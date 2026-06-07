@@ -1,0 +1,295 @@
+.faq {
+    margin-top: -175px;
+    padding-bottom: 100px;  
+}
+
+.min_faq_area {
+    margin-top: 40px;
+    .single_faq_item {
+        display: flex;
+        align-items: flex-start;
+        margin-top: 20px;
+        .content {
+            padding-left: 15px;
+            h3 {
+                color: #2D3132;
+                font-family: $sora;
+                font-weight: 600;
+                font-size: 20px;
+                line-height: 32px;
+            }
+            p  {
+                color: #6C6F70;
+                font-family: $inter;
+                font-weight: 400;
+                font-size: 16px;
+                line-height: 30px;
+                padding-top: 10px;
+            }
+        }
+    }
+}
+
+// Home Six
+.dm_faq {
+    padding-top: 120px;
+    .section_img {
+        img {
+            margin-left: -90px;
+        }
+    }
+    .content {
+        padding-left: 80px;
+        margin-top: -60px;
+        .faq_service {
+            margin-top: 30px;
+            .accordion {
+                .accordion-item {
+                    border: 0;
+                    border-bottom: 1px solid rgba(15, 13, 13, 0.08);
+                    &:first-child {
+                        border-top: 1px solid rgba(15, 13, 13, 0.08);
+                    }
+                    .accordion-header {
+                        button {
+                            background: #fbfafa;
+                            color: #0F0D0D;
+                            font-family: $Montserrat;
+                            font-weight: 600;
+                            font-size: 18px;
+                            line-height: 26px;
+                            padding-left: 0;
+                            padding-top: 22px;
+                            padding-bottom: 22px;
+                            box-shadow: none;
+                            span {
+                                font-family: $Literata;
+                                font-weight: 800;
+                                color: #FF850A;
+                                margin-right: 5px;
+                            }
+                            &::after {
+                                filter: invert(0.5);
+                            }
+                        }
+                    }
+                    .accordion-body {
+                        background: #fbfafa;
+                        font-family: $Montserrat;
+                        color: #565454;
+                        font-weight: 400;
+                        font-size: 18px;
+                        line-height: 32px;
+                        padding-left: 0;   
+                        padding-top: 0;                 
+                    }
+                }
+            }
+        }
+    }
+}
+// Home Six
+
+//Faq Page
+//Search
+.search_area {
+    padding-bottom: 120px;
+    margin-top: -210px;
+    position: relative;
+    .search_box {
+        position: relative;
+        i {
+            font-size: 25px;
+            position: absolute;
+            left: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        input {
+            background: $white;
+            box-shadow: 0px 13px 85px 10px #E6E8EF;
+            height: 97px;
+            padding-left: 95px;
+            &::placeholder {
+                color: #899097;
+                font-family: $man;
+                font-weight: 400;
+                font-size: 20px;
+                line-height: 30px;
+                letter-spacing: -0.01em;
+            }
+        }
+    }
+    .shape_items {
+        .one {
+            right: 200px;
+            top: -190px;
+        }
+        .two {
+            bottom: 10px;
+            left: 0;
+        }
+    }
+}
+
+// Faq Sections
+.faq_innar {
+    padding-bottom: 120px;
+    .faq_items_area {
+        .nav-tabs {
+            display: flex;
+            flex-direction: column;
+            border: 0;
+            background: #F4F5F6;
+            border-radius: 5px;
+            padding: 15px;
+            .nav-item {
+                button {
+                    color: #4C4C63;
+                    font-family: $man;
+                    font-weight: 600;
+                    font-size: 16px;
+                    line-height: 16px;
+                    border: 0;
+                    width: 100%;
+                    text-align: left;
+                    padding: 20px 0;
+                    padding-left: 28px;
+                    border-radius: 5px;
+                    &.active {
+                        color: #14162E;
+                    }
+                }
+            }
+        }
+    }
+    .faq_content_area {
+        padding-left: 30px;
+        margin-top: -25px;
+        .accordion {
+            .accordion-item {
+                border: 0;
+                border-bottom: 1px solid #EEF1F6;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                .accordion-header {
+                    button {
+                        background: transparent;
+                        color: #14162E;
+                        font-family: $man;
+                        font-weight: 700;
+                        font-size: 20px;
+                        line-height: 30px;
+                        box-shadow: none;
+                        padding-left: 0;
+                        &::after {
+                            display: none;
+                        }
+                        &[aria-expanded="true"] {
+                            color: #553BF9;
+                        }
+                    }
+                }
+                .accordion-body {
+                    color: #4C4C63;
+                    font-family: $man;
+                    font-weight: 400;
+                    font-size: 16px;
+                    line-height: 28px;
+                    padding-top: 0;
+                    padding-bottom: 30px;
+                    padding-left: 0;
+                }
+            }
+        }
+    }
+}
+
+//Faq Page
+
+//Home Seven
+.saas_faq {
+    padding-bottom: 120px;
+    .section_title {
+        h2 {
+            span {
+                background: linear-gradient(269.69deg, #CDD043 19.54%, #66E3C5 63.55%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+        }
+    }
+}
+
+.min_saas_faq {
+    .accordion-button:not(.collapsed) {
+        background: transparent;
+    }
+    .saas_faq_content {
+        margin-top: 40px;
+        .accordion-item {
+            border: 1px solid #E7E7E8;
+            border-radius: 12px;
+            margin: 16px 10px;
+            padding-left: 10px;
+            padding-right: 5px;
+            .accordion-header {
+                button {
+                    display: flex;
+                    justify-content: space-between;
+                    background: transparent;
+                    box-shadow: none;
+                    padding-right: 110px;
+                    color: #262B34;
+                    font-family: $inter;
+                    font-weight: 600;
+                    font-size: 16px;
+                    line-height: 30px;
+                    letter-spacing: -0.03em;
+                    position: relative;
+                    .icons {
+                        width: 65px;
+                        display: flex;
+                        justify-content: center;
+                        position: absolute;
+                        right: 0;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        i {
+                            color:#0063D8;
+                            font-size: 20px;
+                            &:last-child {
+                                display: none;
+                            }
+                        }
+                    }
+                    &[aria-expanded="true"] {
+                        .icons {
+                            i {
+                                &:first-child {
+                                    display: none;
+                                }
+                                &:last-child {
+                                    display: block;
+                                }
+                            }
+                        }
+                    }
+                    &::after {
+                        display: none;
+                    }
+                }
+            }
+            .accordion-body {
+                color: #606B7E;
+                font-family: $inter;
+                font-weight: 400;
+                font-size: 16px;
+                line-height: 30px;
+                padding-top: 0;
+            }
+        }
+    }
+}
+//Home Seven

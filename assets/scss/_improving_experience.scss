@@ -1,0 +1,79 @@
+.improving_experience {
+    padding-top: 80px;
+}
+.min_tab_area {
+    width: 1462px;
+    margin: 0 auto;
+    padding-top: 125px;
+    padding-bottom: 40px;
+    border-radius: 30px;
+}
+.tab_p {
+    .nav-tabs {
+        border-bottom: 0;
+        .nav-item {
+            margin: 0 3px;
+            .nav-link {
+                font-family: $dm;
+                font-weight: 500;
+                font-size: 18px;
+                line-height: 20px;
+                color: #050505;
+                padding: 15px 30px;
+                border-radius: 5px;
+                border: 0;
+                &:hover,&.active {
+                    color: $white;
+                    background: #FF824C;
+                }
+            }
+        }
+    }
+    .tab-content {
+        margin-top: 25px;
+        .tab_c {
+            .nav-tabs {
+                margin-top: 35px;
+            }
+            .nav-item {
+                margin: 5px 0;
+                .nav-link {
+                    font-family: $sora;
+                    font-weight: 600;
+                    font-size: 18px;
+                    line-height: 25px;
+                    padding: 19px 25px;
+                    color: #858395;
+                    text-align: left;
+                    padding-right: 55px;
+                    &:hover,&.active {
+                        background: $white;
+                        color: #050505;
+                    }
+                    span {
+                        display: flex;
+                        align-items: center;
+                        img {
+                            margin-right: 15px;
+                        }
+                    }
+                    p {
+                        margin-bottom: 0;
+                        padding-left: 35px;
+                        padding-top: 10px;
+                        font-family: $dm;
+                        font-weight: 400;
+                        font-size: 18px;
+                        line-height: 26px;
+                        display: none;
+                    }
+                    &.active {
+                        p {
+                            display: block;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

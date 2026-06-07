@@ -1,0 +1,372 @@
+/** @format */
+
+// mr_features_area css
+
+.mr_features_area {
+	margin-left: 160px;
+	margin-right: 160px;
+	border-radius: 10px;
+	padding: 140px 0px 100px;
+	position: relative;
+	.d-grid {
+		grid-template-columns: repeat(2, 1fr);
+		row-gap: 15px;
+	}
+	.marketing_section_title .m_title {
+		font-size: 50px;
+	}
+}
+.f_img_one {
+	left: 0;
+	bottom: 0;
+}
+.f_img_two {
+	right: 0;
+	top: 0;
+}
+.f_img_three {
+	right: 0;
+	bottom: 0;
+}
+.f_img_four {
+	left: 35%;
+	bottom: 125px;
+}
+.mr_features_item {
+	margin-left: 50px;
+	margin-bottom: 30px;
+	img {
+		margin-bottom: 15px;
+	}
+	h3 {
+		font-size: 22px;
+		line-height: 30px;
+		color: #212121;
+		font-family: $arimo;
+	}
+	p {
+		font-family: $arimo;
+		color: #494949;
+	}
+	.arrow_btn {
+		font-size: 20px;
+		color: #212121;
+		display: inline-block;
+		i {
+			transition: all 0.2s;
+		}
+		&:hover {
+			i {
+				color: #ff824c;
+				transform: translateX(10px);
+			}
+		}
+	}
+}
+
+.mr_expreience_area {
+	position: relative;
+	z-index: 1;
+	padding: 140px 0px 180px;
+	overflow: hidden;
+	.zigzag {
+		bottom: -150px;
+		left: 50%;
+		transform: translateX(-50%);
+	}
+}
+.bell_img {
+	right: 40px;
+	top: 40px;
+}
+.ex_app_img {
+	position: relative;
+	.round_shap {
+		width: 515px;
+		height: 515px;
+		border-radius: 50%;
+		display: inline-block;
+		position: relative;
+		overflow: hidden;
+	}
+	.one {
+		left: -80px;
+		bottom: 0;
+	}
+	.two {
+		right: -50px;
+		bottom: 0;
+	}
+}
+.mr_expreience_content {
+	.m_title {
+		font-size: 50px;
+		line-height: 1.1;
+	}
+	p {
+		font-size: 16px;
+		line-height: 30px;
+		color: #414141;
+	}
+}
+
+.features {
+	background-image: url(/assets/img/features_bg.png);
+	padding-top: 75px;
+	background-repeat: no-repeat;
+	background-position-y: 150px;
+	.features_list {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		padding: 0 90px;
+		margin-top: 50px;
+		a {
+			font-family: $rob;
+			color: #121212;
+			font-weight: 600;
+			font-size: 20px;
+			line-height: 30px;
+			display: flex;
+			align-items: center;
+			border: 1px solid #e4e4e4;
+			border-radius: 5px;
+			background: $white;
+			padding: 18px 35px;
+			margin: 13px;
+			transition: 0.5s;
+			i {
+				background: #f1f5f9;
+				padding: 10px;
+				border-radius: 50px;
+				color: #121212;
+				margin-right: 15px;
+			}
+			&:hover {
+				background: #09050d;
+				color: #fafafa;
+				i {
+					background: #ddf472;
+				}
+			}
+		}
+	}
+	.content_area {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 90px;
+		.section_title {
+			a {
+				color: #fafafa;
+				font-family: $inter;
+				font-weight: 600;
+				font-size: 16px;
+				display: inline-block;
+				line-height: 40px;
+				background: #09050d;
+				border-radius: 4px;
+				padding: 10px 40px;
+				margin-top: 10px;
+				transition: 0.5s;
+				span {
+					background: #ddf472;
+				}
+				&:hover {
+					color: #09050d;
+				}
+			}
+		}
+	}
+	.img_box {
+		margin-top: 60px;
+		box-shadow: 44px 44px 196px rgba(0, 13, 4, 0.2);
+	}
+}
+
+//Exciting Features
+.exciting_features {
+	padding-top: 510px;
+	padding-bottom: 120px;
+	margin-top: -390px;
+	.section_title.h_3 {
+		&.color_2 {
+			h2 {
+				color: $white;
+			}
+			p {
+				color: $white;
+			}
+		}
+	}
+	.features_tab {
+		margin-top: 55px;
+		.nav-tabs {
+			border-bottom: 0;
+			li {
+				button {
+					border-radius: 0;
+					font-family: $rob;
+					font-weight: 400;
+					font-size: 16px;
+					line-height: 20px;
+					color: #c6c6c6;
+					border: 0;
+					padding-bottom: 20px;
+					border-bottom: 2px solid #3f3855;
+					&:hover,
+					&.active {
+						background: transparent;
+						border-color: #ddf472;
+						color: #ddf472;
+					}
+				}
+				&:first-child {
+					button {
+						padding-left: 0;
+					}
+				}
+				&:last-child {
+					button {
+						padding-right: 0;
+					}
+				}
+			}
+		}
+		.tab_contents {
+			margin-top: 50px;
+			.section_title {
+				h2 {
+					font-weight: 500;
+				}
+			}
+			.section_img {
+				padding-left: 100px;
+			}
+			.buttons {
+				margin-top: 60px;
+				.tab_btn {
+					display: inline-flex;
+					background: #ddf472;
+					color: #121212;
+					font-family: $inter;
+					font-weight: 600;
+					font-size: 16px;
+					line-height: 40px;
+					padding: 10px 40px;
+					border-radius: 3px;
+					transition: 0.5s;
+					&:hover {
+						background: $white;
+					}
+				}
+				.btn_hover {
+					span {
+						background: #b4d424;
+					}
+				}
+				.hover_style_btn {
+					&:hover {
+						color: #ddf472;
+						&:before {
+							background: #ddf472;
+							animation: under_line 1s;
+						}
+					}
+				}
+				.text_button {
+					color: $white;
+					font-family: $inter;
+					font-weight: 600;
+					font-size: 16px;
+					border-bottom: 1px solid $white;
+					line-height: 20px;
+					margin-left: 40px;
+					&:hover {
+						color: #ddf472;
+						border-color: #ddf472;
+					}
+				}
+			}
+		}
+	}
+}
+
+// about_features_area css
+.about_features_area {
+	position: relative;
+	z-index: 1;
+	overflow: hidden;
+	.zigzag_one {
+		left: -100px;
+		bottom: 250px;
+		z-index: -1;
+	}
+}
+.ab_features_img {
+	display: inline-block;
+	border-radius: 10px;
+}
+
+.features_title {
+	font-size: 45px;
+	font-weight: 800;
+	font-family: $man;
+	margin-bottom: 25px;
+}
+.ab_features_item {
+	h4 {
+		font-size: 24px;
+		line-height: 30px;
+		font-family: $man;
+		font-weight: 700;
+		color: $purple;
+		margin-bottom: 15px;
+	}
+	& + .ab_features_item {
+		margin-top: 25px;
+	}
+}
+.ab_features_inner {
+	& + .ab_features_inner {
+		margin-top: 120px;
+	}
+}
+.ab_fact_item {
+	display: flex;
+	font-size: 16px;
+	line-height: 24px;
+	font-weight: 600;
+	margin-right: 45px;
+	span {
+		font-size: 48px;
+		line-height: 1;
+		color: $purple;
+		margin-right: 10px;
+	}
+}
+.flex-row-reverse {
+	.ab_features_img {
+		position: relative;
+		z-index: 1;
+		padding-bottom: 20px;
+		&:before {
+			content: '';
+			width: 100%;
+			right: -20px;
+			bottom: 0px;
+			height: 100%;
+			background: rgba(40, 36, 65, 0.2);
+			opacity: 0.2;
+			position: absolute;
+			border-radius: 10px;
+			z-index: -1;
+		}
+		.zigzag {
+			position: absolute;
+			right: -56px;
+			bottom: -20px;
+			z-index: -1;
+		}
+	}
+}

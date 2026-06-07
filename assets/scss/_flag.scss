@@ -1,0 +1,86 @@
+.country_area {
+    padding-bottom: 128px;
+    .min_country_area {
+        height: 600px;
+        position: relative;
+        margin-top: 70px;
+        img {
+            position: absolute;
+            &.one {
+                top: 105px;
+                left: 85px;
+            }
+            &.two {
+                top: 160px;
+                left: 200px;
+            }
+            &.three {
+                top: 50px;
+                left: 520px;
+            }
+            &.four {
+                top: 175px;
+                right: 240px;
+
+            }
+            &.five {
+                top: 115px;
+                right: 75px;
+
+            }
+            &.six {
+                bottom: 100px;
+                left: 265px;
+
+            }
+            &.seven {
+                bottom: 115px;
+                left: 605px;
+            }
+            &.eight {
+                bottom: 55px;
+                right: 0px;
+            }
+        }
+    }
+}
+
+// Home Eight 
+.dc_flag {
+    background: linear-gradient(288.19deg, #0140E5 12.56%, #1B22E2 106.61%);
+    padding-top: 120px;
+    padding-bottom: 75px;
+    overflow: hidden;
+    .section_title {
+        h2 {
+            color: $white
+        }
+        p {
+            color: $white
+        }
+    }
+    .min_dc_flag {
+        height: 650px;
+        position: relative;
+        margin-top: 30px;
+        img {
+            position: absolute;
+        }
+        .one {
+            left: 135px;
+            top: 89px;
+        }
+        .two {
+            bottom: 179px;
+            left: 263px;
+        }
+        .three {
+            right: 416px;
+            top: 199px;
+        }
+        .four {
+            right: 88px;
+            bottom: 133px;
+        }
+    }
+}

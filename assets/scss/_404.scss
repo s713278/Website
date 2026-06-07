@@ -1,0 +1,31 @@
+.not_found {
+    padding-bottom: 120px;
+    padding-top: 200px;
+    .not_found_content {
+        text-align: center;
+        img {
+            margin-bottom: 70px;
+        }
+        h5 {
+            color: #2C264A;
+            font-family: $man;
+            font-weight: 600;
+            font-size: 45px;
+            line-height: 61px;
+        }
+        p {
+            color: #4C4C63;
+            font-family: $man;
+            font-weight: 400;
+            font-size: 25px;
+            line-height: 40px;
+            margin-top: 20px;
+            a {
+                color: #553BF9;
+                font-weight: 400;
+                font-size: 25px;
+                line-height: 40px;
+            }
+        }
+    }
+}

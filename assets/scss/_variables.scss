@@ -1,0 +1,78 @@
+/**
+ * /*font Variables
+ *
+ * @format
+ */
+
+$arc: 'Archivo', sans-serif;
+$arimo: 'Arimo', sans-serif;
+$dm: 'DM Sans', sans-serif;
+$fra: 'Fraunces', serif;
+$frap: 'FrauncesP';
+$rob: 'Roboto', sans-serif;
+$sora: 'Sora', sans-serif;
+$man: 'Manrope', sans-serif;
+$inter: 'Inter', sans-serif;
+$Space: 'Space Grotesk', sans-serif;
+$Montserrat: 'Montserrat', sans-serif;
+$Literata: 'Literata', serif;
+$Lexend: 'Lexend Deca', sans-serif;
+$Lato: 'Lato', sans-serif;
+
+/*Color Variables*/
+$purple: #553bf9;
+$title: #2c264a;
+$pcolor: #4c4c63;
+$orange: #fc6b75;
+$white: #fff;
+
+/*=================== fonts ====================*/
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600&family=Arimo&family=DM+Sans:wght@400;500&family=Fraunces:opsz@9..144&family=Manrope:wght@400;500;600;700;800&family=Roboto:wght@400;500&family=Sora:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700;7..72,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
+@font-face {
+	font-family: FrauncesP;
+	font-weight: 400;
+	src: url('../fonts/Fraunces-Regular.woff') format('woff');
+}
+@font-face {
+	font-family: FrauncesM;
+	font-weight: 500;
+	src: url('../fonts/Fraunces-Medium.woff') format('woff');
+}
+// Mixins
+@mixin transition(
+	$property: all,
+	$duration: 300ms,
+	$animate: linear,
+	$delay: 0s
+) {
+	transition: $property $duration $animate $delay;
+}
+
+// Placeholder Mixins
+
+@mixin placeholder {
+	&.placeholder {
+		@content;
+	}
+	&:-moz-placeholder {
+		@content;
+	}
+	&::-moz-placeholder {
+		@content;
+	}
+	&::-webkit-input-placeholder {
+		@content;
+	}
+}
+
+.col-md-offset-right-1,
+.col-lg-offset-right-1 {
+	margin-right: 8.33333333%;
+}
+// Font family link

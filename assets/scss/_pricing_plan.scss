@@ -1,0 +1,358 @@
+.pricing_plan {
+    padding: 120px 0;
+}
+
+.pricing_plan_aiea {
+    margin-top: 65px;
+    .pricing_btn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        span {
+            font-family: $dm;
+            font-weight: 500;
+            font-size: 18px;
+            line-height: 23px;
+            color: #222;
+        }
+        .dis {
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 17px;
+            color: #5E6282;
+            background: #DFE2EF;
+            border-radius: 2px;
+            padding: 5px 10px;
+            margin-left: 10px;
+        }
+        .toggle {
+            position: relative;
+            width: 66px;
+            height: 30px;
+            background: #fff;
+            box-shadow: 0px 4px 20px rgba(202, 204, 214, 0.56);
+            display: inline-block;
+            border-radius: 15px;
+            cursor: pointer;
+            margin: 0 15px;
+            &.clicked::after {
+                left: 38px;
+            }
+            &::after {
+                position: absolute;
+                content: "";
+                width: 21px;
+                height: 21px;
+                background: #FF824C;
+                border-radius: 50px;
+                left: 7px;
+                top: 5px;
+            }
+        }
+    }
+    .pricing_content {
+        &.active {
+            .price_items {
+                &.month {
+                    display: none;
+                }
+                &.year {
+                    display: block;
+                }
+            }
+        }
+        margin-top: 55px;
+        .price_items {
+            &.year {
+                display: none;
+            }
+            .single_price_item {
+                background: $white;
+                border-radius: 5px;
+                text-align: center;
+                padding: 30px;
+                padding-top: 40px;
+                .top_area {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-bottom: 1px solid #E9E9E9;
+                    padding-bottom: 3px;
+                    text-align: left;
+                    .content {
+                        h6 {
+                            color: #222;
+                            font-family: $sora;
+                            font-weight: 700;
+                            font-size: 22px;
+                            line-height: 28px;
+                            margin-bottom: 5px;
+                        }
+                        p {
+                            font-family: $dm;
+                            font-weight: 400;
+                            font-size: 14px;
+                            line-height: 22px;
+                            color: #5E6282;
+                        }
+                    }
+                    .price {
+                        font-family: $dm;
+                        font-weight: 700;
+                        font-size: 40px;
+                        line-height: 40px;
+                        color: #050505;
+                    }
+                }
+                .service_list {
+                    padding-top: 15px;
+                    text-align: left;
+                    padding-bottom: 10px;
+                    li {
+                        margin: 10px 0;
+                        font-family: $dm;
+                        font-weight: 400;
+                        font-size: 18px;
+                        line-height: 35px;
+                        color: #5E6282;
+                        i {
+                            background: #55E6A5;
+                            padding: 4px;
+                            border-radius: 50px;
+                            font-size: 14px;
+                            margin-right: 10px;
+                            color: $white;
+                        }
+                        &.disable {
+                            color: #D8D9DE;
+                        }
+                    }
+                }
+                a {
+                    color: #FF824C;
+                    font-family: $dm;
+                    font-weight: 500;
+                    display: inline-block;
+                    font-size: 16px;
+                    line-height: 40px;
+                    border: 1px solid #FF824C;
+                    width: 100%;
+                    padding: 5px 0;
+                    border-radius: 5px;
+                    transition: .3s;
+                    &:hover {
+                        color: $white;
+                        background: #FF824C;
+                    }
+                }
+                &.limite_feture {
+                    .service_list {
+                        li {
+                            &.disable {
+                                color:#D8D9DE;
+                                i {
+                                    color: #D8D9DE;
+                                }
+                            }
+                        }
+                    }
+                }
+                &.recommended {
+                    background: #FAEBE6;
+                    filter: drop-shadow(0px 8px 140px rgba(7, 11, 28, 0.15));
+                    .top_area {
+                        border-color: #CCBEB1;
+                    }
+                    .service_list {
+                        li {
+                            &.disable {
+                                i {
+                                    background:#A89A97;;
+                                }
+                            }
+                        }
+                    }
+                    a {
+                        background: #FF824C;
+                        color: $white;
+                        &:hover {
+                            background: $white;
+                            color: #FF824C;
+                            border: 1px solid #FF824C;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Home Five
+.hosting_price {
+    padding-bottom: 120px;
+}
+
+.hosting_price_area {
+    margin-top: 60px;
+    .single_price {
+        padding-top: 40px;
+        padding-left: 32px;
+        padding-right: 30px;
+        padding-bottom: 45px;
+        background: linear-gradient(143.39deg, #FFFFFF 4.61%, #F8FBFE 106.61%);
+        border: 1px solid #E6E7EC;
+        border-radius: 24px;
+        h5 {
+            color: #19193F;
+            font-family: $Space;
+            font-weight: 500;
+            font-size: 24px;
+            line-height: 34px;
+            letter-spacing: -0.04em;
+            margin-top: 20px;
+        }
+        p {
+            color: #3B3B5B;
+            font-family: $man;
+            font-weight: 400;
+            font-size: 16px;
+            line-height: 30px;
+            padding-bottom: 10px;
+        }
+        span {
+            color: #0063D8;
+            font-family: $Space;
+            font-weight: 500;
+            font-size: 60px;
+            line-height: 70px;
+        }
+        .price_list {
+            margin-top: 25px;
+            li {
+                color: #19193F;
+                font-family: $man;
+                font-weight: 500;
+                font-size: 16px;
+                line-height: 30px;
+                display: flex;
+                align-items: center;
+                margin: 10px 0;
+                i {
+                    color: #0063D8;
+                    font-size: 22px;
+                    margin-right: 8px;
+                }
+                &.dis {
+                    color: #74748c;
+                    i {
+                        color: #65a1e8;
+                    }
+                }
+            }
+        }
+        a {
+            color: #0063D8;
+            font-family: $man;
+            font-weight: 700;
+            font-size: 16px;
+            line-height: 26px;
+            background: rgba(0, 99, 216, 0.1);
+            border-radius: 32px;
+            display: inline-block;
+            padding: 13px 32px;
+            margin-top: 20px;
+            transition: .9s;
+            span {
+                background: #0063D8;
+            }
+            &:hover {
+                color: $white;
+            }
+        }
+    }
+}
+
+// Home Seven 
+.saas_price {
+    padding-bottom: 130px;
+    .section_title {
+        h2 {
+            span {
+                background: linear-gradient(266.95deg, #D07643 0.52%, #C366E3 24.21%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+        }
+    }
+}
+
+.min_saas_price_area {
+    margin-top: 55px;
+    .single_saas_price {
+        background: rgba(39, 48, 68, 0.05);
+        border-radius: 24px;
+        padding-top: 45px;
+        padding-left: 35px;
+        padding-right: 35px;
+        padding-bottom: 48px;
+        margin: 0 5px;
+        .top {
+            h3 {
+                color: #262B34;
+                font-family: $inter;
+                font-weight: 600;
+                font-size: 22px;
+                line-height: 34px;
+                letter-spacing: -0.03em;
+            }
+            p {
+                color: #606B7E;
+                font-family: $inter;
+                font-weight: 400;
+                font-size: 16px;
+                line-height: 30px;
+            }
+            h5 {
+                color: #0063D8;
+                font-family: $inter;
+                font-weight: 600;
+                font-size: 54px;
+                line-height: 66px;
+                margin-top: 25px;
+                span {
+                    color: #606B7E;
+                    font-weight: 400;
+                    font-size: 14px;
+                    line-height: 17px;
+                    margin-left: -10px;
+                }
+            }
+        }
+        .price_list {
+            margin-top: 20px;
+            li {
+                color: #262B34;
+                font-family: $man;
+                font-weight: 500;
+                font-size: 16px;
+                line-height: 30px;
+                display: flex;
+                align-items: center;
+                margin: 10px 0;
+                i {
+                    color: #0063D8;
+                    margin-right: 8px;
+                }
+            }
+        }
+        .bottom {
+            margin-top: 40px;
+            .saas_btn {
+                text-align: center;
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    }
+}

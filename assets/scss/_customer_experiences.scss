@@ -1,0 +1,38 @@
+.customer_experiences {
+    padding-top: 95px;
+    .section_img {
+        img {
+            margin-left: -225px;
+        }
+    }
+    .customer_experiences_content {
+        padding-left: 30px;
+        .section_title {
+            margin-bottom: 30px;
+            h2 {
+                span {
+                    position: relative;
+                    &::after {
+                        position: absolute;
+                        content: "";
+                        width: 100%;
+                        height: 100%;
+                        background-image: url(../img/text_bordr.png);
+                        background-repeat: no-repeat;
+                        background-position: center;
+                        left: 0;
+                        top: 2px;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Section Two
+.customer_experiences.sec_2 {
+    padding-bottom: 80px;
+}
+.customer_experiences.sec_2 .section_img img {
+    margin-left: -20px;
+}

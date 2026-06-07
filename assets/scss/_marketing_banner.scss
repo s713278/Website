@@ -1,0 +1,77 @@
+/**
+ * /*========== marketing_area css =========
+ *
+ * @format
+ */
+
+.marketing_inner {
+	max-width: 900px;
+	margin: 0 auto;
+	padding-top: 170px;
+	position: relative;
+	z-index: 1;
+	.marketing_banner_title {
+		font-size: 80px;
+		line-height: 96px;
+		letter-spacing: -0.01em;
+		font-family: $frap;
+		font-weight: 400;
+		color: #fff;
+		margin-bottom: 18px;
+		span {
+			color: $orange;
+			display: inline-block;
+			position: relative;
+			&:before {
+				content: '';
+				width: 100%;
+				height: 3px;
+				background: $orange;
+				position: absolute;
+				bottom: 17px;
+				left: 0;
+			}
+		}
+	}
+	p {
+		font-size: 24px;
+		line-height: 30px;
+		font-family: $arimo;
+		color: #ffffff;
+	}
+}
+.marketing_image {
+	position: relative;
+	margin-top: 80px;
+	margin-bottom: 0;
+	li {
+		&:nth-child(2),
+		&:nth-child(3) {
+			position: absolute;
+		}
+		&:nth-child(2) {
+			top: -137px;
+			left: -265px;
+		}
+		&:nth-child(3) {
+			top: -172px;
+			right: -125px;
+		}
+	}
+}
+
+.prallax_img_element {
+	margin-bottom: 0;
+	li {
+		position: absolute;
+		&:nth-child(1) {
+			left: 380px;
+			top: 170px;
+		}
+		&:nth-child(2) {
+			right: 380px;
+			top: 200px;
+		}
+	}
+}
+/*========== marketing_area css =========*/
