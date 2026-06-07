@@ -1,379 +1,733 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><!-- Required meta tags --><meta name="viewport" content="width=device-width, initial-scale=1"><!-- Bootstrap CSS -->
-	<link href="assets/vendors/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
-	<link href="assets/vendors/slick/slick-theme.css" rel="stylesheet" />
-	<link href="assets/vendors/slick/slick.css" rel="stylesheet" />
-	<link href="assets/vendors/animation/animate.css" rel="stylesheet" />
-	<link href="assets/vendors/phosphor/css/icons.css" rel="stylesheet" />
-	<link href="assets/css/style.css" rel="stylesheet" />
-	<link href="assets/css/responsive.css" rel="stylesheet" />
-	<title>MithraDirect - Local Venodrs at Your Doorstep</title>
-	<link href="assets/img/icon/favicon.png" rel="icon" type="image/x-icon" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MithraDirect - India's leading hyperlocal community commerce platform. Connect with local vendors, women entrepreneurs, and discover authentic products from your neighborhood.">
+    <meta name="keywords" content="hyperlocal commerce, local vendors, women entrepreneurs, India, online marketplace, local delivery, neighborhood shopping">
+    <meta name="author" content="MithraDirect">
+    <meta name="robots" content="index, follow">
+    <meta property="og:title" content="MithraDirect - Local Vendors at Your Doorstep">
+    <meta property="og:description" content="Discover authentic products from local vendors and women entrepreneurs in your neighborhood.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mithradirect.com">
+    <meta name="twitter:card" content="summary_large_image">
+    <title>MithraDirect - Hyperlocal Community Commerce Platform in India</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Poppins', sans-serif;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-gradient {
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 50%, #A7F3D0 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+        .btn-secondary {
+            border: 2px solid #10B981;
+            color: #10B981;
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background: #10B981;
+            color: white;
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .accordion-content.active {
+            max-height: 500px;
+        }
+    </style>
 </head>
-<body data-scroll-animation="true"><!-- start header  -->
-<header class="header" id="header">
-<nav class="navbar navbar-expand-lg menu_six">
-<div class="container-fluid"><a class="navbar-brand sticky_logo" href="index.html"><img alt="logo" src="assets/img/logos/logo_dark_md.png" /> <img alt="logo" src="assets/img/logos/logo_dark_md.png" /> </a>
-<div class="collapse navbar-collapse" id="navbarSupportedContent">
-<ul class="navbar-nav menu ms-lg-auto me-lg-auto">
-	<li class="nav-item dropdown submenu"><a aria-expanded="false" aria-haspopup="true" class="nav-link dropdown-toggle" data-toggle="dropdown" href="#" role="button">Home </a></li>
-	<li class="nav-item dropdown mega_menu submenu"><a aria-expanded="false" aria-haspopup="true" class="nav-link dropdown-toggle" data-toggle="dropdown" href="#why_mithra" role="button">Why MithraDirect </a></li>
-	<li class="nav-item dropdown submenu"><a aria-expanded="false" aria-haspopup="true" class="nav-link dropdown-toggle" data-toggle="dropdown" href="#for_customers" role="button">For Customers </a></li>
-	<li class="nav-item dropdown submenu"><a aria-expanded="false" aria-haspopup="true" class="nav-link dropdown-toggle" data-toggle="dropdown" href="#for_vendors" role="button">For Vendors </a></li>
-	<li class="nav-item"><a class="nav-link" href="#testimonials">Testimonials</a></li>
-</ul>
-</div>
+<body class="bg-white">
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-md z-50 shadow-sm">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <a href="#" class="flex items-center space-x-2">
+                    <img src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="h-10">
+                </a>
+                
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#why-mithra" class="text-gray-700 hover:text-emerald-600 transition font-medium">Why MithraDirect</a>
+                    <a href="#categories" class="text-gray-700 hover:text-emerald-600 transition font-medium">Categories</a>
+                    <a href="#for-customers" class="text-gray-700 hover:text-emerald-600 transition font-medium">For Customers</a>
+                    <a href="#for-vendors" class="text-gray-700 hover:text-emerald-600 transition font-medium">For Vendors</a>
+                    <a href="#testimonials" class="text-gray-700 hover:text-emerald-600 transition font-medium">Testimonials</a>
+                    <a href="#faq" class="text-gray-700 hover:text-emerald-600 transition font-medium">FAQ</a>
+                </div>
 
-<ul class="list-unstyled alter_nav alter_nav_color_btn">
-	<li><a href="#">Login</a></li>
-	<li><a class="nav_btn btn_hover" href="#">Sign Up</a></li>
-</ul>
-<button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler collapsed" data-bs-target="#navbarSupportedContent" data-bs-toggle="collapse" type="button"></button></div>
-</nav>
-</header>
-<!-- start header  --><!-- Hero -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="#" class="text-gray-700 hover:text-emerald-600 transition font-medium">Login</a>
+                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="btn-primary px-6 py-2 rounded-full text-white font-medium">Sign Up</a>
+                </div>
 
-<section class="hero_digital_marketing" data-bg-color="#ECF7EC">
-<div class="container-fluid">
-<div class="row align-items-center">
-<div class="col-xl-8">
-<div class="content">
-<div class="section_title wow fadeInLeft" data-wow-delay="1s">
-	<h2>Empowering Local Vendors, Delivering Their Services to Your Neighborhood Digitally.</h2>
-	<br>
-<p>MithraDirect connects small and local vendors with nearby customers <br/>through a seamless digital platform. Experience hassle-free <br/>ordering and doorstep delivery with trusted local services.Join us on this journey <br> to redefine local commerce, bringing convenience to customers and growth to<br> vendors.</p>
-</div>
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-gray-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
 
-<div class="buttons_area wow fadeInLeft" data-wow-delay="1.5s"><a class="digital_m_btn" href="https://play.google.com/store/apps/details?id=com.mithrauserapp.customer" target="_blank"
-    rel="noopener noreferrer">Download App </a> <a class="text_button hover_style_btn" href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank">Become a Vendor </a></div>
-</div>
-</div>
+            <!-- Mobile Navigation -->
+            <div id="mobile-menu" class="hidden md:hidden pb-4">
+                <div class="flex flex-col space-y-3">
+                    <a href="#why-mithra" class="text-gray-700 hover:text-emerald-600 transition font-medium">Why MithraDirect</a>
+                    <a href="#categories" class="text-gray-700 hover:text-emerald-600 transition font-medium">Categories</a>
+                    <a href="#for-customers" class="text-gray-700 hover:text-emerald-600 transition font-medium">For Customers</a>
+                    <a href="#for-vendors" class="text-gray-700 hover:text-emerald-600 transition font-medium">For Vendors</a>
+                    <a href="#testimonials" class="text-gray-700 hover:text-emerald-600 transition font-medium">Testimonials</a>
+                    <a href="#faq" class="text-gray-700 hover:text-emerald-600 transition font-medium">FAQ</a>
+                    <div class="flex flex-col space-y-2 pt-2 border-t">
+                        <a href="#" class="text-gray-700 hover:text-emerald-600 transition font-medium">Login</a>
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="btn-primary px-6 py-2 rounded-full text-white font-medium text-center">Sign Up</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
 
-<div class="col-xl-4">
-<div class="section_img">
-<div class="icons"><img alt="" class="one push" src="assets/img/icon/nav.png" /> <img alt="" class="two push" src="assets/img/icon/cart.png" /> <img alt="" class="four push" src="assets/img/icon/time.png" /></div>
+    <!-- Hero Section -->
+    <section class="hero-gradient pt-24 pb-16 md:pt-32 md:pb-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <div class="text-center md:text-left">
+                    <div class="inline-block px-4 py-2 bg-emerald-100 rounded-full mb-6">
+                        <span class="text-emerald-700 font-medium text-sm">🇮🇳 India's #1 Hyperlocal Platform</span>
+                    </div>
+                    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
+                        Empowering <span class="gradient-text">Local Vendors</span>, Delivering to Your Doorstep
+                    </h1>
+                    <p class="text-lg text-gray-600 mb-8 leading-relaxed">
+                        Connect with trusted local vendors, women entrepreneurs, and discover authentic products from your neighborhood. Experience hassle-free ordering with doorstep delivery.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                        <a href="https://play.google.com/store/apps/details?id=com.mithrauserapp.customer" target="_blank" rel="noopener noreferrer" class="btn-primary px-8 py-4 rounded-full text-white font-semibold text-lg flex items-center justify-center gap-2">
+                            Download App
+                        </a>
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="btn-secondary px-8 py-4 rounded-full font-semibold text-lg flex items-center justify-center gap-2">
+                            Become a Vendor
+                        </a>
+                    </div>
+                </div>
+                <div class="relative">
+                    <div class="relative z-10">
+                        <img src="assets/img/banner_md.png" alt="MithraDirect App" class="rounded-2xl shadow-2xl mx-auto animate-float">
+                    </div>
+                    <div class="absolute -top-4 -right-4 w-20 h-20 bg-emerald-200 rounded-full opacity-50 blur-xl"></div>
+                    <div class="absolute -bottom-4 -left-4 w-32 h-32 bg-emerald-300 rounded-full opacity-50 blur-xl"></div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="img_box"><img alt="" class="min" src="assets/img/banner_md.png" /> <img alt="" class="one" src="assets/img/connect.png" /> <img alt="" class="two" src="assets/img/rural.png" /></div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Hero --><!-- Client -->
+    <!-- Trust Stats Section -->
+    <section class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div class="text-center">
+                    <div class="text-4xl md:text-5xl font-bold gradient-text mb-2">500+</div>
+                    <div class="text-gray-600 font-medium">Local Vendors</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl md:text-5xl font-bold gradient-text mb-2">50K+</div>
+                    <div class="text-gray-600 font-medium">Happy Customers</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl md:text-5xl font-bold gradient-text mb-2">100+</div>
+                    <div class="text-gray-600 font-medium">Women Entrepreneurs</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl md:text-5xl font-bold gradient-text mb-2">4.8★</div>
+                    <div class="text-gray-600 font-medium">App Rating</div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<section class="dm_clients_logo pb-5 pt-5 mt-5 mb-5">
-<div class="container">
-<div class="min_area">
-<h5>Our Family of Vendors - <span>Fresh From the Village</span></h5>
+    <!-- Vendor Logos Section -->
+    <section class="py-12 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-8">
+                <h3 class="text-xl font-semibold text-gray-700">Our Family of Vendors</h3>
+                <p class="text-gray-500">Fresh From the Village</p>
+            </div>
+            <div class="flex flex-wrap justify-center items-center gap-8">
+                <img src="assets/img/clients/dm_client/dm_logo01.png" alt="Vendor" class="h-12 opacity-70 hover:opacity-100 transition">
+                <img src="assets/img/clients/dm_client/dm_logo2.png" alt="Vendor" class="h-12 opacity-70 hover:opacity-100 transition">
+                <img src="assets/img/clients/dm_client/dm_logo3.png" alt="Vendor" class="h-12 opacity-70 hover:opacity-100 transition">
+                <img src="assets/img/clients/dm_client/dm_logo4.png" alt="Vendor" class="h-12 opacity-70 hover:opacity-100 transition">
+                <img src="assets/img/clients/dm_client/dm_logo5.png" alt="Vendor" class="h-12 opacity-70 hover:opacity-100 transition">
+            </div>
+        </div>
+    </section>
 
-<div class="all_logos">
-<div class="single_logo wow fadeInLeft" data-wow-delay="1s"><img alt="" src="assets/img/clients/dm_client/dm_logo01.png" /></div>
+    <!-- Why MithraDirect Section -->
+    <section id="why-mithra" class="py-20 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose MithraDirect?</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Empowering local businesses while bringing convenience to your doorstep</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Digital Growth</h3>
+                    <p class="text-gray-600">Enables small and local businesses to expand their reach digitally, boosting their growth beyond physical boundaries.</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Location-Based Discovery</h3>
+                    <p class="text-gray-600">Uses Google Maps to showcase vendors in your proximity, making ordering easy and convenient.</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Real-Time Notifications</h3>
+                    <p class="text-gray-600">Stay informed with real-time WhatsApp and SMS notifications on your orders.</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Flexible Subscriptions</h3>
+                    <p class="text-gray-600">Simplifies recurring orders for daily, weekly, or monthly essentials with customizable plans.</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Trusted & Verified</h3>
+                    <p class="text-gray-600">All vendors are verified to ensure quality, authenticity, and reliable service.</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-8 rounded-2xl card-hover">
+                    <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Support Local Economy</h3>
+                    <p class="text-gray-600">Directly support small businesses and local vendors, helping sustain their livelihoods.</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="single_logo wow fadeInLeft" data-wow-delay="1.1s"><img alt="" src="assets/img/clients/dm_client/dm_logo2.png" /></div>
+    <!-- Categories Section -->
+    <section id="categories" class="py-20 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Explore Categories</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Discover a wide range of products from local vendors</p>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🥬</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Fresh Vegetables</h3>
+                    <p class="text-sm text-gray-500 mt-1">Farm to table</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🍎</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Fruits</h3>
+                    <p class="text-sm text-gray-500 mt-1">Seasonal & fresh</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🍞</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Bakery</h3>
+                    <p class="text-sm text-gray-500 mt-1">Freshly baked</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🥛</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Dairy</h3>
+                    <p class="text-sm text-gray-500 mt-1">Pure & natural</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🫚</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Spices</h3>
+                    <p class="text-sm text-gray-500 mt-1">Authentic flavors</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🧶</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Handmade</h3>
+                    <p class="text-sm text-gray-500 mt-1">Artisan crafts</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🥘</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Home Cooked</h3>
+                    <p class="text-sm text-gray-500 mt-1">Traditional meals</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm card-hover text-center cursor-pointer">
+                    <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">🌸</span>
+                    </div>
+                    <h3 class="font-semibold text-gray-900">Flowers</h3>
+                    <p class="text-sm text-gray-500 mt-1">Fresh blooms</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="single_logo wow fadeInLeft" data-wow-delay="1.2s"><img alt="" src="assets/img/clients/dm_client/dm_logo3.png" /></div>
+    <!-- For Customers Section -->
+    <section id="for-customers" class="py-20 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <div>
+                    <div class="inline-block px-4 py-2 bg-emerald-100 rounded-full mb-6">
+                        <span class="text-emerald-700 font-medium text-sm">For Customers</span>
+                    </div>
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-6">Discover the Flavors of Your Neighborhood</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">🛍️</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Access Local Vendors Digitally</h3>
+                                <p class="text-gray-600">Discover and order from trusted vendors in your area from the comfort of your home</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">🔔</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Real-Time Notifications</h3>
+                                <p class="text-gray-600">Stay updated with instant alerts on order status via WhatsApp, SMS, and email</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">💳</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Flexible Subscriptions</h3>
+                                <p class="text-gray-600">Customize your orders with recurring subscriptions or one-time purchases</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">💡</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Support Local Businesses</h3>
+                                <p class="text-gray-600">Contribute to the growth of small and rural vendors by shopping locally</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <img src="assets/img/ForCustomers.png" alt="For Customers" class="rounded-2xl shadow-xl">
+                    <div class="absolute -top-4 -right-4 w-20 h-20 bg-emerald-200 rounded-full opacity-50 blur-xl"></div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="single_logo wow fadeInLeft" data-wow-delay="1.3s"><img alt="" src="assets/img/clients/dm_client/dm_logo4.png" /></div>
+    <!-- For Vendors Section -->
+    <section id="for-vendors" class="py-20 bg-gradient-to-br from-emerald-50 to-green-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <div class="order-2 md:order-1 relative">
+                    <img src="assets/img/ForVendors.png" alt="For Vendors" class="rounded-2xl shadow-xl">
+                    <div class="absolute -bottom-4 -left-4 w-20 h-20 bg-emerald-200 rounded-full opacity-50 blur-xl"></div>
+                </div>
+                <div class="order-1 md:order-2">
+                    <div class="inline-block px-4 py-2 bg-emerald-100 rounded-full mb-6">
+                        <span class="text-emerald-700 font-medium text-sm">For Vendors</span>
+                    </div>
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-6">Connect Directly with Customers</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">✅</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Digital Presence & Growth</h3>
+                                <p class="text-gray-600">Expand your business beyond physical boundaries with MithraDirect's online platform</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">🚀</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Increased Sales & Reach</h3>
+                                <p class="text-gray-600">Gain visibility to nearby customers searching for your products or services</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">📍</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Location-Based Targeting</h3>
+                                <p class="text-gray-600">Define service areas using Google Maps to attract local customers effectively</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">💬</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-900">Multi-Channel Communication</h3>
+                                <p class="text-gray-600">Send order confirmations, delivery updates, and promotions via WhatsApp and SMS</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-8">
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="btn-primary px-8 py-4 rounded-full text-white font-semibold inline-block">Become a Vendor</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="single_logo wow fadeInLeft" data-wow-delay="1.4s"><img alt="" src="assets/img/clients/dm_client/dm_logo5.png" /></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Client --><!-- Integration Two -->
+    <!-- Vendor Onboarding Flow -->
+    <section class="py-20 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Start Selling in 3 Simple Steps</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Join our platform and grow your business</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+                        <span class="text-3xl font-bold text-emerald-600">1</span>
+                        <div class="absolute -right-4 top-1/2 transform -translate-y-1/2 hidden md:block">
+                            <svg class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Register Your Business</h3>
+                    <p class="text-gray-600">Fill out a simple form with your business details, products, and service area</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+                        <span class="text-3xl font-bold text-emerald-600">2</span>
+                        <div class="absolute -right-4 top-1/2 transform -translate-y-1/2 hidden md:block">
+                            <svg class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Get Verified</h3>
+                    <p class="text-gray-600">Our team verifies your business to ensure quality and authenticity</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="text-3xl font-bold text-emerald-600">3</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Start Receiving Orders</h3>
+                    <p class="text-gray-600">Go live and start receiving orders from customers in your area</p>
+                </div>
+            </div>
+            <div class="text-center mt-12">
+                <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="btn-primary px-8 py-4 rounded-full text-white font-semibold inline-block">Start Your Journey</a>
+            </div>
+        </div>
+    </section>
 
-<section class="integration h_6 two pb-5 mt-0 pt-0" data-bg-color="#ECF7EC" id="why_mithra">
-<div class="container">
-<div class="row align-items-center">
-<div class="col-lg-6">
-<div class="integration_content wow fadeInLeft">
-<div class="section_title h_6">
-<h2>Why Mithra Direct ?</h2>
-</div>
+    <!-- Testimonials Section -->
+    <section id="testimonials" class="py-20 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">What Our Customers Say</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Real experiences from our community</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover">
+                    <div class="flex items-center gap-1 mb-4">
+                        <span class="text-yellow-400 text-xl">★★★★★</span>
+                    </div>
+                    <p class="text-gray-600 mb-6">"The vegetables are incredibly fresh and flavorful. The service is quick and reliable. I'm happy to have discovered this source for organic, local produce."</p>
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <span class="text-emerald-600 font-bold">VK</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Vamsi Krishna</h4>
+                            <p class="text-sm text-gray-500">Hyderabad</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover">
+                    <div class="flex items-center gap-1 mb-4">
+                        <span class="text-yellow-400 text-xl">★★★★★</span>
+                    </div>
+                    <p class="text-gray-600 mb-6">"I love the freshness and taste of the vegetables. Quick service and the focus on organic, local produce make this platform my top choice."</p>
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <span class="text-emerald-600 font-bold">VS</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Vikram Singh</h4>
+                            <p class="text-sm text-gray-500">Dilsukhnagar</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover">
+                    <div class="flex items-center gap-1 mb-4">
+                        <span class="text-yellow-400 text-xl">★★★★★</span>
+                    </div>
+                    <p class="text-gray-600 mb-6">"Delicious, fresh vegetables with excellent service! It's wonderful to have access to organic, locally-sourced goods. This platform has truly enhanced my grocery shopping experience."</p>
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <span class="text-emerald-600 font-bold">KK</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-900">Kiran Kumar</h4>
+                            <p class="text-sm text-gray-500">Nizampet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<ul class="service_items list-unstyled">
-	<li><img alt="" src="assets/img/icon/check-mark2.svg" />
-	<p>Enables small and local businesses to expand their reach digitally, boosting their growth.</p>
-	</li>
-	<li><img alt="" src="assets/img/icon/check-mark2.svg" />
-	<p> Seamless Order & Delivery: Connects customers with trusted nearby vendors for quick and reliable service.</p>
-	</li>
-	<li><img alt="" src="assets/img/icon/check-mark2.svg" />
-	<p>Location-Based Discoverability: Uses Google Maps to showcase vendors in your proximity, making ordering easy.</p>
-	</li>
-		<li><img alt="" src="assets/img/icon/check-mark2.svg" />
-	<p>Multi-Channel Communication: Stay informed with real-time WhatsApp and SMS notifications on your orders.</p>
-	</li>
-		<li><img alt="" src="assets/img/icon/check-mark2.svg" />
-	<p>Convenient Subscription Model: Simplifies recurring orders for daily, weekly, or monthly essentials.</p>
-	</li>
-</ul>
+    <!-- FAQ Section -->
+    <section id="faq" class="py-20 bg-white">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+                <p class="text-lg text-gray-600">Find answers to common questions</p>
+            </div>
+            <div class="space-y-4">
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button class="accordion-btn w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-semibold text-gray-900">How do I place an order?</span>
+                        <svg class="accordion-icon w-5 h-5 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="px-6 py-4 text-gray-600">
+                            Simply download our app, browse vendors in your area, select products, and place your order. You can choose one-time purchase or set up a subscription for regular deliveries.
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button class="accordion-btn w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-semibold text-gray-900">How can I become a vendor?</span>
+                        <svg class="accordion-icon w-5 h-5 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="px-6 py-4 text-gray-600">
+                            Fill out our vendor registration form with your business details. Our team will verify your business, and once approved, you can start listing your products and receiving orders.
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button class="accordion-btn w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-semibold text-gray-900">What areas do you serve?</span>
+                        <svg class="accordion-icon w-5 h-5 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="px-6 py-4 text-gray-600">
+                            We currently serve Hyderabad and surrounding areas. We're continuously expanding to new neighborhoods. Check our app to see if your area is covered.
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button class="accordion-btn w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-semibold text-gray-900">How does the subscription model work?</span>
+                        <svg class="accordion-icon w-5 h-5 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="px-6 py-4 text-gray-600">
+                            You can set up daily, weekly, or monthly subscriptions for regular products like milk, vegetables, or groceries. Choose your preferred frequency and delivery schedule, and we'll handle the rest.
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button class="accordion-btn w-full px-6 py-4 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                        <span class="font-semibold text-gray-900">Is there a delivery fee?</span>
+                        <svg class="accordion-icon w-5 h-5 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="px-6 py-4 text-gray-600">
+                            Delivery fees vary based on your location and order size. Many vendors offer free delivery on orders above a certain amount. Check individual vendor policies for specific details.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="wow fadeInLeft" data-wow-delay="1.5s"><a class="why_mithra" href="#"><span><img alt="" src="assets/img/playstore_btn.png" /> </span></a> <a class="why_mithra" href="#"><span> <img alt="" src="assets/img/appstore_btn.png" /> </span></a></div>
-</div>
-</div>
+    <!-- CTA Section -->
+    <section class="py-20 bg-gradient-to-r from-emerald-600 to-green-600">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Ready to Experience Freshness?</h2>
+            <p class="text-lg text-emerald-100 mb-8">Join thousands of customers who are already enjoying the convenience of MithraDirect</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="https://play.google.com/store/apps/details?id=com.mithrauserapp.customer" target="_blank" rel="noopener noreferrer" class="bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold hover:bg-emerald-50 transition inline-flex items-center justify-center gap-2">
+                    Download App
+                </a>
+                <a href="https://docs.google.com/forms/d/e/1FAIpQLSc4_Gc9fb7AzzC5SZlcLhju3lStbl9iuKWgGQJ2K5gyVDDgKg/viewform" target="_blank" class="border-2 border-white text-white px-8 py-4 rounded-full font-semibold hover:bg-white hover:text-emerald-600 transition inline-flex items-center justify-center gap-2">
+                    Become a Vendor
+                </a>
+            </div>
+        </div>
+    </section>
 
-<div class="col-lg-6">
-<div class="integration_content wow fadeInLeft">
-<h5><b>Vendor Empowerment</b></h5>
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-4 gap-12">
+                <div>
+                    <img src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="h-10 mb-6">
+                    <p class="text-gray-400 mb-4">Empowering local vendors and connecting communities through hyperlocal commerce.</p>
+                    <div class="space-y-2">
+                        <p class="text-gray-400">MIG 3-973/L, Mayurinagar, Miyapur</p>
+                        <p class="text-gray-400">Telangana, India, 500049</p>
+                        <a href="mailto:mithradirect@gmail.com" class="text-emerald-400 hover:text-emerald-300">mithradirect@gmail.com</a>
+                        <p class="text-gray-400">+91-9912149049</p>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-4">Pages</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">About</a></li>
+                        <li><a href="#for-customers" class="text-gray-400 hover:text-emerald-400 transition">For Customers</a></li>
+                        <li><a href="#for-vendors" class="text-gray-400 hover:text-emerald-400 transition">For Vendors</a></li>
+                        <li><a href="#why-mithra" class="text-gray-400 hover:text-emerald-400 transition">Why MithraDirect</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-4">Features</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">Shop Local, Delivered</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">Empowering Businesses</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">Freshness, Guaranteed</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">Flexible Subscriptions</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-4">Help & Support</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-emerald-400 transition">Support</a></li>
+                        <li><a href="#faq" class="text-gray-400 hover:text-emerald-400 transition">FAQ</a></li>
+                        <li><a href="privacy.html" target="_blank" class="text-gray-400 hover:text-emerald-400 transition">Privacy</a></li>
+                        <li><a href="terms-conditions.html" target="_blank" class="text-gray-400 hover:text-emerald-400 transition">Terms & Conditions</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400">&copy; 2025 MithraDirect. All rights reserved.</p>
+                <div class="flex space-x-4 mt-4 md:mt-0">
+                    <a href="#" class="text-gray-400 hover:text-emerald-400 transition">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-emerald-400 transition">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.059-1.265-.073-1.689-.073-4.849 0-3.204.013-3.583.072-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.618-6.782-6.98-6.979-1.28-.059-1.689-.073-4.948-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-emerald-400 transition">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
 
-<ul class="service_items list-unstyled">
-	<li><img alt="" src="assets/img/vendor.png" />
-	<p class="pt-2">Directly support small business and local vendors, helping sustain their livelihoods.</p>
-	</li>
-</ul>
+    <!-- JavaScript for Mobile Menu and Accordion -->
+    <script>
+        // Mobile Menu Toggle
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
 
-<h5><b>Fresh &amp; Authentic</b></h5>
+        if (mobileMenuBtn && mobileMenu) {
+            mobileMenuBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
 
-<ul class="service_items list-unstyled">
-	<li><img alt="" src="assets/img/fresh.png" />
-	<p class="pt-2">Experience local produce,local delivery, handcrafted items, and unique services.</p>
-	</li>
-</ul>
+        // Accordion Toggle
+        const accordionBtns = document.querySelectorAll('.accordion-btn');
 
-<h5><b>Convenient Delivery</b></h5>
+        accordionBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const content = btn.nextElementSibling;
+                const icon = btn.querySelector('.accordion-icon');
+                
+                // Close all other accordions
+                accordionBtns.forEach(otherBtn => {
+                    if (otherBtn !== btn) {
+                        otherBtn.nextElementSibling.classList.remove('active');
+                        otherBtn.querySelector('.accordion-icon').style.transform = 'rotate(0deg)';
+                    }
+                });
 
-<ul class="service_items list-unstyled">
-	<li><img alt="" src="assets/img/delivery.png" />
-	<p class="pt-2">Enjoy the best of local to your doorstep with flexible options.</p>
-	</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Integration Two --><!-- Integration Two -->
+                // Toggle current accordion
+                content.classList.toggle('active');
+                icon.style.transform = content.classList.contains('active') ? 'rotate(180deg)' : 'rotate(0deg)';
+            });
+        });
 
-<section class="integration h_6 two" data-bg-color="#fbfafa" id="for_customers">
-<div class="container">
-<div class="row align-items-center">
-<div class="col-lg-6">
-<div class="integration_content wow fadeInLeft">
-<div class="section_title h_6">
-<h6>For Customers</h6>
-
-<h3>Discover the Flavors of Your Neighbourhood</h3>
-</div>
-
-<ul class="service_items list-unstyled">
-	<li>
-	<p>🛍️ Access Local Vendors Digitally: Discover and order from trusted vendors in your area from the comfort of your home</p>
-	</li>
-	<li>
-	<p>🔔 Real-Time Notifications: Stay updated with instant alerts on order status via WhatsApp, andSMS, and email.</p>
-	</li>
-	<li>
-	<p>💳 Flexible Subscriptions: Customize your orders with recurring subscriptions or one-time purchases.</p>
-	</li>
-	<li>
-	<p>💡 Support Local Businesses: Contribute to the growth of small and rural vendors by shopping locally.</p>
-	</li>
-	<li><p>⚙️ User-Friendly Platform.: Easy-to-use interface for browsing, ordering, and managing your subscriptions.</p>
-	</li>
-</ul>
-</div>
-</div>
-
-<div class="col-lg-6">
-<div class="section_img wow fadeInLeft"><img alt="" src="assets/img/ForCustomers.png" /></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Integration Two --><!-- Integration Two -->
-
-<section class="integration h_6 two pb-5" data-bg-color="#fbfafa" id="for_vendors">
-<div class="container">
-<div class="row align-items-center">
-<div class="col-lg-6">
-<div class="section_img wow fadeInLeft"><img alt="" src="assets/img/ForVendors.png" /></div>
-</div>
-
-<div class="col-lg-6">
-<div class="integration_content wow fadeInLeft">
-<div class="section_title h_6">
-<h6>For Vendors</h6>
-
-<h3>Connect Directly with Customers</h3>
-</div>
-
-<ul class="service_items list-unstyled">
-	<li>
-	<p>✅ Digital Presence & Growth: Expand your business beyond physical boundaries with MithraDirect’s online platform.</p>
-	</li>
-	<li>
-	<p>🚀 Increased Sales & Reach: Gain visibility to nearby customers searching for your products or services.</p>
-	</li>
-	<li>
-	<p>📍 Location-Based Targeting: Define service areas using Google Maps to attract local customers effectively.y</p>
-	</li>
-	<li>
-	<p>💬 Multi-Channel Communication: Send order confirmations, delivery updates, and promotions via WhatsApp, and SMS.</p>
-	</li>
-	<li>
-	<p>💡 Subscription & On-Demand Models: Offer flexible plans like one-time, daily, weekly, or monthly subscriptions.</p>
-	</li>
-</ul>
-<a class="text_button hover_style_btn" href="#">Become a Vendor </a></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Integration Two --><!-- Testimonial -->
-
-<section class="dm_testimonial" data-bg-img="assets/img/dm_testimonial_bg.png" id="testimonials">
-<div class="container">
-<div class="dm_testimonial_items">
-<div class="single_item"><img alt="" src="assets/img/icon/testi_quotation.svg" />
-<h4>The vegetables are incredibly fresh and flavorful. The service is quick and reliable. I&#39;m happy to have discovered this source for organic, local produce.</h4>
-
-<div class="author_info">
-<h5>Vamsi Krishna</h5>
-<span>Hyderabad</span></div>
-</div>
-
-<div class="single_item"><img alt="" src="assets/img/icon/testi_quotation.svg" />
-<h4>I love the freshness and taste of the vegetables. Quick service and the focus on organic, local produce make this platform my top choice.</h4>
-
-<div class="author_info">
-<h5>Vikram Singh</h5>
-<span>Dilsukhnagar</span></div>
-</div>
-
-<div class="single_item"><img alt="" src="assets/img/icon/testi_quotation.svg" />
-<h4>Delicious, fresh vegetables with excellent service! It&#39;s wonderful to have access to organic, locally-sourced goods. This platform has truly enhanced my grocery shopping experience.</h4>
-
-<div class="author_info">
-<h5>Kiran Kumar</h5>
-<span>Nizampet</span></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Testimonial --><!-- Cta -->
-
-<section class="dm_cta" data-bg-color="#1A1919">
-<div class="container">
-<div class="section_title h_6 text-center">
-<h2>Experience Freshness<br />
-Like Never Before</h2>
-
-<p>Sign up with your email for an exclusive demo of our organic, locally-sourced produce.</p>
-</div>
-
-<form action="#" class="email_form"><input class="form-control" placeholder="enter your email address..." type="email" /> <input class="dm_cta_btn" type="submit" value="Request Demo" /> <img alt="" class="icon" src="assets/img/icon/mail1.png" /></form>
-</div>
-
-<div class="shape_items"><img alt="" class="one" data-parallax="{&quot;x&quot;: 0, &quot;y&quot;: 100, &quot;rotateZ&quot;:100}" src="assets/img/dm_cta_shape1.png" /> <img alt="" class="two" src="assets/img/dm_cta_shape2.png" /> <img alt="" class="three" data-parallax="{&quot;x&quot;: 0, &quot;y&quot;: 100, &quot;rotateZ&quot;:0}" src="assets/img/dm_cta_shape3.png" /> <img alt="" class="four" src="assets/img/dm_cta_shape4.png" /> <img alt="" class="five" data-parallax="{&quot;x&quot;: 0, &quot;y&quot;: 100, &quot;rotateZ&quot;:0}" src="assets/img/dm_cta_shape5.png" /> <img alt="" class="six" src="assets/img/dm_cta_shape6.png" /> <img alt="" class="seven" data-parallax="{&quot;x&quot;: 0, &quot;y&quot;: 100, &quot;rotateZ&quot;:100}" src="assets/img/dm_cta_shape7.png" /></div>
-</section>
-<!-- Cta --><!-- Footer -->
-
-<section class="footer h_4 h_5 h_6" data-bg-color="#fbfafa">
-<div class="container">
-<div class="main_footer">
-<div class="row">
-<div class="col-xl-4 col-md-6">
-<div class="site_info"><img alt="" src="assets/img/logos/logo_dark_md.png" width="250" />
-<div class="content">
-<ul class="info_list list-unstyled">
-	<li>
-	<p>MIG 3-973/L,Mayurinagr,Miyapur<br>
-	Telangana,India, 500049</p>
-	</li>
-	<li><a href="mailto:mithradirect@gmail.com">mithradirect@gmail.com</a></li>
-	<li>+91-9912149049</li>
-</ul>
-</div>
-</div>
-</div>
-
-<div class="col-xl-3 col-md-6">
-<div class="site_info posi-f1">
-<div class="content">
-<h5>Pages</h5>
-
-<ul class="info_list list-unstyled">
-	<li><a href="#">About</a></li>
-	<li><a href="#">For Customers</a></li>
-	<li><a href="#">For Vendors</a></li>
-	<li><a href="#">Why MithraDirect</a></li>
-</ul>
-</div>
-</div>
-</div>
-
-<div class="col-xl-3 col-md-6">
-<div class="site_info posi-f2">
-<div class="content">
-<h5>Features</h5>
-
-<ul class="info_list list-unstyled">
-	<li><a href="#">Shop Local, Delivered</a></li>
-	<li><a href="#">Empowering Businesses</a></li>
-	<li><a href="#">Freshness, Guaranteed</a></li>
-	<li><a href="#">Flexible Subscriptions</a></li>
-</ul>
-</div>
-</div>
-</div>
-
-<div class="col-xl-2 col-md-6">
-<div class="site_info posi-f2">
-<div class="content">
-<h5>Help &amp; Support</h5>
-
-<ul class="info_list list-unstyled">
-	<li><a href="#">Support</a></li>
-	<li><a href="#">FAQ</a></li>
-	<li><a href="privacy.html" target="_blank">Privacy</a></li>
-	<li><a href="terms-conditions.html" target="_blank">Term &amp; conditions</a></li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-
-<div class="footer_bottom">
-<div class="row align-items-center">
-<div class="col-lg-6 col-md-6">
-<p>&copy; 2025 MithraDirect. Copyright and rights reserved</p>
-</div>
-
-<div class="col-lg-6 col-md-6">
-<div class="social_icons"></div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Footer --><!-- Optional JavaScript; choose one of the two! --><script src="assets/js/jquery-3.6.0.min.js"></script><!-- Option 1: Bootstrap Bundle with Popper --><script src="assets/vendors/bootstrap/js/popper.min.js"></script><script src="assets/vendors/bootstrap/js/bootstrap.min.js"></script><script src="assets/vendors/isotope/imagesloaded.pkgd.min.js"></script><script src="assets/vendors/isotope/isotope.pkgd.min.js"></script><script src="assets/vendors/parallax/jquery.parallax-scroll.js"></script><script src="assets/vendors/parallax/parallax.min.js"></script><script src="assets/js/jquery.counterup.js"></script><script src="assets/js/waypoints.min.js"></script><script src="assets/vendors/slick/slick.min.js"></script><script src="assets/vendors/wow/wow.min.js"></script><script src="assets/js/custom.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-
-<script>
-  (function () {
-    emailjs.init("IOjACNNvzJEwWloAX");
-  })();
-
-  document.getElementById("demoForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-
-    emailjs.sendForm(
-      "service_4kwxsps",
-      "template_uzyl0dm",
-      this
-    ).then(
-      function () {
-        alert("Thank you! We will contact you shortly.");
-      },
-      function (error) {
-        alert("Something went wrong. Please try again.");
-        console.error(error);
-      }
-    );
-  });
-</script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                    // Close mobile menu if open
+                    if (mobileMenu) {
+                        mobileMenu.classList.add('hidden');
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>
