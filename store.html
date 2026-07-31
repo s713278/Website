@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Shop local on MithraDirect — WhatsApp orders from neighborhood vendors.">
+    <title>Store — MithraDirect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/onboarding.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif; }
+        body.store-page { background: #f8fafc; min-height: 100vh; }
+        .store-hero {
+            position: relative;
+            min-height: 220px;
+            aspect-ratio: 16 / 9;
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
+            padding: 2rem 1.25rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            overflow: hidden;
+        }
+        .store-hero-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+        .store-hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.2));
+            z-index: 0;
+        }
+        .store-hero > *:not(.store-hero-bg):not(.store-hero-overlay) { position: relative; z-index: 1; }
+        .store-header-logo {
+            height: 32px;
+            width: 32px;
+            border-radius: 9999px;
+            object-fit: cover;
+            border: 1px solid #e5e7eb;
+        }
+        .store-cat-img {
+            width: 64px;
+            height: 64px;
+            border-radius: 9999px;
+            object-fit: cover;
+            border: 3px solid #d1fae5;
+            background: #ecfdf5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.35rem;
+            font-size: 1.5rem;
+            overflow: hidden;
+        }
+        .store-product-img {
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+        }
+    </style>
+</head>
+<body class="store-page text-gray-800">
+    <div id="store-empty" class="hidden max-w-md mx-auto px-4 py-20 text-center">
+        <div class="text-5xl mb-4">🏪</div>
+        <h1 class="text-2xl font-bold mb-2">Store not found</h1>
+        <p class="text-gray-500 mb-6">No local draft matched this slug. Complete onboarding to create your storefront demo.</p>
+        <a href="onboarding.html" class="btn-primary-md inline-block px-8 py-3 rounded-full font-semibold">Setup Your Store</a>
+    </div>
+
+    <div id="store-app" class="hidden max-w-lg mx-auto bg-white min-h-screen shadow-xl">
+        <header class="sticky top-0 z-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 h-14">
+            <button type="button" class="text-xl text-gray-700" aria-label="Menu">☰</button>
+            <a href="index.html" id="store-header-brand">
+                <img id="store-header-logo" src="assets/img/logos/logo_dark_md.png" alt="Store" class="h-8">
+            </a>
+            <div class="flex items-center gap-3 text-gray-700">
+                <button type="button" aria-label="Search">🔍</button>
+                <button type="button" class="relative" aria-label="Cart">🛒<span class="absolute -top-1 -right-2 bg-emerald-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">0</span></button>
+            </div>
+        </header>
+
+        <section class="store-hero" id="store-hero">
+            <img id="store-banner-img" class="store-hero-bg hidden" alt="">
+            <div class="store-hero-overlay" id="store-hero-overlay"></div>
+            <h1 class="text-2xl font-bold leading-tight" id="store-name">Store</h1>
+            <p class="text-sm opacity-90 mt-1" id="store-tagline"></p>
+            <p class="text-xs opacity-80 mt-1" id="store-location"></p>
+            <a id="store-wa-btn" href="#" target="_blank" rel="noopener"
+               class="mt-4 inline-flex items-center gap-2 bg-white text-emerald-700 font-bold text-sm px-5 py-2.5 rounded-full shadow hover:scale-105 transition">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                WhatsApp Order
+            </a>
+        </section>
+
+        <section class="px-4 py-5">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Categories</h2>
+            <div class="flex gap-4 overflow-x-auto pb-1" id="store-categories"></div>
+        </section>
+
+        <section class="px-4 pb-6">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Our Products</h2>
+            <div class="grid grid-cols-2 gap-3" id="store-products"></div>
+        </section>
+
+        <section class="px-4 py-6 border-t border-gray-100 bg-emerald-50/50">
+            <div class="grid grid-cols-2 gap-3 text-center text-xs text-gray-600">
+                <div class="bg-white rounded-xl py-3 shadow-sm">🌿 100% Homemade</div>
+                <div class="bg-white rounded-xl py-3 shadow-sm">🚫 No Preservatives</div>
+                <div class="bg-white rounded-xl py-3 shadow-sm">🧼 Hygienically Packed</div>
+                <div class="bg-white rounded-xl py-3 shadow-sm">💵 COD Available</div>
+            </div>
+            <p class="text-center text-xs text-gray-400 mt-5">Powered by <a href="index.html" class="text-emerald-600 font-medium">MithraDirect</a></p>
+            <p class="text-center mt-3">
+                <a href="onboarding.html" class="text-xs text-gray-400 hover:text-emerald-600">← Edit store setup</a>
+            </p>
+        </section>
+    </div>
+
+    <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/storefront.js"></script>
+</body>
+</html>
