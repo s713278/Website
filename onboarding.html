@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Setup your Instagram & WhatsApp store on MithraDirect in 10 minutes.">
+    <title>Setup Your Store — MithraDirect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/onboarding.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif; }
+    </style>
+</head>
+<body class="onboarding-page bg-white text-gray-800">
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-emerald-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="index.html" class="flex items-center gap-2">
+                <img src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="h-9">
+            </a>
+            <div class="text-sm text-gray-500 hidden sm:block">
+                Setup Your Insta &amp; WhatsApp Store in <span class="font-semibold text-emerald-600">10 Minutes</span>
+            </div>
+            <button type="button" id="btn-load-demo" class="text-xs sm:text-sm text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full hover:bg-emerald-50 transition">
+                Load demo data
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="mb-2">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Setup Your Insta &amp; WhatsApp Store</h1>
+            <p class="text-gray-500 mt-1 text-sm sm:text-base">Complete these steps — your storefront updates live on the right.</p>
+        </div>
+
+        <!-- Stepper -->
+        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+
+        <div class="grid lg:grid-cols-5 gap-8 mt-4">
+            <!-- Wizard panels -->
+            <div class="lg:col-span-3">
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 min-h-[420px]">
+
+                    <!-- Step 1: Verify Mobile -->
+                    <section class="step-panel" data-step="1" id="panel-1">
+                        <h2 class="text-xl font-bold mb-1">Verify Mobile Number</h2>
+                        <p class="text-gray-500 text-sm mb-6">We'll send a one-time password to your phone.</p>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
+                        <div class="flex gap-2 max-w-md">
+                            <span class="inline-flex items-center px-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 font-medium">+91</span>
+                            <input type="tel" id="input-phone" maxlength="10" inputmode="numeric" placeholder="10-digit mobile"
+                                class="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400">
+                        </div>
+                        <p id="phone-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                        <button type="button" id="btn-send-otp" class="btn-primary-md mt-6 px-8 py-3 rounded-full font-semibold">Send OTP</button>
+                    </section>
+
+                    <!-- Step 2: OTP -->
+                    <section class="step-panel" data-step="2" id="panel-2">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">✓</span>
+                            <h2 class="text-xl font-bold">Enter OTP</h2>
+                        </div>
+                        <p class="text-gray-500 text-sm mb-6">Enter the 6-digit code sent to <span id="otp-phone-display" class="font-medium text-gray-700"></span>. <span class="text-emerald-600 text-xs">(Demo: any 6 digits)</span></p>
+                        <div class="otp-row mb-4" id="otp-inputs"></div>
+                        <p id="otp-error" class="text-red-500 text-sm text-center hidden"></p>
+                        <p class="text-center text-sm text-gray-500 mt-4">
+                            <button type="button" id="btn-resend-otp" class="text-emerald-600 font-medium disabled:text-gray-400" disabled>
+                                Resend OTP in <span id="resend-timer">30</span>s
+                            </button>
+                        </p>
+                        <div class="flex justify-center mt-6">
+                            <button type="button" id="btn-verify-otp" class="btn-primary-md px-8 py-3 rounded-full font-semibold">Verify &amp; Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 3: Business type -->
+                    <section class="step-panel" data-step="3" id="panel-3">
+                        <h2 class="text-xl font-bold mb-1">Choose Your Business</h2>
+                        <p class="text-gray-500 text-sm mb-6">Pick the option that best matches what you sell.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="business-grid"></div>
+                        <p id="business-error" class="text-red-500 text-sm mt-3 hidden">Please select a business type.</p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 4: Categories -->
+                    <section class="step-panel" data-step="4" id="panel-4">
+                        <h2 class="text-xl font-bold mb-1">Pick Categories</h2>
+                        <p class="text-gray-500 text-sm mb-6">Select up to <strong>2</strong> categories for your store.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="category-grid"></div>
+                        <div class="mt-4 flex flex-wrap gap-2 items-center">
+                            <input type="text" id="input-new-category" placeholder="Custom category name"
+                                class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 max-w-xs">
+                            <button type="button" id="btn-add-category" class="text-sm font-medium text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl hover:bg-emerald-50">+ Add Category</button>
+                        </div>
+                        <p id="category-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 5: Products -->
+                    <section class="step-panel" data-step="5" id="panel-5">
+                        <h2 class="text-xl font-bold mb-1">Add Products</h2>
+                        <p class="text-gray-500 text-sm mb-6">Products are grouped by the categories you picked. Drag to reorder within a category.</p>
+                        <div id="product-list"></div>
+                        <p id="product-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 6: Variants / SKUs -->
+                    <section class="step-panel" data-step="6" id="panel-6">
+                        <h2 class="text-xl font-bold mb-1">Add Variants / SKUs</h2>
+                        <p class="text-gray-500 text-sm mb-6">Set size, selling price, MRP, and active status for each SKU.</p>
+                        <div id="sku-editor"></div>
+                        <p id="sku-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 7: Delivery Methods -->
+                    <section class="step-panel" data-step="7" id="panel-7">
+                        <h2 class="text-xl font-bold mb-1">Delivery Methods</h2>
+                        <p class="text-gray-500 text-sm mb-6">Choose how customers receive orders. Add a charge where it applies.</p>
+                        <div class="space-y-3 max-w-lg" id="delivery-methods">
+                            <label class="method-card" data-delivery="storePickup">
+                                <div class="method-card-head">
+                                    <input type="checkbox" id="del-pickup" class="method-check">
+                                    <div>
+                                        <div class="method-title">Store Pickup</div>
+                                        <div class="method-desc">Customers collect from your location — free</div>
+                                    </div>
+                                    <span class="method-badge">Free</span>
+                                </div>
+                            </label>
+                            <div class="method-card" data-delivery="homeDelivery">
+                                <label class="method-card-head">
+                                    <input type="checkbox" id="del-home" class="method-check">
+                                    <div>
+                                        <div class="method-title">Home Delivery</div>
+                                        <div class="method-desc">Local drop-off with a delivery charge</div>
+                                    </div>
+                                </label>
+                                <div class="method-extra" id="del-home-extra">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1" for="del-home-charge">Delivery charge (₹)</label>
+                                    <input type="number" id="del-home-charge" min="0" step="1" placeholder="e.g. 40"
+                                        class="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                </div>
+                            </div>
+                            <div class="method-card" data-delivery="courierDelivery">
+                                <label class="method-card-head">
+                                    <input type="checkbox" id="del-courier" class="method-check">
+                                    <div>
+                                        <div class="method-title">Courier Delivery</div>
+                                        <div class="method-desc">Ship via courier with shipping charges</div>
+                                    </div>
+                                </label>
+                                <div class="method-extra" id="del-courier-extra">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1" for="del-courier-charge">Courier charge (₹)</label>
+                                    <input type="number" id="del-courier-charge" min="0" step="1" placeholder="e.g. 80"
+                                        class="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                </div>
+                            </div>
+                        </div>
+                        <p id="delivery-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 8: Payment Methods -->
+                    <section class="step-panel" data-step="8" id="panel-8">
+                        <h2 class="text-xl font-bold mb-1">Payment Methods</h2>
+                        <p class="text-gray-500 text-sm mb-6">Tell customers how they can pay you.</p>
+                        <div class="space-y-3 max-w-lg" id="payment-methods">
+                            <div class="method-card" data-payment="upi">
+                                <label class="method-card-head">
+                                    <input type="checkbox" id="pay-upi" class="method-check">
+                                    <div>
+                                        <div class="method-title">UPI Payment</div>
+                                        <div class="method-desc">Collect via PhonePe, GPay, Paytm, etc.</div>
+                                    </div>
+                                </label>
+                                <div class="method-extra" id="pay-upi-extra">
+                                    <div class="grid sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">UPI ID</label>
+                                            <input type="text" id="pay-upi-id" placeholder="yourname@upi"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Payee Name</label>
+                                            <input type="text" id="pay-upi-name" placeholder="Account holder name"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="method-card" data-payment="bank">
+                                <label class="method-card-head">
+                                    <input type="checkbox" id="pay-bank" class="method-check">
+                                    <div>
+                                        <div class="method-title">Bank Account</div>
+                                        <div class="method-desc">Share account details for NEFT / IMPS transfers</div>
+                                    </div>
+                                </label>
+                                <div class="method-extra" id="pay-bank-extra">
+                                    <div class="grid sm:grid-cols-2 gap-3">
+                                        <div class="sm:col-span-2">
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Account Holder Name</label>
+                                            <input type="text" id="pay-bank-name" placeholder="Name as per bank"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Account Number</label>
+                                            <input type="text" id="pay-bank-number" inputmode="numeric" placeholder="Account number"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">IFSC Code</label>
+                                            <input type="text" id="pay-bank-ifsc" placeholder="e.g. HDFC0001234"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 uppercase">
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Bank Name</label>
+                                            <input type="text" id="pay-bank-bank" placeholder="Bank name"
+                                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="method-card" data-payment="cod">
+                                <div class="method-card-head">
+                                    <input type="checkbox" id="pay-cod" class="method-check">
+                                    <div>
+                                        <div class="method-title">Cash on Delivery</div>
+                                        <div class="method-desc">Customer pays in cash when they receive the order</div>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                        <p id="payment-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Continue</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 9: Store Settings -->
+                    <section class="step-panel" data-step="9" id="panel-9">
+                        <h2 class="text-xl font-bold mb-1">Store Settings</h2>
+                        <p class="text-gray-500 text-sm mb-6">Name your store, set branding, and pick a theme color.</p>
+                        <div class="space-y-4 max-w-lg">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Store Name</label>
+                                <input type="text" id="input-store-name" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="e.g. Anitha Homemade Pickles">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Store Tagline</label>
+                                <input type="text" id="input-tagline" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Traditional • Natural • Homemade">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Business Location</label>
+                                <input type="text" id="input-location" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Hyderabad, Telangana">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number (For Orders)</label>
+                                <div class="flex gap-2">
+                                    <span class="inline-flex items-center px-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 font-medium">+91</span>
+                                    <input type="tel" id="input-whatsapp" maxlength="10" class="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="WhatsApp number">
+                                </div>
+                            </div>
+
+                            <div class="theme-panel">
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <label class="block text-sm font-medium text-gray-700">Theme Color</label>
+                                    <span class="text-xs text-gray-400">Applies across your storefront</span>
+                                </div>
+                                <div class="theme-swatches" id="theme-swatches" role="listbox" aria-label="Theme color presets"></div>
+                                <div class="theme-custom mt-3 flex items-center gap-3">
+                                    <label class="text-xs font-medium text-gray-600" for="input-theme-color">Custom</label>
+                                    <input type="color" id="input-theme-color" value="#10b981" class="theme-color-input" aria-label="Custom theme color">
+                                    <span id="theme-color-hex" class="text-xs font-mono text-gray-500">#10b981</span>
+                                    <div class="theme-live-chip" id="theme-live-chip">Live preview</div>
+                                </div>
+                            </div>
+
+                            <div class="grid sm:grid-cols-2 gap-4 pt-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Store Logo <span class="text-gray-400 font-normal">(1:1)</span></label>
+                                    <div class="upload-box upload-box--square" id="logo-upload-box">
+                                        <input type="file" id="input-logo" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only">
+                                        <img id="logo-preview" class="upload-preview hidden" alt="Store logo preview">
+                                        <div class="upload-placeholder" id="logo-placeholder">
+                                            <span class="text-2xl">🖼️</span>
+                                            <span class="text-xs text-gray-500 mt-1">Square logo</span>
+                                            <span class="text-[10px] text-gray-400">JPG, PNG · cropped to 1:1</span>
+                                        </div>
+                                        <button type="button" class="upload-remove hidden" id="btn-remove-logo" aria-label="Remove logo">✕</button>
+                                    </div>
+                                    <button type="button" id="btn-pick-logo" class="mt-2 text-sm font-medium text-emerald-700 hover:underline">Upload logo</button>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Home Banner <span class="text-gray-400 font-normal">(16:9)</span></label>
+                                    <div class="upload-box upload-box--banner" id="banner-upload-box">
+                                        <input type="file" id="input-banner" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only">
+                                        <img id="banner-preview" class="upload-preview hidden" alt="Banner preview">
+                                        <div class="upload-placeholder" id="banner-placeholder">
+                                            <span class="text-2xl">🏞️</span>
+                                            <span class="text-xs text-gray-500 mt-1">Home banner</span>
+                                            <span class="text-[10px] text-gray-400">JPG, PNG · cropped to 16:9</span>
+                                        </div>
+                                        <button type="button" class="upload-remove hidden" id="btn-remove-banner" aria-label="Remove banner">✕</button>
+                                    </div>
+                                    <button type="button" id="btn-pick-banner" class="mt-2 text-sm font-medium text-emerald-700 hover:underline">Upload banner</button>
+                                </div>
+                            </div>
+                        </div>
+                        <p id="settings-error" class="text-red-500 text-sm mt-3 hidden"></p>
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="btn-back px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 font-medium hover:bg-gray-50" data-back>Back</button>
+                            <button type="button" class="btn-next btn-primary-md px-8 py-2.5 rounded-full font-semibold" data-next>Go Live</button>
+                        </div>
+                    </section>
+
+                    <!-- Step 10: Success -->
+                    <section class="step-panel" data-step="10" id="panel-10">
+                        <div class="text-center py-4">
+                            <div class="w-16 h-16 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mb-4">✓</div>
+                            <h2 class="text-2xl font-bold mb-2">Your Store is Live!</h2>
+                            <p class="text-gray-500 text-sm mb-6">Share your store link on Instagram &amp; WhatsApp.</p>
+                            <div class="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 inline-flex items-center gap-2 max-w-full">
+                                <span class="text-emerald-800 font-medium text-sm truncate" id="store-url-display">mithradirect.com/store/…</span>
+                                <button type="button" id="btn-copy-url" class="text-xs font-semibold text-emerald-700 whitespace-nowrap hover:underline">Copy</button>
+                            </div>
+                            <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                                <a id="btn-view-store" href="store.html" class="btn-primary-md px-8 py-3 rounded-full font-semibold inline-block">View My Store</a>
+                            </div>
+                            <div class="mt-6 flex justify-center gap-4">
+                                <a id="share-whatsapp" href="#" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-green-500 text-white flex items-center justify-center hover:scale-105 transition" title="Share on WhatsApp" aria-label="WhatsApp">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                </a>
+                                <a id="share-facebook" href="#" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-105 transition" title="Share on Facebook" aria-label="Facebook">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                </a>
+                                <a id="share-instagram" href="https://www.instagram.com/" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 text-white flex items-center justify-center hover:scale-105 transition" title="Open Instagram" aria-label="Instagram">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Live preview -->
+            <div class="lg:col-span-2">
+                <div class="preview-sticky">
+                    <p class="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Storefront Preview (Live)</p>
+                    <div class="phone-frame">
+                        <div class="phone-screen" id="phone-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Summary bar -->
+    <footer class="summary-bar">
+        <div class="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-5 gap-3 text-center sm:text-left">
+            <div>
+                <div class="stat-label">Total Time</div>
+                <div class="stat-value">~10 Minutes</div>
+            </div>
+            <div>
+                <div class="stat-label">Categories</div>
+                <div class="stat-value"><span id="stat-categories">0</span> Selected</div>
+            </div>
+            <div>
+                <div class="stat-label">Products</div>
+                <div class="stat-value"><span id="stat-products">0</span> Added</div>
+            </div>
+            <div>
+                <div class="stat-label">SKUs</div>
+                <div class="stat-value"><span id="stat-skus">0</span> Configured</div>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+                <div class="stat-label">WhatsApp Orders</div>
+                <div class="stat-value" id="stat-whatsapp">Pending</div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/onboarding.js"></script>
+</body>
+</html>
