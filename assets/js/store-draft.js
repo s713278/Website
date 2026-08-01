@@ -124,6 +124,262 @@
     };
   }
 
+  /**
+   * Default static demo storefront (store.html).
+   * Sai Ram Home Foods with local logo + marketing banner assets.
+   */
+  function seedStaticStorefront() {
+    var draft = seedSaiRamDraft();
+    draft.isStatic = true;
+    draft.addresses = [
+      {
+        id: 'home',
+        label: 'Home',
+        line: 'Near Latif Hospital, Guntur, Andhra Pradesh 522001'
+      },
+      {
+        id: 'work',
+        label: 'Work',
+        line: 'Brodipet Main Road, Guntur, Andhra Pradesh 522002'
+      }
+    ];
+    draft.settings.address = draft.addresses[0].line;
+    draft.settings.addressWork = draft.addresses[1].line;
+    draft.settings.richBanner = true;
+    return draft;
+  }
+
+  /** Sample storefront: Sai Ram Home Foods */
+  function seedSaiRamDraft() {
+    var logo = 'assets/img/vendors/sai-ram-home-foods-logo.png';
+    var banner = 'assets/img/vendors/sai-ram-home-foods-banner.png';
+    var cats = [
+      { id: 'veg-pickles', name: 'Veg Pickles', image: logo, icon: '🫙' },
+      { id: 'nonveg-pickles', name: 'Non-Veg Pickles', image: logo, icon: '🍗' },
+      { id: 'podi', name: 'Kaaram Podulu', image: logo, icon: '🌶️' },
+      { id: 'snacks', name: 'Snacks', image: logo, icon: '🥨' },
+      { id: 'sweets', name: 'Sweets', image: logo, icon: '🍬' }
+    ];
+
+    function product(opts) {
+      return {
+        id: opts.id,
+        name: opts.name,
+        image: opts.image || logo,
+        color: opts.color || PRODUCT_COLORS[0],
+        order: opts.order,
+        categoryId: opts.categoryId,
+        rating: opts.rating || 4.6,
+        description: opts.description || '',
+        ingredients: opts.ingredients || '',
+        nutrition: opts.nutrition || '',
+        storage: opts.storage || 'Store in a cool, dry place. Keep tightly sealed after opening.',
+        deliveryInfo:
+          opts.deliveryInfo ||
+          'Home delivery available in Guntur, AP. Orders prepared fresh in small batches.',
+        popular: !!opts.popular,
+        variants: opts.variants
+      };
+    }
+
+    function pickleSkus(prefix, base) {
+      return [
+        { id: prefix + '_250', label: '250 gms', price: base, mrp: base + 30, active: true },
+        { id: prefix + '_500', label: '500 gms', price: base * 2 - 20, mrp: base * 2 + 20, active: true },
+        { id: prefix + '_1kg', label: '1 kg', price: base * 3.5, mrp: base * 4, active: true }
+      ];
+    }
+
+    function podiSkus(prefix, base) {
+      return [
+        { id: prefix + '_200', label: '200 gms', price: base, mrp: base + 20, active: true },
+        { id: prefix + '_500', label: '500 gms', price: Math.round(base * 2.2), mrp: Math.round(base * 2.5), active: true }
+      ];
+    }
+
+    var products = [
+      product({
+        id: 'prod_mango',
+        name: 'Mango Pickle',
+        categoryId: 'veg-pickles',
+        order: 0,
+        color: '#FEF3C7',
+        rating: 4.9,
+        popular: true,
+        description: 'Sun-cured Andhra avakaya-style mango pickle — Amma chethi ruchi, pure & natural.',
+        ingredients: 'Raw mango, mustard oil, chilli powder, fenugreek, salt',
+        variants: pickleSkus('sku_mango', 160)
+      }),
+      product({
+        id: 'prod_gongura',
+        name: 'Gongura Pickle',
+        categoryId: 'veg-pickles',
+        order: 1,
+        color: '#D1FAE5',
+        rating: 4.8,
+        popular: true,
+        description: 'Tangy gongura pickle made fresh in small batches with traditional Telugu spices.',
+        ingredients: 'Gongura leaves, chilli, garlic, mustard oil, salt',
+        variants: pickleSkus('sku_gongura', 150)
+      }),
+      product({
+        id: 'prod_usiri',
+        name: 'Usirikaya Pickle',
+        categoryId: 'veg-pickles',
+        order: 2,
+        color: '#DBEAFE',
+        rating: 4.7,
+        popular: true,
+        description: 'Classic amla (usirikaya) pickle — chemical free, no artificial colours.',
+        ingredients: 'Amla, chilli, mustard oil, salt, spices',
+        variants: pickleSkus('sku_usiri', 140)
+      }),
+      product({
+        id: 'prod_nimmakaya',
+        name: 'Nimmakaya Pickle',
+        categoryId: 'veg-pickles',
+        order: 3,
+        color: '#FEF3C7',
+        rating: 4.6,
+        description: 'Zesty lemon pickle with authentic Guntur chilli heat.',
+        ingredients: 'Lemon, chilli powder, mustard oil, salt',
+        variants: pickleSkus('sku_nimma', 130)
+      }),
+      product({
+        id: 'prod_chicken',
+        name: 'Chicken Pickle',
+        categoryId: 'nonveg-pickles',
+        order: 4,
+        color: '#FECACA',
+        rating: 4.8,
+        popular: true,
+        description: 'Homemade chicken pickle — bold, spicy and packed hygienically.',
+        ingredients: 'Chicken, chilli, garlic, ginger, spices, oil',
+        variants: pickleSkus('sku_chicken', 280)
+      }),
+      product({
+        id: 'prod_mutton',
+        name: 'Mutton Pickle',
+        categoryId: 'nonveg-pickles',
+        order: 5,
+        color: '#FECACA',
+        rating: 4.7,
+        description: 'Traditional mutton pickle prepared with love in small batches.',
+        ingredients: 'Mutton, chilli, garlic, spices, oil',
+        variants: pickleSkus('sku_mutton', 320)
+      }),
+      product({
+        id: 'prod_karam_podi',
+        name: 'Kaaram Podi',
+        categoryId: 'podi',
+        order: 6,
+        color: '#FFEDD5',
+        rating: 4.8,
+        popular: true,
+        description: 'Spicy kaaram podi for rice, idli and dosa — pure taste from home.',
+        ingredients: 'Red chilli, roasted dals, garlic, cumin, salt',
+        variants: podiSkus('sku_kp', 120)
+      }),
+      product({
+        id: 'prod_kandi',
+        name: 'Kandi Podi',
+        categoryId: 'podi',
+        order: 7,
+        color: '#FFEDD5',
+        rating: 4.6,
+        popular: true,
+        description: 'Roasted toor dal podi — authentic taste of tradition.',
+        ingredients: 'Toor dal, red chilli, garlic, salt',
+        variants: podiSkus('sku_kandi', 110)
+      }),
+      product({
+        id: 'prod_karivepaku',
+        name: 'Karivepaku Kaaram',
+        categoryId: 'podi',
+        order: 8,
+        color: '#D1FAE5',
+        rating: 4.7,
+        description: 'Fragrant curry-leaf spice powder, chemical free and homemade.',
+        ingredients: 'Curry leaves, chilli, dal, salt',
+        variants: podiSkus('sku_kv', 130)
+      }),
+      product({
+        id: 'prod_murukku',
+        name: 'Janthikalu / Murukku',
+        categoryId: 'snacks',
+        order: 9,
+        color: '#FEF3C7',
+        rating: 4.6,
+        popular: true,
+        description: 'Crispy homemade murukku — perfect with evening chai.',
+        ingredients: 'Rice flour, urad dal flour, butter, cumin, salt',
+        variants: [
+          { id: 'sku_mur_200', label: '200 gms', price: 90, mrp: 110, active: true },
+          { id: 'sku_mur_500', label: '500 gms', price: 200, mrp: 240, active: true }
+        ]
+      }),
+      product({
+        id: 'prod_laddu',
+        name: 'Besan Laddu',
+        categoryId: 'sweets',
+        order: 10,
+        color: '#FEF3C7',
+        rating: 4.8,
+        popular: true,
+        description: 'Soft besan laddus made with ghee and love — festive favourite.',
+        ingredients: 'Besan, ghee, sugar, cardamom, cashew',
+        variants: [
+          { id: 'sku_lad_250', label: '250 gms', price: 180, mrp: 210, active: true },
+          { id: 'sku_lad_500', label: '500 gms', price: 340, mrp: 380, active: true }
+        ]
+      })
+    ];
+
+    return {
+      phone: '9876543210',
+      verified: true,
+      businessType: 'pickles',
+      categories: cats,
+      products: products,
+      delivery: {
+        storePickup: { enabled: true },
+        homeDelivery: { enabled: true, charge: 40 },
+        courierDelivery: { enabled: false, charge: 80 }
+      },
+      payment: {
+        upi: { enabled: true, upiId: 'sairam@upi', payeeName: 'Sai Ram Home Foods' },
+        bank: {
+          enabled: false,
+          accountName: 'Sai Ram Home Foods',
+          accountNumber: '',
+          ifsc: '',
+          bankName: ''
+        },
+        cod: { enabled: true }
+      },
+      settings: {
+        storeName: 'Sai Ram Home Foods',
+        tagline: 'Authentic taste of tradition',
+        location: 'Service area: Guntur, AP',
+        whatsapp: '9876543210',
+        logo: logo,
+        banner: banner,
+        themeColor: '#1B5E20',
+        address: 'Near Latif Hospital, Guntur, Andhra Pradesh 522001',
+        richBanner: true
+      },
+      slug: 'sai-ram-home-foods',
+      currentStep: 7,
+      maxReachedStep: 7,
+      isSample: true
+    };
+  }
+
+  /** @deprecated Use seedStaticStorefront */
+  function seedGeetaDraft() {
+    return seedStaticStorefront();
+  }
+
   /** Seed matching the mock: Anitha Homemade Pickles */
   function seedPickleDraft() {
     var pickleProducts = [
@@ -310,6 +566,9 @@
     slugify: slugify,
     emptyDraft: emptyDraft,
     seedPickleDraft: seedPickleDraft,
+    seedGeetaDraft: seedGeetaDraft,
+    seedSaiRamDraft: seedSaiRamDraft,
+    seedStaticStorefront: seedStaticStorefront,
     loadDraft: loadDraft,
     saveDraft: saveDraft,
     clearDraft: clearDraft,
