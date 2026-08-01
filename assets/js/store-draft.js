@@ -75,6 +75,31 @@
       .replace(/^-|-$/g, '') || 'my-store';
   }
 
+  var THEME_PRESETS = [
+    { id: 'emerald', label: 'Emerald', color: '#10b981' },
+    { id: 'teal', label: 'Teal', color: '#0d9488' },
+    { id: 'amber', label: 'Amber', color: '#d97706' },
+    { id: 'rose', label: 'Rose', color: '#e11d48' },
+    { id: 'sky', label: 'Sky', color: '#0284c8' },
+    { id: 'forest', label: 'Forest', color: '#166534' }
+  ];
+
+  function defaultDelivery() {
+    return {
+      storePickup: { enabled: true },
+      homeDelivery: { enabled: false, charge: 40 },
+      courierDelivery: { enabled: false, charge: 80 }
+    };
+  }
+
+  function defaultPayment() {
+    return {
+      upi: { enabled: false, upiId: '', payeeName: '' },
+      bank: { enabled: false, accountName: '', accountNumber: '', ifsc: '', bankName: '' },
+      cod: { enabled: true }
+    };
+  }
+
   function emptyDraft() {
     return {
       phone: '',
@@ -82,13 +107,16 @@
       businessType: '',
       categories: [],
       products: [],
+      delivery: defaultDelivery(),
+      payment: defaultPayment(),
       settings: {
         storeName: '',
         tagline: '',
         location: '',
         whatsapp: '',
         logo: '',
-        banner: ''
+        banner: '',
+        themeColor: '#10b981'
       },
       slug: '',
       currentStep: 1,
@@ -98,13 +126,11 @@
 
   /** Seed matching the mock: Anitha Homemade Pickles */
   function seedPickleDraft() {
-    var products = [
+    var pickleProducts = [
       { name: 'Mango Pickle', color: PRODUCT_COLORS[0] },
       { name: 'Gongura Pickle', color: PRODUCT_COLORS[1] },
       { name: 'Lemon Pickle', color: PRODUCT_COLORS[2] },
-      { name: 'Garlic Pickle', color: PRODUCT_COLORS[3] },
-      { name: 'Mixed Veg Pickle', color: PRODUCT_COLORS[4] },
-      { name: 'Avakaya Special', color: PRODUCT_COLORS[5] }
+      { name: 'Garlic Pickle', color: PRODUCT_COLORS[3] }
     ].map(function (p, i) {
       return {
         id: uid('prod'),
@@ -114,29 +140,33 @@
         order: i,
         categoryId: 'pickles',
         variants: [
-          { id: uid('sku'), label: '250g', price: 189 + i * 10, stock: 40 - i * 2 },
-          { id: uid('sku'), label: '500g', price: 349 + i * 15, stock: 25 - i },
-          { id: uid('sku'), label: '1kg', price: 599 + i * 20, stock: 12 }
-        ].slice(0, i === 0 ? 3 : i < 3 ? 2 : 3)
+          { id: uid('sku'), label: '250g', price: 189 + i * 10, mrp: 249 + i * 10, active: true },
+          { id: uid('sku'), label: '500g', price: 349 + i * 15, mrp: 449 + i * 15, active: true },
+          { id: uid('sku'), label: '1kg', price: 599 + i * 20, mrp: 749 + i * 20, active: true }
+        ].slice(0, i === 0 ? 3 : 2)
       };
     });
 
-    // Ensure ~15 SKUs across products
-    var skuCount = products.reduce(function (n, p) {
-      return n + p.variants.length;
-    }, 0);
-    if (skuCount < 15) {
-      products.forEach(function (p) {
-        if (p.variants.length < 3) {
-          p.variants.push({
-            id: uid('sku'),
-            label: '1kg',
-            price: 599,
-            stock: 10
-          });
-        }
-      });
-    }
+    var comboProducts = [
+      { name: 'Pickle Trio Combo', color: PRODUCT_COLORS[4] },
+      { name: 'Family Combo Pack', color: PRODUCT_COLORS[5] }
+    ].map(function (p, i) {
+      return {
+        id: uid('prod'),
+        name: p.name,
+        image: '',
+        color: p.color,
+        order: pickleProducts.length + i,
+        categoryId: 'combo-packs',
+        variants: [
+          { id: uid('sku'), label: '3 x 250g', price: 499 + i * 50, mrp: 649 + i * 50, active: true },
+          { id: uid('sku'), label: '5 x 250g', price: 799 + i * 50, mrp: 999 + i * 50, active: true },
+          { id: uid('sku'), label: 'Gift Box', price: 999 + i * 50, mrp: 1299 + i * 50, active: true }
+        ]
+      };
+    });
+
+    var products = pickleProducts.concat(comboProducts);
 
     return {
       phone: '9876543210',
@@ -147,13 +177,30 @@
         { id: 'combo-packs', name: 'Combo Packs', image: 'assets/img/cup.png' }
       ],
       products: products,
+      delivery: {
+        storePickup: { enabled: true },
+        homeDelivery: { enabled: true, charge: 40 },
+        courierDelivery: { enabled: true, charge: 80 }
+      },
+      payment: {
+        upi: { enabled: true, upiId: 'anitha@upi', payeeName: 'Anitha Homemade Pickles' },
+        bank: {
+          enabled: false,
+          accountName: 'Anitha Homemade Pickles',
+          accountNumber: '',
+          ifsc: '',
+          bankName: ''
+        },
+        cod: { enabled: true }
+      },
       settings: {
         storeName: 'Anitha Homemade Pickles',
         tagline: 'Traditional • Natural • Homemade',
         location: 'Hyderabad, Telangana',
         whatsapp: '9876543210',
         logo: '',
-        banner: ''
+        banner: '',
+        themeColor: '#10b981'
       },
       slug: 'anitha-homemade-pickles',
       currentStep: 1,
@@ -161,14 +208,48 @@
     };
   }
 
+  function mergeNested(base, incoming) {
+    var out = Object.assign({}, base);
+    if (!incoming || typeof incoming !== 'object') return out;
+    Object.keys(incoming).forEach(function (key) {
+      if (
+        incoming[key] &&
+        typeof incoming[key] === 'object' &&
+        !Array.isArray(incoming[key]) &&
+        base[key] &&
+        typeof base[key] === 'object'
+      ) {
+        out[key] = Object.assign({}, base[key], incoming[key]);
+      } else {
+        out[key] = incoming[key];
+      }
+    });
+    return out;
+  }
+
   function loadDraft() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return emptyDraft();
       var data = JSON.parse(raw);
-      return Object.assign(emptyDraft(), data, {
-        settings: Object.assign(emptyDraft().settings, data.settings || {})
+      var blank = emptyDraft();
+      var draft = Object.assign(blank, data, {
+        settings: Object.assign({}, blank.settings, data.settings || {}),
+        delivery: mergeNested(blank.delivery, data.delivery),
+        payment: mergeNested(blank.payment, data.payment)
       });
+      if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
+      (draft.products || []).forEach(function (p) {
+        (p.variants || []).forEach(function (v) {
+          if (v.mrp == null && v.stock != null) {
+            v.mrp = Number(v.price) > 0 ? Math.round(Number(v.price) * 1.25) : 0;
+          }
+          if (v.mrp == null) v.mrp = Number(v.price) || 0;
+          if (typeof v.active !== 'boolean') v.active = true;
+          delete v.stock;
+        });
+      });
+      return draft;
     } catch (e) {
       return emptyDraft();
     }
@@ -194,12 +275,19 @@
 
   function minPrice(product) {
     if (!product.variants || !product.variants.length) return 0;
-    return Math.min.apply(
-      null,
-      product.variants.map(function (v) {
+    var active = product.variants.filter(function (v) {
+      return v.active !== false;
+    });
+    var list = active.length ? active : product.variants;
+    var prices = list
+      .map(function (v) {
         return Number(v.price) || 0;
       })
-    );
+      .filter(function (n) {
+        return n > 0;
+      });
+    if (!prices.length) return 0;
+    return Math.min.apply(null, prices);
   }
 
   function categoriesForBusiness(businessTypeId) {
@@ -217,6 +305,7 @@
     STORAGE_KEY: STORAGE_KEY,
     BUSINESS_TYPES: BUSINESS_TYPES,
     PRODUCT_COLORS: PRODUCT_COLORS,
+    THEME_PRESETS: THEME_PRESETS,
     uid: uid,
     slugify: slugify,
     emptyDraft: emptyDraft,

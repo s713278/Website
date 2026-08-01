@@ -20,6 +20,116 @@
       .replace(/"/g, '&quot;');
   }
 
+  function normalizeHex(color) {
+    var c = String(color || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
+    }
+    return '#10b981';
+  }
+
+  function hexToRgba(hex, alpha) {
+    var h = normalizeHex(hex).slice(1);
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  function applyTheme(color) {
+    var hex = normalizeHex(color);
+    document.documentElement.style.setProperty('--store-theme', hex);
+    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+  }
+
+  function renderDelivery(draft) {
+    var el = document.getElementById('store-delivery');
+    var d = draft.delivery || {};
+    var rows = [];
+    if (d.storePickup && d.storePickup.enabled) {
+      rows.push({ title: 'Store Pickup', detail: 'Collect from store · Free' });
+    }
+    if (d.homeDelivery && d.homeDelivery.enabled) {
+      rows.push({
+        title: 'Home Delivery',
+        detail: 'Local drop-off · ₹' + (Number(d.homeDelivery.charge) || 0)
+      });
+    }
+    if (d.courierDelivery && d.courierDelivery.enabled) {
+      rows.push({
+        title: 'Courier Delivery',
+        detail: 'Courier shipping · ₹' + (Number(d.courierDelivery.charge) || 0)
+      });
+    }
+    if (!rows.length) {
+      el.innerHTML = '<p class="text-sm text-gray-400">Delivery options will appear here.</p>';
+      return;
+    }
+    el.innerHTML = rows
+      .map(function (r) {
+        return (
+          '<div class="store-info-card">' +
+          '<div class="store-info-label">' +
+          escapeHtml(r.title) +
+          '</div>' +
+          '<div class="store-info-value">' +
+          escapeHtml(r.detail) +
+          '</div></div>'
+        );
+      })
+      .join('');
+  }
+
+  function renderPayment(draft) {
+    var el = document.getElementById('store-payment');
+    var p = draft.payment || {};
+    var rows = [];
+    if (p.upi && p.upi.enabled) {
+      rows.push({
+        title: 'UPI Payment',
+        detail:
+          (p.upi.payeeName ? p.upi.payeeName + ' · ' : '') + (p.upi.upiId || 'UPI ID on request')
+      });
+    }
+    if (p.bank && p.bank.enabled) {
+      var bankBits = [];
+      if (p.bank.accountName) bankBits.push(p.bank.accountName);
+      if (p.bank.bankName) bankBits.push(p.bank.bankName);
+      if (p.bank.accountNumber) bankBits.push('A/C ' + p.bank.accountNumber);
+      if (p.bank.ifsc) bankBits.push('IFSC ' + p.bank.ifsc);
+      rows.push({
+        title: 'Bank Transfer',
+        detail: bankBits.join(' · ') || 'Bank details on request'
+      });
+    }
+    if (p.cod && p.cod.enabled) {
+      rows.push({ title: 'Cash on Delivery', detail: 'Pay in cash when you receive the order' });
+    }
+    if (!rows.length) {
+      el.innerHTML = '<p class="text-sm text-gray-400">Payment options will appear here.</p>';
+      return;
+    }
+    el.innerHTML = rows
+      .map(function (r) {
+        return (
+          '<div class="store-info-card">' +
+          '<div class="store-info-label">' +
+          escapeHtml(r.title) +
+          '</div>' +
+          '<div class="store-info-value">' +
+          escapeHtml(r.detail) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    var trustPay = document.getElementById('store-trust-pay');
+    if (trustPay) {
+      trustPay.textContent = p.cod && p.cod.enabled ? '💵 COD Available' : '💳 Online Pay';
+    }
+  }
+
   function init() {
     var draft = D.loadDraft();
     var slug = qs('slug') || draft.slug;
@@ -35,6 +145,9 @@
       empty.classList.remove('hidden');
       return;
     }
+
+    var theme = (draft.settings && draft.settings.themeColor) || '#10b981';
+    applyTheme(theme);
 
     app.classList.remove('hidden');
     document.title = draft.settings.storeName + ' — MithraDirect';
@@ -64,7 +177,8 @@
       bannerImg.src = 'assets/img/fresh.png';
       bannerImg.classList.remove('hidden');
       bannerImg.style.opacity = '0.35';
-      overlay.style.background = 'linear-gradient(to top, rgba(5,150,105,0.8), rgba(16,185,129,0.35))';
+      overlay.style.background =
+        'linear-gradient(to top,' + hexToRgba(theme, 0.85) + ',' + hexToRgba(theme, 0.35) + ')';
     }
 
     var wa = draft.settings.whatsapp || draft.phone;
@@ -98,9 +212,17 @@
         .join('');
     }
 
-    var products = (draft.products || []).slice().sort(function (a, b) {
-      return a.order - b.order;
-    });
+    var products = (draft.products || [])
+      .filter(function (p) {
+        var ids = (draft.categories || []).map(function (c) {
+          return c.id;
+        });
+        return !ids.length || ids.indexOf(p.categoryId) >= 0;
+      })
+      .slice()
+      .sort(function (a, b) {
+        return a.order - b.order;
+      });
     var prodEl = document.getElementById('store-products');
     if (!products.length) {
       prodEl.innerHTML = '<p class="col-span-2 text-sm text-gray-400">No products yet.</p>';
@@ -111,25 +233,31 @@
           return (
             '<article class="rounded-xl border border-gray-100 overflow-hidden bg-white shadow-sm">' +
             '<div class="store-product-img" style="background:' +
-            escapeHtml(p.color || '#ecfdf5') +
+            escapeHtml(p.color || hexToRgba(theme, 0.12)) +
             '">🫙</div>' +
             '<div class="p-3">' +
             '<h3 class="text-sm font-semibold text-gray-800 truncate">' +
             escapeHtml(p.name || 'Product') +
             '</h3>' +
-            '<p class="text-sm text-emerald-600 font-semibold mt-0.5">From ₹' +
+            '<p class="text-sm font-semibold mt-0.5 store-accent">From ₹' +
             (from || '—') +
             '</p>' +
             (wa
               ? '<a href="' +
-                D.whatsappLink(wa, 'Hi, I want to order: ' + (p.name || 'product') + ' from ' + draft.settings.storeName) +
-                '" target="_blank" class="mt-2 inline-block text-xs font-medium text-emerald-700 hover:underline">Order on WhatsApp</a>'
+                D.whatsappLink(
+                  wa,
+                  'Hi, I want to order: ' + (p.name || 'product') + ' from ' + draft.settings.storeName
+                ) +
+                '" target="_blank" class="mt-2 inline-block text-xs font-medium store-accent hover:underline">Order on WhatsApp</a>'
               : '') +
             '</div></article>'
           );
         })
         .join('');
     }
+
+    renderDelivery(draft);
+    renderPayment(draft);
   }
 
   if (document.readyState === 'loading') {
