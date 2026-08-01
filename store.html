@@ -4,26 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="Live MithraDirect customer storefront demo — WhatsApp checkout for local businesses.">
-    <title>Sai Ram Home Foods — MithraDirect Storefront</title>
+    <title>Geeta's Kitchen — MithraDirect Storefront</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/onboarding.css">
     <link rel="stylesheet" href="assets/css/storefront.css">
+    <script src="assets/js/assets-config.js"></script>
 </head>
-<body class="store-page store-themed">
+<body class="store-page store-themed" data-store-template="release-v1" data-data-mode="localStorage">
     <header class="demo-topbar">
         <div class="demo-topbar-inner">
             <a href="index.html" class="demo-topbar-brand">
-                <img src="assets/img/logos/logo_dark_md.png" alt="MithraDirect">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect">
                 <span class="demo-pill"><span class="demo-pill-dot" aria-hidden="true"></span><span>Live Storefront</span></span>
             </a>
             <div class="demo-topbar-actions">
+                <a href="https://www.instagram.com/mithradirect/" class="demo-link" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.youtube.com/@MithraDirect" class="demo-link" target="_blank" rel="noopener">YouTube</a>
                 <a href="onboarding.html" class="demo-link">Vendor setup</a>
                 <a href="onboarding.html" class="btn-primary-md is-sm">Create your store</a>
             </div>
         </div>
     </header>
+
+    <div id="store-loading" class="store-empty-wrap hidden">
+        <div class="empty-icon" aria-hidden="true">⏳</div>
+        <h1 class="store-brand-font">Loading store…</h1>
+        <p>Fetching release data from local store.</p>
+    </div>
 
     <div id="store-empty" class="store-empty-wrap hidden">
         <div class="empty-icon" aria-hidden="true">🏪</div>
@@ -50,7 +59,7 @@
                             </button>
                         </div>
                         <button type="button" class="store-header-brand" id="btn-brand" aria-label="Home">
-                            <img id="store-header-logo" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
+                            <img id="store-header-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
                             <span class="store-brand-title store-brand-font" id="store-header-name">Store</span>
                         </button>
                         <div class="store-header-right">
@@ -71,7 +80,7 @@
                 <div class="drawer-backdrop" id="drawer-backdrop"></div>
                 <aside class="drawer" id="drawer" aria-hidden="true">
                     <div class="drawer-brand">
-                        <img id="drawer-logo" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
+                        <img id="drawer-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
                         <div>
                             <div class="drawer-brand-name store-brand-font" id="drawer-name">Store</div>
                             <div class="drawer-brand-tag" id="drawer-tagline"></div>
@@ -105,20 +114,21 @@
                         <div class="address-row">
                             <div>
                                 <p class="address-label">Delivering to</p>
-                                <p class="address-value" id="home-address">Guntur, AP</p>
+                                <p class="address-value" id="home-address">Hyderabad</p>
                             </div>
                             <button type="button" class="link-btn" id="btn-change-address">Change</button>
                         </div>
                         <div class="location-row">
-                            <input type="text" class="field" id="location-search" placeholder="Search locality…" aria-label="Search locality">
+                            <input type="text" class="field" id="location-search" placeholder="Search location or area…" aria-label="Search location">
                             <button type="button" class="btn-outline" id="btn-use-location">Use my location</button>
                         </div>
+                        <p class="delivery-window" id="delivery-window">We deliver to your area · Today 6 PM – 9 PM</p>
                     </div>
 
                     <div class="trust-strip" aria-label="Trust signals">
-                        <div class="trust-chip">🌿 100% Homemade</div>
+                        <div class="trust-chip">🌿 100% Natural</div>
                         <div class="trust-chip">🚫 No Preservatives</div>
-                        <div class="trust-chip">🧪 Chemical Free</div>
+                        <div class="trust-chip">🧼 Hygienic &amp; Safe</div>
                         <div class="trust-chip">🚚 Home Delivery</div>
                     </div>
 
@@ -138,6 +148,11 @@
                         <div class="product-grid" id="store-products"></div>
                     </div>
 
+                    <div class="home-trust-footer" aria-label="Store promises">
+                        <div class="home-trust-item"><span aria-hidden="true">🌿</span>100% Natural</div>
+                        <div class="home-trust-item"><span aria-hidden="true">🚫</span>No Preservatives</div>
+                        <div class="home-trust-item"><span aria-hidden="true">🧼</span>Hygienic &amp; Safe</div>
+                    </div>
                     <p class="store-footer-note">Powered by <a href="index.html">MithraDirect</a> · Local support, direct connection</p>
                     <div class="wa-order-banner" role="note">This is a WhatsApp Order storefront</div>
                 </section>
@@ -210,17 +225,18 @@
                         </div>
 
                         <div class="checkout-block">
+                            <h3 style="margin-bottom:0.55rem">Delivery Method</h3>
+                            <div class="pay-options" id="delivery-options"></div>
+                        </div>
+
+                        <div class="checkout-block">
                             <h3 style="margin-bottom:0.55rem">Order Summary</h3>
                             <div class="checkout-summary" id="checkout-summary"></div>
                         </div>
 
                         <div class="checkout-block">
                             <h3 style="margin-bottom:0.55rem">Payment Preference</h3>
-                            <div class="pay-options" id="payment-options">
-                                <label class="pay-option"><input type="radio" name="pay" value="cod" checked> <span>Pay on Delivery (Cash)</span></label>
-                                <label class="pay-option"><input type="radio" name="pay" value="upi"> <span>UPI / Card</span></label>
-                                <label class="pay-option"><input type="radio" name="pay" value="other"> <span>Other</span></label>
-                            </div>
+                            <div class="pay-options" id="payment-options"></div>
                         </div>
 
                         <label class="terms-row">
@@ -262,6 +278,7 @@
     </div>
 
     <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/store-api.js"></script>
     <script src="assets/js/storefront.js"></script>
 </body>
 </html>

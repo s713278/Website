@@ -1,14 +1,16 @@
 /**
- * MithraDirect public storefront — sample checkout experience + draft stores.
+ * MithraDirect public storefront — template UI driven by StoreAPI release data.
+ * Data: localStorage today (StoreAPI); remote API when StoreAPI.setConfig({ useRemote: true }).
  */
 (function () {
   'use strict';
 
   var D = window.MithraDraft;
-  if (!D) return;
-
-  var CART_KEY = 'mithra_store_cart';
-  var SESSION_KEY = 'mithra_store_session';
+  var API = window.StoreAPI;
+  if (!D || !API) {
+    console.error('MithraDraft / StoreAPI missing');
+    return;
+  }
 
   var state = {
     draft: null,
@@ -21,6 +23,7 @@
     customer: { phone: '', name: '', loggedIn: false },
     address: '',
     addressId: 'home',
+    deliveryMethod: 'homeDelivery',
     orderId: '',
     orderMessage: '',
     history: []
@@ -69,65 +72,37 @@
   }
 
   function loadCart() {
-    try {
-      var raw = localStorage.getItem(CART_KEY);
-      state.cart = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(state.cart)) state.cart = [];
-    } catch (e) {
-      state.cart = [];
-    }
+    state.cart = API.getCart();
   }
 
   function saveCart() {
-    localStorage.setItem(CART_KEY, JSON.stringify(state.cart));
+    API.setCart(state.cart);
   }
 
   function loadSession() {
-    try {
-      var raw = localStorage.getItem(SESSION_KEY);
-      if (!raw) return;
-      var s = JSON.parse(raw);
-      if (s && s.phone) {
-        state.customer = {
-          phone: s.phone,
-          name: s.name || 'Guest',
-          loggedIn: !!s.loggedIn
-        };
-      }
-      if (s && s.address) state.address = s.address;
-    } catch (e) {}
+    var s = API.getSession();
+    if (s && s.phone) {
+      state.customer = {
+        phone: s.phone,
+        name: s.name || 'Guest',
+        loggedIn: !!s.loggedIn
+      };
+    }
+    if (s && s.address) state.address = s.address;
   }
 
   function saveSession() {
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        phone: state.customer.phone,
-        name: state.customer.name,
-        loggedIn: state.customer.loggedIn,
-        address: state.address
-      })
-    );
+    API.setSession({
+      phone: state.customer.phone,
+      name: state.customer.name,
+      loggedIn: state.customer.loggedIn,
+      address: state.address
+    });
   }
 
-  function resolveDraft() {
-    var slug = qs('slug');
-    var brand = qs('brand');
-    var saved = D.loadDraft();
-    var savedSlug = saved.slug || D.slugify((saved.settings && saved.settings.storeName) || '');
-
-    // Optional brand overrides for demos
-    if (brand === 'sai-ram' || slug === 'sai-ram-home-foods') {
-      return D.seedSaiRamDraft();
-    }
-
-    // Explicit onboarding draft via ?slug= matching localStorage
-    if (slug && saved.settings && saved.settings.storeName && slug === savedSlug) {
-      return saved;
-    }
-
-    // Default: full static Geeta's Kitchen storefront (store.html)
-    return D.seedStaticStorefront();
+  /** Persist release mutations (addresses, etc.) back to local store */
+  function persistRelease() {
+    if (state.draft) API.saveRelease(state.draft);
   }
 
   function findProduct(id) {
@@ -156,8 +131,16 @@
 
   function deliveryCharge() {
     var d = state.draft.delivery || {};
+    var method = state.deliveryMethod || 'homeDelivery';
+    if (method === 'storePickup') return 0;
+    if (method === 'courierDelivery' && d.courierDelivery && d.courierDelivery.enabled) {
+      return Number(d.courierDelivery.charge) || 0;
+    }
     if (d.homeDelivery && d.homeDelivery.enabled) {
       return Number(d.homeDelivery.charge) || 0;
+    }
+    if (d.courierDelivery && d.courierDelivery.enabled) {
+      return Number(d.courierDelivery.charge) || 0;
     }
     return 0;
   }
@@ -190,6 +173,7 @@
         label: variant.label,
         price: Number(variant.price) || 0,
         image: product.image || '',
+        icon: product.icon || '🫙',
         color: product.color || '',
         qty: qty
       });
@@ -262,22 +246,64 @@
   }
 
   /* ——— Render helpers ——— */
-  function productThumb(p, extraClass) {
-    if (p.image) {
-      return (
-        '<img src="' +
-        escapeHtml(p.image) +
-        '" alt="" class="' +
-        (extraClass || '') +
-        '" onerror="this.style.display=\'none\'">'
-      );
-    }
-    return '🫙';
+  function cssPlaceholder(label, icon, color) {
+    return (
+      '<div class="img-ph" style="--ph-bg:' +
+      escapeHtml(color || '#ecfdf5') +
+      '">' +
+      '<span class="img-ph-icon" aria-hidden="true">' +
+      escapeHtml(icon || '🫙') +
+      '</span>' +
+      (label ? '<span class="img-ph-label">' + escapeHtml(label) + '</span>' : '') +
+      '</div>'
+    );
   }
 
-  function ratingStars(r) {
+  function productThumb(p) {
+    var color =
+      (p && p.color) || hexToRgba(normalizeHex(state.draft.settings.themeColor), 0.12);
+    var icon = (p && p.icon) || '🫙';
+    var label = (p && p.name) || 'Product';
+    var ph = cssPlaceholder(label, icon, color);
+    if (p && p.image) {
+      return (
+        '<div class="media-slot">' +
+        '<img src="' +
+        escapeHtml(p.image) +
+        '" alt="' +
+        escapeHtml(label) +
+        '" loading="lazy" onerror="this.classList.add(\'is-broken\')">' +
+        ph +
+        '</div>'
+      );
+    }
+    return '<div class="media-slot is-placeholder">' + ph + '</div>';
+  }
+
+  function categoryThumb(c) {
+    if (c.image) {
+      return (
+        '<div class="media-slot is-round">' +
+        '<img src="' +
+        escapeHtml(c.image) +
+        '" alt="" loading="lazy" onerror="this.classList.add(\'is-broken\')">' +
+        '<div class="img-ph is-round"><span class="img-ph-icon">' +
+        escapeHtml(c.icon || '📦') +
+        '</span></div></div>'
+      );
+    }
+    return (
+      '<div class="media-slot is-round is-placeholder">' +
+      '<div class="img-ph is-round"><span class="img-ph-icon">' +
+      escapeHtml(c.icon || '📦') +
+      '</span></div></div>'
+    );
+  }
+
+  function ratingStars(r, reviews) {
     var n = Number(r) || 0;
-    return '★ ' + n.toFixed(1);
+    var rev = Number(reviews) || 0;
+    return '★ ' + n.toFixed(1) + (rev ? ' (' + rev + ')' : '');
   }
 
   function skuControls(product, variant) {
@@ -337,7 +363,6 @@
   function renderHome() {
     var draft = state.draft;
     var hero = document.getElementById('store-hero');
-    var rich = !!(draft.settings && draft.settings.richBanner && draft.settings.banner);
 
     document.getElementById('store-name').textContent = draft.settings.storeName;
     document.getElementById('store-tagline').textContent =
@@ -347,11 +372,22 @@
       state.address || draft.settings.address || draft.settings.location || 'Select address';
 
     var bannerImg = document.getElementById('store-banner-img');
-    bannerImg.src = draft.settings.banner || 'assets/img/fresh.png';
-    bannerImg.alt = draft.settings.storeName + ' banner';
-
     if (hero) {
-      hero.classList.toggle('is-rich-banner', rich);
+      hero.classList.remove('is-rich-banner');
+      hero.classList.remove('is-ph-banner');
+    }
+    if (draft.settings.banner) {
+      bannerImg.src = draft.settings.banner;
+      bannerImg.alt = draft.settings.storeName + ' banner';
+      bannerImg.classList.remove('is-broken');
+      bannerImg.onerror = function () {
+        bannerImg.classList.add('is-broken');
+        if (hero) hero.classList.add('is-ph-banner');
+      };
+    } else {
+      bannerImg.removeAttribute('src');
+      bannerImg.classList.add('is-broken');
+      if (hero) hero.classList.add('is-ph-banner');
     }
 
     var catsEl = document.getElementById('store-categories');
@@ -362,9 +398,7 @@
           escapeHtml(c.id) +
           '">' +
           '<div class="store-cat-img">' +
-          (c.image
-            ? '<img src="' + escapeHtml(c.image) + '" alt="" onerror="this.remove()">'
-            : escapeHtml(c.icon || '📦')) +
+          categoryThumb(c) +
           '</div>' +
           '<div class="store-cat-name">' +
           escapeHtml(c.name) +
@@ -372,6 +406,12 @@
         );
       })
       .join('');
+
+    var windowEl = document.getElementById('delivery-window');
+    if (windowEl) {
+      var win = draft.settings.deliveryWindow || '6 PM – 9 PM';
+      windowEl.textContent = 'We deliver to your area · Today ' + win;
+    }
 
     var popular = (draft.products || []).filter(function (p) {
       return p.popular;
@@ -392,9 +432,7 @@
           '<article class="product-card" data-product="' +
           escapeHtml(p.id) +
           '">' +
-          '<div class="store-product-img" style="background:' +
-          escapeHtml(p.color || hexToRgba(normalizeHex(state.draft.settings.themeColor), 0.12)) +
-          '">' +
+          '<div class="store-product-img">' +
           productThumb(p) +
           '</div>' +
           '<div class="product-card-body">' +
@@ -405,7 +443,7 @@
           formatMoney(from || 0) +
           '</p>' +
           '<p class="product-rating">' +
-          ratingStars(p.rating) +
+          ratingStars(p.rating, p.reviews) +
           '</p>' +
           '</div></article>'
         );
@@ -425,9 +463,7 @@
           escapeHtml(c.id) +
           '">' +
           '<span class="menu-rail-icon">' +
-          (c.image
-            ? '<img src="' + escapeHtml(c.image) + '" alt="">'
-            : escapeHtml(c.icon || '📦')) +
+          categoryThumb(c) +
           '</span>' +
           '<span>' +
           escapeHtml(c.name) +
@@ -463,9 +499,7 @@
           '<button type="button" class="menu-product-head" data-product="' +
           escapeHtml(p.id) +
           '">' +
-          '<div class="menu-thumb" style="background:' +
-          escapeHtml(p.color || '#ecfdf5') +
-          '">' +
+          '<div class="menu-thumb">' +
           productThumb(p) +
           '</div>' +
           '<div class="menu-product-meta">' +
@@ -473,7 +507,7 @@
           escapeHtml(p.name) +
           '</h3>' +
           '<p class="product-rating">' +
-          ratingStars(p.rating) +
+          ratingStars(p.rating, p.reviews) +
           '</p>' +
           '<p class="menu-product-desc">' +
           escapeHtml(p.description || '') +
@@ -499,6 +533,14 @@
     });
     var el = document.getElementById('product-detail');
     el.innerHTML =
+      '<div class="product-detail-hero">' +
+      '<div class="store-product-img is-large">' +
+      productThumb(p) +
+      '</div>' +
+      '<div class="product-detail-actions">' +
+      '<button type="button" class="icon-chip" id="btn-share-product" aria-label="Share">↗ Share</button>' +
+      '</div></div>' +
+      '<div class="product-detail-body">' +
       '<div class="breadcrumb">' +
       '<button type="button" data-nav="home">Home</button> › ' +
       '<button type="button" data-cat="' +
@@ -509,21 +551,18 @@
       '<span class="breadcrumb-current">' +
       escapeHtml(p.name) +
       '</span></div>' +
-      '<div class="store-product-img is-large" style="background:' +
-      escapeHtml(p.color || '#ecfdf5') +
-      '">' +
-      productThumb(p) +
-      '</div>' +
-      '<div class="product-detail-body">' +
       '<h1 class="store-brand-font">' +
       escapeHtml(p.name) +
       '</h1>' +
       '<p class="product-rating">' +
-      ratingStars(p.rating) +
+      ratingStars(p.rating, p.reviews) +
       '</p>' +
       '<p class="product-detail-desc">' +
       escapeHtml(p.description || '') +
       '</p>' +
+      '<div class="usp-pills">' +
+      '<span>🌿 100% Natural</span><span>🚫 No Preservatives</span><span>🧼 Hygienic &amp; Safe</span>' +
+      '</div>' +
       accordion('Ingredients', p.ingredients) +
       accordion('Nutritional Information', p.nutrition) +
       accordion('Storage Instructions', p.storage) +
@@ -531,6 +570,24 @@
       '<h3 class="variant-title">Choose variant</h3>' +
       renderSkuList(p) +
       '</div>';
+
+    var shareBtn = document.getElementById('btn-share-product');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', function () {
+        var text =
+          'Check out ' +
+          p.name +
+          ' from ' +
+          state.draft.settings.storeName +
+          ' on MithraDirect';
+        if (navigator.share) {
+          navigator.share({ title: p.name, text: text }).catch(function () {});
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+          alert('Product link text copied');
+        }
+      });
+    }
   }
 
   function accordion(title, body) {
@@ -565,12 +622,13 @@
       .map(function (line) {
         return (
           '<div class="cart-line">' +
-          '<div class="cart-line-thumb" style="background:' +
-          escapeHtml(line.color || '#ecfdf5') +
-          '">' +
-          (line.image
-            ? '<img src="' + escapeHtml(line.image) + '" alt="">'
-            : '🫙') +
+          '<div class="cart-line-thumb">' +
+          productThumb({
+            name: line.name,
+            image: line.image,
+            icon: line.icon || '🫙',
+            color: line.color || '#ecfdf5'
+          }) +
           '</div>' +
           '<div class="cart-line-body">' +
           '<div class="cart-line-top">' +
@@ -665,6 +723,9 @@
         .join('');
     }
 
+    renderDeliveryOptions();
+    renderPaymentOptions();
+
     var sum = document.getElementById('checkout-summary');
     var itemsHtml = state.cart
       .map(function (l) {
@@ -700,6 +761,91 @@
       '<div class="bill-row is-total"><span>Grand Total</span><span>' +
       formatMoney(grandTotal()) +
       '</span></div></div>';
+  }
+
+  function renderDeliveryOptions() {
+    var el = document.getElementById('delivery-options');
+    if (!el) return;
+    var d = state.draft.delivery || {};
+    var options = [];
+    if (d.storePickup && d.storePickup.enabled) {
+      options.push({
+        id: 'storePickup',
+        label: 'Store Pickup',
+        hint: 'Free · Collect from store'
+      });
+    }
+    if (d.homeDelivery && d.homeDelivery.enabled) {
+      options.push({
+        id: 'homeDelivery',
+        label: 'Home Delivery',
+        hint: '₹' + (Number(d.homeDelivery.charge) || 0) + ' charge'
+      });
+    }
+    if (d.courierDelivery && d.courierDelivery.enabled) {
+      options.push({
+        id: 'courierDelivery',
+        label: 'Courier Delivery',
+        hint: '₹' + (Number(d.courierDelivery.charge) || 0) + ' charge'
+      });
+    }
+    if (!options.length) {
+      options.push({ id: 'homeDelivery', label: 'Home Delivery', hint: 'As per store' });
+    }
+    if (!options.some(function (o) { return o.id === state.deliveryMethod; })) {
+      state.deliveryMethod = options[0].id;
+    }
+    el.innerHTML = options
+      .map(function (o) {
+        var checked = o.id === state.deliveryMethod ? ' checked' : '';
+        return (
+          '<label class="pay-option">' +
+          '<input type="radio" name="delivery-method" value="' +
+          escapeHtml(o.id) +
+          '"' +
+          checked +
+          '> <span><strong>' +
+          escapeHtml(o.label) +
+          '</strong><br><span class="addr-line">' +
+          escapeHtml(o.hint) +
+          '</span></span></label>'
+        );
+      })
+      .join('');
+  }
+
+  function renderPaymentOptions() {
+    var el = document.getElementById('payment-options');
+    if (!el) return;
+    var pay = state.draft.payment || {};
+    var options = [];
+    if (!pay.cod || pay.cod.enabled !== false) {
+      options.push({ id: 'cod', label: 'Pay on Delivery (Cash)' });
+    }
+    if (pay.upi && pay.upi.enabled) {
+      options.push({
+        id: 'upi',
+        label: 'UPI / Card' + (pay.upi.upiId ? ' · ' + pay.upi.upiId : '')
+      });
+    }
+    if (pay.bank && pay.bank.enabled) {
+      options.push({ id: 'bank', label: 'Bank Transfer' });
+    }
+    options.push({ id: 'other', label: 'Other' });
+    el.innerHTML = options
+      .map(function (o, i) {
+        var checked = i === 0 ? ' checked' : '';
+        return (
+          '<label class="pay-option"><input type="radio" name="pay" value="' +
+          escapeHtml(o.id) +
+          '"' +
+          checked +
+          '> <span>' +
+          escapeHtml(o.label) +
+          '</span></label>'
+        );
+      })
+      .join('');
   }
 
   function updateCartUI() {
@@ -741,9 +887,18 @@
     var payLabel =
       pay && pay.value === 'upi'
         ? 'UPI / Card'
-        : pay && pay.value === 'other'
-          ? 'Other'
-          : 'Pay on Delivery (Cash)';
+        : pay && pay.value === 'bank'
+          ? 'Bank Transfer'
+          : pay && pay.value === 'other'
+            ? 'Other'
+            : 'Pay on Delivery (Cash)';
+
+    var delLabel =
+      state.deliveryMethod === 'storePickup'
+        ? 'Store Pickup'
+        : state.deliveryMethod === 'courierDelivery'
+          ? 'Courier Delivery'
+          : 'Home Delivery';
 
     var lines = [
       '🛒 *New Order — ' + state.draft.settings.storeName + '*',
@@ -752,6 +907,7 @@
       '*Customer:* ' + (state.customer.name || 'Guest'),
       '*Phone:* +91 ' + state.customer.phone,
       '*Address:* ' + (state.address || state.draft.settings.address || ''),
+      '*Delivery:* ' + delLabel,
       '*Payment:* ' + payLabel,
       '',
       '*Items:*'
@@ -806,8 +962,13 @@
     }, 400);
   }
 
+  var eventsBound = false;
+
   /* ——— Events ——— */
   function bindEvents() {
+    if (eventsBound) return;
+    eventsBound = true;
+
     document.getElementById('btn-menu').addEventListener('click', function () {
       openDrawer(true);
     });
@@ -992,6 +1153,7 @@
         }
         saveSession();
         document.getElementById('home-address').textContent = state.address;
+        persistRelease();
         if (state.view === 'checkout') renderCheckout();
       }
     }
@@ -1011,6 +1173,11 @@
         saveSession();
         renderCheckout();
       }
+      if (e.target && e.target.name === 'delivery-method') {
+        state.deliveryMethod = e.target.value;
+        renderCheckout();
+        updateCartUI();
+      }
     });
   }
 
@@ -1020,7 +1187,10 @@
     document.getElementById('drawer-name').textContent = draft.settings.storeName;
     document.getElementById('drawer-tagline').textContent = draft.settings.tagline || '';
 
-    var logo = draft.settings.logo || 'assets/img/logos/logo_dark_md.png';
+    var logo =
+      draft.settings.logo ||
+      (window.MithraAssets && window.MithraAssets.logo && window.MithraAssets.logo()) ||
+      'assets/img/logos/logo_dark_md.png';
     ['store-header-logo', 'drawer-logo'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -1043,12 +1213,11 @@
     }
   }
 
-  function init() {
-    var draft = resolveDraft();
+  function mountStore(draft) {
     var empty = document.getElementById('store-empty');
     var app = document.getElementById('store-app');
 
-    if (!draft) {
+    if (!draft || !draft.settings || !draft.settings.storeName) {
       empty.classList.remove('hidden');
       var stage = document.getElementById('demo-stage');
       if (stage) stage.classList.add('hidden');
@@ -1057,30 +1226,52 @@
 
     state.draft = draft;
     state.address = draft.settings.address || draft.settings.location || '';
-    if (!state.activeCategory || state.activeCategory === 'all') {
-      state.activeCategory = 'all';
-    }
+    state.activeCategory = 'all';
 
-    applyTheme((draft.settings && draft.settings.themeColor) || '#128C7E');
+    applyTheme((draft.settings && draft.settings.themeColor) || '#006437');
     loadCart();
     loadSession();
     if (state.customer.loggedIn && !state.address) {
       state.address = draft.settings.address || '';
     }
 
+    empty.classList.add('hidden');
     app.classList.remove('hidden');
     initHeader(draft);
     bindEvents();
     renderHome();
+    showView('home', { replace: true });
     updateCartUI();
 
-    // Deep-link: ?view=menu
     var view = qs('view');
     if (view === 'menu') {
       showView('menu', { replace: true });
       renderMenuRail();
       renderMenuProducts();
     }
+
+    // Expose for debugging / future integrations
+    app.dataset.storeSlug = draft.slug || '';
+    app.dataset.dataSource = (draft.meta && draft.meta.source) || 'local';
+  }
+
+  function init() {
+    var loading = document.getElementById('store-loading');
+    if (loading) loading.classList.remove('hidden');
+
+    API.getRelease({
+      slug: qs('slug'),
+      brand: qs('brand')
+    })
+      .then(function (release) {
+        if (loading) loading.classList.add('hidden');
+        mountStore(release);
+      })
+      .catch(function (err) {
+        console.error(err);
+        if (loading) loading.classList.add('hidden');
+        mountStore(null);
+      });
   }
 
   if (document.readyState === 'loading') {

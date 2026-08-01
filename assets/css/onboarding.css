@@ -1,16 +1,22 @@
-/* MithraDirect onboarding wizard + phone preview */
-
-:root {
-  --md-green: #10b981;
-  --md-green-dark: #059669;
-  --md-green-deep: #064e3b;
-  --md-green-soft: #ecfdf5;
-}
+/* MithraDirect onboarding wizard + phone preview
+   Tokens / fonts / assets: assets/css/global.css */
 
 body.onboarding-page {
+  font-family: var(--font-body);
+  color: var(--md-ink);
   background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 40%, #f8fafc 100%);
   min-height: 100vh;
-  padding-bottom: 88px;
+  min-height: 100dvh;
+  padding-bottom: calc(88px + var(--safe-bottom));
+}
+
+body.onboarding-page h1,
+body.onboarding-page h2,
+body.onboarding-page h3,
+body.onboarding-page h4,
+body.onboarding-page h5,
+body.onboarding-page h6 {
+  font-family: var(--font-display);
 }
 
 /* Stepper */
@@ -987,4 +993,61 @@ body.onboarding-page {
 
 .stepper-item.done::after {
   background: var(--store-theme, var(--md-green));
+}
+
+/* ——— Responsive onboarding ——— */
+@media (max-width: 639px) {
+  .stepper-item {
+    min-width: 4.25rem;
+  }
+
+  .stepper-label {
+    font-size: 0.58rem;
+  }
+
+  .stepper-time {
+    display: none;
+  }
+
+  .stepper-num {
+    width: 1.85rem;
+    height: 1.85rem;
+    font-size: 0.75rem;
+  }
+
+  .phone-frame {
+    width: min(100%, 280px);
+    margin-inline: auto;
+  }
+
+  .preview-sticky {
+    margin-top: 1.5rem;
+  }
+
+  .theme-custom {
+    flex-wrap: wrap;
+  }
+
+  .method-card {
+    padding: 0.75rem;
+  }
+
+  .step-panel .flex.justify-between,
+  .step-panel .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .btn-back,
+  .btn-next {
+    flex: 1 1 auto;
+    min-width: 7rem;
+    text-align: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-page .lg\:grid-cols-5 {
+    align-items: start;
+  }
 }
