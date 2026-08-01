@@ -1053,6 +1053,9 @@
   function finalizeLive() {
     draft.slug = D.slugify(draft.settings.storeName);
     persist();
+    if (window.StoreAPI && typeof window.StoreAPI.publishFromDraft === 'function') {
+      window.StoreAPI.publishFromDraft(draft);
+    }
     var displayUrl = 'mithradirect.com/store/' + draft.slug;
     document.getElementById('store-url-display').textContent = displayUrl;
     var storeHref = 'store.html?slug=' + encodeURIComponent(draft.slug);
@@ -1088,14 +1091,21 @@
         return a.order - b.order;
       });
 
+    var defaultLogo =
+      (window.MithraAssets && window.MithraAssets.logo && window.MithraAssets.logo()) ||
+      'assets/img/logos/logo_dark_md.png';
+    var defaultFresh =
+      (window.MithraAssets && window.MithraAssets.path && window.MithraAssets.path('fallbacks.fresh')) ||
+      'assets/img/fresh.png';
+
     var headerLogo = logo
       ? '<img src="' + logo + '" alt="" class="preview-store-logo">'
-      : '<img src="assets/img/logos/logo_dark_md.png" alt="" class="h-5" onerror="this.style.display=\'none\'">';
+      : '<img src="' + defaultLogo + '" alt="" class="h-5" onerror="this.style.display=\'none\'">';
 
     var heroBg = banner
       ? '<img class="preview-hero-bg" src="' + banner + '" alt="">' +
         '<div class="preview-hero-overlay"></div>'
-      : '<img class="preview-hero-bg" src="assets/img/fresh.png" alt="" style="opacity:0.25">' +
+      : '<img class="preview-hero-bg" src="' + defaultFresh + '" alt="" style="opacity:0.25">' +
         '<div class="preview-hero-overlay" style="background:linear-gradient(to top,' +
         hexToRgba(theme, 0.75) +
         ',' +

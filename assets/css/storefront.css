@@ -1,86 +1,33 @@
-﻿/* MithraDirect storefront — investor-ready SaaS demo UI
-   Shares tokens / patterns with onboarding.css */
+﻿/* MithraDirect storefront — page styles
+   Tokens / fonts / assets: assets/css/global.css */
 
 :root {
-  --md-green: #10b981;
-  --md-green-dark: #059669;
-  --md-green-deep: #064e3b;
-  --md-green-soft: #ecfdf5;
-  --store-theme: #10b981;
-  --store-theme-soft: rgba(16, 185, 129, 0.14);
-  --store-ink: #111827;
-  --store-muted: #6b7280;
-  --store-border: #e5e7eb;
   --store-shell-max: 72rem;
   --demo-topbar-h: 3.75rem;
   --store-header-h: 3.5rem;
   --store-sticky-offset: calc(var(--demo-topbar-h) + var(--store-header-h));
-  --store-radius: 1rem;
-  --store-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --font-body: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  --font-display: "Poppins", "Inter", system-ui, sans-serif;
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05);
-  --shadow-md: 0 8px 24px rgba(17, 24, 39, 0.08);
-  --shadow-lg: 0 24px 48px rgba(6, 78, 59, 0.14);
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
+  --store-radius: var(--radius-lg);
+  --store-safe-bottom: var(--safe-bottom);
+  --store-ink: var(--md-ink);
+  --store-muted: var(--md-muted);
+  --store-border: var(--md-border);
 }
 
 body.store-page {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--font-body);
   color: var(--store-ink);
   background: linear-gradient(180deg, #f7f3ea 0%, #ffffff 42%, #f8fafc 100%);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
 }
 
-img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-h1,
-h2,
-h3,
 .store-brand-font {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-
-.hidden {
-  display: none !important;
 }
 
 .store-accent {
@@ -162,6 +109,15 @@ h3,
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .demo-topbar-actions .demo-link:nth-child(1),
+  .demo-topbar-actions .demo-link:nth-child(2) {
+    display: none;
+  }
 }
 
 .demo-link {
@@ -523,13 +479,15 @@ h3,
   font-size: 0.82rem;
 }
 
-/* Hero — default gradient; rich marketing banners use .is-rich-banner */
+/* Hero — fixed 16:9 banner (API/template ready) */
 .store-hero {
   position: relative;
   width: 100%;
-  min-height: 200px;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: min(42vw, 28rem);
   color: #fff;
-  padding: 1.75rem 1.25rem 1.5rem;
+  padding: 1.1rem 1.15rem 1rem;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -547,14 +505,37 @@ h3,
   z-index: 0;
 }
 
+.store-hero-bg.is-broken {
+  display: none;
+}
+
+.store-hero.is-ph-banner {
+  background:
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.18), transparent 40%),
+    linear-gradient(135deg, var(--store-theme, #006437), color-mix(in srgb, var(--store-theme, #006437) 70%, #000));
+}
+
+.store-hero.is-ph-banner::after {
+  content: 'Homely Food';
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.35;
+  z-index: 0;
+}
+
 .store-hero-overlay {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(6, 78, 59, 0.75) 0%,
-    rgba(6, 78, 59, 0.2) 55%,
-    rgba(6, 78, 59, 0.05) 100%
+    rgba(6, 78, 59, 0.78) 0%,
+    rgba(6, 78, 59, 0.28) 55%,
+    rgba(6, 78, 59, 0.08) 100%
   );
   z-index: 0;
   pointer-events: none;
@@ -569,26 +550,22 @@ h3,
   margin-right: auto;
 }
 
-/* Full marketing banner: show complete artwork, no text overlay */
+/* Legacy class kept for compatibility — still locked to 16:9 */
 .store-hero.is-rich-banner {
-  display: block;
-  min-height: 0 !important;
-  max-height: none;
-  aspect-ratio: auto;
-  padding: 0 !important;
-  background: #f5efe3;
-  line-height: 0;
-  border-bottom: 1px solid #e8dfd0;
+  aspect-ratio: 16 / 9;
+  max-height: min(42vw, 28rem);
+  padding: 1.1rem 1.15rem 1rem !important;
+  line-height: 1.4;
+  background: linear-gradient(135deg, #064e3b, #059669);
 }
 
 .store-hero.is-rich-banner .store-hero-bg {
-  position: static;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  max-height: none;
-  object-fit: contain;
-  object-position: center top;
-  display: block;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .store-hero.is-rich-banner .store-hero-overlay,
@@ -597,7 +574,24 @@ h3,
 .store-hero.is-rich-banner .hero-tagline,
 .store-hero.is-rich-banner .hero-location,
 .store-hero.is-rich-banner .hero-chips {
-  display: none !important;
+  display: initial;
+}
+
+.store-hero.is-rich-banner .store-hero-overlay {
+  display: block !important;
+}
+
+.store-hero.is-rich-banner .hero-badge,
+.store-hero.is-rich-banner h1,
+.store-hero.is-rich-banner .hero-tagline,
+.store-hero.is-rich-banner .hero-location,
+.store-hero.is-rich-banner .hero-chips {
+  display: block;
+}
+
+.store-hero.is-rich-banner .hero-badge,
+.store-hero.is-rich-banner .hero-chips {
+  display: flex;
 }
 
 .hero-badge {
@@ -616,7 +610,7 @@ h3,
 }
 
 .store-hero h1 {
-  font-size: clamp(1.3rem, 4vw, 1.65rem);
+  font-size: clamp(1.1rem, 3.2vw, 1.55rem);
   margin: 0;
   line-height: 1.2;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
@@ -624,17 +618,17 @@ h3,
 
 .hero-tagline,
 .hero-location {
-  margin: 0.3rem 0 0;
-  line-height: 1.4;
+  margin: 0.2rem 0 0;
+  line-height: 1.35;
 }
 
 .hero-tagline {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   opacity: 0.95;
 }
 
 .hero-location {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   opacity: 0.8;
   display: flex;
   align-items: center;
@@ -644,18 +638,24 @@ h3,
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.75rem;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
   line-height: 1.3;
 }
 
 .hero-chip {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero-badge {
+  margin-bottom: 0.35rem;
+  font-size: 0.58rem;
+  padding: 0.22rem 0.5rem;
 }
 
 /* Panels */
@@ -903,16 +903,173 @@ h3,
   font-size: 2.1rem;
   overflow: hidden;
   position: relative;
+  background: #f3f4f6;
 }
 
-.store-product-img img {
+.store-product-img img,
+.media-slot img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  position: relative;
+  z-index: 1;
+}
+
+.store-product-img img.is-broken,
+.media-slot img.is-broken {
+  display: none;
+}
+
+.media-slot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.media-slot.is-placeholder .img-ph,
+.media-slot img.is-broken + .img-ph,
+.media-slot:not(:has(img:not(.is-broken))) .img-ph {
+  opacity: 1;
+}
+
+.img-ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--ph-bg, #ecfdf5) 85%, #fff), var(--ph-bg, #ecfdf5));
+  z-index: 0;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.img-ph-icon {
+  font-size: 1.85rem;
+  line-height: 1;
+}
+
+.img-ph-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #374151;
+  max-width: 90%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.img-ph.is-round {
+  border-radius: 9999px;
+}
+
+.media-slot.is-round {
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.store-cat-img .media-slot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.store-cat-img .img-ph-icon {
+  font-size: 1.35rem;
+}
+
+.menu-thumb,
+.cart-line-thumb {
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-thumb .media-slot,
+.cart-line-thumb .media-slot {
+  position: absolute;
+  inset: 0;
 }
 
 .store-product-img.is-large {
   height: 14rem;
+  border-radius: 0;
+}
+
+.product-detail-hero {
+  position: relative;
+}
+
+.product-detail-actions {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+}
+
+.icon-chip {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  box-shadow: var(--shadow-sm);
+}
+
+.usp-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.85rem 0 1rem;
+}
+
+.usp-pills span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--store-theme, #006437);
+  background: var(--store-theme-soft, #e8f5e9);
+  border-radius: 9999px;
+  padding: 0.3rem 0.6rem;
+}
+
+.delivery-window {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--store-theme, #006437);
+  background: var(--store-theme-soft, #e8f5e9);
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.home-trust-footer {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0;
+}
+
+.home-trust-item {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.4rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #374151;
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+}
+
+.home-trust-item span {
+  font-size: 1.1rem;
 }
 
 .product-card-body {
@@ -1820,13 +1977,13 @@ h3,
     height: 9rem;
   }
 
-  .store-hero:not(.is-rich-banner) {
-    min-height: 280px;
-    padding: 2.25rem 1.5rem 2rem;
+  .store-hero {
+    max-height: 22rem;
+    padding: 1.35rem 1.5rem 1.25rem;
   }
 
-  .store-hero:not(.is-rich-banner) h1 {
-    font-size: 2rem;
+  .store-hero h1 {
+    font-size: 1.65rem;
   }
 
   .menu-layout {
@@ -1873,12 +2030,12 @@ h3,
     gap: 1.15rem;
   }
 
-  .store-hero:not(.is-rich-banner) {
-    min-height: 300px;
+  .store-hero {
+    max-height: 24rem;
   }
 
-  .store-hero:not(.is-rich-banner) h1 {
-    font-size: 2.35rem;
+  .store-hero h1 {
+    font-size: 1.85rem;
   }
 
   .hero-tagline {
