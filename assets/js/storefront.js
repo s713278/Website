@@ -1109,7 +1109,12 @@
         return;
       }
       state.customer.loggedIn = true;
-      state.customer.name = 'Customer';
+      state.customer.name =
+        (window.MithraAssets &&
+          window.MithraAssets.paths &&
+          window.MithraAssets.paths.external &&
+          window.MithraAssets.paths.external.demoContactName) ||
+        'Swamy Kunta';
       saveSession();
       showView('checkout');
       renderCheckout();

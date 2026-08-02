@@ -168,6 +168,16 @@
     // Cached release for this slug (or default when no slug)
     if (cached && cached.settings && cached.settings.storeName) {
       if (!slug || slug === cached.slug) {
+        // Keep demo seeds in sync with latest seed catalog / contact number
+        if (cached.meta && cached.meta.source === 'seed') {
+          var refreshed = normalizeRelease(seedByBrand(cached.slug || 'geetas-kitchen'));
+          refreshed.meta.source = 'seed';
+          if (cached.addresses && cached.addresses.length) {
+            refreshed.addresses = cached.addresses;
+          }
+          saveRelease(refreshed);
+          return refreshed;
+        }
         return normalizeRelease(cached);
       }
     }

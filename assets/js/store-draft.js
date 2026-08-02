@@ -23,6 +23,12 @@
       saiBanner: 'assets/img/vendors/sai-ram-home-foods-banner.png'
     }
   };
+  var DEMO_WA =
+    (A && A.external && A.external.whatsappPhone) ||
+    '9912149049';
+  var DEMO_CONTACT =
+    (A && A.external && A.external.demoContactName) ||
+    'Swamy Kunta';
 
   var BUSINESS_TYPES = [
     { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠' },
@@ -339,7 +345,7 @@
     ];
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'home-kitchen',
       categories: cats,
@@ -364,7 +370,8 @@
         storeName: "Geeta's Kitchen",
         tagline: 'Homely Food, Pure Taste',
         location: 'Hyderabad',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: hero,
         banner: hero,
         themeColor: '#006437',
@@ -579,7 +586,7 @@
     ];
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: cats,
@@ -604,7 +611,8 @@
         storeName: 'Sai Ram Home Foods',
         tagline: 'Authentic taste of tradition',
         location: 'Service area: Guntur, AP',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: logo,
         banner: banner,
         themeColor: '#1B5E20',
@@ -668,7 +676,7 @@
     var products = pickleProducts.concat(comboProducts);
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: [
@@ -696,7 +704,8 @@
         storeName: 'Anitha Homemade Pickles',
         tagline: 'Traditional • Natural • Homemade',
         location: 'Hyderabad, Telangana',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: '',
         banner: '',
         themeColor: '#10b981'

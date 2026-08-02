@@ -44,7 +44,9 @@
       tailwind: 'https://cdn.tailwindcss.com',
       instagram: 'https://www.instagram.com/mithradirect/',
       youtube: 'https://www.youtube.com/@MithraDirect',
-      whatsapp: 'https://wa.me/917207200863'
+      whatsapp: 'https://wa.me/919912149049',
+      whatsappPhone: '9912149049',
+      demoContactName: 'Swamy Kunta'
     }
   };
 
