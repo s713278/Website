@@ -1,0 +1,7 @@
+@import "@mithra/ui/styles.css";
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: var(--font-body, Inter, system-ui, sans-serif);
+}
