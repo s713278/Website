@@ -223,3 +223,9 @@ export function resolveVendorIdForSlug(
 }
 
 export { seedSaiRamDraft } from './fixtures';
+export {
+  mapVendorStorefrontToDraft,
+  formatEligibilityMessage,
+  type ExtendedStoreDraft,
+  type StorefrontSku,
+} from './storefront-map';

@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import {
+  getVendorProductSkus,
+  getVendorStorefront,
+  type VendorStorefront,
+} from '@mithra/api-client';
 import {
   SAMPLE_STORE_SLUG,
   formatMoney,
+  mapVendorStorefrontToDraft,
   seedSaiRamDraft,
   whatsappLink,
+  type ExtendedStoreDraft,
+  type StorefrontSku,
 } from '@mithra/domain';
 import { applyVendorTheme, CartBar, Drawer, EmptyState } from '@mithra/ui';
-import { MARKETING_URL, VENDOR_APP_URL } from '../../config';
-import { StoreProvider, useStore } from './store-context';
+import { MARKETING_URL, SAMPLE_VENDOR_ID, USE_API, VENDOR_APP_URL } from '../../config';
+import { StoreProvider, useStore, type StoreModel } from './store-context';
 import { HomeView } from './HomeView';
 import { MenuView } from '../menu/MenuView';
 import { ProductView } from '../product/ProductView';
@@ -16,6 +25,24 @@ import { CartView } from '../cart/CartView';
 import { AuthView } from '../auth/AuthView';
 import { CheckoutView } from '../checkout/CheckoutView';
 import { SuccessView } from '../success/SuccessView';
+
+function resolveVendorId(storeSlug: string, queryVendorId: string | null): number | null {
+  if (queryVendorId && /^\d+$/.test(queryVendorId)) return Number(queryVendorId);
+  if (/^\d+$/.test(storeSlug)) return Number(storeSlug);
+  if (SAMPLE_VENDOR_ID > 0) return SAMPLE_VENDOR_ID;
+  return null;
+}
+
+function unwrapList(data: unknown): StorefrontSku[] {
+  if (Array.isArray(data)) return data as StorefrontSku[];
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    for (const key of ['skus', 'items', 'content', 'products']) {
+      if (Array.isArray(obj[key])) return obj[key] as StorefrontSku[];
+    }
+  }
+  return [];
+}
 
 function Shell() {
   const { storeSlug = '' } = useParams();
@@ -32,23 +59,8 @@ function Shell() {
     if (params.get('view') === 'menu') setView('menu');
   }, [params, setView]);
 
-  if (storeSlug && storeSlug !== SAMPLE_STORE_SLUG && storeSlug !== draft.slug) {
-    return (
-      <EmptyState
-        icon="🏪"
-        title="Store not found"
-        description="No store matched this link. Open the sample storefront or set up your own."
-        primaryLabel="Open Sample Store"
-        onPrimary={() => {
-          window.location.href = `/${SAMPLE_STORE_SLUG}`;
-        }}
-        secondaryLabel="Setup Your Store"
-        onSecondary={() => {
-          window.location.href = `${VENDOR_APP_URL}/onboarding`;
-        }}
-      />
-    );
-  }
+  // silence unused in some builds
+  void storeSlug;
 
   const wa = draft.settings.whatsapp || draft.phone || '';
 
@@ -165,7 +177,96 @@ function Shell() {
 }
 
 export function StoreApp() {
+  const { storeSlug = '' } = useParams();
+  const [params] = useSearchParams();
+  const vendorId = resolveVendorId(storeSlug, params.get('vendor_id'));
+  const useLive = USE_API && vendorId != null && vendorId > 0;
+
+  const storefrontQuery = useQuery({
+    queryKey: ['vendor-storefront', vendorId],
+    enabled: useLive,
+    queryFn: async () => {
+      const res = await getVendorStorefront(vendorId!);
+      const data = (res.data || res) as VendorStorefront;
+      if (!data?.business_name && !data?.vendor_id) {
+        throw new Error('Storefront not available for this vendor.');
+      }
+      return data;
+    },
+    retry: 1,
+  });
+
+  const skusQuery = useQuery({
+    queryKey: ['vendor-skus', vendorId],
+    enabled: useLive && !!storefrontQuery.data,
+    queryFn: async () => {
+      const res = await getVendorProductSkus(vendorId!);
+      return unwrapList(res.data ?? res);
+    },
+    retry: 1,
+  });
+
+  if (useLive) {
+    if (storefrontQuery.isLoading) {
+      return (
+        <div className="md-body flex min-h-screen items-center justify-center text-slate-500">
+          Loading storefront…
+        </div>
+      );
+    }
+    if (storefrontQuery.isError) {
+      return (
+        <EmptyState
+          icon="⚠️"
+          title="Could not load store"
+          description={(storefrontQuery.error as Error).message || 'Failed to load storefront'}
+          primaryLabel="Open Sample Store"
+          onPrimary={() => {
+            window.location.href = `/${SAMPLE_STORE_SLUG}`;
+          }}
+          secondaryLabel="Setup Your Store"
+          onSecondary={() => {
+            window.location.href = `${VENDOR_APP_URL}/onboarding`;
+          }}
+        />
+      );
+    }
+    const draft = mapVendorStorefrontToDraft(
+      storefrontQuery.data as VendorStorefront,
+      skusQuery.data || [],
+    ) as ExtendedStoreDraft;
+    return (
+      <StoreProvider draft={draft as StoreModel} vendorId={vendorId}>
+        <Shell />
+      </StoreProvider>
+    );
+  }
+
   const draft = seedSaiRamDraft();
+  const slugOk =
+    !storeSlug ||
+    storeSlug === SAMPLE_STORE_SLUG ||
+    storeSlug === draft.slug ||
+    storeSlug === 'demo';
+
+  if (!slugOk) {
+    return (
+      <EmptyState
+        icon="🏪"
+        title="Store not found"
+        description="No store matched this link. Open the sample storefront, or set VITE_USE_API=true with a vendor id."
+        primaryLabel="Open Sample Store"
+        onPrimary={() => {
+          window.location.href = `/${SAMPLE_STORE_SLUG}`;
+        }}
+        secondaryLabel="Setup Your Store"
+        onSecondary={() => {
+          window.location.href = `${VENDOR_APP_URL}/onboarding`;
+        }}
+      />
+    );
+  }
+
   return (
     <StoreProvider draft={draft}>
       <Shell />

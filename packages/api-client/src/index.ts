@@ -237,6 +237,96 @@ export async function getVendorProductSkus(vendorId: number | string) {
   return apiRequest<ApiEnvelope>(`/v1/vendors/${vendorId}/products/skus`, { auth: false });
 }
 
+export async function searchVendorSkus(vendorId: number | string, q?: string) {
+  const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+  return apiRequest<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/search${qs}`, { auth: false });
+}
+
+/* ——— Vendor Storefront API (tag 20) ——— */
+
+export type StorefrontTheme = {
+  primary_color?: string;
+  accent_color?: string;
+  logo_image?: string;
+};
+
+export type StorefrontBadge = {
+  icon?: string;
+  title?: string;
+  subtitle?: string;
+};
+
+export type StorefrontFulfillment = {
+  delivery_methods?: string[];
+  home_delivery_available?: boolean;
+  store_pickup_available?: boolean;
+  delivery_message?: string;
+  pickup_message?: string;
+};
+
+export type StorefrontCategory = {
+  id?: number;
+  name?: string;
+  business_type?: string;
+  image_path?: string;
+  description?: string;
+};
+
+export type StorefrontProduct = {
+  id?: number;
+  name?: string;
+  description?: string;
+  measurement_unit_id?: number;
+  image_path?: string;
+  category_id?: number;
+  popular?: boolean;
+};
+
+export type VendorStorefront = {
+  vendor_id?: number;
+  store_identifier?: string;
+  business_name?: string;
+  description?: string;
+  banner_image?: string;
+  thumbnail_image?: string;
+  verified?: boolean;
+  theme?: StorefrontTheme;
+  hero_badges?: string[];
+  fulfillment?: StorefrontFulfillment;
+  categories?: StorefrontCategory[];
+  products?: StorefrontProduct[];
+  trust_strip?: StorefrontBadge[];
+  share_link?: string;
+  support_whatsapp_number?: string;
+};
+
+export type DeliveryEligibility = {
+  vendor_id?: number;
+  business_name?: string;
+  deliverable?: boolean;
+  matched_by?: 'ZIPCODE' | 'GEO_POLYGON' | 'GLOBAL_GEO' | 'NONE' | string;
+  reason?: string;
+};
+
+/** Complete public storefront payload for one vendor. */
+export async function getVendorStorefront(vendorId: number | string) {
+  return apiRequest<ApiEnvelope<VendorStorefront>>(
+    `/v1/vendors/${vendorId}/storefront`,
+    { auth: false },
+  );
+}
+
+/** Check if vendor can deliver to an address (pincode and/or lat/lng). */
+export async function checkDeliveryEligibility(
+  vendorId: number | string,
+  address: Record<string, string>,
+) {
+  return apiRequest<ApiEnvelope<DeliveryEligibility>>(
+    `/v1/vendors/${vendorId}/delivery-eligibility`,
+    { method: 'POST', body: address, auth: false },
+  );
+}
+
 export async function uploadVendorImage(vendorId: number | string, formData: FormData) {
   const token = getAccessToken();
   const res = await fetch(`${getApiBaseUrl()}/v1/vendors/${vendorId}/images`, {
@@ -326,11 +416,18 @@ export async function getCategoriesGrouped() {
 }
 
 /**
- * Public store-by-slug — BACKEND GAP.
- * Until shipped, callers should use fixtures + SLUG_VENDOR_MAP.
+ * Resolve store by public slug.
+ * Prefer GET /v1/vendors/{id}/storefront once vendor_id is known.
+ * Public slug-only lookup is still a backend gap — use vendor_id / env map.
  */
 export async function getPublicStoreBySlug(slug: string) {
   return apiRequest<ApiEnvelope>(`/v1/public/stores/${encodeURIComponent(slug)}`, { auth: false });
+}
+
+/** Load storefront by vendor id and unwrap envelope data. */
+export async function loadVendorStorefront(vendorId: number | string): Promise<VendorStorefront> {
+  const res = await getVendorStorefront(vendorId);
+  return (res.data || (res as unknown as VendorStorefront)) as VendorStorefront;
 }
 
 export type { paths, components, operations } from './schema';

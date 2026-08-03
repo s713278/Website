@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   createVendor,
+  getCategories,
   putCheckoutOptions,
   patchVendorStatus,
   requestOtp,
@@ -28,6 +29,7 @@ type Draft = {
   phone: string;
   businessType: string;
   categories: string[];
+  categoryIds: number[];
   products: Array<{ name: string; skuLabel: string; price: number; mrp: number }>;
   storePickup: boolean;
   homeDelivery: boolean;
@@ -47,6 +49,7 @@ const empty: Draft = {
   phone: '',
   businessType: '',
   categories: [],
+  categoryIds: [],
   products: [{ name: '', skuLabel: '250g', price: 0, mrp: 0 }],
   storePickup: true,
   homeDelivery: true,
@@ -61,6 +64,8 @@ const empty: Draft = {
   themeColor: '#10b981',
 };
 
+const FALLBACK_CATEGORIES = ['Pickles', 'Podulu', 'Snacks', 'Sweets', 'Curries'];
+
 export function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(empty);
@@ -71,6 +76,29 @@ export function OnboardingPage() {
   const [liveSlug, setLiveSlug] = useState('');
 
   const slug = useMemo(() => slugify(draft.storeName || 'my-store'), [draft.storeName]);
+
+  const categoriesQuery = useQuery({
+    queryKey: ['platform-categories'],
+    queryFn: async () => {
+      const res = await getCategories();
+      const data = res.data ?? res;
+      if (Array.isArray(data)) return data as Array<{ id?: number; name?: string }>;
+      if (data && typeof data === 'object') {
+        const obj = data as Record<string, unknown>;
+        for (const key of ['categories', 'content', 'items']) {
+          if (Array.isArray(obj[key])) return obj[key] as Array<{ id?: number; name?: string }>;
+        }
+      }
+      return [] as Array<{ id?: number; name?: string }>;
+    },
+    enabled: USE_API,
+  });
+
+  const categoryOptions = USE_API && categoriesQuery.data?.length
+    ? categoriesQuery.data
+        .filter((c) => c.name)
+        .map((c) => ({ id: Number(c.id), name: String(c.name) }))
+    : FALLBACK_CATEGORIES.map((name, i) => ({ id: i + 1, name }));
 
   const requestOtpMut = useMutation({
     mutationFn: () =>
@@ -129,7 +157,12 @@ export function OnboardingPage() {
             description: draft.tagline,
             contact_number: draft.whatsapp || draft.phone,
             fulfillment_type: draft.homeDelivery && draft.storePickup ? 'BOTH' : draft.homeDelivery ? 'HOME_DELIVERY' : 'STORE_PICKUP',
-            assign_categories: { category_ids: draft.categories },
+            assign_categories: {
+              category_ids:
+                draft.categoryIds.length > 0
+                  ? draft.categoryIds
+                  : draft.categories.map((_, i) => i + 1),
+            },
           });
           const vendorId =
             (created.data as { vendor_id?: number; id?: number } | undefined)?.vendor_id ||
@@ -170,7 +203,9 @@ export function OnboardingPage() {
     }
   }
 
-  const storeUrl = `${STOREFRONT_URL}/${liveSlug || slug}`;
+  const storeUrl = draft.vendorId
+    ? `${STOREFRONT_URL}/${liveSlug || slug}?vendor_id=${draft.vendorId}`
+    : `${STOREFRONT_URL}/${liveSlug || slug}`;
 
   return (
     <div className="md-body min-h-screen">
@@ -226,28 +261,35 @@ export function OnboardingPage() {
             )}
             {step === 4 && (
               <div className="flex flex-wrap gap-2">
-                {['Pickles', 'Podulu', 'Snacks', 'Sweets', 'Curries'].map((c) => {
-                  const on = draft.categories.includes(c);
+                {categoryOptions.map((c) => {
+                  const on = draft.categoryIds.includes(c.id) || draft.categories.includes(c.name);
                   return (
                     <button
-                      key={c}
+                      key={`${c.id}-${c.name}`}
                       type="button"
                       className={`rounded-full border px-3 py-1.5 text-sm ${
                         on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'
                       }`}
                       onClick={() => {
                         setDraft((d) => {
-                          const has = d.categories.includes(c);
-                          const categories = has
-                            ? d.categories.filter((x) => x !== c)
-                            : d.categories.length >= 2
-                              ? d.categories
-                              : [...d.categories, c];
-                          return { ...d, categories };
+                          const has = d.categoryIds.includes(c.id);
+                          if (has) {
+                            return {
+                              ...d,
+                              categoryIds: d.categoryIds.filter((x) => x !== c.id),
+                              categories: d.categories.filter((x) => x !== c.name),
+                            };
+                          }
+                          if (d.categoryIds.length >= 2) return d;
+                          return {
+                            ...d,
+                            categoryIds: [...d.categoryIds, c.id],
+                            categories: [...d.categories, c.name],
+                          };
                         });
                       }}
                     >
-                      {c}
+                      {c.name}
                     </button>
                   );
                 })}

@@ -543,6 +543,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/delivery-eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check vendor delivery eligibility for an address
+         * @description This API checks whether the given vendor can deliver to the supplied address.
+         *         <br>The address is passed as a flexible key-value map, similar to a Google Places address
+         *         selection, and may include `latitude`, `longitude`, `pincode`/`zipcode`/`postal_code`
+         *         and any other address fields (e.g. `city`, `state`, `country`, `formatted_address`, `place_id`).
+         *         <br>At least one of a pincode/zipcode or a latitude+longitude pair must be supplied.
+         *         <br>A vendor is deliverable when, in order of precedence: the pincode is in its
+         *         serviceable zipcode list; the supplied latitude/longitude falls within its mapped geo
+         *         service area polygon; or the vendor has a mapped geo service area with no explicit
+         *         zipcode restriction.
+         *         <br>Test data: pincode: 500049
+         */
+        post: operations["checkDeliveryEligibility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/customers": {
         parameters: {
             query?: never;
@@ -1645,6 +1674,26 @@ export interface paths {
          * @description Fetch Subscription full details By Id and Its accessed by only ADMIN and VENDOR only.
          */
         get: operations["fetchSubsById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor storefront
+         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
+         */
+        get: operations["getStorefront"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3444,6 +3493,53 @@ export interface components {
             /** Format: int64 */
             reference_id?: number;
         };
+        APIResponseDeliveryEligibilityResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["DeliveryEligibilityResponse"];
+        };
+        DeliveryEligibilityResponse: {
+            /**
+             * Format: int64
+             * @description Vendor ID
+             * @example 91
+             */
+            vendor_id?: number;
+            /**
+             * @description Business name
+             * @example Mirdoddi Farm Fresh
+             */
+            business_name?: string;
+            /**
+             * @description Whether the vendor can deliver to the pincode
+             * @example true
+             */
+            deliverable?: boolean;
+            /**
+             * @description How delivery eligibility was determined
+             * @example ZIPCODE
+             * @enum {string}
+             */
+            matched_by?: "ZIPCODE" | "GEO_POLYGON" | "GLOBAL_GEO" | "NONE";
+            /**
+             * @description Human-readable reason
+             * @example Pincode is present in the vendor's serviceable zipcode list
+             */
+            reason?: string;
+        };
         /** @description Request for creating bulk customer profiles with enhanced validation */
         BulkCustomerRequest: {
             /**
@@ -3685,6 +3781,8 @@ export interface components {
             order_source?: "APP" | "WHATSAPP" | "ADMIN" | "VENDOR" | "CUSTOMER_CARE";
         };
         ProductDTO: {
+            /** Format: int64 */
+            id?: number;
             name?: string;
             description?: string;
             /** Format: int64 */
@@ -3693,6 +3791,8 @@ export interface components {
             image_path?: string;
         };
         CategoryDTO: {
+            /** Format: int64 */
+            id?: number;
             /** @example Dairy Products */
             name?: string;
             /** @example Retail */
@@ -3884,8 +3984,8 @@ export interface components {
              * @example Fresh organic tomatoes grown without pesticides
              */
             description?: string;
-            /** @description SKU features as a JSON object */
-            features?: Record<string, never>;
+            /** @description SKU features as a JSON value */
+            features?: components["schemas"]["JsonNode"];
             /**
              * @description Whether the SKU is active
              * @example true
@@ -3896,7 +3996,7 @@ export interface components {
             /** Format: int64 */
             product_id: number;
             description?: string;
-            features?: Record<string, never>;
+            features?: components["schemas"]["JsonNode"];
         };
         OrderUpdateRequest: {
             /**
@@ -3930,7 +4030,7 @@ export interface components {
         AssignProduct: {
             /** Format: int64 */
             product_id?: number;
-            features_map?: Record<string, never>;
+            features_map?: components["schemas"]["JsonNode"];
         };
         AssignProductsRequest: {
             /** Format: int64 */
@@ -4059,6 +4159,135 @@ export interface components {
              */
             preference_type?: "VENDOR" | "PRODUCT" | "CATEGORY";
         };
+        StorefrontBadgeResponse: {
+            /**
+             * @description Lucide/material icon identifier
+             * @example shield
+             */
+            icon?: string;
+            /**
+             * @description Badge title
+             * @example Hygienic & Safe
+             */
+            title?: string;
+            /**
+             * @description Badge subtitle
+             * @example Prepared with care
+             */
+            subtitle?: string;
+        };
+        StorefrontFulfillmentResponse: {
+            /**
+             * @description Enabled delivery method codes
+             * @example [
+             *       "HOME_DELIVERY"
+             *     ]
+             */
+            delivery_methods?: string[];
+            /**
+             * @description Whether home delivery is offered
+             * @example true
+             */
+            home_delivery_available?: boolean;
+            /**
+             * @description Whether store pickup is offered
+             * @example false
+             */
+            store_pickup_available?: boolean;
+            /**
+             * @description Human-readable delivery message
+             * @example Delivery Available from ₹30
+             */
+            delivery_message?: string;
+            /**
+             * @description Human-readable pickup message
+             * @example Store Pickup Available at 2 location(s)
+             */
+            pickup_message?: string;
+        };
+        StorefrontThemeResponse: {
+            /**
+             * @description Primary brand color hex code
+             * @example #F97316
+             */
+            primary_color?: string;
+            /**
+             * @description Accent brand color hex code
+             * @example #15803D
+             */
+            accent_color?: string;
+            /**
+             * @description URL of the storefront logo image
+             * @example https://example.com/logo.png
+             */
+            logo_image?: string;
+        };
+        VendorStorefrontResponse: {
+            /**
+             * Format: int64
+             * @description Unique identifier of the vendor
+             * @example 91
+             */
+            vendor_id?: number;
+            /**
+             * @description Public store identifier/slug
+             * @example mirdoddi-farm-fresh
+             */
+            store_identifier?: string;
+            /**
+             * @description Display name of the vendor's business
+             * @example Mirdoddi Farm Fresh
+             */
+            business_name?: string;
+            /**
+             * @description Short description of the vendor
+             * @example Fresh vegetables, dairy and millet snacks.
+             */
+            description?: string;
+            /**
+             * @description URL of the vendor banner image
+             * @example https://example.com/banner.png
+             */
+            banner_image?: string;
+            /**
+             * @description URL of the vendor thumbnail/logo image
+             * @example https://example.com/thumbnail.png
+             */
+            thumbnail_image?: string;
+            /**
+             * @description Whether the vendor is verified and approved
+             * @example true
+             */
+            verified?: boolean;
+            /** @description Branding theme for the storefront */
+            theme?: components["schemas"]["StorefrontThemeResponse"];
+            /**
+             * @description List of hero badge labels
+             * @example [
+             *       "100% Natural",
+             *       "No Preservatives"
+             *     ]
+             */
+            hero_badges?: string[];
+            /** @description Available delivery/pickup fulfillment options */
+            fulfillment?: components["schemas"]["StorefrontFulfillmentResponse"];
+            /** @description Categories assigned to this vendor */
+            categories?: components["schemas"]["CategoryDTO"][];
+            /** @description Lightweight product list for the storefront home */
+            products?: components["schemas"]["ProductDTO"][];
+            /** @description Trust strip badges shown on the storefront */
+            trust_strip?: components["schemas"]["StorefrontBadgeResponse"][];
+            /**
+             * @description Shareable deep link for this vendor's storefront
+             * @example /api/v1/deeplink?vendor_id=91
+             */
+            share_link?: string;
+            /**
+             * @description WhatsApp support number with country code
+             * @example +919900000000
+             */
+            support_whatsapp_number?: string;
+        };
         APIResponseSkuInfoDTO: {
             /**
              * @description Response message
@@ -4101,8 +4330,8 @@ export interface components {
              * @example Fresh organic tomatoes
              */
             description?: string;
-            /** @description SKU features as JSON object */
-            features?: Record<string, never>;
+            /** @description SKU features as a JSON value */
+            features?: components["schemas"]["JsonNode"];
             /**
              * @description Whether SKU is active
              * @example true
@@ -5575,6 +5804,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["APIResponseImageUploadResponse"];
+                };
+            };
+        };
+    };
+    checkDeliveryEligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseDeliveryEligibilityResponse"];
                 };
             };
         };
@@ -7658,6 +7916,50 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    getStorefront: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Vendor ID
+                 * @example 91
+                 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Storefront loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorStorefrontResponse"];
+                };
+            };
+            /** @description Vendor not found or not active/approved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

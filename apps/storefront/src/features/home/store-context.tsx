@@ -8,15 +8,18 @@ import {
   type ReactNode,
 } from 'react';
 import type { CartLine, StoreDraft } from '@mithra/domain';
-import { seedSaiRamDraft } from '@mithra/domain';
+import { seedSaiRamDraft, type ExtendedStoreDraft } from '@mithra/domain';
 
 const CART_KEY = 'mithra_store_cart';
 const SESSION_KEY = 'mithra_store_session';
 
 type Customer = { phone: string; name: string; loggedIn: boolean };
 
+export type StoreModel = StoreDraft & Partial<ExtendedStoreDraft>;
+
 type StoreContextValue = {
-  draft: StoreDraft;
+  draft: StoreModel;
+  vendorId: number | null;
   view: string;
   setView: (v: string) => void;
   activeCategory: string;
@@ -41,6 +44,8 @@ type StoreContextValue = {
   setAddress: (a: string) => void;
   addressId: string;
   setAddressId: (id: string) => void;
+  pincode: string;
+  setPincode: (p: string) => void;
   orderId: string;
   setOrderId: (id: string) => void;
   orderMessage: string;
@@ -52,12 +57,14 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({
   draft: draftProp,
+  vendorId = null,
   children,
 }: {
-  draft?: StoreDraft;
+  draft?: StoreModel;
+  vendorId?: number | null;
   children: ReactNode;
 }) {
-  const draft = draftProp || seedSaiRamDraft();
+  const draft: StoreModel = (draftProp || seedSaiRamDraft()) as StoreModel;
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState('all');
   const [productId, setProductId] = useState<string | null>(null);
@@ -75,7 +82,7 @@ export function StoreProvider({
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return { phone: '', name: '', loggedIn: false };
-      const s = JSON.parse(raw) as Customer & { address?: string };
+      const s = JSON.parse(raw) as Customer;
       return { phone: s.phone || '', name: s.name || '', loggedIn: !!s.loggedIn };
     } catch {
       return { phone: '', name: '', loggedIn: false };
@@ -83,6 +90,7 @@ export function StoreProvider({
   });
   const [address, setAddress] = useState(draft.settings.address || '');
   const [addressId, setAddressId] = useState('home');
+  const [pincode, setPincode] = useState('');
   const [orderId, setOrderId] = useState('');
   const [orderMessage, setOrderMessage] = useState('');
 
@@ -91,11 +99,8 @@ export function StoreProvider({
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({ ...customer, address }),
-    );
-  }, [customer, address]);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...customer, address, pincode }));
+  }, [customer, address, pincode]);
 
   const addToCart = useCallback(
     (productId: string, skuId: string, qty = 1) => {
@@ -145,11 +150,11 @@ export function StoreProvider({
     ? Number(draft.delivery.homeDelivery.charge || 0)
     : 0;
   const grandTotal = Math.max(0, subtotal + deliveryCharge - discount);
-
   const clearCart = useCallback(() => setCart([]), []);
 
   const value: StoreContextValue = {
     draft,
+    vendorId: vendorId ?? draft.vendorId ?? null,
     view,
     setView,
     activeCategory,
@@ -174,6 +179,8 @@ export function StoreProvider({
     setAddress,
     addressId,
     setAddressId,
+    pincode,
+    setPincode,
     orderId,
     setOrderId,
     orderMessage,

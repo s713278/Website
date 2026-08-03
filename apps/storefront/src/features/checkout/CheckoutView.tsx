@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { createOrderFromCart, ApiError } from '@mithra/api-client';
+import { useEffect, useState } from 'react';
+import { checkDeliveryEligibility, createOrderFromCart, ApiError } from '@mithra/api-client';
 import {
   buildWhatsAppOrderMessage,
+  formatEligibilityMessage,
   formatMoney,
   generateClientOrderId,
   resolveCheckoutChannel,
@@ -14,11 +15,13 @@ import { useStore } from '../home/store-context';
 export function CheckoutView() {
   const {
     draft,
+    vendorId,
     cart,
     address,
     setAddress,
     addressId,
     setAddressId,
+    pincode,
     customer,
     subtotal,
     deliveryCharge,
@@ -33,10 +36,37 @@ export function CheckoutView() {
   const [terms, setTerms] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [eligHint, setEligHint] = useState('');
 
   const addresses = draft.addresses || [
-    { id: 'home', label: 'Home', line: draft.settings.address || '' },
+    { id: 'home', label: 'Home', line: address || draft.settings.address || '' },
   ];
+
+  const effectiveVendorId = vendorId || (SAMPLE_VENDOR_ID > 0 ? SAMPLE_VENDOR_ID : null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (!USE_API || !effectiveVendorId || !pincode) {
+        setEligHint('');
+        return;
+      }
+      try {
+        const res = await checkDeliveryEligibility(effectiveVendorId, {
+          pincode,
+          formatted_address: address || '',
+        });
+        const data = res.data || (res as unknown as { deliverable?: boolean; reason?: string });
+        if (!cancelled) setEligHint(formatEligibilityMessage(data));
+      } catch {
+        if (!cancelled) setEligHint('');
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [USE_API, effectiveVendorId, pincode, address]);
 
   async function createOrder() {
     setError('');
@@ -57,13 +87,16 @@ export function CheckoutView() {
       let orderId = generateClientOrderId();
       const channel = resolveCheckoutChannel(CHECKOUT_CHANNEL);
 
-      if (USE_API && SAMPLE_VENDOR_ID > 0) {
+      const deliveryMethod =
+        draft.delivery?.homeDelivery?.enabled !== false ? 'HOME_DELIVERY' : 'STORE_PICKUP';
+
+      if (USE_API && effectiveVendorId) {
         const res = await createOrderFromCart({
-          vendor_id: SAMPLE_VENDOR_ID,
-          delivery_method: 'HOME_DELIVERY',
+          vendor_id: effectiveVendorId,
+          delivery_method: deliveryMethod,
           clear_cart: true,
           order_source: channel === 'CLOUD_API' ? 'WHATSAPP_CLOUD' : 'WHATSAPP_DEEPLINK',
-          notes: `Payment preference: ${payLabel}`,
+          notes: `Payment preference: ${payLabel}; Address: ${address || ''}; Pincode: ${pincode || ''}`,
         });
         const data = res.data as { order_id?: number | string } | undefined;
         if (data?.order_id) orderId = String(data.order_id);
@@ -113,6 +146,7 @@ export function CheckoutView() {
 
       <section className="mt-4 rounded-xl border border-slate-100 p-3">
         <h3 className="font-semibold">Delivery Address</h3>
+        {eligHint ? <p className="mt-1 text-xs text-emerald-700">{eligHint}</p> : null}
         <div className="mt-2 space-y-2">
           {addresses.map((a) => (
             <label key={a.id} className="flex gap-2 rounded-lg border border-slate-100 p-2 text-sm">
