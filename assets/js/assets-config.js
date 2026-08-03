@@ -25,6 +25,8 @@
     },
     vendors: {
       geeta: BASE + '/vendors/geetas-kitchen.jpg',
+      geetaLogo: BASE + '/vendors/geetas-kitchen-logo.png',
+      geetaBanner: BASE + '/vendors/geetas-kitchen-banner.png',
       saiLogo: BASE + '/vendors/sai-ram-home-foods-logo.png',
       saiBanner: BASE + '/vendors/sai-ram-home-foods-banner.png',
       farm: BASE + '/vendors/straight-from-farm.jpg',

@@ -375,14 +375,22 @@
     if (hero) {
       hero.classList.remove('is-rich-banner');
       hero.classList.remove('is-ph-banner');
+      hero.classList.remove('has-designed-banner');
     }
     if (draft.settings.banner) {
       bannerImg.src = draft.settings.banner;
       bannerImg.alt = draft.settings.storeName + ' banner';
       bannerImg.classList.remove('is-broken');
+      if (hero && draft.settings.richBanner) {
+        hero.classList.add('is-rich-banner');
+        hero.classList.add('has-designed-banner');
+      }
       bannerImg.onerror = function () {
         bannerImg.classList.add('is-broken');
-        if (hero) hero.classList.add('is-ph-banner');
+        if (hero) {
+          hero.classList.add('is-ph-banner');
+          hero.classList.remove('has-designed-banner');
+        }
       };
     } else {
       bannerImg.removeAttribute('src');

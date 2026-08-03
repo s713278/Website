@@ -19,6 +19,8 @@
     },
     vendors: {
       geeta: 'assets/img/vendors/geetas-kitchen.jpg',
+      geetaLogo: 'assets/img/vendors/geetas-kitchen-logo.png',
+      geetaBanner: 'assets/img/vendors/geetas-kitchen-banner.png',
       saiLogo: 'assets/img/vendors/sai-ram-home-foods-logo.png',
       saiBanner: 'assets/img/vendors/sai-ram-home-foods-banner.png'
     }
@@ -168,19 +170,20 @@
     ];
     draft.settings.address = draft.addresses[0].line;
     draft.settings.addressWork = draft.addresses[1].line;
-    draft.settings.richBanner = false;
+    draft.settings.richBanner = true;
     return draft;
   }
 
   /** Sample storefront: Geeta's Kitchen (reference demo) */
   function seedGeetaKitchenDraft() {
-    var hero = IMG.vendors.geeta;
+    var logo = IMG.vendors.geetaLogo || IMG.vendors.geeta;
+    var banner = IMG.vendors.geetaBanner || IMG.vendors.geeta;
     var cats = [
-      { id: 'pickles', name: 'Pickles', image: '', icon: '🫙' },
-      { id: 'podi', name: 'Podi', image: '', icon: '🌶️' },
-      { id: 'snacks', name: 'Snacks', image: '', icon: '🥨' },
-      { id: 'flours', name: 'Flours', image: '', icon: '🌾' },
-      { id: 'sweets', name: 'Sweets', image: '', icon: '🍬' }
+      { id: 'pickles', name: 'Pickles', image: logo, icon: '🫙' },
+      { id: 'podi', name: 'Podi', image: logo, icon: '🌶️' },
+      { id: 'snacks', name: 'Snacks', image: logo, icon: '🥨' },
+      { id: 'flours', name: 'Flours', image: logo, icon: '🌾' },
+      { id: 'sweets', name: 'Sweets', image: logo, icon: '🍬' }
     ];
 
     function product(opts) {
@@ -372,11 +375,11 @@
         location: 'Hyderabad',
         whatsapp: DEMO_WA,
         contactName: DEMO_CONTACT,
-        logo: hero,
-        banner: hero,
-        themeColor: '#006437',
+        logo: logo,
+        banner: banner,
+        themeColor: '#2E5A27',
         address: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032',
-        richBanner: false,
+        richBanner: true,
         deliveryWindow: '6 PM – 9 PM'
       },
       slug: 'geetas-kitchen',

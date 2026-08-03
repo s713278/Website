@@ -330,14 +330,29 @@ body.store-page {
 }
 
 .store-header-logo {
-  width: 2.15rem;
-  height: 2.15rem;
+  width: 2.35rem;
+  height: 2.35rem;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid color-mix(in srgb, var(--store-theme, #10b981) 35%, #fff);
+  object-fit: contain;
+  object-position: center;
+  border: 2px solid color-mix(in srgb, var(--store-theme, #2e5a27) 35%, #fff);
   background: #fff;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px var(--store-theme-soft, rgba(16, 185, 129, 0.15));
+  padding: 0.1rem;
+  box-shadow: 0 2px 8px var(--store-theme-soft, rgba(46, 90, 39, 0.18));
+}
+
+.drawer-brand .store-header-logo,
+#drawer-logo {
+  width: 2.75rem;
+  height: 2.75rem;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  object-fit: contain;
+  background: #fff;
+  padding: 0.12rem;
+  border: 2px solid color-mix(in srgb, var(--store-theme, #2e5a27) 30%, #fff);
 }
 
 .store-brand-title {
@@ -503,6 +518,35 @@ body.store-page {
   object-fit: cover;
   object-position: center center;
   z-index: 0;
+}
+
+/* Designed vendor banners (e.g. Geeta's Kitchen promo) — show creative, lighten overlay */
+.store-hero.has-designed-banner {
+  aspect-ratio: 16 / 9;
+  max-height: min(48vw, 32rem);
+  background: #1a3d1a;
+}
+
+.store-hero.has-designed-banner .store-hero-bg {
+  object-fit: cover;
+  object-position: center top;
+}
+
+.store-hero.has-designed-banner .store-hero-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(26, 61, 26, 0.55) 0%,
+    rgba(26, 61, 26, 0.12) 45%,
+    rgba(26, 61, 26, 0.05) 100%
+  );
+}
+
+.store-hero.has-designed-banner .hero-badge,
+.store-hero.has-designed-banner h1,
+.store-hero.has-designed-banner .hero-tagline,
+.store-hero.has-designed-banner .hero-location,
+.store-hero.has-designed-banner .hero-chips {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
 
 .store-hero-bg.is-broken {
