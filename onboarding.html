@@ -9,24 +9,62 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/landing.css">
     <link rel="stylesheet" href="assets/css/onboarding.css">
     <script src="assets/js/assets-config.js"></script>
 </head>
 <body class="onboarding-page bg-white text-gray-800">
-    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-emerald-100">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <a href="index.html" class="flex items-center gap-2">
-                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="h-9">
+    <header class="site-header">
+        <div class="container nav-bar">
+            <a href="index.html" aria-label="MithraDirect home">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="brand-logo">
             </a>
-            <div class="text-sm text-gray-500 hidden sm:block">
-                Setup Your Insta &amp; WhatsApp Store in <span class="font-semibold text-emerald-600">10 Minutes</span>
+
+            <nav class="nav-links" aria-label="Primary">
+                <a href="index.html#about">About Us</a>
+                <a href="index.html#explore">Search Stores</a>
+                <a href="store.html">Store Demo</a>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#pricing">Pricing</a>
+                <div class="nav-dropdown" id="nav-resources">
+                    <button type="button" class="btn-ghost" style="font-weight:500;font-size:0.9rem;padding:0;color:#374151;">
+                        Resources ▾
+                    </button>
+                    <div class="nav-dropdown-menu" role="menu">
+                        <a href="onboarding.html" class="active">Setup Guide</a>
+                        <a href="privacy.html">Privacy Policy</a>
+                        <a href="terms-conditions.html">Terms &amp; Conditions</a>
+                        <a href="index.html#how-it-works">How It Works</a>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="nav-actions">
+                <button type="button" id="btn-load-demo" class="btn btn-ghost btn-sm">Load demo data</button>
+                <a href="onboarding.html" class="btn btn-ghost">Vendor Login</a>
+                <a href="onboarding.html" class="btn btn-primary btn-sm">Get Started Free</a>
             </div>
-            <div class="flex items-center gap-2 sm:gap-3">
-                <a href="https://www.instagram.com/mithradirect/" target="_blank" rel="noopener" class="text-xs sm:text-sm text-gray-500 hover:text-emerald-700 hidden sm:inline">Instagram</a>
-                <a href="https://www.youtube.com/@MithraDirect" target="_blank" rel="noopener" class="text-xs sm:text-sm text-gray-500 hover:text-emerald-700 hidden sm:inline">YouTube</a>
-                <button type="button" id="btn-load-demo" class="text-xs sm:text-sm text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full hover:bg-emerald-50 transition">
-                    Load demo data
-                </button>
+
+            <button type="button" class="menu-toggle" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="container mobile-nav" id="mobile-menu">
+            <a href="index.html#about">About Us</a>
+            <a href="index.html#explore">Search Stores</a>
+            <a href="store.html">Store Demo</a>
+            <a href="index.html#features">Features</a>
+            <a href="index.html#pricing">Pricing</a>
+            <a href="onboarding.html">Setup Guide</a>
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms-conditions.html">Terms &amp; Conditions</a>
+            <div class="mobile-cta">
+                <button type="button" id="btn-load-demo-mobile" class="btn btn-secondary btn-block">Load demo data</button>
+                <a href="onboarding.html" class="btn btn-secondary btn-block">Vendor Login</a>
+                <a href="onboarding.html" class="btn btn-primary btn-block">Get Started Free</a>
             </div>
         </div>
     </header>
@@ -410,5 +448,6 @@
     <script src="assets/js/store-draft.js"></script>
     <script src="assets/js/store-api.js"></script>
     <script src="assets/js/onboarding.js"></script>
+    <script src="assets/js/landing.js"></script>
 </body>
 </html>

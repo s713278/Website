@@ -1504,7 +1504,7 @@
       }
     });
 
-    document.getElementById('btn-load-demo').addEventListener('click', function () {
+    function loadDemoData() {
       draft = D.seedPickleDraft();
       draft.currentStep = 1;
       draft.maxReachedStep = TOTAL_STEPS;
@@ -1512,6 +1512,11 @@
       renderStepper();
       showPanel(1);
       syncStepForm(1);
+    }
+
+    ['btn-load-demo', 'btn-load-demo-mobile'].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', loadDemoData);
     });
   }
 
