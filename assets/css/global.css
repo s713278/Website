@@ -1,0 +1,478 @@
+/**
+ * MithraDirect — global design system
+ * Shared by index.html, onboarding.html, store.html
+ *
+ * Change fonts, brand colors, and image paths HERE only.
+ */
+
+/* ——— Fonts (single source) ——— */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Brand */
+  --md-green: #10b981;
+  --md-green-dark: #059669;
+  --md-green-deep: #064e3b;
+  --md-green-soft: #ecfdf5;
+  --md-ink: #111827;
+  --md-muted: #6b7280;
+  --md-border: #e5e7eb;
+  --md-surface: #ffffff;
+  --md-surface-alt: #f8fafc;
+  --md-warning: #d97706;
+  --md-danger: #dc2626;
+
+  /* Store theme (overridden per release) */
+  --store-theme: var(--md-green);
+  --store-theme-soft: rgba(16, 185, 129, 0.14);
+
+  /* Typography */
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.35rem;
+  --fs-2xl: clamp(1.5rem, 3.5vw, 2.15rem);
+  --fs-3xl: clamp(1.85rem, 4.5vw, 3.1rem);
+  --lh-tight: 1.2;
+  --lh-body: 1.5;
+
+  /* Layout */
+  --container: 70rem;
+  --container-narrow: 42rem;
+  --page-gutter: clamp(1rem, 3vw, 1.75rem);
+  --header-h: 4.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05);
+  --shadow-md: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --shadow-lg: 0 24px 48px rgba(6, 78, 59, 0.14);
+  --shadow-brand: 0 12px 40px rgba(16, 185, 129, 0.12);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Breakpoints (for reference in JS / docs) */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+
+  /* ——— Image / asset paths (single source) ———
+     Mirror these in assets/js/assets-config.js for JS usage.
+     Prefer CSS vars / data-md-src over hardcoded paths in pages. */
+  --asset-base: assets/img;
+  --img-logo-dark: url('../img/logos/logo_dark_md.png');
+  --img-logo-light: url('../img/logos/logo_light_md.png');
+  --img-banner-fallback: url('../img/banner_md.png');
+  --img-fresh: url('../img/fresh.png');
+  --img-cup: url('../img/cup.png');
+  --img-flower: url('../img/flower.png');
+  --img-batch: url('../img/batch.png');
+  --img-vendor-geeta: url('../img/vendors/geetas-kitchen.jpg');
+  --img-vendor-sai-logo: url('../img/vendors/sai-ram-home-foods-logo.png');
+  --img-vendor-sai-banner: url('../img/vendors/sai-ram-home-foods-banner.png');
+  --img-vendor-farm: url('../img/vendors/straight-from-farm.jpg');
+  --img-vendor-svada: url('../img/vendors/svada-traditional.jpg');
+  --img-testi-1: url('../img/testimonial/testia1.png');
+  --img-testi-2: url('../img/testimonial/testia2.png');
+  --img-testi-3: url('../img/testimonial/testia3.png');
+  --img-placeholder-pattern: linear-gradient(145deg, #ecfdf5, #d1fae5);
+
+  /* External CDNs & brand socials (document + JS via assets-config.js) */
+  --ext-tailwind: https://cdn.tailwindcss.com;
+  --ext-fonts: https://fonts.googleapis.com;
+  --ext-fonts-static: https://fonts.gstatic.com;
+  --url-instagram: https://www.instagram.com/mithradirect/;
+  --url-youtube: https://www.youtube.com/@MithraDirect;
+  --url-whatsapp: https://wa.me/919912149049;
+}
+
+/* ——— Reset / base ——— */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  color: var(--md-ink);
+  background: var(--md-surface);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: var(--lh-tight);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ——— Layout helpers ——— */
+.container,
+.md-container {
+  width: min(var(--container), calc(100% - (var(--page-gutter) * 2)));
+  margin-inline: auto;
+}
+
+.md-container-narrow {
+  width: min(var(--container-narrow), calc(100% - (var(--page-gutter) * 2)));
+  margin-inline: auto;
+}
+
+.md-section {
+  padding-block: clamp(2.5rem, 6vw, 4.5rem);
+}
+
+.md-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.md-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ——— Brand / media ——— */
+.brand-logo,
+.md-logo {
+  height: 2.35rem;
+  width: auto;
+  object-fit: contain;
+}
+
+.md-logo-lg {
+  height: 2.75rem;
+}
+
+.md-img-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.md-img-contain {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.md-banner-16x9 {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--img-placeholder-pattern);
+}
+
+.md-banner-16x9 > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.md-avatar,
+.md-thumb {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--md-green-soft);
+}
+
+.md-avatar {
+  border-radius: var(--radius-pill);
+}
+
+/* CSS background helpers (use classes instead of hardcoding paths) */
+.md-bg-logo-dark {
+  background-image: var(--img-logo-dark);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.md-bg-banner {
+  background-image: var(--img-banner-fallback);
+  background-size: cover;
+  background-position: center;
+}
+
+.md-bg-fresh {
+  background-image: var(--img-fresh);
+  background-size: cover;
+  background-position: center;
+}
+
+.md-ph-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  height: 100%;
+  min-height: 4rem;
+  background: var(--img-placeholder-pattern);
+  color: var(--md-ink);
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.md-ph-media .icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.md-ph-media .label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ——— Shared buttons ——— */
+.btn,
+.md-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  padding: 0.75rem 1.5rem;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.btn:active,
+.md-btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary,
+.md-btn-primary,
+.btn-primary-md {
+  background: linear-gradient(135deg, var(--store-theme, var(--md-green)), var(--md-green-dark));
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.28);
+}
+
+.btn-primary:hover,
+.md-btn-primary:hover,
+.btn-primary-md:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+}
+
+.btn-secondary,
+.md-btn-secondary {
+  background: #fff;
+  color: var(--md-green-dark);
+  border-color: #a7f3d0;
+}
+
+.btn-secondary:hover,
+.md-btn-secondary:hover {
+  background: var(--md-green-soft);
+  border-color: var(--md-green);
+}
+
+.btn-sm,
+.md-btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.btn-block,
+.md-btn-block {
+  width: 100%;
+}
+
+.btn-primary-md.is-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+/* ——— Forms ——— */
+.md-field,
+.field {
+  width: 100%;
+  border: 1px solid var(--md-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.95rem;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.md-field:focus,
+.field:focus {
+  border-color: var(--store-theme, var(--md-green));
+  box-shadow: 0 0 0 3px var(--store-theme-soft, rgba(16, 185, 129, 0.15));
+}
+
+/* ——— Responsive visibility ——— */
+.md-hide-sm {
+  display: none !important;
+}
+
+.md-show-sm {
+  display: initial !important;
+}
+
+@media (min-width: 640px) {
+  .md-hide-sm {
+    display: initial !important;
+  }
+
+  .md-show-sm {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .md-hide-mobile {
+    display: none !important;
+  }
+
+  .btn,
+  .md-btn,
+  .btn-primary-md {
+    min-height: 2.75rem;
+  }
+
+  .btn-block-mobile {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .md-hide-desktop {
+    display: none !important;
+  }
+}
+
+/* ——— Grid helpers ——— */
+.md-grid-2,
+.md-grid-3,
+.md-grid-4 {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .md-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .md-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .md-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .md-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ——— Reduced motion ——— */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
