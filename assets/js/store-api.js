@@ -95,7 +95,7 @@
         draft.payment[k] = Object.assign({}, blank.payment[k], data.payment[k] || {});
       });
     }
-    if (!draft.settings.themeColor) draft.settings.themeColor = '#006437';
+    if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
     if (draft.settings.storeName && !draft.slug) {
       draft.slug = D.slugify(draft.settings.storeName);
     }

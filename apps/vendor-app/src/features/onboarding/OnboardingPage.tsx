@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   createVendor,
@@ -11,7 +11,7 @@ import {
   ApiError,
 } from '@mithra/api-client';
 import { slugify, whatsappLink } from '@mithra/domain';
-import { Button, Field, OtpInput, PhoneInput, PhonePreview, Stepper } from '@mithra/ui';
+import { Button, Field, OtpInput, PhoneInput, PhonePreview, Stepper, applyVendorTheme } from '@mithra/ui';
 import { MARKETING_URL, STOREFRONT_URL, USE_API } from '../../config';
 
 const BUSINESS_TYPES = [
@@ -77,6 +77,10 @@ export function OnboardingPage() {
 
   const slug = useMemo(() => slugify(draft.storeName || 'my-store'), [draft.storeName]);
 
+  useEffect(() => {
+    applyVendorTheme(draft.themeColor);
+  }, [draft.themeColor]);
+
   const categoriesQuery = useQuery({
     queryKey: ['platform-categories'],
     queryFn: async () => {
@@ -105,8 +109,8 @@ export function OnboardingPage() {
       requestOtp({
         country_code: '+91',
         mobile_number: draft.phone,
-        reg_platform: 'WEB',
-        user_role: 'VENDOR',
+        reg_platform: 'Web',
+        user_role: 'ADMIN',
       }),
   });
 
@@ -407,7 +411,15 @@ export function OnboardingPage() {
                 <Field label="Tagline" value={draft.tagline} onChange={(e) => setDraft({ ...draft, tagline: e.target.value })} />
                 <Field label="Location" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
                 <Field label="WhatsApp" value={draft.whatsapp || draft.phone} onChange={(e) => setDraft({ ...draft, whatsapp: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
-                <Field label="Theme color" type="color" value={draft.themeColor} onChange={(e) => setDraft({ ...draft, themeColor: e.target.value })} />
+                <Field
+                  label="Theme color"
+                  type="color"
+                  value={draft.themeColor}
+                  onChange={(e) => setDraft({ ...draft, themeColor: e.target.value })}
+                />
+                <p className="text-xs text-slate-500">
+                  Applies to your live storefront preview and customer shop link.
+                </p>
               </div>
             )}
             {step === 10 && (

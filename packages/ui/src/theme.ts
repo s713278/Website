@@ -2,7 +2,14 @@ export function applyVendorTheme(color?: string | null) {
   const hex = normalizeHex(color || '#10b981');
   const root = document.documentElement;
   root.style.setProperty('--store-theme', hex);
-  root.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+  root.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.14));
+  root.style.setProperty('--store-theme-muted', hexToRgba(hex, 0.22));
+  root.style.setProperty('--store-theme-overlay', hexToRgba(hex, 0.78));
+  root.style.setProperty('--store-theme-overlay-mid', hexToRgba(hex, 0.32));
+  root.style.setProperty('--store-theme-overlay-light', hexToRgba(hex, 0.1));
+  root.setAttribute('data-store-theme', hex);
+  document.body?.classList.add('store-themed');
+  return hex;
 }
 
 export function normalizeHex(color: string): string {

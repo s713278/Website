@@ -49,8 +49,8 @@
       whatsapp: 'https://wa.me/919912149049',
       whatsappPhone: '9912149049',
       demoContactName: 'Swamy Kunta',
-      /** Vendor dashboard base — override when wiring to vendor-app / API */
-      dashboardUrl: '',
+      /** Vendor dashboard demo — replace with vendor-app URL when ready */
+      dashboardUrl: 'dashboard.html',
       pricingUrl: 'index.html#pricing'
     }
   };

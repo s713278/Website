@@ -377,8 +377,8 @@ body.store-page {
 
 .icon-btn:hover,
 .icon-btn:focus-visible {
-  background: var(--md-green-soft);
-  color: var(--md-green-deep);
+  background: var(--store-theme-soft, var(--md-green-soft));
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
   outline: none;
 }
 
@@ -403,7 +403,7 @@ body.store-page {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 2px 6px var(--store-theme-muted, rgba(16, 185, 129, 0.4));
 }
 
 /* Drawer */
@@ -478,14 +478,14 @@ body.store-page {
 
 .drawer-link:hover,
 .drawer-link:focus-visible {
-  background: var(--md-green-soft);
-  color: var(--md-green-deep);
+  background: var(--store-theme-soft, var(--md-green-soft));
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
   outline: none;
 }
 
 .drawer-link.is-accent {
-  color: var(--md-green-dark);
-  background: #f0fdf4;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
+  background: var(--store-theme-soft, #f0fdf4);
 }
 
 .drawer-link.is-muted {
@@ -507,7 +507,11 @@ body.store-page {
   flex-direction: column;
   justify-content: flex-end;
   overflow: hidden;
-  background: linear-gradient(135deg, #064e3b, #059669);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--store-theme, #064e3b) 78%, #000),
+    var(--store-theme, #059669)
+  );
 }
 
 .store-hero-bg {
@@ -524,7 +528,7 @@ body.store-page {
 .store-hero.has-designed-banner {
   aspect-ratio: 16 / 9;
   max-height: min(48vw, 32rem);
-  background: #1a3d1a;
+  background: color-mix(in srgb, var(--store-theme, #1a3d1a) 70%, #000);
 }
 
 .store-hero.has-designed-banner .store-hero-bg {
@@ -535,9 +539,9 @@ body.store-page {
 .store-hero.has-designed-banner .store-hero-overlay {
   background: linear-gradient(
     to top,
-    rgba(26, 61, 26, 0.55) 0%,
-    rgba(26, 61, 26, 0.12) 45%,
-    rgba(26, 61, 26, 0.05) 100%
+    var(--store-theme-overlay-mid, rgba(26, 61, 26, 0.55)) 0%,
+    var(--store-theme-overlay-light, rgba(26, 61, 26, 0.12)) 45%,
+    rgba(0, 0, 0, 0.05) 100%
   );
 }
 
@@ -577,9 +581,9 @@ body.store-page {
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(6, 78, 59, 0.78) 0%,
-    rgba(6, 78, 59, 0.28) 55%,
-    rgba(6, 78, 59, 0.08) 100%
+    var(--store-theme-overlay, rgba(6, 78, 59, 0.78)) 0%,
+    var(--store-theme-overlay-mid, rgba(6, 78, 59, 0.28)) 55%,
+    var(--store-theme-overlay-light, rgba(6, 78, 59, 0.08)) 100%
   );
   z-index: 0;
   pointer-events: none;
@@ -600,7 +604,11 @@ body.store-page {
   max-height: min(42vw, 28rem);
   padding: 1.1rem 1.15rem 1rem !important;
   line-height: 1.4;
-  background: linear-gradient(135deg, #064e3b, #059669);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--store-theme, #064e3b) 78%, #000),
+    var(--store-theme, #059669)
+  );
 }
 
 .store-hero.is-rich-banner .store-hero-bg {
@@ -733,7 +741,7 @@ body.store-page {
 .link-btn {
   font-size: 0.78rem;
   font-weight: 700;
-  color: var(--md-green-dark);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
   white-space: nowrap;
 }
 
@@ -778,19 +786,19 @@ body.store-page {
 .btn-outline {
   flex-shrink: 0;
   padding: 0.7rem 0.85rem;
-  border: 1px solid #d1fae5;
+  border: 1px solid color-mix(in srgb, var(--store-theme, #d1fae5) 40%, #fff);
   border-radius: 0.85rem;
   font-size: 0.75rem;
   font-weight: 600;
   background: #fff;
-  color: var(--md-green-deep);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .btn-outline:hover {
-  background: var(--md-green-soft);
-  border-color: #a7f3d0;
+  background: var(--store-theme-soft, var(--md-green-soft));
+  border-color: var(--store-theme, #a7f3d0);
 }
 
 .trust-strip {
@@ -883,8 +891,8 @@ body.store-page {
   height: 3.6rem;
   margin: 0 auto 0.4rem;
   border-radius: 50%;
-  border: 2px solid #d1fae5;
-  background: var(--md-green-soft);
+  border: 2px solid color-mix(in srgb, var(--store-theme, #d1fae5) 40%, #fff);
+  background: var(--store-theme-soft, var(--md-green-soft));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -904,7 +912,7 @@ body.store-page {
 .store-cat-btn.active .store-cat-img {
   transform: translateY(-2px) scale(1.04);
   border-color: var(--store-theme, var(--md-green));
-  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 8px 16px var(--store-theme-soft, rgba(16, 185, 129, 0.2));
 }
 
 .store-cat-name {
@@ -1165,7 +1173,7 @@ body.store-page {
 }
 
 .menu-rail {
-  background: linear-gradient(180deg, #f0fdf4, #f9fafb);
+  background: linear-gradient(180deg, var(--store-theme-soft, #f0fdf4), #f9fafb);
   border-right: 1px solid #e5e7eb;
   padding: 0.5rem 0;
   overflow-y: auto;
@@ -1203,7 +1211,7 @@ body.store-page {
 }
 
 .menu-rail-item.active {
-  color: var(--md-green-deep);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
   background: #fff;
   border-left-color: var(--store-theme, var(--md-green));
 }
@@ -1326,7 +1334,7 @@ body.store-page {
 
 .sku-stock {
   font-size: 0.68rem;
-  color: var(--md-green-dark);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
   font-weight: 600;
   margin-top: 0.15rem;
 }
@@ -1356,7 +1364,7 @@ body.store-page {
   font-weight: 700;
   padding: 0.45rem 1rem;
   border-radius: 999px;
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.28);
+  box-shadow: 0 4px 10px var(--store-theme-soft, rgba(16, 185, 129, 0.28));
   transition: transform 0.15s;
 }
 
@@ -1368,8 +1376,8 @@ body.store-page {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: var(--md-green-soft);
-  border: 1px solid #d1fae5;
+  background: var(--store-theme-soft, var(--md-green-soft));
+  border: 1px solid color-mix(in srgb, var(--store-theme, #d1fae5) 45%, #fff);
   border-radius: 999px;
   padding: 0.15rem;
 }
@@ -1390,7 +1398,7 @@ body.store-page {
   text-align: center;
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--md-green-deep);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
 }
 
 /* Product detail */
@@ -1918,7 +1926,7 @@ body.store-page {
 
 .cart-bar-cta {
   background: #fff;
-  color: var(--md-green-deep);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
   font-size: 0.82rem;
   font-weight: 700;
   padding: 0.55rem 1rem;

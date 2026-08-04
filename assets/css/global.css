@@ -22,9 +22,13 @@
   --md-warning: #d97706;
   --md-danger: #dc2626;
 
-  /* Store theme (overridden per release) */
+  /* Store theme (overridden per vendor release) */
   --store-theme: var(--md-green);
   --store-theme-soft: rgba(16, 185, 129, 0.14);
+  --store-theme-muted: rgba(16, 185, 129, 0.22);
+  --store-theme-overlay: rgba(6, 78, 59, 0.78);
+  --store-theme-overlay-mid: rgba(6, 78, 59, 0.32);
+  --store-theme-overlay-light: rgba(6, 78, 59, 0.1);
 
   /* Typography */
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -331,29 +335,33 @@ h6,
 .btn-primary,
 .md-btn-primary,
 .btn-primary-md {
-  background: linear-gradient(135deg, var(--store-theme, var(--md-green)), var(--md-green-dark));
+  background: linear-gradient(
+    135deg,
+    var(--store-theme, var(--md-green)),
+    color-mix(in srgb, var(--store-theme, var(--md-green)) 72%, #000)
+  );
   color: #fff;
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.28);
+  box-shadow: 0 8px 20px var(--store-theme-soft, rgba(16, 185, 129, 0.28));
 }
 
 .btn-primary:hover,
 .md-btn-primary:hover,
 .btn-primary-md:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 28px var(--store-theme-muted, rgba(16, 185, 129, 0.35));
 }
 
 .btn-secondary,
 .md-btn-secondary {
   background: #fff;
-  color: var(--md-green-dark);
-  border-color: #a7f3d0;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 85%, #000);
+  border-color: color-mix(in srgb, var(--store-theme, #a7f3d0) 45%, #fff);
 }
 
 .btn-secondary:hover,
 .md-btn-secondary:hover {
-  background: var(--md-green-soft);
-  border-color: var(--md-green);
+  background: var(--store-theme-soft, var(--md-green-soft));
+  border-color: var(--store-theme, var(--md-green));
 }
 
 .btn-sm,

@@ -1019,9 +1019,9 @@ body.onboarding-page h6 {
   background: linear-gradient(
     135deg,
     var(--store-theme, var(--md-green)),
-    var(--md-green-dark)
+    color-mix(in srgb, var(--store-theme, var(--md-green)) 70%, #000)
   );
-  box-shadow: var(--shadow-brand);
+  box-shadow: var(--shadow-brand), 0 8px 24px var(--store-theme-soft, rgba(16, 185, 129, 0.35));
   animation: obSuccessPop 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1044,7 +1044,7 @@ body.onboarding-page h6 {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--md-green-dark);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
   margin: 0 0 0.35rem;
 }
 
@@ -1064,9 +1064,9 @@ body.onboarding-page h6 {
 }
 
 .ob-plan-card {
-  border: 1px solid color-mix(in srgb, var(--md-green) 28%, var(--md-border));
+  border: 1px solid color-mix(in srgb, var(--store-theme, var(--md-green)) 28%, var(--md-border));
   border-radius: var(--radius-xl);
-  background: linear-gradient(160deg, var(--md-green-soft) 0%, #fff 55%);
+  background: linear-gradient(160deg, var(--store-theme-soft, var(--md-green-soft)) 0%, #fff 55%);
   padding: 1rem 1.1rem 1.15rem;
   box-shadow: var(--shadow-sm);
   margin-bottom: 1rem;
@@ -1087,9 +1087,9 @@ body.onboarding-page h6 {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--md-green-deep);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 90%, #000);
   background: #fff;
-  border: 1px solid #a7f3d0;
+  border: 1px solid color-mix(in srgb, var(--store-theme, #a7f3d0) 45%, #fff);
   border-radius: var(--radius-pill);
   padding: 0.25rem 0.65rem;
 }
@@ -1100,15 +1100,15 @@ body.onboarding-page h6 {
   gap: 0.35rem;
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--md-green-dark);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
 }
 
 .ob-plan-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: var(--radius-pill);
-  background: var(--md-green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  background: var(--store-theme, var(--md-green));
+  box-shadow: 0 0 0 3px var(--store-theme-soft, rgba(16, 185, 129, 0.2));
   animation: obPulse 1.8s ease-in-out infinite;
 }
 

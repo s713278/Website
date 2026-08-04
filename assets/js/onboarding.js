@@ -983,15 +983,11 @@
   /* ---------- Step 9 Theme ---------- */
 
   function normalizeHex(color) {
-    var c = String(color || '').trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
-    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
-      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
-    }
-    return '#10b981';
+    return D.normalizeHex ? D.normalizeHex(color) : String(color || '#10b981').toLowerCase();
   }
 
   function hexToRgba(hex, alpha) {
+    if (D.hexToRgba) return D.hexToRgba(hex, alpha);
     var h = normalizeHex(hex).slice(1);
     var r = parseInt(h.slice(0, 2), 16);
     var g = parseInt(h.slice(2, 4), 16);
@@ -1000,10 +996,10 @@
   }
 
   function applyThemeColor(color) {
-    var hex = normalizeHex(color);
+    var hex = D.applyTheme
+      ? D.applyTheme(color)
+      : normalizeHex(color);
     draft.settings.themeColor = hex;
-    document.documentElement.style.setProperty('--store-theme', hex);
-    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
     var input = document.getElementById('input-theme-color');
     var hexLabel = document.getElementById('theme-color-hex');
     var chip = document.getElementById('theme-live-chip');

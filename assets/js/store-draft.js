@@ -838,6 +838,45 @@
     return (CATEGORY_CATALOG[businessTypeId] || []).slice();
   }
 
+  var DEFAULT_THEME = '#10b981';
+
+  function normalizeHex(color) {
+    var c = String(color || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
+    }
+    return DEFAULT_THEME;
+  }
+
+  function hexToRgba(hex, alpha) {
+    var h = normalizeHex(hex).slice(1);
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  /**
+   * Apply vendor theme across the page (onboarding, storefront, dashboard).
+   * Sets CSS vars consumed by global / feature stylesheets.
+   */
+  function applyTheme(color, root) {
+    var hex = normalizeHex(color || DEFAULT_THEME);
+    var el = root || document.documentElement;
+    el.style.setProperty('--store-theme', hex);
+    el.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.14));
+    el.style.setProperty('--store-theme-muted', hexToRgba(hex, 0.22));
+    el.style.setProperty('--store-theme-overlay', hexToRgba(hex, 0.78));
+    el.style.setProperty('--store-theme-overlay-mid', hexToRgba(hex, 0.32));
+    el.style.setProperty('--store-theme-overlay-light', hexToRgba(hex, 0.1));
+    el.setAttribute('data-store-theme', hex);
+    if (el === document.documentElement && document.body) {
+      document.body.classList.add('store-themed');
+    }
+    return hex;
+  }
+
   function whatsappLink(phone, message) {
     var digits = String(phone || '').replace(/\D/g, '');
     if (digits.length === 10) digits = '91' + digits;
@@ -850,8 +889,12 @@
     BUSINESS_TYPES: BUSINESS_TYPES,
     PRODUCT_COLORS: PRODUCT_COLORS,
     THEME_PRESETS: THEME_PRESETS,
+    DEFAULT_THEME: DEFAULT_THEME,
     uid: uid,
     slugify: slugify,
+    normalizeHex: normalizeHex,
+    hexToRgba: hexToRgba,
+    applyTheme: applyTheme,
     emptyDraft: emptyDraft,
     defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,

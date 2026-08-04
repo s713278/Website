@@ -42,15 +42,11 @@
   }
 
   function normalizeHex(color) {
-    var c = String(color || '').trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
-    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
-      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
-    }
-    return '#128c7e';
+    return D.normalizeHex ? D.normalizeHex(color) : String(color || D.DEFAULT_THEME || '#10b981').toLowerCase();
   }
 
   function hexToRgba(hex, alpha) {
+    if (D.hexToRgba) return D.hexToRgba(hex, alpha);
     var h = normalizeHex(hex).slice(1);
     return (
       'rgba(' +
@@ -66,9 +62,11 @@
   }
 
   function applyTheme(color) {
+    if (D.applyTheme) return D.applyTheme(color);
     var hex = normalizeHex(color);
     document.documentElement.style.setProperty('--store-theme', hex);
-    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.14));
+    return hex;
   }
 
   function loadCart() {
@@ -1241,7 +1239,7 @@
     state.address = draft.settings.address || draft.settings.location || '';
     state.activeCategory = 'all';
 
-    applyTheme((draft.settings && draft.settings.themeColor) || '#006437');
+    applyTheme((draft.settings && draft.settings.themeColor) || D.DEFAULT_THEME || '#10b981');
     loadCart();
     loadSession();
     if (state.customer.loggedIn && !state.address) {
