@@ -9,6 +9,7 @@
  * {
  *   slug, phone, businessType, categories[], products[],
  *   delivery{}, payment{}, settings{}, addresses[],
+ *   vendorId, subscription: { planCode, planName, status, activatedAt, … },
  *   meta: { source, fetchedAt, version }
  * }
  *
@@ -112,6 +113,11 @@
       },
       data.meta || {}
     );
+    if (!draft.subscription) {
+      draft.subscription = D.defaultSubscription ? D.defaultSubscription() : null;
+    } else if (D.defaultSubscription) {
+      draft.subscription = Object.assign({}, D.defaultSubscription(), data.subscription || draft.subscription);
+    }
     return draft;
   }
 

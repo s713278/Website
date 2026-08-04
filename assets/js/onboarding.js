@@ -21,7 +21,7 @@
     { n: 7, label: 'Delivery', time: '1 min' },
     { n: 8, label: 'Payments', time: '1 min' },
     { n: 9, label: 'Store Settings', time: '1 min' },
-    { n: 10, label: 'Store Live!', time: '1 min' }
+    { n: 10, label: 'You\'re Live', time: '1 min' }
   ];
 
   var TOTAL_STEPS = 10;
@@ -1050,23 +1050,282 @@
 
   /* ---------- Step 10 ---------- */
 
-  function finalizeLive() {
-    draft.slug = D.slugify(draft.settings.storeName);
+  /**
+   * Build / merge Free-tier entitlement after publish.
+   * Replace `apiSubscription` with the real API payload when wiring
+   * POST publish + GET/POST vendor subscription endpoints.
+   *
+   * Expected API shape (illustrative):
+   * {
+   *   planCode, planName, status, activatedAt, endsAt,
+   *   vendorId, subscriptionId, features[],
+   *   dashboardUrl, storefrontUrl, upgradeUrl
+   * }
+   */
+  function activateFreeSubscription(apiSubscription) {
+    var defaults = D.defaultSubscription ? D.defaultSubscription() : {};
+    var existing = draft.subscription || {};
+    var fromApi = apiSubscription || {};
+    var now = new Date().toISOString();
+    var assetsExt =
+      (window.MithraAssets && window.MithraAssets.paths && window.MithraAssets.paths.external) || {};
+
+    draft.subscription = Object.assign({}, defaults, existing, fromApi, {
+      planCode: fromApi.planCode || existing.planCode || 'FREE',
+      planName: fromApi.planName || existing.planName || 'Free',
+      status: fromApi.status || existing.status || 'ACTIVE',
+      activatedAt: fromApi.activatedAt || existing.activatedAt || now,
+      endsAt: fromApi.endsAt != null ? fromApi.endsAt : existing.endsAt != null ? existing.endsAt : null,
+      vendorId: fromApi.vendorId || draft.vendorId || existing.vendorId || null,
+      subscriptionId: fromApi.subscriptionId || existing.subscriptionId || null,
+      features:
+        fromApi.features && fromApi.features.length
+          ? fromApi.features
+          : existing.features && existing.features.length
+            ? existing.features
+            : defaults.features,
+      dashboardUrl:
+        fromApi.dashboardUrl ||
+        existing.dashboardUrl ||
+        assetsExt.dashboardUrl ||
+        '',
+      storefrontUrl: fromApi.storefrontUrl || existing.storefrontUrl || '',
+      upgradeUrl:
+        fromApi.upgradeUrl ||
+        existing.upgradeUrl ||
+        assetsExt.pricingUrl ||
+        'index.html#pricing'
+    });
+
+    if (draft.subscription.vendorId) {
+      draft.vendorId = draft.subscription.vendorId;
+    }
+    return draft.subscription;
+  }
+
+  function formatActivatedLabel(iso) {
+    if (!iso) return 'Just now';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return 'Just now';
+      var sameDay = new Date().toDateString() === d.toDateString();
+      if (sameDay) {
+        return (
+          'Activated today · ' +
+          d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        );
+      }
+      return (
+        'Activated ' +
+        d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+      );
+    } catch (e) {
+      return 'Just now';
+    }
+  }
+
+  function renderPlanFeatures(features) {
+    var list = document.getElementById('plan-features');
+    if (!list || !features || !features.length) return;
+    var wasHidden = list.hidden;
+    var icons = {
+      storefront: '🏪',
+      whatsapp_orders: '💬',
+      products: '📦',
+      delivery: '🚚',
+      payments: '💳',
+      branding: '🎨'
+    };
+    list.innerHTML = features
+      .map(function (f) {
+        var code = f.code || f.id || '';
+        var label = f.label || f.name || code;
+        var icon = f.icon || icons[code] || '✓';
+        return (
+          '<li class="ob-feature" data-feature="' +
+          escapeAttr(code) +
+          '">' +
+          '<span class="ob-feature-icon" aria-hidden="true">' +
+          icon +
+          '</span>' +
+          '<span>' +
+          escapeHtml(label) +
+          '</span></li>'
+        );
+      })
+      .join('');
+    list.hidden = wasHidden;
+    list.classList.toggle('is-collapsed', wasHidden);
+  }
+
+  function markShareTipDone(tip) {
+    if (!tip) return;
+    var step = document.querySelector('.ob-share-step[data-tip="' + tip + '"]');
+    if (step) step.classList.add('is-done');
+    if (!draft.onboardingTips) draft.onboardingTips = {};
+    draft.onboardingTips[tip] = true;
     persist();
+  }
+
+  function restoreShareTips() {
+    var tips = (draft.onboardingTips) || {};
+    Object.keys(tips).forEach(function (tip) {
+      if (tips[tip]) {
+        var step = document.querySelector('.ob-share-step[data-tip="' + tip + '"]');
+        if (step) step.classList.add('is-done');
+      }
+    });
+  }
+
+  function copyStoreLink(opts) {
+    opts = opts || {};
+    var text = (document.getElementById('store-url-display') || {}).textContent || '';
+    var btn = opts.button || document.getElementById('btn-copy-url');
+    var feedback = document.getElementById('copy-feedback');
+    function onCopied() {
+      if (btn) {
+        var prev = btn.textContent;
+        btn.textContent = opts.doneLabel || 'Copied!';
+        setTimeout(function () {
+          btn.textContent = prev;
+        }, 1600);
+      }
+      if (feedback) {
+        feedback.hidden = false;
+        feedback.textContent =
+          opts.hint || 'Link copied — paste it in WhatsApp or your Instagram bio.';
+      }
+      if (opts.tip) markShareTipDone(opts.tip);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onCopied).catch(function () {
+        window.prompt('Copy your shop link:', text);
+      });
+    } else {
+      window.prompt('Copy your shop link:', text);
+      onCopied();
+    }
+  }
+
+  function renderSuccessPanel(sub) {
+    var storeName = (draft.settings && draft.settings.storeName) || 'Your store';
+    var eyebrow = document.getElementById('success-store-name');
+    if (eyebrow) eyebrow.textContent = storeName + ' is live';
+
+    var panel = document.getElementById('panel-10');
+    var card = document.getElementById('plan-status-card');
+    if (panel) {
+      panel.setAttribute('data-plan-code', sub.planCode || 'FREE');
+      panel.setAttribute('data-plan-status', sub.status || 'ACTIVE');
+    }
+    if (card) {
+      card.setAttribute('data-plan-code', sub.planCode || 'FREE');
+      card.setAttribute('data-plan-status', sub.status || 'ACTIVE');
+      card.setAttribute('data-vendor-id', sub.vendorId != null ? String(sub.vendorId) : '');
+      card.setAttribute(
+        'data-subscription-id',
+        sub.subscriptionId != null ? String(sub.subscriptionId) : ''
+      );
+    }
+
+    var badge = document.getElementById('plan-badge');
+    if (badge) badge.textContent = (sub.planName || 'Free') + ' plan';
+
+    var statusLabel = document.getElementById('plan-status-label');
+    if (statusLabel) {
+      var statusText =
+        String(sub.status || 'ACTIVE').toUpperCase() === 'ACTIVE' ? 'Activated' : String(sub.status);
+      statusLabel.innerHTML =
+        '<span class="ob-plan-dot" aria-hidden="true"></span>' + escapeHtml(statusText);
+    }
+
+    var headline = document.getElementById('plan-headline');
+    if (headline) {
+      headline.textContent =
+        (sub.planCode || 'FREE') === 'FREE'
+          ? 'Free tier is active on your store'
+          : (sub.planName || 'Plan') + ' is active on your store';
+    }
+
+    var activatedEl = document.getElementById('plan-activated-at');
+    if (activatedEl) activatedEl.textContent = formatActivatedLabel(sub.activatedAt);
+
+    var subtitle = document.getElementById('success-subtitle');
+    if (subtitle) {
+      subtitle.textContent =
+        'Your ' +
+        (sub.planName || 'Free') +
+        ' plan is on. Next: share your shop link so customers can browse and order on WhatsApp.';
+    }
+
+    var featuresEl = document.getElementById('plan-features');
+    var featuresWereOpen = featuresEl && !featuresEl.hidden;
+    renderPlanFeatures(sub.features);
+    if (featuresEl && !featuresWereOpen) {
+      featuresEl.hidden = true;
+      featuresEl.classList.add('is-collapsed');
+    }
+
+    var upgrade = document.getElementById('btn-view-plans');
+    if (upgrade && sub.upgradeUrl) upgrade.href = sub.upgradeUrl;
+
+    var dashBtn = document.getElementById('btn-go-dashboard');
+    if (dashBtn) {
+      var dashUrl = String(sub.dashboardUrl || '').trim();
+      dashBtn.hidden = false;
+      if (dashUrl) {
+        dashBtn.href = dashUrl;
+        dashBtn.removeAttribute('data-pending');
+        dashBtn.removeAttribute('aria-disabled');
+      } else {
+        dashBtn.href = '#';
+        dashBtn.setAttribute('data-pending', 'true');
+        dashBtn.setAttribute(
+          'title',
+          'Dashboard URL pending — set subscription.dashboardUrl from API'
+        );
+      }
+    }
+
+    restoreShareTips();
+  }
+
+  function finalizeLive(apiResult) {
+    draft.slug = D.slugify(draft.settings.storeName);
+    var sub = activateFreeSubscription(
+      apiResult && (apiResult.subscription || apiResult.plan || apiResult)
+    );
+    var displayUrl = 'mithradirect.com/store/' + draft.slug;
+    var storeHref = 'store.html?slug=' + encodeURIComponent(draft.slug);
+    if (draft.vendorId) {
+      storeHref += '&vendor_id=' + encodeURIComponent(String(draft.vendorId));
+    }
+    sub.storefrontUrl = sub.storefrontUrl || storeHref;
+    draft.subscription = sub;
+    persist();
+
     if (window.StoreAPI && typeof window.StoreAPI.publishFromDraft === 'function') {
       window.StoreAPI.publishFromDraft(draft);
     }
-    var displayUrl = 'mithradirect.com/store/' + draft.slug;
-    document.getElementById('store-url-display').textContent = displayUrl;
-    var storeHref = 'store.html?slug=' + encodeURIComponent(draft.slug);
-    document.getElementById('btn-view-store').href = storeHref;
 
-    var shareText = 'Check out my store on MithraDirect: ' + displayUrl;
-    var absHint = displayUrl;
-    document.getElementById('share-whatsapp').href =
-      'https://wa.me/?text=' + encodeURIComponent(shareText);
-    document.getElementById('share-facebook').href =
-      'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent('https://' + absHint);
+    document.getElementById('store-url-display').textContent = displayUrl;
+    var viewBtn = document.getElementById('btn-view-store');
+    if (viewBtn) viewBtn.href = sub.storefrontUrl || storeHref;
+
+    renderSuccessPanel(sub);
+
+    var storeName = (draft.settings && draft.settings.storeName) || 'my store';
+    var shareText =
+      'Hi! Order from ' +
+      storeName +
+      ' online 🛍️\nBrowse the menu & message me on WhatsApp:\nhttps://' +
+      displayUrl;
+    var absHint = 'https://' + displayUrl;
+    var wa = document.getElementById('share-whatsapp');
+    var fb = document.getElementById('share-facebook');
+    if (wa) wa.href = 'https://wa.me/?text=' + encodeURIComponent(shareText);
+    if (fb)
+      fb.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(absHint);
   }
 
   /* ---------- Live preview ---------- */
@@ -1493,16 +1752,65 @@
     });
 
     document.getElementById('btn-copy-url').addEventListener('click', function () {
-      var text = document.getElementById('store-url-display').textContent;
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function () {
-          document.getElementById('btn-copy-url').textContent = 'Copied!';
-          setTimeout(function () {
-            document.getElementById('btn-copy-url').textContent = 'Copy';
-          }, 1500);
-        });
-      }
+      copyStoreLink({
+        button: document.getElementById('btn-copy-url'),
+        hint: 'Link copied — paste it in WhatsApp or your Instagram bio.'
+      });
     });
+
+    var bioBtn = document.getElementById('btn-copy-for-bio');
+    if (bioBtn) {
+      bioBtn.addEventListener('click', function () {
+        copyStoreLink({
+          button: bioBtn,
+          tip: 'instagram',
+          doneLabel: 'Copied for bio!',
+          hint: 'Paste this in Instagram → Edit profile → Website / Bio.'
+        });
+      });
+    }
+
+    var previewBtn = document.getElementById('btn-view-store');
+    if (previewBtn) {
+      previewBtn.addEventListener('click', function () {
+        markShareTipDone('preview');
+      });
+    }
+
+    var waShare = document.getElementById('share-whatsapp');
+    if (waShare) {
+      waShare.addEventListener('click', function () {
+        markShareTipDone('whatsapp');
+      });
+    }
+
+    var featToggle = document.getElementById('btn-toggle-features');
+    var featList = document.getElementById('plan-features');
+    if (featToggle && featList) {
+      featToggle.addEventListener('click', function () {
+        var open = featList.hidden;
+        featList.hidden = !open;
+        featList.classList.toggle('is-collapsed', !open);
+        featToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        featToggle.textContent = open ? 'Hide included' : 'What’s included';
+      });
+    }
+
+    var dashBtn = document.getElementById('btn-go-dashboard');
+    if (dashBtn && !dashBtn.dataset.bound) {
+      dashBtn.dataset.bound = '1';
+      dashBtn.addEventListener('click', function (e) {
+        if (dashBtn.getAttribute('data-pending') === 'true' || dashBtn.getAttribute('href') === '#') {
+          e.preventDefault();
+          dashBtn.classList.add('is-pending-hint');
+          var note = document.getElementById('success-note');
+          if (note) {
+            note.textContent =
+              'Dashboard opens here once the vendor app URL is returned by the publish API. Share your shop link anytime — Free plan stays active.';
+          }
+        }
+      });
+    }
 
     function loadDemoData() {
       draft = D.seedPickleDraft();

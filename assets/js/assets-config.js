@@ -48,7 +48,10 @@
       youtube: 'https://www.youtube.com/@MithraDirect',
       whatsapp: 'https://wa.me/919912149049',
       whatsappPhone: '9912149049',
-      demoContactName: 'Swamy Kunta'
+      demoContactName: 'Swamy Kunta',
+      /** Vendor dashboard base — override when wiring to vendor-app / API */
+      dashboardUrl: '',
+      pricingUrl: 'index.html#pricing'
     }
   };
 

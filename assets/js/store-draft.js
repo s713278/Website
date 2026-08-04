@@ -125,6 +125,33 @@
     };
   }
 
+  /**
+   * Default SaaS entitlement after store publish.
+   * Shape mirrors vendor subscription / plan APIs for UI binding.
+   */
+  function defaultSubscription() {
+    return {
+      planCode: 'FREE',
+      planName: 'Free',
+      status: 'ACTIVE',
+      activatedAt: null,
+      endsAt: null,
+      vendorId: null,
+      subscriptionId: null,
+      features: [
+        { code: 'storefront', label: 'Live storefront' },
+        { code: 'whatsapp_orders', label: 'WhatsApp orders' },
+        { code: 'products', label: 'Product catalog' },
+        { code: 'delivery', label: 'Delivery options' },
+        { code: 'payments', label: 'UPI / COD payments' },
+        { code: 'branding', label: 'Theme & branding' }
+      ],
+      dashboardUrl: '',
+      storefrontUrl: '',
+      upgradeUrl: 'index.html#pricing'
+    };
+  }
+
   function emptyDraft() {
     return {
       phone: '',
@@ -144,6 +171,8 @@
         themeColor: '#10b981'
       },
       slug: '',
+      vendorId: null,
+      subscription: defaultSubscription(),
       currentStep: 1,
       maxReachedStep: 1
     };
@@ -747,9 +776,13 @@
       var draft = Object.assign(blank, data, {
         settings: Object.assign({}, blank.settings, data.settings || {}),
         delivery: mergeNested(blank.delivery, data.delivery),
-        payment: mergeNested(blank.payment, data.payment)
+        payment: mergeNested(blank.payment, data.payment),
+        subscription: Object.assign({}, blank.subscription, data.subscription || {})
       });
       if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
+      if (!Array.isArray(draft.subscription.features) || !draft.subscription.features.length) {
+        draft.subscription.features = blank.subscription.features;
+      }
       (draft.products || []).forEach(function (p) {
         (p.variants || []).forEach(function (v) {
           if (v.mrp == null && v.stock != null) {
@@ -820,6 +853,7 @@
     uid: uid,
     slugify: slugify,
     emptyDraft: emptyDraft,
+    defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,
     seedGeetaDraft: seedGeetaDraft,
     seedGeetaKitchenDraft: seedGeetaKitchenDraft,
