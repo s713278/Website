@@ -222,21 +222,48 @@
     });
     var back = document.getElementById('btn-back');
     var menu = document.getElementById('btn-menu');
-    if (name === 'home') {
-      back.hidden = true;
-      menu.hidden = false;
-    } else {
-      back.hidden = false;
-      menu.hidden = name !== 'menu';
+    if (back) {
+      var hideBack = name === 'home';
+      back.hidden = hideBack;
+      back.setAttribute('aria-hidden', hideBack ? 'true' : 'false');
+      back.disabled = hideBack;
+    }
+    if (menu) {
+      var hideMenu = name !== 'home' && name !== 'menu';
+      menu.hidden = hideMenu;
+      menu.setAttribute('aria-hidden', hideMenu ? 'true' : 'false');
     }
     updateCartUI();
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    var activeView = document.querySelector('.store-view.active');
+    if (activeView && typeof activeView.scrollTo === 'function') {
+      activeView.scrollTo(0, 0);
+    }
   }
 
   function goBack() {
     var prev = state.history.pop();
-    if (prev) showView(prev, { replace: true });
-    else showView('home', { replace: true });
+    while (prev && prev === state.view) {
+      prev = state.history.pop();
+    }
+    if (prev) {
+      showView(prev, { replace: true });
+      if (prev === 'menu') {
+        renderMenuRail();
+        renderMenuProducts();
+      } else if (prev === 'cart') {
+        renderCart();
+      } else if (prev === 'product' && state.productId) {
+        renderProductDetail(state.productId);
+      } else if (prev === 'checkout') {
+        renderCheckout();
+      } else if (prev === 'home') {
+        renderHome();
+      }
+      return;
+    }
+    showView('home', { replace: true });
+    renderHome();
   }
 
   function openDrawer(open) {
@@ -864,6 +891,7 @@
 
     var bar = document.getElementById('cart-bar');
     var hideBar =
+      state.view === 'home' ||
       state.view === 'cart' ||
       state.view === 'login' ||
       state.view === 'checkout' ||

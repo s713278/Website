@@ -12,16 +12,23 @@
   }
 
   var STEPS = [
-    { n: 1, label: 'Verify Mobile', time: '1 min' },
-    { n: 2, label: 'Enter OTP', time: '1 min' },
-    { n: 3, label: 'Choose Business', time: '1 min' },
-    { n: 4, label: 'Pick Categories', time: '1 min' },
-    { n: 5, label: 'Add Products', time: '3 min' },
-    { n: 6, label: 'Add Variants', time: '2 min' },
-    { n: 7, label: 'Delivery', time: '1 min' },
-    { n: 8, label: 'Payments', time: '1 min' },
-    { n: 9, label: 'Store Settings', time: '1 min' },
-    { n: 10, label: 'Store Live!', time: '1 min' }
+    { n: 1, label: 'Verify Mobile', time: '1 min', short: 'Mobile' },
+    { n: 2, label: 'Enter OTP', time: '1 min', short: 'OTP' },
+    { n: 3, label: 'Choose Business', time: '1 min', short: 'Business' },
+    { n: 4, label: 'Pick Categories', time: '1 min', short: 'Categories' },
+    { n: 5, label: 'Add Products', time: '3 min', short: 'Products' },
+    { n: 6, label: 'Add Variants', time: '2 min', short: 'Variants' },
+    { n: 7, label: 'Delivery', time: '1 min', short: 'Delivery' },
+    { n: 8, label: 'Payments', time: '1 min', short: 'Payments' },
+    { n: 9, label: 'Store Settings', time: '1 min', short: 'Settings' },
+    { n: 10, label: 'Store Live!', time: '1 min', short: 'Live' }
+  ];
+
+  var PHASES = [
+    { id: 'account', label: 'Account', desc: 'Mobile, email & verification.', from: 1, to: 2 },
+    { id: 'catalog', label: 'Catalog', desc: 'Add products & categories.', from: 3, to: 6 },
+    { id: 'delivery', label: 'Delivery & Pay', desc: 'Shipping & payment methods.', from: 7, to: 8 },
+    { id: 'golive', label: 'Go Live', desc: 'Review & publish your store.', from: 9, to: 10 }
   ];
 
   var TOTAL_STEPS = 10;
@@ -63,8 +70,103 @@
 
   /* ---------- Stepper ---------- */
 
+  function bindGotoButtons(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-goto]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var n = Number(btn.getAttribute('data-goto'));
+        if (n <= draft.maxReachedStep) goToStep(n);
+      });
+    });
+  }
+
+  function renderSidebarProgress() {
+    var current = draft.currentStep || 1;
+    var pct = Math.round((current / TOTAL_STEPS) * 100);
+
+    var progressText = document.getElementById('ob-progress-text');
+    if (progressText) {
+      progressText.textContent = 'Step ' + current + ' of ' + TOTAL_STEPS + ' completed';
+    }
+
+    var progressFill = document.getElementById('ob-progress-fill');
+    if (progressFill) progressFill.style.width = pct + '%';
+
+    var eyebrow = document.getElementById('ob-step-eyebrow');
+    if (eyebrow) eyebrow.textContent = 'Step ' + current + ' of ' + TOTAL_STEPS;
+
+    var phaseList = document.getElementById('ob-phase-list');
+    if (phaseList) {
+      phaseList.innerHTML = PHASES.map(function (phase, idx) {
+        var cls = 'ob-phase';
+        var reachable = draft.maxReachedStep >= phase.from;
+        var done = current > phase.to;
+        var active = current >= phase.from && current <= phase.to;
+        if (done) cls += ' done';
+        if (active) cls += ' active';
+        if (reachable) cls += ' reachable';
+        var icon = done ? '✓' : String(idx + 1);
+        return (
+          '<button type="button" class="' +
+          cls +
+          '" data-goto="' +
+          phase.from +
+          '" ' +
+          (reachable ? '' : 'disabled') +
+          '>' +
+          '<span class="ob-phase-icon">' +
+          icon +
+          '</span>' +
+          '<span class="ob-phase-copy">' +
+          '<span class="ob-phase-title">' +
+          phase.label +
+          '</span>' +
+          '<span class="ob-phase-desc">' +
+          phase.desc +
+          '</span>' +
+          '</span>' +
+          '</button>'
+        );
+      }).join('');
+      bindGotoButtons(phaseList);
+    }
+
+    var stepList = document.getElementById('ob-step-list');
+    if (stepList) {
+      stepList.innerHTML = STEPS.map(function (s) {
+        var cls = 'ob-step-item';
+        if (s.n === current) cls += ' active';
+        else if (s.n < current) cls += ' done';
+        if (s.n <= draft.maxReachedStep) cls += ' reachable';
+        var numContent = s.n < current ? '✓' : String(s.n);
+        var meta = s.n < current ? '✓' : s.time;
+        return (
+          '<button type="button" class="' +
+          cls +
+          '" data-goto="' +
+          s.n +
+          '" ' +
+          (s.n <= draft.maxReachedStep ? '' : 'disabled') +
+          '>' +
+          '<span class="ob-step-num">' +
+          numContent +
+          '</span>' +
+          '<span class="ob-step-label">' +
+          (s.short || s.label) +
+          '</span>' +
+          '<span class="ob-step-time">' +
+          meta +
+          '</span>' +
+          '</button>'
+        );
+      }).join('');
+      bindGotoButtons(stepList);
+    }
+  }
+
   function renderStepper() {
     var el = document.getElementById('stepper');
+    if (!el) return;
     el.innerHTML = STEPS.map(function (s) {
       var cls = 'stepper-item';
       if (s.n === draft.currentStep) cls += ' active';
@@ -92,12 +194,8 @@
       );
     }).join('');
 
-    el.querySelectorAll('[data-goto]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var n = Number(btn.getAttribute('data-goto'));
-        if (n <= draft.maxReachedStep) goToStep(n);
-      });
-    });
+    bindGotoButtons(el);
+    renderSidebarProgress();
   }
 
   function showPanel(step) {
@@ -999,11 +1097,29 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
 
+  function mixHex(hex, target, weight) {
+    var h = normalizeHex(hex).slice(1);
+    var t = normalizeHex(target).slice(1);
+    var w = Math.max(0, Math.min(1, Number(weight) || 0));
+    var channels = [0, 2, 4].map(function (i) {
+      var a = parseInt(h.slice(i, i + 2), 16);
+      var b = parseInt(t.slice(i, i + 2), 16);
+      var v = Math.round(a * (1 - w) + b * w);
+      return ('0' + Math.max(0, Math.min(255, v)).toString(16)).slice(-2);
+    });
+    return '#' + channels.join('');
+  }
+
   function applyThemeColor(color) {
     var hex = normalizeHex(color);
     draft.settings.themeColor = hex;
-    document.documentElement.style.setProperty('--store-theme', hex);
-    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+    var root = document.documentElement;
+    root.style.setProperty('--store-theme', hex);
+    root.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+    root.style.setProperty('--store-theme-soft-strong', hexToRgba(hex, 0.18));
+    root.style.setProperty('--store-theme-border', hexToRgba(hex, 0.38));
+    root.style.setProperty('--store-theme-dark', mixHex(hex, '#000000', 0.28));
+    root.style.setProperty('--store-theme-ring', hexToRgba(hex, 0.22));
     var input = document.getElementById('input-theme-color');
     var hexLabel = document.getElementById('theme-color-hex');
     var chip = document.getElementById('theme-live-chip');

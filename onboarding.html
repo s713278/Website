@@ -14,75 +14,90 @@
     <script src="assets/js/assets-config.js"></script>
 </head>
 <body class="onboarding-page bg-white text-gray-800">
-    <header class="site-header">
-        <div class="container nav-bar">
-            <a href="index.html" aria-label="MithraDirect home">
+    <header class="ob-header">
+        <div class="ob-header-inner">
+            <a href="index.html" class="ob-brand" aria-label="MithraDirect home">
                 <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="brand-logo">
             </a>
 
-            <nav class="nav-links" aria-label="Primary">
-                <a href="index.html#about">About Us</a>
-                <a href="index.html#explore">Search Stores</a>
-                <a href="store.html">Store Demo</a>
-                <a href="index.html#features">Features</a>
-                <a href="index.html#pricing">Pricing</a>
-                <div class="nav-dropdown" id="nav-resources">
-                    <button type="button" class="btn-ghost" style="font-weight:500;font-size:0.9rem;padding:0;color:#374151;">
-                        Resources ▾
-                    </button>
-                    <div class="nav-dropdown-menu" role="menu">
-                        <a href="onboarding.html" class="active">Setup Guide</a>
-                        <a href="privacy.html">Privacy Policy</a>
-                        <a href="terms-conditions.html">Terms &amp; Conditions</a>
-                        <a href="index.html#how-it-works">How It Works</a>
-                    </div>
-                </div>
-            </nav>
-
-            <div class="nav-actions">
-                <button type="button" id="btn-load-demo" class="btn btn-ghost btn-sm">Load demo data</button>
-                <a href="onboarding.html" class="btn btn-ghost">Vendor Login</a>
-                <a href="onboarding.html" class="btn btn-primary btn-sm">Get Started Free</a>
+            <div class="ob-header-center" aria-hidden="false">
+                <a href="onboarding.html" class="ob-header-cta">Start my shop</a>
+                <span class="ob-header-sep" aria-hidden="true">·</span>
+                <span class="ob-header-note">Go live in about <strong>10 minutes</strong>.</span>
             </div>
 
-            <button type="button" class="menu-toggle" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
-                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-            </button>
+            <div class="ob-header-actions">
+                <a href="store.html" class="ob-link-quiet">Sample store</a>
+                <button type="button" id="btn-load-demo" class="ob-btn-demo">Load demo data</button>
+                <button type="button" class="ob-menu-toggle" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
-        <div class="container mobile-nav" id="mobile-menu">
-            <a href="index.html#about">About Us</a>
-            <a href="index.html#explore">Search Stores</a>
-            <a href="store.html">Store Demo</a>
+        <div class="ob-mobile-nav" id="mobile-menu">
+            <p class="ob-mobile-title">Setup Your Insta &amp; WhatsApp Store</p>
+            <p class="ob-mobile-sub">Complete these steps — your storefront updates live on the right.</p>
+            <a href="store.html">Sample store</a>
+            <a href="index.html">Home</a>
             <a href="index.html#features">Features</a>
-            <a href="index.html#pricing">Pricing</a>
-            <a href="onboarding.html">Setup Guide</a>
             <a href="privacy.html">Privacy Policy</a>
             <a href="terms-conditions.html">Terms &amp; Conditions</a>
-            <div class="mobile-cta">
-                <button type="button" id="btn-load-demo-mobile" class="btn btn-secondary btn-block">Load demo data</button>
-                <a href="onboarding.html" class="btn btn-secondary btn-block">Vendor Login</a>
-                <a href="onboarding.html" class="btn btn-primary btn-block">Get Started Free</a>
+            <div class="ob-mobile-cta">
+                <button type="button" id="btn-load-demo-mobile" class="ob-btn-demo ob-btn-demo--block">Load demo data</button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="mb-2">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Setup Your Insta &amp; WhatsApp Store</h1>
-            <p class="text-gray-500 mt-1 text-sm sm:text-base">Complete these steps — your storefront updates live on the right.</p>
-        </div>
+    <main class="ob-main">
+        <div class="ob-frame">
+        <div class="ob-layout">
+            <!-- Left: onboarding progress -->
+            <aside class="ob-sidebar" aria-label="Onboarding progress">
+                <div class="ob-progress-card">
+                    <p class="ob-aside-label">Onboarding Progress</p>
+                    <div class="ob-progress-meta">
+                        <span id="ob-progress-text">Step 1 of 10</span>
+                    </div>
+                    <div class="ob-progress-track" aria-hidden="true">
+                        <div class="ob-progress-fill" id="ob-progress-fill" style="width:0%"></div>
+                    </div>
 
-        <!-- Stepper -->
-        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+                    <div class="ob-phase-list" id="ob-phase-list"></div>
 
-        <div class="grid lg:grid-cols-5 gap-8 mt-4">
-            <!-- Wizard panels -->
-            <div class="lg:col-span-3">
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 min-h-[420px]">
+                    <div class="ob-step-list-wrap">
+                        <div class="ob-step-list" id="ob-step-list"></div>
+                    </div>
+                </div>
 
+                <a href="https://wa.me/919912149049?text=Hi%2C%20I%27m%20interested%20in%20MithraDirect%20Enterprise" target="_blank" rel="noopener" class="ob-help-card" aria-label="Contact Us on WhatsApp">
+                    <span class="ob-help-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 18v-6a9 9 0 0118 0v6"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/>
+                        </svg>
+                    </span>
+                    <span class="ob-help-copy">
+                        <span class="ob-help-title">Need help?</span>
+                        <span class="ob-help-sub">Contact Us</span>
+                    </span>
+                    <span class="ob-help-chevron" aria-hidden="true">›</span>
+                </a>
+            </aside>
+
+            <!-- Center: wizard -->
+            <section class="ob-center">
+                <div class="ob-center-card">
+                    <div class="ob-center-top">
+                        <p class="ob-page-kicker">Setup Your Insta &amp; WhatsApp Store</p>
+                        <p class="ob-page-sub">Complete these steps — your storefront updates live on the right.</p>
+                        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+                        <p class="ob-step-eyebrow" id="ob-step-eyebrow">Step 1 of 10</p>
+                    </div>
+
+                    <div class="ob-center-body">
                     <!-- Step 1: Verify Mobile -->
                     <section class="step-panel" data-step="1" id="panel-1">
                         <h2 class="text-xl font-bold mb-1">Verify Mobile Number</h2>
@@ -404,41 +419,44 @@
                             </div>
                         </div>
                     </section>
-                </div>
-            </div>
-
-            <!-- Live preview -->
-            <div class="lg:col-span-2">
-                <div class="preview-sticky">
-                    <p class="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Storefront Preview (Live)</p>
-                    <div class="phone-frame">
-                        <div class="phone-screen" id="phone-preview"></div>
                     </div>
                 </div>
-            </div>
+            </section>
+
+            <!-- Right: storefront preview -->
+            <aside class="ob-preview" aria-label="Storefront preview">
+                <div class="preview-sticky">
+                    <div class="ob-preview-phone">
+                        <div class="phone-frame">
+                            <div class="phone-screen" id="phone-preview"></div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
         </div>
     </main>
 
-    <!-- Summary bar -->
+    <!-- Summary bar (existing stats preserved) -->
     <footer class="summary-bar">
-        <div class="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-5 gap-3 text-center sm:text-left">
-            <div>
+        <div class="ob-footer-inner">
+            <div class="ob-footer-stat">
                 <div class="stat-label">Total Time</div>
                 <div class="stat-value">~10 Minutes</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">Categories</div>
                 <div class="stat-value"><span id="stat-categories">0</span> Selected</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">Products</div>
                 <div class="stat-value"><span id="stat-products">0</span> Added</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">SKUs</div>
                 <div class="stat-value"><span id="stat-skus">0</span> Configured</div>
             </div>
-            <div class="col-span-2 sm:col-span-1">
+            <div class="ob-footer-stat">
                 <div class="stat-label">WhatsApp Orders</div>
                 <div class="stat-value" id="stat-whatsapp">Pending</div>
             </div>
