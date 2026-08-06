@@ -1,0 +1,5 @@
+# MithraDirect web app
+.DS_Store
+dist
+node_modules
+*.local

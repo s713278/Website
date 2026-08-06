@@ -8,6 +8,7 @@
     "dev:marketing": "pnpm --filter @mithra/marketing dev",
     "dev:vendor": "pnpm --filter @mithra/vendor-app dev",
     "dev:storefront": "pnpm --filter @mithra/storefront dev",
+    "dev:web": "pnpm --filter @mithra/web dev",
     "build": "pnpm -r --filter \"./apps/*\" run build",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",

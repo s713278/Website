@@ -38,51 +38,51 @@ export interface paths {
         /**
          * Get checkout options for a vendor
          * @description Returns the available fulfillment methods and their configuration for the checkout UI.
-         *     <br><br>The vendor's <code>fulfillment_type</code> determines which options are returned:
-         *     <br>• <b>HOME_DELIVERY</b> — delivery charges, free threshold, same-day availability, delivery slots
-         *     <br>• <b>STORE_PICKUP</b> — list of active pickup stores with per-store ready time and pickup slots
-         *     <br>• <b>BOTH</b> — both options returned, user selects at checkout
-         *     <br><br><b>Delivery Scheduling Strategies:</b>
-         *     <br>• <b>FIXED_WINDOW</b> — Eco products: 3-5 days delivery window
-         *     <br>• <b>CUSTOMER_SELECT_DATE</b> — Milk delivery: customer picks exact date within 1-30 days
-         *     <br>• <b>PREDEFINED_DAYS</b> — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday)
-         *     <br>• <b>INSTANT</b> — Hotel/Restaurant: 30-60 minutes delivery
-         *     <br><br><b>Response Structure:</b>
-         *     <br>• <code>delivery_methods</code> — list of available methods: <code>["HOME_DELIVERY"]</code>, <code>["STORE_PICKUP"]</code>, or both
-         *     <br>• <code>delivery_options</code> — home delivery config (charges, scheduling, slots) — null if not available
-         *     <br>• <code>delivery_options.scheduling_strategy</code> — one of: FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
-         *     <br>• <code>delivery_options.shipping_strategy_type</code> — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
-         *     <br>• <code>delivery_options.shipping_config</code> — strategy-specific configuration (snake_case keys)
-         *     <br>• <code>delivery_options.scheduling_config</code> — strategy-specific configuration
-         *     <br>• <code>delivery_options.available_delivery_dates</code> — list of available dates based on strategy
-         *     <br>• <code>pickup_options.stores[]</code> — pickup store list with address, ready time, slots — null if not available
-         *     <br><br><b>Shipping Strategy Configurations:</b>
-         *     <br>• <b>ORDER_AMOUNT_THRESHOLD</b>: delivery_charge=30, free_delivery_threshold=300
-         *     <br>• <b>ZIPCODE_THRESHOLD</b>: free_zipcodes=["560001"], free_delivery_threshold=500, default_charge=50
-         *     <br>• <b>ZIPCODE_TIERED</b>: tiers=[{label, zipcodes[], charge}], rest_of_india_charge=80
-         *     <br>• <b>FLAT</b>: charge=40
-         *     <br>• <b>WEIGHT_BASED</b>: free_up_to_kg=2, charge_per_kg=20
-         *     <br><br><b>Scheduling Strategy Configurations:</b>
-         *     <br>• <b>FIXED_WINDOW</b>: min_delivery_days=3, max_delivery_days=5, deliveryFrequency=false
-         *     <br>• <b>CUSTOMER_SELECT_DATE</b>: min_advance_booking_days=1, max_advance_booking_days=30, cutoff_time=18:00
-         *     <br>• <b>PREDEFINED_DAYS</b>: available_delivery_days=["SUNDAY", "WEDNESDAY"], max_orders_per_day=50
-         *     <br>• <b>INSTANT</b>: minPrepTimeMinutes=30, maxPrepTimeMinutes=60, operatingUntil=23:59, orderCutoffTime=22:00
+         *      The vendor's fulfillment_type determines which options are returned:
+         *      • HOME_DELIVERY — delivery charges, free threshold, same-day availability, delivery slots
+         *      • STORE_PICKUP — list of active pickup stores with per-store ready time and pickup slots
+         *      • BOTH — both options returned, user selects at checkout
+         *      Delivery Scheduling Strategies:
+         *      • FIXED_WINDOW — Eco products: 3-5 days delivery window
+         *      • CUSTOMER_SELECT_DATE — Milk delivery: customer picks exact date within 1-30 days
+         *      • PREDEFINED_DAYS — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday)
+         *      • INSTANT — Hotel/Restaurant: 30-60 minutes delivery
+         *      Response Structure:
+         *      • delivery_methods — list of available methods: ["HOME_DELIVERY"], ["STORE_PICKUP"], or both
+         *      • delivery_options — home delivery config (charges, scheduling, slots) — null if not available
+         *      • delivery_options.scheduling_strategy — one of: FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
+         *      • delivery_options.shipping_strategy_type — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
+         *      • delivery_options.shipping_config — strategy-specific configuration (snake_case keys)
+         *      • delivery_options.scheduling_config — strategy-specific configuration
+         *      • delivery_options.available_delivery_dates — list of available dates based on strategy
+         *      • pickup_options.stores[] — pickup store list with address, ready time, slots — null if not available
+         *      Shipping Strategy Configurations:
+         *      • ORDER_AMOUNT_THRESHOLD: delivery_charge=30, free_delivery_threshold=300
+         *      • ZIPCODE_THRESHOLD: free_zipcodes=["560001"], free_delivery_threshold=500, default_charge=50
+         *      • ZIPCODE_TIERED: tiers=[{label, zipcodes[], charge}], rest_of_india_charge=80
+         *      • FLAT: charge=40
+         *      • WEIGHT_BASED: free_up_to_kg=2, charge_per_kg=20
+         *      Scheduling Strategy Configurations:
+         *      • FIXED_WINDOW: min_delivery_days=3, max_delivery_days=5, deliveryFrequency=false
+         *      • CUSTOMER_SELECT_DATE: min_advance_booking_days=1, max_advance_booking_days=30, cutoff_time=18:00
+         *      • PREDEFINED_DAYS: available_delivery_days=["SUNDAY", "WEDNESDAY"], max_orders_per_day=50
+         *      • INSTANT: minPrepTimeMinutes=30, maxPrepTimeMinutes=60, operatingUntil=23:59, orderCutoffTime=22:00
          */
         get: operations["getCheckoutOptions"];
         /**
          * Save vendor checkout configuration
          * @description Creates or updates the full checkout configuration for a vendor in a single call.
-         *     <br><br><b>Manageable fields:</b>
-         *     <br>• <code>fulfillment_type</code> — HOME_DELIVERY, STORE_PICKUP, or BOTH
-         *     <br>• <code>customer_consent_title</code> / <code>customer_consent_text</code> — consent dialog
-         *     <br>• <code>scheduling_strategy</code> — FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
-         *     <br>• <code>scheduling_config</code> — strategy-specific JSON
-         *     <br>• <code>shipping_strategy_type</code> — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
-         *     <br>• <code>shipping_config</code> — strategy-specific JSON for the selected shipping strategy
-         *     <br>• <code>order_acceptance_policy</code> — AUTO_ACCEPT or MANUAL_APPROVAL
-         *     <br>• <code>payment_options[]</code> — list of payment methods (replaces existing active options)
-         *     <br><br><b>Rule:</b> <code>shipping_strategy_type</code> and <code>shipping_config</code> must be provided together.
-         *     <br>Returns <code>CheckoutOptionsResponse</code>, the same shape as GET /v1/vendors/{vendor_id}/checkout_options.
+         *      Manageable fields:
+         *      • fulfillment_type — HOME_DELIVERY, STORE_PICKUP, or BOTH
+         *      • customer_consent_title / customer_consent_text — consent dialog
+         *      • scheduling_strategy — FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
+         *      • scheduling_config — strategy-specific JSON
+         *      • shipping_strategy_type — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
+         *      • shipping_config — strategy-specific JSON for the selected shipping strategy
+         *      • order_acceptance_policy — AUTO_ACCEPT or MANUAL_APPROVAL
+         *      • payment_options[] — list of payment methods (replaces existing active options)
+         *      Rule: shipping_strategy_type and shipping_config must be provided together.
+         *      Returns CheckoutOptionsResponse, the same shape as GET /v1/vendors/{vendor_id}/checkout_options.
          */
         put: operations["saveDeliveryConfig"];
         post?: never;
@@ -103,29 +103,29 @@ export interface paths {
         /**
          * Add/update item in cart
          * @description Add a new item or update quantity of existing item in cart.
-         *     <br><br><b>Behavior:</b>
-         *     <br>• If item exists: quantity is <b>added</b> to existing quantity (additive, same as POST)
-         *     <br>• If item doesn't exist: adds new item with specified quantity
-         *     <br>• Enforces vendor validation (same as POST)
-         *     <br>• Recalculates cart totals automatically
-         *     <br><br><b>Use Cases:</b>
-         *     <br>• Add quantity on top of current (e.g., add 2 more to existing 3 → becomes 5)
-         *     <br>• Add new item to existing cart
-         *     <br>• Use PUT /items/{cart_item_id} for exact quantity replacement by item ID
+         *      Behavior:
+         *      • If item exists: quantity is added to existing quantity (additive, same as POST)
+         *      • If item doesn't exist: adds new item with specified quantity
+         *      • Enforces vendor validation (same as POST)
+         *      • Recalculates cart totals automatically
+         *      Use Cases:
+         *      • Add quantity on top of current (e.g., add 2 more to existing 3 → becomes 5)
+         *      • Add new item to existing cart
+         *      • Use PUT /items/{cart_item_id} for exact quantity replacement by item ID
          */
         put: operations["addOrUpdateItem"];
         /**
          * Add item to cart
          * @description Add a new item to the user's cart. Automatically handles vendor validation.
-         *     <br><br><b>Business Rules:</b>
-         *     <br>• Only items from the same vendor can be in one cart
-         *     <br>• Maximum 25 quantity per item
-         *     <br>• Maximum 50 items per cart
-         *     <br>• Cart expires after 24 hours
-         *     <br>• If cart contains items from different vendor, returns 409 Conflict
-         *     <br><br><b>Test Data:</b>
-         *     <br>• SKU ID: 101, Quantity: 2 (Vendor: 123)
-         *     <br>• SKU ID: 102, Quantity: 1 (Vendor: 123)
+         *      Business Rules:
+         *      • Only items from the same vendor can be in one cart
+         *      • Maximum 25 quantity per item
+         *      • Maximum 50 items per cart
+         *      • Cart expires after 24 hours
+         *      • If cart contains items from different vendor, returns 409 Conflict
+         *      Test Data:
+         *      • SKU ID: 101, Quantity: 2 (Vendor: 123)
+         *      • SKU ID: 102, Quantity: 1 (Vendor: 123)
          */
         post: operations["addItemToCart"];
         delete?: never;
@@ -145,26 +145,26 @@ export interface paths {
         /**
          * Update item quantity
          * @description Update the quantity of an existing item in the cart.
-         *     <br><br><b>Behavior:</b>
-         *     <br>• Updates quantity to exact value provided
-         *     <br>• Recalculates cart totals automatically
-         *     <br>• Validates quantity limits
-         *     <br><br><b>Use Cases:</b>
-         *     <br>• Update quantity from 2 to 5 units
-         *     <br>• Reduce quantity from 10 to 3 units
+         *      Behavior:
+         *      • Updates quantity to exact value provided
+         *      • Recalculates cart totals automatically
+         *      • Validates quantity limits
+         *      Use Cases:
+         *      • Update quantity from 2 to 5 units
+         *      • Reduce quantity from 10 to 3 units
          */
         put: operations["updateItemQuantity"];
         post?: never;
         /**
          * Remove item from cart
          * @description Remove a specific item from the user's cart.
-         *     <br><br><b>Behavior:</b>
-         *     <br>• Removes item completely (not quantity reduction)
-         *     <br>• Recalculates cart totals automatically
-         *     <br>• If cart becomes empty, vendor_id becomes null
-         *     <br>• Cart remains active for adding new items
-         *     <br><br><b>Test Data:</b>
-         *     <br>• Cart Item ID: 987654321 (from previous examples)
+         *      Behavior:
+         *      • Removes item completely (not quantity reduction)
+         *      • Recalculates cart totals automatically
+         *      • If cart becomes empty, vendor_id becomes null
+         *      • Cart remains active for adding new items
+         *      Test Data:
+         *      • Cart Item ID: 987654321 (from previous examples)
          */
         delete: operations["removeItemFromCart"];
         options?: never;
@@ -356,14 +356,14 @@ export interface paths {
         /**
          * Create Subscriptions on Behalf of Customers
          * @description Allows a VENDOR or ADMIN to create single or bulk subscriptions on behalf of customers.
-         *     <br><br><b>Business Rules:</b>
-         *     <br>• Vendor can only create subscriptions for their own SKUs.
-         *     <br>• Start date must be today or a future date.
-         *     <br>• Quantity must be greater than 0.
-         *     <br>• Duplicate active subscriptions for the same customer+SKU are rejected.
-         *     <br>• Customer receives an async notification after creation.
-         *     <br>• Failed items in a bulk request do NOT roll back successful ones.
-         *     <br><br><b>Future Support:</b> CSV/Excel bulk import via multipart upload.
+         *      Business Rules:
+         *      • Vendor can only create subscriptions for their own SKUs.
+         *      • Start date must be today or a future date.
+         *      • Quantity must be greater than 0.
+         *      • Duplicate active subscriptions for the same customer+SKU are rejected.
+         *      • Customer receives an async notification after creation.
+         *      • Failed items in a bulk request do NOT roll back successful ones.
+         *      Future Support: CSV/Excel bulk import via multipart upload.
          */
         post: operations["createSubscriptionsOnBehalfOfCustomers"];
         delete?: never;
@@ -384,7 +384,7 @@ export interface paths {
         /**
          * Create Vendor Sku API
          * @description This API is used to create Sku with eligible subscription plans and delivery days.
-         *     ONE_TIME with FIXED delivery mode is always required  'eligible_delivery_days'.
+         *     ONE_TIME with FIXED delivery mode is always required 'eligible_delivery_days'.
          */
         post: operations["createVendorSku"];
         delete?: never;
@@ -492,27 +492,27 @@ export interface paths {
          * Fetch vendor image URL from the database
          * @description Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.
          *
-         *     <b>Image Types &amp; Parameter Combinations:</b>
-         *     <ul>
-         *       <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).
-         *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
-         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).
-         *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
-         *       <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).
-         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>
-         *       <li><b>SKU</b> - SKU image (reads tb_sku.image_path, must belong to vendor).
-         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (skuId).</li>
-         *     </ul>
+         *      Image Types & Parameter Combinations:
          *
-         *     <b>Request Format:</b><br/>
-         *     GET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>
-         *     GET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>
+         *      HOMEBANNER - Vendor home banner (reads tb_vendor.banner_image).
+         *      Only vendor_id + image_type required.
+         *      THUMBNAIL - Vendor thumbnail (reads tb_vendor.thumbnail_image).
+         *      Only vendor_id + image_type required.
+         *      PRODUCT - Product image (reads tb_product.image_path).
+         *      Requires vendor_id + image_type + reference_id (productId).
+         *      SKU - SKU image (reads tb_sku.image_path, must belong to vendor).
+         *      Requires vendor_id + image_type + reference_id (skuId).
          *
-         *     <b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,
-         *     <code>reference_id</code> (when applicable), and a <code>message</code>.
-         *     The <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.
          *
-         *     <b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.
+         *      Request Format:
+         *     GET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER
+         *     GET /v1/vendors/{vendor_id}/images?image_type=SKU&reference_id=114
+         *
+         *      Response: Returns image_url, image_type,
+         *      reference_id (when applicable), and a message.
+         *     The image_url will be null if no image has been uploaded yet.
+         *
+         *      Access: ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.
          */
         get: operations["getVendorImageUrl"];
         put?: never;
@@ -521,20 +521,20 @@ export interface paths {
          * @description Uploads images for a specific vendor. Simple API for back office use.
          *     Supports vendor banner, thumbnail, product, and SKU images using multipart/form-data.
          *
-         *     <b>Image Types:</b>
-         *     <ul>
-         *       <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>
-         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>
-         *       <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>
-         *       <li><b>SKU</b> - SKU image (reference_id = skuId, must belong to vendor)</li>
-         *     </ul>
+         *      Image Types:
          *
-         *     <b>Request Format:</b><br/>
-         *     POST /v1/vendors/{vendor_id}/images<br/>
-         *     Content-Type: multipart/form-data<br/>
+         *      HOMEBANNER - Vendor home banner (updates tb_vendor.banner_image)
+         *      THUMBNAIL - Vendor thumbnail (updates tb_vendor.thumbnail_image)
+         *      PRODUCT - Product image (reference_id = productId)
+         *      SKU - SKU image (reference_id = skuId, must belong to vendor)
+         *
+         *
+         *      Request Format:
+         *     POST /v1/vendors/{vendor_id}/images
+         *     Content-Type: multipart/form-data
          *     Parameters: image_type, reference_id (optional), fileName (optional), file (required)
          *
-         *     <b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.
+         *      Access: ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.
          */
         post: operations["uploadVendorImage"];
         delete?: never;
@@ -555,15 +555,15 @@ export interface paths {
         /**
          * Check vendor delivery eligibility for an address
          * @description This API checks whether the given vendor can deliver to the supplied address.
-         *         <br>The address is passed as a flexible key-value map, similar to a Google Places address
-         *         selection, and may include `latitude`, `longitude`, `pincode`/`zipcode`/`postal_code`
-         *         and any other address fields (e.g. `city`, `state`, `country`, `formatted_address`, `place_id`).
-         *         <br>At least one of a pincode/zipcode or a latitude+longitude pair must be supplied.
-         *         <br>A vendor is deliverable when, in order of precedence: the pincode is in its
-         *         serviceable zipcode list; the supplied latitude/longitude falls within its mapped geo
-         *         service area polygon; or the vendor has a mapped geo service area with no explicit
-         *         zipcode restriction.
-         *         <br>Test data: pincode: 500049
+         *      The address is passed as a flexible key-value map, similar to a Google Places address
+         *      selection, and may include `latitude`, `longitude`, `pincode`/`zipcode`/`postal_code`
+         *      and any other address fields (e.g. `city`, `state`, `country`, `formatted_address`, `place_id`).
+         *      At least one of a pincode/zipcode or a latitude+longitude pair must be supplied.
+         *      A vendor is deliverable when, in order of precedence: the pincode is in its
+         *      serviceable zipcode list; the supplied latitude/longitude falls within its mapped geo
+         *      service area polygon; or the vendor has a mapped geo service area with no explicit
+         *      zipcode restriction.
+         *      Test data: pincode: 500049
          */
         post: operations["checkDeliveryEligibility"];
         delete?: never;
@@ -582,14 +582,14 @@ export interface paths {
         /**
          * Fetch Vendor Customers
          * @description Fetch all customers associated with a vendor with optional mobile number filtering.
-         *     <br><b>Features:</b></br>
-         *     <br>• Pagination support for large datasets</br>
-         *     <br>• Optional mobile number filter (pass null to get all customers)</br>
-         *     <br>• Only active vendor-customer relationships are returned</br>
-         *     <br>• Results ordered by relationship creation date (newest first)</br>
-         *     <br><b>Access:</b> Vendors can only view their own customers</br>
-         *     <br>Admin : 9948023105 </br>
-         *     <br>Vendor : 9948023190 </br>
+         *      Features:
+         *      • Pagination support for large datasets
+         *      • Optional mobile number filter (pass null to get all customers)
+         *      • Only active vendor-customer relationships are returned
+         *      • Results ordered by relationship creation date (newest first)
+         *      Access: Vendors can only view their own customers
+         *      Admin : 9948023105
+         *      Vendor : 9948023190
          */
         get: operations["getVendorCustomers"];
         put?: never;
@@ -616,10 +616,10 @@ export interface paths {
         /**
          * Bulk Create Customer Profiles via Excel
          * @description Upload an .xlsx file to bulk-create customer profiles and send WhatsApp invitations.
-         *       <br><b>Expected columns (row 1 is header):</b></br>
-         *       <br>A: country_code &nbsp; B: mobile_number &nbsp; C: first_name &nbsp; D: last_name</br>
-         *       <br>Admin : 9948023105 </br>
-         *       <br>Vendor : 9948023190 </br>
+         *      Expected columns (row 1 is header):
+         *      A: country_code   B: mobile_number   C: first_name   D: last_name
+         *      Admin : 9948023105
+         *      Vendor : 9948023190
          */
         post: operations["createCustomerProfilesFromExcel"];
         delete?: never;
@@ -640,16 +640,16 @@ export interface paths {
         /**
          * Invite Customer via WhatsApp
          * @description Send a WhatsApp invitation to a customer on behalf of a vendor.
-         *     <br><b>Access:</b> VENDOR or ADMIN only.</br>
-         *     <br>The vendor must supply the customer's country code and mobile number.</br>
-         *     <br>Notifications are dispatched asynchronously; the API returns immediately on acceptance.</br>
-         *     <br><b>Rate Limits (Redis-backed):</b></br>
-         *     <ul>
-         *       <li><b>Vendor weekly cap:</b> default 100 invitations per calendar week (configurable per vendor via <code>application.invite-rate-limit.vendor-overrides</code>).</li>
-         *       <li><b>Mobile window cap:</b> default 2 invitations per mobile number per 10 minutes (configurable).</li>
-         *       <li>Exceeding either limit returns <code>HTTP 429 Too Many Requests</code>.</li>
-         *     </ul>
-         *     <br>See <a href="https://github.com/search?q=vendor-invite-api.md">docs/vendor-invite-api.md</a> for full configuration reference.</br>
+         *      Access: VENDOR or ADMIN only.
+         *      The vendor must supply the customer's country code and mobile number.
+         *      Notifications are dispatched asynchronously; the API returns immediately on acceptance.
+         *      Rate Limits (Redis-backed):
+         *
+         *      Vendor weekly cap: default 100 invitations per calendar week (configurable per vendor via application.invite-rate-limit.vendor-overrides).
+         *      Mobile window cap: default 2 invitations per mobile number per 10 minutes (configurable).
+         *      Exceeding either limit returns HTTP 429 Too Many Requests.
+         *
+         *      See docs/vendor-invite-api.md for full configuration reference.
          */
         post: operations["inviteCustomer"];
         delete?: never;
@@ -667,21 +667,21 @@ export interface paths {
         };
         /**
          * Fetch all vendors
-         * @description Fetch all vendors OR Search vendors by business_name/phone number/id.<br>
-         *     <b>search_key</b> Used to search vendors by business name/phone number/id.<br>
-         *     <b>name_only</b> Used to fetch only names and vendor_ids of vendors for rendering dropdowns.
+         * @description Fetch all vendors OR Search vendors by business_name/phone number/id.
+         *      search_key Used to search vendors by business name/phone number/id.
+         *      name_only Used to fetch only names and vendor_ids of vendors for rendering dropdowns.
          */
         get: operations["getAllVendors"];
         put?: never;
         /**
          * Create Vendor Profile
          * @description Profile can be created by Vendor/Admin/Customer_Care after login.
-         *       <br>
-         *         <b>Test data</b>
-         *       </br>
-         *       <br>Admin : 9948023105 </br>
-         *       <br>Vendor : 9948023190 </br>
-         *       OTP is default one to verify the APIs.
+         *
+         *      Test data
+         *
+         *      Admin : 9948023105
+         *      Vendor : 9948023190
+         *      OTP is default one to verify the APIs.
          */
         post: operations["createVendorProfile"];
         delete?: never;
@@ -700,7 +700,7 @@ export interface paths {
         /**
          * Fetch Subscriptions
          * @description Returns all active subscriptions for a user, or a single subscription when `sub_id` is supplied.
-         *     <br><br>
+         *
          *     The response includes all fields needed to populate the **Edit Subscription** screen:
          *     vendor name, item name, image, status, quantity, frequency, unit price, estimated monthly
          *     cost, payment method, start date, next delivery date, delivery slot, and delivery mode.
@@ -710,7 +710,7 @@ export interface paths {
         /**
          * Create new subscription
          * @description Creates a subscription with the specified details.
-         *     <br> Test Data: SKUID : 664 to 680
+         *      Test Data: SKUID : 664 to 680
          */
         post: operations["createSubscription"];
         delete?: never;
@@ -792,19 +792,19 @@ export interface paths {
         /**
          * Create order
          * @description Create a new order with multiple items from a single vendor.
-         *     <br><br><b>Business Rules:</b>
-         *     <br>• All items must be from the same vendor
-         *     <br>• Valid SKU IDs and price IDs required
-         *     <br>• Real-time pricing applied from SKU price table
-         *     <br>• Automatic total calculation including taxes and delivery
-         *     <br>• Order status set to PENDING by default
-         *     <br><br><b>Vendor Context:</b>
-         *     <br>• vendor_id specifies which vendor's items to order
-         *     <br>• System validates all SKUs belong to specified vendor
-         *     <br>• Vendor-specific delivery charges applied
-         *     <br><br><b>Test Data:</b>
-         *     <br>• User ID: 12552, Vendor ID: 123
-         *     <br>• SKU IDs: 101, 102 (both from Vendor 123)
+         *      Business Rules:
+         *      • All items must be from the same vendor
+         *      • Valid SKU IDs and price IDs required
+         *      • Real-time pricing applied from SKU price table
+         *      • Automatic total calculation including taxes and delivery
+         *      • Order status set to PENDING by default
+         *      Vendor Context:
+         *      • vendor_id specifies which vendor's items to order
+         *      • System validates all SKUs belong to specified vendor
+         *      • Vendor-specific delivery charges applied
+         *      Test Data:
+         *      • User ID: 12552, Vendor ID: 123
+         *      • SKU IDs: 101, 102 (both from Vendor 123)
          */
         post: operations["createOrder"];
         delete?: never;
@@ -825,43 +825,43 @@ export interface paths {
         /**
          * Create order from cart
          * @description Convert user's shopping cart into a formal order.
-         *     Supports both <b>HOME_DELIVERY</b> and <b>STORE_PICKUP</b> fulfillment modes.
-         *     Can be invoked by <b>USER</b>, <b>VENDOR</b>, <b>ADMIN</b>, or <b>CUSTOMER_CARE</b> roles.
-         *     <br><br><b>Fulfillment Modes:</b>
-         *     <br>• <b>HOME_DELIVERY</b> — requires <code>address_id</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, or PREDEFINED_DAYS).
-         *       FIXED_WINDOW / CUSTOMER_SELECT_DATE / PREDEFINED_DAYS require <code>delivery_date</code>. INSTANT auto-sets delivery date to today.
-         *       Delivery charges calculated from vendor's delivery config (charge + free threshold).
-         *     <br>• <b>STORE_PICKUP</b> — requires <code>pickup_address_id</code> (vendor store ID) and <code>pickup_slot</code> (Morning/Evening).
-         *       Pickup is always free. <code>ready_in_minutes</code> is captured from the store's config.
-         *       Pickup slots are validated against the selected store's configured slots.
-         *     <br><br><b>Delivery Scheduling Strategies:</b>
-         *     <br>• <b>FIXED_WINDOW</b> — Eco products: 3-5 days delivery window. System validates delivery date is within this range.
-         *     <br>• <b>CUSTOMER_SELECT_DATE</b> — Milk delivery: customer picks exact date within 1-30 days advance booking via <code>delivery_date</code>.
-         *     <br>• <b>PREDEFINED_DAYS</b> — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday).
-         *       System validates delivery date matches configured days.
-         *     <br>• <b>INSTANT</b> — Hotel/Restaurant: 30-60 minutes delivery. Use <code>order_timing_type</code> = "INSTANT".
-         *       Validates against cutoff time and operating hours.
-         *     <br><br><b>Backoffice Ordering:</b>
-         *     <br>• When called by VENDOR/ADMIN/CUSTOMER_CARE, <code>customer_id</code> is <b>required</b> to identify the customer.
-         *     <br>• <code>order_source</code> is auto-derived from the caller role but can be overridden.
-         *     <br>• <code>placed_by_user_id</code> is recorded automatically from the authenticated principal.
-         *     <br><br><b>Business Rules:</b>
-         *     <br>• Cart must exist and contain items for the specified vendor
-         *     <br>• Current pricing applied from SKU price table
-         *     <br>• Per-item fulfillment eligibility validated (SKU <code>home_delivery</code> / <code>store_pickup</code> flags)
-         *     <br>• Cart can be optionally cleared after order creation
-         *     <br>• Delivery scheduling validation based on vendor's configured strategy
-         *     <br>• <code>payment_type_id</code> must be a valid <code>VendorPaymentConfig.id</code> from the checkout-options API.
-         *       If omitted, the vendor's default payment option is used. Each vendor can support different payment methods (COD, PRE_PAID, ONLINE, IN_STORE_PAYMENT).
-         *     <br><br><b>Process Flow:</b>
-         *     <br>1. Validate request fields based on delivery method
-         *     <br>2. Validate against vendor's <code>fulfillment_type</code> (HOME_DELIVERY / STORE_PICKUP / BOTH)
-         *     <br>3. For HOME_DELIVERY: load delivery config, validate timing based on scheduling strategy
-         *     <br>4. For STORE_PICKUP: validate pickup store exists and belongs to vendor
-         *     <br>5. Retrieve and validate cart from Redis
-         *     <br>6. Per-item fulfillment eligibility + price validation
-         *     <br>7. Create order, calculate totals, persist, send notifications
-         *     <br>8. Optionally clear cart
+         *     Supports both HOME_DELIVERY and STORE_PICKUP fulfillment modes.
+         *     Can be invoked by USER, VENDOR, ADMIN, or CUSTOMER_CARE roles.
+         *      Fulfillment Modes:
+         *      • HOME_DELIVERY — requires address_id, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, or PREDEFINED_DAYS).
+         *      FIXED_WINDOW / CUSTOMER_SELECT_DATE / PREDEFINED_DAYS require delivery_date. INSTANT auto-sets delivery date to today.
+         *      Delivery charges calculated from vendor's delivery config (charge + free threshold).
+         *      • STORE_PICKUP — requires pickup_address_id (vendor store ID) and pickup_slot (Morning/Evening).
+         *      Pickup is always free. ready_in_minutes is captured from the store's config.
+         *      Pickup slots are validated against the selected store's configured slots.
+         *      Delivery Scheduling Strategies:
+         *      • FIXED_WINDOW — Eco products: 3-5 days delivery window. System validates delivery date is within this range.
+         *      • CUSTOMER_SELECT_DATE — Milk delivery: customer picks exact date within 1-30 days advance booking via delivery_date.
+         *      • PREDEFINED_DAYS — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday).
+         *      System validates delivery date matches configured days.
+         *      • INSTANT — Hotel/Restaurant: 30-60 minutes delivery. Use order_timing_type = "INSTANT".
+         *      Validates against cutoff time and operating hours.
+         *      Backoffice Ordering:
+         *      • When called by VENDOR/ADMIN/CUSTOMER_CARE, customer_id is required to identify the customer.
+         *      • order_source is auto-derived from the caller role but can be overridden.
+         *      • placed_by_user_id is recorded automatically from the authenticated principal.
+         *      Business Rules:
+         *      • Cart must exist and contain items for the specified vendor
+         *      • Current pricing applied from SKU price table
+         *      • Per-item fulfillment eligibility validated (SKU home_delivery / store_pickup flags)
+         *      • Cart can be optionally cleared after order creation
+         *      • Delivery scheduling validation based on vendor's configured strategy
+         *      • payment_type_id must be a valid VendorPaymentConfig.id from the checkout-options API.
+         *      If omitted, the vendor's default payment option is used. Each vendor can support different payment methods (COD, PRE_PAID, ONLINE, IN_STORE_PAYMENT).
+         *      Process Flow:
+         *      1. Validate request fields based on delivery method
+         *      2. Validate against vendor's fulfillment_type (HOME_DELIVERY / STORE_PICKUP / BOTH)
+         *      3. For HOME_DELIVERY: load delivery config, validate timing based on scheduling strategy
+         *      4. For STORE_PICKUP: validate pickup store exists and belongs to vendor
+         *      5. Retrieve and validate cart from Redis
+         *      6. Per-item fulfillment eligibility + price validation
+         *      7. Create order, calculate totals, persist, send notifications
+         *      8. Optionally clear cart
          */
         post: operations["createOrderFromCart"];
         delete?: never;
@@ -905,7 +905,7 @@ export interface paths {
         put?: never;
         /**
          * Create product
-         * @description Create platform level product. <p>measurement_unit_id</p> get from the '/v1/measurements/'
+         * @description Create platform level product. measurement_unit_id get from the '/v1/measurements/'
          */
         post: operations["addProduct"];
         delete?: never;
@@ -923,7 +923,7 @@ export interface paths {
         };
         /**
          * Fetch All Categories
-         * @description API accessed by  Admin/Customer_Care roles
+         * @description API accessed by Admin/Customer_Care roles
          */
         get: operations["getCategories"];
         put?: never;
@@ -949,10 +949,10 @@ export interface paths {
         put?: never;
         /**
          * Verify OTP
-         * @description This API returns <b>access_token</b> with short TTL and <b>refresh_token</b> with long TTL on successful user authentication.
-         *     <ul>
-         *     <li>data.address and name values are null for new users.
-         *     <li>data.roles never be null.
+         * @description This API returns access_token with short TTL and refresh_token with long TTL on successful user authentication.
+         *
+         *      data.address and name values are null for new users.
+         *      data.roles never be null.
          */
         post: operations["verifyMobileOtp"];
         delete?: never;
@@ -989,7 +989,7 @@ export interface paths {
         put?: never;
         /**
          * Request OTP
-         * @description <b>Test users with USER role</b><br> Test User#1 : 9912149045 with address <br> Test User#2 : 9912149046 without address<br><b>Test users with VENDOR role </b><br> Test User#1 : 9912149047
+         * @description Test users with USER role Test User#1 : 9912149045 with address Test User#2 : 9912149046 without address Test users with VENDOR role Test User#1 : 9912149047
          */
         post: operations["requestOTP"];
         delete?: never;
@@ -1052,9 +1052,9 @@ export interface paths {
          * Import Catalog for Existing Vendor from CSV
          * @description Import catalog data (categories, products, SKUs with prices) for an existing vendor using CSV file.
          *     Vendor must already exist in the system. Skips vendor profile and delivery config creation.
-         *     <br><br>
-         *     <b>CSV Format:</b>
-         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
+         *
+         *      CSV Format:
+         *      category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
          */
         post: operations["importCatalogFromCsv"];
         delete?: never;
@@ -1097,12 +1097,12 @@ export interface paths {
          * Bulk Import Vendor Catalog from CSV
          * @description Bulk import vendor catalog from CSV file. Creates vendor profile, categories (if not exists),
          *     products (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.
-         *     <br><br>
-         *     <b>CSV Format:</b>
-         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
-         *     <br><br>
-         *     <b>Example:</b>
-         *     <br>Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT
+         *
+         *      CSV Format:
+         *      category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
+         *
+         *      Example:
+         *      Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT
          */
         post: operations["bulkImportVendorFromCsv"];
         delete?: never;
@@ -1200,8 +1200,8 @@ export interface paths {
         head?: never;
         /**
          * Update SKU info
-         * @description Partially update core SKU fields: <b>name</b>, <b>description</b>, <b>features</b>,
-         *     and <b>is_active</b>. Only supplied (non-null) fields are written to the database;
+         * @description Partially update core SKU fields: name, description, features,
+         *     and is_active. Only supplied (non-null) fields are written to the database;
          *     omitted fields are left unchanged. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.
          */
         patch: operations["updateSkuInfo"];
@@ -1350,7 +1350,7 @@ export interface paths {
         /**
          * Vendor assigned categories
          * @description This API fetches assigned categories and This API accessed by Vendor/Admin/Customer_Care role.
-         *     <br> This response.data.id has to be used for assigning products to vendor.
+         *      This response.data.id has to be used for assigning products to vendor.
          */
         get: operations["fetchAssignCategories"];
         put?: never;
@@ -1380,7 +1380,7 @@ export interface paths {
         head?: never;
         /**
          * Assign products to a vendor
-         * @description Assigns one or more products to a vendor with their features by Admin/Customer_Care role. <br>
+         * @description Assigns one or more products to a vendor with their features by Admin/Customer_Care role.
          *     In the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it.
          */
         patch: operations["assignProducts"];
@@ -1401,7 +1401,7 @@ export interface paths {
         head?: never;
         /**
          * Approve Vendor
-         * @description This API is used to  APPROVED/REJECTED vendor's registration by Admin.
+         * @description This API is used to APPROVED/REJECTED vendor's registration by Admin.
          */
         patch: operations["updateApprovalStatus"];
         trace?: never;
@@ -1451,11 +1451,11 @@ export interface paths {
          * Get order details by ID
          * @description Returns full order details with all items, fulfillment info, and financials.
          *     Only the order owner can access this endpoint.
-         *     <br><br><b>Response structure:</b>
-         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>store_name</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
-         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
-         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
-         *     <br>• <code>order_items[]</code> — per-item with SKU enrichment: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
+         *      Response structure:
+         *      • Order header: order_id, vendor_id, user_id, store_name, delivery_date, order_status, payment_status
+         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
+         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
+         *      • order_items[] — per-item with SKU enrichment: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
          */
         get: operations["getOrderDetail"];
         put?: never;
@@ -1466,19 +1466,19 @@ export interface paths {
         /**
          * Update order quantity and status
          * @description Update the quantity and/or status of an existing order.
-         *     <br><br><b>Customer Capabilities:</b>
-         *     <br>• Update one or more item quantities for PENDING orders (auto-recalculates totals)
-         *     <br>• Cancel PENDING orders with a required reason
-         *     <br>• Only PENDING orders can be modified by customers
-         *     <br><br><b>Quantity Update — Two Modes:</b>
-         *     <br>• <b>Multi-item (preferred):</b> supply <code>items</code> array with <code>sku_id</code> + <code>quantity</code> per item
-         *     <br>• <b>Single-item (legacy):</b> supply top-level <code>quantity</code> — applies to the first item only
-         *     <br>• If both are provided, <code>items</code> takes precedence
-         *     <br><br><b>Status Transition Rules (Customer View):</b>
-         *     <br>• PENDING → QUANTITY UPDATE or CANCELLED
-         *     <br>• SCHEDULED / DELIVERED / CANCELLED → locked, no changes allowed
-         *     <br><br><b>Test Data:</b>
-         *     <br>• Order ID: 6353, User ID: 12552
+         *      Customer Capabilities:
+         *      • Update one or more item quantities for PENDING orders (auto-recalculates totals)
+         *      • Cancel PENDING orders with a required reason
+         *      • Only PENDING orders can be modified by customers
+         *      Quantity Update — Two Modes:
+         *      • Multi-item (preferred): supply items array with sku_id + quantity per item
+         *      • Single-item (legacy): supply top-level quantity — applies to the first item only
+         *      • If both are provided, items takes precedence
+         *      Status Transition Rules (Customer View):
+         *      • PENDING → QUANTITY UPDATE or CANCELLED
+         *      • SCHEDULED / DELIVERED / CANCELLED → locked, no changes allowed
+         *      Test Data:
+         *      • Order ID: 6353, User ID: 12552
          */
         patch: operations["updateOrder_1"];
         trace?: never;
@@ -1549,12 +1549,12 @@ export interface paths {
         /**
          * Get order by ID
          * @description Returns full order details including fulfillment info and financials.
-         *     <br><br><b>Response structure:</b>
-         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
-         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
-         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
-         *     <br>• <code>order_source</code> — APP, ADMIN, VENDOR, or CUSTOMER_CARE
-         *     <br>• <code>order_items[]</code> — per-item: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
+         *      Response structure:
+         *      • Order header: order_id, vendor_id, user_id, delivery_date, order_status, payment_status
+         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
+         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
+         *      • order_source — APP, ADMIN, VENDOR, or CUSTOMER_CARE
+         *      • order_items[] — per-item: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
          */
         get: operations["getOrder"];
         put?: never;
@@ -1565,10 +1565,10 @@ export interface paths {
         /**
          * Update order status or payment
          * @description Update order status and/or payment status. Restricted to ADMIN and VENDOR roles.
-         *     <br><br><b>Updatable fields:</b>
-         *     <br>• <code>order_status</code> — e.g. CONFIRMED, SHIPPED, DELIVERED, CANCELLED
-         *     <br>• <code>payment_status</code> — e.g. PAID, REFUNDED
-         *     <br>• <code>cancel_reason</code> — required when cancelling
+         *      Updatable fields:
+         *      • order_status — e.g. CONFIRMED, SHIPPED, DELIVERED, CANCELLED
+         *      • payment_status — e.g. PAID, REFUNDED
+         *      • cancel_reason — required when cancelling
          */
         patch: operations["updateOrder_2"];
         trace?: never;
@@ -1732,11 +1732,11 @@ export interface paths {
         /**
          * Fetch vendor assigned products
          * @description This API endpoint retrieves a list of products assigned to a specific vendor.
-         *        The response includes an array of products, each with its id, name, category_id,
-         *        and measurement_id. Optionally, descriptions can be included in the response.
-         *         * vendorId The ID of the vendor whose assigned products are to be fetched. (Example: 91,94,99)
-         *         * categoryId (Optional) The category ID to filter products by category.
-         *         * descNeeded (Optional) A boolean flag indicating whether descriptions are needed in the response.
+         *      The response includes an array of products, each with its id, name, category_id,
+         *      and measurement_id. Optionally, descriptions can be included in the response.
+         *      * vendorId The ID of the vendor whose assigned products are to be fetched. (Example: 91,94,99)
+         *      * categoryId (Optional) The category ID to filter products by category.
+         *      * descNeeded (Optional) A boolean flag indicating whether descriptions are needed in the response.
          */
         get: operations["fetchAssignProducts"];
         put?: never;
@@ -1757,9 +1757,9 @@ export interface paths {
         /**
          * Fetch SKUs with vendor_id and/or without product_id
          * @description This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.
-         *     <br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.
-         *     <br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.
-         *     <br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2
+         *      If product_id is NULL: SKUs will be filtered by vendor_id only.
+         *      If product_id is not NULL: SKUs will be filtered by vendor_id & product_id.
+         *      Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2
          */
         get: operations["fetchSkusByVendorProduct"];
         put?: never;
@@ -1783,14 +1783,14 @@ export interface paths {
          *     customer details (customer_name, customer_mobile, email), resolved delivery address,
          *     shipment tracking, and all order items enriched with SKU display data.
          *     Use this endpoint to render the order detail view after selecting an order from the list.
-         *     <br><br><b>Response structure:</b>
-         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>store_name</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
-         *     <br>• Customer: <code>customer_name</code>, <code>customer_mobile</code>, <code>email</code>
-         *     <br>• Address: <code>delivery_address</code> — nested object with <code>type</code>, <code>address</code> map, <code>default_one</code>
-         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
-         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
-         *     <br>• <code>shipment</code> — tracking info for shipped orders: <code>courier_partner</code>, <code>tracking_number</code>, <code>tracking_url</code>, <code>status</code>, <code>shipped_at</code>
-         *     <br>• <code>order_items[]</code> — per-item: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
+         *      Response structure:
+         *      • Order header: order_id, vendor_id, user_id, store_name, delivery_date, order_status, payment_status
+         *      • Customer: customer_name, customer_mobile, email
+         *      • Address: delivery_address — nested object with type, address map, default_one
+         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
+         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
+         *      • shipment — tracking info for shipped orders: courier_partner, tracking_number, tracking_url, status, shipped_at
+         *      • order_items[] — per-item: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
          */
         get: operations["getOrderItems"];
         put?: never;
@@ -1811,15 +1811,15 @@ export interface paths {
         /**
          * Get user cart
          * @description Retrieve the user's current cart with all items and calculated totals.
-         *     <br><br><b>Returns:</b>
-         *     <br>• Cart items with details and pricing
-         *     <br>• Cart summary with totals breakdown
-         *     <br>• Vendor information (if cart has items)
-         *     <br>• Cart expiration time
-         *     <br><br><b>Behavior:</b>
-         *     <br>• Returns empty cart if no cart exists
-         *     <br>• Returns cart with vendor_id null if cart is empty
-         *     <br>• Includes real-time calculated totals
+         *      Returns:
+         *      • Cart items with details and pricing
+         *      • Cart summary with totals breakdown
+         *      • Vendor information (if cart has items)
+         *      • Cart expiration time
+         *      Behavior:
+         *      • Returns empty cart if no cart exists
+         *      • Returns cart with vendor_id null if cart is empty
+         *      • Includes real-time calculated totals
          */
         get: operations["getCart"];
         put?: never;
@@ -1827,16 +1827,16 @@ export interface paths {
         /**
          * Clear cart
          * @description Clear all items from the user's cart.
-         *     <br><br><b>Behavior:</b>
-         *     <br>• Removes ALL items from cart
-         *     <br>• Resets cart to empty state
-         *     <br>• vendor_id becomes null (ready for new vendor)
-         *     <br>• Cart remains active for new items
-         *     <br>• Useful for switching vendors
-         *     <br><br><b>Use Cases:</b>
-         *     <br>• Switch to different vendor's items
-         *     <br>• Start fresh shopping session
-         *     <br>• Remove all items before logout
+         *      Behavior:
+         *      • Removes ALL items from cart
+         *      • Resets cart to empty state
+         *      • vendor_id becomes null (ready for new vendor)
+         *      • Cart remains active for new items
+         *      • Useful for switching vendors
+         *      Use Cases:
+         *      • Switch to different vendor's items
+         *      • Start fresh shopping session
+         *      • Remove all items before logout
          */
         delete: operations["clearCart"];
         options?: never;
@@ -1874,9 +1874,9 @@ export interface paths {
         /**
          * Fetch Vendors by zipcode with/without category_id
          * @description This API used for searching vendors and specific vendors based on zipcode and/or category_id.
-         *     <br>If <b>category_id</b> is NULL: Vendors will be filtered by zipcode only.
-         *     <br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & product_id.
-         *     <br>Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103
+         *      If category_id is NULL: Vendors will be filtered by zipcode only.
+         *      If category_id is not NULL: Vendors will be filtered by zipcode & product_id.
+         *      Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103
          */
         get: operations["fetchActiveVendorsByServiceArea"];
         put?: never;
@@ -1897,7 +1897,7 @@ export interface paths {
         /**
          * Search vendors by zipcode and product keyword[ regex: vendor name , category name,product name and sku name ]
          * @description This API used for search and list of matched vendors for given search pattern.
-         *     <br>Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish
+         *      Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish
          */
         get: operations["searchVendorsByKeyword"];
         put?: never;
@@ -1954,7 +1954,7 @@ export interface paths {
         /**
          * Fetch Categories by service_area
          * @description This API used for fetching all categories served by the vendors based on service_area/zipcode.
-         *         <br>Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.
+         *      Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.
          */
         get: operations["fetchCategoriesByZipCode"];
         put?: never;
@@ -1995,19 +1995,19 @@ export interface paths {
         /**
          * Paginated Order History API
          * @description Returns paginated order history for a user. Use this endpoint for large order lists to improve performance.
-         *     <br><br><b>Query parameters:</b>
-         *     <br>• <code>page</code> — page number (0-indexed, default: 0)
-         *     <br>• <code>size</code> — page size (default: 20)
-         *     <br><br><b>Response structure:</b>
-         *     <br>• <code>result[]</code> — array of order history items
-         *     <br>• <code>page_number</code> — current page number
-         *     <br>• <code>page_size</code> — items per page
-         *     <br>• <code>total_elements</code> — total number of orders
-         *     <br>• <code>total_pages</code> — total number of pages
-         *     <br>• <code>last_page</code> — boolean indicating if this is the last page
-         *     <br><br>Each order history item includes: <code>order_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,
-         *     <code>order_status</code>, <code>payment_status</code>, <code>amount</code>, <code>delivery_charge</code>, <code>discount</code>,
-         *     <code>items[]</code> (enriched with SKU data), <code>shipment</code> (tracking info), and <code>order_amount</code> (nested financial summary).
+         *      Query parameters:
+         *      • page — page number (0-indexed, default: 0)
+         *      • size — page size (default: 20)
+         *      Response structure:
+         *      • result[] — array of order history items
+         *      • page_number — current page number
+         *      • page_size — items per page
+         *      • total_elements — total number of orders
+         *      • total_pages — total number of pages
+         *      • last_page — boolean indicating if this is the last page
+         *      Each order history item includes: order_id, vendor_name, delivery_date,
+         *      order_status, payment_status, amount, delivery_charge, discount,
+         *      items[] (enriched with SKU data), shipment (tracking info), and order_amount (nested financial summary).
          */
         get: operations["getUserOrderHistoryPaged"];
         put?: never;
@@ -2343,9 +2343,9 @@ export interface paths {
         /**
          * GeoBased Home Page API
          * @description This API is used for fetching new_vendors , offers based on user's location.
-         *     <br> On click on the <b>new vendor image/name</b> ,User has to navigate to vendor's product listing page.
-         *     <br> On click on <b>offer image/name</b> ,User has to navigate to vendor's specific sku's listing page.
-         *     <br> On click on <b>top product</b> ,User has to navigate to vendor's specific sku's listing page.
+         *      On click on the new vendor image/name ,User has to navigate to vendor's product listing page.
+         *      On click on offer image/name ,User has to navigate to vendor's specific sku's listing page.
+         *      On click on top product ,User has to navigate to vendor's specific sku's listing page.
          */
         get: operations["getHomePageData"];
         put?: never;
@@ -2501,9 +2501,29 @@ export interface paths {
         };
         /**
          * Fetch categories by type
-         * @description API accessed by  Admin/Customer_Care roles with bearer token.This API return all the categories grouped by <b>type</b>
+         * @description API accessed by Admin/Customer_Care roles with bearer token.This API return all the categories grouped by type
          */
         get: operations["getCategoriesByType"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-types/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch all business types
+         * @description Returns a paginated list of business types. Supports keyword search, sorting and page-size defaults matching the UI.
+         */
+        get: operations["getBusinessTypes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6413,6 +6433,7 @@ export interface operations {
                 pageSize?: number;
                 sortBy?: string;
                 sortOrder?: string;
+                business_type_id?: number;
             };
             header?: never;
             path?: never;
@@ -9174,6 +9195,32 @@ export interface operations {
     getCategoriesByType: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    getBusinessTypes: {
+        parameters: {
+            query?: {
+                keyword?: string;
+                pageNumber?: number;
+                pageSize?: number;
+                sortBy?: string;
+                sortOrder?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
