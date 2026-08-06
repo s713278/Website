@@ -1,0 +1,13 @@
+---
+description: MithraDirect UI principles — brand tokens, vendor simplicity, theme
+alwaysApply: true
+---
+
+# MithraDirect UI principles
+
+- **Design tokens live in** `assets/css/global.css` (`:root`). Prefer `--md-*` and `--store-theme*` over hardcoded colors.
+- **Vendor theme**: apply via `MithraDraft.applyTheme(hex)` so storefront, onboarding, and dashboard stay in sync.
+- **Small-vendor UX**: one job per screen, collapse secondary detail, clear primary CTA, offline-friendly share (link + WhatsApp + QR).
+- **Preserve the static HTML shell** (`*.html` + `assets/css/*` + `assets/js/*`) patterns; do not invent a parallel design system.
+- **No purple-glow / cream-serif AI defaults.** Brand is emerald green + Poppins display + Inter body (existing stack).
+- **Do not commit** `.env` or secrets. Leave unrelated vendor-app local edits out of commits unless asked.

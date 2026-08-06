@@ -26,7 +26,9 @@
     deliveryMethod: 'homeDelivery',
     orderId: '',
     orderMessage: '',
-    history: []
+    history: [],
+    pendingAdd: null,
+    addressGateOpen: false
   };
 
   function qs(name) {
@@ -42,15 +44,11 @@
   }
 
   function normalizeHex(color) {
-    var c = String(color || '').trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
-    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
-      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
-    }
-    return '#128c7e';
+    return D.normalizeHex ? D.normalizeHex(color) : String(color || D.DEFAULT_THEME || '#10b981').toLowerCase();
   }
 
   function hexToRgba(hex, alpha) {
+    if (D.hexToRgba) return D.hexToRgba(hex, alpha);
     var h = normalizeHex(hex).slice(1);
     return (
       'rgba(' +
@@ -66,9 +64,11 @@
   }
 
   function applyTheme(color) {
+    if (D.applyTheme) return D.applyTheme(color);
     var hex = normalizeHex(color);
     document.documentElement.style.setProperty('--store-theme', hex);
-    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.12));
+    document.documentElement.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.14));
+    return hex;
   }
 
   function loadCart() {
@@ -154,7 +154,20 @@
   }
 
   /* ——— Cart mutations ——— */
+  function hasDeliveryAddress() {
+    return String(state.address || '').trim().length >= 8;
+  }
+
+  function requireDeliveryAddress(reason, pending) {
+    if (hasDeliveryAddress()) return true;
+    openAddressGate(reason || 'add', pending || null);
+    return false;
+  }
+
   function addToCart(productId, skuId, qty) {
+    if (!requireDeliveryAddress('add', { productId: productId, skuId: skuId, qty: qty || 1 })) {
+      return;
+    }
     qty = qty || 1;
     var product = findProduct(productId);
     var variant = findVariant(product, skuId);
@@ -183,6 +196,7 @@
   }
 
   function setQty(skuId, qty) {
+    if (qty > 0 && !requireDeliveryAddress('add', null)) return;
     var line = state.cart.find(function (l) {
       return l.skuId === skuId;
     });
@@ -368,21 +382,28 @@
     document.getElementById('store-tagline').textContent =
       draft.settings.tagline || 'Made with love, delivered to your home';
     document.getElementById('store-location').textContent = draft.settings.location || '';
-    document.getElementById('home-address').textContent =
-      state.address || draft.settings.address || draft.settings.location || 'Select address';
+    syncHomeAddressUI();
 
     var bannerImg = document.getElementById('store-banner-img');
     if (hero) {
       hero.classList.remove('is-rich-banner');
       hero.classList.remove('is-ph-banner');
+      hero.classList.remove('has-designed-banner');
     }
     if (draft.settings.banner) {
       bannerImg.src = draft.settings.banner;
       bannerImg.alt = draft.settings.storeName + ' banner';
       bannerImg.classList.remove('is-broken');
+      if (hero && draft.settings.richBanner) {
+        hero.classList.add('is-rich-banner');
+        hero.classList.add('has-designed-banner');
+      }
       bannerImg.onerror = function () {
         bannerImg.classList.add('is-broken');
-        if (hero) hero.classList.add('is-ph-banner');
+        if (hero) {
+          hero.classList.add('is-ph-banner');
+          hero.classList.remove('has-designed-banner');
+        }
       };
     } else {
       bannerImg.removeAttribute('src');
@@ -410,7 +431,9 @@
     var windowEl = document.getElementById('delivery-window');
     if (windowEl) {
       var win = draft.settings.deliveryWindow || '6 PM – 9 PM';
-      windowEl.textContent = 'We deliver to your area · Today ' + win;
+      windowEl.textContent = hasDeliveryAddress()
+        ? 'We can deliver here · Today ' + win
+        : 'Homemade · Fresh · Delivered around ' + win;
     }
 
     var popular = (draft.products || []).filter(function (p) {
@@ -418,6 +441,121 @@
     });
     if (!popular.length) popular = (draft.products || []).slice(0, 4);
     renderProductGrid(document.getElementById('store-products'), popular);
+  }
+
+  function syncHomeAddressUI() {
+    var ready = hasDeliveryAddress();
+    var panel = document.getElementById('address-panel');
+    var value = document.getElementById('home-address');
+    var label = document.getElementById('home-address-label');
+    var hint = document.getElementById('home-address-hint');
+    var btn = document.getElementById('btn-change-address');
+    if (panel) panel.classList.toggle('needs-address', !ready);
+    if (value) {
+      value.textContent = ready ? state.address : 'Add your delivery address';
+    }
+    if (label) label.textContent = ready ? 'Delivering to' : 'Where should we deliver?';
+    if (hint) {
+      hint.hidden = ready;
+      hint.textContent = 'Add once — then tap Add on any item. No address check after order.';
+    }
+    if (btn) btn.textContent = ready ? 'Change' : 'Add address';
+  }
+
+  function openAddressGate(reason, pending) {
+    var gate = document.getElementById('addr-gate');
+    if (!gate) return;
+    state.addressGateOpen = true;
+    state.pendingAdd = pending || null;
+    gate.hidden = false;
+    gate.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('addr-gate-open');
+
+    var title = document.getElementById('addr-gate-title');
+    var lead = document.getElementById('addr-gate-lead');
+    var eyebrow = document.getElementById('addr-gate-eyebrow');
+    var saveBtn = document.getElementById('addr-gate-save');
+    var storeName = (state.draft && state.draft.settings && state.draft.settings.storeName) || 'this home kitchen';
+
+    if (reason === 'change') {
+      if (eyebrow) eyebrow.textContent = 'Update delivery';
+      if (title) title.textContent = 'Change delivery address';
+      if (lead) lead.textContent = 'We’ll send your ' + storeName + ' order here.';
+      if (saveBtn) saveBtn.textContent = 'Save address';
+    } else if (reason === 'add') {
+      if (eyebrow) eyebrow.textContent = 'One quick step';
+      if (title) title.textContent = 'Where should we deliver?';
+      if (lead)
+        lead.textContent =
+          'Instagram customers love this — set your address once, then add items freely. No re-check at checkout.';
+      if (saveBtn) saveBtn.textContent = 'Save & add to cart';
+    } else {
+      if (eyebrow) eyebrow.textContent = 'Welcome';
+      if (title) title.textContent = 'Where should we deliver?';
+      if (lead)
+        lead.textContent =
+          'You’re ordering from a home business. Tell us your address first so your WhatsApp order is ready to go.';
+      if (saveBtn) saveBtn.textContent = 'Save & start ordering';
+    }
+
+    var skip = document.getElementById('addr-gate-skip');
+    if (skip) skip.hidden = reason === 'add';
+
+    var input = document.getElementById('addr-gate-input');
+    var err = document.getElementById('addr-gate-error');
+    if (err) err.hidden = true;
+    if (input) {
+      input.value = state.address || '';
+      setTimeout(function () {
+        input.focus();
+      }, 180);
+    }
+  }
+
+  function closeAddressGate() {
+    var gate = document.getElementById('addr-gate');
+    if (!gate) return;
+    state.addressGateOpen = false;
+    gate.hidden = true;
+    gate.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('addr-gate-open');
+  }
+
+  function commitDeliveryAddress(line) {
+    var text = String(line || '').trim();
+    if (text.length < 8) {
+      var err = document.getElementById('addr-gate-error');
+      if (err) {
+        err.hidden = false;
+        err.textContent = 'Add a bit more detail (area + city) so this home kitchen can find you.';
+      }
+      return false;
+    }
+    state.address = text;
+    state.addressId = state.addressId || 'home';
+    if (!state.draft.addresses) state.draft.addresses = [];
+    var current = state.draft.addresses.find(function (a) {
+      return a.id === state.addressId;
+    });
+    if (current) {
+      current.line = text;
+    } else {
+      state.draft.addresses = [{ id: 'home', label: 'Home', line: text }];
+      state.addressId = 'home';
+    }
+    saveSession();
+    syncHomeAddressUI();
+    closeAddressGate();
+
+    var pending = state.pendingAdd;
+    state.pendingAdd = null;
+    if (pending && pending.productId && pending.skuId) {
+      addToCart(pending.productId, pending.skuId, pending.qty || 1);
+      if (state.view === 'menu') renderMenuProducts();
+      if (state.view === 'product') renderProductDetail(state.productId);
+    }
+    if (state.view === 'checkout') renderCheckout();
+    return true;
   }
 
   function renderProductGrid(el, products) {
@@ -686,42 +824,61 @@
       '</span></div>';
   }
 
-  function renderCheckout() {
-    var addrs = state.draft.addresses || [
-      {
-        id: 'home',
-        label: 'Home',
-        line: state.draft.settings.address || state.draft.settings.location || ''
-      }
-    ];
-    if (!state.addressId) state.addressId = addrs[0].id;
-
-    var selected = addrs.find(function (a) {
-      return a.id === state.addressId;
-    }) || addrs[0];
-    state.address = selected.line;
-
-    var addrEl = document.getElementById('checkout-addresses');
-    if (addrEl) {
-      addrEl.innerHTML = addrs
-        .map(function (a) {
-          var checked = a.id === state.addressId ? ' checked' : '';
-          return (
-            '<label class="pay-option address-option">' +
-            '<input type="radio" name="delivery-addr" value="' +
-            escapeHtml(a.id) +
-            '"' +
-            checked +
-            '>' +
-            '<span><strong class="addr-label">' +
-            escapeHtml(a.label) +
-            '</strong><br><span class="addr-line">' +
-            escapeHtml(a.line) +
-            '</span></span></label>'
-          );
-        })
-        .join('');
+  function ensureAddress() {
+    if (!state.draft.addresses || !state.draft.addresses.length) {
+      state.draft.addresses = [{ id: 'home', label: 'Home', line: state.address || '' }];
     }
+    if (!state.addressId) state.addressId = state.draft.addresses[0].id;
+    var selected =
+      state.draft.addresses.find(function (a) {
+        return a.id === state.addressId;
+      }) || state.draft.addresses[0];
+    // Prefer customer session address; never invent from vendor shop location
+    if (!state.address && selected && String(selected.line || '').trim().length >= 8) {
+      state.address = selected.line;
+    }
+    return selected;
+  }
+
+  function setAddressEditMode(on) {
+    var card = document.getElementById('checkout-addresses');
+    var edit = document.getElementById('checkout-address-edit');
+    var editBtn = document.getElementById('btn-edit-address');
+    if (card) card.classList.toggle('hidden', !!on);
+    if (edit) edit.classList.toggle('hidden', !on);
+    if (editBtn) editBtn.classList.toggle('hidden', !!on);
+    if (on) {
+      var input = document.getElementById('checkout-addr-input');
+      if (input) {
+        input.value = state.address || '';
+        input.focus();
+      }
+    }
+  }
+
+  function saveEditedAddress(line) {
+    if (!commitDeliveryAddress(line)) return false;
+    setAddressEditMode(false);
+    renderCheckout();
+    return true;
+  }
+
+  function renderCheckout() {
+    var selected = ensureAddress();
+    state.address = state.address || selected.line || '';
+
+    var labelEl = document.getElementById('checkout-addr-label');
+    var lineEl = document.getElementById('checkout-addr-line');
+    var phoneEl = document.getElementById('checkout-addr-phone');
+    if (labelEl) labelEl.textContent = selected.label || 'Delivery';
+    if (lineEl) lineEl.textContent = state.address || 'No address yet — tap Edit to add one.';
+    if (phoneEl) {
+      phoneEl.textContent = state.customer.phone
+        ? '+91 ' + state.customer.phone
+        : '';
+      phoneEl.hidden = !state.customer.phone;
+    }
+    setAddressEditMode(false);
 
     renderDeliveryOptions();
     renderPaymentOptions();
@@ -945,6 +1102,10 @@
       showView('menu');
       return;
     }
+    if (!hasDeliveryAddress()) {
+      openAddressGate('change', null);
+      return;
+    }
     state.orderId = generateOrderId();
     state.orderMessage = buildWhatsAppMessage();
     document.getElementById('order-id-display').textContent = state.orderId;
@@ -1081,14 +1242,18 @@
 
     document.getElementById('btn-proceed-login').addEventListener('click', function () {
       if (!state.cart.length) return;
-      if (state.customer.loggedIn) {
-        showView('checkout');
-        renderCheckout();
-      } else {
-        showView('login');
-        document.getElementById('login-phone-step').classList.remove('hidden');
-        document.getElementById('login-otp-step').classList.add('hidden');
+      if (!requireDeliveryAddress('change', null)) return;
+      // Always: mobile number → OTP → order creation / review
+      showView('login');
+      document.getElementById('login-phone-step').classList.remove('hidden');
+      document.getElementById('login-otp-step').classList.add('hidden');
+      var phoneInput = document.getElementById('login-phone');
+      if (phoneInput) {
+        phoneInput.value = state.customer.phone || '';
+        phoneInput.focus();
       }
+      var otpInput = document.getElementById('login-otp');
+      if (otpInput) otpInput.value = '';
     });
 
     document.getElementById('btn-send-otp').addEventListener('click', function () {
@@ -1100,6 +1265,11 @@
       state.customer.phone = phone;
       document.getElementById('login-phone-step').classList.add('hidden');
       document.getElementById('login-otp-step').classList.remove('hidden');
+      var otpInput = document.getElementById('login-otp');
+      if (otpInput) {
+        otpInput.value = '';
+        otpInput.focus();
+      }
     });
 
     document.getElementById('btn-verify-otp').addEventListener('click', function () {
@@ -1109,7 +1279,13 @@
         return;
       }
       state.customer.loggedIn = true;
-      state.customer.name = 'Customer';
+      state.customer.name =
+        (window.MithraAssets &&
+          window.MithraAssets.paths &&
+          window.MithraAssets.paths.external &&
+          window.MithraAssets.paths.external.demoContactName) ||
+        'Swamy Kunta';
+      ensureAddress();
       saveSession();
       showView('checkout');
       renderCheckout();
@@ -1130,49 +1306,77 @@
       );
     });
 
-    function promptAddress() {
-      var next = window.prompt(
-        'Enter delivery address',
-        state.address || state.draft.settings.address || ''
-      );
-      if (next != null && next.trim()) {
-        state.address = next.trim();
-        state.addressId = 'custom';
-        if (!state.draft.addresses) state.draft.addresses = [];
-        var existing = state.draft.addresses.find(function (a) {
-          return a.id === 'custom';
-        });
-        if (existing) {
-          existing.line = state.address;
-        } else {
-          state.draft.addresses.push({
-            id: 'custom',
-            label: 'Other',
-            line: state.address
-          });
-        }
-        saveSession();
-        document.getElementById('home-address').textContent = state.address;
-        persistRelease();
-        if (state.view === 'checkout') renderCheckout();
-      }
+    var editAddrBtn = document.getElementById('btn-edit-address');
+    if (editAddrBtn) {
+      editAddrBtn.addEventListener('click', function () {
+        setAddressEditMode(true);
+      });
     }
-    document.getElementById('btn-change-address').addEventListener('click', promptAddress);
-    var addAddrBtn = document.getElementById('btn-add-address');
-    if (addAddrBtn) addAddrBtn.addEventListener('click', promptAddress);
-    document.getElementById('btn-use-location').addEventListener('click', function () {
-      state.address = state.draft.settings.address || 'Current location, Hyderabad';
-      state.addressId = 'home';
-      saveSession();
-      document.getElementById('home-address').textContent = state.address;
+    var saveAddrBtn = document.getElementById('btn-save-address');
+    if (saveAddrBtn) {
+      saveAddrBtn.addEventListener('click', function () {
+        var input = document.getElementById('checkout-addr-input');
+        saveEditedAddress(input ? input.value : '');
+      });
+    }
+    var cancelAddrBtn = document.getElementById('btn-cancel-address');
+    if (cancelAddrBtn) {
+      cancelAddrBtn.addEventListener('click', function () {
+        setAddressEditMode(false);
+      });
+    }
+
+    document.getElementById('btn-change-address').addEventListener('click', function () {
+      openAddressGate(hasDeliveryAddress() ? 'change' : 'start', null);
     });
 
+    var gateSave = document.getElementById('addr-gate-save');
+    if (gateSave) {
+      gateSave.addEventListener('click', function () {
+        var input = document.getElementById('addr-gate-input');
+        commitDeliveryAddress(input ? input.value : '');
+      });
+    }
+
+    var gateBackdrop = document.getElementById('addr-gate-backdrop');
+    if (gateBackdrop) {
+      gateBackdrop.addEventListener('click', function () {
+        closeAddressGate();
+      });
+    }
+
+    var gateSkip = document.getElementById('addr-gate-skip');
+    if (gateSkip) {
+      gateSkip.addEventListener('click', function () {
+        state.pendingAdd = null;
+        closeAddressGate();
+      });
+    }
+
+    document.querySelectorAll('[data-addr-chip]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var input = document.getElementById('addr-gate-input');
+        if (!input) return;
+        var starter = chip.getAttribute('data-addr-chip') || '';
+        if (!String(input.value || '').trim()) input.value = starter;
+        input.focus();
+      });
+    });
+
+    var nearMe = document.getElementById('addr-gate-near-me');
+    if (nearMe) {
+      nearMe.addEventListener('click', function () {
+        var input = document.getElementById('addr-gate-input');
+        var area =
+          (state.draft && state.draft.settings && state.draft.settings.location) || 'my area';
+        if (input) {
+          input.value = 'Near ' + area + ' (please add flat / street)';
+          input.focus();
+        }
+      });
+    }
+
     document.getElementById('store-app').addEventListener('change', function (e) {
-      if (e.target && e.target.name === 'delivery-addr') {
-        state.addressId = e.target.value;
-        saveSession();
-        renderCheckout();
-      }
       if (e.target && e.target.name === 'delivery-method') {
         state.deliveryMethod = e.target.value;
         renderCheckout();
@@ -1225,15 +1429,13 @@
     }
 
     state.draft = draft;
-    state.address = draft.settings.address || draft.settings.location || '';
+    state.address = '';
     state.activeCategory = 'all';
 
-    applyTheme((draft.settings && draft.settings.themeColor) || '#006437');
+    applyTheme((draft.settings && draft.settings.themeColor) || D.DEFAULT_THEME || '#10b981');
     loadCart();
     loadSession();
-    if (state.customer.loggedIn && !state.address) {
-      state.address = draft.settings.address || '';
-    }
+    // Customer delivery address only — never default to vendor shop location
 
     empty.classList.add('hidden');
     app.classList.remove('hidden');
@@ -1242,6 +1444,13 @@
     renderHome();
     showView('home', { replace: true });
     updateCartUI();
+
+    if (!hasDeliveryAddress()) {
+      // Soft welcome gate for Instagram / first-time visitors
+      setTimeout(function () {
+        openAddressGate('start', null);
+      }, 450);
+    }
 
     var view = qs('view');
     if (view === 'menu') {

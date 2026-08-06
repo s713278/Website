@@ -110,19 +110,16 @@
                         </div>
                     </div>
 
-                    <div class="store-panel is-bordered">
+                    <div class="store-panel is-bordered address-panel" id="address-panel">
                         <div class="address-row">
-                            <div>
-                                <p class="address-label">Delivering to</p>
-                                <p class="address-value" id="home-address">Hyderabad</p>
+                            <div class="address-row-main">
+                                <p class="address-label" id="home-address-label">Delivering to</p>
+                                <p class="address-value" id="home-address">Add your delivery address</p>
+                                <p class="address-hint" id="home-address-hint">Tell us where to send your order — then pick what you love.</p>
                             </div>
-                            <button type="button" class="link-btn" id="btn-change-address">Change</button>
+                            <button type="button" class="btn-outline is-compact" id="btn-change-address" data-cta="set_delivery_address">Add address</button>
                         </div>
-                        <div class="location-row">
-                            <input type="text" class="field" id="location-search" placeholder="Search location or area…" aria-label="Search location">
-                            <button type="button" class="btn-outline" id="btn-use-location">Use my location</button>
-                        </div>
-                        <p class="delivery-window" id="delivery-window">We deliver to your area · Today 6 PM – 9 PM</p>
+                        <p class="delivery-window" id="delivery-window">Homemade · Fresh · Delivered to your door</p>
                     </div>
 
                     <div class="trust-strip" aria-label="Trust signals">
@@ -216,12 +213,25 @@
                     <div class="store-panel">
                         <h2 class="page-title store-brand-font">Review Order</h2>
 
-                        <div class="checkout-block">
+                        <div class="checkout-block checkout-block--confirm">
                             <div class="checkout-block-head">
-                                <h3>Delivery Address</h3>
+                                <h3>Delivering here</h3>
+                                <button type="button" class="link-btn" id="btn-edit-address" data-cta="edit_address">Edit</button>
                             </div>
-                            <div class="address-options" id="checkout-addresses"></div>
-                            <button type="button" class="link-btn" id="btn-add-address" style="margin-top:0.55rem">+ Add New Address</button>
+                            <p class="checkout-confirm-note">Confirmed before you shopped — no extra verify step.</p>
+                            <div class="address-card is-confirmed" id="checkout-addresses" data-api-field="delivery.address">
+                                <p class="tag" id="checkout-addr-label">Home</p>
+                                <p class="addr-line" id="checkout-addr-line">—</p>
+                                <p class="phone" id="checkout-addr-phone"></p>
+                            </div>
+                            <div class="address-edit hidden" id="checkout-address-edit">
+                                <label class="field-label" for="checkout-addr-input">Delivery address</label>
+                                <textarea class="field address-edit-input" id="checkout-addr-input" rows="3" placeholder="Flat / Street, Area, City, PIN"></textarea>
+                                <div class="address-edit-actions">
+                                    <button type="button" class="btn-outline" id="btn-cancel-address">Cancel</button>
+                                    <button type="button" class="btn-primary-store is-inline" id="btn-save-address">Save address</button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="checkout-block">
@@ -273,6 +283,40 @@
                         <div class="cart-bar-total" id="cart-bar-total">₹0</div>
                     </div>
                     <button type="button" class="cart-bar-cta" id="btn-go-cart">Go to Cart</button>
+                </div>
+
+                <!-- Delivery address gate (required before adding items) -->
+                <div class="addr-gate" id="addr-gate" hidden aria-hidden="true">
+                    <div class="addr-gate-backdrop" id="addr-gate-backdrop"></div>
+                    <div class="addr-gate-sheet" role="dialog" aria-modal="true" aria-labelledby="addr-gate-title">
+                        <div class="addr-gate-handle" aria-hidden="true"></div>
+                        <p class="addr-gate-eyebrow" id="addr-gate-eyebrow">Almost there</p>
+                        <h2 class="addr-gate-title store-brand-font" id="addr-gate-title">Where should we deliver?</h2>
+                        <p class="addr-gate-lead" id="addr-gate-lead">
+                            Add your address once — homemade orders reach you without back-and-forth on WhatsApp.
+                        </p>
+                        <label class="field-label" for="addr-gate-input">Delivery address</label>
+                        <textarea
+                            class="field addr-gate-input"
+                            id="addr-gate-input"
+                            rows="3"
+                            placeholder="Flat / House, Street, Area, City, PIN"
+                            autocomplete="street-address"
+                        ></textarea>
+                        <p class="addr-gate-error" id="addr-gate-error" hidden>Please enter a full delivery address (area + city helps a lot).</p>
+                        <div class="addr-gate-quick">
+                            <button type="button" class="addr-chip" data-addr-chip="Home, near [landmark], City">Home</button>
+                            <button type="button" class="addr-chip" data-addr-chip="Office / work, Area, City">Work</button>
+                            <button type="button" class="addr-chip" id="addr-gate-near-me">Near me</button>
+                        </div>
+                        <button type="button" class="btn-primary-store addr-gate-save" id="addr-gate-save" data-cta="save_delivery_address">
+                            Save &amp; start ordering
+                        </button>
+                        <button type="button" class="addr-gate-skip" id="addr-gate-skip">
+                            Browse the menu first
+                        </button>
+                        <p class="addr-gate-note">You’ll need an address before adding items — so checkout stays quick on WhatsApp.</p>
+                    </div>
                 </div>
             </div>
     </div>

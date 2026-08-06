@@ -19,21 +19,69 @@
     },
     vendors: {
       geeta: 'assets/img/vendors/geetas-kitchen.jpg',
+      geetaLogo: 'assets/img/vendors/geetas-kitchen-logo.png',
+      geetaBanner: 'assets/img/vendors/geetas-kitchen-banner.png',
       saiLogo: 'assets/img/vendors/sai-ram-home-foods-logo.png',
       saiBanner: 'assets/img/vendors/sai-ram-home-foods-banner.png'
     }
   };
+  var DEMO_WA =
+    (A && A.external && A.external.whatsappPhone) ||
+    '9912149049';
+  var DEMO_CONTACT =
+    (A && A.external && A.external.demoContactName) ||
+    'Swamy Kunta';
 
   var BUSINESS_TYPES = [
-    { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠' },
-    { id: 'pickles', label: 'Pickles & Homemade', icon: '🫙' },
-    { id: 'bakery', label: 'Bakery', icon: '🥐' },
-    { id: 'spices', label: 'Spices & Masalas', icon: '🌶️' },
-    { id: 'snacks', label: 'Snacks & Sweets', icon: '🍬' },
-    { id: 'dairy', label: 'Dairy & Fresh', icon: '🥛' },
-    { id: 'organic', label: 'Organic Produce', icon: '🥬' },
-    { id: 'crafts', label: 'Handmade Crafts', icon: '🧵' }
+    { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠', keywords: 'home cooked meals tiffin catering food' },
+    { id: 'pickles', label: 'Pickles & Homemade', icon: '🫙', keywords: 'pickle achar podi chutney homemade' },
+    { id: 'bakery', label: 'Bakery', icon: '🥐', keywords: 'cake bread pastry cookies bakery' },
+    { id: 'spices', label: 'Spices & Masalas', icon: '🌶️', keywords: 'spice masala powder seasonings' },
+    { id: 'snacks', label: 'Snacks & Sweets', icon: '🍬', keywords: 'snacks sweets namkeen mithai' },
+    { id: 'dairy', label: 'Dairy & Fresh', icon: '🥛', keywords: 'milk curd paneer ghee dairy' },
+    { id: 'organic', label: 'Organic Produce', icon: '🥬', keywords: 'organic vegetables fruits farm' },
+    { id: 'crafts', label: 'Handmade Crafts', icon: '🧵', keywords: 'craft handmade decor gifts art' },
+    { id: 'florist', label: 'Florist & Plants', icon: '🌸', keywords: 'flowers plants bouquet nursery' },
+    { id: 'clothing', label: 'Clothing & Apparel', icon: '👗', keywords: 'clothes fashion boutique garments' },
+    { id: 'jewellery', label: 'Jewellery', icon: '💍', keywords: 'jewellery jewelry ornaments gold silver' },
+    { id: 'beauty', label: 'Beauty & Wellness', icon: '💅', keywords: 'beauty salon spa cosmetics wellness' },
+    { id: 'stationery', label: 'Stationery & Books', icon: '📚', keywords: 'books stationery gifts office' },
+    { id: 'electronics', label: 'Electronics', icon: '🔌', keywords: 'electronics mobiles accessories gadgets' },
+    { id: 'pets', label: 'Pet Supplies', icon: '🐾', keywords: 'pets dogs cats food accessories' },
+    { id: 'grocery', label: 'Grocery & Kirana', icon: '🛒', keywords: 'grocery kirana provisions staples' },
+    { id: 'meat', label: 'Meat & Seafood', icon: '🐟', keywords: 'meat chicken fish seafood' },
+    { id: 'others', label: 'Others', icon: '✨', keywords: 'other custom general miscellaneous any business' }
   ];
+
+  var BUSINESS_TYPE_PAGE_SIZE = 9;
+
+  /**
+   * Simulated server page fetch for business types.
+   * Replace with GET /v1/business-types?q=&page=&size= when API is ready.
+   */
+  function fetchBusinessTypesPage(opts) {
+    opts = opts || {};
+    var page = Math.max(1, Number(opts.page) || 1);
+    var size = Math.max(1, Number(opts.size) || BUSINESS_TYPE_PAGE_SIZE);
+    var q = String(opts.q || '')
+      .toLowerCase()
+      .trim();
+    var filtered = BUSINESS_TYPES.filter(function (b) {
+      if (!q) return true;
+      var hay = [b.id, b.label, b.keywords || ''].join(' ').toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+    var start = (page - 1) * size;
+    var items = filtered.slice(start, start + size);
+    return {
+      items: items,
+      page: page,
+      size: size,
+      total: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / size)),
+      hasMore: start + items.length < filtered.length
+    };
+  }
 
   var CATEGORY_CATALOG = {
     pickles: [
@@ -71,6 +119,47 @@
     crafts: [
       { id: 'decor', name: 'Home Decor', image: IMG.fallbacks.flower },
       { id: 'gifts', name: 'Gift Items', image: IMG.fallbacks.batch }
+    ],
+    florist: [
+      { id: 'bouquets', name: 'Bouquets', image: IMG.fallbacks.flower },
+      { id: 'plants', name: 'Plants', image: IMG.fallbacks.fresh }
+    ],
+    clothing: [
+      { id: 'women', name: 'Women', image: IMG.fallbacks.cup },
+      { id: 'men', name: 'Men', image: IMG.fallbacks.batch }
+    ],
+    jewellery: [
+      { id: 'earrings', name: 'Earrings', image: IMG.fallbacks.flower },
+      { id: 'necklaces', name: 'Necklaces', image: IMG.fallbacks.cup }
+    ],
+    beauty: [
+      { id: 'skincare', name: 'Skincare', image: IMG.fallbacks.fresh },
+      { id: 'makeup', name: 'Makeup', image: IMG.fallbacks.flower }
+    ],
+    stationery: [
+      { id: 'notebooks', name: 'Notebooks', image: IMG.fallbacks.batch },
+      { id: 'gifts', name: 'Gift Sets', image: IMG.fallbacks.cup }
+    ],
+    electronics: [
+      { id: 'accessories', name: 'Accessories', image: IMG.fallbacks.cup },
+      { id: 'gadgets', name: 'Gadgets', image: IMG.fallbacks.batch }
+    ],
+    pets: [
+      { id: 'pet-food', name: 'Pet Food', image: IMG.fallbacks.fresh },
+      { id: 'pet-care', name: 'Pet Care', image: IMG.fallbacks.cup }
+    ],
+    grocery: [
+      { id: 'staples', name: 'Staples', image: IMG.fallbacks.fresh },
+      { id: 'daily', name: 'Daily Needs', image: IMG.fallbacks.cup }
+    ],
+    meat: [
+      { id: 'chicken', name: 'Chicken', image: IMG.fallbacks.fresh },
+      { id: 'seafood', name: 'Seafood', image: IMG.fallbacks.cup }
+    ],
+    others: [
+      { id: 'general', name: 'General', image: IMG.fallbacks.fresh },
+      { id: 'bestsellers', name: 'Bestsellers', image: IMG.fallbacks.cup },
+      { id: 'new-arrivals', name: 'New Arrivals', image: IMG.fallbacks.flower }
     ]
   };
 
@@ -117,6 +206,33 @@
     };
   }
 
+  /**
+   * Default SaaS entitlement after store publish.
+   * Shape mirrors vendor subscription / plan APIs for UI binding.
+   */
+  function defaultSubscription() {
+    return {
+      planCode: 'FREE',
+      planName: 'Free',
+      status: 'ACTIVE',
+      activatedAt: null,
+      endsAt: null,
+      vendorId: null,
+      subscriptionId: null,
+      features: [
+        { code: 'storefront', label: 'Live storefront' },
+        { code: 'whatsapp_orders', label: 'WhatsApp orders' },
+        { code: 'products', label: 'Product catalog' },
+        { code: 'delivery', label: 'Delivery options' },
+        { code: 'payments', label: 'UPI / COD payments' },
+        { code: 'branding', label: 'Theme & branding' }
+      ],
+      dashboardUrl: '',
+      storefrontUrl: '',
+      upgradeUrl: 'index.html#pricing'
+    };
+  }
+
   function emptyDraft() {
     return {
       phone: '',
@@ -136,6 +252,8 @@
         themeColor: '#10b981'
       },
       slug: '',
+      vendorId: null,
+      subscription: defaultSubscription(),
       currentStep: 1,
       maxReachedStep: 1
     };
@@ -162,19 +280,20 @@
     ];
     draft.settings.address = draft.addresses[0].line;
     draft.settings.addressWork = draft.addresses[1].line;
-    draft.settings.richBanner = false;
+    draft.settings.richBanner = true;
     return draft;
   }
 
   /** Sample storefront: Geeta's Kitchen (reference demo) */
   function seedGeetaKitchenDraft() {
-    var hero = IMG.vendors.geeta;
+    var logo = IMG.vendors.geetaLogo || IMG.vendors.geeta;
+    var banner = IMG.vendors.geetaBanner || IMG.vendors.geeta;
     var cats = [
-      { id: 'pickles', name: 'Pickles', image: '', icon: '🫙' },
-      { id: 'podi', name: 'Podi', image: '', icon: '🌶️' },
-      { id: 'snacks', name: 'Snacks', image: '', icon: '🥨' },
-      { id: 'flours', name: 'Flours', image: '', icon: '🌾' },
-      { id: 'sweets', name: 'Sweets', image: '', icon: '🍬' }
+      { id: 'pickles', name: 'Pickles', image: logo, icon: '🫙' },
+      { id: 'podi', name: 'Podi', image: logo, icon: '🌶️' },
+      { id: 'snacks', name: 'Snacks', image: logo, icon: '🥨' },
+      { id: 'flours', name: 'Flours', image: logo, icon: '🌾' },
+      { id: 'sweets', name: 'Sweets', image: logo, icon: '🍬' }
     ];
 
     function product(opts) {
@@ -339,7 +458,7 @@
     ];
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'home-kitchen',
       categories: cats,
@@ -364,12 +483,13 @@
         storeName: "Geeta's Kitchen",
         tagline: 'Homely Food, Pure Taste',
         location: 'Hyderabad',
-        whatsapp: '9876543210',
-        logo: hero,
-        banner: hero,
-        themeColor: '#006437',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
+        logo: logo,
+        banner: banner,
+        themeColor: '#2E5A27',
         address: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032',
-        richBanner: false,
+        richBanner: true,
         deliveryWindow: '6 PM – 9 PM'
       },
       slug: 'geetas-kitchen',
@@ -579,7 +699,7 @@
     ];
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: cats,
@@ -604,7 +724,8 @@
         storeName: 'Sai Ram Home Foods',
         tagline: 'Authentic taste of tradition',
         location: 'Service area: Guntur, AP',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: logo,
         banner: banner,
         themeColor: '#1B5E20',
@@ -668,7 +789,7 @@
     var products = pickleProducts.concat(comboProducts);
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: [
@@ -696,7 +817,8 @@
         storeName: 'Anitha Homemade Pickles',
         tagline: 'Traditional • Natural • Homemade',
         location: 'Hyderabad, Telangana',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: '',
         banner: '',
         themeColor: '#10b981'
@@ -735,9 +857,13 @@
       var draft = Object.assign(blank, data, {
         settings: Object.assign({}, blank.settings, data.settings || {}),
         delivery: mergeNested(blank.delivery, data.delivery),
-        payment: mergeNested(blank.payment, data.payment)
+        payment: mergeNested(blank.payment, data.payment),
+        subscription: Object.assign({}, blank.subscription, data.subscription || {})
       });
       if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
+      if (!Array.isArray(draft.subscription.features) || !draft.subscription.features.length) {
+        draft.subscription.features = blank.subscription.features;
+      }
       (draft.products || []).forEach(function (p) {
         (p.variants || []).forEach(function (v) {
           if (v.mrp == null && v.stock != null) {
@@ -793,6 +919,45 @@
     return (CATEGORY_CATALOG[businessTypeId] || []).slice();
   }
 
+  var DEFAULT_THEME = '#10b981';
+
+  function normalizeHex(color) {
+    var c = String(color || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+      return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
+    }
+    return DEFAULT_THEME;
+  }
+
+  function hexToRgba(hex, alpha) {
+    var h = normalizeHex(hex).slice(1);
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  /**
+   * Apply vendor theme across the page (onboarding, storefront, dashboard).
+   * Sets CSS vars consumed by global / feature stylesheets.
+   */
+  function applyTheme(color, root) {
+    var hex = normalizeHex(color || DEFAULT_THEME);
+    var el = root || document.documentElement;
+    el.style.setProperty('--store-theme', hex);
+    el.style.setProperty('--store-theme-soft', hexToRgba(hex, 0.14));
+    el.style.setProperty('--store-theme-muted', hexToRgba(hex, 0.22));
+    el.style.setProperty('--store-theme-overlay', hexToRgba(hex, 0.78));
+    el.style.setProperty('--store-theme-overlay-mid', hexToRgba(hex, 0.32));
+    el.style.setProperty('--store-theme-overlay-light', hexToRgba(hex, 0.1));
+    el.setAttribute('data-store-theme', hex);
+    if (el === document.documentElement && document.body) {
+      document.body.classList.add('store-themed');
+    }
+    return hex;
+  }
+
   function whatsappLink(phone, message) {
     var digits = String(phone || '').replace(/\D/g, '');
     if (digits.length === 10) digits = '91' + digits;
@@ -800,14 +965,71 @@
     return 'https://wa.me/' + digits + '?text=' + text;
   }
 
+  /** Absolute URL for QR / share (works for relative store.html links). */
+  function absoluteUrl(href) {
+    try {
+      return new URL(href || '', window.location.href).href;
+    } catch (e) {
+      return String(href || '');
+    }
+  }
+
+  /**
+   * QR image URL for a shop link (no local library required).
+   * size: pixel width/height, default 240.
+   */
+  function qrImageUrl(data, size) {
+    var px = size || 240;
+    var payload = absoluteUrl(data);
+    return (
+      'https://api.qrserver.com/v1/create-qr-code/?size=' +
+      px +
+      'x' +
+      px +
+      '&margin=12&ecc=M&data=' +
+      encodeURIComponent(payload)
+    );
+  }
+
+  function downloadQrImage(remoteUrl, filename) {
+    filename = filename || 'mithradirect-shop-qr.png';
+    function saveBlob(blob) {
+      var objectUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () {
+        URL.revokeObjectURL(objectUrl);
+      }, 1500);
+    }
+    fetch(remoteUrl, { mode: 'cors' })
+      .then(function (r) {
+        return r.blob();
+      })
+      .then(saveBlob)
+      .catch(function () {
+        window.open(remoteUrl, '_blank');
+      });
+  }
+
   global.MithraDraft = {
     STORAGE_KEY: STORAGE_KEY,
     BUSINESS_TYPES: BUSINESS_TYPES,
+    BUSINESS_TYPE_PAGE_SIZE: BUSINESS_TYPE_PAGE_SIZE,
+    fetchBusinessTypesPage: fetchBusinessTypesPage,
     PRODUCT_COLORS: PRODUCT_COLORS,
     THEME_PRESETS: THEME_PRESETS,
+    DEFAULT_THEME: DEFAULT_THEME,
     uid: uid,
     slugify: slugify,
+    normalizeHex: normalizeHex,
+    hexToRgba: hexToRgba,
+    applyTheme: applyTheme,
     emptyDraft: emptyDraft,
+    defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,
     seedGeetaDraft: seedGeetaDraft,
     seedGeetaKitchenDraft: seedGeetaKitchenDraft,
@@ -819,6 +1041,9 @@
     countSkus: countSkus,
     minPrice: minPrice,
     categoriesForBusiness: categoriesForBusiness,
-    whatsappLink: whatsappLink
+    whatsappLink: whatsappLink,
+    absoluteUrl: absoluteUrl,
+    qrImageUrl: qrImageUrl,
+    downloadQrImage: downloadQrImage
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -25,6 +25,8 @@
     },
     vendors: {
       geeta: BASE + '/vendors/geetas-kitchen.jpg',
+      geetaLogo: BASE + '/vendors/geetas-kitchen-logo.png',
+      geetaBanner: BASE + '/vendors/geetas-kitchen-banner.png',
       saiLogo: BASE + '/vendors/sai-ram-home-foods-logo.png',
       saiBanner: BASE + '/vendors/sai-ram-home-foods-banner.png',
       farm: BASE + '/vendors/straight-from-farm.jpg',
@@ -44,7 +46,12 @@
       tailwind: 'https://cdn.tailwindcss.com',
       instagram: 'https://www.instagram.com/mithradirect/',
       youtube: 'https://www.youtube.com/@MithraDirect',
-      whatsapp: 'https://wa.me/917207200863'
+      whatsapp: 'https://wa.me/919912149049',
+      whatsappPhone: '9912149049',
+      demoContactName: 'Swamy Kunta',
+      /** Vendor dashboard demo — replace with vendor-app URL when ready */
+      dashboardUrl: 'dashboard.html',
+      pricingUrl: 'index.html#pricing'
     }
   };
 

@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-md-green: #10b981;
+  --color-md-green-dark: #059669;
+  --color-md-green-deep: #064e3b;
+  --color-md-green-soft: #ecfdf5;
+  --color-store-ink: #111827;
+  --color-store-muted: #6b7280;
+  --color-store-border: #e5e7eb;
+  --color-wa: #25d366;
+
+  --radius-store: 1rem;
+  --shadow-store-sm: 0 1px 2px rgb(17 24 39 / 0.05);
+  --shadow-store-md: 0 8px 24px rgb(17 24 39 / 0.08);
+  --shadow-store-lg: 0 24px 48px rgb(6 78 59 / 0.14);
+}

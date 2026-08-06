@@ -22,9 +22,13 @@
   --md-warning: #d97706;
   --md-danger: #dc2626;
 
-  /* Store theme (overridden per release) */
+  /* Store theme (overridden per vendor release) */
   --store-theme: var(--md-green);
   --store-theme-soft: rgba(16, 185, 129, 0.14);
+  --store-theme-muted: rgba(16, 185, 129, 0.22);
+  --store-theme-overlay: rgba(6, 78, 59, 0.78);
+  --store-theme-overlay-mid: rgba(6, 78, 59, 0.32);
+  --store-theme-overlay-light: rgba(6, 78, 59, 0.1);
 
   /* Typography */
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -53,6 +57,16 @@
   --shadow-md: 0 8px 24px rgba(17, 24, 39, 0.08);
   --shadow-lg: 0 24px 48px rgba(6, 78, 59, 0.14);
   --shadow-brand: 0 12px 40px rgba(16, 185, 129, 0.12);
+
+  /* Atmosphere (rich surfaces — prefer over flat #f8fafc alone) */
+  --md-atmosphere:
+    radial-gradient(120% 80% at 0% -10%, var(--store-theme-soft, rgba(16, 185, 129, 0.16)), transparent 42%),
+    radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
+    var(--md-surface-alt);
+  --md-panel-bg: #fff;
+  --md-panel-border: color-mix(in srgb, var(--store-theme, var(--md-green)) 12%, var(--md-border));
+  --md-focus-ring: 0 0 0 3px var(--store-theme-soft, rgba(16, 185, 129, 0.22));
+
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 
@@ -89,7 +103,7 @@
   --ext-fonts-static: https://fonts.gstatic.com;
   --url-instagram: https://www.instagram.com/mithradirect/;
   --url-youtube: https://www.youtube.com/@MithraDirect;
-  --url-whatsapp: https://wa.me/917207200863;
+  --url-whatsapp: https://wa.me/919912149049;
 }
 
 /* ——— Reset / base ——— */
@@ -115,6 +129,20 @@ body {
   background: var(--md-surface);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--store-theme, var(--md-green)) 28%, #fff);
+  color: var(--md-ink);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--store-theme, var(--md-green)) 75%, #000);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 img,
@@ -331,29 +359,33 @@ h6,
 .btn-primary,
 .md-btn-primary,
 .btn-primary-md {
-  background: linear-gradient(135deg, var(--store-theme, var(--md-green)), var(--md-green-dark));
+  background: linear-gradient(
+    135deg,
+    var(--store-theme, var(--md-green)),
+    color-mix(in srgb, var(--store-theme, var(--md-green)) 72%, #000)
+  );
   color: #fff;
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.28);
+  box-shadow: 0 8px 20px var(--store-theme-soft, rgba(16, 185, 129, 0.28));
 }
 
 .btn-primary:hover,
 .md-btn-primary:hover,
 .btn-primary-md:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 28px var(--store-theme-muted, rgba(16, 185, 129, 0.35));
 }
 
 .btn-secondary,
 .md-btn-secondary {
   background: #fff;
-  color: var(--md-green-dark);
-  border-color: #a7f3d0;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 85%, #000);
+  border-color: color-mix(in srgb, var(--store-theme, #a7f3d0) 45%, #fff);
 }
 
 .btn-secondary:hover,
 .md-btn-secondary:hover {
-  background: var(--md-green-soft);
-  border-color: var(--md-green);
+  background: var(--store-theme-soft, var(--md-green-soft));
+  border-color: var(--store-theme, var(--md-green));
 }
 
 .btn-sm,
@@ -388,7 +420,144 @@ h6,
 .md-field:focus,
 .field:focus {
   border-color: var(--store-theme, var(--md-green));
-  box-shadow: 0 0 0 3px var(--store-theme-soft, rgba(16, 185, 129, 0.15));
+  box-shadow: var(--md-focus-ring);
+}
+
+.md-field-label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.4rem;
+}
+
+.md-field-hint {
+  margin: 0.35rem 0 0;
+  font-size: var(--fs-xs);
+  color: var(--md-muted);
+}
+
+/* Search field (shared) */
+.md-search {
+  position: relative;
+  width: 100%;
+}
+
+.md-search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.1rem;
+  height: 1.1rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.md-search-input {
+  width: 100%;
+  border: 1px solid var(--md-border);
+  border-radius: var(--radius-lg);
+  padding: 0.8rem 2.6rem 0.8rem 2.55rem;
+  font-size: 0.95rem;
+  outline: none;
+  background: #fff;
+  color: var(--md-ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: var(--shadow-sm);
+}
+
+.md-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.md-search-input:focus {
+  border-color: var(--store-theme, var(--md-green));
+  box-shadow: var(--md-focus-ring);
+}
+
+.md-search-clear {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.md-search.has-value .md-search-clear {
+  display: inline-flex;
+}
+
+.md-search-clear:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.md-search-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+  font-size: var(--fs-xs);
+  color: var(--md-muted);
+}
+
+/* ——— Rich panels / surfaces (shared) ——— */
+.md-atmosphere {
+  background: var(--md-atmosphere);
+}
+
+.md-panel {
+  background: var(--md-panel-bg);
+  border: 1px solid var(--md-panel-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(0.9rem, 2.5vw, 1.25rem);
+}
+
+.md-panel--soft {
+  background:
+    linear-gradient(165deg, color-mix(in srgb, var(--store-theme-soft, #ecfdf5) 70%, #fff) 0%, #fff 62%);
+  border-color: color-mix(in srgb, var(--store-theme, var(--md-green)) 18%, var(--md-border));
+}
+
+.md-panel--accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.md-panel--accent::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(
+    180deg,
+    var(--store-theme, var(--md-green)),
+    color-mix(in srgb, var(--store-theme, var(--md-green)) 40%, #fff)
+  );
+  border-radius: var(--radius-pill);
+}
+
+.md-eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
 }
 
 /* ——— Responsive visibility ——— */
