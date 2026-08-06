@@ -1799,10 +1799,10 @@ body.store-page {
 }
 
 .address-card {
-  border: 1px solid #d1fae5;
+  border: 1px solid color-mix(in srgb, var(--store-theme, #d1fae5) 40%, #fff);
   border-radius: 0.95rem;
   padding: 0.9rem;
-  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+  background: linear-gradient(135deg, var(--store-theme-soft, #f0fdf4), #ffffff);
   font-size: 0.875rem;
   box-shadow: var(--shadow-sm);
 }
@@ -1810,16 +1810,49 @@ body.store-page {
 .address-card .tag {
   font-size: 0.68rem;
   font-weight: 700;
-  color: var(--md-green-dark);
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 0.3rem;
+}
+
+.address-card .addr-line {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.45;
 }
 
 .address-card .phone {
   font-size: 0.75rem;
   color: var(--store-muted);
   margin: 0.4rem 0 0;
+}
+
+.address-edit {
+  margin-top: 0.35rem;
+}
+
+.address-edit-input {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  margin-bottom: 0.65rem;
+}
+
+.address-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.btn-primary-store.is-inline {
+  width: auto;
+  display: inline-flex;
+  padding-left: 1.1rem;
+  padding-right: 1.1rem;
 }
 
 .checkout-summary {

@@ -219,9 +219,21 @@
                         <div class="checkout-block">
                             <div class="checkout-block-head">
                                 <h3>Delivery Address</h3>
+                                <button type="button" class="link-btn" id="btn-edit-address" data-cta="edit_address">Edit</button>
                             </div>
-                            <div class="address-options" id="checkout-addresses"></div>
-                            <button type="button" class="link-btn" id="btn-add-address" style="margin-top:0.55rem">+ Add New Address</button>
+                            <div class="address-card" id="checkout-addresses" data-api-field="delivery.address">
+                                <p class="tag" id="checkout-addr-label">Home</p>
+                                <p class="addr-line" id="checkout-addr-line">—</p>
+                                <p class="phone" id="checkout-addr-phone"></p>
+                            </div>
+                            <div class="address-edit hidden" id="checkout-address-edit">
+                                <label class="field-label" for="checkout-addr-input">Delivery address</label>
+                                <textarea class="field address-edit-input" id="checkout-addr-input" rows="3" placeholder="Flat / Street, Area, City, PIN"></textarea>
+                                <div class="address-edit-actions">
+                                    <button type="button" class="btn-outline" id="btn-cancel-address">Cancel</button>
+                                    <button type="button" class="btn-primary-store is-inline" id="btn-save-address">Save address</button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="checkout-block">

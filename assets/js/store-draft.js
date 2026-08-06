@@ -33,15 +33,55 @@
     'Swamy Kunta';
 
   var BUSINESS_TYPES = [
-    { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠' },
-    { id: 'pickles', label: 'Pickles & Homemade', icon: '🫙' },
-    { id: 'bakery', label: 'Bakery', icon: '🥐' },
-    { id: 'spices', label: 'Spices & Masalas', icon: '🌶️' },
-    { id: 'snacks', label: 'Snacks & Sweets', icon: '🍬' },
-    { id: 'dairy', label: 'Dairy & Fresh', icon: '🥛' },
-    { id: 'organic', label: 'Organic Produce', icon: '🥬' },
-    { id: 'crafts', label: 'Handmade Crafts', icon: '🧵' }
+    { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠', keywords: 'home cooked meals tiffin catering food' },
+    { id: 'pickles', label: 'Pickles & Homemade', icon: '🫙', keywords: 'pickle achar podi chutney homemade' },
+    { id: 'bakery', label: 'Bakery', icon: '🥐', keywords: 'cake bread pastry cookies bakery' },
+    { id: 'spices', label: 'Spices & Masalas', icon: '🌶️', keywords: 'spice masala powder seasonings' },
+    { id: 'snacks', label: 'Snacks & Sweets', icon: '🍬', keywords: 'snacks sweets namkeen mithai' },
+    { id: 'dairy', label: 'Dairy & Fresh', icon: '🥛', keywords: 'milk curd paneer ghee dairy' },
+    { id: 'organic', label: 'Organic Produce', icon: '🥬', keywords: 'organic vegetables fruits farm' },
+    { id: 'crafts', label: 'Handmade Crafts', icon: '🧵', keywords: 'craft handmade decor gifts art' },
+    { id: 'florist', label: 'Florist & Plants', icon: '🌸', keywords: 'flowers plants bouquet nursery' },
+    { id: 'clothing', label: 'Clothing & Apparel', icon: '👗', keywords: 'clothes fashion boutique garments' },
+    { id: 'jewellery', label: 'Jewellery', icon: '💍', keywords: 'jewellery jewelry ornaments gold silver' },
+    { id: 'beauty', label: 'Beauty & Wellness', icon: '💅', keywords: 'beauty salon spa cosmetics wellness' },
+    { id: 'stationery', label: 'Stationery & Books', icon: '📚', keywords: 'books stationery gifts office' },
+    { id: 'electronics', label: 'Electronics', icon: '🔌', keywords: 'electronics mobiles accessories gadgets' },
+    { id: 'pets', label: 'Pet Supplies', icon: '🐾', keywords: 'pets dogs cats food accessories' },
+    { id: 'grocery', label: 'Grocery & Kirana', icon: '🛒', keywords: 'grocery kirana provisions staples' },
+    { id: 'meat', label: 'Meat & Seafood', icon: '🐟', keywords: 'meat chicken fish seafood' },
+    { id: 'others', label: 'Others', icon: '✨', keywords: 'other custom general miscellaneous any business' }
   ];
+
+  var BUSINESS_TYPE_PAGE_SIZE = 9;
+
+  /**
+   * Simulated server page fetch for business types.
+   * Replace with GET /v1/business-types?q=&page=&size= when API is ready.
+   */
+  function fetchBusinessTypesPage(opts) {
+    opts = opts || {};
+    var page = Math.max(1, Number(opts.page) || 1);
+    var size = Math.max(1, Number(opts.size) || BUSINESS_TYPE_PAGE_SIZE);
+    var q = String(opts.q || '')
+      .toLowerCase()
+      .trim();
+    var filtered = BUSINESS_TYPES.filter(function (b) {
+      if (!q) return true;
+      var hay = [b.id, b.label, b.keywords || ''].join(' ').toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+    var start = (page - 1) * size;
+    var items = filtered.slice(start, start + size);
+    return {
+      items: items,
+      page: page,
+      size: size,
+      total: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / size)),
+      hasMore: start + items.length < filtered.length
+    };
+  }
 
   var CATEGORY_CATALOG = {
     pickles: [
@@ -79,6 +119,47 @@
     crafts: [
       { id: 'decor', name: 'Home Decor', image: IMG.fallbacks.flower },
       { id: 'gifts', name: 'Gift Items', image: IMG.fallbacks.batch }
+    ],
+    florist: [
+      { id: 'bouquets', name: 'Bouquets', image: IMG.fallbacks.flower },
+      { id: 'plants', name: 'Plants', image: IMG.fallbacks.fresh }
+    ],
+    clothing: [
+      { id: 'women', name: 'Women', image: IMG.fallbacks.cup },
+      { id: 'men', name: 'Men', image: IMG.fallbacks.batch }
+    ],
+    jewellery: [
+      { id: 'earrings', name: 'Earrings', image: IMG.fallbacks.flower },
+      { id: 'necklaces', name: 'Necklaces', image: IMG.fallbacks.cup }
+    ],
+    beauty: [
+      { id: 'skincare', name: 'Skincare', image: IMG.fallbacks.fresh },
+      { id: 'makeup', name: 'Makeup', image: IMG.fallbacks.flower }
+    ],
+    stationery: [
+      { id: 'notebooks', name: 'Notebooks', image: IMG.fallbacks.batch },
+      { id: 'gifts', name: 'Gift Sets', image: IMG.fallbacks.cup }
+    ],
+    electronics: [
+      { id: 'accessories', name: 'Accessories', image: IMG.fallbacks.cup },
+      { id: 'gadgets', name: 'Gadgets', image: IMG.fallbacks.batch }
+    ],
+    pets: [
+      { id: 'pet-food', name: 'Pet Food', image: IMG.fallbacks.fresh },
+      { id: 'pet-care', name: 'Pet Care', image: IMG.fallbacks.cup }
+    ],
+    grocery: [
+      { id: 'staples', name: 'Staples', image: IMG.fallbacks.fresh },
+      { id: 'daily', name: 'Daily Needs', image: IMG.fallbacks.cup }
+    ],
+    meat: [
+      { id: 'chicken', name: 'Chicken', image: IMG.fallbacks.fresh },
+      { id: 'seafood', name: 'Seafood', image: IMG.fallbacks.cup }
+    ],
+    others: [
+      { id: 'general', name: 'General', image: IMG.fallbacks.fresh },
+      { id: 'bestsellers', name: 'Bestsellers', image: IMG.fallbacks.cup },
+      { id: 'new-arrivals', name: 'New Arrivals', image: IMG.fallbacks.flower }
     ]
   };
 
@@ -887,6 +968,8 @@
   global.MithraDraft = {
     STORAGE_KEY: STORAGE_KEY,
     BUSINESS_TYPES: BUSINESS_TYPES,
+    BUSINESS_TYPE_PAGE_SIZE: BUSINESS_TYPE_PAGE_SIZE,
+    fetchBusinessTypesPage: fetchBusinessTypesPage,
     PRODUCT_COLORS: PRODUCT_COLORS,
     THEME_PRESETS: THEME_PRESETS,
     DEFAULT_THEME: DEFAULT_THEME,

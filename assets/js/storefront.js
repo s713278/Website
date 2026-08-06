@@ -692,42 +692,85 @@
       '</span></div>';
   }
 
-  function renderCheckout() {
-    var addrs = state.draft.addresses || [
-      {
-        id: 'home',
-        label: 'Home',
-        line: state.draft.settings.address || state.draft.settings.location || ''
-      }
-    ];
-    if (!state.addressId) state.addressId = addrs[0].id;
-
-    var selected = addrs.find(function (a) {
-      return a.id === state.addressId;
-    }) || addrs[0];
-    state.address = selected.line;
-
-    var addrEl = document.getElementById('checkout-addresses');
-    if (addrEl) {
-      addrEl.innerHTML = addrs
-        .map(function (a) {
-          var checked = a.id === state.addressId ? ' checked' : '';
-          return (
-            '<label class="pay-option address-option">' +
-            '<input type="radio" name="delivery-addr" value="' +
-            escapeHtml(a.id) +
-            '"' +
-            checked +
-            '>' +
-            '<span><strong class="addr-label">' +
-            escapeHtml(a.label) +
-            '</strong><br><span class="addr-line">' +
-            escapeHtml(a.line) +
-            '</span></span></label>'
-          );
-        })
-        .join('');
+  function ensureAddress() {
+    if (!state.draft.addresses || !state.draft.addresses.length) {
+      state.draft.addresses = [
+        {
+          id: 'home',
+          label: 'Home',
+          line: state.draft.settings.address || state.draft.settings.location || ''
+        }
+      ];
     }
+    if (!state.addressId) state.addressId = state.draft.addresses[0].id;
+    var selected =
+      state.draft.addresses.find(function (a) {
+        return a.id === state.addressId;
+      }) || state.draft.addresses[0];
+    if (!state.address) state.address = selected.line || '';
+    return selected;
+  }
+
+  function setAddressEditMode(on) {
+    var card = document.getElementById('checkout-addresses');
+    var edit = document.getElementById('checkout-address-edit');
+    var editBtn = document.getElementById('btn-edit-address');
+    if (card) card.classList.toggle('hidden', !!on);
+    if (edit) edit.classList.toggle('hidden', !on);
+    if (editBtn) editBtn.classList.toggle('hidden', !!on);
+    if (on) {
+      var input = document.getElementById('checkout-addr-input');
+      if (input) {
+        input.value = state.address || '';
+        input.focus();
+      }
+    }
+  }
+
+  function saveEditedAddress(line) {
+    var text = String(line || '').trim();
+    if (!text) {
+      alert('Please enter a delivery address.');
+      return false;
+    }
+    ensureAddress();
+    state.address = text;
+    var current =
+      state.draft.addresses.find(function (a) {
+        return a.id === state.addressId;
+      }) || state.draft.addresses[0];
+    if (current) {
+      current.line = text;
+      state.addressId = current.id;
+    } else {
+      state.addressId = 'home';
+      state.draft.addresses = [{ id: 'home', label: 'Home', line: text }];
+    }
+    saveSession();
+    persistRelease();
+    var homeAddr = document.getElementById('home-address');
+    if (homeAddr) homeAddr.textContent = text;
+    setAddressEditMode(false);
+    renderCheckout();
+    return true;
+  }
+
+  function renderCheckout() {
+    var selected = ensureAddress();
+    state.address = state.address || selected.line || '';
+
+    var labelEl = document.getElementById('checkout-addr-label');
+    var lineEl = document.getElementById('checkout-addr-line');
+    var phoneEl = document.getElementById('checkout-addr-phone');
+    if (labelEl) labelEl.textContent = selected.label || 'Delivery';
+    if (lineEl) lineEl.textContent = state.address || 'No address yet — tap Edit to add one.';
+    if (phoneEl) {
+      phoneEl.textContent = state.customer.phone
+        ? '+91 ' + state.customer.phone
+        : '';
+      phoneEl.hidden = !state.customer.phone;
+    }
+    setAddressEditMode(false);
 
     renderDeliveryOptions();
     renderPaymentOptions();
@@ -951,6 +994,12 @@
       showView('menu');
       return;
     }
+    ensureAddress();
+    if (!String(state.address || '').trim()) {
+      alert('Please add a delivery address before placing the order.');
+      setAddressEditMode(true);
+      return;
+    }
     state.orderId = generateOrderId();
     state.orderMessage = buildWhatsAppMessage();
     document.getElementById('order-id-display').textContent = state.orderId;
@@ -1087,14 +1136,17 @@
 
     document.getElementById('btn-proceed-login').addEventListener('click', function () {
       if (!state.cart.length) return;
-      if (state.customer.loggedIn) {
-        showView('checkout');
-        renderCheckout();
-      } else {
-        showView('login');
-        document.getElementById('login-phone-step').classList.remove('hidden');
-        document.getElementById('login-otp-step').classList.add('hidden');
+      // Always: mobile number → OTP → order creation / review
+      showView('login');
+      document.getElementById('login-phone-step').classList.remove('hidden');
+      document.getElementById('login-otp-step').classList.add('hidden');
+      var phoneInput = document.getElementById('login-phone');
+      if (phoneInput) {
+        phoneInput.value = state.customer.phone || '';
+        phoneInput.focus();
       }
+      var otpInput = document.getElementById('login-otp');
+      if (otpInput) otpInput.value = '';
     });
 
     document.getElementById('btn-send-otp').addEventListener('click', function () {
@@ -1106,6 +1158,11 @@
       state.customer.phone = phone;
       document.getElementById('login-phone-step').classList.add('hidden');
       document.getElementById('login-otp-step').classList.remove('hidden');
+      var otpInput = document.getElementById('login-otp');
+      if (otpInput) {
+        otpInput.value = '';
+        otpInput.focus();
+      }
     });
 
     document.getElementById('btn-verify-otp').addEventListener('click', function () {
@@ -1121,6 +1178,7 @@
           window.MithraAssets.paths.external &&
           window.MithraAssets.paths.external.demoContactName) ||
         'Swamy Kunta';
+      ensureAddress();
       saveSession();
       showView('checkout');
       renderCheckout();
@@ -1141,49 +1199,41 @@
       );
     });
 
-    function promptAddress() {
-      var next = window.prompt(
-        'Enter delivery address',
-        state.address || state.draft.settings.address || ''
-      );
-      if (next != null && next.trim()) {
-        state.address = next.trim();
-        state.addressId = 'custom';
-        if (!state.draft.addresses) state.draft.addresses = [];
-        var existing = state.draft.addresses.find(function (a) {
-          return a.id === 'custom';
-        });
-        if (existing) {
-          existing.line = state.address;
-        } else {
-          state.draft.addresses.push({
-            id: 'custom',
-            label: 'Other',
-            line: state.address
-          });
-        }
-        saveSession();
-        document.getElementById('home-address').textContent = state.address;
-        persistRelease();
-        if (state.view === 'checkout') renderCheckout();
-      }
+    var editAddrBtn = document.getElementById('btn-edit-address');
+    if (editAddrBtn) {
+      editAddrBtn.addEventListener('click', function () {
+        setAddressEditMode(true);
+      });
     }
-    document.getElementById('btn-change-address').addEventListener('click', promptAddress);
-    var addAddrBtn = document.getElementById('btn-add-address');
-    if (addAddrBtn) addAddrBtn.addEventListener('click', promptAddress);
+    var saveAddrBtn = document.getElementById('btn-save-address');
+    if (saveAddrBtn) {
+      saveAddrBtn.addEventListener('click', function () {
+        var input = document.getElementById('checkout-addr-input');
+        saveEditedAddress(input ? input.value : '');
+      });
+    }
+    var cancelAddrBtn = document.getElementById('btn-cancel-address');
+    if (cancelAddrBtn) {
+      cancelAddrBtn.addEventListener('click', function () {
+        setAddressEditMode(false);
+      });
+    }
+
+    document.getElementById('btn-change-address').addEventListener('click', function () {
+      var next = window.prompt(
+        'Edit delivery address',
+        state.address || state.draft.settings.address || state.draft.settings.location || ''
+      );
+      if (next != null) saveEditedAddress(next);
+    });
+
     document.getElementById('btn-use-location').addEventListener('click', function () {
-      state.address = state.draft.settings.address || 'Current location, Hyderabad';
-      state.addressId = 'home';
-      saveSession();
-      document.getElementById('home-address').textContent = state.address;
+      saveEditedAddress(
+        state.draft.settings.address || state.draft.settings.location || 'Current location, Hyderabad'
+      );
     });
 
     document.getElementById('store-app').addEventListener('change', function (e) {
-      if (e.target && e.target.name === 'delivery-addr') {
-        state.addressId = e.target.value;
-        saveSession();
-        renderCheckout();
-      }
       if (e.target && e.target.name === 'delivery-method') {
         state.deliveryMethod = e.target.value;
         renderCheckout();

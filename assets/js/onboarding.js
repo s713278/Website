@@ -17,7 +17,7 @@
     { n: 3, label: 'Choose Business', time: '1 min' },
     { n: 4, label: 'Pick Categories', time: '1 min' },
     { n: 5, label: 'Add Products', time: '3 min' },
-    { n: 6, label: 'Add Variants', time: '2 min' },
+    { n: 6, label: 'Set Prices', time: '2 min' },
     { n: 7, label: 'Delivery', time: '1 min' },
     { n: 8, label: 'Payments', time: '1 min' },
     { n: 9, label: 'Store Settings', time: '1 min' },
@@ -28,6 +28,9 @@
 
   var draft = D.loadDraft();
   var resendSeconds = 0;
+  /** Accordion: which category is open on Products / Prices steps */
+  var expandedProductCatId = null;
+  var expandedSkuCatId = null;
   var resendInterval = null;
   var dragSrcId = null;
 
@@ -313,7 +316,13 @@
       buildOtpInputs();
       startResendTimer(30);
     }
-    if (step === 3) renderBusinessGrid();
+    if (step === 3) {
+      var searchInput = document.getElementById('input-business-search');
+      if (searchInput && searchInput.value !== businessSearchQuery) {
+        searchInput.value = businessSearchQuery;
+      }
+      renderBusinessGrid();
+    }
     if (step === 4) renderCategoryGrid();
     if (step === 5) renderProductList();
     if (step === 6) renderSkuEditor();
@@ -401,35 +410,45 @@
 
   /* ---------- Step 3 Business ---------- */
 
-  function renderBusinessGrid() {
-    var grid = document.getElementById('business-grid');
-    grid.innerHTML = D.BUSINESS_TYPES.map(function (b) {
-      var sel = draft.businessType === b.id ? ' selected' : '';
-      return (
-        '<button type="button" class="select-card' +
-        sel +
-        '" data-biz="' +
-        b.id +
-        '">' +
-        '<span class="check">✓</span>' +
-        '<div class="icon-emoji">' +
-        b.icon +
-        '</div>' +
-        '<div class="text-sm font-semibold text-gray-800">' +
-        b.label +
-        '</div>' +
-        '</button>'
-      );
-    }).join('');
+  var businessSearchQuery = '';
+  var businessPage = 0;
+  var businessTotal = 0;
+  var businessHasMore = false;
+  var businessLoading = false;
+  var businessItems = [];
+  var BUSINESS_PAGE_SIZE = (D.BUSINESS_TYPE_PAGE_SIZE || 9);
 
-    grid.querySelectorAll('[data-biz]').forEach(function (btn) {
+  function businessCardHtml(b) {
+    var sel = draft.businessType === b.id ? ' selected' : '';
+    return (
+      '<button type="button" class="select-card' +
+      sel +
+      '" data-biz="' +
+      b.id +
+      '" role="option" aria-selected="' +
+      (draft.businessType === b.id ? 'true' : 'false') +
+      '">' +
+      '<span class="check">✓</span>' +
+      '<div class="icon-emoji">' +
+      b.icon +
+      '</div>' +
+      '<div class="text-sm font-semibold text-gray-800">' +
+      escapeHtml(b.label) +
+      '</div>' +
+      '</button>'
+    );
+  }
+
+  function bindBusinessCards(scope) {
+    (scope || document).querySelectorAll('#business-grid [data-biz]').forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-biz');
         var changed = draft.businessType !== id;
         draft.businessType = id;
         if (changed) {
           draft.categories = [];
-          // Soft-seed default categories for pickles demo feel
           var cats = D.categoriesForBusiness(id);
           if (cats.length) draft.categories = cats.slice(0, Math.min(2, cats.length));
           if (!draft.products.length && id === 'pickles') {
@@ -443,10 +462,150 @@
             }
           }
         }
+        hideErrors();
         persist();
-        renderBusinessGrid();
+        renderBusinessGridSelection();
+        syncBusinessPaginationUi();
       });
     });
+  }
+
+  function renderBusinessGridSelection() {
+    document.querySelectorAll('#business-grid [data-biz]').forEach(function (btn) {
+      var on = btn.getAttribute('data-biz') === draft.businessType;
+      btn.classList.toggle('selected', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  function syncBusinessPaginationUi() {
+    var wrap = document.getElementById('business-search-wrap');
+    var countEl = document.getElementById('business-search-count');
+    var selectedEl = document.getElementById('business-selected-label');
+    var emptyEl = document.getElementById('business-empty');
+    var moreEl = document.getElementById('business-more');
+    var hintEl = document.getElementById('business-more-hint');
+    var loadingEl = document.getElementById('business-loading');
+    var endEl = document.getElementById('business-end');
+    var scrollEl = document.getElementById('business-scroll');
+    var loaded = businessItems.length;
+
+    if (wrap) wrap.classList.toggle('has-value', !!businessSearchQuery);
+
+    if (countEl) {
+      if (!businessTotal) {
+        countEl.textContent = businessSearchQuery ? '0 matches' : 'No types yet';
+      } else if (businessHasMore) {
+        countEl.textContent =
+          'Showing ' + loaded + ' of ' + businessTotal + ' types · more available';
+      } else if (businessSearchQuery) {
+        countEl.textContent = loaded + ' match' + (loaded === 1 ? '' : 'es');
+      } else {
+        countEl.textContent = 'All ' + businessTotal + ' types loaded';
+      }
+    }
+
+    if (selectedEl) {
+      var selected = (D.BUSINESS_TYPES || []).find(function (b) {
+        return b.id === draft.businessType;
+      });
+      if (selected) {
+        selectedEl.hidden = false;
+        selectedEl.textContent = 'Selected: ' + selected.label;
+      } else {
+        selectedEl.hidden = true;
+        selectedEl.textContent = '';
+      }
+    }
+
+    if (emptyEl) {
+      var showEmpty = !businessLoading && loaded === 0;
+      emptyEl.hidden = !showEmpty;
+      emptyEl.classList.toggle('hidden', !showEmpty);
+    }
+
+    if (moreEl) moreEl.hidden = !(businessHasMore && loaded > 0);
+    if (hintEl) {
+      var remaining = Math.max(0, businessTotal - loaded);
+      hintEl.innerHTML =
+        '<span class="ob-biz-more-chevron" aria-hidden="true">↓</span> ' +
+        (remaining
+          ? remaining + ' more type' + (remaining === 1 ? '' : 's') + ' — scroll to load'
+          : 'Scroll to see more business types');
+    }
+    if (loadingEl) loadingEl.hidden = !businessLoading;
+    if (endEl) endEl.hidden = !(!businessHasMore && loaded > 0 && businessTotal > BUSINESS_PAGE_SIZE);
+    if (scrollEl) scrollEl.classList.toggle('has-more', !!businessHasMore);
+  }
+
+  function appendBusinessPage(pageResult, reset) {
+    var grid = document.getElementById('business-grid');
+    if (!grid) return;
+    if (reset) {
+      businessItems = [];
+      grid.innerHTML = '';
+    }
+    businessItems = businessItems.concat(pageResult.items || []);
+    businessPage = pageResult.page;
+    businessTotal = pageResult.total;
+    businessHasMore = !!pageResult.hasMore;
+    grid.insertAdjacentHTML(
+      'beforeend',
+      (pageResult.items || []).map(businessCardHtml).join('')
+    );
+    bindBusinessCards(grid);
+    syncBusinessPaginationUi();
+  }
+
+  function loadBusinessPage(opts) {
+    opts = opts || {};
+    if (businessLoading) return;
+    var nextPage = opts.reset ? 1 : businessPage + 1;
+    if (!opts.reset && !businessHasMore && businessPage > 0) return;
+
+    businessLoading = true;
+    syncBusinessPaginationUi();
+
+    // Simulated latency — swap for fetch('/api/v1/business-types?...') 
+    window.setTimeout(function () {
+      var pageResult = D.fetchBusinessTypesPage
+        ? D.fetchBusinessTypesPage({
+            page: nextPage,
+            size: BUSINESS_PAGE_SIZE,
+            q: businessSearchQuery
+          })
+        : { items: [], page: nextPage, total: 0, hasMore: false };
+
+      // Keep selected type visible even if it was beyond page 1
+      if (opts.reset && draft.businessType) {
+        var selected = (D.BUSINESS_TYPES || []).find(function (b) {
+          return b.id === draft.businessType;
+        });
+        var already = (pageResult.items || []).some(function (b) {
+          return b.id === draft.businessType;
+        });
+        if (selected && !already && !businessSearchQuery) {
+          // leave as-is; selection can still be on later pages
+        }
+      }
+
+      businessLoading = false;
+      appendBusinessPage(pageResult, !!opts.reset);
+    }, opts.instant ? 0 : 220);
+  }
+
+  function renderBusinessGrid() {
+    businessPage = 0;
+    businessHasMore = true;
+    businessItems = [];
+    loadBusinessPage({ reset: true, instant: true });
+  }
+
+  function onBusinessScroll() {
+    var scrollEl = document.getElementById('business-scroll');
+    if (!scrollEl || !businessHasMore || businessLoading) return;
+    var nearBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 48;
+    if (nearBottom) loadBusinessPage();
   }
 
   /* ---------- Step 4 Categories ---------- */
@@ -525,34 +684,108 @@
       });
   }
 
+  function sampleProductNames(categoryName) {
+    var base = String(categoryName || 'Item').replace(/\s+/g, ' ').trim();
+    return [base + ' Special', 'Homemade ' + base];
+  }
+
+  function ensureSampleProducts() {
+    var cats = draft.categories || [];
+    var seeded = false;
+    cats.forEach(function (cat) {
+      var existing = productsForCategory(cat.id);
+      if (existing.length) return;
+      var names = sampleProductNames(cat.name);
+      // One starter item per category — vendors add more as needed
+      names.slice(0, 1).forEach(function (name, idx) {
+        var color = D.PRODUCT_COLORS[(draft.products.length + idx) % D.PRODUCT_COLORS.length];
+        draft.products.push({
+          id: D.uid('prod'),
+          name: name,
+          image: '',
+          color: color,
+          order: draft.products.length,
+          categoryId: cat.id,
+          variants: [{ id: D.uid('sku'), label: '250g', price: 199, mrp: 249, active: true }]
+        });
+        seeded = true;
+      });
+    });
+    if (seeded) {
+      reindexProducts();
+      persist();
+    }
+  }
+
   function productRowHtml(p) {
+    var hasImg = !!p.image;
     return (
-      '<div class="product-row" draggable="true" data-pid="' +
+      '<div class="product-card" draggable="true" data-pid="' +
       p.id +
       '" data-cat="' +
       escapeAttr(p.categoryId || '') +
       '">' +
-      '<span class="drag-handle" title="Drag to reorder">⠿</span>' +
-      '<div class="product-thumb" style="background:' +
+      '<span class="drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>' +
+      '<div class="product-media">' +
+      '<label class="product-thumb-upload' +
+      (hasImg ? ' has-image' : '') +
+      '" style="--thumb-bg:' +
       (p.color || '#ecfdf5') +
-      '">' +
-      (p.image ? '<img src="' + p.image + '" class="w-full h-full object-cover rounded-lg" alt="">' : '🫙') +
+      '" title="Upload product photo">' +
+      '<input type="file" class="sr-only product-image-input" data-pid="' +
+      p.id +
+      '" accept="image/png,image/jpeg,image/webp,image/gif">' +
+      (hasImg
+        ? '<img src="' +
+          p.image +
+          '" class="product-thumb-img" alt="' +
+          escapeAttr(p.name || 'Product photo') +
+          '">'
+        : '<span class="product-thumb-icon" aria-hidden="true">🫙</span>') +
+      '<span class="product-thumb-overlay">' +
+      (hasImg ? 'Change' : 'Photo') +
+      '</span>' +
+      '</label>' +
+      (hasImg
+        ? '<button type="button" class="product-thumb-remove btn-remove-product-image" data-pid="' +
+          p.id +
+          '" aria-label="Remove photo">✕</button>'
+        : '') +
       '</div>' +
-      '<input type="text" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm product-name-input" data-pid="' +
+      '<div class="product-fields">' +
+      '<input type="text" class="md-field product-name-input" data-pid="' +
       p.id +
       '" value="' +
       escapeAttr(p.name) +
-      '" placeholder="Product name">' +
-      '<button type="button" class="text-red-400 hover:text-red-600 p-2 btn-del-product" data-pid="' +
+      '" placeholder="Product name" aria-label="Product name">' +
+      '</div>' +
+      '<button type="button" class="product-delete btn-del-product" data-pid="' +
       p.id +
-      '" aria-label="Delete">🗑</button>' +
+      '" aria-label="Delete product">🗑</button>' +
       '</div>'
     );
+  }
+
+  function ensureExpandedProductCat(cats) {
+    if (!cats.length) {
+      expandedProductCatId = null;
+      return;
+    }
+    if (
+      expandedProductCatId &&
+      !cats.some(function (c) {
+        return c.id === expandedProductCatId;
+      })
+    ) {
+      expandedProductCatId = null;
+    }
   }
 
   function renderProductList() {
     var list = document.getElementById('product-list');
     var cats = draft.categories || [];
+    ensureSampleProducts();
+    ensureExpandedProductCat(cats);
 
     if (!cats.length) {
       list.innerHTML =
@@ -560,44 +793,83 @@
       return;
     }
 
-    list.innerHTML = cats
-      .map(function (cat) {
-        var items = productsForCategory(cat.id);
-        var rows = items.length
-          ? items.map(productRowHtml).join('')
-          : '<p class="text-sm text-gray-400 py-2">No products in this category yet.</p>';
-        return (
-          '<div class="category-product-block mb-6" data-cat-block="' +
-          escapeAttr(cat.id) +
-          '">' +
-          '<div class="flex items-center justify-between mb-3">' +
-          '<h3 class="font-semibold text-gray-800 flex items-center gap-2">' +
-          '<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 text-sm">📦</span>' +
-          escapeHtml(cat.name) +
-          '<span class="text-xs font-normal text-gray-400">(' +
-          items.length +
-          ')</span>' +
-          '</h3>' +
-          '</div>' +
-          '<div class="category-product-rows" data-cat="' +
-          escapeAttr(cat.id) +
-          '">' +
-          rows +
-          '</div>' +
-          '<button type="button" class="btn-add-product-cat mt-2 w-full border-2 border-dashed border-emerald-200 text-emerald-700 py-2.5 rounded-xl text-sm font-medium hover:bg-emerald-50 transition" data-cat="' +
-          escapeAttr(cat.id) +
-          '">+ Add Product to ' +
-          escapeHtml(cat.name) +
-          '</button>' +
-          '</div>'
-        );
-      })
-      .join('');
+    list.innerHTML =
+      '<div class="ob-cat-stack" role="list">' +
+      cats
+        .map(function (cat) {
+          var items = productsForCategory(cat.id);
+          var open = cat.id === expandedProductCatId;
+          var withPhoto = items.filter(function (p) {
+            return !!p.image;
+          }).length;
+          var status =
+            items.length === 0
+              ? 'Empty — tap to add'
+              : withPhoto === items.length
+                ? 'Ready'
+                : withPhoto
+                  ? withPhoto + '/' + items.length + ' photos'
+                  : items.length + (items.length === 1 ? ' item' : ' items');
+          var rows = items.length
+            ? items.map(productRowHtml).join('')
+            : '<p class="ob-cat-empty">No products yet — add your first item.</p>';
+          return (
+            '<div class="ob-cat-panel' +
+            (open ? ' is-open' : '') +
+            '" data-cat-block="' +
+            escapeAttr(cat.id) +
+            '" role="listitem">' +
+            '<button type="button" class="ob-cat-toggle" data-cat-toggle="' +
+            escapeAttr(cat.id) +
+            '" aria-expanded="' +
+            (open ? 'true' : 'false') +
+            '">' +
+            '<span class="ob-cat-chevron" aria-hidden="true"></span>' +
+            '<span class="ob-cat-toggle-main">' +
+            '<span class="ob-cat-name">' +
+            escapeHtml(cat.name) +
+            '</span>' +
+            '<span class="ob-cat-meta">' +
+            escapeHtml(status) +
+            '</span>' +
+            '</span>' +
+            '<span class="ob-cat-count">' +
+            items.length +
+            '</span>' +
+            '</button>' +
+            '<div class="ob-cat-body"' +
+            (open ? '' : ' hidden') +
+            '>' +
+            '<div class="category-product-rows" data-cat="' +
+            escapeAttr(cat.id) +
+            '">' +
+            rows +
+            '</div>' +
+            '<button type="button" class="btn-add-product-cat" data-cat="' +
+            escapeAttr(cat.id) +
+            '">+ Add product</button>' +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      (!expandedProductCatId
+        ? '<p class="ob-cat-nudge">Tap a category to open it and edit products.</p>'
+        : '');
 
     bindProductListEvents(list);
   }
 
   function bindProductListEvents(list) {
+    list.querySelectorAll('[data-cat-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-cat-toggle');
+        expandedProductCatId = expandedProductCatId === id ? null : id;
+        renderProductList();
+      });
+    });
+
     list.querySelectorAll('.product-name-input').forEach(function (input) {
       input.addEventListener('input', function () {
         var p = findProduct(input.dataset.pid);
@@ -621,12 +893,56 @@
 
     list.querySelectorAll('.btn-add-product-cat').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        addProduct(btn.getAttribute('data-cat'));
+        var catId = btn.getAttribute('data-cat');
+        expandedProductCatId = catId;
+        addProduct(catId);
       });
     });
 
-    list.querySelectorAll('.product-row').forEach(function (row) {
+    list.querySelectorAll('.product-image-input').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        var pid = input.dataset.pid;
+        if (!file || !pid) return;
+        processImageFile(
+          file,
+          1,
+          800,
+          function (dataUrl) {
+            var p = findProduct(pid);
+            if (!p) return;
+            p.image = dataUrl;
+            if (p.categoryId) expandedProductCatId = p.categoryId;
+            persist();
+            renderProductList();
+          },
+          {
+            errorId: 'product-error',
+            maxBytes: 5 * 1024 * 1024
+          }
+        );
+      });
+    });
+
+    list.querySelectorAll('.btn-remove-product-image').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var p = findProduct(btn.dataset.pid);
+        if (!p) return;
+        p.image = '';
+        if (p.categoryId) expandedProductCatId = p.categoryId;
+        persist();
+        renderProductList();
+      });
+    });
+
+    list.querySelectorAll('.product-card').forEach(function (row) {
       row.addEventListener('dragstart', function (e) {
+        if (e.target && e.target.closest && e.target.closest('input,button,label,textarea')) {
+          e.preventDefault();
+          return;
+        }
         dragSrcId = row.dataset.pid;
         row.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -646,6 +962,7 @@
         var target = findProduct(targetId);
         if (!src || !target || src.categoryId !== target.categoryId) return;
         var catId = src.categoryId;
+        expandedProductCatId = catId;
         var catProducts = productsForCategory(catId);
         var from = catProducts.findIndex(function (p) {
           return p.id === dragSrcId;
@@ -657,7 +974,6 @@
         var ordered = catProducts.slice();
         var item = ordered.splice(from, 1)[0];
         ordered.splice(to, 0, item);
-        // Rebuild products: keep other categories, replace this category's order
         var others = draft.products.filter(function (p) {
           return p.categoryId !== catId;
         });
@@ -697,10 +1013,14 @@
       showError('product-error', 'Select a category first.');
       return;
     }
+    var cat = (draft.categories || []).find(function (c) {
+      return c.id === catId;
+    });
     var color = D.PRODUCT_COLORS[draft.products.length % D.PRODUCT_COLORS.length];
+    var count = productsForCategory(catId).length + 1;
     draft.products.push({
       id: D.uid('prod'),
-      name: '',
+      name: (cat && cat.name ? cat.name + ' ' : 'Product ') + count,
       image: '',
       color: color,
       order: draft.products.length,
@@ -729,6 +1049,15 @@
     if (!visible.length) {
       editor.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Add products in the previous step first.</p>';
       return;
+    }
+
+    if (
+      expandedSkuCatId &&
+      !cats.some(function (c) {
+        return c.id === expandedSkuCatId;
+      })
+    ) {
+      expandedSkuCatId = null;
     }
 
     function skuBlockHtml(p) {
@@ -767,16 +1096,16 @@
         '<div class="sku-block" data-pid="' +
         p.id +
         '">' +
-        '<div class="flex items-center justify-between mb-3">' +
-        '<h3 class="font-semibold text-gray-800">' +
+        '<div class="flex items-center justify-between mb-2">' +
+        '<h3 class="font-semibold text-gray-800 text-sm">' +
         escapeHtml(p.name || 'Untitled') +
         '</h3>' +
         '<button type="button" class="text-sm text-emerald-700 font-medium btn-add-sku" data-pid="' +
         p.id +
-        '">+ Add SKU</button>' +
+        '">+ Size</button>' +
         '</div>' +
         '<div class="sku-headers">' +
-        '<span>Label</span><span>Price (₹)</span><span>MRP (₹)</span><span class="sku-toggle-label">Active</span><span></span>' +
+        '<span>Size</span><span>Price</span><span>MRP</span><span class="sku-toggle-label">On</span><span></span>' +
         '</div>' +
         rows +
         '</div>'
@@ -784,35 +1113,71 @@
     }
 
     if (cats.length) {
-      editor.innerHTML = cats
-        .map(function (cat) {
-          var items = visible.filter(function (p) {
-            return p.categoryId === cat.id;
-          });
-          if (!items.length) {
+      editor.innerHTML =
+        '<div class="ob-cat-stack" role="list">' +
+        cats
+          .map(function (cat) {
+            var items = visible.filter(function (p) {
+              return p.categoryId === cat.id;
+            });
+            var open = cat.id === expandedSkuCatId;
+            var meta =
+              items.length === 0
+                ? 'No products'
+                : items.length + (items.length === 1 ? ' product' : ' products');
             return (
-              '<div class="mb-4">' +
-              '<h3 class="text-sm font-semibold text-gray-500 mb-2">' +
+              '<div class="ob-cat-panel' +
+              (open ? ' is-open' : '') +
+              '" role="listitem">' +
+              '<button type="button" class="ob-cat-toggle" data-sku-cat-toggle="' +
+              escapeAttr(cat.id) +
+              '" aria-expanded="' +
+              (open ? 'true' : 'false') +
+              '">' +
+              '<span class="ob-cat-chevron" aria-hidden="true"></span>' +
+              '<span class="ob-cat-toggle-main">' +
+              '<span class="ob-cat-name">' +
               escapeHtml(cat.name) +
-              '</h3>' +
-              '<p class="text-sm text-gray-400 mb-4">No products in this category.</p>' +
+              '</span>' +
+              '<span class="ob-cat-meta">' +
+              escapeHtml(meta) +
+              '</span>' +
+              '</span>' +
+              '<span class="ob-cat-count">' +
+              items.length +
+              '</span>' +
+              '</button>' +
+              '<div class="ob-cat-body"' +
+              (open ? '' : ' hidden') +
+              '>' +
+              (items.length
+                ? items.map(skuBlockHtml).join('')
+                : '<p class="ob-cat-empty">No products in this category.</p>') +
+              '</div>' +
               '</div>'
             );
-          }
-          return (
-            '<div class="mb-6">' +
-            '<h3 class="text-sm font-semibold text-emerald-700 uppercase tracking-wide mb-3">' +
-            escapeHtml(cat.name) +
-            '</h3>' +
-            items.map(skuBlockHtml).join('') +
-            '</div>'
-          );
-        })
-        .join('');
+          })
+          .join('') +
+        '</div>' +
+        (!expandedSkuCatId
+          ? '<p class="ob-cat-nudge">Tap a category to set prices.</p>'
+          : '');
     } else {
       editor.innerHTML = visible.map(skuBlockHtml).join('');
     }
 
+    editor.querySelectorAll('[data-sku-cat-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-sku-cat-toggle');
+        expandedSkuCatId = expandedSkuCatId === id ? null : id;
+        renderSkuEditor();
+      });
+    });
+
+    bindSkuEditorEvents(editor);
+  }
+
+  function bindSkuEditorEvents(editor) {
     editor.querySelectorAll('.sku-row').forEach(function (row) {
       var pid = row.dataset.pid;
       var vid = row.dataset.vid;
@@ -844,6 +1209,7 @@
       btn.addEventListener('click', function () {
         var p = findProduct(btn.dataset.pid);
         if (!p) return;
+        if (p.categoryId) expandedSkuCatId = p.categoryId;
         p.variants.push({ id: D.uid('sku'), label: '', price: '', mrp: '', active: true });
         persist();
         renderSkuEditor();
@@ -1393,11 +1759,18 @@
       ? products
           .map(function (p) {
             var from = D.minPrice(p);
+            var thumb = p.image
+              ? '<img src="' +
+                p.image +
+                '" alt="" class="w-full h-full object-cover">'
+              : '🫙';
             return (
               '<div class="preview-product-card">' +
               '<div class="preview-product-img" style="background:' +
               (p.color || hexToRgba(theme, 0.12)) +
-              '">🫙</div>' +
+              '">' +
+              thumb +
+              '</div>' +
               '<div class="p-1.5">' +
               '<div class="text-[11px] font-semibold text-gray-800 truncate">' +
               escapeHtml(p.name || 'Product') +
@@ -1513,14 +1886,21 @@
   /**
    * Center-crop to aspectRatio (w/h), then scale to maxWidth.
    * Returns a JPEG data URL for localStorage.
+   * opts: { errorId, maxBytes }
    */
-  function processImageFile(file, aspectRatio, maxWidth, cb) {
+  function processImageFile(file, aspectRatio, maxWidth, cb, opts) {
+    opts = opts || {};
+    var errorId = opts.errorId || 'settings-error';
+    var maxBytes = opts.maxBytes || 8 * 1024 * 1024;
     if (!file || !file.type || file.type.indexOf('image/') !== 0) {
-      showError('settings-error', 'Please choose an image file (JPG, PNG, or WebP).');
+      showError(errorId, 'Please choose an image file (JPG, PNG, or WebP).');
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      showError('settings-error', 'Image must be under 8 MB.');
+    if (file.size > maxBytes) {
+      showError(
+        errorId,
+        'Image must be under ' + Math.round(maxBytes / (1024 * 1024)) + ' MB.'
+      );
       return;
     }
     hideErrors();
@@ -1557,12 +1937,12 @@
         cb(dataUrl);
       };
       img.onerror = function () {
-        showError('settings-error', 'Could not read that image. Try another file.');
+        showError(errorId, 'Could not read that image. Try another file.');
       };
       img.src = reader.result;
     };
     reader.onerror = function () {
-      showError('settings-error', 'Could not read that file.');
+      showError(errorId, 'Could not read that file.');
     };
     reader.readAsDataURL(file);
   }
@@ -1675,6 +2055,41 @@
       persist();
       renderCategoryGrid();
     });
+
+    var bizSearch = document.getElementById('input-business-search');
+    if (bizSearch) {
+      bizSearch.addEventListener('input', function () {
+        businessSearchQuery = (bizSearch.value || '').trim();
+        renderBusinessGrid();
+      });
+      bizSearch.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          bizSearch.value = '';
+          businessSearchQuery = '';
+          renderBusinessGrid();
+          bizSearch.blur();
+        }
+      });
+    }
+    var clearBizSearch = document.getElementById('btn-clear-business-search');
+    if (clearBizSearch) {
+      clearBizSearch.addEventListener('click', function () {
+        if (bizSearch) bizSearch.value = '';
+        businessSearchQuery = '';
+        renderBusinessGrid();
+        if (bizSearch) bizSearch.focus();
+      });
+    }
+    var bizScroll = document.getElementById('business-scroll');
+    if (bizScroll) {
+      bizScroll.addEventListener('scroll', onBusinessScroll, { passive: true });
+    }
+    var loadMoreBiz = document.getElementById('btn-load-more-business');
+    if (loadMoreBiz) {
+      loadMoreBiz.addEventListener('click', function () {
+        loadBusinessPage();
+      });
+    }
 
     ['input-store-name', 'input-tagline', 'input-location', 'input-whatsapp'].forEach(function (id) {
       var el = document.getElementById(id);
