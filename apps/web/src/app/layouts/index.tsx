@@ -45,22 +45,9 @@ export function StoreLayout() {
   );
 }
 
+/** Onboarding page owns its own header / summary chrome. */
 export function OnboardingLayout() {
-  return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 backdrop-blur">
-        <div className="md-container flex h-16 items-center justify-between gap-3">
-          <Link to="/onboarding" className="font-display text-lg font-bold text-md-green-deep">
-            Store setup
-          </Link>
-          <SurfaceBadge label="Onboarding" />
-        </div>
-      </header>
-      <main className="md-container py-8">
-        <Outlet />
-      </main>
-    </div>
-  );
+  return <Outlet />;
 }
 
 export function DashboardLayout() {
