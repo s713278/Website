@@ -205,6 +205,32 @@
                             <a href="store.html" id="dash-open-store" class="btn btn-secondary" data-cta="view_storefront">Open storefront</a>
                         </div>
                     </div>
+
+                    <div class="dash-panel dash-qr-panel md-panel--accent" id="dash-qr-panel">
+                        <div class="dash-qr-layout">
+                            <div class="dash-qr-frame">
+                                <img id="dash-qr-img" class="dash-qr-img" alt="Shop QR code" width="200" height="200" hidden>
+                                <div class="dash-qr-placeholder" id="dash-qr-placeholder">QR</div>
+                            </div>
+                            <div class="dash-qr-copy">
+                                <p class="dash-qr-eyebrow">Scan &amp; order</p>
+                                <h3 class="dash-qr-title">Put this on your counter</h3>
+                                <p class="dash-qr-text">
+                                    Print or save this QR. Customers scan with their phone camera and land on your shop — no typing, no app needed.
+                                </p>
+                                <ul class="dash-qr-tips">
+                                    <li>Stick on packaging or your shop table</li>
+                                    <li>Show it in WhatsApp status / Stories</li>
+                                    <li>Keep next to UPI / cash counter</li>
+                                </ul>
+                                <div class="dash-qr-actions">
+                                    <button type="button" class="btn btn-primary btn-sm" id="dash-qr-download" data-cta="download_store_qr">Save QR image</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="dash-qr-share" data-cta="share_store_qr" hidden>Share QR</button>
+                                </div>
+                                <p class="dash-muted" id="dash-qr-hint" hidden></p>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Settings -->
@@ -224,6 +250,23 @@
                         <p class="dash-muted dash-settings-note">
                             This is a demo dashboard shell. Live edits will connect to vendor APIs later.
                         </p>
+                    </div>
+
+                    <div class="dash-panel dash-account-panel" id="dash-account-panel">
+                        <div class="dash-panel-head">
+                            <h3>Account</h3>
+                            <span class="dash-role-badge" id="dash-role-badge">Vendor</span>
+                        </div>
+                        <dl class="dash-settings">
+                            <div><dt>Signed in</dt><dd id="dash-account-phone">—</dd></div>
+                            <div><dt>Role</dt><dd id="dash-account-role">Vendor</dd></div>
+                        </dl>
+                        <p class="dash-muted dash-settings-note">
+                            Log out ends your vendor or admin session on this device. Your store catalog stays saved.
+                        </p>
+                        <button type="button" class="btn btn-secondary dash-logout-btn" id="btn-dash-logout" data-cta="vendor_logout">
+                            Log out
+                        </button>
                     </div>
                 </section>
             </main>

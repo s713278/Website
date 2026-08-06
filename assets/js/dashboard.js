@@ -19,7 +19,10 @@
   var orderFilter = 'all';
   var state = {
     store: null,
-    orders: []
+    orders: [],
+    qrSrc: '',
+    qrHref: '',
+    qrName: ''
   };
 
   function qs(id) {
@@ -289,6 +292,8 @@
     var wa = qs('dash-share-wa');
     if (wa) wa.href = 'https://wa.me/?text=' + encodeURIComponent(shareText);
 
+    renderStoreQr(storeHref, settings.storeName || slug);
+
     if (qs('set-name')) qs('set-name').textContent = settings.storeName || '—';
     if (qs('set-whatsapp'))
       qs('set-whatsapp').textContent = settings.whatsapp ? '+91 ' + settings.whatsapp : '—';
@@ -307,6 +312,106 @@
     } else if (settings.themeColor) {
       document.documentElement.style.setProperty('--store-theme', settings.themeColor);
     }
+
+    renderAccount(store);
+  }
+
+  function renderStoreQr(storeHref, storeName) {
+    if (!D || typeof D.qrImageUrl !== 'function') return;
+    var img = qs('dash-qr-img');
+    var placeholder = qs('dash-qr-placeholder');
+    var src = D.qrImageUrl(storeHref, 280);
+    state.qrSrc = src;
+    state.qrHref = storeHref;
+    state.qrName = storeName || 'shop';
+    if (img) {
+      img.onload = function () {
+        img.hidden = false;
+        if (placeholder) placeholder.hidden = true;
+      };
+      img.onerror = function () {
+        img.hidden = true;
+        if (placeholder) {
+          placeholder.hidden = false;
+          placeholder.textContent = 'QR unavailable';
+        }
+      };
+      img.src = src;
+      img.alt = 'QR code for ' + (storeName || 'your shop');
+    }
+    var shareBtn = qs('dash-qr-share');
+    if (shareBtn) shareBtn.hidden = !navigator.share;
+  }
+
+  function roleLabel(role) {
+    return role === 'admin' ? 'Admin' : 'Vendor';
+  }
+
+  function ensureVendorSession(store) {
+    if (!API || typeof API.getVendorSession !== 'function') return null;
+    var vs = API.getVendorSession();
+    if (vs && vs.loggedIn) return vs;
+    // Bootstrap demo session from verified onboarding draft
+    if (store && store.verified && typeof API.setVendorSession === 'function') {
+      var roleParam = '';
+      try {
+        roleParam = new URLSearchParams(window.location.search).get('role') || '';
+      } catch (e) {}
+      return API.setVendorSession({
+        loggedIn: true,
+        phone: store.phone || (store.settings && store.settings.whatsapp) || '',
+        name: (store.settings && store.settings.storeName) || '',
+        role: roleParam || 'vendor',
+        vendorId: store.vendorId || null
+      });
+    }
+    return vs;
+  }
+
+  function renderAccount(store) {
+    var vs = ensureVendorSession(store) || { loggedIn: true, phone: '', role: 'vendor' };
+    var role =
+      API && typeof API.normalizeVendorRole === 'function'
+        ? API.normalizeVendorRole(vs.role)
+        : vs.role === 'admin'
+          ? 'admin'
+          : 'vendor';
+    var phone =
+      vs.phone ||
+      (store && store.phone) ||
+      (store && store.settings && store.settings.whatsapp) ||
+      '';
+
+    if (qs('dash-account-phone')) {
+      qs('dash-account-phone').textContent = phone ? '+91 ' + phone : 'This device';
+    }
+    if (qs('dash-account-role')) qs('dash-account-role').textContent = roleLabel(role);
+
+    var badge = qs('dash-role-badge');
+    if (badge) {
+      badge.textContent = roleLabel(role);
+      badge.classList.toggle('dash-role-badge--admin', role === 'admin');
+    }
+
+    var panel = qs('dash-account-panel');
+    if (panel) panel.hidden = false;
+    var logoutBtn = qs('btn-dash-logout');
+    if (logoutBtn) logoutBtn.hidden = false;
+  }
+
+  function handleLogout() {
+    var ok = window.confirm('Log out of your vendor account on this device?');
+    if (!ok) return;
+    if (API && typeof API.logoutVendor === 'function') {
+      API.logoutVendor();
+    } else {
+      try {
+        localStorage.removeItem('mithra_vendor_session');
+        localStorage.removeItem('mithra_access_token');
+        localStorage.removeItem('mithra_refresh_token');
+      } catch (e) {}
+    }
+    window.location.href = 'onboarding.html';
   }
 
   function setView(view) {
@@ -396,6 +501,65 @@
           window.prompt('Copy shop link:', text);
           done();
         }
+      });
+    }
+
+    var logoutBtn = qs('btn-dash-logout');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    var qrDownload = qs('dash-qr-download');
+    if (qrDownload) {
+      qrDownload.addEventListener('click', function () {
+        var src = state.qrSrc;
+        var hint = qs('dash-qr-hint');
+        if (!src || !D || typeof D.downloadQrImage !== 'function') {
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = 'QR not ready yet — open Store & Share again.';
+          }
+          return;
+        }
+        var safe = String(state.qrName || 'shop')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        D.downloadQrImage(src, (safe || 'shop') + '-qr.png');
+        if (hint) {
+          hint.hidden = false;
+          hint.textContent = 'Saving… Print it or set as WhatsApp status.';
+          setTimeout(function () {
+            hint.hidden = true;
+          }, 3500);
+        }
+      });
+    }
+
+    var qrShare = qs('dash-qr-share');
+    if (qrShare) {
+      qrShare.addEventListener('click', function () {
+        var src = state.qrSrc;
+        if (!src || !navigator.share) return;
+        fetch(src, { mode: 'cors' })
+          .then(function (r) {
+            return r.blob();
+          })
+          .then(function (blob) {
+            var file = new File([blob], 'shop-qr.png', { type: blob.type || 'image/png' });
+            var data = {
+              title: (state.qrName || 'My shop') + ' — scan to order',
+              text: 'Scan to order from ' + (state.qrName || 'my shop'),
+              files: [file]
+            };
+            if (navigator.canShare && navigator.canShare(data)) {
+              return navigator.share(data);
+            }
+            return navigator.share({
+              title: data.title,
+              text: data.text,
+              url: D && D.absoluteUrl ? D.absoluteUrl(state.qrHref) : state.qrHref
+            });
+          })
+          .catch(function () {});
       });
     }
   }

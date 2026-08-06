@@ -18,6 +18,7 @@
  *   StoreAPI.saveRelease(payload)
  *   StoreAPI.getCart() / setCart(lines)
  *   StoreAPI.getSession() / setSession(session)
+ *   StoreAPI.getVendorSession() / setVendorSession() / logoutVendor()
  */
 (function (global) {
   'use strict';
@@ -32,6 +33,7 @@
     release: 'mithra_store_release',
     cart: 'mithra_store_cart',
     session: 'mithra_store_session',
+    vendorSession: 'mithra_vendor_session',
     config: 'mithra_store_api_config'
   };
 
@@ -307,6 +309,66 @@
   }
 
   /**
+   * Vendor / admin dashboard auth (local; API tokens cleared on logout).
+   * role: 'vendor' | 'admin'
+   */
+  function normalizeVendorRole(role) {
+    var r = String(role || '')
+      .trim()
+      .toLowerCase();
+    if (r === 'admin' || r === 'administrator') return 'admin';
+    return 'vendor';
+  }
+
+  function getVendorSession() {
+    return readJson(KEYS.vendorSession, {
+      loggedIn: false,
+      phone: '',
+      name: '',
+      role: 'vendor',
+      vendorId: null
+    });
+  }
+
+  function setVendorSession(partial) {
+    var cur = getVendorSession();
+    var next = Object.assign({}, cur, partial || {});
+    if (partial && partial.role != null) next.role = normalizeVendorRole(partial.role);
+    if (next.loggedIn == null) next.loggedIn = true;
+    return writeJson(KEYS.vendorSession, next);
+  }
+
+  function clearVendorSession() {
+    localStorage.removeItem(KEYS.vendorSession);
+  }
+
+  function clearAuthTokens() {
+    try {
+      localStorage.removeItem('mithra_access_token');
+      localStorage.removeItem('mithra_refresh_token');
+    } catch (e) {}
+  }
+
+  /**
+   * End vendor/admin session. Keeps store draft/release data; requires re-verify.
+   */
+  function logoutVendor(opts) {
+    opts = opts || {};
+    clearVendorSession();
+    clearAuthTokens();
+    if (opts.clearCustomerSession) clearSession();
+    if (D && typeof D.loadDraft === 'function' && typeof D.saveDraft === 'function') {
+      try {
+        var draft = D.loadDraft();
+        draft.verified = false;
+        draft.currentStep = 1;
+        D.saveDraft(draft);
+      } catch (e) {}
+    }
+    return true;
+  }
+
+  /**
    * Publish helper for onboarding → storefront handoff.
    */
   function publishFromDraft(draft) {
@@ -330,6 +392,12 @@
     clearCart: clearCart,
     getSession: getSession,
     setSession: setSession,
-    clearSession: clearSession
+    clearSession: clearSession,
+    getVendorSession: getVendorSession,
+    setVendorSession: setVendorSession,
+    clearVendorSession: clearVendorSession,
+    clearAuthTokens: clearAuthTokens,
+    logoutVendor: logoutVendor,
+    normalizeVendorRole: normalizeVendorRole
   };
 })(typeof window !== 'undefined' ? window : this);

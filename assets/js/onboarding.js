@@ -130,6 +130,19 @@
         return false;
       }
       draft.verified = true;
+      if (window.StoreAPI && typeof window.StoreAPI.setVendorSession === 'function') {
+        var roleParam = '';
+        try {
+          roleParam = new URLSearchParams(window.location.search).get('role') || '';
+        } catch (e) {}
+        window.StoreAPI.setVendorSession({
+          loggedIn: true,
+          phone: draft.phone || '',
+          name: (draft.settings && draft.settings.storeName) || '',
+          role: roleParam || 'vendor',
+          vendorId: draft.vendorId || null
+        });
+      }
       return true;
     }
     if (step === 3) {
@@ -1670,6 +1683,16 @@
       window.StoreAPI.publishFromDraft(draft);
     }
 
+    if (window.StoreAPI && typeof window.StoreAPI.setVendorSession === 'function') {
+      window.StoreAPI.setVendorSession({
+        loggedIn: true,
+        phone: draft.phone || (draft.settings && draft.settings.whatsapp) || '',
+        name: (draft.settings && draft.settings.storeName) || '',
+        role: (window.StoreAPI.getVendorSession() || {}).role || 'vendor',
+        vendorId: draft.vendorId || null
+      });
+    }
+
     document.getElementById('store-url-display').textContent = displayUrl;
     var viewBtn = document.getElementById('btn-view-store');
     if (viewBtn) viewBtn.href = sub.storefrontUrl || storeHref;
@@ -1677,6 +1700,8 @@
     renderSuccessPanel(sub);
 
     var storeName = (draft.settings && draft.settings.storeName) || 'my store';
+    renderSuccessQr(sub.storefrontUrl || storeHref, storeName);
+
     var shareText =
       'Hi! Order from ' +
       storeName +
@@ -1688,6 +1713,28 @@
     if (wa) wa.href = 'https://wa.me/?text=' + encodeURIComponent(shareText);
     if (fb)
       fb.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(absHint);
+  }
+
+  function renderSuccessQr(storeHref, storeName) {
+    var img = document.getElementById('ob-qr-img');
+    var placeholder = document.getElementById('ob-qr-placeholder');
+    if (!img || !D || typeof D.qrImageUrl !== 'function') return;
+    var src = D.qrImageUrl(storeHref, 200);
+    window.__obQrSrc = src;
+    window.__obQrName = storeName || 'shop';
+    img.onload = function () {
+      img.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+    };
+    img.onerror = function () {
+      img.hidden = true;
+      if (placeholder) {
+        placeholder.hidden = false;
+        placeholder.textContent = 'QR';
+      }
+    };
+    img.src = src;
+    img.alt = 'QR code for ' + (storeName || 'your shop');
   }
 
   /* ---------- Live preview ---------- */
@@ -2192,6 +2239,25 @@
     if (waShare) {
       waShare.addEventListener('click', function () {
         markShareTipDone('whatsapp');
+      });
+    }
+
+    var qrBtn = document.getElementById('btn-download-qr');
+    if (qrBtn) {
+      qrBtn.addEventListener('click', function () {
+        var src = window.__obQrSrc;
+        if (!src && D && typeof D.qrImageUrl === 'function') {
+          var view = document.getElementById('btn-view-store');
+          src = D.qrImageUrl((view && view.getAttribute('href')) || 'store.html', 200);
+          window.__obQrSrc = src;
+        }
+        if (!src || !D || typeof D.downloadQrImage !== 'function') return;
+        var safe = String(window.__obQrName || 'shop')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        D.downloadQrImage(src, (safe || 'shop') + '-qr.png');
+        markShareTipDone('instagram');
       });
     }
 

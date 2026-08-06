@@ -965,6 +965,56 @@
     return 'https://wa.me/' + digits + '?text=' + text;
   }
 
+  /** Absolute URL for QR / share (works for relative store.html links). */
+  function absoluteUrl(href) {
+    try {
+      return new URL(href || '', window.location.href).href;
+    } catch (e) {
+      return String(href || '');
+    }
+  }
+
+  /**
+   * QR image URL for a shop link (no local library required).
+   * size: pixel width/height, default 240.
+   */
+  function qrImageUrl(data, size) {
+    var px = size || 240;
+    var payload = absoluteUrl(data);
+    return (
+      'https://api.qrserver.com/v1/create-qr-code/?size=' +
+      px +
+      'x' +
+      px +
+      '&margin=12&ecc=M&data=' +
+      encodeURIComponent(payload)
+    );
+  }
+
+  function downloadQrImage(remoteUrl, filename) {
+    filename = filename || 'mithradirect-shop-qr.png';
+    function saveBlob(blob) {
+      var objectUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () {
+        URL.revokeObjectURL(objectUrl);
+      }, 1500);
+    }
+    fetch(remoteUrl, { mode: 'cors' })
+      .then(function (r) {
+        return r.blob();
+      })
+      .then(saveBlob)
+      .catch(function () {
+        window.open(remoteUrl, '_blank');
+      });
+  }
+
   global.MithraDraft = {
     STORAGE_KEY: STORAGE_KEY,
     BUSINESS_TYPES: BUSINESS_TYPES,
@@ -991,6 +1041,9 @@
     countSkus: countSkus,
     minPrice: minPrice,
     categoriesForBusiness: categoriesForBusiness,
-    whatsappLink: whatsappLink
+    whatsappLink: whatsappLink,
+    absoluteUrl: absoluteUrl,
+    qrImageUrl: qrImageUrl,
+    downloadQrImage: downloadQrImage
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -4,7 +4,7 @@
 body.onboarding-page {
   font-family: var(--font-body);
   color: var(--md-ink);
-  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 40%, #f8fafc 100%);
+  background: var(--md-atmosphere);
   min-height: 100vh;
   min-height: 100dvh;
   padding-bottom: calc(88px + var(--safe-bottom));
@@ -1546,6 +1546,69 @@ body.onboarding-page h6 {
   font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--md-green-dark);
+}
+
+.ob-qr-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: center;
+  margin: 0.85rem 0 1rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--store-theme, var(--md-green)) 22%, var(--md-border));
+  background:
+    radial-gradient(100% 120% at 0% 0%, color-mix(in srgb, var(--store-theme, var(--md-green)) 12%, transparent), transparent 60%),
+    #fff;
+}
+
+.ob-qr-frame {
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ob-qr-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.35rem;
+  display: block;
+}
+
+.ob-qr-placeholder {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #9ca3af;
+}
+
+.ob-qr-title {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: var(--fs-sm);
+  color: var(--md-ink);
+}
+
+.ob-qr-body p {
+  margin: 0 0 0.55rem;
+  font-size: var(--fs-xs);
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+@media (max-width: 479px) {
+  .ob-qr-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
 }
 
 .ob-share-steps {
