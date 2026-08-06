@@ -7,6 +7,31 @@
 
   var STORAGE_KEY = 'mithra_store_draft';
 
+  var A = (global.MithraAssets && global.MithraAssets.paths) || null;
+  var IMG = A || {
+    logos: { dark: 'assets/img/logos/logo_dark_md.png' },
+    fallbacks: {
+      fresh: 'assets/img/fresh.png',
+      cup: 'assets/img/cup.png',
+      flower: 'assets/img/flower.png',
+      batch: 'assets/img/batch.png',
+      banner: 'assets/img/banner_md.png'
+    },
+    vendors: {
+      geeta: 'assets/img/vendors/geetas-kitchen.jpg',
+      geetaLogo: 'assets/img/vendors/geetas-kitchen-logo.png',
+      geetaBanner: 'assets/img/vendors/geetas-kitchen-banner.png',
+      saiLogo: 'assets/img/vendors/sai-ram-home-foods-logo.png',
+      saiBanner: 'assets/img/vendors/sai-ram-home-foods-banner.png'
+    }
+  };
+  var DEMO_WA =
+    (A && A.external && A.external.whatsappPhone) ||
+    '9912149049';
+  var DEMO_CONTACT =
+    (A && A.external && A.external.demoContactName) ||
+    'Swamy Kunta';
+
   var BUSINESS_TYPES = [
     { id: 'home-kitchen', label: 'Home Kitchen', icon: '🏠' },
     { id: 'pickles', label: 'Pickles & Homemade', icon: '🫙' },
@@ -20,40 +45,40 @@
 
   var CATEGORY_CATALOG = {
     pickles: [
-      { id: 'pickles', name: 'Pickles', image: 'assets/img/fresh.png' },
-      { id: 'combo-packs', name: 'Combo Packs', image: 'assets/img/cup.png' },
-      { id: 'powders', name: 'Powders', image: 'assets/img/flower.png' },
-      { id: 'chutneys', name: 'Chutneys', image: 'assets/img/batch.png' }
+      { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh },
+      { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup },
+      { id: 'powders', name: 'Powders', image: IMG.fallbacks.flower },
+      { id: 'chutneys', name: 'Chutneys', image: IMG.fallbacks.batch }
     ],
     'home-kitchen': [
-      { id: 'meals', name: 'Meals', image: 'assets/img/fresh.png' },
-      { id: 'snacks', name: 'Snacks', image: 'assets/img/cup.png' },
-      { id: 'sweets', name: 'Sweets', image: 'assets/img/flower.png' }
+      { id: 'meals', name: 'Meals', image: IMG.fallbacks.fresh },
+      { id: 'snacks', name: 'Snacks', image: IMG.fallbacks.cup },
+      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.flower }
     ],
     bakery: [
-      { id: 'breads', name: 'Breads', image: 'assets/img/fresh.png' },
-      { id: 'cakes', name: 'Cakes', image: 'assets/img/cup.png' },
-      { id: 'cookies', name: 'Cookies', image: 'assets/img/flower.png' }
+      { id: 'breads', name: 'Breads', image: IMG.fallbacks.fresh },
+      { id: 'cakes', name: 'Cakes', image: IMG.fallbacks.cup },
+      { id: 'cookies', name: 'Cookies', image: IMG.fallbacks.flower }
     ],
     spices: [
-      { id: 'masalas', name: 'Masalas', image: 'assets/img/fresh.png' },
-      { id: 'whole-spices', name: 'Whole Spices', image: 'assets/img/cup.png' }
+      { id: 'masalas', name: 'Masalas', image: IMG.fallbacks.fresh },
+      { id: 'whole-spices', name: 'Whole Spices', image: IMG.fallbacks.cup }
     ],
     snacks: [
-      { id: 'savory', name: 'Savory', image: 'assets/img/fresh.png' },
-      { id: 'sweets', name: 'Sweets', image: 'assets/img/cup.png' }
+      { id: 'savory', name: 'Savory', image: IMG.fallbacks.fresh },
+      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.cup }
     ],
     dairy: [
-      { id: 'milk', name: 'Milk Products', image: 'assets/img/fresh.png' },
-      { id: 'curd', name: 'Curd & Paneer', image: 'assets/img/cup.png' }
+      { id: 'milk', name: 'Milk Products', image: IMG.fallbacks.fresh },
+      { id: 'curd', name: 'Curd & Paneer', image: IMG.fallbacks.cup }
     ],
     organic: [
-      { id: 'veggies', name: 'Vegetables', image: 'assets/img/fresh.png' },
-      { id: 'fruits', name: 'Fruits', image: 'assets/img/cup.png' }
+      { id: 'veggies', name: 'Vegetables', image: IMG.fallbacks.fresh },
+      { id: 'fruits', name: 'Fruits', image: IMG.fallbacks.cup }
     ],
     crafts: [
-      { id: 'decor', name: 'Home Decor', image: 'assets/img/flower.png' },
-      { id: 'gifts', name: 'Gift Items', image: 'assets/img/batch.png' }
+      { id: 'decor', name: 'Home Decor', image: IMG.fallbacks.flower },
+      { id: 'gifts', name: 'Gift Items', image: IMG.fallbacks.batch }
     ]
   };
 
@@ -125,22 +150,22 @@
   }
 
   /**
-   * Default static demo storefront (store.html).
-   * Sai Ram Home Foods with local logo + marketing banner assets.
+   * Default static demo storefront (store.html) — Geeta's Kitchen
+   * Matches the WhatsApp checkout screen reference.
    */
   function seedStaticStorefront() {
-    var draft = seedSaiRamDraft();
+    var draft = seedGeetaKitchenDraft();
     draft.isStatic = true;
     draft.addresses = [
       {
         id: 'home',
         label: 'Home',
-        line: 'Near Latif Hospital, Guntur, Andhra Pradesh 522001'
+        line: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032'
       },
       {
         id: 'work',
         label: 'Work',
-        line: 'Brodipet Main Road, Guntur, Andhra Pradesh 522002'
+        line: 'HITEC City, Madhapur, Hyderabad 500081'
       }
     ];
     draft.settings.address = draft.addresses[0].line;
@@ -149,10 +174,225 @@
     return draft;
   }
 
+  /** Sample storefront: Geeta's Kitchen (reference demo) */
+  function seedGeetaKitchenDraft() {
+    var logo = IMG.vendors.geetaLogo || IMG.vendors.geeta;
+    var banner = IMG.vendors.geetaBanner || IMG.vendors.geeta;
+    var cats = [
+      { id: 'pickles', name: 'Pickles', image: logo, icon: '🫙' },
+      { id: 'podi', name: 'Podi', image: logo, icon: '🌶️' },
+      { id: 'snacks', name: 'Snacks', image: logo, icon: '🥨' },
+      { id: 'flours', name: 'Flours', image: logo, icon: '🌾' },
+      { id: 'sweets', name: 'Sweets', image: logo, icon: '🍬' }
+    ];
+
+    function product(opts) {
+      return {
+        id: opts.id,
+        name: opts.name,
+        image: opts.image || '',
+        icon: opts.icon || '🫙',
+        color: opts.color || PRODUCT_COLORS[0],
+        order: opts.order,
+        categoryId: opts.categoryId,
+        rating: opts.rating || 4.6,
+        reviews: opts.reviews || 24,
+        description: opts.description || '',
+        ingredients: opts.ingredients || '',
+        nutrition: opts.nutrition || 'Homemade in small batches. Exact values may vary.',
+        storage: opts.storage || 'Store in a cool, dry place. Keep tightly sealed after opening.',
+        deliveryInfo:
+          opts.deliveryInfo ||
+          'Home delivery available in Hyderabad. Orders prepared fresh the same day.',
+        popular: !!opts.popular,
+        variants: opts.variants
+      };
+    }
+
+    function pickleSkus(prefix, base) {
+      return [
+        { id: prefix + '_250', label: '250 gms', price: base, mrp: base + 30, active: true },
+        { id: prefix + '_500', label: '500 gms', price: base * 2 - 20, mrp: base * 2 + 20, active: true },
+        { id: prefix + '_1kg', label: '1 Kg', price: Math.round(base * 3.5), mrp: Math.round(base * 4), active: true }
+      ];
+    }
+
+    function podiSkus(prefix, base) {
+      return [
+        { id: prefix + '_200', label: '200 gms', price: base, mrp: base + 20, active: true },
+        { id: prefix + '_500', label: '500 gms', price: Math.round(base * 2.2), mrp: Math.round(base * 2.5), active: true },
+        { id: prefix + '_1kg', label: '1 Kg', price: Math.round(base * 4), mrp: Math.round(base * 4.5), active: true }
+      ];
+    }
+
+    var products = [
+      product({
+        id: 'prod_avakaya',
+        name: 'Avakaya Pickle',
+        categoryId: 'pickles',
+        order: 0,
+        icon: '🥭',
+        color: '#FEF3C7',
+        rating: 4.8,
+        reviews: 128,
+        popular: true,
+        description: 'Sun-cured Andhra avakaya — Homely Food, Pure Taste. 100% homemade.',
+        ingredients: 'Raw mango, mustard oil, chilli powder, fenugreek, salt',
+        variants: pickleSkus('sku_ava', 160)
+      }),
+      product({
+        id: 'prod_gongura',
+        name: 'Gongura Pickle',
+        categoryId: 'pickles',
+        order: 1,
+        icon: '🌿',
+        color: '#D1FAE5',
+        rating: 4.7,
+        reviews: 86,
+        popular: true,
+        description: 'Tangy gongura pickle made fresh in small batches with traditional spices.',
+        ingredients: 'Gongura leaves, chilli, garlic, mustard oil, salt',
+        variants: pickleSkus('sku_gongura', 150)
+      }),
+      product({
+        id: 'prod_karam_podi',
+        name: 'Karam Podi',
+        categoryId: 'podi',
+        order: 2,
+        icon: '🌶️',
+        color: '#FFEDD5',
+        rating: 4.7,
+        reviews: 94,
+        popular: true,
+        description: 'Spicy karam podi for rice, idli and dosa — pure taste from home.',
+        ingredients: 'Red chilli, roasted dals, garlic, cumin, salt',
+        variants: podiSkus('sku_kp', 160)
+      }),
+      product({
+        id: 'prod_idli_podi',
+        name: 'Idli Podi',
+        categoryId: 'podi',
+        order: 3,
+        icon: '🥄',
+        color: '#FFEDD5',
+        rating: 4.6,
+        reviews: 52,
+        popular: true,
+        description: 'Classic gunpowder-style idli podi with sesame and roasted dals.',
+        ingredients: 'Urad dal, chana dal, sesame, red chilli, salt',
+        variants: podiSkus('sku_idli', 140)
+      }),
+      product({
+        id: 'prod_murukku',
+        name: 'Murukku',
+        categoryId: 'snacks',
+        order: 4,
+        icon: '🥨',
+        color: '#FEF3C7',
+        rating: 4.6,
+        reviews: 41,
+        popular: true,
+        description: 'Crispy homemade murukku — perfect with evening chai.',
+        ingredients: 'Rice flour, urad dal flour, butter, cumin, salt',
+        variants: [
+          { id: 'sku_mur_200', label: '200 gms', price: 90, mrp: 110, active: true },
+          { id: 'sku_mur_500', label: '500 gms', price: 200, mrp: 240, active: true }
+        ]
+      }),
+      product({
+        id: 'prod_millet_laddu',
+        name: 'Millet Laddu',
+        categoryId: 'sweets',
+        order: 5,
+        icon: '🍬',
+        color: '#FEF3C7',
+        rating: 4.9,
+        reviews: 67,
+        popular: true,
+        description: 'Soft millet laddus made with jaggery and ghee — festive favourite.',
+        ingredients: 'Millet flour, jaggery, ghee, cardamom, cashew',
+        variants: [
+          { id: 'sku_lad_250', label: '250 gms', price: 180, mrp: 210, active: true },
+          { id: 'sku_lad_500', label: '500 gms', price: 340, mrp: 380, active: true }
+        ]
+      }),
+      product({
+        id: 'prod_ragi_flour',
+        name: 'Ragi Flour',
+        categoryId: 'flours',
+        order: 6,
+        icon: '🌾',
+        color: '#E7E5E4',
+        rating: 4.5,
+        reviews: 33,
+        description: 'Freshly milled ragi flour — chemical free and stone-ground feel.',
+        ingredients: '100% finger millet (ragi)',
+        variants: [
+          { id: 'sku_ragi_500', label: '500 gms', price: 75, mrp: 90, active: true },
+          { id: 'sku_ragi_1kg', label: '1 Kg', price: 140, mrp: 160, active: true }
+        ]
+      }),
+      product({
+        id: 'prod_nimmakaya',
+        name: 'Nimmakaya Pickle',
+        categoryId: 'pickles',
+        order: 7,
+        icon: '🍋',
+        color: '#FEF3C7',
+        rating: 4.6,
+        reviews: 39,
+        description: 'Zesty lemon pickle with authentic chilli heat.',
+        ingredients: 'Lemon, chilli powder, mustard oil, salt',
+        variants: pickleSkus('sku_nimma', 130)
+      })
+    ];
+
+    return {
+      phone: DEMO_WA,
+      verified: true,
+      businessType: 'home-kitchen',
+      categories: cats,
+      products: products,
+      delivery: {
+        storePickup: { enabled: true },
+        homeDelivery: { enabled: true, charge: 40 },
+        courierDelivery: { enabled: true, charge: 80 }
+      },
+      payment: {
+        upi: { enabled: true, upiId: 'geeta@upi', payeeName: "Geeta's Kitchen" },
+        bank: {
+          enabled: false,
+          accountName: "Geeta's Kitchen",
+          accountNumber: '',
+          ifsc: '',
+          bankName: ''
+        },
+        cod: { enabled: true }
+      },
+      settings: {
+        storeName: "Geeta's Kitchen",
+        tagline: 'Homely Food, Pure Taste',
+        location: 'Hyderabad',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
+        logo: logo,
+        banner: banner,
+        themeColor: '#2E5A27',
+        address: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032',
+        richBanner: true,
+        deliveryWindow: '6 PM – 9 PM'
+      },
+      slug: 'geetas-kitchen',
+      currentStep: 7,
+      maxReachedStep: 7,
+      isSample: true
+    };
+  }
+
   /** Sample storefront: Sai Ram Home Foods */
   function seedSaiRamDraft() {
-    var logo = 'assets/img/vendors/sai-ram-home-foods-logo.png';
-    var banner = 'assets/img/vendors/sai-ram-home-foods-banner.png';
+    var logo = IMG.vendors.saiLogo;
+    var banner = IMG.vendors.saiBanner;
     var cats = [
       { id: 'veg-pickles', name: 'Veg Pickles', image: logo, icon: '🫙' },
       { id: 'nonveg-pickles', name: 'Non-Veg Pickles', image: logo, icon: '🍗' },
@@ -165,11 +405,13 @@
       return {
         id: opts.id,
         name: opts.name,
-        image: opts.image || logo,
+        image: opts.image || '',
+        icon: opts.icon || '🫙',
         color: opts.color || PRODUCT_COLORS[0],
         order: opts.order,
         categoryId: opts.categoryId,
         rating: opts.rating || 4.6,
+        reviews: opts.reviews || 24,
         description: opts.description || '',
         ingredients: opts.ingredients || '',
         nutrition: opts.nutrition || '',
@@ -203,6 +445,7 @@
         name: 'Mango Pickle',
         categoryId: 'veg-pickles',
         order: 0,
+        icon: '🥭',
         color: '#FEF3C7',
         rating: 4.9,
         popular: true,
@@ -215,6 +458,7 @@
         name: 'Gongura Pickle',
         categoryId: 'veg-pickles',
         order: 1,
+        icon: '🌿',
         color: '#D1FAE5',
         rating: 4.8,
         popular: true,
@@ -227,6 +471,7 @@
         name: 'Usirikaya Pickle',
         categoryId: 'veg-pickles',
         order: 2,
+        icon: '🟢',
         color: '#DBEAFE',
         rating: 4.7,
         popular: true,
@@ -239,6 +484,7 @@
         name: 'Nimmakaya Pickle',
         categoryId: 'veg-pickles',
         order: 3,
+        icon: '🍋',
         color: '#FEF3C7',
         rating: 4.6,
         description: 'Zesty lemon pickle with authentic Guntur chilli heat.',
@@ -250,6 +496,7 @@
         name: 'Chicken Pickle',
         categoryId: 'nonveg-pickles',
         order: 4,
+        icon: '🍗',
         color: '#FECACA',
         rating: 4.8,
         popular: true,
@@ -262,6 +509,7 @@
         name: 'Mutton Pickle',
         categoryId: 'nonveg-pickles',
         order: 5,
+        icon: '🍖',
         color: '#FECACA',
         rating: 4.7,
         description: 'Traditional mutton pickle prepared with love in small batches.',
@@ -273,6 +521,7 @@
         name: 'Kaaram Podi',
         categoryId: 'podi',
         order: 6,
+        icon: '🌶️',
         color: '#FFEDD5',
         rating: 4.8,
         popular: true,
@@ -285,6 +534,7 @@
         name: 'Kandi Podi',
         categoryId: 'podi',
         order: 7,
+        icon: '🥄',
         color: '#FFEDD5',
         rating: 4.6,
         popular: true,
@@ -297,6 +547,7 @@
         name: 'Karivepaku Kaaram',
         categoryId: 'podi',
         order: 8,
+        icon: '🍃',
         color: '#D1FAE5',
         rating: 4.7,
         description: 'Fragrant curry-leaf spice powder, chemical free and homemade.',
@@ -308,6 +559,7 @@
         name: 'Janthikalu / Murukku',
         categoryId: 'snacks',
         order: 9,
+        icon: '🥨',
         color: '#FEF3C7',
         rating: 4.6,
         popular: true,
@@ -323,6 +575,7 @@
         name: 'Besan Laddu',
         categoryId: 'sweets',
         order: 10,
+        icon: '🍬',
         color: '#FEF3C7',
         rating: 4.8,
         popular: true,
@@ -336,7 +589,7 @@
     ];
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: cats,
@@ -361,7 +614,8 @@
         storeName: 'Sai Ram Home Foods',
         tagline: 'Authentic taste of tradition',
         location: 'Service area: Guntur, AP',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: logo,
         banner: banner,
         themeColor: '#1B5E20',
@@ -375,7 +629,7 @@
     };
   }
 
-  /** @deprecated Use seedStaticStorefront */
+  /** @deprecated Use seedStaticStorefront / seedGeetaKitchenDraft */
   function seedGeetaDraft() {
     return seedStaticStorefront();
   }
@@ -425,12 +679,12 @@
     var products = pickleProducts.concat(comboProducts);
 
     return {
-      phone: '9876543210',
+      phone: DEMO_WA,
       verified: true,
       businessType: 'pickles',
       categories: [
-        { id: 'pickles', name: 'Pickles', image: 'assets/img/fresh.png' },
-        { id: 'combo-packs', name: 'Combo Packs', image: 'assets/img/cup.png' }
+        { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh },
+        { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup }
       ],
       products: products,
       delivery: {
@@ -453,7 +707,8 @@
         storeName: 'Anitha Homemade Pickles',
         tagline: 'Traditional • Natural • Homemade',
         location: 'Hyderabad, Telangana',
-        whatsapp: '9876543210',
+        whatsapp: DEMO_WA,
+        contactName: DEMO_CONTACT,
         logo: '',
         banner: '',
         themeColor: '#10b981'
@@ -567,6 +822,7 @@
     emptyDraft: emptyDraft,
     seedPickleDraft: seedPickleDraft,
     seedGeetaDraft: seedGeetaDraft,
+    seedGeetaKitchenDraft: seedGeetaKitchenDraft,
     seedSaiRamDraft: seedSaiRamDraft,
     seedStaticStorefront: seedStaticStorefront,
     loadDraft: loadDraft,
