@@ -6,6 +6,17 @@
  */
 
 export type { paths, components, operations } from './schema';
+export type {
+  ApiResponseObject,
+  CategoryDTO,
+  MobileSignUpRequest,
+  OTPVerificationRequest,
+  RefreshTokenRequest,
+  GetBusinessTypesQuery,
+  GetCategoriesQuery,
+  CatalogPage,
+  BusinessTypeDTO,
+} from './schema-types';
 
 export * from './client';
 export * from './services';

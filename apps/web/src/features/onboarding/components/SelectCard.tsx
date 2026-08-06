@@ -9,6 +9,10 @@ type SelectCardProps = {
   'aria-checked'?: boolean;
 };
 
+function isIconUrl(icon: string) {
+  return /^https?:\/\//i.test(icon) || icon.startsWith('data:');
+}
+
 export function SelectCard({
   selected,
   onSelect,
@@ -40,9 +44,13 @@ export function SelectCard({
         </span>
       ) : null}
       {icon ? (
-        <span className="mb-2 block text-2xl" aria-hidden="true">
-          {icon}
-        </span>
+        isIconUrl(icon) ? (
+          <img src={icon} alt="" className="mx-auto mb-2 h-8 w-8 object-contain" />
+        ) : (
+          <span className="mb-2 block text-2xl" aria-hidden="true">
+            {icon}
+          </span>
+        )
       ) : null}
       <span className="text-sm font-semibold text-gray-800">{label}</span>
     </button>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { QueryState } from '@/features/onboarding/components/QueryState';
 import { SelectCard } from '@/features/onboarding/components/SelectCard';
 import { StepNav } from '@/features/onboarding/components/StepNav';
 import { StepShell } from '@/features/onboarding/components/StepShell';
-import { categoriesForBusiness } from '@/features/onboarding/data/constants';
+import { useOnboardingCategories } from '@/features/onboarding/hooks/use-onboarding-catalog';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
 
 export function StepCategories() {
@@ -13,9 +14,15 @@ export function StepCategories() {
   const error = useOnboardingStore((s) => s.error);
   const [customName, setCustomName] = useState('');
 
-  const available = categoriesForBusiness(businessType);
-  const extras = categories.filter((c) => !available.some((a) => a.id === c.id));
-  const options = [...available, ...extras];
+  const businessTypeId = Number(businessType) || null;
+  const categoriesQuery = useOnboardingCategories(businessTypeId);
+
+  const apiCategories = categoriesQuery.data?.items ?? [];
+  const extras = categories.filter((c) => !apiCategories.some((a) => String(a.id) === String(c.id)));
+  const options = [
+    ...apiCategories.map((c) => ({ id: c.id, name: c.name })),
+    ...extras,
+  ];
 
   return (
     <StepShell
@@ -28,21 +35,37 @@ export function StepCategories() {
       error={error}
       footer={<StepNav />}
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Categories">
-        {options.map((cat) => {
-          const selected = categories.some((c) => c.id === cat.id);
-          return (
-            <SelectCard
-              key={cat.id}
-              role="checkbox"
-              aria-checked={selected}
-              label={cat.name}
-              selected={selected}
-              onSelect={() => toggleCategory(cat)}
-            />
-          );
-        })}
-      </div>
+      <QueryState
+        isLoading={categoriesQuery.isLoading && !categoriesQuery.data}
+        isError={categoriesQuery.isError}
+        error={categoriesQuery.error}
+        isEmpty={
+          !categoriesQuery.isLoading &&
+          !categoriesQuery.isError &&
+          apiCategories.length === 0 &&
+          extras.length === 0
+        }
+        onRetry={() => void categoriesQuery.refetch()}
+        loadingLabel="Loading categories"
+        emptyTitle="No categories for this business"
+        emptyDescription="Try another business type, or add a custom category below."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Categories">
+          {options.map((cat) => {
+            const selected = categories.some((c) => String(c.id) === String(cat.id));
+            return (
+              <SelectCard
+                key={String(cat.id)}
+                role="checkbox"
+                aria-checked={selected}
+                label={cat.name}
+                selected={selected}
+                onSelect={() => toggleCategory(cat)}
+              />
+            );
+          })}
+        </div>
+      </QueryState>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <label htmlFor="new-category" className="sr-only">

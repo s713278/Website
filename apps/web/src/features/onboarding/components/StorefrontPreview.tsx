@@ -1,13 +1,10 @@
-import { BUSINESS_TYPES } from '@/features/onboarding/data/constants';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
 
 export function StorefrontPreview() {
   const settings = useOnboardingStore((s) => s.settings);
   const categories = useOnboardingStore((s) => s.categories);
   const products = useOnboardingStore((s) => s.products);
-  const businessType = useOnboardingStore((s) => s.businessType);
   const theme = settings.themeColor || '#10b981';
-  const biz = BUSINESS_TYPES.find((b) => b.id === businessType);
   const namedProducts = products.filter((p) => p.name.trim()).slice(0, 4);
 
   return (
@@ -32,7 +29,7 @@ export function StorefrontPreview() {
                 {settings.logoDataUrl ? (
                   <img src={settings.logoDataUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <span aria-hidden>{biz?.icon || '🏪'}</span>
+                  <span aria-hidden>🏪</span>
                 )}
               </div>
               <div className="min-w-0 text-white">

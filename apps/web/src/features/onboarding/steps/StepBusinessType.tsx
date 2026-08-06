@@ -1,31 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useState } from 'react';
+import { QueryState } from '@/features/onboarding/components/QueryState';
 import { SelectCard } from '@/features/onboarding/components/SelectCard';
 import { StepNav } from '@/features/onboarding/components/StepNav';
 import { StepShell } from '@/features/onboarding/components/StepShell';
-import {
-  BUSINESS_TYPES,
-  BUSINESS_TYPE_PAGE_SIZE,
-} from '@/features/onboarding/data/constants';
+import { useOnboardingBusinessTypes } from '@/features/onboarding/hooks/use-onboarding-catalog';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
 
 export function StepBusinessType() {
   const businessType = useOnboardingStore((s) => s.businessType);
+  const businessTypeLabel = useOnboardingStore((s) => s.businessTypeLabel);
   const setBusinessType = useOnboardingStore((s) => s.setBusinessType);
   const error = useOnboardingStore((s) => s.error);
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const deferredQuery = useDeferredValue(query.trim());
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return BUSINESS_TYPES;
-    return BUSINESS_TYPES.filter((b) =>
-      [b.id, b.label, b.keywords].join(' ').toLowerCase().includes(q),
-    );
-  }, [query]);
+  const businessTypesQuery = useOnboardingBusinessTypes({
+    pageNumber: 0,
+    pageSize: 48,
+    keyword: deferredQuery || undefined,
+  });
 
-  const visible = filtered.slice(0, page * BUSINESS_TYPE_PAGE_SIZE);
-  const hasMore = visible.length < filtered.length;
-  const selected = BUSINESS_TYPES.find((b) => b.id === businessType);
+  const items = businessTypesQuery.data?.items ?? [];
+  const selectedLabel =
+    businessTypeLabel || items.find((b) => String(b.id) === businessType)?.label;
 
   return (
     <StepShell
@@ -48,10 +45,7 @@ export function StepBusinessType() {
             id="business-search"
             type="search"
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search e.g. bakery, pickles, dairy…"
             autoComplete="off"
             enterKeyHint="search"
@@ -63,60 +57,58 @@ export function StepBusinessType() {
               type="button"
               aria-label="Clear search"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-              onClick={() => {
-                setQuery('');
-                setPage(1);
-              }}
+              onClick={() => setQuery('')}
             >
               ✕
             </button>
           ) : null}
         </div>
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-          <span>
-            Showing {visible.length} of {filtered.length}
-          </span>
-          {selected ? (
-            <span className="font-medium text-emerald-700">Selected: {selected.label}</span>
+          {businessTypesQuery.data ? (
+            <span>
+              Showing {items.length}
+              {businessTypesQuery.data.total ? ` of ${businessTypesQuery.data.total}` : ''}
+            </span>
+          ) : null}
+          {selectedLabel ? (
+            <span className="font-medium text-emerald-700">Selected: {selectedLabel}</span>
           ) : null}
         </div>
       </div>
 
-      <div className="max-h-80 overflow-y-auto pr-1">
-        {visible.length ? (
+      <QueryState
+        isLoading={businessTypesQuery.isLoading && !businessTypesQuery.data}
+        isError={businessTypesQuery.isError}
+        error={businessTypesQuery.error}
+        isEmpty={!businessTypesQuery.isLoading && !businessTypesQuery.isError && items.length === 0}
+        onRetry={() => void businessTypesQuery.refetch()}
+        loadingLabel="Loading business types"
+        emptyTitle="No business types found"
+        emptyDescription={
+          deferredQuery
+            ? 'No business types match your search. Try another word.'
+            : 'The catalog is empty right now. Retry or try again later.'
+        }
+      >
+        <div className="max-h-80 overflow-y-auto pr-1">
           <div
             id="business-grid"
             role="listbox"
             aria-label="Business types"
             className="grid grid-cols-2 gap-3 sm:grid-cols-3"
           >
-            {visible.map((b) => (
+            {items.map((b) => (
               <SelectCard
                 key={b.id}
                 icon={b.icon}
                 label={b.label}
-                selected={businessType === b.id}
-                onSelect={() => setBusinessType(b.id)}
+                selected={businessType === String(b.id)}
+                onSelect={() => setBusinessType(b.id, b.label)}
               />
             ))}
           </div>
-        ) : (
-          <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
-            No business types match your search. Try another word or choose <strong>Others</strong>.
-          </p>
-        )}
-        {hasMore ? (
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Load more types
-            </button>
-          </div>
-        ) : null}
-      </div>
+        </div>
+      </QueryState>
     </StepShell>
   );
 }

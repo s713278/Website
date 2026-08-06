@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import {
   PRODUCT_COLORS,
   TOTAL_STEPS,
-  categoriesForBusiness,
   slugify,
   uid,
 } from '@/features/onboarding/data/constants';
@@ -26,12 +25,12 @@ type OnboardingStore = OnboardingDraft & {
   reset: () => void;
   setPhone: (phone: string) => void;
   markVerified: () => void;
-  setBusinessType: (id: string) => void;
+  setBusinessType: (id: string | number, label?: string) => void;
   toggleCategory: (cat: CategoryOption) => void;
   addCustomCategory: (name: string) => void;
-  setExpandedProductCat: (id: string | null) => void;
-  setExpandedSkuCat: (id: string | null) => void;
-  addProduct: (categoryId: string, name?: string) => void;
+  setExpandedProductCat: (id: number | string | null) => void;
+  setExpandedSkuCat: (id: number | string | null) => void;
+  addProduct: (categoryId: number | string, name?: string) => void;
   updateProduct: (id: string, patch: Partial<ProductDraft>) => void;
   removeProduct: (id: string) => void;
   addVariant: (productId: string) => void;
@@ -63,7 +62,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
       return false;
     }
     if (state.currentStep === 1) {
-      set({ currentStep: 2, maxReachedStep: Math.max(state.maxReachedStep, 2), error: '' });
+      // OTP send is handled by useOnboardingRequestOtp — do not auto-advance here.
       return true;
     }
     const next = Math.min(TOTAL_STEPS, state.currentStep + 1);
@@ -101,14 +100,14 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
     });
   },
 
-  setBusinessType: (id) => {
-    const cats = categoriesForBusiness(id).slice(0, 2);
+  setBusinessType: (id, label) => {
     set({
-      businessType: id,
-      categories: cats,
+      businessType: String(id),
+      businessTypeLabel: label || '',
+      categories: [],
       products: [],
-      expandedProductCatId: cats[0]?.id ?? null,
-      expandedSkuCatId: cats[0]?.id ?? null,
+      expandedProductCatId: null,
+      expandedSkuCatId: null,
       error: '',
     });
   },

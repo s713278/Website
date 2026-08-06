@@ -15,7 +15,7 @@ export async function requestOtp(values: OtpRequestValues) {
     country_code: '+91',
     mobile_number: values.phone,
     reg_platform: 'Web',
-    user_role: values.role === 'customer' ? 'CUSTOMER' : 'ADMIN',
+    user_role: values.role === 'customer' ? 'USER' : 'VENDOR',
   };
   return authService.requestOtp(body);
 }
@@ -29,7 +29,7 @@ export async function verifyOtp(
 }> {
   const body: OTPVerificationRequest = {
     country_code: '+91',
-    mobile_number: values.phone,
+    mobile_number: Number(values.phone),
     otp: values.otp,
   };
   const res = await authService.verifyOtp(body);

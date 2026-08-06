@@ -16,9 +16,11 @@ export const queryKeys = {
   },
   catalog: {
     all: ['mithra', 'catalog'] as const,
-    categories: () => ['mithra', 'catalog', 'categories'] as const,
+    categories: (params?: Record<string, unknown>) =>
+      ['mithra', 'catalog', 'categories', params ?? {}] as const,
     grouped: () => ['mithra', 'catalog', 'categories', 'grouped'] as const,
-    businessTypes: () => ['mithra', 'catalog', 'business-types'] as const,
+    businessTypes: (params?: Record<string, unknown>) =>
+      ['mithra', 'catalog', 'business-types', params ?? {}] as const,
     products: (categoryId: number | string) =>
       ['mithra', 'catalog', 'categories', String(categoryId), 'products'] as const,
   },

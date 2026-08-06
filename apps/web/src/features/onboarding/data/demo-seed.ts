@@ -1,6 +1,5 @@
 import {
   PRODUCT_COLORS,
-  categoriesForBusiness,
   uid,
 } from '@/features/onboarding/data/constants';
 import type { OnboardingDraft, ProductDraft } from '@/features/onboarding/types';
@@ -40,6 +39,7 @@ export function createEmptyDraft(): OnboardingDraft {
     phone: '',
     verified: false,
     businessType: '',
+    businessTypeLabel: '',
     categories: [],
     products: [],
     delivery: emptyDelivery(),
@@ -51,7 +51,7 @@ export function createEmptyDraft(): OnboardingDraft {
 }
 
 function makeProduct(
-  categoryId: string,
+  categoryId: number | string,
   name: string,
   color: string,
   price: number,
@@ -66,13 +66,16 @@ function makeProduct(
   };
 }
 
-/** Local demo seed — no API. */
+/** Local demo seed — offline only (Load demo data). */
 export function createDemoDraft(): OnboardingDraft {
-  const cats = categoriesForBusiness('home-kitchen').slice(0, 2);
+  const cats = [
+    { id: 117, name: 'Fresh Milk' },
+    { id: 118, name: 'Curd & Yogurt' },
+  ];
   const products: ProductDraft[] = [
-    makeProduct(cats[0]?.id || 'meals', 'Veg Thali', PRODUCT_COLORS[0], 120),
-    makeProduct(cats[0]?.id || 'meals', 'Sambar Rice', PRODUCT_COLORS[2], 80),
-    makeProduct(cats[1]?.id || 'snacks', 'Murukku Pack', PRODUCT_COLORS[3], 60),
+    makeProduct(cats[0].id, 'Cow Milk 1L', PRODUCT_COLORS[0], 60),
+    makeProduct(cats[0].id, 'Buffalo Milk 1L', PRODUCT_COLORS[2], 70),
+    makeProduct(cats[1].id, 'Plain Curd', PRODUCT_COLORS[3], 40),
   ];
 
   return {
@@ -81,7 +84,8 @@ export function createDemoDraft(): OnboardingDraft {
     maxReachedStep: 9,
     phone: '9912149049',
     verified: true,
-    businessType: 'home-kitchen',
+    businessType: '1',
+    businessTypeLabel: 'Dairy & Farm Fresh',
     categories: cats,
     products,
     delivery: {

@@ -12,7 +12,7 @@ export type BusinessType = {
 };
 
 export type CategoryOption = {
-  id: string;
+  id: number | string;
   name: string;
 };
 
@@ -25,7 +25,7 @@ export type ProductVariant = {
 
 export type ProductDraft = {
   id: string;
-  categoryId: string;
+  categoryId: number | string;
   name: string;
   imageDataUrl: string;
   color: string;
@@ -65,14 +65,16 @@ export type OnboardingDraft = {
   maxReachedStep: number;
   phone: string;
   verified: boolean;
+  /** OpenAPI business type id (stringified number from API). */
   businessType: string;
+  businessTypeLabel: string;
   categories: CategoryOption[];
   products: ProductDraft[];
   delivery: DeliveryDraft;
   payment: PaymentDraft;
   settings: StoreSettingsDraft;
-  expandedProductCatId: string | null;
-  expandedSkuCatId: string | null;
+  expandedProductCatId: number | string | null;
+  expandedSkuCatId: number | string | null;
 };
 
 export type ThemePreset = {

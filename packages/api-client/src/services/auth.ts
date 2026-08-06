@@ -1,23 +1,13 @@
 import { apiGet, apiPost, unwrapData } from '../client/http';
 import { clearTokens, parseTokenResponse, setTokens } from '../client/tokens';
 import type { ApiEnvelope } from '../client/types';
+import type {
+  MobileSignUpRequest,
+  OTPVerificationRequest,
+  RefreshTokenRequest,
+} from '../schema-types';
 
-export type MobileSignUpRequest = {
-  country_code: string;
-  mobile_number: string;
-  reg_platform: string;
-  user_role?: string;
-};
-
-export type OTPVerificationRequest = {
-  country_code: string;
-  mobile_number: number | string;
-  otp: string;
-};
-
-export type RefreshTokenRequest = {
-  refresh_token: string;
-};
+export type { MobileSignUpRequest, OTPVerificationRequest, RefreshTokenRequest };
 
 /** POST /v1/auth/request-otp */
 export async function requestOtp(body: MobileSignUpRequest) {
