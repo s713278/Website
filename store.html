@@ -200,9 +200,13 @@
                             <button type="button" class="btn-primary-store" id="btn-send-otp">Send OTP</button>
                         </div>
                         <div id="login-otp-step" class="hidden">
-                            <label class="field-label" for="login-otp">Enter OTP</label>
-                            <input type="text" class="field field-otp" id="login-otp" maxlength="6" placeholder="••••••" inputmode="numeric">
-                            <p class="demo-hint">Demo: enter any 6 digits</p>
+                            <p class="field-label" id="login-otp-label">Enter OTP</p>
+                            <p class="auth-sub auth-otp-lead">
+                                Enter the 4-digit code sent to your phone.
+                                <span class="otp-demo">(Demo: any 4 digits)</span>
+                            </p>
+                            <div class="otp-row" id="login-otp-inputs" aria-labelledby="login-otp-label"></div>
+                            <p id="login-otp-error" class="login-otp-error hidden" role="alert"></p>
                             <button type="button" class="btn-primary-store" id="btn-verify-otp">Verify &amp; Continue</button>
                             <button type="button" class="resend-btn" id="btn-resend-otp">Resend OTP</button>
                         </div>
@@ -323,6 +327,7 @@
 
     <script src="assets/js/store-draft.js"></script>
     <script src="assets/js/store-api.js"></script>
+    <script src="assets/js/otp-input.js"></script>
     <script src="assets/js/storefront.js"></script>
 </body>
 </html>

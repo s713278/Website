@@ -132,29 +132,7 @@ body.onboarding-page h6 {
   }
 }
 
-/* OTP boxes */
-.otp-row {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-}
-
-.otp-input {
-  width: 2.75rem;
-  height: 3.25rem;
-  text-align: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  border: 2px solid #d1d5db;
-  border-radius: 0.75rem;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.otp-input:focus {
-  border-color: var(--md-green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
-}
+/* OTP boxes — shared styles live in assets/css/global.css (.otp-row / .otp-input) */
 
 /* Business / category cards */
 .select-card {

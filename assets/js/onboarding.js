@@ -125,8 +125,9 @@
     }
     if (step === 2) {
       var otp = getOtpValue();
-      if (!/^\d{6}$/.test(otp)) {
-        showError('otp-error', 'Enter the 6-digit OTP.');
+      var otpLen = (window.MithraOtp && window.MithraOtp.LENGTH) || 4;
+      if (!new RegExp('^\\d{' + otpLen + '}$').test(otp)) {
+        showError('otp-error', 'Enter the ' + otpLen + '-digit OTP.');
         return false;
       }
       draft.verified = true;
@@ -355,51 +356,22 @@
 
   /* ---------- Step 1–2 OTP ---------- */
 
+  var otpField = null;
+
   function buildOtpInputs() {
+    var Otp = window.MithraOtp;
     var row = document.getElementById('otp-inputs');
-    row.innerHTML = '';
-    for (var i = 0; i < 6; i++) {
-      var input = document.createElement('input');
-      input.type = 'text';
-      input.inputMode = 'numeric';
-      input.maxLength = 1;
-      input.className = 'otp-input';
-      input.setAttribute('aria-label', 'Digit ' + (i + 1));
-      input.dataset.idx = String(i);
-      input.addEventListener('input', onOtpInput);
-      input.addEventListener('keydown', onOtpKeydown);
-      input.addEventListener('paste', onOtpPaste);
-      row.appendChild(input);
+    if (!row || !Otp) return;
+    if (!otpField) {
+      otpField = Otp.mount(row, { idPrefix: 'onboarding-otp' });
+    } else {
+      otpField.clear();
     }
-  }
-
-  function onOtpInput(e) {
-    var v = e.target.value.replace(/\D/g, '').slice(0, 1);
-    e.target.value = v;
-    if (v && e.target.nextElementSibling) e.target.nextElementSibling.focus();
-  }
-
-  function onOtpKeydown(e) {
-    if (e.key === 'Backspace' && !e.target.value && e.target.previousElementSibling) {
-      e.target.previousElementSibling.focus();
-    }
-  }
-
-  function onOtpPaste(e) {
-    e.preventDefault();
-    var text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
-    var inputs = document.querySelectorAll('.otp-input');
-    for (var i = 0; i < inputs.length; i++) {
-      inputs[i].value = text[i] || '';
-    }
+    otpField.focus();
   }
 
   function getOtpValue() {
-    return Array.prototype.map
-      .call(document.querySelectorAll('.otp-input'), function (i) {
-        return i.value;
-      })
-      .join('');
+    return otpField ? otpField.getValue() : '';
   }
 
   function startResendTimer(sec) {

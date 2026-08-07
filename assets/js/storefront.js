@@ -1240,7 +1240,34 @@
       updateCartUI();
     });
 
-    document.getElementById('btn-proceed-login').addEventListener('click', function () {
+    var storeOtpField = null;
+
+  function ensureStoreOtp() {
+    if (storeOtpField || !window.MithraOtp) return storeOtpField;
+    var row = document.getElementById('login-otp-inputs');
+    if (!row) return null;
+    storeOtpField = window.MithraOtp.mount(row, { idPrefix: 'store-otp' });
+    return storeOtpField;
+  }
+
+  function showLoginOtpError(message) {
+    var el = document.getElementById('login-otp-error');
+    if (!el) {
+      alert(message);
+      return;
+    }
+    el.textContent = message || '';
+    el.classList.remove('hidden');
+  }
+
+  function hideLoginOtpError() {
+    var el = document.getElementById('login-otp-error');
+    if (!el) return;
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+
+  document.getElementById('btn-proceed-login').addEventListener('click', function () {
       if (!state.cart.length) return;
       if (!requireDeliveryAddress('change', null)) return;
       // Always: mobile number → OTP → order creation / review
@@ -1252,8 +1279,9 @@
         phoneInput.value = state.customer.phone || '';
         phoneInput.focus();
       }
-      var otpInput = document.getElementById('login-otp');
-      if (otpInput) otpInput.value = '';
+      ensureStoreOtp();
+      if (storeOtpField) storeOtpField.clear();
+      hideLoginOtpError();
     });
 
     document.getElementById('btn-send-otp').addEventListener('click', function () {
@@ -1265,19 +1293,23 @@
       state.customer.phone = phone;
       document.getElementById('login-phone-step').classList.add('hidden');
       document.getElementById('login-otp-step').classList.remove('hidden');
-      var otpInput = document.getElementById('login-otp');
-      if (otpInput) {
-        otpInput.value = '';
-        otpInput.focus();
+      ensureStoreOtp();
+      if (storeOtpField) {
+        storeOtpField.clear();
+        storeOtpField.focus();
       }
+      hideLoginOtpError();
     });
 
     document.getElementById('btn-verify-otp').addEventListener('click', function () {
-      var otp = (document.getElementById('login-otp').value || '').replace(/\D/g, '');
-      if (otp.length !== 6) {
-        alert('Enter the 6-digit OTP (demo: any 6 digits).');
+      ensureStoreOtp();
+      var otpLen = (window.MithraOtp && window.MithraOtp.LENGTH) || 4;
+      var otp = storeOtpField ? storeOtpField.getValue() : '';
+      if (otp.length !== otpLen) {
+        showLoginOtpError('Enter the ' + otpLen + '-digit OTP (demo: any ' + otpLen + ' digits).');
         return;
       }
+      hideLoginOtpError();
       state.customer.loggedIn = true;
       state.customer.name =
         (window.MithraAssets &&
@@ -1292,6 +1324,12 @@
     });
 
     document.getElementById('btn-resend-otp').addEventListener('click', function () {
+      ensureStoreOtp();
+      if (storeOtpField) {
+        storeOtpField.clear();
+        storeOtpField.focus();
+      }
+      hideLoginOtpError();
       alert('OTP resent (demo).');
     });
 
