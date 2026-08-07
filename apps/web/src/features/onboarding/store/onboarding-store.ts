@@ -115,9 +115,19 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
       set({ hydrated: true });
       return;
     }
+    const maxReached = Math.min(
+      TOTAL_STEPS,
+      Math.max(1, Number(saved.maxReachedStep) || 1),
+    );
+    const current = Math.min(
+      maxReached,
+      Math.max(1, Number(saved.currentStep) || 1),
+    );
     set({
       ...createEmptyDraft(),
       ...saved,
+      currentStep: current,
+      maxReachedStep: maxReached,
       saveStatus: 'saved',
       lastSavedAt: saved.savedAt || null,
       publishError: '',

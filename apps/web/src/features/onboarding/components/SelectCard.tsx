@@ -28,26 +28,16 @@ export function SelectCard({
       aria-selected={role === 'option' ? !!selected : undefined}
       aria-checked={role === 'checkbox' ? (ariaChecked ?? !!selected) : undefined}
       onClick={onSelect}
-      className={cn(
-        'relative rounded-2xl border-2 bg-white p-4 text-center transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
-        selected
-          ? 'border-emerald-500 bg-emerald-50 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]'
-          : 'border-gray-200 hover:border-emerald-200',
-      )}
+      className={cn('select-card', selected && 'selected')}
     >
-      {selected ? (
-        <span
-          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[0.7rem] text-white"
-          aria-hidden="true"
-        >
-          ✓
-        </span>
-      ) : null}
+      <span className="check" aria-hidden="true">
+        ✓
+      </span>
       {icon ? (
         isIconUrl(icon) ? (
           <img src={icon} alt="" className="mx-auto mb-2 h-8 w-8 object-contain" />
         ) : (
-          <span className="mb-2 block text-2xl" aria-hidden="true">
+          <span className="icon-emoji" aria-hidden="true">
             {icon}
           </span>
         )

@@ -29,7 +29,7 @@ export function OtpInputs({
   }
 
   return (
-    <div className="flex justify-center gap-2" role="group" aria-label="One-time password">
+    <div className="otp-row mb-4" role="group" aria-label="One-time password">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -44,10 +44,7 @@ export function OtpInputs({
           disabled={disabled}
           aria-label={`Digit ${index + 1} of ${length}`}
           aria-describedby={describedBy}
-          className={cn(
-            'h-[3.25rem] w-11 rounded-xl border-2 border-gray-300 text-center text-xl font-bold outline-none transition focus:border-emerald-500 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.2)]',
-            disabled && 'opacity-50',
-          )}
+          className={cn('otp-input', disabled && 'opacity-50')}
           onChange={(e) => {
             const char = e.target.value.replace(/\D/g, '').slice(-1);
             setAt(index, char);

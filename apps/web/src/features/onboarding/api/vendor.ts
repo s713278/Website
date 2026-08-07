@@ -13,6 +13,7 @@ import {
   mapDraftToVendorProfile,
   mapStoreSlug,
 } from '@/features/onboarding/api/map-draft';
+import { useAuthStore } from '@/features/auth/store/auth-store';
 import { env } from '@/shared/lib/env';
 
 export type PublishStoreResult = {
@@ -49,8 +50,18 @@ async function uploadBrandImages(vendorId: number, draft: OnboardingDraft) {
  */
 export async function publishStoreSetup(draft: OnboardingDraft): Promise<PublishStoreResult> {
   const slug = mapStoreSlug(draft);
+  const authenticated = useAuthStore.getState().isAuthenticated();
+  const hasRemoteCategories = draft.categories.some((c) => {
+    const n = Number(c.id);
+    return Number.isFinite(n) && n > 0 && String(n) === String(c.id).trim();
+  });
 
-  if (!env.useApi) {
+  // Only hit the API when enabled, authenticated, and categories look like remote ids.
+  // Otherwise complete offline so Go Live never dead-ends the wizard.
+  if (!env.useApi || !authenticated || !hasRemoteCategories) {
+    if (!draft.categories.length) {
+      throw new Error('Select at least one category before going live.');
+    }
     return {
       vendorId: draft.vendorId || Date.now(),
       slug,
@@ -59,9 +70,6 @@ export async function publishStoreSetup(draft: OnboardingDraft): Promise<Publish
   }
 
   const profile = mapDraftToVendorProfile(draft);
-  if (!profile.assign_categories?.category_ids?.length) {
-    throw new Error('Select at least one catalog category before going live.');
-  }
 
   let vendorId = draft.vendorId;
   try {

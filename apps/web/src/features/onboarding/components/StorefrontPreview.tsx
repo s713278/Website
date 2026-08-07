@@ -11,11 +11,12 @@ export function StorefrontPreview() {
   const hasHome = delivery.homeDelivery.enabled || delivery.courierDelivery.enabled;
 
   return (
-    <div className="lg:sticky lg:top-24">
+    <div className="preview-sticky">
       <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-400">
         Storefront Preview (Live)
       </p>
-      <div className="mx-auto w-[300px] overflow-hidden rounded-[1.75rem] border border-gray-200 bg-white shadow-xl shadow-emerald-900/10">
+      <div className="phone-frame">
+        <div className="phone-screen">
         {/* store-header */}
         <div className="flex h-11 items-center justify-between border-b border-gray-100 px-3">
           <span className="text-lg text-gray-500" aria-hidden>
@@ -151,6 +152,7 @@ export function StorefrontPreview() {
           >
             Order on WhatsApp
           </div>
+        </div>
         </div>
       </div>
     </div>

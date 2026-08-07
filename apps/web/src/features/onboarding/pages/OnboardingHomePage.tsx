@@ -9,6 +9,7 @@ import { OnboardingWizard } from '@/features/onboarding/components/OnboardingWiz
 import { StorefrontPreview } from '@/features/onboarding/components/StorefrontPreview';
 import { useStoreSetupAutosave } from '@/features/onboarding/hooks/use-store-setup-autosave';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
+import '@/features/onboarding/styles/onboarding.css';
 
 export function OnboardingHomePage() {
   useStoreSetupAutosave();
@@ -28,12 +29,12 @@ export function OnboardingHomePage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[var(--md-atmosphere)] pb-28 text-gray-800">
+    <div className="onboarding-page">
       <OnboardingHeader />
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="font-display text-2xl font-bold text-gray-900 sm:text-3xl">
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
               Setup Your Insta &amp; WhatsApp Store
             </h1>
             <p className="mt-1 text-sm text-gray-500 sm:text-base">

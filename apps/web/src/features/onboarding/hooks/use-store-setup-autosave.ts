@@ -28,6 +28,7 @@ export function useStoreSetupAutosave() {
         state.payment !== prev.payment ||
         state.settings !== prev.settings ||
         state.currentStep !== prev.currentStep ||
+        state.maxReachedStep !== prev.maxReachedStep ||
         state.vendorId !== prev.vendorId ||
         state.published !== prev.published;
 

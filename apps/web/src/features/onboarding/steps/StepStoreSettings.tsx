@@ -73,7 +73,7 @@ export function StepStoreSettings() {
             type="button"
             onClick={goBack}
             disabled={publish.isPending}
-            className="rounded-full border border-gray-200 px-5 py-2.5 font-medium text-gray-600 hover:bg-gray-50"
+            className="btn-back px-5 py-2.5"
           >
             Back
           </button>
@@ -81,7 +81,7 @@ export function StepStoreSettings() {
             type="button"
             onClick={() => void onGoLive()}
             disabled={publish.isPending}
-            className="rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 px-8 py-2.5 font-semibold text-white shadow-md shadow-emerald-500/30 disabled:opacity-60"
+            className="btn-primary-md rounded-full px-8 py-2.5 font-semibold disabled:opacity-60"
           >
             {publish.isPending ? 'Publishing…' : 'Go Live'}
           </button>

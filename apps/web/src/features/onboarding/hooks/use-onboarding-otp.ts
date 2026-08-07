@@ -15,11 +15,14 @@ export function useOnboardingRequestOtp() {
     mutationFn: (phone: string) => requestOnboardingOtp(phone),
     onMutate: () => clearError(),
     onSuccess: () => {
-      const maxReached = useOnboardingStore.getState().maxReachedStep;
+      const state = useOnboardingStore.getState();
+      // Advance only from step 1 → 2; resend on step 2 must not reset navigation.
+      const nextStep = state.currentStep === 1 ? 2 : state.currentStep;
       useOnboardingStore.setState({
-        currentStep: 2,
-        maxReachedStep: Math.max(maxReached, 2),
+        currentStep: nextStep,
+        maxReachedStep: Math.max(state.maxReachedStep, 2),
         error: '',
+        publishError: '',
       });
     },
     onError: (error) => {
@@ -43,10 +46,12 @@ export function useOnboardingVerifyOtp() {
         access_token?: string;
         refresh_token?: string;
         user?: { id?: string | number; name?: string; role?: string };
+        offline?: boolean;
       };
-      if (data.access_token) {
+      const token = data.access_token;
+      if (token) {
         setSession({
-          accessToken: data.access_token,
+          accessToken: token,
           refreshToken: data.refresh_token || null,
           user: {
             id: String(data.user?.id || `vendor_${phone}`),

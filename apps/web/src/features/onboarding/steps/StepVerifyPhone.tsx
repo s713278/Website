@@ -40,7 +40,7 @@ export function StepVerifyPhone() {
           type="button"
           onClick={() => void onSend()}
           disabled={requestOtp.isPending}
-          className="mt-6 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 px-8 py-3 font-semibold text-white shadow-md shadow-emerald-500/30 disabled:opacity-60"
+          className="btn-primary-md mt-6 rounded-full px-8 py-3 font-semibold"
         >
           {requestOtp.isPending ? 'Sending…' : 'Send OTP'}
         </button>

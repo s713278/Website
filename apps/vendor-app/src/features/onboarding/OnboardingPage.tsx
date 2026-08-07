@@ -136,7 +136,7 @@ export function OnboardingPage() {
         return;
       }
       if (step === 2) {
-        if (otp.length !== 6) throw new Error('Enter 6-digit OTP.');
+        if (otp.length !== 4) throw new Error('Enter 4-digit OTP.');
         if (USE_API) {
           await verifyOtpMut.mutateAsync();
         }
@@ -229,7 +229,7 @@ export function OnboardingPage() {
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           {!USE_API ? (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Demo mode (`VITE_USE_API` not true). OTP accepts any 6 digits; vendor APIs skipped.
+              Demo mode (`VITE_USE_API` not true). OTP accepts any 4 digits; vendor APIs skipped.
             </p>
           ) : null}
 
@@ -241,7 +241,7 @@ export function OnboardingPage() {
               <>
                 <OtpInput value={otp} onChange={setOtp} />
                 <p className="text-xs text-slate-500">
-                  {otpSent ? 'OTP sent (or demo).' : ''} Enter any 6 digits in demo mode.
+                  {otpSent ? 'OTP sent (or demo).' : ''} Enter any 4 digits in demo mode.
                 </p>
               </>
             )}
