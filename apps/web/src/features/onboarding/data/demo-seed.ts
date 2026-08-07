@@ -47,6 +47,11 @@ export function createEmptyDraft(): OnboardingDraft {
     settings: emptySettings(),
     expandedProductCatId: null,
     expandedSkuCatId: null,
+    vendorId: null,
+    published: false,
+    saveStatus: 'idle',
+    lastSavedAt: null,
+    publishError: '',
   };
 }
 
@@ -69,8 +74,8 @@ function makeProduct(
 /** Local demo seed — offline only (Load demo data). */
 export function createDemoDraft(): OnboardingDraft {
   const cats = [
-    { id: 117, name: 'Fresh Milk' },
-    { id: 118, name: 'Curd & Yogurt' },
+    { id: 'milk', name: 'Milk Products' },
+    { id: 'curd', name: 'Curd & Paneer' },
   ];
   const products: ProductDraft[] = [
     makeProduct(cats[0].id, 'Cow Milk 1L', PRODUCT_COLORS[0], 60),
@@ -84,8 +89,8 @@ export function createDemoDraft(): OnboardingDraft {
     maxReachedStep: 9,
     phone: '9912149049',
     verified: true,
-    businessType: '1',
-    businessTypeLabel: 'Dairy & Farm Fresh',
+    businessType: 'dairy',
+    businessTypeLabel: 'Dairy & Fresh',
     categories: cats,
     products,
     delivery: {

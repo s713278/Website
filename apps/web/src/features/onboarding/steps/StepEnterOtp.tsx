@@ -25,8 +25,8 @@ export function StepEnterOtp() {
     (resendOtp.isError ? getErrorMessage(resendOtp.error) : '');
 
   function verify() {
-    if (!/^\d{6}$/.test(otp)) {
-      setError('Enter the 6-digit OTP to continue.');
+    if (!/^\d{4}$/.test(otp)) {
+      setError('Enter the 4-digit OTP to continue.');
       return;
     }
     verifyOtp.mutate(otp);
@@ -42,20 +42,22 @@ export function StepEnterOtp() {
     <section aria-labelledby="otp-title">
       <div className="mb-1 flex items-center gap-2">
         <span
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm text-emerald-600"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--md-green-soft)] text-sm text-[var(--md-green)]"
           aria-hidden
         >
           ✓
         </span>
-        <h2 id="otp-title" className="font-display text-xl font-bold text-gray-900">
+        <h2 id="otp-title" className="text-xl font-bold text-gray-900">
           Enter OTP
         </h2>
       </div>
       <p className="mb-6 text-sm text-gray-500">
-        Enter the 6-digit code sent to{' '}
-        <span className="font-medium text-gray-700">+91 {phone}</span>.
+        Enter the 4-digit code sent to{' '}
+        <span className="font-medium text-gray-700">+91 {phone}</span>.{' '}
+        <span className="otp-demo">(Demo: any 4 digits)</span>
       </p>
       <OtpInputs
+        length={4}
         value={otp}
         onChange={setOtp}
         disabled={verifyOtp.isPending}
@@ -70,7 +72,7 @@ export function StepEnterOtp() {
         <div className="mt-3 flex justify-center">
           <button
             type="button"
-            className="text-sm font-semibold text-emerald-700 hover:underline"
+            className="text-sm font-semibold text-[var(--md-green)] hover:underline"
             onClick={verifyOtp.isError ? verify : resend}
             disabled={verifyOtp.isPending || resendOtp.isPending}
           >
@@ -83,7 +85,7 @@ export function StepEnterOtp() {
           type="button"
           disabled={seconds > 0 || resendOtp.isPending}
           onClick={resend}
-          className="font-medium text-emerald-600 disabled:text-gray-400"
+          className="font-medium text-[var(--md-green)] disabled:text-gray-400"
         >
           {resendOtp.isPending
             ? 'Sending…'
@@ -97,7 +99,7 @@ export function StepEnterOtp() {
           type="button"
           onClick={verify}
           disabled={verifyOtp.isPending}
-          className="rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 px-8 py-3 font-semibold text-white shadow-md shadow-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn-primary-md rounded-full px-8 py-3 font-semibold"
         >
           {verifyOtp.isPending ? 'Verifying…' : 'Verify & Continue'}
         </button>

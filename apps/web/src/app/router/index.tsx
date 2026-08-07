@@ -19,6 +19,11 @@ const MarketingHomePage = lazy(() =>
 const StoreHomePage = lazy(() =>
   import('@/features/storefront/pages/StoreHomePage').then((m) => ({ default: m.StoreHomePage })),
 );
+const ProductDetailPage = lazy(() =>
+  import('@/features/storefront/pages/ProductDetailPage').then((m) => ({
+    default: m.ProductDetailPage,
+  })),
+);
 const OnboardingHomePage = lazy(() =>
   import('@/features/onboarding/pages/OnboardingHomePage').then((m) => ({
     default: m.OnboardingHomePage,
@@ -27,6 +32,26 @@ const OnboardingHomePage = lazy(() =>
 const DashboardHomePage = lazy(() =>
   import('@/features/dashboard/pages/DashboardHomePage').then((m) => ({
     default: m.DashboardHomePage,
+  })),
+);
+const OrdersPage = lazy(() =>
+  import('@/features/dashboard/pages/OrdersPage').then((m) => ({ default: m.OrdersPage })),
+);
+const ProductsPage = lazy(() =>
+  import('@/features/dashboard/pages/ProductsPage').then((m) => ({ default: m.ProductsPage })),
+);
+const StoreSharePage = lazy(() =>
+  import('@/features/dashboard/pages/StoreSharePage').then((m) => ({ default: m.StoreSharePage })),
+);
+const SettingsPage = lazy(() =>
+  import('@/features/dashboard/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
+const AuditLogsPage = lazy(() =>
+  import('@/features/dashboard/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })),
+);
+const AdminVendorsPage = lazy(() =>
+  import('@/features/dashboard/pages/AdminVendorsPage').then((m) => ({
+    default: m.AdminVendorsPage,
   })),
 );
 const LoginPage = lazy(() =>
@@ -61,7 +86,10 @@ export const router = createBrowserRouter([
         <StoreLayout />
       </RouteFrame>
     ),
-    children: [{ index: true, element: <StoreHomePage /> }],
+    children: [
+      { index: true, element: <StoreHomePage /> },
+      { path: 'products/:productId', element: <ProductDetailPage /> },
+    ],
   },
   {
     path: '/onboarding',
@@ -99,7 +127,18 @@ export const router = createBrowserRouter([
             <DashboardLayout />
           </RouteFrame>
         ),
-        children: [{ index: true, element: <DashboardHomePage /> }],
+        children: [
+          { index: true, element: <DashboardHomePage /> },
+          { path: 'orders', element: <OrdersPage /> },
+          { path: 'products', element: <ProductsPage /> },
+          { path: 'store', element: <StoreSharePage /> },
+          { path: 'settings', element: <SettingsPage /> },
+          { path: 'audit-logs', element: <AuditLogsPage /> },
+          {
+            element: <ProtectedRoute roles={['admin']} />,
+            children: [{ path: 'vendors', element: <AdminVendorsPage /> }],
+          },
+        ],
       },
     ],
   },

@@ -39,8 +39,8 @@ export function AuthView() {
 
   async function verify() {
     setError('');
-    if (otp.length !== 6) {
-      setError('Enter the 6-digit OTP.');
+    if (otp.length !== 4) {
+      setError('Enter the 4-digit OTP.');
       return;
     }
     setBusy(true);
@@ -63,7 +63,7 @@ export function AuthView() {
       <h2 className="md-display text-2xl">Login / Signup</h2>
       <p className="mt-1 text-sm text-slate-500">We&apos;ll send a one-time password to your phone</p>
       {!USE_API ? (
-        <p className="mt-2 text-xs text-amber-700">Demo: any 6 digits</p>
+        <p className="mt-2 text-xs text-amber-700">Demo: any 4 digits</p>
       ) : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       <div className="mt-6 w-full max-w-sm space-y-4 text-left">

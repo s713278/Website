@@ -437,6 +437,37 @@ h6,
   color: var(--md-muted);
 }
 
+/* ——— Shared OTP digit boxes (store + onboarding) ——— */
+.otp-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.otp-input {
+  width: 2.75rem;
+  height: 3.25rem;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  border: 2px solid #d1d5db;
+  border-radius: 0.75rem;
+  outline: none;
+  background: #fff;
+  color: var(--md-ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.otp-input:focus {
+  border-color: var(--store-theme, var(--md-green));
+  box-shadow: var(--md-focus-ring);
+}
+
+.otp-demo {
+  color: var(--store-theme, var(--md-green));
+  font-weight: 600;
+}
+
 /* Search field (shared) */
 .md-search {
   position: relative;

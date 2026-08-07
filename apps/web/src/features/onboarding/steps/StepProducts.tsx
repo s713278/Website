@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { StepNav } from '@/features/onboarding/components/StepNav';
 import { StepShell } from '@/features/onboarding/components/StepShell';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
+import { readImageFileAsDataUrl } from '@/shared/lib/read-image-file';
 import { cn } from '@/shared/lib/utils';
 
 export function StepProducts() {
@@ -43,9 +44,9 @@ export function StepProducts() {
           const id = pendingPhotoId.current;
           e.target.value = '';
           if (!file || !id) return;
-          const reader = new FileReader();
-          reader.onload = () => updateProduct(id, { imageDataUrl: String(reader.result || '') });
-          reader.readAsDataURL(file);
+          void readImageFileAsDataUrl(file).then((dataUrl) => {
+            if (dataUrl) updateProduct(id, { imageDataUrl: dataUrl });
+          });
         }}
       />
 

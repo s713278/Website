@@ -1,4 +1,5 @@
 import { useId, useRef } from 'react';
+import { readImageFileAsDataUrl } from '@/shared/lib/read-image-file';
 import { cn } from '@/shared/lib/utils';
 
 type ImageUploadBoxProps = {
@@ -9,8 +10,6 @@ type ImageUploadBoxProps = {
   onChange: (dataUrl: string) => void;
   pickLabel: string;
 };
-
-const MAX_BYTES = 5 * 1024 * 1024;
 
 export function ImageUploadBox({
   label,
@@ -23,13 +22,9 @@ export function ImageUploadBox({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function onFile(file: File | undefined) {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) return;
-    if (file.size > MAX_BYTES) return;
-    const reader = new FileReader();
-    reader.onload = () => onChange(String(reader.result || ''));
-    reader.readAsDataURL(file);
+  async function onFile(file: File | undefined) {
+    const dataUrl = await readImageFileAsDataUrl(file);
+    if (dataUrl) onChange(dataUrl);
   }
 
   return (

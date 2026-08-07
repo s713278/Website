@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FREE_PLAN_FEATURES, slugify } from '@/features/onboarding/data/constants';
+import { FREE_PLAN_FEATURES } from '@/features/onboarding/data/constants';
 import { useOnboardingStore } from '@/features/onboarding/store/onboarding-store';
+import { slugify, whatsappShareUrl } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 
 export function StepSuccess() {
@@ -26,9 +27,9 @@ export function StepSuccess() {
     }
   }
 
-  const waShare = `https://wa.me/?text=${encodeURIComponent(
+  const waShare = whatsappShareUrl(
     `Order from ${settings.storeName || 'my shop'} — ${storeUrl}`,
-  )}`;
+  );
 
   return (
     <section aria-labelledby="success-title" className="space-y-5">

@@ -1,14 +1,17 @@
 import { create } from 'zustand';
-import {
-  PRODUCT_COLORS,
-  TOTAL_STEPS,
-  slugify,
-  uid,
-} from '@/features/onboarding/data/constants';
+import { PRODUCT_COLORS, TOTAL_STEPS, uid } from '@/features/onboarding/data/constants';
 import { createDemoDraft, createEmptyDraft } from '@/features/onboarding/data/demo-seed';
+import { slugify } from '@/shared/lib/format';
+import {
+  clearPersistedDraft,
+  loadPersistedDraft,
+  savePersistedDraft,
+  type PersistedStoreSetupDraft,
+} from '@/features/onboarding/lib/draft-storage';
 import { validateOnboardingStep } from '@/features/onboarding/lib/validate-step';
 import type {
   CategoryOption,
+  DraftSaveStatus,
   OnboardingDraft,
   ProductDraft,
   ProductVariant,
@@ -16,8 +19,13 @@ import type {
 
 type OnboardingStore = OnboardingDraft & {
   error: string;
+  hydrated: boolean;
   setError: (msg: string) => void;
   clearError: () => void;
+  setPublishError: (msg: string) => void;
+  setSaveStatus: (status: DraftSaveStatus, savedAt?: string | null) => void;
+  hydrateFromStorage: () => void;
+  persistDraftNow: () => void;
   goToStep: (step: number) => void;
   goNext: () => boolean;
   goBack: () => void;
@@ -39,32 +47,118 @@ type OnboardingStore = OnboardingDraft & {
   setDelivery: (patch: Partial<OnboardingDraft['delivery']>) => void;
   setPayment: (patch: Partial<OnboardingDraft['payment']>) => void;
   setSettings: (patch: Partial<OnboardingDraft['settings']>) => void;
+  applyPublishSuccess: (vendorId: number) => void;
+  restoreSnapshot: (snapshot: OnboardingDraft) => void;
+  getDraftSnapshot: () => OnboardingDraft;
 };
+
+function draftSlice(state: OnboardingDraft): PersistedStoreSetupDraft {
+  return {
+    currentStep: state.currentStep,
+    maxReachedStep: state.maxReachedStep,
+    phone: state.phone,
+    verified: state.verified,
+    businessType: state.businessType,
+    businessTypeLabel: state.businessTypeLabel,
+    categories: state.categories,
+    products: state.products,
+    delivery: state.delivery,
+    payment: state.payment,
+    settings: state.settings,
+    vendorId: state.vendorId,
+    published: state.published,
+    expandedProductCatId: state.expandedProductCatId,
+    expandedSkuCatId: state.expandedSkuCatId,
+  };
+}
+
+function asDraft(state: OnboardingStore): OnboardingDraft {
+  return {
+    currentStep: state.currentStep,
+    maxReachedStep: state.maxReachedStep,
+    phone: state.phone,
+    verified: state.verified,
+    businessType: state.businessType,
+    businessTypeLabel: state.businessTypeLabel,
+    categories: state.categories,
+    products: state.products,
+    delivery: state.delivery,
+    payment: state.payment,
+    settings: state.settings,
+    expandedProductCatId: state.expandedProductCatId,
+    expandedSkuCatId: state.expandedSkuCatId,
+    vendorId: state.vendorId,
+    published: state.published,
+    saveStatus: state.saveStatus,
+    lastSavedAt: state.lastSavedAt,
+    publishError: state.publishError,
+  };
+}
 
 export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   ...createEmptyDraft(),
   error: '',
+  hydrated: false,
 
   setError: (msg) => set({ error: msg }),
-  clearError: () => set({ error: '' }),
+  clearError: () => set({ error: '', publishError: '' }),
+  setPublishError: (msg) => set({ publishError: msg, error: msg }),
+  setSaveStatus: (status, savedAt) =>
+    set({
+      saveStatus: status,
+      ...(savedAt !== undefined ? { lastSavedAt: savedAt } : {}),
+    }),
+
+  hydrateFromStorage: () => {
+    const saved = loadPersistedDraft();
+    if (!saved) {
+      set({ hydrated: true });
+      return;
+    }
+    const maxReached = Math.min(
+      TOTAL_STEPS,
+      Math.max(1, Number(saved.maxReachedStep) || 1),
+    );
+    const current = Math.min(
+      maxReached,
+      Math.max(1, Number(saved.currentStep) || 1),
+    );
+    set({
+      ...createEmptyDraft(),
+      ...saved,
+      currentStep: current,
+      maxReachedStep: maxReached,
+      saveStatus: 'saved',
+      lastSavedAt: saved.savedAt || null,
+      publishError: '',
+      error: '',
+      hydrated: true,
+    });
+  },
+
+  persistDraftNow: () => {
+    try {
+      const savedAt = savePersistedDraft(draftSlice(get()));
+      set({ saveStatus: 'saved', lastSavedAt: savedAt });
+    } catch {
+      set({ saveStatus: 'error' });
+    }
+  },
 
   goToStep: (step) => {
     const { maxReachedStep } = get();
     if (step < 1 || step > TOTAL_STEPS || step > maxReachedStep) return;
-    set({ currentStep: step, error: '' });
+    set({ currentStep: step, error: '', publishError: '' });
   },
 
   goNext: () => {
     const state = get();
-    const msg = validateOnboardingStep(state);
+    const msg = validateOnboardingStep(asDraft(state));
     if (msg) {
       set({ error: msg });
       return false;
     }
-    if (state.currentStep === 1) {
-      // OTP send is handled by useOnboardingRequestOtp — do not auto-advance here.
-      return true;
-    }
+    if (state.currentStep === 1) return true;
     const next = Math.min(TOTAL_STEPS, state.currentStep + 1);
     const settings =
       next === TOTAL_STEPS && !state.settings.whatsapp
@@ -74,6 +168,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
       currentStep: next,
       maxReachedStep: Math.max(state.maxReachedStep, next),
       error: '',
+      publishError: '',
       settings,
     });
     return true;
@@ -82,11 +177,14 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   goBack: () => {
     const { currentStep } = get();
     if (currentStep <= 1) return;
-    set({ currentStep: currentStep - 1, error: '' });
+    set({ currentStep: currentStep - 1, error: '', publishError: '' });
   },
 
-  loadDemo: () => set({ ...createDemoDraft(), error: '' }),
-  reset: () => set({ ...createEmptyDraft(), error: '' }),
+  loadDemo: () => set({ ...createDemoDraft(), error: '', publishError: '', hydrated: true }),
+  reset: () => {
+    clearPersistedDraft();
+    set({ ...createEmptyDraft(), error: '', hydrated: true });
+  },
 
   setPhone: (phone) => set({ phone: phone.replace(/\D/g, '').slice(0, 10) }),
 
@@ -97,6 +195,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
       currentStep: 3,
       maxReachedStep: Math.max(maxReachedStep, 3),
       error: '',
+      publishError: '',
     });
   },
 
@@ -114,9 +213,9 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
 
   toggleCategory: (cat) => {
     const { categories } = get();
-    const idx = categories.findIndex((c) => c.id === cat.id);
+    const idx = categories.findIndex((c) => String(c.id) === String(cat.id));
     if (idx >= 0) {
-      set({ categories: categories.filter((c) => c.id !== cat.id), error: '' });
+      set({ categories: categories.filter((c) => String(c.id) !== String(cat.id)), error: '' });
       return;
     }
     if (categories.length >= 2) {
@@ -176,10 +275,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
         p.id === productId
           ? {
               ...p,
-              variants: [
-                ...p.variants,
-                { id: uid('sku'), label: '', price: 0, active: true },
-              ],
+              variants: [...p.variants, { id: uid('sku'), label: '', price: 0, active: true }],
             }
           : p,
       ),
@@ -214,4 +310,18 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   setDelivery: (patch) => set({ delivery: { ...get().delivery, ...patch } }),
   setPayment: (patch) => set({ payment: { ...get().payment, ...patch } }),
   setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
+
+  applyPublishSuccess: (vendorId) => {
+    set({
+      vendorId,
+      published: true,
+      currentStep: TOTAL_STEPS,
+      maxReachedStep: TOTAL_STEPS,
+      publishError: '',
+      error: '',
+    });
+  },
+
+  restoreSnapshot: (snapshot) => set({ ...snapshot, error: snapshot.publishError || '' }),
+  getDraftSnapshot: () => asDraft(get()),
 }));

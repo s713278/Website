@@ -1,7 +1,4 @@
-/**
- * Feature auth API — thin wrappers over @mithra/api-client.
- * Prefer React Query hooks from `@/shared/api`.
- */
+/** Feature auth API — thin wrappers over @mithra/api-client. */
 import {
   authService,
   type MobileSignUpRequest,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { QueryState } from '@/features/onboarding/components/QueryState';
+import { QueryState } from '@/shared/components/QueryState';
 import { SelectCard } from '@/features/onboarding/components/SelectCard';
 import { StepNav } from '@/features/onboarding/components/StepNav';
 import { StepShell } from '@/features/onboarding/components/StepShell';
@@ -14,15 +14,17 @@ export function StepCategories() {
   const error = useOnboardingStore((s) => s.error);
   const [customName, setCustomName] = useState('');
 
-  const businessTypeId = Number(businessType) || null;
-  const categoriesQuery = useOnboardingCategories(businessTypeId);
+  const categoriesQuery = useOnboardingCategories(businessType || null);
 
   const apiCategories = categoriesQuery.data?.items ?? [];
+  const fromFallback = Boolean(categoriesQuery.data?.fromFallback);
   const extras = categories.filter((c) => !apiCategories.some((a) => String(a.id) === String(c.id)));
   const options = [
     ...apiCategories.map((c) => ({ id: c.id, name: c.name })),
     ...extras,
   ];
+
+  const isHardError = categoriesQuery.isError && options.length === 0;
 
   return (
     <StepShell
@@ -35,13 +37,26 @@ export function StepCategories() {
       error={error}
       footer={<StepNav />}
     >
+      {fromFallback ? (
+        <p className="ob-fallback-note" role="status">
+          Showing offline categories.{' '}
+          <button
+            type="button"
+            className="font-semibold underline underline-offset-2"
+            onClick={() => void categoriesQuery.refetch()}
+          >
+            Retry server catalog
+          </button>
+        </p>
+      ) : null}
+
       <QueryState
         isLoading={categoriesQuery.isLoading && !categoriesQuery.data}
-        isError={categoriesQuery.isError}
+        isError={isHardError}
         error={categoriesQuery.error}
         isEmpty={
           !categoriesQuery.isLoading &&
-          !categoriesQuery.isError &&
+          !isHardError &&
           apiCategories.length === 0 &&
           extras.length === 0
         }
@@ -77,11 +92,11 @@ export function StepCategories() {
           value={customName}
           onChange={(e) => setCustomName(e.target.value)}
           placeholder="Custom category name"
-          className="max-w-xs rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          className="max-w-xs rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--store-theme-soft)]"
         />
         <button
           type="button"
-          className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+          className="rounded-xl border border-[color-mix(in_srgb,var(--store-theme)_35%,#e5e7eb)] px-3 py-2 text-sm font-medium text-[var(--md-green-deep)] hover:bg-[var(--md-green-soft)]"
           onClick={() => {
             addCustomCategory(customName);
             setCustomName('');

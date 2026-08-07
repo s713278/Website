@@ -16,6 +16,11 @@ export type {
   GetCategoriesQuery,
   CatalogPage,
   BusinessTypeDTO,
+  VendorProfileRequest,
+  AssignCategoriesRequest,
+  SaveVendorDeliveryConfigRequest,
+  PaymentOptionRequest,
+  VendorStatusRequest,
 } from './schema-types';
 
 export * from './client';

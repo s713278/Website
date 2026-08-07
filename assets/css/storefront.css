@@ -1709,6 +1709,26 @@ body.addr-gate-open {
   margin-bottom: 0.5rem;
 }
 
+.auth-otp-lead {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+#login-otp-inputs {
+  margin-bottom: 1rem;
+}
+
+.login-otp-error {
+  margin: 0 0 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #dc2626;
+}
+
+.login-otp-error.hidden {
+  display: none;
+}
+
 /* Cart */
 .page-title {
   margin: 0 0 1rem;

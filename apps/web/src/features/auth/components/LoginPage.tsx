@@ -104,8 +104,8 @@ export function LoginPage() {
               <Input
                 id="otp"
                 inputMode="numeric"
-                maxLength={6}
-                placeholder="••••••"
+                maxLength={4}
+                placeholder="••••"
                 {...otpForm.register('otp')}
               />
               {otpForm.formState.errors.otp ? (

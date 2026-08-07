@@ -15,8 +15,8 @@ export function OnboardingSummaryBar() {
   const waLabel = /^\d{10}$/.test(wa) ? `+91 ${wa}` : 'Pending';
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 py-3 backdrop-blur pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-4 text-center sm:grid-cols-5 sm:text-left sm:px-6 lg:px-8">
+    <footer className="summary-bar">
+      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-3 text-center sm:grid-cols-5 sm:px-2 sm:text-left">
         <Stat label="Total Time" value="~10 Minutes" />
         <Stat label="Categories" value={`${categories.length} Selected`} />
         <Stat label="Products" value={`${namedProducts} Added`} />
@@ -38,10 +38,8 @@ function Stat({
 }) {
   return (
     <div className={className}>
-      <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </div>
-      <div className="text-sm font-bold text-gray-900">{value}</div>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
     </div>
   );
 }

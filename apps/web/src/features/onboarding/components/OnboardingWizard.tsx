@@ -28,7 +28,7 @@ export function OnboardingWizard() {
   const Step = STEPS[currentStep as keyof typeof STEPS] || StepVerifyPhone;
 
   return (
-    <div className="min-h-[420px] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
+    <div className="wizard-card">
       <Step />
     </div>
   );
