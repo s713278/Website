@@ -19,6 +19,11 @@ const MarketingHomePage = lazy(() =>
 const StoreHomePage = lazy(() =>
   import('@/features/storefront/pages/StoreHomePage').then((m) => ({ default: m.StoreHomePage })),
 );
+const ProductDetailPage = lazy(() =>
+  import('@/features/storefront/pages/ProductDetailPage').then((m) => ({
+    default: m.ProductDetailPage,
+  })),
+);
 const OnboardingHomePage = lazy(() =>
   import('@/features/onboarding/pages/OnboardingHomePage').then((m) => ({
     default: m.OnboardingHomePage,
@@ -61,7 +66,10 @@ export const router = createBrowserRouter([
         <StoreLayout />
       </RouteFrame>
     ),
-    children: [{ index: true, element: <StoreHomePage /> }],
+    children: [
+      { index: true, element: <StoreHomePage /> },
+      { path: 'products/:productId', element: <ProductDetailPage /> },
+    ],
   },
   {
     path: '/onboarding',

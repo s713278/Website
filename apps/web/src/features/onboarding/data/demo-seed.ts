@@ -47,6 +47,11 @@ export function createEmptyDraft(): OnboardingDraft {
     settings: emptySettings(),
     expandedProductCatId: null,
     expandedSkuCatId: null,
+    vendorId: null,
+    published: false,
+    saveStatus: 'idle',
+    lastSavedAt: null,
+    publishError: '',
   };
 }
 

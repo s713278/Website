@@ -60,6 +60,8 @@ export type StoreSettingsDraft = {
   bannerDataUrl: string;
 };
 
+export type DraftSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 export type OnboardingDraft = {
   currentStep: number;
   maxReachedStep: number;
@@ -75,6 +77,12 @@ export type OnboardingDraft = {
   settings: StoreSettingsDraft;
   expandedProductCatId: number | string | null;
   expandedSkuCatId: number | string | null;
+  /** Remote vendor id after create/publish. */
+  vendorId: number | null;
+  published: boolean;
+  saveStatus: DraftSaveStatus;
+  lastSavedAt: string | null;
+  publishError: string;
 };
 
 export type ThemePreset = {

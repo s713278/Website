@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 import { env } from '@/shared/lib/env';
+import { StoreShell } from '@/features/storefront/components/StoreShell';
 
 function SurfaceBadge({ label }: { label: string }) {
   return (
@@ -27,22 +28,9 @@ export function MarketingLayout() {
   );
 }
 
+/** Storefront owns full chrome (header/cart) — no competing shell. */
 export function StoreLayout() {
-  return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-white/90 backdrop-blur">
-        <div className="md-container flex h-16 items-center justify-between gap-3">
-          <Link to="/store" className="font-display text-lg font-bold text-md-green-deep">
-            {env.VITE_APP_NAME} Store
-          </Link>
-          <SurfaceBadge label="Storefront · store" />
-        </div>
-      </header>
-      <main className="md-container py-8">
-        <Outlet />
-      </main>
-    </div>
-  );
+  return <StoreShell />;
 }
 
 /** Onboarding page owns its own header / summary chrome. */
