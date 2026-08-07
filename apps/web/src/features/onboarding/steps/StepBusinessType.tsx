@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react';
-import { QueryState } from '@/features/onboarding/components/QueryState';
+import { QueryState } from '@/shared/components/QueryState';
 import { SelectCard } from '@/features/onboarding/components/SelectCard';
 import { StepNav } from '@/features/onboarding/components/StepNav';
 import { StepShell } from '@/features/onboarding/components/StepShell';

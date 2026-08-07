@@ -147,18 +147,6 @@ export function categoriesForBusiness(businessTypeId: string): CategoryOption[] 
   return (CATEGORY_CATALOG[businessTypeId] || []).map((c) => ({ ...c }));
 }
 
-export function slugify(text: string): string {
-  return (
-    String(text || '')
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'my-store'
-  );
-}
-
 export function uid(prefix = 'id'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }

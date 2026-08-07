@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStoreCatalog } from '@/features/storefront/hooks/use-store-catalog';
-import { useDebouncedValue } from '@/features/storefront/hooks/use-debounced-value';
+import { useDebouncedValue } from '@/shared/hooks';
 import { filterAndSortProducts, priceBounds } from '@/features/storefront/lib/filter-products';
 import type { BrowseMode, ProductFilters, ProductSort } from '@/features/storefront/types';
 

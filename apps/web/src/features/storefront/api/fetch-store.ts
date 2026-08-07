@@ -1,16 +1,9 @@
-import {
-  storefrontService,
-  vendorsService,
-  type VendorStorefront,
-} from '@mithra/api-client';
+import { storefrontService, vendorsService, type VendorStorefront } from '@mithra/api-client';
 import { env } from '@/shared/lib/env';
+import { unwrapEnvelope } from '@/shared/lib/map-utils';
 import { createDemoCatalog } from '@/features/storefront/data/demo-catalog';
 import { loadPersistedDraft } from '@/features/onboarding/lib/draft-storage';
-import {
-  mapDraftToCatalog,
-  mapVendorStorefront,
-  unwrapData,
-} from '@/features/storefront/api/map-catalog';
+import { mapDraftToCatalog, mapVendorStorefront } from '@/features/storefront/api/map-catalog';
 import type { StoreCatalog, StoreProduct } from '@/features/storefront/types';
 
 function resolveVendorId(explicit?: string | null): string | null {
@@ -50,9 +43,9 @@ export async function fetchStoreCatalog(vendorId?: string | null): Promise<Store
       vendorsService.getProductSkus(id).catch(() => null),
     ]);
 
-    const storefront = unwrapData<VendorStorefront>(storefrontRes) || {};
-    const productRows = unwrapData<unknown[]>(productsRes);
-    const skuRows = unwrapData<unknown[]>(skusRes);
+    const storefront = unwrapEnvelope<VendorStorefront>(storefrontRes) || {};
+    const productRows = unwrapEnvelope<unknown[]>(productsRes);
+    const skuRows = unwrapEnvelope<unknown[]>(skusRes);
 
     const merged: VendorStorefront = {
       ...storefront,
@@ -85,7 +78,7 @@ export async function fetchStoreProduct(
 
   try {
     const res = await vendorsService.getProduct(id, productId);
-    const raw = unwrapData(res);
+    const raw = unwrapEnvelope(res);
     if (!raw) return { catalog, product: null };
     const mapped = mapVendorStorefront({
       ...catalog.meta,

@@ -5,7 +5,7 @@ import type {
   VendorStatusRequest,
 } from '@mithra/api-client';
 import type { OnboardingDraft } from '@/features/onboarding/types';
-import { slugify } from '@/features/onboarding/data/constants';
+import { slugify } from '@/shared/lib/format';
 
 export function mapFulfillmentType(
   delivery: OnboardingDraft['delivery'],

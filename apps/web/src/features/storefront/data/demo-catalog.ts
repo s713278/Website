@@ -1,9 +1,14 @@
 import type { StoreCatalog, StoreProduct, StoreReview } from '@/features/storefront/types';
+import { DEMO_DAIRY_PRODUCTS } from '@/shared/data/demo-dairy-products';
 
 const COLORS = ['#fde68a', '#bbf7d0', '#fecaca', '#bae6fd', '#ddd6fe', '#fed7aa', '#a7f3d0'];
 
+/** Align primary demo SKUs with shared dashboard seed prices. */
+const seedPriceBySku = Object.fromEntries(DEMO_DAIRY_PRODUCTS.map((p) => [p.sku, p.price]));
+
 function sku(id: string, label: string, price: number, inStock = true) {
-  return { id, label, price, listPrice: Math.round(price * 1.12), active: true, inStock };
+  const aligned = seedPriceBySku[id] ?? price;
+  return { id, label, price: aligned, listPrice: Math.round(aligned * 1.12), active: true, inStock };
 }
 
 function product(

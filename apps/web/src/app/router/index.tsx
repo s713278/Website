@@ -34,6 +34,26 @@ const DashboardHomePage = lazy(() =>
     default: m.DashboardHomePage,
   })),
 );
+const OrdersPage = lazy(() =>
+  import('@/features/dashboard/pages/OrdersPage').then((m) => ({ default: m.OrdersPage })),
+);
+const ProductsPage = lazy(() =>
+  import('@/features/dashboard/pages/ProductsPage').then((m) => ({ default: m.ProductsPage })),
+);
+const StoreSharePage = lazy(() =>
+  import('@/features/dashboard/pages/StoreSharePage').then((m) => ({ default: m.StoreSharePage })),
+);
+const SettingsPage = lazy(() =>
+  import('@/features/dashboard/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
+const AuditLogsPage = lazy(() =>
+  import('@/features/dashboard/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })),
+);
+const AdminVendorsPage = lazy(() =>
+  import('@/features/dashboard/pages/AdminVendorsPage').then((m) => ({
+    default: m.AdminVendorsPage,
+  })),
+);
 const LoginPage = lazy(() =>
   import('@/features/auth/components/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
@@ -107,7 +127,18 @@ export const router = createBrowserRouter([
             <DashboardLayout />
           </RouteFrame>
         ),
-        children: [{ index: true, element: <DashboardHomePage /> }],
+        children: [
+          { index: true, element: <DashboardHomePage /> },
+          { path: 'orders', element: <OrdersPage /> },
+          { path: 'products', element: <ProductsPage /> },
+          { path: 'store', element: <StoreSharePage /> },
+          { path: 'settings', element: <SettingsPage /> },
+          { path: 'audit-logs', element: <AuditLogsPage /> },
+          {
+            element: <ProtectedRoute roles={['admin']} />,
+            children: [{ path: 'vendors', element: <AdminVendorsPage /> }],
+          },
+        ],
       },
     ],
   },

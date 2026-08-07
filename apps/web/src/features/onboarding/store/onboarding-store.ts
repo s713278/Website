@@ -1,11 +1,7 @@
 import { create } from 'zustand';
-import {
-  PRODUCT_COLORS,
-  TOTAL_STEPS,
-  slugify,
-  uid,
-} from '@/features/onboarding/data/constants';
+import { PRODUCT_COLORS, TOTAL_STEPS, uid } from '@/features/onboarding/data/constants';
 import { createDemoDraft, createEmptyDraft } from '@/features/onboarding/data/demo-seed';
+import { slugify } from '@/shared/lib/format';
 import {
   clearPersistedDraft,
   loadPersistedDraft,

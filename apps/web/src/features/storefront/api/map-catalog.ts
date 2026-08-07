@@ -8,10 +8,7 @@ import type {
 } from '@/features/storefront/types';
 import { createDemoCatalog } from '@/features/storefront/data/demo-catalog';
 import type { PersistedStoreSetupDraft } from '@/features/onboarding/lib/draft-storage';
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
-}
+import { asRecord } from '@/shared/lib/map-utils';
 
 function str(value: unknown, fallback = ''): string {
   return value == null ? fallback : String(value);
@@ -23,7 +20,7 @@ function num(value: unknown, fallback = 0): number {
 }
 
 function mapSku(raw: unknown, index: number): StoreSku {
-  const r = asRecord(raw) || {};
+  const r = asRecord(raw);
   const id = str(r.id ?? r.sku_id ?? r.skuId, `sku-${index}`);
   const price = num(r.sale_price ?? r.price ?? r.unit_price, 0);
   const listPrice = num(r.list_price ?? r.listPrice, price);
@@ -44,7 +41,7 @@ function mapSku(raw: unknown, index: number): StoreSku {
 }
 
 function mapProduct(raw: unknown, index: number): StoreProduct {
-  const r = asRecord(raw) || {};
+  const r = asRecord(raw);
   const skusRaw = (r.skus ?? r.variants ?? r.product_skus) as unknown;
   const skus = Array.isArray(skusRaw)
     ? skusRaw.map(mapSku).filter((s) => s.active)
@@ -90,7 +87,7 @@ function mapProduct(raw: unknown, index: number): StoreProduct {
 }
 
 function mapCategory(raw: unknown, index: number): StoreCategory {
-  const r = asRecord(raw) || {};
+  const r = asRecord(raw);
   return {
     id: str(r.id ?? r.category_id, `cat-${index}`),
     name: str(r.name ?? r.category_name, 'Category'),
@@ -104,8 +101,8 @@ export function mapVendorStorefront(
   skuRows?: unknown[],
 ): StoreCatalog {
   const demo = createDemoCatalog();
-  const root = asRecord(data) || {};
-  const theme = asRecord(root.theme) || {};
+  const root = asRecord(data);
+  const theme = asRecord(root.theme);
   const meta: StoreMeta = {
     vendorId: root.vendor_id != null ? str(root.vendor_id) : null,
     storeName: str(root.business_name ?? root.store_name, demo.meta.storeName),
@@ -127,7 +124,7 @@ export function mapVendorStorefront(
   if (skuRows?.length) {
     const byProduct = new Map<string, StoreSku[]>();
     skuRows.forEach((row, i) => {
-      const r = asRecord(row) || {};
+      const r = asRecord(row);
       const productId = str(r.product_id ?? r.productId);
       if (!productId) return;
       const list = byProduct.get(productId) || [];
@@ -193,11 +190,4 @@ export function mapDraftToCatalog(draft: PersistedStoreSetupDraft): StoreCatalog
     categories: categories.length ? categories : demo.categories,
     products: products.length ? products : demo.products,
   };
-}
-
-export function unwrapData<T = unknown>(envelope: unknown): T | null {
-  const root = asRecord(envelope);
-  if (!root) return null;
-  if ('data' in root) return (root.data as T) ?? null;
-  return envelope as T;
 }

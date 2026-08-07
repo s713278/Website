@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { applyVendorTheme } from '@mithra/ui';
 import { DraftSaveStatus } from '@/features/onboarding/components/DraftSaveStatus';
 import { ErrorRecoveryBanner } from '@/features/onboarding/components/ErrorRecoveryBanner';
 import { OnboardingHeader } from '@/features/onboarding/components/OnboardingHeader';
@@ -15,7 +16,7 @@ export function OnboardingHomePage() {
   const hydrated = useOnboardingStore((s) => s.hydrated);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--store-theme', themeColor || '#10b981');
+    applyVendorTheme(themeColor || '#10b981');
   }, [themeColor]);
 
   if (!hydrated) {
