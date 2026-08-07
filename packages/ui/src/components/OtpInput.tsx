@@ -21,10 +21,10 @@ export function OtpInput({
         id={id}
         className="md-field"
         inputMode="numeric"
-        maxLength={6}
-        placeholder="••••••"
+        maxLength={4}
+        placeholder="••••"
         value={value}
-        onChange={(e) => onChange?.(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onChange={(e) => onChange?.(e.target.value.replace(/\D/g, '').slice(0, 4))}
         {...rest}
       />
     </div>

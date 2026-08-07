@@ -10,7 +10,7 @@ type OtpInputsProps = {
 };
 
 export function OtpInputs({
-  length = 6,
+  length = 4,
   value,
   onChange,
   disabled,

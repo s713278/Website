@@ -16,7 +16,7 @@ export const otpVerifySchema = z.object({
   otp: z
     .string()
     .trim()
-    .regex(/^\d{6}$/, 'Enter the 6-digit OTP'),
+    .regex(/^\d{4}$/, 'Enter the 4-digit OTP'),
 });
 
 export type OtpRequestValues = z.infer<typeof otpRequestSchema>;

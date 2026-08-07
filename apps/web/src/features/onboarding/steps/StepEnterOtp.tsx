@@ -25,8 +25,8 @@ export function StepEnterOtp() {
     (resendOtp.isError ? getErrorMessage(resendOtp.error) : '');
 
   function verify() {
-    if (!/^\d{6}$/.test(otp)) {
-      setError('Enter the 6-digit OTP to continue.');
+    if (!/^\d{4}$/.test(otp)) {
+      setError('Enter the 4-digit OTP to continue.');
       return;
     }
     verifyOtp.mutate(otp);
@@ -52,7 +52,7 @@ export function StepEnterOtp() {
         </h2>
       </div>
       <p className="mb-6 text-sm text-gray-500">
-        Enter the 6-digit code sent to{' '}
+        Enter the 4-digit code sent to{' '}
         <span className="font-medium text-gray-700">+91 {phone}</span>.
       </p>
       <OtpInputs

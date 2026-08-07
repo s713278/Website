@@ -6,7 +6,7 @@ export function validateOnboardingStep(draft: OnboardingDraft): string | null {
       if (!/^\d{10}$/.test(draft.phone)) return 'Enter a valid 10-digit mobile number.';
       return null;
     case 2:
-      if (!draft.verified) return 'Enter the 6-digit OTP to continue.';
+      if (!draft.verified) return 'Enter the 4-digit OTP to continue.';
       return null;
     case 3:
       if (!draft.businessType) return 'Please select a business type.';
