@@ -1,0 +1,259 @@
+/** @format */
+
+.marketing_btn_solid {
+	font-size: 18px;
+	line-height: 40px;
+	font-family: $arimo;
+	color: #fff;
+	background: #ff824c;
+	text-align: center;
+	padding: 8px 35px;
+	display: inline-block;
+	border-radius: 3px;
+	i {
+		vertical-align: middle;
+	}
+}
+.marketing_video_btn {
+	font-size: 18px;
+	font-family: $arimo;
+	color: #fff;
+	transition: color 0.2s;
+	i {
+		margin-right: 4px;
+		vertical-align: middle;
+	}
+	&:hover {
+		color: #ff824d;
+	}
+}
+
+// Hero
+
+// customer_service_btn
+.customer_service_btn {
+	background: #ff824d;
+	border-radius: 5px;
+	color: $white;
+	border: 0;
+	font-weight: 500;
+	font-size: 18px;
+	line-height: 40px;
+	font-family: $dm;
+	padding: 0 28px;
+	margin-left: 18px;
+	transition: 0.5s;
+	&:hover {
+		background: #050505;
+	}
+}
+
+// financial_data_btn
+.financial_data_btn {
+	color: #121212;
+	font-family: $inter;
+	font-weight: 600;
+	font-size: 18px;
+	line-height: 40px;
+	background: #ddf472;
+	display: inline-flex;
+	align-items: center;
+	padding: 10px 40px;
+	border-radius: 3px;
+	transition: .5s;
+	transition: 0.5s;
+	i {
+		margin-left: 10px;
+	}
+}
+
+//financial_transaction_btn
+.financial_transaction_btn {
+	color: $white;
+	font-family: $inter;
+	font-weight: 600;
+	font-size: 16px;
+	line-height: 26px;
+	background: linear-gradient(279.49deg, #4f44f9 13.52%, #9234f0 74.26%);
+	box-shadow: 0px 6px 40px rgba(90, 66, 248, 0.4);
+	border-radius: 6px;
+	padding: 20px 40px;
+	transition: .5s;
+	&:hover {
+		color: $white;
+		background: linear-gradient(279.49deg, #9234f0 13.52%, #4f44f9 74.26%);
+	}
+}
+
+//saas_btn 
+.saas_btn {
+	display: inline-flex;
+	align-items: center;
+	color: $white;
+	font-family: $inter;
+	font-weight: 600;
+	font-size: 16px;
+	line-height: 26px;
+	padding: 15px 28px;
+	background: #0063D8;
+	border-radius: 32px;
+	i {
+		color: #0063D8;
+		background: $white;
+		padding: 5px;
+		border-radius: 50px;
+		margin-left: 10px;
+	}
+	span {
+		background: #1d3ad7a6 !important;
+	}
+}
+// Hero
+
+// Text Button
+.text_button {
+	font-family: $dm;
+	font-weight: 500;
+	font-size: 18px;
+	line-height: 30px;
+	color: #050505;
+	display: inline-flex;
+	align-items: center;
+	transition: 0.5s;
+	i {
+		margin-left: 10px;
+	}
+	&:hover {
+		color: #ff824c;
+	}
+}
+
+// Hover Btn
+.hover_style_btn {
+	position: relative;
+	i {
+		transition: transform 0.5s;
+	}
+	&:before {
+		content: '';
+		width: 100%;
+		height: 1px;
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		background: transparent;
+	}
+	&:hover {
+		color: #ff824c;
+		i {
+			transform: translateX(5px);
+		}
+		&:before {
+			background: #ff824c;
+			animation: under_line 1s;
+		}
+	}
+}
+
+.theme_btn_text {
+	font-size: 17px;
+	line-height: 22px;
+	font-family: $arimo;
+	color: #868686;
+	position: relative;
+	display: inline-block;
+	z-index: 1;
+	transition: color 0.2s;
+	&:before {
+		content: '';
+		width: 100%;
+		height: 1px;
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		background: #868686;
+	}
+	&:hover {
+		color: #ff824c;
+		&:before {
+			background: #ff824c;
+			animation: under_line 1s;
+		}
+	}
+}
+
+.btn_hover {
+	position: relative;
+	overflow: hidden;
+	z-index: 1;
+	transition: color 0.3s;
+	span {
+		position: absolute;
+		display: block;
+		width: 0;
+		height: 0;
+		border-radius: 50%;
+		background: #e66934;
+		transition: width 0.5s ease-in-out, height 0.5s ease-in-out;
+		transform: translate(-50%, -50%);
+		z-index: -1;
+	}
+	&:hover {
+		color: #fff;
+		span {
+			width: 60rem;
+			height: 60rem;
+		}
+	}
+}
+
+.theme_btn_two {
+	background: #ff824c;
+	box-shadow: 0px 12px 50px 15px rgba(170, 139, 139, 0.4);
+	border-radius: 3px;
+	font-size: 20px;
+	line-height: 30px;
+	color: #fff;
+	font-family: $arimo;
+	padding: 24px 64px;
+	transition: all 0.2s;
+	display: inline-block;
+	i {
+		vertical-align: middle;
+		transition: all 0.2s;
+	}
+	&:hover {
+		color: #fff;
+		box-shadow: none;
+		i {
+			transform: translateX(15px);
+		}
+	}
+}
+
+@keyframes under_line {
+	0% {
+		transform: translate(0px, 0px) scale(1, 1);
+		transform-origin: 100% 50%;
+	}
+	49% {
+		transform: translate(0px, 0px) scale(0, 1);
+		transform-origin: 100% 50%;
+	}
+	50% {
+		transform: translate(0px, 0px) scale(0, 1);
+		transform-origin: 0% 50%;
+	}
+	51% {
+		transform: translate(0px, 0px) scale(0, 1);
+		transform-origin: 0% 50%;
+	}
+	99% {
+		transform: translate(0px, 0px) scale(1, 1);
+		transform-origin: 0% 50%;
+	}
+	100% {
+		transform: translate(0px, 0px) scale(1, 1);
+		transform-origin: 100% 50%;
+	}
+}

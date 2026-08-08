@@ -27,6 +27,7 @@ npx shadcn@latest add dialog dropdown-menu sheet
 ## Structure
 
 ```
+design-reference/           # frozen static HTML + assets (visual reference only)
 src/
   app/                      # layouts, providers, router
   modules/
@@ -43,6 +44,8 @@ src/
   components/ui/            # shadcn primitives
   styles/
 ```
+
+For pixel/layout reference while building React screens, open pages under `design-reference/` (see that folder’s README). They are not served by `npm run dev`.
 
 ## API layer
 

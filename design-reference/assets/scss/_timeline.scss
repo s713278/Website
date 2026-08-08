@@ -1,0 +1,158 @@
+.timeline {
+    padding-top: 120px;
+    padding-bottom: 130px;
+}
+
+.min_timeline_area {
+    position: relative;
+    margin-top: 65px;
+    .line {
+        border-color: #676282;
+        position: absolute;
+        top: 195px;
+        left: -115px;
+        width: 1400px;
+    }
+    .slick-arrow  {
+        position: absolute;
+        color: #B4B4B4;
+        height: 50px;
+        width: 50px;
+        background: #FFFFFF;
+        box-shadow: 0px 15px 50px rgba(40, 0, 152, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        top: 50%;
+        transform: translatey(-50%);
+        transition: .3s;
+        &:hover {
+            color: #FFF;
+            background: #553BF9;
+        }
+    }
+    i.ph-arrow-right {
+        right: -135px;
+    }
+    i.ph-arrow-left {
+        left: -135px;
+    }
+    .single_item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 150px;
+        .date {
+            color: $white;
+            font-family: $rob;
+            font-weight: 400;
+            font-size: 14px;
+            line-height: 1.6;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: #433B6B;
+            border-radius: 50px;
+            width: 150px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .dot {
+            width: 20px;
+            height: 20px;
+            background: #FFDED6;
+            box-shadow: 0px 15px 50px rgba(40, 0, 152, 0.1);
+            border-radius: 50%;
+        }
+        .content_area {
+            position: relative;
+            margin-top: 35px;
+            background: #FFDED6;
+            border: 1px solid #E8E7EE;
+            border-radius: 5px;
+            padding-left: 22px;
+            padding-top: 34px;
+            padding-bottom: 10px;
+            padding-right: 48px;
+            h5 {
+                color: #2C264A;
+                font-family: $man;
+                font-weight: 800;
+                font-size: 20px;
+                line-height: 1.2;
+            }
+            p {
+                color: #4C4C63;
+                font-family: $man;
+                font-weight: 500;
+                font-size: 16px;
+                line-height: 24px;
+            }
+            &::after {
+                position: absolute;
+                content: "";
+                clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+                background: #FFDED6;
+                width: 50px;
+                height: 50px;
+                top: -20px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+        }
+        &.rev {
+            flex-direction: column-reverse;
+            margin-top: 0;
+            .content_area {
+                margin-top: 0;
+                margin-bottom: 35px;
+                &::after {
+                    left: 50%;
+                    top: 135px;
+                    bottom: 38px;
+                    clip-path: polygon(50% 100%, 0 0, 100% 0);
+                }
+            }
+            .date {
+                margin-bottom: 0;
+                margin-top: 15px;
+            }
+        }
+        &.two {
+            .content_area {
+                background: #D6FFD8;
+                &::after {
+                    background: #D6FFD8;
+                }
+            }
+            .dot {
+                background: #D6FFD8;
+            }
+        }
+        &.three {
+            .content_area {
+                background: #FFECC4;
+                &::after {
+                    background: #FFECC4;
+                }
+            }
+            .dot {
+                background: #FFECC4;
+            }
+        }
+        &.four {
+            .content_area {
+                background: #E0EDFC;
+                &::after {
+                    background: #E0EDFC;
+                }
+            }
+            .dot {
+                background: #E0EDFC;
+            }
+        }
+    }
+}

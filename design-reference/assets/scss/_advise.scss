@@ -1,0 +1,81 @@
+.advise {
+    padding-top: 120px;
+    padding-bottom: 125px;
+    .content_area {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .increase_area {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 110px;
+        .increase_item {
+            background: #EFF0F1;
+            width: 233px;
+            height: 233px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #292929;
+            span {
+                font-family: $rob;
+                font-weight: 500;
+                font-size: 52px;
+            }
+            p {
+                color: #292929;
+                font-family: $rob;
+                font-weight: 400;
+                font-size: 20px;
+                line-height: 30px;
+                margin-bottom: 0;
+                margin-top: -10px;
+            }
+            &:nth-child(2) {
+                width: 333px;
+                height: 333px;
+                background: #161616;
+                color: $white;
+                margin-left: -35px;
+                margin-top: 55px;
+                span {
+                    font-size: 75px;
+                }
+                p {
+                    color: $white;
+                    font-size: 32px;;
+                }
+            }
+            &:nth-child(3) {
+                width: 270px;
+                height: 270px;
+                background: #f1f2f390;
+                margin-top: -200px;
+                margin-left: -70px;
+                span {
+                    font-size: 58px;
+                }
+                p {
+                    font-size: 22px;
+                }
+            }
+            &:nth-child(4) {
+                width: 388px;
+                height: 388px;
+                background: #D4EE5C;
+                margin-left: -60px;
+                span {
+                    font-size: 85px;
+                    color: #3E3E3E;
+                }
+                p {
+                    font-size: 32px;
+                }
+            }
+        }
+    }
+}

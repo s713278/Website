@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Live MithraDirect customer storefront demo — WhatsApp checkout for local businesses.">
+    <title>Geeta's Kitchen — MithraDirect Storefront</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/onboarding.css">
+    <link rel="stylesheet" href="assets/css/storefront.css">
+    <script src="assets/js/assets-config.js"></script>
+</head>
+<body class="store-page store-themed" data-store-template="release-v1" data-data-mode="localStorage">
+    <header class="demo-topbar">
+        <div class="demo-topbar-inner">
+            <a href="index.html" class="demo-topbar-brand">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect">
+                <span class="demo-pill"><span class="demo-pill-dot" aria-hidden="true"></span><span>Live Storefront</span></span>
+            </a>
+            <div class="demo-topbar-actions">
+                <a href="https://www.instagram.com/mithradirect/" class="demo-link" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.youtube.com/@MithraDirect" class="demo-link" target="_blank" rel="noopener">YouTube</a>
+                <a href="onboarding.html" class="demo-link">Vendor setup</a>
+                <a href="onboarding.html" class="btn-primary-md is-sm">Create your store</a>
+            </div>
+        </div>
+    </header>
+
+    <div id="store-loading" class="store-empty-wrap hidden">
+        <div class="empty-icon" aria-hidden="true">⏳</div>
+        <h1 class="store-brand-font">Loading store…</h1>
+        <p>Fetching release data from local store.</p>
+    </div>
+
+    <div id="store-empty" class="store-empty-wrap hidden">
+        <div class="empty-icon" aria-hidden="true">🏪</div>
+        <h1 class="store-brand-font">Store not found</h1>
+        <p>No store matched this link. Open the sample storefront or set up your own in minutes.</p>
+        <div class="store-empty-actions">
+            <a href="store.html" class="btn-primary-store is-inline">Open Sample Store</a>
+            <a href="onboarding.html" class="link-btn">Setup Your Store</a>
+        </div>
+    </div>
+
+    <div id="demo-stage" class="store-site">
+            <div id="store-app" class="store-shell hidden">
+                <div class="demo-ribbon hidden" id="demo-ribbon">SAMPLE</div>
+
+                <header class="store-header" id="store-header">
+                    <div class="store-header-inner">
+                        <div class="store-header-left">
+                            <button type="button" class="icon-btn" id="btn-back" aria-label="Back" hidden>
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            </button>
+                            <button type="button" class="icon-btn" id="btn-menu" aria-label="Open menu">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            </button>
+                        </div>
+                        <button type="button" class="store-header-brand" id="btn-brand" aria-label="Home">
+                            <img id="store-header-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
+                            <span class="store-brand-title store-brand-font" id="store-header-name">Store</span>
+                        </button>
+                        <div class="store-header-right">
+                            <button type="button" class="icon-btn" id="btn-search" aria-label="Search">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
+                            </button>
+                            <a class="icon-btn" id="btn-header-wa" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">
+                                <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                            </a>
+                            <button type="button" class="icon-btn" id="btn-cart" aria-label="Cart">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 9h14M10 21a1 1 0 112 0 1 1 0 01-2 0zm7 0a1 1 0 112 0 1 1 0 01-2 0z"/></svg>
+                                <span id="store-cart-badge" class="store-cart-badge">0</span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="drawer-backdrop" id="drawer-backdrop"></div>
+                <aside class="drawer" id="drawer" aria-hidden="true">
+                    <div class="drawer-brand">
+                        <img id="drawer-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
+                        <div>
+                            <div class="drawer-brand-name store-brand-font" id="drawer-name">Store</div>
+                            <div class="drawer-brand-tag" id="drawer-tagline"></div>
+                        </div>
+                    </div>
+                    <nav class="drawer-nav">
+                        <button type="button" class="drawer-link" data-nav="home">Home</button>
+                        <button type="button" class="drawer-link is-accent" data-nav="menu">Menu</button>
+                        <button type="button" class="drawer-link" data-nav="cart">Cart</button>
+                        <a href="index.html" class="drawer-link is-muted">← Back to MithraDirect</a>
+                        <a href="onboarding.html" class="drawer-link is-muted">Create your store</a>
+                    </nav>
+                </aside>
+
+                <section class="store-view active" id="view-home" data-view="home">
+                    <div class="store-hero" id="store-hero">
+                        <img id="store-banner-img" class="store-hero-bg" alt="">
+                        <div class="store-hero-overlay"></div>
+                        <span class="hero-badge">100% Homemade</span>
+                        <h1 class="store-brand-font" id="store-name">Store</h1>
+                        <p class="hero-tagline" id="store-tagline"></p>
+                        <p class="hero-location" id="store-location"></p>
+                        <div class="hero-chips">
+                            <span class="hero-chip">No preservatives</span>
+                            <span class="hero-chip">FSSAI licensed</span>
+                            <span class="hero-chip">Home delivery</span>
+                        </div>
+                    </div>
+
+                    <div class="store-panel is-bordered address-panel" id="address-panel">
+                        <div class="address-row">
+                            <div class="address-row-main">
+                                <p class="address-label" id="home-address-label">Delivering to</p>
+                                <p class="address-value" id="home-address">Add your delivery address</p>
+                                <p class="address-hint" id="home-address-hint">Tell us where to send your order — then pick what you love.</p>
+                            </div>
+                            <button type="button" class="btn-outline is-compact" id="btn-change-address" data-cta="set_delivery_address">Add address</button>
+                        </div>
+                        <p class="delivery-window" id="delivery-window">Homemade · Fresh · Delivered to your door</p>
+                    </div>
+
+                    <div class="trust-strip" aria-label="Trust signals">
+                        <div class="trust-chip">🌿 100% Natural</div>
+                        <div class="trust-chip">🚫 No Preservatives</div>
+                        <div class="trust-chip">🧼 Hygienic &amp; Safe</div>
+                        <div class="trust-chip">🚚 Home Delivery</div>
+                    </div>
+
+                    <div class="store-panel">
+                        <div class="section-head">
+                            <h2>Categories</h2>
+                            <button type="button" class="link-btn" data-nav="menu">View menu</button>
+                        </div>
+                        <div class="category-scroller" id="store-categories"></div>
+                    </div>
+
+                    <div class="store-panel">
+                        <div class="section-head">
+                            <h2>Popular Products</h2>
+                            <button type="button" class="link-btn" data-nav="menu">View all</button>
+                        </div>
+                        <div class="product-grid" id="store-products"></div>
+                    </div>
+
+                    <div class="home-trust-footer" aria-label="Store promises">
+                        <div class="home-trust-item"><span aria-hidden="true">🌿</span>100% Natural</div>
+                        <div class="home-trust-item"><span aria-hidden="true">🚫</span>No Preservatives</div>
+                        <div class="home-trust-item"><span aria-hidden="true">🧼</span>Hygienic &amp; Safe</div>
+                    </div>
+                    <p class="store-footer-note">Powered by <a href="index.html">MithraDirect</a> · Local support, direct connection</p>
+                    <div class="wa-order-banner" role="note">This is a WhatsApp Order storefront</div>
+                </section>
+
+                <section class="store-view" id="view-menu" data-view="menu">
+                    <div class="menu-layout">
+                        <nav class="menu-rail" id="menu-rail" aria-label="Product categories"></nav>
+                        <div class="menu-content" id="menu-content">
+                            <div class="menu-search-wrap">
+                                <input type="search" class="field" id="menu-search" placeholder="Search products…" aria-label="Search products">
+                            </div>
+                            <div id="menu-products" class="menu-products-wide"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="store-view" id="view-product" data-view="product">
+                    <div id="product-detail" class="fade-in"></div>
+                </section>
+
+                <section class="store-view" id="view-cart" data-view="cart">
+                    <div class="store-panel">
+                        <h2 class="page-title store-brand-font">Shopping Cart</h2>
+                        <div id="cart-items"></div>
+                        <div class="coupon-row">
+                            <input type="text" class="field" id="coupon-input" placeholder="Enter coupon code" aria-label="Coupon code">
+                            <button type="button" class="btn-outline" id="btn-apply-coupon">Apply</button>
+                        </div>
+                        <p class="coupon-msg hidden" id="coupon-msg"></p>
+                        <div class="bill-lines" id="cart-summary"></div>
+                        <button type="button" class="btn-primary-store mt-block" id="btn-proceed-login">Proceed to Login</button>
+                    </div>
+                </section>
+
+                <section class="store-view no-pad" id="view-login" data-view="login">
+                    <div class="auth-panel">
+                        <div class="auth-icon" aria-hidden="true">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        </div>
+                        <h2 class="store-brand-font">Login / Signup</h2>
+                        <p class="auth-sub">We'll send a one-time password to your phone</p>
+                        <div id="login-phone-step">
+                            <label class="field-label" for="login-phone">Mobile Number</label>
+                            <div class="phone-row">
+                                <select class="field field-cc" aria-label="Country code"><option>+91</option></select>
+                                <input type="tel" class="field" id="login-phone" maxlength="10" placeholder="10-digit mobile" inputmode="numeric">
+                            </div>
+                            <button type="button" class="btn-primary-store" id="btn-send-otp">Send OTP</button>
+                        </div>
+                        <div id="login-otp-step" class="hidden">
+                            <p class="field-label" id="login-otp-label">Enter OTP</p>
+                            <p class="auth-sub auth-otp-lead">
+                                Enter the 4-digit code sent to your phone.
+                                <span class="otp-demo">(Demo: any 4 digits)</span>
+                            </p>
+                            <div class="otp-row" id="login-otp-inputs" aria-labelledby="login-otp-label"></div>
+                            <p id="login-otp-error" class="login-otp-error hidden" role="alert"></p>
+                            <button type="button" class="btn-primary-store" id="btn-verify-otp">Verify &amp; Continue</button>
+                            <button type="button" class="resend-btn" id="btn-resend-otp">Resend OTP</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="store-view" id="view-checkout" data-view="checkout">
+                    <div class="store-panel">
+                        <h2 class="page-title store-brand-font">Review Order</h2>
+
+                        <div class="checkout-block checkout-block--confirm">
+                            <div class="checkout-block-head">
+                                <h3>Delivering here</h3>
+                                <button type="button" class="link-btn" id="btn-edit-address" data-cta="edit_address">Edit</button>
+                            </div>
+                            <p class="checkout-confirm-note">Confirmed before you shopped — no extra verify step.</p>
+                            <div class="address-card is-confirmed" id="checkout-addresses" data-api-field="delivery.address">
+                                <p class="tag" id="checkout-addr-label">Home</p>
+                                <p class="addr-line" id="checkout-addr-line">—</p>
+                                <p class="phone" id="checkout-addr-phone"></p>
+                            </div>
+                            <div class="address-edit hidden" id="checkout-address-edit">
+                                <label class="field-label" for="checkout-addr-input">Delivery address</label>
+                                <textarea class="field address-edit-input" id="checkout-addr-input" rows="3" placeholder="Flat / Street, Area, City, PIN"></textarea>
+                                <div class="address-edit-actions">
+                                    <button type="button" class="btn-outline" id="btn-cancel-address">Cancel</button>
+                                    <button type="button" class="btn-primary-store is-inline" id="btn-save-address">Save address</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="checkout-block">
+                            <h3 style="margin-bottom:0.55rem">Delivery Method</h3>
+                            <div class="pay-options" id="delivery-options"></div>
+                        </div>
+
+                        <div class="checkout-block">
+                            <h3 style="margin-bottom:0.55rem">Order Summary</h3>
+                            <div class="checkout-summary" id="checkout-summary"></div>
+                        </div>
+
+                        <div class="checkout-block">
+                            <h3 style="margin-bottom:0.55rem">Payment Preference</h3>
+                            <div class="pay-options" id="payment-options"></div>
+                        </div>
+
+                        <label class="terms-row">
+                            <input type="checkbox" id="terms-check" checked>
+                            <span>I agree to the Terms &amp; Conditions and confirm this order details are correct.</span>
+                        </label>
+
+                        <button type="button" class="btn-primary-store" id="btn-create-order">Create Order &amp; Send on WhatsApp</button>
+                    </div>
+                </section>
+
+                <section class="store-view no-pad" id="view-success" data-view="success">
+                    <div class="success-panel">
+                        <div class="success-check" aria-hidden="true">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <h2 class="store-brand-font">Order Created Successfully!</h2>
+                        <p class="order-id-label">Order ID</p>
+                        <p class="order-id-value" id="order-id-display">—</p>
+                        <a id="btn-send-whatsapp" href="#" target="_blank" rel="noopener" class="btn-primary-store">
+                            <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                            Send Order on WhatsApp
+                        </a>
+                        <div class="success-links">
+                            <button type="button" class="link-btn" id="btn-view-order">View Order Details</button>
+                            <button type="button" class="is-muted" data-nav="home">Continue Shopping</button>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="cart-bar" id="cart-bar">
+                    <div>
+                        <div class="cart-bar-meta" id="cart-bar-count">0 Items</div>
+                        <div class="cart-bar-total" id="cart-bar-total">₹0</div>
+                    </div>
+                    <button type="button" class="cart-bar-cta" id="btn-go-cart">Go to Cart</button>
+                </div>
+
+                <!-- Delivery address gate (required before adding items) -->
+                <div class="addr-gate" id="addr-gate" hidden aria-hidden="true">
+                    <div class="addr-gate-backdrop" id="addr-gate-backdrop"></div>
+                    <div class="addr-gate-sheet" role="dialog" aria-modal="true" aria-labelledby="addr-gate-title">
+                        <div class="addr-gate-handle" aria-hidden="true"></div>
+                        <p class="addr-gate-eyebrow" id="addr-gate-eyebrow">Almost there</p>
+                        <h2 class="addr-gate-title store-brand-font" id="addr-gate-title">Where should we deliver?</h2>
+                        <p class="addr-gate-lead" id="addr-gate-lead">
+                            Add your address once — homemade orders reach you without back-and-forth on WhatsApp.
+                        </p>
+                        <label class="field-label" for="addr-gate-input">Delivery address</label>
+                        <textarea
+                            class="field addr-gate-input"
+                            id="addr-gate-input"
+                            rows="3"
+                            placeholder="Flat / House, Street, Area, City, PIN"
+                            autocomplete="street-address"
+                        ></textarea>
+                        <p class="addr-gate-error" id="addr-gate-error" hidden>Please enter a full delivery address (area + city helps a lot).</p>
+                        <div class="addr-gate-quick">
+                            <button type="button" class="addr-chip" data-addr-chip="Home, near [landmark], City">Home</button>
+                            <button type="button" class="addr-chip" data-addr-chip="Office / work, Area, City">Work</button>
+                            <button type="button" class="addr-chip" id="addr-gate-near-me">Near me</button>
+                        </div>
+                        <button type="button" class="btn-primary-store addr-gate-save" id="addr-gate-save" data-cta="save_delivery_address">
+                            Save &amp; start ordering
+                        </button>
+                        <button type="button" class="addr-gate-skip" id="addr-gate-skip">
+                            Browse the menu first
+                        </button>
+                        <p class="addr-gate-note">You’ll need an address before adding items — so checkout stays quick on WhatsApp.</p>
+                    </div>
+                </div>
+            </div>
+    </div>
+
+    <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/store-api.js"></script>
+    <script src="assets/js/otp-input.js"></script>
+    <script src="assets/js/storefront.js"></script>
+</body>
+</html>

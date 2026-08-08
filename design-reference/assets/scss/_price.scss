@@ -1,0 +1,131 @@
+/** @format */
+
+// mr_price_area css
+.mr_price_area {
+	padding-top: 120px;
+	position: relative;
+	z-index: 1;
+	&:before {
+		content: '';
+		background: url(../img/app/price_bg_shap.png) no-repeat scroll center bottom /
+			contain;
+		position: absolute;
+		left: 50%;
+		transform: translateX(-50%);
+		top: 0;
+		width: 1480px;
+		height: 100%;
+		z-index: -1;
+	}
+}
+.table_price_info {
+	border-radius: 6px;
+	border: 1px solid #dcdcdc;
+	overflow: hidden;
+	h4,
+	h5,
+	p,
+	.pr_title {
+		font-family: $arimo;
+	}
+	.price_head,
+	.pr_list {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		text-align: center;
+	}
+	h5 {
+		font-size: 18px;
+		font-weight: 400;
+		color: #212121;
+		margin-bottom: 4px;
+	}
+	.price_head {
+		background: #f8eee1;
+		h4 {
+			margin-bottom: 0;
+			font-size: 30px;
+			font-weight: 600;
+		}
+		.p_head {
+			display: grid;
+			align-items: center;
+			padding: 30px 20px;
+			p {
+				margin-bottom: 0;
+				font-size: 14px;
+			}
+			&:nth-child(2) {
+				background: #212121;
+				h4 {
+					color: #fff;
+					font-size: 27px;
+					font-weight: 500;
+					letter-spacing: -0.01rem;
+					img {
+						margin-right: 8px;
+					}
+				}
+			}
+		}
+		.head_title {
+			text-align: left;
+			padding-left: 35px;
+		}
+	}
+	.price_body {
+		background: #ffffff;
+		.pr_list {
+			border-top: 1px solid #3f3f3f;
+			.price_item {
+				display: grid;
+				align-items: center;
+				justify-content: center;
+				padding: 25px 20px;
+				h5 {
+					margin-bottom: 0;
+					i {
+						font-size: 30px;
+					}
+					&.check {
+						color: #56c28c;
+					}
+					&.crose {
+						color: #e42e1b;
+					}
+				}
+				&:nth-child(1) {
+					text-align: left;
+					justify-content: start;
+					padding-left: 35px;
+				}
+				&:nth-child(2) {
+					background: #212121;
+					.price {
+						color: #fff;
+					}
+				}
+				.price {
+					font-size: 25px;
+				}
+				.price_btn {
+					font-size: 18px;
+					color: #fff;
+					overflow: visible;
+					img {
+						margin-left: 6px;
+						transition: all 0.3s;
+					}
+					&:hover {
+						img {
+							transform: translateX(10px);
+						}
+					}
+				}
+				.theme_btn_text {
+					display: inline-block;
+				}
+			}
+		}
+	}
+}

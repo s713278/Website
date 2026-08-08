@@ -1,0 +1,55 @@
+/** @format */
+
+.payments_flow {
+	.image_box {
+		position: relative;
+		margin-top: 50px;
+		.main {
+			position: relative;
+			z-index: 97;
+		}
+		.shape {
+			position: absolute;
+			width: 1210px;
+			height: 562px;
+			background: linear-gradient(
+				355.01deg,
+				#ffd7e5 4.02%,
+				rgba(255, 239, 245, 0.6) 112.11%
+			);
+			opacity: 0.7;
+			filter: blur(200px);
+			border-radius: 30px;
+			left: -15px;
+			top: 30px;
+		}
+		.one {
+			position: absolute;
+			top: 75px;
+			left: -110px;
+			z-index: 98;
+		}
+		.two {
+			position: absolute;
+			right: -125px;
+			bottom: 85px;
+			z-index: 98;
+		}
+		.shape_items {
+			.one {
+				top: 410px;
+				left: -90px;
+			}
+			.two {
+				z-index: 0;
+				top: -90px;
+				left: -145px;
+			}
+			.three {
+				z-index: 0;
+				right: -110px;
+				bottom: 0;
+			}
+		}
+	}
+}

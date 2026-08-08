@@ -1,0 +1,256 @@
+/** @format */
+.portfolio_area {
+	padding: 110px 0px 50px;
+}
+// portfolio_area css
+.portfolio_filter {
+	display: flex;
+	justify-content: center;
+	.work_portfolio_item {
+		display: inline-block;
+		font-size: 16px;
+		line-height: 22px;
+		font-weight: 600;
+		color: $pcolor;
+		font-family: $man;
+		margin-right: 40px;
+		position: relative;
+		cursor: pointer;
+		&:before {
+			content: '';
+			width: 0;
+			height: 1px;
+			background: $purple;
+			position: absolute;
+			bottom: 0;
+			right: 0;
+			left: auto;
+			transition: width 0.3s;
+		}
+		&.active,
+		&:hover {
+			color: $purple;
+			&:before {
+				width: 100%;
+				left: 0;
+				right: auto;
+			}
+		}
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+}
+
+.portfolio_item {
+	margin-bottom: 60px;
+	.portfolio_img {
+		.img_popup {
+			display: block;
+			border-radius: 10px;
+			overflow: hidden;
+			img {
+				transition: all 0.4s;
+				max-width: 100%;
+				width: 100%;
+			}
+		}
+		&:hover {
+			img {
+				transform: scale(1.04);
+			}
+			.portfolio_title {
+				color: $purple;
+			}
+		}
+	}
+	.portfolio-description {
+		padding-top: 22px;
+		.portfolio_title {
+			font-size: 24px;
+			line-height: 28px;
+			font-weight: 800;
+			transition: color 0.2s;
+		}
+		.links {
+			a {
+				color: $pcolor;
+				transition: all 0.3s;
+				display: inline-block;
+				&:hover {
+					color: $purple;
+				}
+			}
+		}
+	}
+}
+
+// portfolio_masonry_gallery css
+.portfolio_masonry_area {
+	padding-bottom: 80px;
+}
+.portfolio_masonry_gallery {
+	.portfolio_item {
+		margin-bottom: 30px;
+		.portfolio_img {
+			position: relative;
+			overflow: hidden;
+			border-radius: 10px;
+			z-index: 2;
+			.img_popup {
+				overflow: visible;
+				position: relative;
+				&::before {
+					content: '';
+					width: 100%;
+					height: 100%;
+					position: absolute;
+					z-index: 1;
+					background: linear-gradient(
+						180deg,
+						rgba(44, 38, 74, 0) 48.6%,
+						#2c264a 100%
+					);
+					border-radius: 10px;
+					opacity: 0;
+					transition: all 0.4s;
+				}
+			}
+			img {
+				width: 100%;
+			}
+			.portfolio-description {
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				width: 100%;
+				padding-left: 30px;
+				padding-right: 15px;
+				padding-bottom: 30px;
+				z-index: 2;
+				.portfolio_title,
+				.links a {
+					color: #fff;
+					transform: translateY(110%);
+					transition: transform 0.5s;
+				}
+				a {
+					overflow: hidden;
+					display: inline-block;
+				}
+				.links {
+					overflow: hidden;
+				}
+				.links a {
+					transition: transform 0.7s;
+				}
+			}
+			&:hover {
+				.img_popup {
+					&::before {
+						opacity: 1;
+					}
+				}
+				.portfolio_title,
+				.links a {
+					transform: translateY(0);
+				}
+			}
+		}
+	}
+}
+
+// portfolio_details_area  css
+
+.portfolio_details_area {
+	img {
+		border-radius: 10px;
+		width: 100%;
+		margin-bottom: 85px;
+	}
+}
+
+.portfolio_details_content {
+	margin-bottom: -40px;
+	h4 {
+		font-size: 35px;
+		font-weight: 800;
+		color: $title;
+		font-family: $man;
+		margin-bottom: 20px;
+	}
+	p {
+		margin-bottom: 50px;
+	}
+	strong {
+		color: $title;
+	}
+	ul {
+		margin-top: -10px;
+		margin-bottom: 50px;
+		li {
+			font-weight: 500;
+			color: $title;
+			position: relative;
+			padding-left: 25px;
+			font-family: 'Manrope', sans-serif;
+			margin-bottom: 10px;
+			&::before {
+				content: '\f33e';
+				font-family: 'Phosphor';
+				color: $purple;
+				position: absolute;
+				font-size: 20px;
+				left: 0;
+			}
+		}
+	}
+}
+
+.product_info {
+	background: #f8f8ff;
+	border-radius: 10px;
+	padding: 40px 32px;
+}
+.pr_info_item {
+	h6 {
+		font-size: 16px;
+		font-weight: 600;
+		color: $pcolor;
+		text-transform: uppercase;
+		margin-bottom: 10px;
+	}
+	h5 {
+		font-size: 18px;
+		color: $title;
+		font-weight: 700;
+		margin-bottom: 0;
+	}
+	.social_icons {
+		a {
+			width: 40px;
+			height: 40px;
+			font-size: 18px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			background: #ffffff;
+			box-shadow: 0px 4px 12px -2px rgba(15, 13, 13, 0.06);
+			border-radius: 24px;
+			color: #0f0d0d;
+			margin-right: 10px;
+			transition: all 0.3s;
+			&:hover {
+				background: $purple;
+				color: #fff;
+				box-shadow: 0px 20px 44px rgba(85, 59, 249, 0.3);
+			}
+			&:last-child {
+				margin-right: 0;
+			}
+		}
+	}
+	& + .pr_info_item {
+		margin-top: 30px;
+	}
+}

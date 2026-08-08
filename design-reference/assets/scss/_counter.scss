@@ -1,0 +1,57 @@
+// Home Six
+.dm_counter {
+    padding-top: 120px;
+    .single_dm_counter {
+        text-align: center;
+        h5 {
+            font-family: $Montserrat;
+            font-weight: 600;
+            font-size: 52px;
+            line-height: 70px;
+            background: linear-gradient(137deg, #60C1FF 29.11%, #4C93F3 84.24%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0;
+        }
+        p {
+            font-family: $Montserrat;
+            color: #0F0D0D;
+            font-weight: 500;
+            font-size: 16px;
+            line-height: 28px;
+        }
+    }
+    .col-lg-3 {
+        &:nth-child(2) {
+            .single_dm_counter {
+                   h5 {
+                    background: linear-gradient(122.11deg, #F4C553 29.11%, #E69940 84.24%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                   }
+            }
+        }
+        &:nth-child(3) {
+            .single_dm_counter {
+                   h5 {
+                    background: linear-gradient(122.11deg, #7FEAB8 29.11%, #4DBC87 84.24%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                   }
+            }
+        }
+        &:nth-child(4) {
+            .single_dm_counter {
+                   h5 {
+                    background: linear-gradient(122.11deg, #FF7D61 29.11%, #EE5A3A 84.24%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                   }
+            }
+        }
+    }
+}

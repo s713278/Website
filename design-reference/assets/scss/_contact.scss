@@ -1,0 +1,153 @@
+/** @format */
+
+//contact_box
+.contact_box {
+	margin-top: -210px;
+	padding-bottom: 120px;
+	position: relative;
+	.single_item {
+		padding-top: 48px;
+		padding-bottom: 45px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		background: #ffffff;
+		border: 1px solid #e5e5e5;
+		border-radius: 10px;
+		cursor: pointer;
+		transition: 0.5s;
+		.icon {
+			height: 83px;
+			width: 80px;
+			background: #553bf9;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			border-radius: 50%;
+			margin-bottom: 20px;
+		}
+		h5 {
+			color: #2c264a;
+			font-family: $man;
+			font-weight: 700;
+			font-size: 25px;
+			line-height: 34px;
+			margin-bottom: 15px;
+		}
+		p {
+			color: #4c4c63;
+			font-family: $man;
+			font-weight: 400;
+			font-size: 16px;
+			line-height: 28px;
+		}
+		a {
+			color: #4c4c63;
+			font-family: $man;
+			font-weight: 400;
+			font-size: 16px;
+			line-height: 36px;
+		}
+		&:hover {
+			background: #f4f5f6;
+		}
+	}
+	.shape_items {
+		.one {
+			left: 150px;
+			top: 50px;
+		}
+		.two {
+			top: -110px;
+			right: 285px;
+		}
+		.three {
+			right: 162px;
+			bottom: 190px;
+		}
+	}
+}
+
+//contact_form
+.contact_form {
+	padding-top: 120px;
+	padding-bottom: 120px;
+	position: relative;
+	.main_form {
+		margin-top: 60px;
+		.form_box {
+			padding: 0 20px;
+		}
+		h6 {
+			color: #4c4c63;
+			font-family: $man;
+			font-weight: 600;
+			font-size: 16px;
+			line-height: 14px;
+			margin-top: 48px;
+		}
+		input {
+			padding-top: 13px;
+			padding-bottom: 22px;
+			padding-left: 0;
+			border: 0;
+			border-bottom: 2px solid #d7d7e2;
+			background: transparent;
+			border-radius: 0;
+			&::placeholder {
+				color: #9797ac;
+				font-family: $man;
+				font-weight: 400;
+				font-size: 20px;
+				line-height: 28px;
+			}
+			&:focus {
+				box-shadow: none;
+				border-bottom: 2px solid #553bf9;
+			}
+		}
+		.submit_note {
+			padding-top: 60px;
+			padding-left: 20px;
+			span {
+				color: #4c4c63;
+				font-family: $man;
+				font-weight: 400;
+				font-size: 18px;
+				line-height: 32px;
+			}
+		}
+		.submit_area {
+			text-align: right;
+			padding-right: 20px;
+			.submit_btn {
+				width: 223px;
+				height: 56px;
+				font-family: $man;
+				color: $white;
+				font-weight: 700;
+				font-size: 16px;
+				line-height: 40px;
+				border-bottom: 0;
+				background: #553bf9;
+				border-radius: 5px;
+				padding-top: 8px;
+				margin-top: 45px;
+				&:hover {
+					background: #333;
+				}
+			}
+		}
+	}
+	.shape_items {
+		.one {
+			top: 200px;
+			left: 205px;
+		}
+		.two {
+			right: 150px;
+			bottom: 80px;
+		}
+	}
+}

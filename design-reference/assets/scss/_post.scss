@@ -1,0 +1,23 @@
+.post_area {
+    margin-top: -210px;
+    .content_area {
+        .content {
+            margin-top: 60px;
+            padding-right: 80px;
+            h4 {
+                color: #2C264A;
+                font-family: $man;
+                font-weight: 800;
+                font-size: 45px;
+                margin-bottom: 30px;
+            }
+            p {
+                color: #4C4C63;
+                font-family: $man;
+                font-weight: 400;
+                font-size: 16px;
+                line-height: 28px;
+            }
+        }
+    }
+}
