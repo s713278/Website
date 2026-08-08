@@ -1,6 +1,9 @@
 ﻿/* MithraDirect storefront — page styles
    Tokens / fonts / assets: assets/css/global.css */
 
+/* Vendor font presets — store.html only */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600;700;800&display=swap');
+
 :root {
   --store-shell-max: 72rem;
   --demo-topbar-h: 3.75rem;
@@ -11,6 +14,10 @@
   --store-ink: var(--md-ink);
   --store-muted: var(--md-muted);
   --store-border: var(--md-border);
+  --store-accent: #f97316;
+  --store-accent-soft: rgba(249, 115, 22, 0.16);
+  --store-accent-muted: rgba(249, 115, 22, 0.28);
+  --store-bg: #f9fafb;
 }
 
 body.store-page {
@@ -19,7 +26,7 @@ body.store-page {
   min-height: 100dvh;
   font-family: var(--font-body);
   color: var(--store-ink);
-  background: var(--md-atmosphere);
+  background: var(--store-bg, var(--md-atmosphere));
   line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
 }
@@ -31,11 +38,23 @@ body.store-page {
 }
 
 .store-accent {
-  color: var(--store-theme, var(--md-green-dark));
+  color: var(--store-accent, var(--store-theme, var(--md-green-dark)));
 }
 
 .store-accent-soft {
-  background: var(--store-theme-soft, var(--md-green-soft));
+  background: var(--store-accent-soft, var(--store-theme-soft, var(--md-green-soft)));
+}
+
+.store-offer-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--store-accent, #f97316);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  line-height: 1.2;
 }
 
 /* ========== Investor demo chrome ========== */

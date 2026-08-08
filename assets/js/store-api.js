@@ -97,7 +97,11 @@
         draft.payment[k] = Object.assign({}, blank.payment[k], data.payment[k] || {});
       });
     }
-    if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
+    if (!draft.settings.themeColor) draft.settings.themeColor = D.DEFAULT_THEME || '#10b981';
+    if (!draft.settings.accentColor) draft.settings.accentColor = D.DEFAULT_ACCENT || '#f97316';
+    if (!draft.settings.backgroundColor) draft.settings.backgroundColor = D.DEFAULT_BG || '#f9fafb';
+    if (!draft.settings.fontId) draft.settings.fontId = D.DEFAULT_FONT || 'poppins';
+    if (draft.settings.instagramUrl == null) draft.settings.instagramUrl = '';
     if (draft.settings.storeName && !draft.slug) {
       draft.slug = D.slugify(draft.settings.storeName);
     }

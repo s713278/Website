@@ -298,16 +298,51 @@
     if (qs('set-whatsapp'))
       qs('set-whatsapp').textContent = settings.whatsapp ? '+91 ' + settings.whatsapp : '—';
     if (qs('set-location')) qs('set-location').textContent = settings.location || '—';
+    if (qs('set-instagram')) {
+      var igUrl = settings.instagramUrl || '';
+      var igEl = qs('set-instagram');
+      if (igUrl) {
+        igEl.innerHTML =
+          '<a href="' +
+          igUrl.replace(/"/g, '') +
+          '" target="_blank" rel="noopener">' +
+          igUrl.replace(/^https?:\/\/(www\.)?/i, '') +
+          '</a>';
+      } else {
+        igEl.textContent = '—';
+      }
+    }
     if (qs('set-plan')) qs('set-plan').textContent = planName;
     if (qs('set-theme')) qs('set-theme').textContent = settings.themeColor || '—';
+    if (qs('set-accent')) qs('set-accent').textContent = settings.accentColor || '—';
+    if (qs('set-bg')) qs('set-bg').textContent = settings.backgroundColor || '—';
+    if (qs('set-font')) {
+      var fontPreset =
+        D && typeof D.getFontPreset === 'function'
+          ? D.getFontPreset(settings.fontId)
+          : null;
+      qs('set-font').textContent = (fontPreset && fontPreset.label) || settings.fontId || '—';
+    }
 
     var themeSwatch = qs('set-theme-swatch');
     if (themeSwatch && settings.themeColor) {
       themeSwatch.style.background = settings.themeColor;
       themeSwatch.hidden = false;
     }
+    var accentSwatch = qs('set-accent-swatch');
+    if (accentSwatch && settings.accentColor) {
+      accentSwatch.style.background = settings.accentColor;
+      accentSwatch.hidden = false;
+    }
+    var bgSwatch = qs('set-bg-swatch');
+    if (bgSwatch && settings.backgroundColor) {
+      bgSwatch.style.background = settings.backgroundColor;
+      bgSwatch.hidden = false;
+    }
 
-    if (D && typeof D.applyTheme === 'function') {
+    if (D && typeof D.applyStoreBrand === 'function') {
+      D.applyStoreBrand(settings);
+    } else if (D && typeof D.applyTheme === 'function') {
       D.applyTheme(settings.themeColor || D.DEFAULT_THEME || '#10b981');
     } else if (settings.themeColor) {
       document.documentElement.style.setProperty('--store-theme', settings.themeColor);
