@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RootLayout, VendorLayout } from '@/app/layouts'
 import { ProtectedRoute } from '@/app/router/ProtectedRoute'
 import { CartPage } from '@/modules/storefront/pages/CartPage'
@@ -13,11 +13,6 @@ import { VendorOrdersPage } from '@/modules/vendor/pages/VendorOrdersPage'
 import { VendorProductsPage } from '@/modules/vendor/pages/VendorProductsPage'
 import { LoginPage } from '@/shared/auth/pages/LoginPage'
 import { RegisterPage } from '@/shared/auth/pages/RegisterPage'
-
-function LegacyRestaurantRedirect() {
-  const { storeId } = useParams()
-  return <Navigate to={storeId ? `/stores/${storeId}` : '/stores'} replace />
-}
 
 export function AppRouter() {
   return (
@@ -49,8 +44,6 @@ export function AppRouter() {
             </Route>
           </Route>
 
-          <Route path="restaurants" element={<Navigate to="/stores" replace />} />
-          <Route path="restaurants/:storeId" element={<LegacyRestaurantRedirect />} />
           <Route path="home" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
