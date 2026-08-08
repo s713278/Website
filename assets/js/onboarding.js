@@ -265,27 +265,83 @@
       return true;
     }
     if (step === 9) {
+      clearSettingsFieldErrors();
       var name = (document.getElementById('input-store-name').value || '').trim();
       var tagline = (document.getElementById('input-tagline').value || '').trim();
       var location = (document.getElementById('input-location').value || '').trim();
       var wa = (document.getElementById('input-whatsapp').value || '').replace(/\D/g, '');
+      var instagramRaw =
+        (document.getElementById('input-instagram') &&
+          document.getElementById('input-instagram').value) ||
+        '';
+      var instagram = normalizeInstagramInput(instagramRaw);
+
+      var firstInvalid = null;
       if (!name) {
-        showError('settings-error', 'Store name is required.');
+        markSettingsFieldInvalid('storeName', 'Store name is required.');
+        firstInvalid = firstInvalid || 'input-store-name';
+      } else if (name.length < 2) {
+        markSettingsFieldInvalid('storeName', 'Enter at least 2 characters.');
+        firstInvalid = firstInvalid || 'input-store-name';
+      } else if (name.length > 80) {
+        markSettingsFieldInvalid('storeName', 'Keep the name under 80 characters.');
+        firstInvalid = firstInvalid || 'input-store-name';
+      }
+
+      if (tagline.length > 120) {
+        markSettingsFieldInvalid('tagline', 'Keep the tagline under 120 characters.');
+        firstInvalid = firstInvalid || 'input-tagline';
+      }
+
+      if (!location) {
+        markSettingsFieldInvalid('location', 'Business location is required.');
+        firstInvalid = firstInvalid || 'input-location';
+      } else if (location.length < 2) {
+        markSettingsFieldInvalid('location', 'Enter a valid city or area.');
+        firstInvalid = firstInvalid || 'input-location';
+      }
+
+      if (!wa) {
+        markSettingsFieldInvalid('whatsapp', 'WhatsApp number is required for orders.');
+        firstInvalid = firstInvalid || 'input-whatsapp';
+      } else if (!/^\d{10}$/.test(wa)) {
+        markSettingsFieldInvalid('whatsapp', 'Enter a valid 10-digit WhatsApp number.');
+        firstInvalid = firstInvalid || 'input-whatsapp';
+      }
+
+      if (instagram.error) {
+        markSettingsFieldInvalid('instagramUrl', instagram.error);
+        firstInvalid = firstInvalid || 'input-instagram';
+      }
+
+      if (firstInvalid) {
+        showError('settings-error', 'Please fix the highlighted fields to continue.');
+        var focusEl = document.getElementById(firstInvalid);
+        if (focusEl && focusEl.focus) focusEl.focus();
         return false;
       }
-      if (!/^\d{10}$/.test(wa)) {
-        showError('settings-error', 'Enter a valid 10-digit WhatsApp number.');
-        return false;
-      }
+
       draft.settings.storeName = name;
       draft.settings.tagline = tagline;
       draft.settings.location = location;
       draft.settings.whatsapp = wa;
+      draft.settings.instagramUrl = instagram.url || '';
       draft.settings.themeColor =
         (document.getElementById('input-theme-color') &&
           document.getElementById('input-theme-color').value) ||
         draft.settings.themeColor ||
         '#10b981';
+      draft.settings.accentColor =
+        (document.getElementById('input-accent-color') &&
+          document.getElementById('input-accent-color').value) ||
+        draft.settings.accentColor ||
+        (D.DEFAULT_ACCENT || '#f97316');
+      draft.settings.backgroundColor =
+        (document.getElementById('input-bg-color') &&
+          document.getElementById('input-bg-color').value) ||
+        draft.settings.backgroundColor ||
+        (D.DEFAULT_BG || '#f9fafb');
+      draft.settings.fontId = draft.settings.fontId || D.DEFAULT_FONT || 'poppins';
       draft.slug = D.slugify(name);
       return true;
     }
@@ -297,6 +353,56 @@
     if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
+  }
+
+  function markSettingsFieldInvalid(fieldKey, message) {
+    var wrap = document.querySelector('.settings-field[data-field="' + fieldKey + '"]');
+    if (!wrap) return;
+    wrap.classList.add('is-invalid');
+    var err = wrap.querySelector('.field-error');
+    if (err) err.textContent = message || '';
+  }
+
+  function clearSettingsFieldErrors() {
+    document.querySelectorAll('.settings-field.is-invalid').forEach(function (wrap) {
+      wrap.classList.remove('is-invalid');
+      var err = wrap.querySelector('.field-error');
+      if (err) err.textContent = '';
+    });
+  }
+
+  /**
+   * Accept @handle, username, or full Instagram URL.
+   * Returns { url, handle, error }.
+   */
+  function normalizeInstagramInput(raw) {
+    var value = String(raw || '').trim();
+    if (!value) return { url: '', handle: '', error: '' };
+
+    var handle = value
+      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+      .replace(/^@/, '')
+      .replace(/\/.*$/, '')
+      .replace(/\?.*$/, '')
+      .trim();
+
+    if (!/^[A-Za-z0-9._]{1,30}$/.test(handle)) {
+      return {
+        url: '',
+        handle: '',
+        error: 'Enter a valid Instagram username (letters, numbers, . or _).'
+      };
+    }
+    return {
+      url: 'https://www.instagram.com/' + handle + '/',
+      handle: handle,
+      error: ''
+    };
+  }
+
+  function instagramHandleFromUrl(url) {
+    var parsed = normalizeInstagramInput(url || '');
+    return parsed.handle || '';
   }
 
   function hideErrors() {
@@ -343,10 +449,13 @@
     if (step === 7) syncDeliveryForm();
     if (step === 8) syncPaymentForm();
     if (step === 9) {
+      clearSettingsFieldErrors();
       document.getElementById('input-store-name').value = draft.settings.storeName || '';
       document.getElementById('input-tagline').value = draft.settings.tagline || '';
       document.getElementById('input-location').value = draft.settings.location || '';
       document.getElementById('input-whatsapp').value = draft.settings.whatsapp || draft.phone || '';
+      var ig = document.getElementById('input-instagram');
+      if (ig) ig.value = instagramHandleFromUrl(draft.settings.instagramUrl || '');
       syncImagePreview('logo', draft.settings.logo);
       syncImagePreview('banner', draft.settings.banner);
       syncThemePanel();
@@ -1347,52 +1456,354 @@
   }
 
   function applyThemeColor(color) {
-    var hex = D.applyTheme
-      ? D.applyTheme(color)
-      : normalizeHex(color);
-    draft.settings.themeColor = hex;
-    var input = document.getElementById('input-theme-color');
-    var hexLabel = document.getElementById('theme-color-hex');
-    var chip = document.getElementById('theme-live-chip');
-    if (input) input.value = hex;
-    if (hexLabel) hexLabel.textContent = hex;
-    if (chip) {
-      chip.style.background = hex;
-      chip.style.color = '#fff';
+    applyBrandSettings({ themeColor: color });
+  }
+
+  function applyBrandSettings(partial) {
+    partial = partial || {};
+    if (partial.themeColor != null) {
+      draft.settings.themeColor = normalizeHex(partial.themeColor);
     }
-    document.querySelectorAll('.theme-swatch').forEach(function (btn) {
-      btn.classList.toggle('selected', normalizeHex(btn.getAttribute('data-color')) === hex);
+    if (partial.accentColor != null) {
+      var accentRaw = String(partial.accentColor || '').trim();
+      draft.settings.accentColor = /^#[0-9a-fA-F]{3,6}$/.test(accentRaw)
+        ? normalizeHex(accentRaw)
+        : D.DEFAULT_ACCENT || '#f97316';
+    }
+    if (partial.backgroundColor != null) {
+      var bgRaw = String(partial.backgroundColor || '').trim();
+      draft.settings.backgroundColor = /^#[0-9a-fA-F]{3,6}$/.test(bgRaw)
+        ? normalizeHex(bgRaw)
+        : D.DEFAULT_BG || '#f9fafb';
+    }
+    if (partial.fontId != null) {
+      draft.settings.fontId = String(partial.fontId || D.DEFAULT_FONT || 'poppins');
+    }
+
+    if (!draft.settings.accentColor) draft.settings.accentColor = D.DEFAULT_ACCENT || '#f97316';
+    if (!draft.settings.backgroundColor) draft.settings.backgroundColor = D.DEFAULT_BG || '#f9fafb';
+    if (!draft.settings.fontId) draft.settings.fontId = D.DEFAULT_FONT || 'poppins';
+
+    var applied = D.applyStoreBrand
+      ? D.applyStoreBrand(draft.settings)
+      : {
+          themeColor: D.applyTheme
+            ? D.applyTheme(draft.settings.themeColor)
+            : normalizeHex(draft.settings.themeColor),
+          accentColor: draft.settings.accentColor,
+          backgroundColor: draft.settings.backgroundColor,
+          fontId: draft.settings.fontId
+        };
+
+    draft.settings.themeColor = applied.themeColor || draft.settings.themeColor;
+    draft.settings.accentColor = applied.accentColor || draft.settings.accentColor;
+    draft.settings.backgroundColor = applied.backgroundColor || draft.settings.backgroundColor;
+    draft.settings.fontId = applied.fontId || draft.settings.fontId;
+
+    syncBrandControls();
+    return draft.settings.themeColor;
+  }
+
+  function syncBrandControls() {
+    var theme = normalizeHex(draft.settings.themeColor || '#10b981');
+    var accent = draft.settings.accentColor || D.DEFAULT_ACCENT || '#f97316';
+    var bg = draft.settings.backgroundColor || D.DEFAULT_BG || '#f9fafb';
+    var fontId = draft.settings.fontId || D.DEFAULT_FONT || 'poppins';
+
+    var themeInput = document.getElementById('input-theme-color');
+    var themeHex = document.getElementById('theme-color-hex');
+    var themeChip = document.getElementById('theme-live-chip');
+    if (themeInput) themeInput.value = theme;
+    if (themeHex) themeHex.textContent = theme;
+    if (themeChip) {
+      themeChip.style.background = theme;
+      themeChip.style.color = '#fff';
+    }
+
+    var accentInput = document.getElementById('input-accent-color');
+    var accentHex = document.getElementById('accent-color-hex');
+    var accentChip = document.getElementById('accent-live-chip');
+    if (accentInput) accentInput.value = accent;
+    if (accentHex) accentHex.textContent = accent;
+    if (accentChip) {
+      accentChip.style.background = accent;
+      accentChip.style.color = '#fff';
+    }
+
+    var bgInput = document.getElementById('input-bg-color');
+    var bgHex = document.getElementById('bg-color-hex');
+    if (bgInput) bgInput.value = bg;
+    if (bgHex) bgHex.textContent = bg;
+
+    document.querySelectorAll('#theme-swatches .theme-swatch').forEach(function (btn) {
+      btn.classList.toggle('selected', normalizeHex(btn.getAttribute('data-color')) === theme);
+    });
+    document.querySelectorAll('#accent-swatches .theme-swatch').forEach(function (btn) {
+      btn.classList.toggle('selected', normalizeHex(btn.getAttribute('data-color')) === normalizeHex(accent));
+    });
+    document.querySelectorAll('#bg-swatches .theme-swatch').forEach(function (btn) {
+      btn.classList.toggle('selected', normalizeHex(btn.getAttribute('data-color')) === normalizeHex(bg));
+    });
+    document.querySelectorAll('#font-swatches .font-swatch').forEach(function (btn) {
+      btn.classList.toggle('selected', btn.getAttribute('data-font') === fontId);
+    });
+  }
+
+  function renderSwatchButtons(containerId, presets, onPick, options) {
+    options = options || {};
+    var el = document.getElementById(containerId);
+    if (!el || el.dataset.ready) return;
+    var isLight = D.isLightHex || function (hex) {
+      return String(hex).toLowerCase() === '#ffffff' || String(hex).toLowerCase() === '#f9fafb';
+    };
+    el.innerHTML = (presets || [])
+      .map(function (t) {
+        var lightClass = isLight(t.color) ? ' theme-swatch--light' : '';
+        return (
+          '<button type="button" class="theme-swatch' +
+          lightClass +
+          '" data-color="' +
+          t.color +
+          '" title="' +
+          escapeAttr(t.label) +
+          '" aria-label="' +
+          escapeAttr(t.label) +
+          '" style="--swatch:' +
+          t.color +
+          '"><span class="theme-swatch-check">✓</span></button>'
+        );
+      })
+      .join('');
+    el.dataset.ready = '1';
+    el.querySelectorAll('.theme-swatch').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        onPick(btn.getAttribute('data-color'));
+        persist();
+      });
+    });
+  }
+
+  function renderFontButtons() {
+    var el = document.getElementById('font-swatches');
+    if (!el || el.dataset.ready) return;
+    var presets = D.FONT_PRESETS || [];
+    el.innerHTML = presets
+      .map(function (f) {
+        return (
+          '<button type="button" class="font-swatch" data-font="' +
+          escapeAttr(f.id) +
+          '" title="' +
+          escapeAttr(f.label) +
+          '" aria-label="' +
+          escapeAttr(f.label) +
+          '">' +
+          '<span class="font-swatch-sample" style="font-family:' +
+          escapeAttr(f.display) +
+          '">Aa</span>' +
+          '<span class="font-swatch-label">' +
+          escapeHtml(f.label) +
+          '</span>' +
+          (f.hint
+            ? '<span class="font-swatch-hint">' + escapeHtml(f.hint) + '</span>'
+            : '') +
+          '</button>'
+        );
+      })
+      .join('');
+    el.dataset.ready = '1';
+    el.querySelectorAll('.font-swatch').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyBrandSettings({ fontId: btn.getAttribute('data-font') });
+        persist();
+        renderPreview();
+      });
     });
   }
 
   function syncThemePanel() {
-    var presets = D.THEME_PRESETS || [];
-    var el = document.getElementById('theme-swatches');
-    if (el && !el.dataset.ready) {
-      el.innerHTML = presets
-        .map(function (t) {
-          return (
-            '<button type="button" class="theme-swatch" data-color="' +
-            t.color +
-            '" title="' +
-            escapeAttr(t.label) +
-            '" aria-label="' +
-            escapeAttr(t.label) +
-            '" style="--swatch:' +
-            t.color +
-            '"><span class="theme-swatch-check">✓</span></button>'
-          );
-        })
-        .join('');
-      el.dataset.ready = '1';
-      el.querySelectorAll('.theme-swatch').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          applyThemeColor(btn.getAttribute('data-color'));
-          persist();
-        });
-      });
+    renderSwatchButtons('theme-swatches', D.THEME_PRESETS || [], function (color) {
+      applyBrandSettings({ themeColor: color });
+      renderPreview();
+    });
+    renderSwatchButtons('accent-swatches', D.ACCENT_PRESETS || [], function (color) {
+      applyBrandSettings({ accentColor: color });
+      renderPreview();
+    });
+    renderSwatchButtons('bg-swatches', D.BG_PRESETS || [], function (color) {
+      applyBrandSettings({ backgroundColor: color });
+      renderPreview();
+    });
+    renderFontButtons();
+    applyBrandSettings({});
+  }
+
+  /* ---------- Tagline examples popup ---------- */
+
+  var taglineModalBizId = '';
+
+  function openTaglineExamplesModal() {
+    var modal = document.getElementById('tagline-examples-modal');
+    if (!modal) return;
+    taglineModalBizId = draft.businessType || 'others';
+    renderTaglineBizTabs();
+    renderTaglineSamples(taglineModalBizId);
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    var closeBtn = modal.querySelector('.ob-modal-close');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeTaglineExamplesModal() {
+    var modal = document.getElementById('tagline-examples-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    var hint = document.getElementById('tagline-modal-hint');
+    if (hint) {
+      hint.hidden = true;
+      hint.textContent = '';
     }
-    applyThemeColor(draft.settings.themeColor || '#10b981');
+  }
+
+  function renderTaglineBizTabs() {
+    var tabs = document.getElementById('tagline-biz-tabs');
+    if (!tabs) return;
+    var types = D.BUSINESS_TYPES || [];
+    // Prefer selected business type first
+    var ordered = types.slice().sort(function (a, b) {
+      if (a.id === draft.businessType) return -1;
+      if (b.id === draft.businessType) return 1;
+      return 0;
+    });
+    tabs.innerHTML = ordered
+      .map(function (b) {
+        var active = b.id === taglineModalBizId ? ' is-active' : '';
+        return (
+          '<button type="button" class="ob-modal-biz-btn' +
+          active +
+          '" role="tab" aria-selected="' +
+          (b.id === taglineModalBizId ? 'true' : 'false') +
+          '" data-biz="' +
+          escapeAttr(b.id) +
+          '">' +
+          (b.icon ? b.icon + ' ' : '') +
+          escapeHtml(b.label) +
+          '</button>'
+        );
+      })
+      .join('');
+    tabs.querySelectorAll('.ob-modal-biz-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        taglineModalBizId = btn.getAttribute('data-biz') || 'others';
+        renderTaglineBizTabs();
+        renderTaglineSamples(taglineModalBizId);
+      });
+    });
+  }
+
+  function renderTaglineSamples(bizId) {
+    var panel = document.getElementById('tagline-samples');
+    if (!panel) return;
+    var samples = D.taglinesForBusiness
+      ? D.taglinesForBusiness(bizId)
+      : (D.TAGLINE_EXAMPLES && D.TAGLINE_EXAMPLES[bizId]) ||
+        (D.TAGLINE_EXAMPLES && D.TAGLINE_EXAMPLES.others) ||
+        [];
+    if (!samples.length) {
+      panel.innerHTML = '<p class="text-sm text-gray-500">No samples for this type yet.</p>';
+      return;
+    }
+    panel.innerHTML = samples
+      .map(function (text, idx) {
+        return (
+          '<div class="ob-tagline-card">' +
+          '<div class="ob-tagline-text">' +
+          escapeHtml(text) +
+          '</div>' +
+          '<div class="ob-tagline-actions">' +
+          '<button type="button" class="ob-copy" data-idx="' +
+          idx +
+          '">Copy</button>' +
+          '<button type="button" class="ob-use" data-idx="' +
+          idx +
+          '">Use</button>' +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    panel.querySelectorAll('.ob-use').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = Number(btn.getAttribute('data-idx'));
+        applyTaglineSample(samples[i], false);
+      });
+    });
+    panel.querySelectorAll('.ob-copy').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = Number(btn.getAttribute('data-idx'));
+        applyTaglineSample(samples[i], true);
+      });
+    });
+  }
+
+  function applyTaglineSample(text, copyOnly) {
+    text = String(text || '');
+    var input = document.getElementById('input-tagline');
+    var hint = document.getElementById('tagline-modal-hint');
+    function showHint(msg) {
+      if (!hint) return;
+      hint.hidden = false;
+      hint.textContent = msg;
+    }
+    if (copyOnly) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            showHint('Copied — paste into Tagline anytime.');
+          },
+          function () {
+            showHint('Copy failed — use the Use button instead.');
+          }
+        );
+      } else {
+        if (input) {
+          input.value = text;
+          input.select();
+          try {
+            document.execCommand('copy');
+            showHint('Copied to clipboard.');
+          } catch (e) {
+            showHint('Select the text and copy manually.');
+          }
+        }
+      }
+      return;
+    }
+    if (input) {
+      input.value = text;
+      draft.settings.tagline = text;
+      persist();
+      renderPreview();
+      var wrap = input.closest('.settings-field');
+      if (wrap) wrap.classList.remove('is-invalid');
+    }
+    showHint('Tagline applied.');
+    setTimeout(closeTaglineExamplesModal, 450);
+  }
+
+  function bindTaglineModal() {
+    var openBtn = document.getElementById('btn-tagline-examples');
+    if (openBtn) {
+      openBtn.addEventListener('click', openTaglineExamplesModal);
+    }
+    document.querySelectorAll('[data-close-tagline-modal]').forEach(function (el) {
+      el.addEventListener('click', closeTaglineExamplesModal);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var modal = document.getElementById('tagline-examples-modal');
+      if (modal && !modal.hidden) closeTaglineExamplesModal();
+    });
   }
 
   /* ---------- Step 10 ---------- */
@@ -1714,7 +2125,12 @@
   function renderPreview() {
     var root = document.getElementById('phone-preview');
     var theme = normalizeHex(draft.settings.themeColor || '#10b981');
-    applyThemeColor(theme);
+    var accent = draft.settings.accentColor || D.DEFAULT_ACCENT || '#f97316';
+    var bg = draft.settings.backgroundColor || D.DEFAULT_BG || '#f9fafb';
+    var font = D.getFontPreset
+      ? D.getFontPreset(draft.settings.fontId)
+      : { display: "var(--font-display)", body: "var(--font-body)" };
+    applyBrandSettings({});
     var name = draft.settings.storeName || 'Your Store Name';
     var tagline = draft.settings.tagline || 'Your tagline appears here';
     var wa = draft.settings.whatsapp || draft.phone;
@@ -1737,6 +2153,9 @@
     var defaultFresh =
       (window.MithraAssets && window.MithraAssets.path && window.MithraAssets.path('fallbacks.fresh')) ||
       'assets/img/fresh.png';
+
+    var ink = D.isDarkHex && D.isDarkHex(bg) ? '#f9fafb' : '#111827';
+    var muted = D.isDarkHex && D.isDarkHex(bg) ? '#9ca3af' : '#6b7280';
 
     var headerLogo = logo
       ? '<img src="' + logo + '" alt="" class="preview-store-logo">'
@@ -1766,13 +2185,15 @@
                 ? '<img src="' + c.image + '" class="w-full h-full object-cover rounded-full" alt="" onerror="this.parentNode.textContent=\'📦\'">'
                 : '📦') +
               '</div>' +
-              '<div class="text-[10px] text-gray-600 truncate">' +
+              '<div class="text-[10px] truncate" style="color:' +
+              muted +
+              '">' +
               escapeHtml(c.name) +
               '</div></div>'
             );
           })
           .join('')
-      : '<p class="text-[10px] text-gray-400 px-2">Categories will show here</p>';
+      : '<p class="text-[10px] px-2" style="color:' + muted + '">Categories will show here</p>';
 
     var prodHtml = products.length
       ? products
@@ -1784,14 +2205,23 @@
                 '" alt="" class="w-full h-full object-cover">'
               : '🫙';
             return (
-              '<div class="preview-product-card">' +
+              '<div class="preview-product-card" style="background:#fff;border-radius:0.5rem;overflow:hidden">' +
               '<div class="preview-product-img" style="background:' +
               (p.color || hexToRgba(theme, 0.12)) +
-              '">' +
+              ';position:relative">' +
+              (p === products[0]
+                ? '<span style="position:absolute;top:4px;left:4px;background:' +
+                  accent +
+                  ';color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px">Sale</span>'
+                : '') +
               thumb +
               '</div>' +
               '<div class="p-1.5">' +
-              '<div class="text-[11px] font-semibold text-gray-800 truncate">' +
+              '<div class="text-[11px] font-semibold truncate" style="color:' +
+              ink +
+              ';font-family:' +
+              escapeAttr(font.display) +
+              '">' +
               escapeHtml(p.name || 'Product') +
               '</div>' +
               '<div class="text-[10px] font-medium" style="color:' +
@@ -1802,7 +2232,7 @@
             );
           })
           .join('')
-      : '<p class="text-[10px] text-gray-400 col-span-2">Products will appear here</p>';
+      : '<p class="text-[10px] col-span-2" style="color:' + muted + '">Products will appear here</p>';
 
     var d = ensureDelivery();
     var pay = ensurePayment();
@@ -1818,7 +2248,18 @@
     if (pay.cod && pay.cod.enabled) payBits.push('COD');
 
     root.innerHTML =
-      '<div class="flex items-center justify-between px-3 py-2 border-b border-gray-100 text-gray-700">' +
+      '<div style="background:' +
+      bg +
+      ';color:' +
+      ink +
+      ';font-family:' +
+      escapeAttr(font.body) +
+      ';min-height:100%">' +
+      '<div class="flex items-center justify-between px-3 py-2 border-b text-gray-700" style="border-color:' +
+      hexToRgba(theme, 0.15) +
+      ';color:' +
+      ink +
+      '">' +
       '<span class="text-lg leading-none">☰</span>' +
       headerLogo +
       '<div class="flex gap-2 text-sm"><span>🔍</span><span>🛒<sup class="text-[9px]" style="color:' +
@@ -1827,7 +2268,9 @@
       '</div>' +
       '<div class="preview-hero' + (banner ? ' has-banner' : '') + '">' +
       heroBg +
-      '<div class="font-bold text-sm leading-tight">' +
+      '<div class="font-bold text-sm leading-tight" style="font-family:' +
+      escapeAttr(font.display) +
+      '">' +
       escapeHtml(name) +
       '</div>' +
       '<div class="text-[10px] opacity-90 mt-0.5">' +
@@ -1842,34 +2285,63 @@
         : '') +
       '</div>' +
       '<div class="px-3 py-2">' +
-      '<div class="text-[11px] font-semibold text-gray-700 mb-1.5">Categories</div>' +
+      '<div class="text-[11px] font-semibold mb-1.5" style="color:' +
+      ink +
+      ';font-family:' +
+      escapeAttr(font.display) +
+      '">Categories</div>' +
       '<div class="flex gap-2 overflow-x-auto pb-1">' +
       catHtml +
       '</div></div>' +
       '<div class="px-3 py-2">' +
-      '<div class="text-[11px] font-semibold text-gray-700 mb-1.5">Our Products</div>' +
+      '<div class="flex items-center justify-between mb-1.5">' +
+      '<div class="text-[11px] font-semibold" style="color:' +
+      ink +
+      ';font-family:' +
+      escapeAttr(font.display) +
+      '">Our Products</div>' +
+      '<span class="text-[9px] font-bold" style="color:' +
+      accent +
+      '">Offers</span>' +
+      '</div>' +
       '<div class="grid grid-cols-2 gap-2">' +
       prodHtml +
       '</div></div>' +
-      '<div class="px-3 py-2 border-t border-gray-100">' +
-      '<div class="text-[10px] text-gray-500"><span class="font-semibold text-gray-600">Delivery:</span> ' +
+      '<div class="px-3 py-2 border-t" style="border-color:' +
+      hexToRgba(theme, 0.12) +
+      '">' +
+      '<div class="text-[10px]" style="color:' +
+      muted +
+      '"><span class="font-semibold" style="color:' +
+      ink +
+      '">Delivery:</span> ' +
       escapeHtml(delBits.length ? delBits.join(' · ') : 'Not set') +
       '</div>' +
-      '<div class="text-[10px] text-gray-500 mt-0.5"><span class="font-semibold text-gray-600">Pay:</span> ' +
+      '<div class="text-[10px] mt-0.5" style="color:' +
+      muted +
+      '"><span class="font-semibold" style="color:' +
+      ink +
+      '">Pay:</span> ' +
       escapeHtml(payBits.length ? payBits.join(' · ') : 'Not set') +
       '</div>' +
       '</div>' +
-      '<div class="px-3 py-3 border-t border-gray-100 mt-1" style="background:' +
+      '<div class="px-3 py-3 border-t mt-1" style="background:' +
       hexToRgba(theme, 0.06) +
+      ';border-color:' +
+      hexToRgba(theme, 0.12) +
       '">' +
-      '<div class="grid grid-cols-2 gap-1 text-[9px] text-gray-500 text-center">' +
+      '<div class="grid grid-cols-2 gap-1 text-[9px] text-center" style="color:' +
+      muted +
+      '">' +
       '<span>🌿 100% Homemade</span><span>🚫 No Preservatives</span>' +
       '<span>🧼 Hygienically Packed</span><span>' +
       (pay.cod && pay.cod.enabled ? '💵 COD Available' : '💳 Online Pay') +
       '</span>' +
       '</div>' +
-      '<p class="text-center text-[9px] text-gray-400 mt-2">Powered by MithraDirect</p>' +
-      '</div>';
+      '<p class="text-center text-[9px] mt-2" style="color:' +
+      muted +
+      '">Powered by MithraDirect</p>' +
+      '</div></div>';
   }
 
   function updateSummary() {
@@ -2110,18 +2582,42 @@
       });
     }
 
-    ['input-store-name', 'input-tagline', 'input-location', 'input-whatsapp'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', function () {
-        if (id === 'input-store-name') draft.settings.storeName = el.value;
-        if (id === 'input-tagline') draft.settings.tagline = el.value;
-        if (id === 'input-location') draft.settings.location = el.value;
-        if (id === 'input-whatsapp') draft.settings.whatsapp = el.value.replace(/\D/g, '').slice(0, 10);
-        draft.slug = D.slugify(draft.settings.storeName);
-        persist();
-      });
-    });
+    ['input-store-name', 'input-tagline', 'input-location', 'input-whatsapp', 'input-instagram'].forEach(
+      function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function () {
+          var wrap = el.closest('.settings-field');
+          if (wrap) {
+            wrap.classList.remove('is-invalid');
+            var err = wrap.querySelector('.field-error');
+            if (err) err.textContent = '';
+          }
+          if (id === 'input-store-name') draft.settings.storeName = el.value;
+          if (id === 'input-tagline') draft.settings.tagline = el.value;
+          if (id === 'input-location') draft.settings.location = el.value;
+          if (id === 'input-whatsapp') {
+            el.value = el.value.replace(/\D/g, '').slice(0, 10);
+            draft.settings.whatsapp = el.value;
+          }
+          if (id === 'input-instagram') {
+            var parsed = normalizeInstagramInput(el.value);
+            draft.settings.instagramUrl = parsed.error ? '' : parsed.url;
+          }
+          draft.slug = D.slugify(draft.settings.storeName);
+          persist();
+          if (id === 'input-store-name' || id === 'input-tagline') renderPreview();
+        });
+        el.addEventListener('blur', function () {
+          if (id === 'input-instagram' && el.value.trim()) {
+            var parsed = normalizeInstagramInput(el.value);
+            if (!parsed.error && parsed.handle) el.value = parsed.handle;
+          }
+        });
+      }
+    );
+
+    bindTaglineModal();
 
     ['del-pickup', 'del-home', 'del-courier'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -2169,13 +2665,32 @@
     var themeInput = document.getElementById('input-theme-color');
     if (themeInput) {
       themeInput.addEventListener('input', function () {
-        applyThemeColor(themeInput.value);
+        applyBrandSettings({ themeColor: themeInput.value });
         persist();
+        renderPreview();
       });
     }
 
-    bindImageUpload('logo', 1, 400);
-    bindImageUpload('banner', 16 / 9, 1280);
+    var accentInput = document.getElementById('input-accent-color');
+    if (accentInput) {
+      accentInput.addEventListener('input', function () {
+        applyBrandSettings({ accentColor: accentInput.value });
+        persist();
+        renderPreview();
+      });
+    }
+
+    var bgInput = document.getElementById('input-bg-color');
+    if (bgInput) {
+      bgInput.addEventListener('input', function () {
+        applyBrandSettings({ backgroundColor: bgInput.value });
+        persist();
+        renderPreview();
+      });
+    }
+
+    bindImageUpload('logo', 1, 512);
+    bindImageUpload('banner', 16 / 9, 1600);
 
     document.getElementById('input-phone').addEventListener('input', function (e) {
       e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -2291,7 +2806,7 @@
     if (draft.currentStep > TOTAL_STEPS) draft.currentStep = TOTAL_STEPS;
     if (draft.maxReachedStep > TOTAL_STEPS) draft.maxReachedStep = TOTAL_STEPS;
     bindEvents();
-    applyThemeColor((draft.settings && draft.settings.themeColor) || '#10b981');
+    applyBrandSettings({});
     renderStepper();
     showPanel(draft.currentStep);
     syncStepForm(draft.currentStep);

@@ -347,71 +347,166 @@
                     <!-- Step 9: Store Settings -->
                     <section class="step-panel" data-step="9" id="panel-9">
                         <h2 class="text-xl font-bold mb-1">Store Settings</h2>
-                        <p class="text-gray-500 text-sm mb-6">Name your store, set branding, and pick a theme color.</p>
-                        <div class="space-y-4 max-w-lg">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Store Name</label>
-                                <input type="text" id="input-store-name" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="e.g. Anitha Homemade Pickles">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Store Tagline</label>
-                                <input type="text" id="input-tagline" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Traditional • Natural • Homemade">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Business Location</label>
-                                <input type="text" id="input-location" class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Hyderabad, Telangana">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number (For Orders)</label>
-                                <div class="flex gap-2">
-                                    <span class="inline-flex items-center px-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 font-medium">+91</span>
-                                    <input type="tel" id="input-whatsapp" maxlength="10" class="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="WhatsApp number">
+                        <p class="text-gray-500 text-sm mb-6">Name your store, set branding, and personalize how your shop looks.</p>
+                        <div class="settings-form space-y-3 max-w-3xl">
+                            <div class="settings-field settings-field--row" data-field="storeName">
+                                <label class="settings-label" for="input-store-name">
+                                    Store Name <span class="settings-req" aria-hidden="true">*</span>
+                                </label>
+                                <div class="settings-control">
+                                    <input type="text" id="input-store-name" name="storeName" required maxlength="80" autocomplete="organization" class="settings-input w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="e.g. Anitha Homemade Pickles" aria-required="true">
+                                    <p class="field-error" id="err-store-name" role="alert"></p>
                                 </div>
                             </div>
 
-                            <div class="theme-panel">
-                                <div class="flex items-center justify-between gap-2 mb-2">
-                                    <label class="block text-sm font-medium text-gray-700">Theme Color</label>
-                                    <span class="text-xs text-gray-400">Applies to storefront &amp; dashboard</span>
-                                </div>
-                                <p class="text-xs text-gray-500 mb-3">Pick a colour that matches your brand — customers will see it on your shop link instantly.</p>
-                                <div class="theme-swatches" id="theme-swatches" role="listbox" aria-label="Theme color presets"></div>
-                                <div class="theme-custom mt-3 flex items-center gap-3">
-                                    <label class="text-xs font-medium text-gray-600" for="input-theme-color">Custom</label>
-                                    <input type="color" id="input-theme-color" value="#10b981" class="theme-color-input" aria-label="Custom theme color">
-                                    <span id="theme-color-hex" class="text-xs font-mono text-gray-500">#10b981</span>
-                                    <div class="theme-live-chip" id="theme-live-chip">Live preview</div>
+                            <div class="settings-field settings-field--row" data-field="tagline">
+                                <label class="settings-label" for="input-tagline">Store Tagline</label>
+                                <div class="settings-control">
+                                    <div class="flex gap-2 items-center">
+                                        <input type="text" id="input-tagline" name="tagline" maxlength="120" class="settings-input flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Traditional • Natural • Homemade">
+                                        <button type="button" id="btn-tagline-examples" class="settings-examples-btn shrink-0">Examples</button>
+                                    </div>
+                                    <p class="field-error" id="err-tagline" role="alert"></p>
                                 </div>
                             </div>
 
-                            <div class="grid sm:grid-cols-2 gap-4 pt-2">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Store Logo <span class="text-gray-400 font-normal">(1:1)</span></label>
+                            <div class="settings-field settings-field--row" data-field="location">
+                                <label class="settings-label" for="input-location">
+                                    Business Location <span class="settings-req" aria-hidden="true">*</span>
+                                </label>
+                                <div class="settings-control">
+                                    <input type="text" id="input-location" name="location" required maxlength="100" autocomplete="address-level2" class="settings-input w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Hyderabad, Telangana" aria-required="true">
+                                    <p class="field-error" id="err-location" role="alert"></p>
+                                </div>
+                            </div>
+
+                            <div class="settings-field settings-field--row" data-field="whatsapp">
+                                <label class="settings-label" for="input-whatsapp">
+                                    WhatsApp Number <span class="settings-req" aria-hidden="true">*</span>
+                                </label>
+                                <div class="settings-control">
+                                    <div class="flex gap-2">
+                                        <span class="inline-flex items-center px-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 font-medium">+91</span>
+                                        <input type="tel" id="input-whatsapp" name="whatsapp" required maxlength="10" inputmode="numeric" autocomplete="tel-national" class="settings-input flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="10-digit number" aria-required="true" aria-describedby="hint-whatsapp">
+                                    </div>
+                                    <p class="settings-hint" id="hint-whatsapp">Used for customer orders</p>
+                                    <p class="field-error" id="err-whatsapp" role="alert"></p>
+                                </div>
+                            </div>
+
+                            <div class="settings-field settings-field--row" data-field="instagramUrl">
+                                <label class="settings-label" for="input-instagram">
+                                    Instagram page URL
+                                </label>
+                                <div class="settings-control">
+                                    <div class="flex gap-2">
+                                        <span class="inline-flex items-center px-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 font-medium text-sm shrink-0">instagram.com/</span>
+                                        <input type="text" id="input-instagram" name="instagramUrl" maxlength="80" autocomplete="url" class="settings-input flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="yourshop" aria-describedby="hint-instagram">
+                                    </div>
+                                    <p class="settings-hint" id="hint-instagram">Optional — paste username or full profile link</p>
+                                    <p class="field-error" id="err-instagram" role="alert"></p>
+                                </div>
+                            </div>
+
+                            <div class="theme-panel" id="branding-panel">
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <h3 class="text-sm font-semibold text-gray-800">Theme &amp; Branding</h3>
+                                    <span class="text-xs text-gray-400">Storefront &amp; dashboard</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-3">Pick ready-made options that match your brand — customers see changes on your shop link instantly.</p>
+
+                                <div class="theme-section theme-section--first">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" for="input-theme-color">Primary color</label>
+                                    <p class="theme-option-help">
+                                        Used for the <strong>shop header, buttons, links, and important actions</strong> on your storefront and dashboard.
+                                        This is your main brand colour — the one customers notice first on CTAs.
+                                    </p>
+                                    <div class="theme-swatches" id="theme-swatches" role="listbox" aria-label="Primary color presets"></div>
+                                    <div class="theme-custom mt-3 flex items-center gap-3">
+                                        <label class="text-xs font-medium text-gray-600" for="input-theme-color">Custom</label>
+                                        <input type="color" id="input-theme-color" value="#10b981" class="theme-color-input" aria-label="Custom primary color">
+                                        <span id="theme-color-hex" class="text-xs font-mono text-gray-500">#10b981</span>
+                                        <div class="theme-live-chip" id="theme-live-chip">Live preview</div>
+                                    </div>
+                                </div>
+
+                                <div class="theme-section">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" for="input-accent-color">Accent color</label>
+                                    <p class="theme-option-help">
+                                        Used for <strong>offers, sale badges, icons, and highlights</strong>.
+                                        Pick a colour that stands out from primary so deals and special tags catch the eye.
+                                    </p>
+                                    <div class="theme-swatches" id="accent-swatches" role="listbox" aria-label="Accent color presets"></div>
+                                    <div class="theme-custom mt-3 flex items-center gap-3">
+                                        <label class="text-xs font-medium text-gray-600" for="input-accent-color">Custom</label>
+                                        <input type="color" id="input-accent-color" value="#f97316" class="theme-color-input" aria-label="Custom accent color">
+                                        <span id="accent-color-hex" class="text-xs font-mono text-gray-500">#f97316</span>
+                                        <div class="theme-live-chip theme-live-chip--accent" id="accent-live-chip">Sale · 10% off</div>
+                                    </div>
+                                </div>
+
+                                <div class="theme-section">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" for="input-bg-color">Background</label>
+                                    <p class="theme-option-help">
+                                        Sets the <strong>main page colour behind your products</strong>.
+                                        Soft light backgrounds keep shops easy to browse; charcoal gives a bold look. Prefer light colours for food and grocery stores.
+                                    </p>
+                                    <div class="theme-swatches" id="bg-swatches" role="listbox" aria-label="Background color presets"></div>
+                                    <div class="theme-custom mt-3 flex items-center gap-3">
+                                        <label class="text-xs font-medium text-gray-600" for="input-bg-color">Custom</label>
+                                        <input type="color" id="input-bg-color" value="#f9fafb" class="theme-color-input" aria-label="Custom background color">
+                                        <span id="bg-color-hex" class="text-xs font-mono text-gray-500">#f9fafb</span>
+                                    </div>
+                                </div>
+
+                                <div class="theme-section theme-section--last">
+                                    <span class="block text-sm font-medium text-gray-700 mb-1" id="font-picker-label">Font</span>
+                                    <p class="theme-option-help">
+                                        Controls <strong>headings and body text</strong> across your shop.
+                                        All options stay clear on mobile — choose friendly, modern, or classic to match your brand mood.
+                                    </p>
+                                    <div class="font-swatches" id="font-swatches" role="listbox" aria-labelledby="font-picker-label"></div>
+                                </div>
+                            </div>
+
+                            <div class="media-upload-grid">
+                                <div class="media-upload-card">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" for="input-logo">Store Logo</label>
+                                    <p class="media-help">
+                                        <strong>Best size:</strong> <span>512 × 512 px</span> (square 1:1).<br>
+                                        Use PNG or JPG, under 1&nbsp;MB. Keep the logo centred with a little padding so it stays sharp on mobile and WhatsApp share.
+                                    </p>
                                     <div class="upload-box upload-box--square" id="logo-upload-box">
                                         <input type="file" id="input-logo" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only">
                                         <img id="logo-preview" class="upload-preview hidden" alt="Store logo preview">
                                         <div class="upload-placeholder" id="logo-placeholder">
-                                            <span class="text-2xl">🖼️</span>
+                                            <span class="text-2xl" aria-hidden="true">🖼️</span>
                                             <span class="text-xs text-gray-500 mt-1">Square logo</span>
-                                            <span class="text-[10px] text-gray-400">JPG, PNG · cropped to 1:1</span>
+                                            <span class="text-[10px] text-gray-400">Recommended 512×512 · PNG/JPG</span>
                                         </div>
                                         <button type="button" class="upload-remove hidden" id="btn-remove-logo" aria-label="Remove logo">✕</button>
                                     </div>
                                     <button type="button" id="btn-pick-logo" class="mt-2 text-sm font-medium text-emerald-700 hover:underline">Upload logo</button>
+                                    <p class="media-tip">Minimum 256×256. Larger is fine — we crop to 1:1.</p>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Home Banner <span class="text-gray-400 font-normal">(16:9)</span></label>
+                                <div class="media-upload-card">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" for="input-banner">Home Banner</label>
+                                    <p class="media-help">
+                                        <strong>Best size:</strong> <span>1600 × 900 px</span> (widescreen 16:9).<br>
+                                        Use JPG or PNG, under 2&nbsp;MB. Show your food, products, or shop — avoid heavy text that becomes hard to read on phones.
+                                    </p>
                                     <div class="upload-box upload-box--banner" id="banner-upload-box">
                                         <input type="file" id="input-banner" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only">
                                         <img id="banner-preview" class="upload-preview hidden" alt="Banner preview">
                                         <div class="upload-placeholder" id="banner-placeholder">
-                                            <span class="text-2xl">🏞️</span>
+                                            <span class="text-2xl" aria-hidden="true">🏞️</span>
                                             <span class="text-xs text-gray-500 mt-1">Home banner</span>
-                                            <span class="text-[10px] text-gray-400">JPG, PNG · cropped to 16:9</span>
+                                            <span class="text-[10px] text-gray-400">Recommended 1600×900 · 16:9</span>
                                         </div>
                                         <button type="button" class="upload-remove hidden" id="btn-remove-banner" aria-label="Remove banner">✕</button>
                                     </div>
                                     <button type="button" id="btn-pick-banner" class="mt-2 text-sm font-medium text-emerald-700 hover:underline">Upload banner</button>
+                                    <p class="media-tip">Minimum 1280×720. We crop to 16:9 for the storefront hero.</p>
                                 </div>
                             </div>
                         </div>
@@ -636,6 +731,28 @@
             </div>
         </div>
     </footer>
+
+    <!-- Tagline examples popup -->
+    <div id="tagline-examples-modal" class="ob-modal" hidden>
+        <div class="ob-modal-backdrop" data-close-tagline-modal tabindex="-1"></div>
+        <div
+            class="ob-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tagline-modal-title"
+        >
+            <div class="ob-modal-head">
+                <div>
+                    <h3 id="tagline-modal-title">Tagline examples</h3>
+                    <p class="ob-modal-sub">Pick a sample for your business type — tap to use or copy.</p>
+                </div>
+                <button type="button" class="ob-modal-close" data-close-tagline-modal aria-label="Close">✕</button>
+            </div>
+            <div class="ob-modal-biz" id="tagline-biz-tabs" role="tablist" aria-label="Business types"></div>
+            <div class="ob-modal-samples" id="tagline-samples" role="tabpanel"></div>
+            <p class="ob-modal-hint" id="tagline-modal-hint" hidden></p>
+        </div>
+    </div>
 
     <script src="assets/js/store-draft.js"></script>
     <script src="assets/js/store-api.js"></script>
