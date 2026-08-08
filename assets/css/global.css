@@ -22,7 +22,7 @@
   --md-warning: #d97706;
   --md-danger: #dc2626;
 
-  /* Store theme (overridden per vendor release) */
+  /* Store theme (overridden per vendor on onboarding / store / dashboard) */
   --store-theme: var(--md-green);
   --store-theme-soft: rgba(16, 185, 129, 0.14);
   --store-theme-muted: rgba(16, 185, 129, 0.22);

@@ -1470,7 +1470,11 @@
     state.address = '';
     state.activeCategory = 'all';
 
-    applyTheme((draft.settings && draft.settings.themeColor) || D.DEFAULT_THEME || '#10b981');
+    if (D.applyStoreBrand) {
+      D.applyStoreBrand(draft.settings || {});
+    } else {
+      applyTheme((draft.settings && draft.settings.themeColor) || D.DEFAULT_THEME || '#10b981');
+    }
     loadCart();
     loadSession();
     // Customer delivery address only — never default to vendor shop location

@@ -1,9 +1,17 @@
 /* MithraDirect — vendor dashboard demo
    Tokens / fonts: assets/css/global.css */
 
+/* Vendor font presets — dashboard.html only */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600;700;800&display=swap');
+
 .dash-page {
+  --store-accent: #f97316;
+  --store-accent-soft: rgba(249, 115, 22, 0.16);
+  --store-accent-muted: rgba(249, 115, 22, 0.28);
+  --store-bg: #f9fafb;
+  --store-ink: #111827;
   font-family: var(--font-body);
-  color: var(--md-ink);
+  color: var(--store-ink, var(--md-ink));
   background: var(--md-atmosphere);
   min-height: 100vh;
   min-height: 100dvh;
@@ -748,6 +756,10 @@
   box-shadow: 0 0 0 1px var(--md-border);
   vertical-align: middle;
   margin-right: 0.4rem;
+}
+
+.dash-theme-swatch--bg {
+  border-radius: 0.25rem;
 }
 
 @media (max-width: 1023px) {

@@ -55,6 +55,106 @@
 
   var BUSINESS_TYPE_PAGE_SIZE = 9;
 
+  /** Sample taglines by business type — for Store Settings examples popup. */
+  var TAGLINE_EXAMPLES = {
+    'home-kitchen': [
+      'Homely Food, Pure Taste',
+      'Fresh home-cooked meals daily',
+      'Made with love · Delivered warm'
+    ],
+    pickles: [
+      'Traditional • Natural • Homemade',
+      'Authentic taste of tradition',
+      'Grandma’s recipes, bottled fresh'
+    ],
+    bakery: [
+      'Freshly baked every morning',
+      'Cakes & breads made with care',
+      'From our oven to your table'
+    ],
+    spices: [
+      'Pure spices · Bold flavours',
+      'Freshly ground masalas',
+      'Taste the difference of purity'
+    ],
+    snacks: [
+      'Crunchy • Fresh • Homemade',
+      'Festival favourites, all year',
+      'Snacks & sweets made with love'
+    ],
+    dairy: [
+      'Farm-fresh dairy daily',
+      'Pure milk products you can trust',
+      'Fresh • Natural • Local'
+    ],
+    organic: [
+      'Organic • Natural • Family farming',
+      'From our farm to your kitchen',
+      'Clean produce, honest prices'
+    ],
+    crafts: [
+      'Handmade with heart',
+      'Unique crafts for every occasion',
+      'Artisan made · Locally crafted'
+    ],
+    florist: [
+      'Fresh blooms, happy moments',
+      'Flowers & plants for every day',
+      'Bloom better with us'
+    ],
+    clothing: [
+      'Style that fits your everyday',
+      'Comfort • Quality • Value',
+      'Fashion for the whole family'
+    ],
+    jewellery: [
+      'Elegant pieces for every moment',
+      'Sparkle that feels personal',
+      'Jewellery you’ll love to wear'
+    ],
+    beauty: [
+      'Glow naturally, feel confident',
+      'Beauty & wellness, simplified',
+      'Care that shows'
+    ],
+    stationery: [
+      'Stationery for work & school',
+      'Books, gifts & everyday essentials',
+      'Write, gift, create'
+    ],
+    electronics: [
+      'Gadgets you can trust',
+      'Quality electronics, fair prices',
+      'Tech that works for you'
+    ],
+    pets: [
+      'Happy pets, happy homes',
+      'Care & treats your pets deserve',
+      'Everything for your furry friends'
+    ],
+    grocery: [
+      'Daily essentials, delivered fresh',
+      'Your neighbourhood kirana online',
+      'Quality groceries at fair prices'
+    ],
+    meat: [
+      'Fresh cuts, hygienically packed',
+      'Farm to kitchen — meat & seafood',
+      'Clean • Fresh • Reliable'
+    ],
+    others: [
+      'Quality you can count on',
+      'Local business · Direct to you',
+      'Shop local, shop with trust'
+    ]
+  };
+
+  function taglinesForBusiness(businessTypeId) {
+    var id = String(businessTypeId || '');
+    if (TAGLINE_EXAMPLES[id]) return TAGLINE_EXAMPLES[id].slice();
+    return TAGLINE_EXAMPLES.others.slice();
+  }
+
   /**
    * Simulated server page fetch for business types.
    * Replace with GET /v1/business-types?q=&page=&size= when API is ready.
@@ -190,6 +290,70 @@
     { id: 'forest', label: 'Forest', color: '#166534' }
   ];
 
+  /** Accent — offers, badges, highlights (kept distinct from primary). */
+  var ACCENT_PRESETS = [
+    { id: 'orange', label: 'Orange', color: '#f97316' },
+    { id: 'amber', label: 'Amber', color: '#f59e0b' },
+    { id: 'rose', label: 'Rose', color: '#f43f5e' },
+    { id: 'violet', label: 'Violet', color: '#7c3aed' },
+    { id: 'sky', label: 'Sky', color: '#0ea5e9' },
+    { id: 'lime', label: 'Lime', color: '#65a30d' }
+  ];
+
+  /** Store page backgrounds — neutral, readable presets for small vendors. */
+  var BG_PRESETS = [
+    { id: 'white', label: 'White', color: '#ffffff' },
+    { id: 'soft', label: 'Soft gray', color: '#f9fafb' },
+    { id: 'mint', label: 'Mint', color: '#f0fdf4' },
+    { id: 'sky', label: 'Sky mist', color: '#f0f9ff' },
+    { id: 'warm', label: 'Warm sand', color: '#faf6f1' },
+    { id: 'ink', label: 'Charcoal', color: '#111827' }
+  ];
+
+  /** Font pairings — Google fonts loaded in global.css. */
+  var FONT_PRESETS = [
+    {
+      id: 'poppins',
+      label: 'Poppins',
+      hint: 'Default',
+      display: "'Poppins', 'Inter', system-ui, sans-serif",
+      body: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
+    },
+    {
+      id: 'nunito',
+      label: 'Nunito',
+      hint: 'Friendly',
+      display: "'Nunito', system-ui, sans-serif",
+      body: "'Nunito', system-ui, sans-serif"
+    },
+    {
+      id: 'outfit',
+      label: 'Outfit',
+      hint: 'Modern',
+      display: "'Outfit', system-ui, sans-serif",
+      body: "'Outfit', system-ui, sans-serif"
+    },
+    {
+      id: 'dm-sans',
+      label: 'DM Sans',
+      hint: 'Clean',
+      display: "'DM Sans', system-ui, sans-serif",
+      body: "'DM Sans', system-ui, sans-serif"
+    },
+    {
+      id: 'source-sans',
+      label: 'Source Sans',
+      hint: 'Classic',
+      display: "'Source Sans 3', system-ui, sans-serif",
+      body: "'Source Sans 3', system-ui, sans-serif"
+    }
+  ];
+
+  var DEFAULT_THEME = '#10b981';
+  var DEFAULT_ACCENT = '#f97316';
+  var DEFAULT_BG = '#f9fafb';
+  var DEFAULT_FONT = 'poppins';
+
   function defaultDelivery() {
     return {
       storePickup: { enabled: true },
@@ -247,9 +411,13 @@
         tagline: '',
         location: '',
         whatsapp: '',
+        instagramUrl: '',
         logo: '',
         banner: '',
-        themeColor: '#10b981'
+        themeColor: DEFAULT_THEME,
+        accentColor: DEFAULT_ACCENT,
+        backgroundColor: DEFAULT_BG,
+        fontId: DEFAULT_FONT
       },
       slug: '',
       vendorId: null,
@@ -860,7 +1028,11 @@
         payment: mergeNested(blank.payment, data.payment),
         subscription: Object.assign({}, blank.subscription, data.subscription || {})
       });
-      if (!draft.settings.themeColor) draft.settings.themeColor = '#10b981';
+      if (!draft.settings.themeColor) draft.settings.themeColor = DEFAULT_THEME;
+      if (!draft.settings.accentColor) draft.settings.accentColor = DEFAULT_ACCENT;
+      if (!draft.settings.backgroundColor) draft.settings.backgroundColor = DEFAULT_BG;
+      if (!draft.settings.fontId) draft.settings.fontId = DEFAULT_FONT;
+      if (draft.settings.instagramUrl == null) draft.settings.instagramUrl = '';
       if (!Array.isArray(draft.subscription.features) || !draft.subscription.features.length) {
         draft.subscription.features = blank.subscription.features;
       }
@@ -919,8 +1091,6 @@
     return (CATEGORY_CATALOG[businessTypeId] || []).slice();
   }
 
-  var DEFAULT_THEME = '#10b981';
-
   function normalizeHex(color) {
     var c = String(color || '').trim();
     if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
@@ -936,6 +1106,34 @@
     var g = parseInt(h.slice(2, 4), 16);
     var b = parseInt(h.slice(4, 6), 16);
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  function relativeLuminance(hex) {
+    var h = normalizeHex(hex).slice(1);
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000;
+  }
+
+  function isLightHex(hex) {
+    return relativeLuminance(hex) > 210;
+  }
+
+  function isDarkHex(hex) {
+    return relativeLuminance(hex) < 140;
+  }
+
+  function getFontPreset(fontId) {
+    var id = String(fontId || DEFAULT_FONT);
+    var found = null;
+    for (var i = 0; i < FONT_PRESETS.length; i++) {
+      if (FONT_PRESETS[i].id === id) {
+        found = FONT_PRESETS[i];
+        break;
+      }
+    }
+    return found || FONT_PRESETS[0];
   }
 
   /**
@@ -956,6 +1154,80 @@
       document.body.classList.add('store-themed');
     }
     return hex;
+  }
+
+  /**
+   * Apply full vendor branding: primary, accent, background, font.
+   * Scoped to onboarding.html, store.html, and dashboard.html only.
+   * settings: { themeColor, accentColor, backgroundColor, fontId }
+   */
+  function applyStoreBrand(settings, root) {
+    settings = settings || {};
+    var body = typeof document !== 'undefined' ? document.body : null;
+    var surface = 'none';
+    if (body) {
+      if (body.classList.contains('store-page')) surface = 'store';
+      else if (body.classList.contains('dash-page')) surface = 'dashboard';
+      else if (body.classList.contains('onboarding-page')) surface = 'onboarding';
+    }
+    // Do not mutate branding on landing / other pages
+    if (surface === 'none' && !root) {
+      return {
+        themeColor: normalizeHex(settings.themeColor || DEFAULT_THEME),
+        accentColor: DEFAULT_ACCENT,
+        backgroundColor: DEFAULT_BG,
+        fontId: DEFAULT_FONT
+      };
+    }
+
+    var el = root || document.documentElement;
+    var theme = applyTheme(settings.themeColor, el);
+
+    var accentRaw = String(settings.accentColor || '').trim();
+    var accent = /^#[0-9a-fA-F]{3,6}$/.test(accentRaw)
+      ? normalizeHex(accentRaw)
+      : DEFAULT_ACCENT;
+
+    var bgRaw = String(settings.backgroundColor || '').trim();
+    var bg = /^#[0-9a-fA-F]{3,6}$/.test(bgRaw) ? normalizeHex(bgRaw) : DEFAULT_BG;
+
+    var font = getFontPreset(settings.fontId);
+
+    el.style.setProperty('--store-accent', accent);
+    el.style.setProperty('--store-accent-soft', hexToRgba(accent, 0.16));
+    el.style.setProperty('--store-accent-muted', hexToRgba(accent, 0.28));
+    el.setAttribute('data-store-accent', accent);
+    el.setAttribute('data-store-font', font.id);
+    el.setAttribute('data-store-bg', bg);
+
+    // Background + ink: storefront canvas; dashboard keeps Mithra atmosphere
+    if (surface === 'store' || root) {
+      el.style.setProperty('--store-bg', bg);
+      if (isDarkHex(bg)) {
+        el.style.setProperty('--store-ink', '#f9fafb');
+        el.style.setProperty('--store-muted', '#9ca3af');
+        el.style.setProperty('--store-border', 'rgba(255,255,255,0.12)');
+        el.style.setProperty('--md-panel-bg', '#1f2937');
+      } else {
+        el.style.setProperty('--store-ink', '#111827');
+        el.style.setProperty('--store-muted', '#6b7280');
+        el.style.setProperty('--store-border', '#e5e7eb');
+        el.style.setProperty('--md-panel-bg', '#ffffff');
+      }
+    }
+
+    // Vendor fonts on store + dashboard; onboarding chrome stays Mithra (preview uses inline)
+    if (surface === 'store' || surface === 'dashboard' || root) {
+      el.style.setProperty('--font-display', font.display);
+      el.style.setProperty('--font-body', font.body);
+    }
+
+    return {
+      themeColor: theme,
+      accentColor: accent,
+      backgroundColor: bg,
+      fontId: font.id
+    };
   }
 
   function whatsappLink(phone, message) {
@@ -1019,15 +1291,27 @@
     STORAGE_KEY: STORAGE_KEY,
     BUSINESS_TYPES: BUSINESS_TYPES,
     BUSINESS_TYPE_PAGE_SIZE: BUSINESS_TYPE_PAGE_SIZE,
+    TAGLINE_EXAMPLES: TAGLINE_EXAMPLES,
+    taglinesForBusiness: taglinesForBusiness,
     fetchBusinessTypesPage: fetchBusinessTypesPage,
     PRODUCT_COLORS: PRODUCT_COLORS,
     THEME_PRESETS: THEME_PRESETS,
+    ACCENT_PRESETS: ACCENT_PRESETS,
+    BG_PRESETS: BG_PRESETS,
+    FONT_PRESETS: FONT_PRESETS,
     DEFAULT_THEME: DEFAULT_THEME,
+    DEFAULT_ACCENT: DEFAULT_ACCENT,
+    DEFAULT_BG: DEFAULT_BG,
+    DEFAULT_FONT: DEFAULT_FONT,
     uid: uid,
     slugify: slugify,
     normalizeHex: normalizeHex,
     hexToRgba: hexToRgba,
+    isLightHex: isLightHex,
+    isDarkHex: isDarkHex,
+    getFontPreset: getFontPreset,
     applyTheme: applyTheme,
+    applyStoreBrand: applyStoreBrand,
     emptyDraft: emptyDraft,
     defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,
