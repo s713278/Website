@@ -11,6 +11,79 @@ Single Vite + React + TypeScript app with three modules: **marketing**, **storef
 - Zustand
 - Tailwind CSS v4
 
+## Prerequisites
+
+- **Node.js** 20+ (22 LTS recommended)
+- **npm** 10+ (comes with Node)
+
+## Local setup
+
+```bash
+# clone and enter the repo
+git clone <repo-url>
+cd Website
+
+# install dependencies
+npm install
+
+# create env from the example (optional — defaults work for demo mode)
+copy .env.example .env   # Windows
+# cp .env.example .env   # macOS / Linux
+```
+
+### Environment
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `VITE_API_BASE_URL` | Spring Boot API URL | Base URL for live HTTP calls |
+| `VITE_APP_ENV` | `development` | App environment label |
+| `VITE_USE_API` | `false` | `false` = demo mocks; `true` = live API |
+
+Do not commit `.env` (it is gitignored).
+
+## Scripts
+
+| Command | What it does |
+|---------|----------------|
+| `npm run dev` | Start Vite dev server at [http://localhost:5173](http://localhost:5173) |
+| `npm run build` | Typecheck (`tsc -b`) then production build into `dist/` |
+| `npm run preview` | Serve the `dist/` build locally (after `build`) |
+| `npm run typecheck` | TypeScript check only |
+
+## Run locally
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+Useful routes:
+
+| Path | Surface |
+|------|---------|
+| `/` | Marketing home |
+| `/stores` | Store list |
+| `/stores/:storeId` | Store detail |
+| `/cart` | Cart |
+| `/login`, `/register` | Auth |
+| `/checkout`, `/orders` | Customer (protected) |
+| `/vendor` | Vendor dashboard (protected) |
+
+## Build for production
+
+```bash
+npm run build
+```
+
+Output is written to `dist/`. Preview the production bundle:
+
+```bash
+npm run preview
+```
+
 ## UI
 
 - **Tailwind CSS v4** + **shadcn/ui** (Radix Nova)
@@ -46,6 +119,11 @@ src/
 ```
 
 For pixel/layout reference while building React screens, open pages under `design-reference/` (see that folder’s README). They are not served by `npm run dev`.
+
+```bash
+npx --yes serve design-reference -p 4173
+# http://localhost:4173/index.html
+```
 
 ## API layer
 
