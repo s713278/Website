@@ -69,19 +69,19 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="mb-2">
+    <main class="ob-main max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="ob-main-intro mb-2">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Setup Your Insta &amp; WhatsApp Store</h1>
             <p class="text-gray-500 mt-1 text-sm sm:text-base">Complete these steps — your storefront updates live on the right.</p>
         </div>
 
-        <!-- Stepper -->
-        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
-
-        <div class="grid lg:grid-cols-5 gap-8 mt-4">
+        <div class="ob-workspace grid lg:grid-cols-5 gap-8 mt-4">
             <!-- Wizard panels -->
-            <div class="lg:col-span-3">
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 min-h-[420px]">
+            <div class="ob-wizard-col lg:col-span-3">
+                <!-- Stepper -->
+                <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+
+                <div class="ob-wizard-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 min-h-[420px]">
 
                     <!-- Step 1: Verify Mobile -->
                     <section class="step-panel" data-step="1" id="panel-1">
@@ -695,14 +695,16 @@
             </div>
 
             <!-- Live preview -->
-            <div class="lg:col-span-2">
+            <aside class="ob-preview-col lg:col-span-2" aria-label="Live storefront preview">
                 <div class="preview-sticky">
-                    <p class="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Storefront Preview (Live)</p>
+                    <div class="preview-live-head">
+                        <p class="preview-live-label">Storefront Preview (Live)</p>
+                    </div>
                     <div class="phone-frame">
                         <div class="phone-screen" id="phone-preview"></div>
                     </div>
                 </div>
-            </div>
+            </aside>
         </div>
     </main>
 
