@@ -1,11 +1,25 @@
 import { getStoreById, STORES } from '@/modules/storefront/data/catalog'
-import type { Store } from '@/modules/storefront/types'
+import type { Store, StoreTheme } from '@/modules/storefront/types'
+import { DEFAULT_ACCENT_COLOR, DEFAULT_PRIMARY_COLOR, normalizeHex } from '@/shared/lib/theme'
 import { apiGet, unwrapData } from '../client'
 import { useLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 function delay(ms = 250) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undefined {
+  const t = raw.theme as Record<string, unknown> | undefined
+  if (!t || typeof t !== 'object') return undefined
+  const primaryColor = typeof t.primary_color === 'string' ? t.primary_color : undefined
+  const accentColor = typeof t.accent_color === 'string' ? t.accent_color : undefined
+  if (!primaryColor && !accentColor) return undefined
+  return {
+    primaryColor: normalizeHex(primaryColor, DEFAULT_PRIMARY_COLOR),
+    accentColor: normalizeHex(accentColor, DEFAULT_ACCENT_COLOR),
+    logoImage: typeof t.logo_image === 'string' && t.logo_image ? t.logo_image : undefined,
+  }
 }
 
 function mapVendorToStore(raw: Record<string, unknown>): Store {
@@ -23,6 +37,7 @@ function mapVendorToStore(raw: Record<string, unknown>): Store {
         ? raw.image
         : 'linear-gradient(135deg, #059669 0%, #047857 45%, #0f766e 100%)',
     offer: raw.offer ? String(raw.offer) : undefined,
+    theme: mapVendorTheme(raw),
     products: Array.isArray(raw.products)
       ? (raw.products as Array<Record<string, unknown>>).map((p, index) => ({
           id: String(p.id ?? `${id}-p${index}`),

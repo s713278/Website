@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { vendorService, type VendorDashboardStats } from '@/shared/api'
 import { getErrorMessage } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
+import { applyStoreTheme } from '@/shared/lib/theme'
 import { formatCurrency } from '@/shared/lib/utils'
 
 export function VendorDashboardPage() {
@@ -11,6 +12,7 @@ export function VendorDashboardPage() {
   const [stats, setStats] = useState<VendorDashboardStats | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -31,6 +33,10 @@ export function VendorDashboardPage() {
     }
   }, [vendorId])
 
+  useEffect(() => {
+    if (stats && wrapperRef.current) applyStoreTheme(stats.theme, wrapperRef.current)
+  }, [stats])
+
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -48,7 +54,7 @@ export function VendorDashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div ref={wrapperRef} className="mx-auto max-w-5xl px-4 py-8">
       <PageHeader
         title="Vendor dashboard"
         subtitle={stats.storeName}

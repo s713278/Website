@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { catalogService, getErrorMessage } from '@/shared/api'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
+import { applyStoreTheme } from '@/shared/lib/theme'
 import { formatCurrency } from '@/shared/lib/utils'
 
 export function StoreDetailPage() {
@@ -13,6 +14,7 @@ export function StoreDetailPage() {
   const [store, setStore] = useState<Store | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -33,6 +35,10 @@ export function StoreDetailPage() {
       cancelled = true
     }
   }, [storeId])
+
+  useEffect(() => {
+    if (store && wrapperRef.current) applyStoreTheme(store.theme, wrapperRef.current)
+  }, [store])
 
   if (loading) {
     return (
@@ -59,13 +65,24 @@ export function StoreDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div ref={wrapperRef} className="mx-auto max-w-3xl px-4 py-8">
       <div
         className="mb-6 overflow-hidden rounded-[var(--md-radius)] p-6 text-white shadow-[var(--md-shadow)]"
         style={{ background: store.image }}
       >
-        <p className="text-sm text-white/85">{store.category}</p>
-        <h1 className="font-display mt-1 text-3xl font-bold">{store.name}</h1>
+        <div className="flex items-center gap-3">
+          {store.theme?.logoImage ? (
+            <img
+              src={store.theme.logoImage}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-full border border-white/40 object-cover"
+            />
+          ) : null}
+          <div>
+            <p className="text-sm text-white/85">{store.category}</p>
+            <h1 className="font-display mt-1 text-3xl font-bold">{store.name}</h1>
+          </div>
+        </div>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Badge tone="success">★ {store.rating}</Badge>
           <span>{store.etaMins} mins</span>

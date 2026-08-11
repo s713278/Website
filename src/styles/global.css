@@ -23,6 +23,19 @@
   --font-display: 'Poppins', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
 
+  /* Per-vendor storefront theme — set at runtime via applyTheme()/applyAccent() on a scoped wrapper.
+     Falls back to Mithra brand green/orange when unthemed. */
+  --store-theme: var(--md-green-500);
+  --store-theme-soft: rgba(16, 185, 129, 0.14);
+  --store-theme-muted: rgba(16, 185, 129, 0.22);
+  --store-theme-overlay: rgba(6, 78, 59, 0.78);
+  --store-theme-overlay-mid: rgba(6, 78, 59, 0.32);
+  --store-theme-overlay-light: rgba(6, 78, 59, 0.1);
+
+  --store-accent: #f97316;
+  --store-accent-soft: rgba(249, 115, 22, 0.16);
+  --store-accent-muted: rgba(249, 115, 22, 0.28);
+
   /* shadcn tokens — emerald brand */
   --background: oklch(0.985 0.002 247);
   --foreground: oklch(0.21 0.034 265.8);

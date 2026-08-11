@@ -7,6 +7,12 @@ export type Product = {
   popular?: boolean
 }
 
+export type StoreTheme = {
+  primaryColor: string
+  accentColor: string
+  logoImage?: string
+}
+
 export type Store = {
   id: string
   name: string
@@ -16,6 +22,7 @@ export type Store = {
   distanceKm: number
   image: string
   offer?: string
+  theme?: StoreTheme
   products: Product[]
 }
 

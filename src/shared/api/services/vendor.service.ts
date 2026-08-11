@@ -1,7 +1,9 @@
 import { VENDOR_ORDERS, VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
+import type { StoreTheme } from '@/modules/storefront/types'
 import { apiGet, unwrapData } from '../client'
 import { useLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
+import { mapVendorTheme } from './catalog.service'
 
 export type VendorDashboardStats = {
   openOrders: number
@@ -9,6 +11,7 @@ export type VendorDashboardStats = {
   todayRevenue: number
   storeName: string
   online: boolean
+  theme?: StoreTheme
 }
 
 export async function getVendorDashboard(vendorId: string | number): Promise<VendorDashboardStats> {
@@ -20,6 +23,7 @@ export async function getVendorDashboard(vendorId: string | number): Promise<Ven
       todayRevenue: VENDOR_ORDERS.reduce((sum, order) => sum + order.total, 0),
       storeName: 'Green Bowl Kitchen',
       online: true,
+      theme: { primaryColor: '#10b981', accentColor: '#f97316' },
     }
   }
 
@@ -50,6 +54,7 @@ export async function getVendorDashboard(vendorId: string | number): Promise<Ven
     ),
     storeName: String(vendor.business_name ?? vendor.name ?? 'Your store'),
     online: String(vendor.vendor_status ?? 'ONLINE').toUpperCase() !== 'OFFLINE',
+    theme: mapVendorTheme(vendor),
   }
 }
 
