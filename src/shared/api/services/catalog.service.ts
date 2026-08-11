@@ -14,11 +14,17 @@ export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undef
   if (!t || typeof t !== 'object') return undefined
   const primaryColor = typeof t.primary_color === 'string' ? t.primary_color : undefined
   const accentColor = typeof t.accent_color === 'string' ? t.accent_color : undefined
-  if (!primaryColor && !accentColor) return undefined
+  const backgroundColor = typeof t.background_color === 'string' ? t.background_color : undefined
+  const fontFamily = typeof t.font_family === 'string' ? t.font_family : undefined
+  if (!primaryColor && !accentColor && !backgroundColor && !fontFamily) return undefined
   return {
     primaryColor: normalizeHex(primaryColor, DEFAULT_PRIMARY_COLOR),
     accentColor: normalizeHex(accentColor, DEFAULT_ACCENT_COLOR),
     logoImage: typeof t.logo_image === 'string' && t.logo_image ? t.logo_image : undefined,
+    // Left unnormalized on purpose — getBgPreset/getFontPreset are the single
+    // validation gate, so curated-only stays enforced in exactly one place.
+    backgroundColor,
+    fontFamily,
   }
 }
 

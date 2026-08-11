@@ -23,7 +23,12 @@ export async function getVendorDashboard(vendorId: string | number): Promise<Ven
       todayRevenue: VENDOR_ORDERS.reduce((sum, order) => sum + order.total, 0),
       storeName: 'Green Bowl Kitchen',
       online: true,
-      theme: { primaryColor: '#10b981', accentColor: '#f97316' },
+      theme: {
+        primaryColor: '#10b981',
+        accentColor: '#f97316',
+        backgroundColor: '#f9fafb',
+        fontFamily: 'Poppins',
+      },
     }
   }
 

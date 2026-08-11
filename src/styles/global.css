@@ -36,6 +36,21 @@
   --store-accent-soft: rgba(249, 115, 22, 0.16);
   --store-accent-muted: rgba(249, 115, 22, 0.28);
 
+  /* Storefront canvas + surface tokens. Real values are set per-mode below; these are
+     the unthemed fallbacks used everywhere outside a themed storefront. */
+  --store-bg: var(--md-bg);
+  --store-ink: var(--md-ink);
+  --store-muted: var(--md-muted);
+  --store-border: var(--md-border);
+  --store-panel: var(--md-surface);
+
+  /* Badge tones. Defaults are byte-identical to the emerald-100/800 and amber-100/800
+     they replaced, so every non-storefront badge renders exactly as before. */
+  --badge-success-bg: #d1fae5;
+  --badge-success-fg: #065f46;
+  --badge-warning-bg: #fef3c7;
+  --badge-warning-fg: #92400e;
+
   /* shadcn tokens — emerald brand */
   --background: oklch(0.985 0.002 247);
   --foreground: oklch(0.21 0.034 265.8);
@@ -133,6 +148,73 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.72 0.14 163);
+}
+
+/* ── Per-vendor storefront scope ────────────────────────────────────────────
+   Applied by applyStoreTheme() to the storefront wrapper only. Remapping the
+   shadcn tokens here is what lets shared components (Card, Button, Input,
+   EmptyState…) adapt with no prop or API changes, while every surface outside
+   this subtree keeps Mithra branding.
+
+   Deliberately independent of `.dark` above: that is app-wide dark mode, an
+   orthogonal concern. A vendor choosing a dark canvas must not opt the whole
+   app into dark mode, and vice versa. */
+[data-store-mode] {
+  --primary: var(--store-theme);
+  --ring: var(--store-theme);
+  /* --primary-foreground is computed in applyTheme() — vendors may pick any
+     primary hex, so it can't be a fixed value here. */
+}
+
+[data-store-mode='light'] {
+  --store-ink: #111827;
+  --store-muted: #6b7280;
+  --store-border: #e5e7eb;
+  --store-panel: #ffffff;
+
+  --background: var(--store-bg);
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --accent: #f3f4f6;
+  --accent-foreground: #111827;
+}
+
+[data-store-mode='dark'] {
+  --store-ink: #f9fafb;
+  --store-muted: #9ca3af;
+  --store-border: rgba(255, 255, 255, 0.12);
+  --store-panel: #1f2937;
+
+  --background: var(--store-bg);
+  --foreground: #f9fafb;
+  --card: #1f2937;
+  --card-foreground: #f9fafb;
+  --popover: #1f2937;
+  --popover-foreground: #f9fafb;
+  --muted: #263244;
+  --muted-foreground: #9ca3af;
+  --secondary: #263244;
+  --secondary-foreground: #f9fafb;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.18);
+  --accent: #263244;
+  --accent-foreground: #f9fafb;
+
+  /* Pastel chips read as blown-out on a dark canvas. Retint to the same
+     translucent-fill + bright-text pattern the destructive badge already uses. */
+  --badge-success-bg: rgba(16, 185, 129, 0.18);
+  --badge-success-fg: #6ee7b7;
+  --badge-warning-bg: rgba(245, 158, 11, 0.18);
+  --badge-warning-fg: #fcd34d;
 }
 
 @layer base {

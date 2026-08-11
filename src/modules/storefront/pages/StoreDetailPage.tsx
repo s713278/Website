@@ -4,7 +4,7 @@ import { catalogService, getErrorMessage } from '@/shared/api'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
-import { applyStoreTheme } from '@/shared/lib/theme'
+import { applyStoreTheme, clearStoreTheme } from '@/shared/lib/theme'
 import { formatCurrency } from '@/shared/lib/utils'
 
 export function StoreDetailPage() {
@@ -37,35 +37,55 @@ export function StoreDetailPage() {
   }, [storeId])
 
   useEffect(() => {
-    if (store && wrapperRef.current) applyStoreTheme(store.theme, wrapperRef.current)
+    const root = wrapperRef.current
+    if (!store || !root) return
+    applyStoreTheme(store.theme, root)
+    // Without this a vendor's canvas could outlive its page — very visible now that
+    // the theme paints a full-viewport background.
+    return () => clearStoreTheme(root)
   }, [store])
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <Spinner label="Loading products…" />
-      </div>
-    )
-  }
-
-  if (error || !store) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <EmptyState
-          title="Store not found"
-          description={error || 'This store may be offline.'}
-          action={
-            <Link to="/stores">
-              <Button variant="secondary">Back to stores</Button>
-            </Link>
-          }
-        />
-      </div>
-    )
-  }
-
+  // One themed wrapper hosts every state, so loading/error don't flash the default
+  // Mithra canvas before a themed store paints.
   return (
-    <div ref={wrapperRef} className="mx-auto max-w-3xl px-4 py-8">
+    <div ref={wrapperRef}>
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: 'var(--store-bg)' }}
+      />
+      {loading ? (
+        <div className="mx-auto max-w-3xl px-4 py-10">
+          <Spinner label="Loading products…" />
+        </div>
+      ) : error || !store ? (
+        <div className="mx-auto max-w-3xl px-4 py-10">
+          <EmptyState
+            title="Store not found"
+            description={error || 'This store may be offline.'}
+            action={
+              <Link to="/stores">
+                <Button variant="secondary">Back to stores</Button>
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <StoreDetail store={store} addItem={addItem} itemCount={itemCount} />
+      )}
+    </div>
+  )
+}
+
+type StoreDetailProps = {
+  store: Store
+  addItem: (storeId: string, storeName: string, item: Store['products'][number]) => void
+  itemCount: number
+}
+
+function StoreDetail({ store, addItem, itemCount }: StoreDetailProps) {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <div
         className="mb-6 overflow-hidden rounded-[var(--md-radius)] p-6 text-white shadow-[var(--md-shadow)]"
         style={{ background: store.image }}
@@ -107,6 +127,10 @@ export function StoreDetailPage() {
           <Card key={item.id} className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
+                {/* Green/red veg marks are a regulatory label under India's FSS
+                    (Packaging and Labelling) Regulations — the colours carry legal
+                    meaning. Intentionally excluded from vendor theming; do not
+                    convert these to theme tokens. */}
                 <span
                   className={`inline-block h-3 w-3 rounded-sm border ${
                     item.veg ? 'border-green-600' : 'border-red-600'
@@ -122,7 +146,7 @@ export function StoreDetailPage() {
                 <h2 className="font-semibold">{item.name}</h2>
                 {item.popular ? <Badge tone="warning">Popular</Badge> : null}
               </div>
-              <p className="text-sm text-[var(--md-muted)]">{item.description}</p>
+              <p className="text-muted-foreground text-sm">{item.description}</p>
               <p className="mt-2 font-semibold">{formatCurrency(item.price)}</p>
             </div>
             <Button size="sm" onClick={() => addItem(store.id, store.name, item)}>

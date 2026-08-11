@@ -11,6 +11,10 @@ export type StoreTheme = {
   primaryColor: string
   accentColor: string
   logoImage?: string
+  /** Hex matched against BG_PRESETS; anything off-list resolves to the default swatch. */
+  backgroundColor?: string
+  /** CSS family name as sent by the API, e.g. "DM Sans". Matched against FONT_PRESETS. */
+  fontFamily?: string
 }
 
 export type Store = {
