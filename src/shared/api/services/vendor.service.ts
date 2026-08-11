@@ -1,9 +1,9 @@
 import { VENDOR_ORDERS, VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
 import type { StoreTheme } from '@/modules/storefront/types'
 import { apiGet, unwrapData } from '../client'
+import { mapVendorTheme } from '../mappers/vendor'
 import { useLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
-import { mapVendorTheme } from './catalog.service'
 
 export type VendorDashboardStats = {
   openOrders: number
