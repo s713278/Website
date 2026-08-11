@@ -9,7 +9,7 @@ import {
 } from '@/shared/auth/api/demo-auth'
 import { apiGet, apiPost, unwrapData } from '../client'
 import { toApiError } from '../errors'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import { clearTokens, parseTokenResponse, setTokens } from '../tokens'
 import type { ApiEnvelope } from '../types'
 
@@ -31,7 +31,7 @@ export type OtpVerifyInput = {
 
 /** POST /v1/auth/request-otp */
 export async function requestOtp(input: OtpRequestInput) {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 300))
     return { success: true, message: 'Demo OTP sent (use 1234)' }
   }
@@ -50,7 +50,7 @@ export async function requestOtp(input: OtpRequestInput) {
 
 /** POST /v1/auth/verify-otp */
 export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 300))
     if (input.otp !== '1234') throw toApiError(new Error('Invalid OTP'), '/v1/auth/verify-otp', 401)
     const role = input.role || 'customer'
@@ -104,7 +104,7 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
 
 /** Email/password for demo UI; live mode uses OTP endpoints above. */
 export async function login(input: LoginInput): Promise<AuthSession> {
-  if (useLiveApi()) {
+  if (isLiveApi()) {
     throw toApiError(
       new Error(
         'Live API uses OTP login. Call requestOtp / verifyOtp, or set VITE_USE_API=false for demo email login.',
@@ -120,7 +120,7 @@ export async function login(input: LoginInput): Promise<AuthSession> {
 }
 
 export async function register(input: RegisterInput): Promise<AuthSession> {
-  if (useLiveApi()) {
+  if (isLiveApi()) {
     throw toApiError(
       new Error('Live registration uses OTP. Set VITE_USE_API=false for demo register.'),
       '/auth/register',
@@ -139,7 +139,7 @@ export async function getProfile<T = User>() {
 
 export async function signOut() {
   try {
-    if (useLiveApi()) {
+    if (isLiveApi()) {
       await apiPost('/v1/auth/signout', undefined)
     }
   } finally {

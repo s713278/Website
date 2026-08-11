@@ -1,6 +1,6 @@
 import type { CartLine } from '@/modules/storefront/types'
 import { apiGet, apiPost, unwrapData } from '../client'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 export type CustomerOrder = {
@@ -38,7 +38,7 @@ function writeDemoOrders(orders: CustomerOrder[]) {
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 400))
     const order: CustomerOrder = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
@@ -76,7 +76,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
 }
 
 export async function listMyOrders(userId?: string): Promise<CustomerOrder[]> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 200))
     return readDemoOrders().map((order) => ({
       ...order,

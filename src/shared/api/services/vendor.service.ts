@@ -2,7 +2,7 @@ import { VENDOR_ORDERS, VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
 import type { StoreTheme } from '@/modules/storefront/types'
 import { apiGet, unwrapData } from '../client'
 import { mapVendorTheme } from '../mappers/vendor'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 export type VendorDashboardStats = {
@@ -15,7 +15,7 @@ export type VendorDashboardStats = {
 }
 
 export async function getVendorDashboard(vendorId: string | number): Promise<VendorDashboardStats> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 200))
     return {
       openOrders: VENDOR_ORDERS.filter((o) => o.status !== 'completed').length,

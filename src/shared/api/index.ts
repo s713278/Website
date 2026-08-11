@@ -7,7 +7,7 @@ export {
   isApiError,
   toApiError,
 } from './errors'
-export { useLiveApi } from './mode'
+export { isLiveApi } from './mode'
 export {
   clearTokens,
   getAccessToken,

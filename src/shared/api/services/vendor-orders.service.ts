@@ -1,7 +1,7 @@
 import { VENDOR_ORDERS } from '@/modules/vendor/data/demo'
 import type { VendorOrder, VendorOrderStatus } from '@/modules/vendor/types'
 import { apiGet, apiPatch, unwrapData } from '../client'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 const DEMO_KEY = 'md-vendor-orders'
@@ -21,7 +21,7 @@ function writeDemo(orders: VendorOrder[]) {
 }
 
 export async function listVendorOrders(vendorId: string | number): Promise<VendorOrder[]> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 200))
     return readDemo()
   }
@@ -56,7 +56,7 @@ export async function updateVendorOrderStatus(
   orderId: string,
   status: VendorOrderStatus,
 ): Promise<VendorOrder | null> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     const orders = readDemo()
     const next = orders.map((order) => (order.id === orderId ? { ...order, status } : order))
     writeDemo(next)
