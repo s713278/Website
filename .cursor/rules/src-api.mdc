@@ -1,0 +1,14 @@
+---
+description: Shared API client and service conventions
+globs: src/shared/api/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Shared API
+
+- Single import point for the app: `@/shared/api`.
+- HTTP: `client.ts` (`apiGet` / `apiPost` / …) — native `fetch`, auth header, JSON parse, non-2xx → `ApiError`, 401 refresh. Do not add axios unless asked.
+- Domain calls in `services/*`; export via `services/index.ts` and root `shared/api/index.ts`.
+- Demo vs live: branch with `isLiveApi()` (plain function in `mode.ts`).
+- Shared DTO → domain mappers belong in `mappers/` when used by 2+ services; keep theme/CSS helpers out of services.
+- UI uses `getErrorMessage()` for user-facing errors.
