@@ -1,7 +1,7 @@
 import { VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
 import type { VendorProduct } from '@/modules/vendor/types'
 import { apiGet, apiPatch, unwrapData } from '../client'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 const DEMO_KEY = 'md-vendor-products'
@@ -21,7 +21,7 @@ function writeDemo(products: VendorProduct[]) {
 }
 
 export async function listVendorProducts(vendorId: string | number): Promise<VendorProduct[]> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 200))
     return readDemo()
   }
@@ -52,7 +52,7 @@ export async function setProductAvailability(
   productId: string,
   available: boolean,
 ): Promise<VendorProduct | null> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     const products = readDemo()
     const next = products.map((product) =>
       product.id === productId ? { ...product, available } : product,

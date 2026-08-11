@@ -1,7 +1,7 @@
 import { getStoreById, STORES } from '@/modules/storefront/data/catalog'
 import type { Store } from '@/modules/storefront/types'
 import { apiGet, unwrapData } from '../client'
-import { useLiveApi } from '../mode'
+import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
 function delay(ms = 250) {
@@ -39,7 +39,7 @@ function mapVendorToStore(raw: Record<string, unknown>): Store {
 }
 
 export async function listStores(query?: string): Promise<Store[]> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await delay()
     const q = query?.trim().toLowerCase()
     if (!q) return STORES
@@ -70,7 +70,7 @@ export async function listStores(query?: string): Promise<Store[]> {
 }
 
 export async function getStore(storeId: string): Promise<Store | null> {
-  if (!useLiveApi()) {
+  if (!isLiveApi()) {
     await delay()
     return getStoreById(storeId) ?? null
   }
