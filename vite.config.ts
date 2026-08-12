@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(rootDir, './src'),
+      '@mithra/api-client': path.resolve(rootDir, './packages/api-client/src/index.ts'),
     },
   },
   server: {
