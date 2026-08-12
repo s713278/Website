@@ -20,7 +20,7 @@
     vendors: {
       geeta: 'assets/img/vendors/geetas-kitchen.jpg',
       geetaLogo: 'assets/img/vendors/geetas-kitchen-logo.png',
-      geetaBanner: 'assets/img/vendors/geetas-kitchen-banner.png',
+      geetaBanner: 'assets/img/vendors/homemade-pickles-banner.png',
       saiLogo: 'assets/img/vendors/sai-ram-home-foods-logo.png',
       saiBanner: 'assets/img/vendors/sai-ram-home-foods-banner.png'
     }
@@ -656,6 +656,9 @@
         logo: logo,
         banner: banner,
         themeColor: '#2E5A27',
+        accentColor: '#f97316',
+        backgroundColor: '#faf6f1',
+        fontId: 'poppins',
         address: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032',
         richBanner: true,
         deliveryWindow: '6 PM – 9 PM'

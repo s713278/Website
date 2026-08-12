@@ -377,8 +377,9 @@
   function renderHome() {
     var draft = state.draft;
     var hero = document.getElementById('store-hero');
+    var name = draft.settings.storeName || 'Store';
 
-    document.getElementById('store-name').textContent = draft.settings.storeName;
+    document.getElementById('store-name').textContent = name;
     document.getElementById('store-tagline').textContent =
       draft.settings.tagline || 'Made with love, delivered to your home';
     document.getElementById('store-location').textContent = draft.settings.location || '';
@@ -386,29 +387,39 @@
 
     var bannerImg = document.getElementById('store-banner-img');
     if (hero) {
-      hero.classList.remove('is-rich-banner');
-      hero.classList.remove('is-ph-banner');
-      hero.classList.remove('has-designed-banner');
+      hero.classList.remove('has-banner', 'is-ph-banner', 'is-rich-banner', 'has-designed-banner');
     }
-    if (draft.settings.banner) {
-      bannerImg.src = draft.settings.banner;
-      bannerImg.alt = draft.settings.storeName + ' banner';
-      bannerImg.classList.remove('is-broken');
-      if (hero && draft.settings.richBanner) {
-        hero.classList.add('is-rich-banner');
-        hero.classList.add('has-designed-banner');
-      }
-      bannerImg.onerror = function () {
+
+    function showPlaceholder() {
+      if (bannerImg) {
+        bannerImg.removeAttribute('src');
+        bannerImg.alt = '';
         bannerImg.classList.add('is-broken');
+      }
+      if (hero) {
+        hero.classList.add('is-ph-banner');
+        hero.classList.remove('has-banner');
+      }
+    }
+
+    function showBanner(src) {
+      if (!bannerImg) return;
+      bannerImg.classList.remove('is-broken');
+      bannerImg.alt = name + ' home banner';
+      bannerImg.onload = function () {
         if (hero) {
-          hero.classList.add('is-ph-banner');
-          hero.classList.remove('has-designed-banner');
+          hero.classList.add('has-banner');
+          hero.classList.remove('is-ph-banner');
         }
       };
+      bannerImg.onerror = showPlaceholder;
+      bannerImg.src = src;
+    }
+
+    if (draft.settings.banner) {
+      showBanner(draft.settings.banner);
     } else {
-      bannerImg.removeAttribute('src');
-      bannerImg.classList.add('is-broken');
-      if (hero) hero.classList.add('is-ph-banner');
+      showPlaceholder();
     }
 
     var catsEl = document.getElementById('store-categories');
@@ -1424,29 +1435,43 @@
   }
 
   function initHeader(draft) {
-    document.title = draft.settings.storeName + ' — MithraDirect';
-    document.getElementById('store-header-name').textContent = draft.settings.storeName;
-    document.getElementById('drawer-name').textContent = draft.settings.storeName;
+    var name = draft.settings.storeName || 'Store';
+    document.title = name;
+    document.getElementById('store-header-name').textContent = name;
+    document.getElementById('drawer-name').textContent = name;
     document.getElementById('drawer-tagline').textContent = draft.settings.tagline || '';
 
-    var logo =
-      draft.settings.logo ||
-      (window.MithraAssets && window.MithraAssets.logo && window.MithraAssets.logo()) ||
-      'assets/img/logos/logo_dark_md.png';
-    ['store-header-logo', 'drawer-logo'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.src = logo;
-      el.alt = draft.settings.storeName;
-    });
+    var logo = draft.settings.logo || '';
+    var initial = (name.trim().charAt(0) || 'S').toUpperCase();
+    function setLogo(imgId, initialId) {
+      var img = document.getElementById(imgId);
+      var badge = document.getElementById(initialId);
+      if (img && logo) {
+        img.src = logo;
+        img.alt = name;
+        img.classList.remove('hidden');
+        if (badge) {
+          badge.hidden = true;
+        }
+      } else {
+        if (img) {
+          img.removeAttribute('src');
+          img.alt = '';
+          img.classList.add('hidden');
+        }
+        if (badge) {
+          badge.textContent = initial;
+          badge.hidden = false;
+        }
+      }
+    }
+    setLogo('store-header-logo', 'store-header-initial');
+    setLogo('drawer-logo', 'drawer-initial');
 
     var wa = draft.settings.whatsapp || draft.phone;
     var waBtn = document.getElementById('btn-header-wa');
     if (waBtn && wa) {
-      waBtn.href = D.whatsappLink(
-        wa,
-        'Hi, I would like to order from ' + draft.settings.storeName
-      );
+      waBtn.href = D.whatsappLink(wa, 'Hi, I would like to order from ' + name);
     }
 
     if (draft.isSample) {
