@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="Vendor WhatsApp storefront — browse products and place orders.">
-    <title>Store</title>
+    <meta name="description" content="Live MithraDirect customer storefront demo — WhatsApp checkout for local businesses.">
+    <title>Geeta's Kitchen — MithraDirect Storefront</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="assets/css/global.css">
@@ -12,17 +12,36 @@
     <link rel="stylesheet" href="assets/css/storefront.css">
     <script src="assets/js/assets-config.js"></script>
 </head>
-<body class="store-page store-themed store-page--vendor-only" data-store-template="release-v1" data-data-mode="localStorage">
+<body class="store-page store-themed" data-store-template="release-v1" data-data-mode="localStorage">
+    <header class="demo-topbar">
+        <div class="demo-topbar-inner">
+            <a href="index.html" class="demo-topbar-brand">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect">
+                <span class="demo-pill"><span class="demo-pill-dot" aria-hidden="true"></span><span>Live Storefront</span></span>
+            </a>
+            <div class="demo-topbar-actions">
+                <a href="https://www.instagram.com/mithradirect/" class="demo-link" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.youtube.com/@MithraDirect" class="demo-link" target="_blank" rel="noopener">YouTube</a>
+                <a href="onboarding.html" class="demo-link">Vendor setup</a>
+                <a href="onboarding.html" class="btn-primary-md is-sm">Create your store</a>
+            </div>
+        </div>
+    </header>
+
     <div id="store-loading" class="store-empty-wrap hidden">
         <div class="empty-icon" aria-hidden="true">⏳</div>
         <h1 class="store-brand-font">Loading store…</h1>
-        <p>Please wait while we open this shop.</p>
+        <p>Fetching release data from local store.</p>
     </div>
 
     <div id="store-empty" class="store-empty-wrap hidden">
         <div class="empty-icon" aria-hidden="true">🏪</div>
         <h1 class="store-brand-font">Store not found</h1>
-        <p>No shop is available on this link right now.</p>
+        <p>No store matched this link. Open the sample storefront or set up your own in minutes.</p>
+        <div class="store-empty-actions">
+            <a href="store.html" class="btn-primary-store is-inline">Open Sample Store</a>
+            <a href="onboarding.html" class="link-btn">Setup Your Store</a>
+        </div>
     </div>
 
     <div id="demo-stage" class="store-site">
@@ -40,8 +59,7 @@
                             </button>
                         </div>
                         <button type="button" class="store-header-brand" id="btn-brand" aria-label="Home">
-                            <img id="store-header-logo" src="" alt="" class="store-header-logo hidden">
-                            <span id="store-header-initial" class="store-header-initial" aria-hidden="true" hidden>S</span>
+                            <img id="store-header-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
                             <span class="store-brand-title store-brand-font" id="store-header-name">Store</span>
                         </button>
                         <div class="store-header-right">
@@ -62,8 +80,7 @@
                 <div class="drawer-backdrop" id="drawer-backdrop"></div>
                 <aside class="drawer" id="drawer" aria-hidden="true">
                     <div class="drawer-brand">
-                        <img id="drawer-logo" src="" alt="" class="store-header-logo hidden">
-                        <span id="drawer-initial" class="store-header-initial" aria-hidden="true" hidden>S</span>
+                        <img id="drawer-logo" data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="" class="store-header-logo">
                         <div>
                             <div class="drawer-brand-name store-brand-font" id="drawer-name">Store</div>
                             <div class="drawer-brand-tag" id="drawer-tagline"></div>
@@ -73,17 +90,23 @@
                         <button type="button" class="drawer-link" data-nav="home">Home</button>
                         <button type="button" class="drawer-link is-accent" data-nav="menu">Menu</button>
                         <button type="button" class="drawer-link" data-nav="cart">Cart</button>
+                        <a href="index.html" class="drawer-link is-muted">← Back to MithraDirect</a>
+                        <a href="onboarding.html" class="drawer-link is-muted">Create your store</a>
                     </nav>
                 </aside>
 
                 <section class="store-view active" id="view-home" data-view="home">
-                    <div class="store-hero has-banner" id="store-hero">
-                        <img id="store-banner-img" class="store-hero-bg" src="assets/img/vendors/homemade-pickles-banner.png" alt="Homemade pickles home banner">
-                        <div class="store-hero-overlay" aria-hidden="true"></div>
-                        <div class="store-hero-copy">
-                            <h1 class="store-brand-font" id="store-name">Store</h1>
-                            <p class="hero-tagline" id="store-tagline"></p>
-                            <p class="hero-location" id="store-location"></p>
+                    <div class="store-hero" id="store-hero">
+                        <img id="store-banner-img" class="store-hero-bg" alt="">
+                        <div class="store-hero-overlay"></div>
+                        <span class="hero-badge">100% Homemade</span>
+                        <h1 class="store-brand-font" id="store-name">Store</h1>
+                        <p class="hero-tagline" id="store-tagline"></p>
+                        <p class="hero-location" id="store-location"></p>
+                        <div class="hero-chips">
+                            <span class="hero-chip">No preservatives</span>
+                            <span class="hero-chip">FSSAI licensed</span>
+                            <span class="hero-chip">Home delivery</span>
                         </div>
                     </div>
 
@@ -127,7 +150,7 @@
                         <div class="home-trust-item"><span aria-hidden="true">🚫</span>No Preservatives</div>
                         <div class="home-trust-item"><span aria-hidden="true">🧼</span>Hygienic &amp; Safe</div>
                     </div>
-                    <p class="store-footer-note">WhatsApp order storefront</p>
+                    <p class="store-footer-note">Powered by <a href="index.html">MithraDirect</a> · Local support, direct connection</p>
                     <div class="wa-order-banner" role="note">This is a WhatsApp Order storefront</div>
                 </section>
 
