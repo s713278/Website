@@ -19,8 +19,12 @@ const badgeVariants = cva(
         ghost:
           'hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50',
         link: 'text-primary underline-offset-4 hover:underline',
-        success: 'bg-emerald-100 text-emerald-800 [a]:hover:bg-emerald-100/80',
-        warning: 'bg-amber-100 text-amber-800 [a]:hover:bg-amber-100/80',
+        // Local (non-stock) variants. Driven by CSS variables rather than palette
+        // literals so the per-vendor storefront scope in global.css can retint them
+        // for a dark canvas — see [data-store-mode='dark']. The :root defaults are
+        // the exact emerald-100/800 and amber-100/800 values these replaced.
+        success: 'bg-(--badge-success-bg) text-(--badge-success-fg)',
+        warning: 'bg-(--badge-warning-bg) text-(--badge-warning-fg)',
       },
     },
     defaultVariants: {
