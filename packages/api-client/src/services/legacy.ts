@@ -1,7 +1,4 @@
 import { apiGet, apiRequest, getHttp } from '../client/http';
-import { getAccessToken } from '../client/tokens';
-import { getApiBaseUrl } from '../client/config';
-import { ApiError } from '../client/errors';
 import type { ApiEnvelope } from '../client/types';
 import { vendorsService } from './vendors';
 import { catalogService } from './catalog';
@@ -115,14 +112,7 @@ export async function checkDeliveryEligibility(
 }
 
 export async function uploadVendorImage(vendorId: number | string, formData: FormData) {
-  const token = getAccessToken();
-  const res = await fetch(`${getApiBaseUrl()}/v1/vendors/${vendorId}/images`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: formData,
-  });
-  if (!res.ok) throw new ApiError('Image upload failed', res.status, await res.text());
-  return res.json();
+  return imagesService.upload(vendorId, formData);
 }
 
 export async function createSku(vendorId: number | string, body: Record<string, unknown>) {

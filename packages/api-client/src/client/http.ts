@@ -1,4 +1,5 @@
 import axios, {
+  AxiosHeaders,
   type AxiosInstance,
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
@@ -29,11 +30,17 @@ function createHttp(): AxiosInstance {
   });
 
   instance.interceptors.request.use((config: RetryConfig) => {
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.delete('Content-Type');
+      config.headers = headers;
+    }
+
     if (!config.skipAuth) {
       const token = getAccessToken();
       if (token) {
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers = AxiosHeaders.from(config.headers ?? {});
+        config.headers.set('Authorization', `Bearer ${token}`);
       }
     }
     return config;

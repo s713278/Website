@@ -49,7 +49,7 @@ export async function refreshAccessToken(): Promise<string | null> {
     const parsed = parseTokenResponse(res.data);
     if (!parsed.accessToken) {
       clearTokens();
-      flushQueue(new Error('Refresh response missing access token'), null);
+      flushQueue(null, null);
       return null;
     }
 
@@ -58,8 +58,8 @@ export async function refreshAccessToken(): Promise<string | null> {
     return parsed.accessToken;
   } catch (error) {
     clearTokens();
-    flushQueue(error, null);
-    getClientConfig().onUnauthorized?.();
+    // Resolve null so callers handle logout once (http interceptor calls onUnauthorized).
+    flushQueue(null, null);
     return null;
   } finally {
     refreshing = false;

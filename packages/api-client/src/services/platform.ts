@@ -24,7 +24,7 @@ export const platformService = {
 export const imagesService = {
   list: (vendorId: number | string, params?: Record<string, unknown>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, { params }),
-  upload: (vendorId: number | string, body: unknown) =>
+  upload: (vendorId: number | string, body: FormData) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, body),
 };
 
