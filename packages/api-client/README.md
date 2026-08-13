@@ -57,3 +57,16 @@ const store = await storefrontService.get(vendorId)
 ```
 
 Feature code must not create its own Axios client — import from `@mithra/api-client` (or the app shared wrapper over it).
+
+## Errors
+
+**Source of truth:** `src/client/errors.ts` (this package). App `src/shared/api` only re-exports — no duplicate mapping.
+
+All failures normalize to `ApiError` (`status`, `code`, `message`, `url`/`path`, `kind`).
+
+- Reads Mithra body fields: `user_message`, `failure_reason`, `reason_code`
+- HTTP 200 + `success: false` → failure (`assertApiSuccess` in http helpers)
+- Timeout / offline / 4xx / 5xx → user-safe copy (never Axios “status code 401” text)
+- 401 after failed refresh → session message; app `onUnauthorized` handles logout
+- Logging: `setApiErrorLogger(fn)` — scrubbed payload (no tokens/PII)
+- App UI already uses `getErrorMessage()`; optional hook: `useApiError()` from `@/shared/api`

@@ -15,9 +15,13 @@ export {
   getHttp,
   ApiError,
   apiErrorFromResponse,
+  assertApiSuccess,
   getErrorMessage,
   isApiError,
+  logApiError,
+  setApiErrorLogger,
   toApiError,
+  toLoggableApiError,
   clearTokens,
   getAccessToken,
   getRefreshToken,
@@ -28,6 +32,8 @@ export {
 export type {
   ApiEnvelope,
   AuthTokensResponse,
+  ApiErrorKind,
+  ApiErrorLogger,
   HttpMethod,
   RequestConfig,
   TokenPair,
@@ -44,6 +50,7 @@ export {
 } from './config'
 export type { ClientConfig } from './config'
 export { isLiveApi } from './mode'
+export { useApiError } from './useApiError'
 
 /** Domain services — single access point for the app */
 export * from './services'

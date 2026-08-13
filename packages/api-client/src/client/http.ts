@@ -5,7 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { getClientConfig } from './config';
-import { ApiError, toApiError } from './errors';
+import { ApiError, assertApiSuccess, toApiError } from './errors';
 import { refreshAccessToken } from './refresh';
 import { getAccessToken } from './tokens';
 import type { ApiEnvelope, RequestConfig } from './types';
@@ -96,7 +96,7 @@ function withFlags(config?: RequestConfig): AxiosRequestConfig {
 export async function apiGet<T>(url: string, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().get<T>(url, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -105,7 +105,7 @@ export async function apiGet<T>(url: string, config?: RequestConfig): Promise<T>
 export async function apiPost<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().post<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -114,7 +114,7 @@ export async function apiPost<T>(url: string, body?: unknown, config?: RequestCo
 export async function apiPut<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().put<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -123,7 +123,7 @@ export async function apiPut<T>(url: string, body?: unknown, config?: RequestCon
 export async function apiPatch<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().patch<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -132,7 +132,7 @@ export async function apiPatch<T>(url: string, body?: unknown, config?: RequestC
 export async function apiDelete<T>(url: string, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().delete<T>(url, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
