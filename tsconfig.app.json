@@ -20,7 +20,8 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@mithra/api-client": ["./packages/api-client/src/index.ts"]
     }
   },
   "include": ["src"]
