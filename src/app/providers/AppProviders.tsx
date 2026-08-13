@@ -5,14 +5,14 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
-    // Sanitized error hook — swap for telemetry later; never logs tokens/PII fields.
     setApiErrorLogger((payload) => {
       console.error('[api]', payload)
     })
 
     configureApiClient({
+      // Failed refresh → clear local session only (no server signout / no logout loop)
       onUnauthorized: () => {
-        void useAuthStore.getState().logout()
+        useAuthStore.getState().clearSession()
       },
     })
   }, [])

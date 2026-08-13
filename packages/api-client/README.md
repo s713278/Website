@@ -58,6 +58,13 @@ const store = await storefrontService.get(vendorId)
 
 Feature code must not create its own Axios client — import from `@mithra/api-client` (or the app shared wrapper over it).
 
+## Session (JWT)
+
+- Token store: `tokens.ts` (`mithra_access_token` / `mithra_refresh_token`)
+- Interceptors: Bearer attach; `401` → refresh once → retry; else `onUnauthorized`
+- Public calls: `{ skipAuth: true }`
+- App session sync + XSS notes: `docs/SESSION.md`
+
 ## Errors
 
 **Source of truth:** `src/client/errors.ts` (this package). App `src/shared/api` only re-exports — no duplicate mapping.

@@ -10,7 +10,7 @@ import {
 import { apiGet, apiPost, unwrapData } from '../client'
 import { toApiError } from '../errors'
 import { isLiveApi } from '../mode'
-import { clearTokens, parseTokenResponse, setTokens } from '../tokens'
+import { clearTokens, getAccessToken, parseTokenResponse, setTokens } from '../tokens'
 import type { ApiEnvelope } from '../types'
 
 export type { LoginInput, RegisterInput, AuthSession }
@@ -139,8 +139,9 @@ export async function getProfile<T = User>() {
 
 export async function signOut() {
   try {
-    if (isLiveApi()) {
-      await apiPost('/v1/auth/signout', undefined)
+    // skipRefresh: failed refresh already cleared tokens — avoid 401 → refresh → logout loop
+    if (isLiveApi() && getAccessToken()) {
+      await apiPost('/v1/auth/signout', undefined, { skipRefresh: true })
     }
   } finally {
     clearTokens()
