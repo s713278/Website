@@ -1000,8 +1000,8 @@
         if (!file || !pid) return;
         processImageFile(
           file,
-          1,
-          800,
+          IMAGE_SPECS.product.aspectRatio,
+          IMAGE_SPECS.product.maxWidth,
           function (dataUrl) {
             var p = findProduct(pid);
             if (!p) return;
@@ -1012,7 +1012,7 @@
           },
           {
             errorId: 'product-error',
-            maxBytes: 5 * 1024 * 1024
+            maxBytes: IMAGE_SPECS.product.maxBytes
           }
         );
       });
@@ -2374,6 +2374,23 @@
     return escapeHtml(s).replace(/'/g, '&#39;');
   }
 
+  /** MVP image upload caps (MithraDirect Image Specification). */
+  var IMAGE_SPECS = {
+    logo: { aspectRatio: 1, maxWidth: 512, maxBytes: 500 * 1024 },
+    product: { aspectRatio: 1, maxWidth: 1200, maxBytes: 1 * 1024 * 1024 },
+    category: { aspectRatio: 1, maxWidth: 600, maxBytes: 500 * 1024 },
+    banner: { aspectRatio: 16 / 9, maxWidth: 1600, maxBytes: 1 * 1024 * 1024 },
+    marketingBanner: { aspectRatio: 16 / 9, maxWidth: 1600, maxBytes: 1 * 1024 * 1024 }
+  };
+
+  function formatMaxUploadLabel(maxBytes) {
+    if (maxBytes < 1024 * 1024) {
+      return Math.round(maxBytes / 1024) + ' KB';
+    }
+    var mb = maxBytes / (1024 * 1024);
+    return (Number.isInteger(mb) ? mb : mb.toFixed(1)) + ' MB';
+  }
+
   /**
    * Center-crop to aspectRatio (w/h), then scale to maxWidth.
    * Returns a JPEG data URL for localStorage.
@@ -2388,10 +2405,7 @@
       return;
     }
     if (file.size > maxBytes) {
-      showError(
-        errorId,
-        'Image must be under ' + Math.round(maxBytes / (1024 * 1024)) + ' MB.'
-      );
+      showError(errorId, 'Image must be under ' + formatMaxUploadLabel(maxBytes) + '.');
       return;
     }
     hideErrors();
@@ -2464,11 +2478,15 @@
     persist();
   }
 
-  function bindImageUpload(kind, aspectRatio, maxWidth) {
+  function bindImageUpload(kind, aspectRatio, maxWidth, maxBytes) {
     var input = document.getElementById('input-' + kind);
     var box = document.getElementById(kind + '-upload-box');
     var pickBtn = document.getElementById('btn-pick-' + kind);
     var removeBtn = document.getElementById('btn-remove-' + kind);
+    var spec = IMAGE_SPECS[kind] || {};
+    var ratio = aspectRatio != null ? aspectRatio : spec.aspectRatio || 1;
+    var width = maxWidth != null ? maxWidth : spec.maxWidth || 1200;
+    var bytes = maxBytes != null ? maxBytes : spec.maxBytes || 1 * 1024 * 1024;
 
     function openPicker() {
       input.click();
@@ -2491,11 +2509,17 @@
       input.addEventListener('change', function () {
         var file = input.files && input.files[0];
         if (!file) return;
-        processImageFile(file, aspectRatio, maxWidth, function (dataUrl) {
-          draft.settings[kind] = dataUrl;
-          syncImagePreview(kind, dataUrl);
-          persist();
-        });
+        processImageFile(
+          file,
+          ratio,
+          width,
+          function (dataUrl) {
+            draft.settings[kind] = dataUrl;
+            syncImagePreview(kind, dataUrl);
+            persist();
+          },
+          { errorId: 'settings-error', maxBytes: bytes }
+        );
       });
     }
   }
@@ -2689,8 +2713,8 @@
       });
     }
 
-    bindImageUpload('logo', 1, 512);
-    bindImageUpload('banner', 16 / 9, 1600);
+    bindImageUpload('logo');
+    bindImageUpload('banner');
 
     document.getElementById('input-phone').addEventListener('input', function (e) {
       e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
