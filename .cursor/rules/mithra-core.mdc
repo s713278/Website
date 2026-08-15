@@ -6,9 +6,12 @@ alwaysApply: true
 # MithraDirect core
 
 Read root `AGENTS.md` for full agent guidance. README for human setup.
+`docs/API_ARCHITECTURE.md` for the API layer.
 
-- **Stack:** Vite + React 19 + TypeScript + Tailwind v4 + shadcn. Single app under `src/` — modules `marketing`, `storefront`, `vendor`.
-- **Not this branch:** no `apps/web`, no `src/features/*`, no axios (use `src/shared/api/client.ts` fetch wrapper).
+- **Stack:** Vite + React 19 + TypeScript + Tailwind v4 + shadcn. App under `src/` — modules `marketing`, `storefront`, `vendor`. Plus one local package, `packages/api-client`.
+- **HTTP is axios**, in `packages/api-client/src/client/http.ts`. `src/shared/api/client.ts` is only a re-export shim.
+- **Package manager is npm** (`package-lock.json`). `pnpm-workspace.yaml` is committed but unused.
+- **Not this branch:** no `apps/web`, no `src/features/*`.
 - **Brand:** emerald + Poppins display + Inter body via `src/styles/global.css`. Prefer `--md-*` / shadcn vars. No purple-glow / cream-serif AI defaults.
 - **UX:** one job per screen, clear primary CTA; small-vendor simplicity.
 - **design-reference/** is visual reference only — not served by Vite; don’t treat as product source.

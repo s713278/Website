@@ -6,9 +6,12 @@ alwaysApply: false
 
 # Shared API
 
-- Single import point for the app: `@/shared/api`.
-- HTTP: `client.ts` (`apiGet` / `apiPost` / …) — native `fetch`, auth header, JSON parse, non-2xx → `ApiError`, 401 refresh. Do not add axios unless asked.
-- Domain calls in `services/*`; export via `services/index.ts` and root `shared/api/index.ts`.
-- Demo vs live: branch with `isLiveApi()` (plain function in `mode.ts`).
-- Shared DTO → domain mappers belong in `mappers/` when used by 2+ services; keep theme/CSS helpers out of services.
-- UI uses `getErrorMessage()` for user-facing errors.
+Full detail: `docs/API_ARCHITECTURE.md`. Two stacked layers — know which one you're in.
+
+- Single import point for the app: `@/shared/api`. Never import `@mithra/api-client` directly from app code.
+- **Transport is axios in `packages/api-client/src/client/`** — auth header, FormData handling, non-2xx → `ApiError`, 401 → single-flight refresh → retry once. `src/shared/api/{client,errors,tokens,types}.ts` are re-export shims with no logic.
+- Typed backend calls go in `packages/api-client/src/services/*`; the app's demo/live services go in `src/shared/api/services/*` and are what pages import.
+- Demo vs live: branch with `isLiveApi()` (plain function in `mode.ts`). **Write both paths** — demo is the default, so a live-only function fails as a blank screen.
+- Shared DTO → domain mappers belong in `mappers/`; keep theme/CSS helpers out of services.
+- UI uses `getErrorMessage()` for user-facing errors. `useApiError()` optionally wraps the error state.
+- A 200 can throw: `assertApiSuccess` rejects envelopes with `success: false`.
