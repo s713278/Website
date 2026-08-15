@@ -448,8 +448,11 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 - **Token storage is duplicated** across `mithra_*` and `md-auth` — §5.
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
   session compromise. `SESSION.md` covers the intended migration to httpOnly cookies.
-- **`API_GAPS.md` partly describes a different codebase.** It references an `@mithra/domain`
-  package and a `mithra_store_cart` localStorage key; neither exists here (this app's cart key
-  is `md-cart`, and `packages/` contains only `api-client`). Its endpoint tables are still
-  useful — verify anything structural against the tree before acting on it.
+- **The richer `/storefront` payload isn't wired into the app.** `storefrontService` and the flat
+  `getVendorStorefront` / `loadVendorStorefront` exist in the package, but no page imports them —
+  the customer storefront still renders from `catalogService` (`/v1/vendors/…`). Open work, not a
+  backend gap.
+- **`getPublicStoreBySlug` (`services/legacy.ts:173`) calls an endpoint that doesn't exist**
+  (`GET /v1/public/stores/{slug}` is absent from the spec). It will 404. Nothing imports it; don't
+  start. See `API_GAPS.md`.
 - **`pnpm-workspace.yaml` is unused** — §2.
