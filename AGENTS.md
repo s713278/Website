@@ -1,189 +1,212 @@
 # AGENTS.md — MithraDirect
 
-Guidance for coding agents (Cursor, Claude, Codex, etc.) working in this repo.
-Prefer this file over any older doc that mentions `apps/web`, `src/features/*`, or root `assets/`
-HTML — those describe a layout that does not exist here.
+Canonical, tool-neutral guidance for coding agents working in this repository.
 
-Human setup detail lives in [README.md](./README.md). Keep both in sync when architecture changes.
-Deep API detail lives in [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md).
+Source code and the current backend OpenAPI document take precedence when documentation disagrees
+with implementation. Human setup and project orientation live in [README.md](./README.md). Detailed
+API behavior lives in [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md).
 
----
+## Product in brief
 
-## What this repo is
+MithraDirect is a hyperlocal e-commerce platform for nearby customers and independent vendors.
+Customers browse storefronts and place orders; vendors manage their storefront, catalog, and order
+operations. Production identity uses WhatsApp phone-number OTP. The React/TypeScript web application
+consumes a separately maintained Spring Boot API through the repository's OpenAPI/Axios layers.
 
-A **Vite + React 19 + TypeScript** app (`mithradirect`) plus one local package.
+## Before changing anything
 
-| Surface | Module | Routes (examples) |
-|---------|--------|-------------------|
+- Inspect the repository root, branch, remotes, and complete staged/unstaged/untracked state.
+- Preserve existing work. Do not discard, overwrite, commit, push, stash, switch branches, or open a
+  pull request unless the user explicitly requests that action.
+- `integration` is the shared integration branch and normal pull-request target. Feature work belongs
+  on a separate task branch.
+- Keep changes limited to the requested task; do not mix in opportunistic refactors.
+- Never commit secrets, `.env`, credentials, test tokens, or private local tooling configuration.
+- Personal tooling belongs in user-level or locally excluded locations. Do not reference it from
+  tracked project documentation.
+
+## Documentation ownership
+
+| File | Owns |
+|------|------|
+| [README.md](./README.md) | Human setup, stack, commands, environment, routes, and project map |
+| [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
+| [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
+| [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |
+| [packages/api-client/README.md](./packages/api-client/README.md) | Local API package commands, exports, and package-specific usage |
+| [design-reference/README.md](./design-reference/README.md) | Static-reference purpose and inventory |
+
+Each detailed fact should have one owning document. Elsewhere, summarize it briefly and link to the
+owner instead of copying the full explanation.
+
+## Repository map
+
+This repository contains one Vite + React 19 + TypeScript application and one source-resolved local
+package.
+
+| Surface | Location | Routes (examples) |
+|---------|----------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
-| Storefront (customer) | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
+| Storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
 | Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Shared app code | `src/shared` | auth, API facade, components, hooks, utilities, types |
+| HTTP/OpenAPI package | `packages/api-client` | generated schema, Axios transport, auth infrastructure, backend services |
 
-Auth UI lives in `src/shared/auth`. The app's demo/live service layer lives in `src/shared/api`.
-**Transport (axios) and the OpenAPI-typed API live in `packages/api-client` (`@mithra/api-client`).**
-
-**Not product source:** `design-reference/` is frozen static HTML for visual reference only (not served by Vite).
-
-There is **no** `apps/web` package.
-
----
+`design-reference/` is frozen static HTML used for visual reference. It is not Vite product source.
+There is no `apps/web` package and no `src/features/*` layout in this repository.
 
 ## Commands
 
+The package manager is npm (`package-lock.json` is authoritative). The committed
+`pnpm-workspace.yaml` is currently unused.
+
 ```bash
 npm install
-cp .env.example .env   # never commit .env
-npm run dev            # http://localhost:5173
-npm run typecheck      # tsc -b
-npm run lint           # eslint src (react-hooks deps enforced)
-npm run build          # tsc -b && vite build → dist/
-npm run preview        # serve dist/ after a build
+cp .env.example .env
+npm run dev
+npm run typecheck
+npm run lint
+npm run build
+npm run preview
 ```
 
-No test runner exists (no vitest/jest, no `npm test`). `npm run typecheck && npm run lint` is the
-full verification loop — run both before calling a change done. `build` type-checks first, and
-`noUnusedLocals`/`noUnusedParameters` are on, so an unused import breaks the build.
-
-**Package manager is npm.** `pnpm-workspace.yaml` is committed but unused — there is a
-`package-lock.json` and no `pnpm-lock.yaml`. Ignore the pnpm file.
-
-OpenAPI codegen (only when the backend changes):
+There is no test runner. For code changes, the available baseline is:
 
 ```bash
-npm run fetch:openapi   # backend Swagger → packages/api-client/openapi.json
-npm run generate:api    # openapi-typescript → packages/api-client/src/schema.d.ts
-npm run sync:api        # both — but shells out to pnpm internally; prefer the two above
+npm run typecheck && npm run lint
 ```
 
-`openapi.json` and `schema.d.ts` are generated — never hand-edit; commit the regenerated diff.
+`npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
 
-| Env | Purpose |
-|-----|---------|
-| `VITE_USE_API=false` | Demo mocks (**default** in `.env.example`) |
-| `VITE_USE_API=true` | Live Spring Boot at `VITE_API_BASE_URL` |
+```bash
+npm --prefix packages/api-client run typecheck
+```
 
----
+## Backend contract and OpenAPI workflow
 
-## Where to put code
+The Spring Boot backend is maintained separately. Its `/api/v3/api-docs` document is the frontend's
+authoritative HTTP contract. The development server base configured in the client is
+`https://subscriptionapp-wgf8.onrender.com/api`; service paths begin with `/v1`, producing requests
+under `https://subscriptionapp-wgf8.onrender.com/api/v1/*`.
 
-| Adding… | Put it here |
-|---------|-------------|
-| Screen / page | `src/modules/<module>/pages/` |
-| Module-only UI | `src/modules/<module>/components/` |
+- Do not invent endpoints, request fields, response shapes, or undocumented status transitions.
+- If the contract is missing, inconsistent, or unsuitable, record a backend gap and describe the
+  required contract change. Do not hide it behind a silent frontend workaround.
+- Generic OpenAPI response objects do not provide generated end-to-end safety. Verify real response
+  shapes with safe test data before treating an integration as production-ready.
+- Never put live tokens or personal test data in source, documentation, fixtures, logs, or examples.
+
+Regeneration is a two-step workflow:
+
+```bash
+npm run fetch:openapi
+npm run generate:api
+```
+
+The first command fetches Swagger into `packages/api-client/openapi.json`; the second generates
+`packages/api-client/src/schema.d.ts` with `openapi-typescript`. Both files are generated: never edit
+them manually. Review and commit their regenerated diff together when the backend contract changes.
+`npm run sync:api` currently delegates to `pnpm` internally, so use the two npm commands above until
+that script is corrected.
+
+## Current API architecture
+
+Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before changing API code. The implemented
+relationship is:
+
+1. `packages/api-client` owns Axios, client configuration, token storage and refresh, normalized
+   errors, generated OpenAPI declarations, and handwritten domain service wrappers. The generated
+   `schema.d.ts` is exported, but the existing domain wrappers are not consistently derived from its
+   operation types.
+2. `src/shared/api` is the React application's facade. Its services select demo/live behavior and
+   shape backend payloads into application view models.
+3. Current app-facing services call the package's raw `apiGet`/`apiPost`/other transport primitives
+   through thin re-export shims. They do not currently consume the package's parallel domain-service
+   wrappers.
+
+Therefore, the repository has two service sets, but they are not yet a fully stacked typed pipeline.
+Do not casually bypass or redesign this boundary during an unrelated feature. Any migration should
+first document current caveats, the target design, ownership, and an incremental transition plan.
+
+### API placement rules
+
+| Change | Location |
+|--------|----------|
+| Axios/interceptors/config/refresh/errors | `packages/api-client/src/client/` |
+| Generated backend declarations | regenerate `packages/api-client/src/schema.d.ts` |
+| Backend-domain wrapper | `packages/api-client/src/services/` |
+| Demo/live behavior or view-model shaping | `src/shared/api/services/` |
+| Reusable wire-to-view-model mapping | `src/shared/api/mappers/` |
+| App-facing export | `src/shared/api/index.ts` |
+
+Pages and components import API behavior from `@/shared/api`. They must not call Axios/fetch directly
+or import `@mithra/api-client` directly.
+
+## Application architecture
+
+| Adding | Location |
+|--------|----------|
+| Page | `src/modules/<module>/pages/` |
+| Module-only component | `src/modules/<module>/components/` |
 | Module Zustand store | `src/modules/<module>/store/` |
-| Shared UI (2+ modules) | `src/shared/components/` |
-| A typed call to a backend endpoint | `packages/api-client/src/services/<domain>.ts` |
-| Demo/live service + view-model shaping | `src/shared/api/services/` → export from `@/shared/api` |
-| API → domain mapping | `src/shared/api/mappers/` |
-| Transport change (headers, retry, timeout) | `packages/api-client/src/client/` |
-| Auth UI / store | `src/shared/auth/` |
-| Routes / layouts | `src/app/router/`, `src/app/layouts/` |
-| shadcn primitive | `npx shadcn@latest add …` → `src/components/ui/` |
-| Design tokens | `src/styles/global.css` |
+| Shared UI used by multiple modules | `src/shared/components/` |
+| Auth UI or app session store | `src/shared/auth/` |
+| Routes/layouts/providers | `src/app/` |
+| shadcn primitive | `src/components/ui/` |
+| Design tokens/global styling | `src/styles/global.css` |
 
-```ts
-import { Button, EmptyState } from '@/shared/components'
-import { catalogService, getErrorMessage } from '@/shared/api'
-import { cn, formatCurrency } from '@/shared/lib/utils'
-```
+- Prefer `@/` aliases to deep relative imports.
+- Use function components. Keep ephemeral UI state local; use Zustand for established shared auth and
+  cart state.
+- Data-fetch effects must include their real dependencies, cancel/ignore stale work during cleanup,
+  and present errors through `getErrorMessage`.
+- Normalize reusable wire-format differences in mappers, not inline in pages.
+- Use existing shared wrappers and shadcn primitives rather than creating a parallel component system.
+- Keep vendor theming scoped to a component element and clear it during effect cleanup.
 
-Prefer `@/` imports over deep relatives. `cn` is available from both `@/lib/utils` (shadcn's alias
-target) and `@/shared/lib/utils` (same function, plus `formatCurrency`) — pick one per file.
+## Authentication: current state and guardrails
 
----
+The backend contract exposes WhatsApp-phone OTP endpoints under `/v1/auth`, then returns an access
+token and refresh token after verification. The OpenAPI security scheme is HTTP Bearer. The current
+frontend stores both tokens in `localStorage` and attaches the access token as an `Authorization`
+header; this is implemented behavior, not a final browser-security recommendation.
 
-## The API layer in one screen
+The current React login/register pages still use demo email/password actions. Those actions throw in
+live mode; OTP services exist but the production OTP UI is not wired yet. Do not claim otherwise.
 
-Two stacked layers. Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before changing either.
+Backend identities may hold multiple roles, while the current app `User` model and route guard assume
+one active role. Do not infer authorization solely from the role requested during OTP. The production
+auth task must define how verified roles and the active audience are mapped into frontend session and
+route authorization.
 
-1. **`packages/api-client` (`@mithra/api-client`)** — axios instance + interceptors, token
-   storage/refresh, `ApiError`, and OpenAPI-typed services (`vendorsService`, `ordersService`, …).
-   No React, no app types, no demo mode. Resolved straight from TypeScript source via a path alias
-   in `vite.config.ts` / `tsconfig.app.json` (plus a `file:` dep in `package.json`) — no build step.
-2. **`src/shared/api/services/*.service.ts`** — the app's own services. They add demo-mode fallback
-   and map wire payloads to app view-models. **This is what pages import.**
+Until that task replaces the lifecycle:
 
-Layer 2 calls Layer 1's raw primitives (`apiGet`/`apiPost`), *not* Layer 1's typed services — so
-`catalogService`/`cartService` exist in both layers and mean different things. Check your import.
+- Route token/user changes through `applySession()` and `clearSession()` in `auth-store.ts`.
+- Keep `onUnauthorized` wired to local session clearing, not server sign-out.
+- Preserve single-flight refresh and one retry after a 401.
+- Verify sign-out against the OpenAPI contract: it requires the refresh-token request body, which the
+  current frontend does not send.
 
-`src/shared/api/client.ts`, `errors.ts`, `tokens.ts`, `types.ts` are **thin re-export shims** over
-the package — no logic. The real HTTP code is `packages/api-client/src/client/http.ts`.
+See [docs/SESSION.md](./docs/SESSION.md) for the currently implemented lifecycle. Update that document
+with the implementation, not in advance of it.
 
----
+## Current behavior to preserve deliberately
 
-## Architecture rules
+- Demo mode is the `.env.example` default. Preserve an existing demo path unless the task explicitly
+  changes demo support; do not let a live-only branch fail as an unexplained blank screen.
+- `assertApiSuccess` can reject an HTTP 200 envelope whose `success` field is false.
+- `isLiveApi()` configuration is currently one-way: an environment-enabled API cannot be disabled by
+  passing `useApi: false` later.
+- The Zustand cart (`md-cart`) is local-only and single-store. Existing cart service files are not
+  wired into its runtime flow.
+- `openapi-fetch` is declared by the API package but currently unused.
 
-1. **Pages call services only** (`@/shared/api`). Do not `fetch`/`axios` from pages or components.
-2. **Import from `@/shared/api`, never `@mithra/api-client` directly** in app code. The façade
-   (`src/shared/api/index.ts`) re-exports everything the app needs.
-3. **HTTP lives in** `packages/api-client/src/client/http.ts` (axios: auth header, FormData
-   handling, non-2xx → `ApiError`, 401 → single-flight refresh → retry once).
-4. **Demo vs live:** services branch on `isLiveApi()` from `@/shared/api` (not a React hook). Every
-   service function needs **both** paths — demo (fixtures in `src/modules/*/data/`, or `md-*`
-   localStorage keys) and live — or demo mode breaks silently. Demo is the default.
-5. **Wire-format quirks** (`business_name` vs `name`, `distance_km` vs `distanceKm`) get normalized in
-   `src/shared/api/mappers/`, never inline in a page.
-6. **Data fetching:** no React Query/SWR/context. Page-local `useState` + `useEffect` with a
-   `cancelled` flag + `getErrorMessage(err, fallback)` in the catch. `StoreDetailPage` is the template.
-   `useApiError()` from `@/shared/api` optionally wraps the error half.
-7. **State:** Zustand for auth/cart; keep ephemeral UI state in the component.
-8. **UI:** App wrappers in `src/shared/components`; raw shadcn in `src/components/ui` (also re-exported
-   as `Shadcn*`). Don’t invent a parallel design system.
-9. **Brand:** emerald + Poppins (display) + Inter (body) via `src/styles/global.css`. Prefer `--md-*` / shadcn CSS vars. No purple-glow / cream-serif AI defaults.
-10. **Per-vendor theming:** `applyStoreTheme()` from `@/shared/lib/theme` must target a **scoped element**
-    (a ref), never `documentElement` — it sets `--font-display`/`--font-body`, which are app-wide — and
-    must be paired with `clearStoreTheme()` in the effect cleanup. Backgrounds/fonts are curated
-    allowlists; `getBgPreset`/`getFontPreset` are the only validation gate, so don’t add hex checks elsewhere.
-11. **Small-vendor UX:** one job per screen, clear primary CTA, collapse secondary detail.
-12. **design-reference/** may be read for look-and-feel; do not treat it as runtime source. Mirror into React/`src/styles`.
-13. **Secrets:** never commit `.env` or credentials.
-14. **Scope:** only change files needed for the task; don’t drive-by refactor.
+## UI and design reference
 
-## Known state (don’t "fix" these by accident)
+The product uses emerald brand colors, Poppins for display text, Inter for body text, Tailwind v4,
+and shadcn variables defined in `src/styles/global.css`. Prefer established variables and shared UI.
+For small-vendor workflows, keep one primary job per screen and make the next action obvious.
 
-- **Two service layers exist**, by design — see above. Adding an endpoint usually means touching both.
-- **Auth has two entry points.** Live login is OTP (`requestOtp`/`verifyOtp`, called from the pages);
-  `useAuthStore.login`/`register` are email+password and **throw in live mode**. Check which one a page
-  uses before changing either.
-- **Tokens live in two places** — `mithra_access_token`/`mithra_refresh_token` (what requests read)
-  and the persisted `md-auth` key (UI state). Route session changes through `applySession()` /
-  `clearSession()` in `auth-store.ts`, never bare `setTokens`, or the two drift. `onRehydrateStorage`
-  deliberately calls `setTokens(access)` with no second argument — passing `null` there used to wipe
-  the refresh token on every reload.
-- **`onUnauthorized` → `clearSession()`, not `logout()`** (wired once in `AppProviders.tsx`). A failed
-  refresh means the server session is already gone; calling sign-out would risk a loop.
-- **A 200 response can throw.** `assertApiSuccess` rejects any envelope with `success: false`.
-- **`isLiveApi()` overrides are one-way.** It's `useApi || isApiEnabled()`, so
-  `configureApiClient({ useApi: false })` cannot disable live mode when `VITE_USE_API=true`.
-- **Cart is local-only.** `useCartStore` (`md-cart`) never calls `cart.service.ts`, which is written but
-  unwired. Single-store cart by design.
-- **`packages/api-client` is not linted** — `npm run lint` is `eslint src`. It *is* type-checked,
-  transitively via the app build and by its own `npm --prefix packages/api-client run typecheck`.
-- **`openapi-fetch` is a declared dependency of the package but imported nowhere.**
-
----
-
-## React / hooks
-
-- Function components only.
-- Data-fetch `useEffect`s must list real deps (`storeId`, `vendorId`, `query`, …) and cancel in-flight work.
-- Run `npm run lint` — `react-hooks/exhaustive-deps` and `rules-of-hooks` are errors.
-- Don’t rename non-hooks to `use*` (e.g. use `isLiveApi`, not `useLiveApi`).
-
----
-
-## design-reference (static)
-
-Serve locally if needed:
-
-```bash
-npx --yes serve design-reference -p 4173
-```
-
-Static conventions (only when editing that folder):
-
-- Tokens historically in `design-reference/assets/css/global.css`
-- Page JS depends on `MithraDraft` / `StoreAPI` load order
-- Do not move product work back into static HTML
-
-Cursor rules under `.cursor/rules/` cover scoped editing for `src/**` and `design-reference/**`.
+Use `design-reference/` only to study layout and behavior, then implement the result in React and
+`src/styles`. Do not move product work back into static HTML. Read
+[design-reference/README.md](./design-reference/README.md) before editing the reference itself.

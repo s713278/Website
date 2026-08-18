@@ -6,12 +6,19 @@ alwaysApply: false
 
 # Shared API
 
-Full detail: `docs/API_ARCHITECTURE.md`. Two stacked layers — know which one you're in.
+Read root `AGENTS.md` and `docs/API_ARCHITECTURE.md` before changing this folder.
 
-- Single import point for the app: `@/shared/api`. Never import `@mithra/api-client` directly from app code.
-- **Transport is axios in `packages/api-client/src/client/`** — auth header, FormData handling, non-2xx → `ApiError`, 401 → single-flight refresh → retry once. `src/shared/api/{client,errors,tokens,types}.ts` are re-export shims with no logic.
-- Typed backend calls go in `packages/api-client/src/services/*`; the app's demo/live services go in `src/shared/api/services/*` and are what pages import.
-- Demo vs live: branch with `isLiveApi()` (plain function in `mode.ts`). **Write both paths** — demo is the default, so a live-only function fails as a blank screen.
-- Shared DTO → domain mappers belong in `mappers/`; keep theme/CSS helpers out of services.
-- UI uses `getErrorMessage()` for user-facing errors. `useApiError()` optionally wraps the error state.
-- A 200 can throw: `assertApiSuccess` rejects envelopes with `success: false`.
+- Keep `@/shared/api` as the application's import facade; app code must not import
+  `@mithra/api-client` directly.
+- The files `client.ts`, `errors.ts`, `tokens.ts`, and `types.ts` are thin package re-exports.
+  Transport logic belongs in `packages/api-client/src/client/`.
+- Current app services call raw package transport primitives. Package domain services are parallel;
+  do not silently migrate or create a third service path during a feature.
+- Preserve explicit demo/live behavior with `isLiveApi()`. Never let an unsupported mode fail as an
+  unexplained blank screen.
+- Map reusable wire-format differences in `mappers/`, not in pages.
+- The backend OpenAPI document is authoritative. Do not invent an endpoint or payload; record a
+  backend gap when the contract is insufficient.
+- Do not edit `openapi.json` or `schema.d.ts` manually.
+- Use `getErrorMessage()` for UI errors. Remember that `assertApiSuccess` can reject an HTTP 200
+  envelope whose `success` field is false.
