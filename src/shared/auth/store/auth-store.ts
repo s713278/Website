@@ -4,6 +4,7 @@ import {
   authService,
   clearTokens,
   getAccessToken,
+  sessionDisplayName,
   setTokens,
   type AuthSession,
   type LoginInput,
@@ -92,6 +93,13 @@ export const useAuthStore = create<AuthState>()(
         if (access) {
           // Important: do NOT pass refresh=null — that cleared refresh on every reload.
           setTokens(access)
+        }
+
+        if (state.user) {
+          state.user = {
+            ...state.user,
+            name: sessionDisplayName(state.user.role, state.user.name),
+          }
         }
 
         state.setHydrated(true)

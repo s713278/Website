@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { catalogService, getErrorMessage } from '@/shared/api'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
@@ -9,6 +9,7 @@ import { formatCurrency } from '@/shared/lib/utils'
 
 export function StoreDetailPage() {
   const { storeId = '' } = useParams()
+  const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
   const itemCount = useCartStore((s) => s.itemCount())
   const [store, setStore] = useState<Store | null>(null)
@@ -23,7 +24,11 @@ export function StoreDetailPage() {
     void catalogService
       .getStore(storeId)
       .then((data) => {
-        if (!cancelled) setStore(data)
+        if (cancelled) return
+        setStore(data)
+        if (data && data.id !== storeId) {
+          navigate(`/stores/${data.id}`, { replace: true })
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(getErrorMessage(err, 'Could not load store'))
@@ -34,7 +39,7 @@ export function StoreDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [storeId])
+  }, [storeId, navigate])
 
   useEffect(() => {
     const root = wrapperRef.current
@@ -87,10 +92,11 @@ function StoreDetail({ store, addItem, itemCount }: StoreDetailProps) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div
-        className="mb-6 overflow-hidden rounded-[var(--md-radius)] p-6 text-white shadow-[var(--md-shadow)]"
+        className="relative mb-6 overflow-hidden rounded-[var(--md-radius)] p-6 text-white shadow-[var(--md-shadow)]"
         style={{ background: store.image }}
       >
-        <div className="flex items-center gap-3">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 to-black/10" />
+        <div className="relative flex items-center gap-3">
           {store.theme?.logoImage ? (
             <img
               src={store.theme.logoImage}
@@ -103,7 +109,7 @@ function StoreDetail({ store, addItem, itemCount }: StoreDetailProps) {
             <h1 className="font-display mt-1 text-3xl font-bold">{store.name}</h1>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-3 text-sm">
+        <div className="relative mt-3 flex flex-wrap gap-3 text-sm">
           <Badge tone="success">★ {store.rating}</Badge>
           <span>{store.etaMins} mins</span>
           <span>{store.distanceKm} km</span>
@@ -122,39 +128,43 @@ function StoreDetail({ store, addItem, itemCount }: StoreDetailProps) {
         }
       />
 
-      <div className="space-y-3">
-        {store.products.map((item) => (
-          <Card key={item.id} className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                {/* Green/red veg marks are a regulatory label under India's FSS
-                    (Packaging and Labelling) Regulations — the colours carry legal
-                    meaning. Intentionally excluded from vendor theming; do not
-                    convert these to theme tokens. */}
-                <span
-                  className={`inline-block h-3 w-3 rounded-sm border ${
-                    item.veg ? 'border-green-600' : 'border-red-600'
-                  }`}
-                  aria-hidden
-                >
+      {store.products.length === 0 ? (
+        <EmptyState title="No products yet" description="This store has not listed items." />
+      ) : (
+        <div className="space-y-3">
+          {store.products.map((item) => (
+            <Card key={item.id} className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  {/* Green/red veg marks are a regulatory label under India's FSS
+                      (Packaging and Labelling) Regulations — the colours carry legal
+                      meaning. Intentionally excluded from vendor theming; do not
+                      convert these to theme tokens. */}
                   <span
-                    className={`m-[2px] block h-1.5 w-1.5 rounded-full ${
-                      item.veg ? 'bg-green-600' : 'bg-red-600'
+                    className={`inline-block h-3 w-3 rounded-sm border ${
+                      item.veg ? 'border-green-600' : 'border-red-600'
                     }`}
-                  />
-                </span>
-                <h2 className="font-semibold">{item.name}</h2>
-                {item.popular ? <Badge tone="warning">Popular</Badge> : null}
+                    aria-hidden
+                  >
+                    <span
+                      className={`m-[2px] block h-1.5 w-1.5 rounded-full ${
+                        item.veg ? 'bg-green-600' : 'bg-red-600'
+                      }`}
+                    />
+                  </span>
+                  <h2 className="font-semibold">{item.name}</h2>
+                  {item.popular ? <Badge tone="warning">Popular</Badge> : null}
+                </div>
+                <p className="text-muted-foreground text-sm">{item.description}</p>
+                <p className="mt-2 font-semibold">{formatCurrency(item.price)}</p>
               </div>
-              <p className="text-muted-foreground text-sm">{item.description}</p>
-              <p className="mt-2 font-semibold">{formatCurrency(item.price)}</p>
-            </div>
-            <Button size="sm" onClick={() => addItem(store.id, store.name, item)}>
-              Add
-            </Button>
-          </Card>
-        ))}
-      </div>
+              <Button size="sm" onClick={() => addItem(store.id, store.name, item)}>
+                Add
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
