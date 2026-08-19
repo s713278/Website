@@ -1,4 +1,11 @@
-import type { User } from '@/shared/types'
+import {
+  getProfile as apiGetProfile,
+  refreshAccessToken,
+  requestOtp as apiRequestOtp,
+  unwrapData,
+  verifyOtp as apiVerifyOtp,
+} from '@mithra/api-client'
+import type { User, UserRole } from '@/shared/types'
 import {
   DEMO_CREDENTIALS,
   demoLogin,
@@ -7,113 +14,141 @@ import {
   type LoginInput,
   type RegisterInput,
 } from '@/shared/auth/api/demo-auth'
-import { apiGet, apiPost, unwrapData } from '../client'
+import { apiPost } from '../client'
 import { toApiError } from '../errors'
 import { isLiveApi } from '../mode'
-import { clearTokens, getAccessToken, parseTokenResponse, setTokens } from '../tokens'
-import type { ApiEnvelope } from '../types'
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  parseTokenResponse,
+  setTokens,
+} from '../tokens'
 
 export type { LoginInput, RegisterInput, AuthSession }
 export { DEMO_CREDENTIALS }
 
+/** Ticket: public OTP auth always sends Web. */
+export const AUTH_REG_PLATFORM = 'Web' as const
+
+export const OTP_LENGTH = 4
+export const OTP_RESEND_SECONDS = 30
+
 export type OtpRequestInput = {
   phone: string
-  role: User['role']
+  role: UserRole
   countryCode?: string
 }
 
 export type OtpVerifyInput = {
   phone: string
   otp: string
-  role?: User['role']
+  role: UserRole
   countryCode?: string
 }
 
-/** POST /v1/auth/request-otp */
-export async function requestOtp(input: OtpRequestInput) {
-  if (!isLiveApi()) {
-    await new Promise((r) => setTimeout(r, 300))
-    return { success: true, message: 'Demo OTP sent (use 1234)' }
-  }
-
-  return apiPost<ApiEnvelope>(
-    '/v1/auth/request-otp',
-    {
-      country_code: input.countryCode || '+91',
-      mobile_number: input.phone,
-      reg_platform: 'Web',
-      user_role: input.role === 'customer' ? 'USER' : 'VENDOR',
-    },
-    { skipAuth: true },
-  )
+type VerifyOtpData = {
+  user_id?: number | string
+  name?: string | null
+  phoneNumber?: string
+  roles?: string[]
+  vendors?: Array<{ vendor_id?: number | string; vendorId?: number | string; name?: string }>
+  mobile_verified?: boolean
 }
 
-/** POST /v1/auth/verify-otp */
-export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
-  if (!isLiveApi()) {
-    await new Promise((r) => setTimeout(r, 300))
-    if (input.otp !== '1234') throw toApiError(new Error('Invalid OTP'), '/v1/auth/verify-otp', 401)
-    const role = input.role || 'customer'
-    const session: AuthSession = {
-      token: `demo-otp-${input.phone}`,
-      refreshToken: null,
-      user: {
-        id: `u-${input.phone}`,
-        name: role === 'vendor' ? 'Demo Vendor' : 'Demo Customer',
-        email: `${input.phone}@demo.local`,
-        role,
-        vendorId: role === 'vendor' ? 'r1' : undefined,
-      },
-    }
-    setTokens(session.token, session.refreshToken)
-    return session
+export function digitsPhone(phone: string) {
+  return phone.replace(/\D/g, '').slice(-10)
+}
+
+export function isValidMobile(phone: string) {
+  return /^[6-9]\d{9}$/.test(digitsPhone(phone))
+}
+
+function apiRole(role: UserRole) {
+  return role === 'vendor' ? 'VENDOR' : 'USER'
+}
+
+function firstVendorId(data: VerifyOtpData): string | undefined {
+  const id = data.vendors?.[0]?.vendor_id ?? data.vendors?.[0]?.vendorId
+  return id == null ? undefined : String(id)
+}
+
+function isPhoneLikeName(value: string) {
+  return digitsPhone(value).length === 10 || value.trim().startsWith('+')
+}
+
+/** Welcome User / Welcome Vendor — never show the mobile number as the display name. */
+export function sessionDisplayName(role: UserRole, apiName?: string | null) {
+  const trimmed = String(apiName || '').trim()
+  if (trimmed && !isPhoneLikeName(trimmed)) return trimmed
+  return role === 'vendor' ? 'Vendor' : 'User'
+}
+
+/** Session role is the static login-page role (USER vs VENDOR), not inferred from other roles. */
+function mapSessionUser(data: VerifyOtpData, input: OtpVerifyInput): User {
+  const mobile = digitsPhone(input.phone)
+  return {
+    id: String(data.user_id ?? `u-${mobile}`),
+    name: sessionDisplayName(input.role, data.name),
+    email: `${mobile}@mithra.local`,
+    role: input.role,
+    vendorId: input.role === 'vendor' ? firstVendorId(data) : undefined,
+  }
+}
+
+/** POST /v1/auth/request-otp via @mithra/api-client */
+export async function requestOtp(input: OtpRequestInput) {
+  const mobile = digitsPhone(input.phone)
+  if (!isValidMobile(mobile)) {
+    throw toApiError(new Error('Enter a valid 10-digit mobile number'), '/v1/auth/request-otp', 400)
   }
 
-  const res = await apiPost<ApiEnvelope<Record<string, unknown>>>(
-    '/v1/auth/verify-otp',
-    {
-      country_code: input.countryCode || '+91',
-      mobile_number: Number(input.phone),
-      otp: input.otp,
-    },
-    { skipAuth: true },
-  )
+  return apiRequestOtp({
+    country_code: input.countryCode || '+91',
+    mobile_number: mobile,
+    reg_platform: AUTH_REG_PLATFORM,
+    user_role: apiRole(input.role),
+  })
+}
+
+/** POST /v1/auth/verify-otp via @mithra/api-client — stores tokens on success */
+export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
+  const mobile = digitsPhone(input.phone)
+  const otp = input.otp.replace(/\D/g, '')
+
+  const res = await apiVerifyOtp({
+    country_code: input.countryCode || '+91',
+    mobile_number: Number(mobile),
+    otp,
+  })
 
   const parsed = parseTokenResponse(res)
   if (!parsed.accessToken) {
     throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
   }
 
-  setTokens(parsed.accessToken, parsed.refreshToken)
-  const data = unwrapData(res) || {}
-  const record = data as Record<string, unknown>
-  const nestedUser = (record.user || {}) as Partial<User>
-
+  const data = (unwrapData(res) || {}) as VerifyOtpData
   return {
     token: parsed.accessToken,
     refreshToken: parsed.refreshToken,
-    user: {
-      id: String(nestedUser.id || `u-${input.phone}`),
-      name: nestedUser.name || 'User',
-      email: nestedUser.email || `${input.phone}@mithra.local`,
-      role: input.role || nestedUser.role || 'customer',
-      vendorId: nestedUser.vendorId,
-    },
+    user: mapSessionUser(data, input),
   }
 }
 
-/** Email/password for demo UI; live mode uses OTP endpoints above. */
+/** Uses the shared interceptor refresh (single-flight). */
+export async function refreshToken() {
+  return refreshAccessToken()
+}
+
+/** Email/password kept for demo-only tooling; live UI uses OTP. */
 export async function login(input: LoginInput): Promise<AuthSession> {
   if (isLiveApi()) {
     throw toApiError(
-      new Error(
-        'Live API uses OTP login. Call requestOtp / verifyOtp, or set VITE_USE_API=false for demo email login.',
-      ),
+      new Error('Live API uses OTP login. Call requestOtp / verifyOtp.'),
       '/auth/login',
       400,
     )
   }
-
   const session = await demoLogin(input)
   setTokens(session.token, null)
   return session
@@ -121,27 +156,22 @@ export async function login(input: LoginInput): Promise<AuthSession> {
 
 export async function register(input: RegisterInput): Promise<AuthSession> {
   if (isLiveApi()) {
-    throw toApiError(
-      new Error('Live registration uses OTP. Set VITE_USE_API=false for demo register.'),
-      '/auth/register',
-      400,
-    )
+    throw toApiError(new Error('Live registration uses OTP.'), '/auth/register', 400)
   }
-
   const session = await demoRegister(input)
   setTokens(session.token, null)
   return session
 }
 
 export async function getProfile<T = User>() {
-  return apiGet<ApiEnvelope<T>>('/v1/auth/profile')
+  return apiGetProfile<T>()
 }
 
 export async function signOut() {
   try {
-    // skipRefresh: failed refresh already cleared tokens — avoid 401 → refresh → logout loop
-    if (isLiveApi() && getAccessToken()) {
-      await apiPost('/v1/auth/signout', undefined, { skipRefresh: true })
+    const refresh = getRefreshToken()
+    if (getAccessToken() || refresh) {
+      await apiPost('/v1/auth/signout', { refresh_token: refresh }, { skipRefresh: true })
     }
   } finally {
     clearTokens()
@@ -153,6 +183,7 @@ export const authService = {
   register,
   requestOtp,
   verifyOtp,
+  refreshToken,
   getProfile,
   signOut,
 }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { loginPathForRole } from '@/app/router/role-home'
 import { getAccessToken } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Spinner } from '@/shared/components'
@@ -26,11 +27,13 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
   if (!isHydrated) return <Spinner label="Restoring session…" />
 
   if (!user || !hasToken) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    const intended = roles?.length === 1 ? roles[0] : undefined
+    return <Navigate to={loginPathForRole(intended)} replace state={{ from: location.pathname }} />
   }
 
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'vendor' ? '/vendor' : '/stores'} replace />
+    const needed = roles[0]
+    return <Navigate to={loginPathForRole(needed)} replace state={{ from: location.pathname }} />
   }
 
   return <Outlet />

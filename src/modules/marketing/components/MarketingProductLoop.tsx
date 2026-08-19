@@ -12,14 +12,14 @@ const steps = [
     num: '2',
     title: 'Vendor setup',
     subtitle: 'Live in minutes',
-    to: '/register',
+    to: '/vendor/login',
     active: false,
   },
   {
     num: '3',
     title: 'Customer store',
     subtitle: 'WhatsApp checkout',
-    to: '/stores/r1',
+    to: '/stores',
     active: false,
   },
 ] as const

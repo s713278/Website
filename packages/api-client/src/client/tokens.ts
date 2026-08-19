@@ -44,17 +44,20 @@ export function parseTokenResponse(payload: unknown): {
   const data =
     root.data && typeof root.data === 'object'
       ? (root.data as Record<string, unknown>)
-      : root;
+      : {};
 
-  const access =
-    (data.access_token as string | undefined) ||
-    (data.accessToken as string | undefined) ||
-    (data.token as string | undefined) ||
+  const pickAccess = (obj: Record<string, unknown>) =>
+    (obj.access_token as string | undefined) ||
+    (obj.accessToken as string | undefined) ||
+    (obj.token as string | undefined) ||
     null;
-  const refresh =
-    (data.refresh_token as string | undefined) ||
-    (data.refreshToken as string | undefined) ||
+  const pickRefresh = (obj: Record<string, unknown>) =>
+    (obj.refresh_token as string | undefined) ||
+    (obj.refreshToken as string | undefined) ||
     null;
 
-  return { accessToken: access, refreshToken: refresh };
+  return {
+    accessToken: pickAccess(data) || pickAccess(root),
+    refreshToken: pickRefresh(data) || pickRefresh(root),
+  };
 }
