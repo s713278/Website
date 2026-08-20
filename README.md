@@ -9,9 +9,9 @@ through an OpenAPI/Axios integration.
 > **Current status:** demo mode is the default. Live WhatsApp OTP is wired at `/login` (customer)
 > and `/vendor/login` (vendor); the email/password forms remain demo-only.
 > Vendor onboarding at `/onboarding` verifies the vendor's number through the shared OTP session and
-> persists business type, categories and storefront settings to the vendor account. Products, SKUs,
-> delivery, payments and go-live are still saved in the browser only, each labelled with the backend
-> contract gap that blocks it — see [docs/API_GAPS.md](./docs/API_GAPS.md).
+> persists every step to the vendor account. Step 10 submits the store for admin approval; the public
+> storefront and sharing unlock once approved. Remaining backend gaps are tracked in
+> [docs/API_GAPS.md](./docs/API_GAPS.md).
 
 ## Product surfaces
 
@@ -256,7 +256,7 @@ alongside the production auth implementation.
 | `/cart` | Cart |
 | `/login`, `/register` | Customer authentication |
 | `/vendor/login` | Vendor WhatsApp OTP login |
-| `/onboarding` | Ten-step vendor onboarding; Steps 1-2 verify the vendor by WhatsApp OTP |
+| `/onboarding` | Ten-step vendor onboarding; persists to the vendor account |
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |

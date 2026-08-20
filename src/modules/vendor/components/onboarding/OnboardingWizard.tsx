@@ -210,6 +210,7 @@ export function OnboardingWizard() {
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [serverProgress, setServerProgress] = useState<number | null>(null)
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form')
   const [confirmState, setConfirmState] = useState<ConfirmDialogState>(EMPTY_CONFIRM)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -256,16 +257,29 @@ export function OnboardingWizard() {
     vendorOnboardingService
       .getVendorContext(access.vendorId, { signal: controller.signal })
       .then((context) => {
-        if (!ignore) setCategoryLimit(context.subscription.limits.maxCategories)
+        if (ignore) return
+        setCategoryLimit(context.subscription.limits.maxCategories)
+        // A vendor who already finished must see their real store state, not an
+        // empty wizard, even from a browser with no local draft.
+        if (context.onboarding.status === 'COMPLETED') {
+          setLivePublication({
+            storeIdentifier: context.storeIdentifier,
+            approvalStatus: context.approvalStatus,
+            vendorStatus: context.vendorStatus,
+            completedAt: new Date().toISOString(),
+          })
+        }
+        setServerProgress(context.onboarding.nextStep)
       })
       .catch(() => {
-        // Limits are an enhancement; the configured fallback keeps the step usable.
+        // Limits and resume are enhancements; the configured fallback keeps the
+        // step usable and the local draft still governs.
       })
     return () => {
       ignore = true
       controller.abort()
     }
-  }, [access, setCategoryLimit])
+  }, [access, setCategoryLimit, setLivePublication])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -574,9 +588,13 @@ export function OnboardingWizard() {
   const saveLabel = persistenceLabel(persistenceStatus)
   // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
   // rather than only on the ones with an open contract gap.
+  const behindServer =
+    isLiveApi() && serverProgress != null && serverProgress > furthestVisitedStep
   const stepNotice = currentStep >= 3 && !isLiveApi()
     ? 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
-    : null
+    : behindServer
+      ? `Your store already has setup saved up to step ${Math.min(serverProgress! - 1, 10)}. Continuing from here will not remove it.`
+      : null
   const moveMobileTab = (view: 'form' | 'preview') => {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)

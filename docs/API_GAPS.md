@@ -33,15 +33,13 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Rich product attributes on the storefront payload | Ingredients / nutrition / rating on the PDP | None. `ProductDTO` is `id`, `name`, `description`, `measurement_unit_id`, `image_path` — the spec itself calls it "lightweight". Pull detail from the SKU endpoints or fixtures. |
 | Guest cart → merge on customer OTP | Browse anonymously, then sign in without losing the cart | Cart is local-only (`md-cart` via `useCartStore`) and never syncs, so there is nothing to merge yet |
 | Coupon codes | Cart promo CTA | **(static only)** — `MITHRA50` / `HOME50` are hardcoded in `design-reference/assets/js/storefront.js`. The React app has no coupon UI. |
-| Machine-readable onboarding progress | Resuming the wizard at the right step from the server | `GET /v1/vendors/{vendor_id}/context` documents only `onboarding.status` plus a human-readable `description` ("Step 2 is completed"). There is **no** `next_step` field, despite earlier claims. `mapVendorContext` maps `nextStep` only if one ever appears; resume must reconcile real server resources instead of parsing the description string. |
-| Assigned-product ID mapping | Create SKUs after assigning platform products (Steps 5-6) | **Blocking.** `PATCH /v1/vendors/{vendor_id}/assign/products` and `GET /v1/vendors/{vendor_id}/products` both return an untyped `APIResponseObject` with no documented example, so the vendor-assigned product ID that `ItemSkuCreateRequest.product_id` requires cannot be resolved — refetching does not close this without guessing field names. Steps 5-6 stay in the local draft and use `draft-sku-*` IDs. Backend must type the assign response or the vendor-products response. |
-| Canonical checkout JSON keys | Persist delivery schedules and shipping rules | Keep typed delivery and payment drafts separate, then combine them only at the future mapper boundary |
-| Canonical payment-detail keys | Persist UPI holder details and NEFT/IMPS bank-account details | `PaymentOptionRequest.details` is generic JSON and documents only `upi_account`. Keep all values in volatile tab memory; confirm that `ONLINE` represents bank transfer plus the exact account-holder/account-number/IFSC/bank-name keys before enabling protected writes |
-| Storefront logo classification | Map the logo control to the intended vendor image field | The contract now documents `HOMEBANNER`, `THUMBNAIL`, `PRODUCT`, `SKU`, and typed `image_url`; keep files in memory until the backend confirms that `THUMBNAIL` is the canonical storefront logo purpose |
-| Canonical public web URL | Share the published store across browsers/devices | Offer only a same-browser private preview; link, WhatsApp, and QR sharing remain unavailable until a canonical published URL exists |
-| Stable go-live validation contract | Link backend readiness failures to the responsible wizard step | Run the shared local readiness validator and set only `prototype-complete` |
-| Vendor role granted at verification | Letting a first-time vendor past Step 2 | `verifyOtp` now requires `VENDOR` in the response `roles`, because the role requested on the login screen is not a grant. It is **not confirmed** whether a first-time vendor receives `VENDOR` at `/request-otp` or only after `/verify-otp`. If the backend does not return it at verification, new vendors are refused with "This number is not registered as a vendor yet." Fail-closed is deliberate; the alternative is granting unverified vendor access. |
-| Vendor record for a verified vendor | Any vendor-scoped write (Steps 3+) | If `verify-otp` returns an empty `vendors[]` there is no `vendor_id`, so nothing can be saved. The wizard stops with an explicit "vendor account is not ready" state and keeps the local draft. It never calls `POST /v1/vendors/` — onboarding has no contract for creating a vendor. Backend must confirm when the vendor record is created and what `vendors[]` represents. |
+| Canonical payment-detail keys | A customer-facing consumer for bank details | **No bank/payout endpoint exists anywhere in the contract** — no path, schema or property matching bank/ifsc/payout. `details` is a free-form JsonNode that round-trips whatever it is given (verified). The wizard writes `{account_holder_name, account_number, ifsc_code, bank_name}` under `ONLINE`, matching the documented `upi_account` style. Backend must confirm these keys and that a consumer renders them. |
+| Public store reachability | Sharing a store after go-live | `store_identifier` **is** generated at go-live (`slug-vendorId`) and `/stores/{identifier}` resolves it, but the public storefront returns `404` until an admin sets `approval_status: APPROVED`. Share controls therefore unlock only on approval. `share_link` is still a relative API deep link, not a web URL. |
+| Stable go-live validation contract | Link backend readiness failures to the responsible wizard step | Go-live succeeds with a plain string (`"Vendor is now active and pending admin approval"`); the failure shape is undocumented and untested. Errors fall back to `getErrorMessage`. |
+| QR sharing | The ticket's offline-friendly QR requirement | No QR dependency in the project. The control is rendered disabled pending a decision on adding one. |
+| Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard says removal needs support rather than silently doing nothing. |
+| Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
+| Unvalidated `scheduling_config` | Trusting the delivery schedule a vendor configures | The backend stores `scheduling_config` **verbatim without validation** — even `{}` is accepted. `FIXED_WINDOW` and `CUSTOMER_SELECT_DATE` keys come from documented examples; `PREDEFINED_DAYS` and `INSTANT` keys are our own snake_case and no consumer contract confirms them. |
 
 ### Deployed catalog sorting behavior
 
@@ -57,6 +55,24 @@ either a numeric ID or a store slug. `storefrontService.get(identifier)` and the
 `getPublicStoreBySlug(slug)` now both use that operation. The removed
 `GET /v1/public/stores/{slug}` workaround must not be reintroduced.
 
+## Backend defects (verified against the deployed dev API)
+
+Found by running the full onboarding chain against a live test vendor. Each is a backend fix, and
+the frontend works around it with an inline comment at the call site.
+
+- **`assign/products` is documented against the wrong ID.** Its description says `category_id` is the
+  vendor category ID from `/{vendor_id}/categories`. Passing that returns
+  `400 Invalid vendor category id`. It requires the **platform** category ID. Either the docs or the
+  implementation is wrong; they disagree.
+- **`POST /skus` crashes instead of validating.** Omitting `eligible_sub_plans` returns
+  `HV000028: Unexpected exception during isValid call` (envelope `500`, HTTP 417). An empty array
+  correctly returns `400 SKU must have at least one eligible subscription plan`, so the validator
+  simply cannot handle the field being absent. The schema marks only `product_id` as required.
+- **Three shipping strategies are unimplemented** — see the table above.
+- **`GET /v1/home` returns `500`** for a plain `zip_code` query.
+- **`GET /v1/vendors/{id}` (list) requires auth** while `/products` and `/products/skus` are public,
+  which is an inconsistent boundary for the same vendor's data.
+
 ## Corrections to earlier versions of this file
 
 Previous revisions referenced things that do not exist in this repo. Recorded here so the same
@@ -68,3 +84,24 @@ workarounds don't get re-proposed:
 - **`mithra_store_cart` localStorage key** — belongs to `design-reference/assets/js/store-api.js`.
   The React app's cart key is `md-cart`.
 - **"vendor-app pages"** — there is no vendor-app. Vendor screens live in `src/modules/vendor`.
+
+### Retracted in this revision
+
+These were recorded as blocking contract gaps. All were **wrong**, and all were disproved by calling
+the API instead of reading `openapi.json`. The lesson is in the first two: an operation typed as a
+bare `APIResponseObject` says nothing about what it actually returns, and operation-level
+`requestBody.examples` can be far richer than the schema.
+
+- **"Assigned-product ID mapping is blocking"** — it is not. `GET /v1/vendors/{id}/products` is
+  public and returns `{id, ref_id}`, where `ref_id` is the platform product ID and `id` the vendor
+  product ID. One field, one unauthenticated call.
+- **"Canonical checkout JSON keys are unknown"** — they are documented. `PUT /checkout_options`
+  carries four complete request examples with exact snake_case keys per shipping strategy.
+- **"There is no `next_step`"** — there is. Both `verify-otp`'s `vendors[]` entry and
+  `GET /context` return `onboarding.next_step`. Only the checked-in OpenAPI *example* omits it.
+- **"`THUMBNAIL` is not confirmed as the storefront logo"** — it is. A live storefront returns
+  `thumbnail_image` at `/vendors/{id}/thumbnails/logo_*` and `banner_image` at `/homebanners/*`.
+- **"A verified vendor may have no vendor record"** — verification auto-creates one ("My Store")
+  and returns it in `vendors[]`.
+- **"`VENDOR` may not be granted at verification"** — it is. A first-time vendor's `verify-otp`
+  returns `roles: ["VENDOR", "USER"]`.
