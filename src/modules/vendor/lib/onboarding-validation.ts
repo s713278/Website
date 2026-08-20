@@ -222,7 +222,7 @@ export function validateStep(
       : [issue(1, 'phone', 'Enter a valid 10-digit Indian mobile number beginning with 6-9.')]
   }
   if (step === 2) {
-    return draft.otpSimulationComplete
+    return draft.mobileVerified
       ? []
       : [issue(2, 'otp-0', 'Enter and verify the four-digit prototype code.')]
   }

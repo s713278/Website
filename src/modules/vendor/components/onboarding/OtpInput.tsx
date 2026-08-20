@@ -80,7 +80,7 @@ export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) 
   }
 
   return (
-    <div className="flex gap-2.5" aria-label="Four-digit prototype code">
+    <div className="flex gap-2.5" aria-label="Four-digit verification code">
       {digits.map((digit, index) => (
         <input
           key={index}

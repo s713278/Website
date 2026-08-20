@@ -14,7 +14,7 @@ import {
   type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
 
-export const ONBOARDING_DRAFT_STORAGE_KEY = 'md-vendor-onboarding-draft-v1'
+export const ONBOARDING_DRAFT_STORAGE_KEY = 'md-vendor-onboarding-draft-v2'
 
 type UnknownRecord = Record<string, unknown>
 type IdleWindow = Window & {
@@ -289,7 +289,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     'currentStep',
     'completedSteps',
     'referenceMode',
-    'otpSimulationComplete',
+    'mobileVerified',
     'business',
     'categories',
     'products',
@@ -302,7 +302,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
   if (value.version !== ONBOARDING_DRAFT_VERSION || !isStep(value.currentStep)) return false
   if (!Array.isArray(value.completedSteps) || !value.completedSteps.every(isStep)) return false
   if (value.referenceMode !== 'live' && value.referenceMode !== 'sample') return false
-  if (!isBoolean(value.otpSimulationComplete)) return false
+  if (!isBoolean(value.mobileVerified)) return false
   if (!isRecord(value.business) || !hasOnlyKeys(value.business, ['businessType', 'businessName', 'ownerName', 'contactPerson'])) return false
   if (value.business.businessType !== null && !isBusinessTypeReference(value.business.businessType)) return false
   if (!isString(value.business.businessName) || !isString(value.business.ownerName) || !isString(value.business.contactPerson)) return false
@@ -373,7 +373,7 @@ export function toPersistedDraft(draft: VendorOnboardingDraftV1): PersistedOnboa
     currentStep: draft.currentStep,
     completedSteps: [...draft.completedSteps],
     referenceMode: draft.referenceMode,
-    otpSimulationComplete: draft.otpSimulationComplete,
+    mobileVerified: draft.mobileVerified,
     business: {
       businessType: draft.business.businessType
         ? { ...draft.business.businessType, icon: safeAssetUrl(draft.business.businessType.icon) }
@@ -425,7 +425,7 @@ export function reconcilePersistedDraft(
   persistedFurthestStep: OnboardingStep,
 ): { draft: VendorOnboardingDraftV1; furthestVisitedStep: OnboardingStep } {
   const draft = hydratePersistedDraft(persisted)
-  if (!draft.otpSimulationComplete) {
+  if (!draft.mobileVerified) {
     return {
       draft: {
         ...draft,

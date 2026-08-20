@@ -4,7 +4,7 @@ import type {
   ProductReference,
 } from '@/shared/api'
 
-export const ONBOARDING_DRAFT_VERSION = 1 as const
+export const ONBOARDING_DRAFT_VERSION = 2 as const
 export const ONBOARDING_CONFIG = {
   maxCategories: 2,
   businessTypePageSize: 6,
@@ -150,7 +150,7 @@ export type VendorOnboardingDraftV1 = {
   completedSteps: OnboardingStep[]
   referenceMode: ReferenceMode
   maskedPhone: string | null
-  otpSimulationComplete: boolean
+  mobileVerified: boolean
   business: {
     businessType: BusinessTypeReference | null
     businessName: string
@@ -217,13 +217,13 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   description: string
 }> = [
   { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Start with the number customers know.' },
-  { step: 2, short: 'Verify', title: 'Verify your number', description: 'Use the prototype code to continue.' },
+  { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code we sent on WhatsApp.' },
   { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the closest match for your catalog.' },
-  { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Pick up to two categories for this prototype.' },
+  { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Pick the categories your store sells.' },
   { step: 5, short: 'Products', title: 'Choose products to sell', description: 'Build a focused starting catalog.' },
   { step: 6, short: 'Prices', title: 'Set SKUs and prices', description: 'Every selected product needs at least one active SKU.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how and when orders are fulfilled.' },
   { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Offer at least one method and choose a default.' },
   { step: 9, short: 'Store', title: 'Add your store details', description: 'Name your store, add its contacts, and make the preview yours.' },
-  { step: 10, short: 'Review', title: 'Review your prototype', description: 'Resolve readiness items, then create a local preview.' },
+  { step: 10, short: 'Review', title: 'Review your store', description: 'Resolve readiness items, then preview your store.' },
 ]

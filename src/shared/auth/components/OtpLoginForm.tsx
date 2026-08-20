@@ -85,11 +85,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
       const session = await authService.verifyOtp({ phone, otp: code, role })
       if (gen !== requestGen.current) return
       completeOtpLogin(session)
-      if (isVendor) {
-        navigate('/vendor', { replace: true })
-        return
-      }
-      navigate(resumePathAfterLogin('customer', from), { replace: true })
+      navigate(resumePathAfterLogin(role, from), { replace: true })
     } catch (err) {
       if (gen !== requestGen.current) return
       setError(getErrorMessage(err, 'Invalid or expired OTP. Try again.'))

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
-import { localPrototypeOnboardingAdapter } from '../lib/onboarding-adapter'
+import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
@@ -8,13 +8,14 @@ import {
   scheduleDraftSave,
   toPersistedDraft,
 } from '../lib/onboarding-persistence'
-import type {
-  LocalPreviewSnapshotV1,
-  OnboardingPersistenceStatus,
-  OnboardingRuntimeState,
-  OnboardingStep,
-  VendorOnboardingDraftV1,
-  VendorOnboardingPersistedEnvelopeV1,
+import {
+  ONBOARDING_DRAFT_VERSION,
+  type LocalPreviewSnapshotV1,
+  type OnboardingPersistenceStatus,
+  type OnboardingRuntimeState,
+  type OnboardingStep,
+  type VendorOnboardingDraftV1,
+  type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
 
 type ImageKind = 'logo' | 'banner'
@@ -46,6 +47,10 @@ type OnboardingStore = {
   completeStep: (step: OnboardingStep, nextStep: OnboardingStep) => void
   goToStep: (step: OnboardingStep) => void
   completePrototype: (draftSlug: string) => void
+  /** Steps 1-2 already satisfied by an existing vendor session. */
+  adoptVerifiedSession: (maskedPhone: string | null) => void
+  /** Session lost while the draft claimed a verified number — reopen Step 1. */
+  revokeVerifiedSession: () => void
   reset: () => void
 }
 
@@ -88,7 +93,7 @@ function invalidateDraft(
 }
 
 function restorationMessage(draft: VendorOnboardingDraftV1): string {
-  if (!draft.otpSimulationComplete) {
+  if (!draft.mobileVerified) {
     return 'Draft restored. Enter your WhatsApp number to continue.'
   }
   return 'Draft restored. Private contact and payment details, OTPs, and images are not saved.'
@@ -121,7 +126,7 @@ function persistCurrentDraft(): void {
 
   const updatedAt = new Date().toISOString()
   const envelope: VendorOnboardingPersistedEnvelopeV1 = {
-    version: 1,
+    version: ONBOARDING_DRAFT_VERSION,
     revision: state.persistenceRevision + 1,
     updatedAt,
     furthestVisitedStep: state.furthestVisitedStep,
@@ -129,7 +134,7 @@ function persistCurrentDraft(): void {
     previewSnapshot: state.previewSnapshot,
   }
   try {
-    localPrototypeOnboardingAdapter.drafts.write(envelope)
+    onboardingDraftAdapter.drafts.write(envelope)
     useOnboardingStore.setState({
       persistenceStatus: 'saved',
       persistenceRevision: envelope.revision,
@@ -180,7 +185,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   initializePersistence() {
     if (useOnboardingStore.getState().persistenceInitialized) return
-    const result = localPrototypeOnboardingAdapter.drafts.read()
+    const result = onboardingDraftAdapter.drafts.read()
     if (result.kind === 'valid') {
       applyPersistedEnvelope(result.envelope, set)
     } else if (result.kind === 'empty') {
@@ -196,7 +201,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     }
 
     if (!unsubscribeFromStorage) {
-      unsubscribeFromStorage = localPrototypeOnboardingAdapter.drafts.subscribe((envelope) => {
+      unsubscribeFromStorage = onboardingDraftAdapter.drafts.subscribe((envelope) => {
         const current = useOnboardingStore.getState()
         const currentUpdatedAt = current.persistenceUpdatedAt ?? ''
         const isNewer = envelope.revision > current.persistenceRevision ||
@@ -231,7 +236,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   clearCorruptDraft() {
     try {
-      localPrototypeOnboardingAdapter.drafts.clear()
+      onboardingDraftAdapter.drafts.clear()
       set({
         persistenceStatus: 'idle',
         persistenceRevision: 0,
@@ -267,7 +272,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       runtime: { ...state.runtime, phone, otpDigits: ['', '', '', ''] },
       furthestVisitedStep: 1,
       draft: invalidateDraft(
-        { ...state.draft, maskedPhone: null, otpSimulationComplete: false },
+        { ...state.draft, maskedPhone: null, mobileVerified: false },
         1,
       ),
       recoveryMessage: null,
@@ -313,9 +318,47 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     flushScheduledDraftSave(persistCurrentDraft)
   },
 
+  adoptVerifiedSession(maskedPhone) {
+    set((state) => {
+      if (state.draft.mobileVerified) return {}
+      return {
+        furthestVisitedStep: Math.max(state.furthestVisitedStep, 3) as OnboardingStep,
+        draft: {
+          ...state.draft,
+          mobileVerified: true,
+          maskedPhone: maskedPhone ?? state.draft.maskedPhone,
+          currentStep: Math.max(state.draft.currentStep, 3) as OnboardingStep,
+          completedSteps: Array.from(new Set([...state.draft.completedSteps, 1, 2])).sort(
+            (a, b) => a - b,
+          ) as OnboardingStep[],
+        },
+      }
+    })
+    flushScheduledDraftSave(persistCurrentDraft)
+  },
+
+  revokeVerifiedSession() {
+    set((state) => {
+      if (!state.draft.mobileVerified) return {}
+      return {
+        furthestVisitedStep: 1,
+        runtime: { ...state.runtime, otpDigits: ['', '', '', ''] },
+        draft: {
+          ...state.draft,
+          mobileVerified: false,
+          maskedPhone: null,
+          currentStep: 1,
+          completedSteps: [],
+          publication: { state: 'draft', draftSlug: null, completedAt: null },
+        },
+      }
+    })
+    flushScheduledDraftSave(persistCurrentDraft)
+  },
+
   completePrototype(draftSlug) {
     set((state) => {
-      const completedDraft = localPrototypeOnboardingAdapter.complete(state.draft, draftSlug)
+      const completedDraft = onboardingDraftAdapter.complete(state.draft, draftSlug)
       const completedAt = completedDraft.publication.completedAt ?? new Date().toISOString()
       return {
         draft: completedDraft,
@@ -335,7 +378,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     revokeRuntimeUrls(useOnboardingStore.getState().runtime)
     let persistenceStatus: OnboardingPersistenceStatus = 'idle'
     try {
-      localPrototypeOnboardingAdapter.drafts.clear()
+      onboardingDraftAdapter.drafts.clear()
     } catch {
       persistenceStatus = 'unavailable'
     }

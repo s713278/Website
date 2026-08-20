@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { InfoIcon, MessageCircleOffIcon, SmartphoneIcon } from 'lucide-react'
+import { InfoIcon, MessageCircleIcon, SmartphoneIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
@@ -53,8 +53,8 @@ export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
       </div>
 
       <div className="flex gap-3 rounded-lg bg-muted/35 p-3 text-sm leading-5 text-muted-foreground">
-        <MessageCircleOffIcon className="mt-0.5 size-5 shrink-0" />
-        <p>No WhatsApp message will be sent, and no account or session is created.</p>
+        <MessageCircleIcon className="mt-0.5 size-5 shrink-0" />
+        <p>We send a four-digit code to this number on WhatsApp. Standard messaging rates may apply.</p>
       </div>
       {statusMessage ? <p role="status" className="text-sm font-medium text-primary">{statusMessage}</p> : null}
     </div>
@@ -83,8 +83,8 @@ export function OtpStep({ issues, busy, statusMessage, onResend }: StepProps & {
         <div className="flex gap-3">
           <InfoIcon className="mt-0.5 size-5 shrink-0 text-primary" />
           <div>
-            <p className="font-semibold">Prototype verification</p>
-            <p className="mt-1 leading-5">No WhatsApp was sent to {maskedPhone ?? 'your number'}. Enter <strong>1234</strong> to continue.</p>
+            <p className="font-semibold">Check WhatsApp</p>
+            <p className="mt-1 leading-5">We sent a four-digit code to {maskedPhone ?? 'your number'}. Enter it below to verify this number.</p>
           </div>
         </div>
       </div>
@@ -102,7 +102,7 @@ export function OtpStep({ issues, busy, statusMessage, onResend }: StepProps & {
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <Button variant="outline" size="sm" disabled={busy || seconds > 0} onClick={() => void resend()}>
-          Resend simulation
+          Resend code
         </Button>
         <span className="text-muted-foreground" aria-live="polite">
           {seconds > 0 ? `Available in ${seconds}s` : 'Ready to resend'}

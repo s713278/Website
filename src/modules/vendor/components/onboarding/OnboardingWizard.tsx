@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -10,8 +10,11 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { authService, getErrorMessage } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
-import { localPrototypeOnboardingAdapter } from '../../lib/onboarding-adapter'
+import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
+import { maskPhone } from '../../lib/onboarding-adapter'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
@@ -20,6 +23,7 @@ import {
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
+import { AccessNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpStep, PhoneStep } from './IdentitySteps'
@@ -189,6 +193,15 @@ export function OnboardingWizard() {
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
+  const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
+  const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
+
+  const user = useAuthStore((state) => state.user)
+  const completeOtpLogin = useAuthStore((state) => state.completeOtpLogin)
+  const selectVendor = useAuthStore((state) => state.selectVendor)
+  const logout = useAuthStore((state) => state.logout)
+  const access = useMemo(() => resolveOnboardingAccess(user), [user])
+  const catalogUnlocked = canEnterCatalogSteps(access)
 
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -219,6 +232,15 @@ export function OnboardingWizard() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [flushPersistence, initializePersistence])
+
+  // Steps 1-2 exist to establish a session. If one already exists (for example the vendor
+  // signed in at /vendor/login first) they are already satisfied; if it disappears, the
+  // draft must not keep claiming a verified number.
+  useEffect(() => {
+    if (!persistenceInitialized) return
+    if (access.state === 'anonymous') revokeVerifiedSession()
+    else adoptVerifiedSession(null)
+  }, [access.state, persistenceInitialized, adoptVerifiedSession, revokeVerifiedSession])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -333,16 +355,21 @@ export function OnboardingWizard() {
     }
     const phone = runtime.phone
     const controller = beginRequest()
-    setStatusMessage('Simulating OTP request…')
+    setStatusMessage('Sending your WhatsApp code…')
     try {
-      const result = await localPrototypeOnboardingAdapter.requestOtp(phone, controller.signal)
+      // Both 200 (existing account) and 201 (new account) are request successes, and
+      // neither means the number is verified yet.
+      await authService.requestOtp({ phone, role: 'vendor' })
       if (!requestIsCurrent(controller, 1)) return
-      updateDraft((current) => ({ ...current, maskedPhone: result.maskedPhone, otpSimulationComplete: false }), 1)
+      setStatusMessage(null)
+      updateDraft((current) => ({ ...current, maskedPhone: maskPhone(phone), mobileVerified: false }), 1)
       completeStep(1, 2)
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError') && requestIsCurrent(controller, 1)) {
-        setStatusMessage('The local simulation could not start. Please try again.')
-      }
+      if (!requestIsCurrent(controller, 1)) return
+      setStatusMessage(null)
+      showIssues([
+        { step: 1, field: 'phone', message: getErrorMessage(error, 'Could not send the code. Please try again.') },
+      ])
     } finally {
       finishRequest(controller)
     }
@@ -356,21 +383,22 @@ export function OnboardingWizard() {
       return
     }
     const controller = beginRequest()
-    setStatusMessage('Checking the prototype code…')
+    setStatusMessage('Verifying your code…')
     try {
-      const verified = await localPrototypeOnboardingAdapter.verifyOtp(runtime.phone, otp, controller.signal)
+      // Establishes the real session. AuthSessionError covers an unverified number or a
+      // number without vendor authority; both surface as an actionable message here.
+      const session = await authService.verifyOtp({ phone: runtime.phone, otp, role: 'vendor' })
       if (!requestIsCurrent(controller, 2)) return
-      if (!verified) {
-        showIssues([{ step: 2, field: 'otp-0', message: 'That code is incorrect. Use 1234 for this prototype.' }])
-        setStatusMessage(null)
-        return
-      }
-      updateDraft((current) => ({ ...current, otpSimulationComplete: true }), 2)
+      completeOtpLogin(session)
+      setStatusMessage(null)
+      updateDraft((current) => ({ ...current, mobileVerified: true }), 2)
       completeStep(2, 3)
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError') && requestIsCurrent(controller, 2)) {
-        setStatusMessage('The local verification simulation failed. Please try again.')
-      }
+      if (!requestIsCurrent(controller, 2)) return
+      setStatusMessage(null)
+      showIssues([
+        { step: 2, field: 'otp-0', message: getErrorMessage(error, 'That code is incorrect or has expired.') },
+      ])
     } finally {
       finishRequest(controller)
     }
@@ -383,16 +411,19 @@ export function OnboardingWizard() {
       return false
     }
     const controller = beginRequest()
-    setStatusMessage('Simulating a resend…')
+    setStatusMessage('Sending a new code…')
     try {
-      await localPrototypeOnboardingAdapter.requestOtp(runtime.phone, controller.signal)
+      await authService.requestOtp({ phone: runtime.phone, role: 'vendor' })
       if (requestIsCurrent(controller, 2)) {
-        setStatusMessage('Resend simulated. No WhatsApp was sent; the code is still 1234.')
+        setStatusMessage('We sent a new code to your WhatsApp number.')
         return true
       }
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError') && requestIsCurrent(controller, 2)) {
-        setStatusMessage('The resend simulation failed. Please try again.')
+      if (requestIsCurrent(controller, 2)) {
+        setStatusMessage(null)
+        showIssues([
+          { step: 2, field: 'otp-0', message: getErrorMessage(error, 'Could not resend the code. Please try again.') },
+        ])
       }
     } finally {
       finishRequest(controller)
@@ -405,6 +436,7 @@ export function OnboardingWizard() {
     setStatusMessage(null)
     if (draft.currentStep === 1) return handleOtpRequest()
     if (draft.currentStep === 2) return handleOtpVerify()
+    if (!catalogUnlocked) return
     if (draft.currentStep === 10) {
       const nextIssues = readinessIssues(draft, runtime)
       if (nextIssues.length) return showIssues(nextIssues)
@@ -440,10 +472,10 @@ export function OnboardingWizard() {
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
   const isComplete = publicationState === 'prototype-complete' && completedSteps.includes(10)
-  const continueLabel = currentStep === 1 ? 'Send prototype code'
+  const continueLabel = currentStep === 1 ? 'Send code on WhatsApp'
     : currentStep === 2 ? 'Verify and continue'
       : currentStep === 9 ? 'Review readiness'
-        : currentStep === 10 ? 'Complete local prototype'
+        : currentStep === 10 ? 'Complete setup'
           : 'Continue'
   const saveLabel = persistenceLabel(persistenceStatus)
   const moveMobileTab = (view: 'form' | 'preview') => {
@@ -521,14 +553,17 @@ export function OnboardingWizard() {
                     <div className="px-5 pt-4 pb-6 sm:px-7 min-[900px]:px-8 min-[900px]:pb-8">
                       {currentStep === 1 ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
                       {currentStep === 2 ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
-                      {currentStep === 3 ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 4 ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 5 ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 6 ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
-                      {currentStep === 7 ? <DeliveryStep issues={issues} /> : null}
-                      {currentStep === 8 ? <PaymentStep issues={issues} /> : null}
-                      {currentStep === 9 ? <StorefrontStep issues={issues} /> : null}
-                      {currentStep === 10 ? <ReviewStep onGoToStep={navigateToStep} /> : null}
+                      {currentStep >= 3 && !catalogUnlocked ? (
+                        <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
+                      ) : null}
+                      {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                      {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                      {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                      {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
+                      {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
+                      {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
+                      {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
+                      {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} /> : null}
                     </div>
                   </div>
                 </div>
@@ -536,7 +571,7 @@ export function OnboardingWizard() {
                 <div className="shrink-0 border-t border-border/45 bg-background">
                   <div className={cn('mx-auto flex w-full max-w-[52rem] flex-wrap items-center gap-3 px-5 py-3 sm:px-7 min-[900px]:px-8', currentStep === 1 ? 'justify-end' : 'justify-between')}>
                     {currentStep > 1 ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                    {!(currentStep === 10 && isComplete) ? <Button className="sm:min-w-44" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
+                    {!(currentStep === 10 && isComplete) && !(currentStep >= 3 && !catalogUnlocked) ? <Button className="sm:min-w-44" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                   </div>
                 </div>
               </section>

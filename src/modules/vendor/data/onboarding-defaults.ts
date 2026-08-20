@@ -32,7 +32,7 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     completedSteps: [],
     referenceMode: 'live',
     maskedPhone: null,
-    otpSimulationComplete: false,
+    mobileVerified: false,
     business: {
       businessType: null,
       businessName: '',
