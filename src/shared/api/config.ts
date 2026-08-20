@@ -33,6 +33,7 @@ export function configureApiClient(partial: Partial<ClientConfig> = {}) {
     baseURL: partial.baseURL,
     timeoutMs: partial.timeoutMs,
     onUnauthorized: partial.onUnauthorized,
+    onForbidden: partial.onForbidden,
   })
   return getClientConfig()
 }

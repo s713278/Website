@@ -54,13 +54,25 @@ function createHttp(): AxiosInstance {
 
       if (status === 401 && !original.skipAuth && !original.skipRefresh && !original._retry) {
         original._retry = true;
-        const token = await refreshAccessToken();
+        let token: string | null = null;
+        try {
+          token = await refreshAccessToken();
+        } catch (refreshError) {
+          // Refresh now throws on transient failures so the session survives. Normalize it
+          // here so callers never receive a raw axios error from the retry path.
+          return Promise.reject(toApiError(refreshError, original.url));
+        }
         if (token) {
           original.headers = original.headers || {};
           original.headers.Authorization = `Bearer ${token}`;
           return instance.request(original);
         }
         getClientConfig().onUnauthorized?.();
+      }
+
+      // Authenticated but not permitted. The session stays; the caller decides what to show.
+      if (status === 403 && !original.skipAuth) {
+        getClientConfig().onForbidden?.(original.url);
       }
 
       return Promise.reject(toApiError(error, original.url));
