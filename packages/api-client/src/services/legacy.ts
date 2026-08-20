@@ -1,4 +1,4 @@
-import { apiGet, apiRequest, getHttp } from '../client/http';
+import { apiRequest, getHttp } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
 import { vendorsService } from './vendors';
 import { catalogService } from './catalog';
@@ -97,9 +97,7 @@ export async function searchVendorSkus(vendorId: number | string, q?: string) {
 }
 
 export async function getVendorStorefront(vendorId: number | string) {
-  return apiGet<ApiEnvelope<VendorStorefront>>(`/v1/vendors/${vendorId}/storefront`, {
-    skipAuth: true,
-  });
+  return storefrontService.get(vendorId) as Promise<ApiEnvelope<VendorStorefront>>;
 }
 
 export async function checkDeliveryEligibility(
@@ -171,9 +169,7 @@ export async function getCategoriesGrouped() {
 }
 
 export async function getPublicStoreBySlug(slug: string) {
-  return apiRequest<ApiEnvelope>(`/v1/public/stores/${encodeURIComponent(slug)}`, {
-    auth: false,
-  });
+  return storefrontService.get(slug);
 }
 
 export async function loadVendorStorefront(vendorId: number | string): Promise<VendorStorefront> {

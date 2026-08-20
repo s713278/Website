@@ -16,7 +16,7 @@
   },
   "externalDocs": {
     "description": "UI/UX API Handoff Docs",
-    "url": "http://localhost:8080/api/v1/docs"
+    "url": "/api/v1/docs"
   },
   "servers": [
     {
@@ -28,6 +28,10 @@
     {
       "name": "11. Platform APIs - Product Catalog",
       "description": "APIs for managing  Measurements and faqs"
+    },
+    {
+      "name": "07. Vendor Profile API",
+      "description": "Vendor profile, catalog, and store management APIs.\nAccess is controlled by @vendorPermissionEvaluator using store-level membership\n(OWNER or STAFF) and global roles (ADMIN, CUSTOMER_CARE, VENDOR).\n"
     },
     {
       "name": "17. Social Media Integration",
@@ -222,59 +226,6 @@
       }
     },
     "/v1/vendors/{vendor_id}/storefront": {
-      "get": {
-        "tags": [
-          "20. Vendor Storefront API"
-        ],
-        "summary": "Get vendor storefront",
-        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.",
-        "operationId": "getStorefront",
-        "parameters": [
-          {
-            "name": "vendor_id",
-            "in": "path",
-            "description": "Vendor ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "example": 91
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Storefront loaded successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VendorStorefrontResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Vendor not found or not active/approved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
-                }
-              }
-            }
-          }
-        }
-      },
       "put": {
         "tags": [
           "07. Vendor Profile API"
@@ -4807,10 +4758,19 @@
         "description": "<b>Test users with USER role</b><br> Test User#1 : 9912149045 with address <br> Test User#2 : 9912149046 without address<br><b>Test users with VENDOR role </b><br> Test User#1 : 9912149047",
         "operationId": "requestOTP",
         "requestBody": {
+          "description": "Mobile OTP request for a USER or a VENDOR",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MobileSignUpRequest"
+              },
+              "examples": {
+                "User Request OTP": {
+                  "$ref": "#/components/examples/Req_User_Request_OTP"
+                },
+                "Vendor Request OTP": {
+                  "$ref": "#/components/examples/Req_Vendor_Request_OTP"
+                }
               }
             }
           },
@@ -4818,11 +4778,25 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "OTP sent successfully to an already registered user/vendor",
             "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+              "application/json": {
+                "examples": {
+                  "Vendor Request OTP - Success": {
+                    "$ref": "#/components/examples/Resp_Vendor_Request_OTP_Success"
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "OTP sent successfully to a new user",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "User Request OTP - Success": {
+                    "$ref": "#/components/examples/Resp_User_Request_OTP_Success"
+                  }
                 }
               }
             }
@@ -6214,7 +6188,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Update vendor business type",
-        "description": "Self-onboarding step 3: choose business type and initial details for an empty vendor\ncreated during OTP verification.\n",
+        "description": "Self-onboarding step 3: choose business type and initial details for an empty vendor\ncreated during OTP verification.\n\nOnly the vendor owner can call this endpoint. The `business_type` must match an existing\nvalue in the master table. Partial updates are supported: only non-blank fields are\npersisted. The fields collected here are mandatory preconditions for the go-live endpoint.\n\nOn success, the vendor's `onboarding_step` is set to `STEP_3_COMPLETED`.\n",
         "operationId": "updateVendorBusinessType",
         "parameters": [
           {
@@ -6228,10 +6202,19 @@
           }
         ],
         "requestBody": {
+          "description": "Business type and initial vendor details",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/VendorBusinessTypeRequest"
+              },
+              "examples": {
+                "Update business type - Simple": {
+                  "$ref": "#/components/examples/Req_Vendor_Update_Business_Type_Simple"
+                },
+                "Update business type - Full": {
+                  "$ref": "#/components/examples/Req_Vendor_Update_Business_Type"
+                }
               }
             }
           },
@@ -6239,11 +6222,64 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Vendor business type updated successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Vendor_Update_Business_Type_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or invalid business type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Validation error": {
+                    "$ref": "#/components/examples/Resp_Vendor_Update_Business_Type_Validation_Error"
+                  },
+                  "Invalid business type": {
+                    "$ref": "#/components/examples/Resp_Vendor_Update_Business_Type_Invalid_Business_Type"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not the vendor owner or lacks STORE_CONFIG permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Vendor_Update_Business_Type_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Update_Business_Type_Not_Found"
+                  }
                 }
               }
             }
@@ -7765,6 +7801,81 @@
         ]
       }
     },
+    "/v1/vendors/{vendor_id}/context": {
+      "get": {
+        "tags": [
+          "07. Vendor Profile API"
+        ],
+        "summary": "Get vendor dashboard context",
+        "description": "Returns onboarding, subscription tier, usage, and eligible features.",
+        "operationId": "getVendorContext",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor context retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Vendor_Context_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied to the vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Vendor_Context_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Context_Not_Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
     "/v1/vendors/{vendor_id}/cart": {
       "get": {
         "tags": [
@@ -7873,6 +7984,60 @@
             "E-Commerce Application": []
           }
         ]
+      }
+    },
+    "/v1/vendors/{identifier}/storefront": {
+      "get": {
+        "tags": [
+          "20. Vendor Storefront API"
+        ],
+        "summary": "Get vendor storefront",
+        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.\n<br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).",
+        "operationId": "getStorefront",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "description": "Vendor identifier — either a numeric vendor ID or the store_identifier slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Storefront loaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorStorefrontResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found or not active/approved",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseObject"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/vendors/search": {
@@ -13284,6 +13449,133 @@
           }
         }
       },
+      "APIResponseSkuInfoDTO": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "$ref": "#/components/schemas/SkuInfoDTO",
+            "description": "Data"
+          }
+        }
+      },
+      "SkuInfoDTO": {
+        "type": "object",
+        "description": "SKU information response containing core display fields",
+        "properties": {
+          "sku_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "SKU identifier",
+            "example": 1001
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Vendor product identifier",
+            "example": 10002
+          },
+          "name": {
+            "type": "string",
+            "description": "SKU name",
+            "example": "Organic Tomato 1kg"
+          },
+          "description": {
+            "type": "string",
+            "description": "SKU description",
+            "example": "Fresh organic tomatoes"
+          },
+          "features": {
+            "$ref": "#/components/schemas/JsonNode",
+            "description": "SKU features as a JSON value"
+          },
+          "is_active": {
+            "type": "boolean",
+            "description": "Whether SKU is active",
+            "example": true
+          }
+        }
+      },
+      "APIResponseListSkuSubscriptionPlanResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "type": "array",
+            "description": "Data",
+            "items": {
+              "$ref": "#/components/schemas/SkuSubscriptionPlanResponse"
+            }
+          }
+        }
+      },
+      "SkuSubscriptionPlanResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "ONE_TIME",
+              "DAILY",
+              "ALTERNATE_DAY",
+              "WEEKLY",
+              "MONTHLY",
+              "CUSTOM"
+            ]
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "FIXED",
+              "FLEXIBLE"
+            ]
+          },
+          "eligible_delivery_days": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "StorefrontFulfillmentResponse": {
         "type": "object",
         "properties": {
@@ -13518,133 +13810,6 @@
             "type": "string",
             "description": "WhatsApp support number with country code",
             "example": "+919900000000"
-          }
-        }
-      },
-      "APIResponseSkuInfoDTO": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Response message",
-            "example": "Customer registered successfully"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "integer",
-            "format": "int32",
-            "description": "HTTP Status Code",
-            "example": 201
-          },
-          "data": {
-            "$ref": "#/components/schemas/SkuInfoDTO",
-            "description": "Data"
-          }
-        }
-      },
-      "SkuInfoDTO": {
-        "type": "object",
-        "description": "SKU information response containing core display fields",
-        "properties": {
-          "sku_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "SKU identifier",
-            "example": 1001
-          },
-          "product_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Vendor product identifier",
-            "example": 10002
-          },
-          "name": {
-            "type": "string",
-            "description": "SKU name",
-            "example": "Organic Tomato 1kg"
-          },
-          "description": {
-            "type": "string",
-            "description": "SKU description",
-            "example": "Fresh organic tomatoes"
-          },
-          "features": {
-            "$ref": "#/components/schemas/JsonNode",
-            "description": "SKU features as a JSON value"
-          },
-          "is_active": {
-            "type": "boolean",
-            "description": "Whether SKU is active",
-            "example": true
-          }
-        }
-      },
-      "APIResponseListSkuSubscriptionPlanResponse": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Response message",
-            "example": "Customer registered successfully"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "integer",
-            "format": "int32",
-            "description": "HTTP Status Code",
-            "example": 201
-          },
-          "data": {
-            "type": "array",
-            "description": "Data",
-            "items": {
-              "$ref": "#/components/schemas/SkuSubscriptionPlanResponse"
-            }
-          }
-        }
-      },
-      "SkuSubscriptionPlanResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "frequency": {
-            "type": "string",
-            "enum": [
-              "ONE_TIME",
-              "DAILY",
-              "ALTERNATE_DAY",
-              "WEEKLY",
-              "MONTHLY",
-              "CUSTOM"
-            ]
-          },
-          "delivery_mode": {
-            "type": "string",
-            "enum": [
-              "FIXED",
-              "FLEXIBLE"
-            ]
-          },
-          "eligible_delivery_days": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },
@@ -14359,6 +14524,395 @@
             "type": "integer",
             "format": "int32"
           }
+        }
+      }
+    },
+    "examples": {
+      "Resp_OTP_Auth_Failed_1": {
+        "value": {
+          "success": false,
+          "status": 401,
+          "timestamp": "2024-10-22T09:09:04.6311632",
+          "failure_reason": "OTP is already expired!!",
+          "user_message": "User authentication failed!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Request_OTP_Success": {
+        "value": {
+          "timestamp": "2026-08-13T10:16:45.987654321",
+          "success": true,
+          "status": 200,
+          "data": {
+            "user_id": 3052,
+            "mobile_verified": true
+          }
+        }
+      },
+      "Resp_SignUp_Success": {
+        "value": {
+          "timestamp": "2024-10-22T09:05:58.140309",
+          "success": true,
+          "status": 201,
+          "data": {
+            "customer_id": 2852,
+            "mobile": 9848336190,
+            "mobile_verified": false,
+            "email_verified": false,
+            "message": "Mobile registered successfully!"
+          }
+        }
+      },
+      "Resp_Vendor_SignIn_Success": {
+        "value": {
+          "timestamp": "2026-08-14T10:16:45.987654321",
+          "success": true,
+          "status": 200,
+          "data": {
+            "user_id": 3052,
+            "access_token": "header.body.signature",
+            "refresh_token": "<<12345-2152-4c3e-b9d8-898989>>",
+            "mobile_verified": true,
+            "roles": [
+              "VENDOR"
+            ],
+            "vendors": [
+              {
+                "vendor_id": 127,
+                "name": "My Store",
+                "status": "INACTIVE",
+                "onboarding": {
+                  "status": "IN_PROGRESS",
+                  "current_step": 3,
+                  "completed_steps": [
+                    1,
+                    2
+                  ]
+                },
+                "subscription": {
+                  "status": "NOT_STARTED",
+                  "plan_code": null,
+                  "trial_started_at": null,
+                  "trial_ends_at": null
+                }
+              }
+            ],
+            "addresses": []
+          }
+        }
+      },
+      "Req_Verify_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": 1111111111,
+          "reg_source": "android"
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-08-14T10:15:30.123456789",
+          "failure_reason": "Vendor not found",
+          "user_message": "Resource not found.",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_1": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T07:50:13.7165159",
+          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Req_Delivery_Address_Success": {
+        "value": {
+          "timestamp": "2024-11-24T09:35:48.1728205",
+          "success": true,
+          "status": 200,
+          "data": "Address updated successfully."
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_3": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T18:55:41.5212978",
+          "failure_reason": "No defined subscription plans found for skuId :10003 with frequency: CUSTOM",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Invalid_Business_Type": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-14T10:15:30.123456789",
+          "failure_reason": "Invalid business type",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Context_Forbidden": {
+        "value": {
+          "success": false,
+          "status": 403,
+          "timestamp": "2026-08-14T17:10:00.123456789",
+          "failure_reason": "Unauthorized access to vendor #91",
+          "user_message": "You are not authorized to access this vendor.",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_2": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T07:50:13.7165159",
+          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_5": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T18:56:46.0982331",
+          "failure_reason": "[Delivery date is required for ONE_TIME frequency]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Success": {
+        "value": {
+          "success": true,
+          "message": "Subscription created successfully",
+          "data": {
+            "subscription_id": 2053,
+            "next_delivery_date": "2024-11-24"
+          }
+        }
+      },
+      "Resp_SignUp_Duplicate": {
+        "value": {
+          "success": false,
+          "status": 409,
+          "timestamp": "2024-10-24T10:03:20.1192753",
+          "failure_reason": "Mobile number is already registered!",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_SignIn_Success": {
+        "value": {
+          "timestamp": "2024-10-19T06:38:38.0027661",
+          "success": true,
+          "status": 200,
+          "data": {
+            "user_id": 753,
+            "access_token": "header.body.signature",
+            "first_name": "Swamy",
+            "last_name": "Kunta",
+            "refresh_token": "<<12345-2152-4c3e-b9d8-898989>>",
+            "active_subscriptions": []
+          }
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_4": {
+        "value": {
+          "success": false,
+          "status": 409,
+          "timestamp": "2024-11-21T09:19:31.3623991",
+          "failure_reason": "Subscription already existed for sku id : 10004",
+          "user_message": "Data already existed in system.",
+          "api_details": []
+        }
+      },
+      "Req_Vendor_Update_Business_Type": {
+        "value": {
+          "business_type": "Agriculture",
+          "business_name": "SK Organic Store",
+          "owner_name": "SK Owner",
+          "contact_person": "SK Contact"
+        }
+      },
+      "Resp_SignIn_Invalid_Credentials": {
+        "value": {
+          "success": false,
+          "status": 401,
+          "timestamp": "2024-10-19T06:36:32.7372589",
+          "failure_reason": "Bad credentials",
+          "user_message": "User authentication failed!!",
+          "api_details": []
+        }
+      },
+      "Req_Sub_OneTime_With_Fixed": {
+        "value": {
+          "quantity": 2,
+          "frequency": "ONE_TIME",
+          "sku_id": 10003,
+          "price_id": 4,
+          "delivery_date": "2024-11-22"
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Validation_Error": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-14T10:15:30.123456789",
+          "failure_reason": "Business type is required.",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Success": {
+        "value": {
+          "success": true,
+          "message": "Vendor business type updated successfully",
+          "data": null
+        }
+      },
+      "Resp_Vendor_Context_Success": {
+        "value": {
+          "timestamp": "2026-08-14T17:10:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "vendor_id": 91,
+            "business_name": "SK Organic Store",
+            "store_identifier": "sk-organic-store",
+            "vendor_status": "INACTIVE",
+            "approval_status": "PENDING",
+            "role": "OWNER",
+            "onboarding": {
+              "status": "IN_PROGRESS",
+              "description": "Step 2 is completed"
+            },
+            "subscription": {
+              "tier": "SILVER",
+              "plan_name": "Silver",
+              "status": "TRIAL",
+              "trial_ends_at": "2026-08-28T17:10:00.123456789",
+              "monthly_price": 999,
+              "yearly_price": 9999,
+              "currency": "INR",
+              "trial_days": 14,
+              "limits": {
+                "max_categories": 10,
+                "max_products": 50,
+                "max_skus": 100,
+                "max_images": 50
+              },
+              "usage": {
+                "categories": 2,
+                "products": 5,
+                "skus": 12,
+                "images": 3
+              }
+            },
+            "eligible_features": [
+              "DASHBOARD",
+              "VIEW",
+              "CATALOG",
+              "PRICES",
+              "ORDERS"
+            ]
+          }
+        }
+      },
+      "Req_Vendor_Request_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": "9000000002",
+          "reg_platform": "Web",
+          "user_role": "VENDOR"
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Forbidden": {
+        "value": {
+          "success": false,
+          "status": 403,
+          "timestamp": "2026-08-14T10:15:30.123456789",
+          "failure_reason": "Only store owners can update business details",
+          "user_message": "You are not authorized to perform this action.",
+          "api_details": []
+        }
+      },
+      "Req_Delivery_Address": {
+        "value": {
+          "name": "John Doe",
+          "address": {
+            "address1": "123 Main Street",
+            "address2": "Apt 4B",
+            "city": "Hyderabad",
+            "state": "Telangana",
+            "zipCode": "500001",
+            "country": "India"
+          }
+        }
+      },
+      "Req_Vendor_Update_Business_Type_Simple": {
+        "value": {
+          "business_type": "Home Foods"
+        }
+      },
+      "Res_Create_Subscription": {
+        "value": {
+          "success": true,
+          "message": "Subscription created successfully",
+          "data": {
+            "subscription_id": 2302,
+            "next_delivery_date": "2024-11-27"
+          }
+        }
+      },
+      "Resp_Authentication_Failed": {
+        "value": {
+          "success": false,
+          "status": 401,
+          "timestamp": "2024-11-20T07:29:50.573111213",
+          "failure_reason": "Full authentication is required to access this resource",
+          "user_message": "User authentication failed!!",
+          "api_details": []
+        }
+      },
+      "Req_User_Request_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": "9000000001",
+          "reg_platform": "Android",
+          "user_role": "USER"
+        }
+      },
+      "Resp_Vendor_Context_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-08-14T17:10:00.123456789",
+          "failure_reason": "Vendor not found",
+          "user_message": "Resource not found.",
+          "api_details": []
+        }
+      },
+      "Resp_User_Request_OTP_Success": {
+        "value": {
+          "timestamp": "2026-08-13T10:15:30.123456789",
+          "success": true,
+          "status": 201,
+          "data": {
+            "user_id": 3051,
+            "mobile_verified": false
+          }
+        }
+      },
+      "Req_Request_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": 1111111111,
+          "reg_source": "android"
         }
       }
     },

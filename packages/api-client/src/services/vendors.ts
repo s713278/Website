@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
+import type { components } from '../schema';
 
 /** Vendor profile + catalog assignment (tag 07) + public listing (tag 02) */
 export const vendorsService = {
@@ -17,8 +18,21 @@ export const vendorsService = {
   addLegalDetails: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/legal_details`, body),
 
+  updateBusinessType: (
+    vendorId: number | string,
+    body: components['schemas']['VendorBusinessTypeRequest'],
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/business-type`, body),
+  getContext: (vendorId: number | string) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/context`),
+  saveStorefront: (
+    vendorId: number | string,
+    body: components['schemas']['SaveStorefrontConfigRequest'],
+  ) => apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}/storefront`, body),
+  goLive: (vendorId: number | string) =>
+    apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/go-live`),
+
   getCheckoutOptions: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, { skipAuth: true }),
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`),
   saveCheckoutOptions: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, body),
 

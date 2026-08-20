@@ -12,6 +12,12 @@ export {
 
 export { vendorsService } from './vendors';
 export { catalogService } from './catalog';
+export type {
+  BusinessTypeQuery,
+  CategoryQuery,
+  ProductsByCategoryQuery,
+  PublicCatalogRequestConfig,
+} from './catalog';
 export { cartService } from './cart';
 export { ordersService } from './orders';
 export { usersService } from './users';
