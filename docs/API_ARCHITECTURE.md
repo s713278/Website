@@ -6,6 +6,9 @@ wiring up the next page, or debugging why a call behaves oddly.
 Verified against branch `integration` at commit `ff995c1`, i.e. after the `@mithra/api-client`
 merge (PR #16, `ac4aecb`).
 
+Updated on 2026-08-19 for the 117-path generated contract, vendor-onboarding public-reference
+service, and privacy-filtered local draft recovery.
+
 Companion docs: [`API_GAPS.md`](./API_GAPS.md) (endpoints the backend doesn't have yet),
 [`SESSION.md`](./SESSION.md) (JWT lifecycle + the XSS posture of localStorage tokens).
 
@@ -32,11 +35,12 @@ could be dropped into a second app (a vendor admin, a native shell) unchanged. L
 where this specific app's opinions live: demo mode, and the mapping from the backend's
 inconsistent wire format to the types our components expect.
 
-**The consequence you must internalise:** they are stacked, not merged. Layer 2 does *not*
-call Layer 1's typed services (`vendorsService`, `catalogService`, …). It calls Layer 1's raw
-primitives (`apiGet`/`apiPost`) with its own hand-written paths. So `catalogService` exists in
-*both* layers, means different things in each, and changing one does not change the other.
-Check which one you're importing.
+**The consequence you must internalise:** they are stacked, not merged. Most established Layer 2
+services call Layer 1's raw primitives (`apiGet`/`apiPost`) with hand-written paths rather than its
+typed services. The vendor-onboarding reference service is the first bounded exception: it calls
+Layer 1's `catalogService`, then validates and maps the generic response before exposing it to the
+wizard. So `catalogService` still exists in both layers, means different things in each, and changing
+one does not automatically change the other. Check which one you're importing.
 
 ### The one import rule
 
@@ -87,10 +91,13 @@ src/shared/api/
   config.ts                 # adds the demo/live `useApi` flag on top of the package config
   mode.ts                   # isLiveApi()
   useApiError.ts            # small error-state hook for pages
-  mappers/vendor.ts         # wire payload → app view-model
+  mappers/
+    vendor.ts               # vendor wire payload → app view-model
+    vendor-onboarding.ts    # strict public-reference mapping + future storefront request mapper
   services/                 # the demo/live service layer
     auth.service.ts  catalog.service.ts  cart.service.ts  orders.service.ts
     vendor.service.ts  vendor-orders.service.ts  vendor-products.service.ts
+    vendor-onboarding.service.ts # live public reference reads for the onboarding wizard
     index.ts
   client.ts   errors.ts   tokens.ts   types.ts    # ← thin re-export shims only
 ```
@@ -110,7 +117,7 @@ src/shared/api/
 | Change how errors become user-facing text | `client/errors.ts` (`getErrorMessage`) |
 | Add a typed call to a new backend endpoint | `packages/api-client/src/services/<domain>.ts` |
 | Add demo-mode fallback or view-model mapping | `src/shared/api/services/<x>.service.ts` |
-| Fix a wire-format quirk (`business_name` vs `name`) | `src/shared/api/mappers/vendor.ts` |
+| Fix a wire-format quirk (`business_name` vs `name`) | the matching file in `src/shared/api/mappers/` |
 | Change what a page renders while loading | the page itself — it owns its own state |
 | Change login / logout / session behaviour | `src/shared/auth/store/auth-store.ts` |
 
@@ -169,12 +176,12 @@ One object per backend domain, all thin wrappers over the primitives above.
 | File | Service | Covers |
 |---|---|---|
 | `auth.ts` | `authService` | `requestOtp`, `verifyOtp`, `refreshToken`, `getProfile`, `signOut`. OTP-first — no email/password. |
-| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search. The largest service. |
-| `catalog.ts` | `catalogService` | Platform-wide categories and business types; category-scoped product CRUD. |
+| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search, business-type update, context, storefront save, and go-live. The protected onboarding methods are wrapped but not called by the local prototype. |
+| `catalog.ts` | `catalogService` | Platform-wide categories and business types; category-scoped product CRUD. Public onboarding reads accept generated query types plus `AbortSignal`. |
 | `cart.ts` | `cartService` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` — all under `/v1/vendors/{vendorId}/cart`. |
 | `orders.ts` | `ordersService` | `create`, `createFromCart`, vendor-scoped list/update/cancel/tracking, user order history. |
 | `users.ts` | `usersService` | Profile, mobile/address updates, dashboard, history, preferences, subscriptions. |
-| `storefront.ts` | `storefrontService` | Public storefront payload + delivery-eligibility check (both `skipAuth`). Exports the `Storefront*` types. |
+| `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier + delivery-eligibility check (both `skipAuth`). Exports the `Storefront*` types. |
 | `subscriptions.ts` | `subscriptionsService` | Vendor subscriptions, SKU-level plans, platform plans. |
 | `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, measurements, SKU pricing, vendor image upload, courier admin. |
 | `social.ts` | `socialService` | Social OAuth connect/callback, profile/media sync. |
@@ -183,8 +190,8 @@ One object per backend domain, all thin wrappers over the primitives above.
 
 ### 3.3 App services (`src/shared/api/services/*.service.ts`)
 
-Two jobs: **demo-mode fallback** and **payload → view-model mapping**. Every function has the
-same skeleton:
+The established services have two jobs: **demo-mode fallback** and **payload → view-model mapping**.
+Most functions have the same skeleton:
 
 ```ts
 export async function listStores(query?: string): Promise<Store[]> {
@@ -209,6 +216,11 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor-orders.service.ts` | `listVendorOrders`, `updateVendorOrderStatus` | localStorage `md-vendor-orders`, seeded from `modules/vendor/data/demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/orders/*` |
 | `vendor-products.service.ts` | `listVendorProducts`, `setProductAvailability` | localStorage `md-vendor-products`, seeded from same `demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/products/*` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
+| `vendor-onboarding.service.ts` | `getBusinessTypes`, `getCategories`, `getProductsByCategory` | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Public catalog operations through the package `catalogService`; strict `ReferencePage<T>` mappers reject malformed records and deduplicate numeric IDs |
+
+The onboarding reference service intentionally ignores the global demo/live switch. It tries the
+public live catalog in either app mode; if that fails, the wizard offers a visibly labelled switch
+to reserved-negative-ID sample records. It never silently converts a live failure into sample data.
 
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
@@ -346,8 +358,21 @@ boilerplate — it returns `{ error, setError, capture, clear }` where `capture(
 runs `getErrorMessage` for you. It's a convenience, not the house style; most pages still use
 plain `useState`.
 
-State management overall is two zustand stores — `useAuthStore` and `useCartStore` — and
-nothing else. There is no third "server state" store.
+State management now includes three Zustand stores: `useAuthStore`, `useCartStore`, and the
+feature-local `useOnboardingStore`. The onboarding store keeps private fields in volatile memory and
+persists only a versioned, validated safe draft through the `local-prototype` adapter. Writes use one
+1200 ms trailing timer followed by `requestIdleCallback` (with a timeout fallback), plus immediate
+flushes on step transitions, completion, and page hiding. It deliberately does not use Zustand's
+per-mutation persistence middleware. The safe snapshot excludes phones, OTP digits, payment
+credentials, files, object URLs, tokens, vendor IDs, and backend error bodies. Newer cross-tab
+revisions pause writes until the user chooses which draft wins.
+
+The onboarding catalog hooks separately use a bounded module-memory result cache keyed by reference
+kind, Live/Sample provenance, query, and parent ID. Business-type keys additionally include the
+committed query, page size, sort field, and sort order so a six-record `id:ASC` result cannot collide
+with a different request contract. Successful accumulated pages are reused on remount, while failed
+pages are never cached and retries still go to the service. This cache also clears on reload and
+stores no vendor input. There is no React Query, SWR, or shared server-state store.
 
 ---
 
@@ -360,9 +385,11 @@ nothing else. There is no third "server state" store.
    `ApiEnvelope`. New domain? New file, exported from `services/index.ts`. Mark genuinely
    public endpoints `{ skipAuth: true }`.
 3. **Add the app service** in `src/shared/api/services/` *if* the UI needs demo-mode fallback
-   or view-model mapping — which it usually does. Write **both** branches: demo (fixtures
-   under `src/modules/*/data/`, or an `md-*` localStorage key for mutable state) and live.
-   Export it from `services/index.ts` so it reaches the `@/shared/api` façade.
+   or view-model mapping — which it usually does. For ordinary app surfaces, write **both**
+   branches: demo (fixtures under `src/modules/*/data/`, or an `md-*` localStorage key for mutable
+   state) and live. A live-first feature such as onboarding must make any sample mode an explicit,
+   labelled user choice. Export the service from `services/index.ts` so it reaches the
+   `@/shared/api` façade.
 4. **Normalise wire quirks** in `src/shared/api/mappers/`, not in the page.
 5. **Call it from the component** with the §6 pattern.
 6. **Verify:** `npm run typecheck && npm run lint`. There is no test runner — that pair *is*
@@ -425,6 +452,13 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
+| `md-vendor-onboarding-draft-v1` | `local-prototype` onboarding adapter | versioned safe wizard draft and optional same-browser preview snapshot; no private contact/payment values or files |
+
+Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
+object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated
+server persistence or a public storefront. The future `mapFutureStorefrontConfig` mapper aligns the
+typed draft with `SaveStorefrontConfigRequest`, rejects local image URLs, and is not connected to a
+protected request in prototype mode.
 
 ---
 
@@ -448,11 +482,9 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 - **Token storage is duplicated** across `mithra_*` and `md-auth` — §5.
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
   session compromise. `SESSION.md` covers the intended migration to httpOnly cookies.
-- **The richer `/storefront` payload isn't wired into the app.** `storefrontService` and the flat
-  `getVendorStorefront` / `loadVendorStorefront` exist in the package, but no page imports them —
-  the customer storefront still renders from `catalogService` (`/v1/vendors/…`). Open work, not a
-  backend gap.
-- **`getPublicStoreBySlug` (`services/legacy.ts:173`) calls an endpoint that doesn't exist**
-  (`GET /v1/public/stores/{slug}` is absent from the spec). It will 404. Nothing imports it; don't
-  start. See `API_GAPS.md`.
+- **The richer `/storefront` payload isn't wired into the customer storefront.**
+  `storefrontService.get(identifier)` and the flat storefront functions exist in the package, but
+  the customer surface still renders from `catalogService` (`/v1/vendors/…`). The legacy
+  `getPublicStoreBySlug` now delegates to the identifier endpoint; this fixes the old nonexistent
+  `/v1/public/stores/{slug}` path but does not complete customer storefront adoption.
 - **`pnpm-workspace.yaml` is unused** — §2.

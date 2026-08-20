@@ -8,6 +8,9 @@ through an OpenAPI/Axios integration.
 
 > **Current status:** demo mode is the default. The React login/register screens still use demo-only
 > email/password actions; the production WhatsApp OTP flow is not wired into those screens yet.
+> Vendor onboarding is available as an explicit local prototype at `/onboarding`: public reference
+> data is live-first with a labelled sample option, while a privacy-filtered draft is saved only in
+> the current browser. No protected endpoint is called and completion makes no publication claim.
 
 ## Product surfaces
 
@@ -16,6 +19,7 @@ through an OpenAPI/Axios integration.
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
 | Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Vendor onboarding prototype | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/register` |
 
 ## Stack
@@ -174,9 +178,11 @@ The application currently has two API-related service sets:
 2. **`src/shared/api`** is the application facade imported by pages. Its services choose demo/live
    behavior and map backend payloads into application view models.
 
-The current app services use raw package transport primitives through thin re-export shims; they do
-not consume the package's parallel domain-service wrappers. The generated schema is exported, but
-existing service wrappers are not consistently built from generated operation types. This is the
+Most established app services use raw package transport primitives through thin re-export shims;
+they do not consume the package's parallel domain-service wrappers. Vendor onboarding is a bounded
+exception: its app-facing reference service consumes the package catalog wrapper and validates the
+generic live envelopes in dedicated mappers. The generated schema is exported, but service wrappers
+are not consistently built from generated operation types across the repository. This is the
 implemented architecture—not yet a fully stacked generated-type pipeline.
 
 Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before integrating or changing an endpoint.
@@ -245,6 +251,8 @@ alongside the production auth implementation.
 | `/stores/:storeId` | Store detail |
 | `/cart` | Cart |
 | `/login`, `/register` | Authentication |
+| `/onboarding` | Ten-step local vendor-onboarding prototype |
+| `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
 | `/vendor/orders`, `/vendor/products` | Protected vendor tools |
@@ -257,6 +265,7 @@ alongside the production auth implementation.
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
+| [docs/VENDOR_ONBOARDING_SPEC.md](./docs/VENDOR_ONBOARDING_SPEC.md) | Vendor-onboarding requirements, prototype state, and production gates |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |
 | [design-reference/README.md](./design-reference/README.md) | Static reference purpose and inventory |
 
