@@ -34,6 +34,35 @@ export const AUTH_REG_PLATFORM = 'Web' as const
 export const OTP_LENGTH = 4
 export const OTP_RESEND_SECONDS = 30
 
+/**
+ * Demo mode has no backend. `.env.example` ships with VITE_USE_API=false, so the OTP
+ * screens must stay usable there rather than failing with a network error.
+ */
+export const DEMO_OTP = '1234'
+const DEMO_VENDOR_ID = 'r1'
+
+function demoDelay(ms = 400) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function demoSession(input: OtpVerifyInput): AuthSession {
+  const mobile = digitsPhone(input.phone)
+  const isVendor = input.role === 'vendor'
+  return {
+    token: `demo-token-${mobile}`,
+    refreshToken: null,
+    user: {
+      id: `u-${mobile}`,
+      name: sessionDisplayName(input.role),
+      email: `${mobile}@mithra.local`,
+      role: input.role,
+      roles: [input.role],
+      vendors: isVendor ? [{ vendorId: DEMO_VENDOR_ID, name: 'Demo Store' }] : [],
+      vendorId: isVendor ? DEMO_VENDOR_ID : undefined,
+    },
+  }
+}
+
 export type OtpRequestInput = {
   phone: string
   role: UserRole
@@ -166,6 +195,11 @@ export async function requestOtp(input: OtpRequestInput) {
     throw toApiError(new Error('Enter a valid 10-digit mobile number'), '/v1/auth/request-otp', 400)
   }
 
+  if (!isLiveApi()) {
+    await demoDelay()
+    return { success: true, status: 200, data: { mobile_verified: false } }
+  }
+
   return apiRequestOtp({
     country_code: input.countryCode || '+91',
     mobile_number: mobile,
@@ -178,6 +212,18 @@ export async function requestOtp(input: OtpRequestInput) {
 export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
   const mobile = digitsPhone(input.phone)
   const otp = input.otp.replace(/\D/g, '')
+
+  if (!isLiveApi()) {
+    await demoDelay()
+    if (otp !== DEMO_OTP) {
+      throw toApiError(
+        new Error(`Demo mode: enter ${DEMO_OTP} to continue.`),
+        '/v1/auth/verify-otp',
+        400,
+      )
+    }
+    return demoSession(input)
+  }
 
   const res = await apiVerifyOtp({
     country_code: input.countryCode || '+91',

@@ -10,7 +10,7 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { authService, getErrorMessage, vendorOnboardingService } from '@/shared/api'
+import { authService, getErrorMessage, isLiveApi, vendorOnboardingService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
@@ -471,9 +471,13 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep
-    // Sample data carries synthetic IDs, so it is never written to a real account.
+    // Demo mode has no backend, and sample data carries synthetic IDs. Neither is
+    // ever written to a real account.
     const shouldPersist =
-      isLivePersistedStep(step) && access.state === 'ready' && draft.referenceMode === 'live'
+      isLiveApi() &&
+      isLivePersistedStep(step) &&
+      access.state === 'ready' &&
+      draft.referenceMode === 'live'
 
     if (shouldPersist && access.state === 'ready') {
       const controller = beginRequest()
@@ -532,6 +536,13 @@ export function OnboardingWizard() {
         : currentStep === 10 ? 'Complete setup'
           : 'Continue'
   const saveLabel = persistenceLabel(persistenceStatus)
+  // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
+  // rather than only on the ones with an open contract gap.
+  const stepNotice = currentStep >= 3
+    ? (!isLiveApi()
+        ? 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
+        : draftOnlyReason(currentStep))
+    : null
   const moveMobileTab = (view: 'form' | 'preview') => {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
@@ -607,8 +618,8 @@ export function OnboardingWizard() {
                     <div className="px-5 pt-4 pb-6 sm:px-7 min-[900px]:px-8 min-[900px]:pb-8">
                       {currentStep === 1 ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
                       {currentStep === 2 ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
-                      {catalogUnlocked && draftOnlyReason(currentStep) ? (
-                        <div className="mb-4"><DraftOnlyNotice reason={draftOnlyReason(currentStep) as string} /></div>
+                      {catalogUnlocked && stepNotice ? (
+                        <div className="mb-4"><DraftOnlyNotice reason={stepNotice} /></div>
                       ) : null}
                       {currentStep >= 3 && !catalogUnlocked ? (
                         <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />

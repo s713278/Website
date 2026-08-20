@@ -5,6 +5,7 @@ export {
   OTP_RESEND_SECONDS,
   authService,
   DEMO_CREDENTIALS,
+  DEMO_OTP,
   digitsPhone,
   getProfile,
   isValidMobile,

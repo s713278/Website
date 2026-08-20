@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { InfoIcon, MessageCircleIcon, SmartphoneIcon } from 'lucide-react'
+import { DEMO_OTP, isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
@@ -54,7 +55,7 @@ export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
 
       <div className="flex gap-3 rounded-lg bg-muted/35 p-3 text-sm leading-5 text-muted-foreground">
         <MessageCircleIcon className="mt-0.5 size-5 shrink-0" />
-        <p>We send a four-digit code to this number on WhatsApp. Standard messaging rates may apply.</p>
+        <p>{isLiveApi() ? 'We send a four-digit code to this number on WhatsApp. Standard messaging rates may apply.' : 'Demo mode is on, so no WhatsApp message is sent.'}</p>
       </div>
       {statusMessage ? <p role="status" className="text-sm font-medium text-primary">{statusMessage}</p> : null}
     </div>
@@ -83,8 +84,12 @@ export function OtpStep({ issues, busy, statusMessage, onResend }: StepProps & {
         <div className="flex gap-3">
           <InfoIcon className="mt-0.5 size-5 shrink-0 text-primary" />
           <div>
-            <p className="font-semibold">Check WhatsApp</p>
-            <p className="mt-1 leading-5">We sent a four-digit code to {maskedPhone ?? 'your number'}. Enter it below to verify this number.</p>
+            <p className="font-semibold">{isLiveApi() ? 'Check WhatsApp' : 'Demo mode'}</p>
+            <p className="mt-1 leading-5">
+              {isLiveApi()
+                ? <>We sent a four-digit code to {maskedPhone ?? 'your number'}. Enter it below to verify this number.</>
+                : <>No WhatsApp was sent because demo mode is on. Enter <strong>{DEMO_OTP}</strong> to continue.</>}
+            </p>
           </div>
         </div>
       </div>
