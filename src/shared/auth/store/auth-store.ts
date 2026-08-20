@@ -4,6 +4,7 @@ import {
   authService,
   clearTokens,
   getAccessToken,
+  getRefreshToken,
   sessionDisplayName,
   setTokens,
   type AuthSession,
@@ -12,10 +13,14 @@ import {
 } from '@/shared/api'
 import type { User, UserRole } from '@/shared/types'
 
+/** Backend refused an action the UI believed was allowed. Not an authentication failure. */
+export type SessionProblem = 'forbidden' | null
+
 type AuthState = {
   user: User | null
   token: string | null
   isHydrated: boolean
+  sessionProblem: SessionProblem
   /** Apply OTP / login / register session — syncs Zustand + api-client token store */
   applySession: (session: AuthSession) => void
   /** Local clear only (no server call) — used after failed refresh */
@@ -27,6 +32,9 @@ type AuthState = {
   /** Choose the active vendor for a multi-membership identity. Ignores unknown IDs. */
   selectVendor: (vendorId: string) => void
   logout: () => Promise<void>
+  /** One-shot startup restoration. Route guards must wait for this to finish. */
+  restoreSession: () => Promise<void>
+  setSessionProblem: (problem: SessionProblem) => void
   setHydrated: (value: boolean) => void
   hasRole: (role: UserRole) => boolean
 }
@@ -58,15 +66,43 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isHydrated: false,
+      sessionProblem: null,
 
       applySession(session) {
         setTokens(session.token, session.refreshToken ?? null)
-        set({ user: session.user, token: session.token })
+        set({ user: session.user, token: session.token, sessionProblem: null })
       },
 
       clearSession() {
         clearTokens()
-        set({ user: null, token: null })
+        set({ user: null, token: null, sessionProblem: null })
+      },
+
+      setSessionProblem(problem) {
+        set({ sessionProblem: problem })
+      },
+
+      async restoreSession() {
+        if (get().isHydrated) return
+        try {
+          if (!get().user) return
+
+          // An access token that is merely expired is still present here; the
+          // interceptor refreshes it on the first 401. Only act when it is gone.
+          if (!getAccessToken() && getRefreshToken()) {
+            try {
+              const token = await authService.refreshToken()
+              if (token) set({ token })
+            } catch {
+              // Transient failure. Keep the persisted session and let the first
+              // protected request retry rather than signing the user out.
+            }
+          }
+
+          if (!getAccessToken() && !getRefreshToken()) get().clearSession()
+        } finally {
+          set({ isHydrated: true })
+        }
       },
 
       completeOtpLogin(session) {
@@ -129,15 +165,9 @@ export const useAuthStore = create<AuthState>()(
           state.user = normalizePersistedUser(state.user)
         }
 
-        state.setHydrated(true)
-
-        // Persisted user but no access token left → signed out
-        queueMicrotask(() => {
-          const current = useAuthStore.getState()
-          if (current.user && !getAccessToken()) {
-            current.clearSession()
-          }
-        })
+        // Hydration is completed by restoreSession() so route guards never see a
+        // half-restored session. The previous microtask cleared the session whenever
+        // the access token was absent, ignoring a still-valid refresh token.
       },
     },
   ),

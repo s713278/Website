@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { loginPathForRole } from '@/app/router/role-home'
-import { getAccessToken } from '@/shared/api'
+import { getAccessToken, getRefreshToken } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Spinner } from '@/shared/components'
 import type { UserRole } from '@/shared/types'
@@ -16,17 +16,19 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
   const user = useAuthStore((s) => s.user)
   const isHydrated = useAuthStore((s) => s.isHydrated)
   const clearSession = useAuthStore((s) => s.clearSession)
-  const hasToken = Boolean(getAccessToken())
+  // A merely expired access token is still recoverable through refresh, so credentials
+  // count as present while either token exists.
+  const hasCredentials = Boolean(getAccessToken() || getRefreshToken())
 
   useEffect(() => {
-    if (isHydrated && user && !getAccessToken()) {
+    if (isHydrated && user && !getAccessToken() && !getRefreshToken()) {
       clearSession()
     }
   }, [isHydrated, user, clearSession])
 
   if (!isHydrated) return <Spinner label="Restoring session…" />
 
-  if (!user || !hasToken) {
+  if (!user || !hasCredentials) {
     const intended = roles?.length === 1 ? roles[0] : undefined
     return <Navigate to={loginPathForRole(intended)} replace state={{ from: location.pathname }} />
   }

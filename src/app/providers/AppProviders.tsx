@@ -14,7 +14,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
       onUnauthorized: () => {
         useAuthStore.getState().clearSession()
       },
+      // 403 → authenticated but not permitted for this resource. The session is still
+      // valid, so keep it and let the feature decide what to show; signing out here
+      // would throw away unsaved work.
+      onForbidden: () => {
+        useAuthStore.getState().setSessionProblem('forbidden')
+      },
     })
+
+    // Must run after configureApiClient so a restoration refresh uses the configured base URL.
+    void useAuthStore.getState().restoreSession()
   }, [])
 
   return children
