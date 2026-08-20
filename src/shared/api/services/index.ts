@@ -1,5 +1,6 @@
 export {
   AUTH_REG_PLATFORM,
+  AuthSessionError,
   OTP_LENGTH,
   OTP_RESEND_SECONDS,
   authService,
@@ -15,6 +16,7 @@ export {
   signOut,
   verifyOtp,
   type AuthSession,
+  type AuthSessionProblem,
   type LoginInput,
   type OtpRequestInput,
   type OtpVerifyInput,

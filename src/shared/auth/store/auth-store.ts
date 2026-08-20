@@ -24,9 +24,32 @@ type AuthState = {
   register: (input: RegisterInput) => Promise<void>
   /** OTP verify helper — stores session for customer or vendor */
   completeOtpLogin: (session: AuthSession) => void
+  /** Choose the active vendor for a multi-membership identity. Ignores unknown IDs. */
+  selectVendor: (vendorId: string) => void
   logout: () => Promise<void>
   setHydrated: (value: boolean) => void
   hasRole: (role: UserRole) => boolean
+}
+
+/**
+ * Sessions persisted before verified roles and memberships existed carry neither field.
+ * Rebuild both from the active role so an older md-auth entry cannot crash a selector, and
+ * keep `vendorId` only when it matches a known membership.
+ */
+function normalizePersistedUser(user: User): User {
+  const roles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role]
+  const vendors = Array.isArray(user.vendors) && user.vendors.length
+    ? user.vendors
+    : user.vendorId
+      ? [{ vendorId: user.vendorId }]
+      : []
+  const vendorId = vendors.some((entry) => entry.vendorId === user.vendorId)
+    ? user.vendorId
+    : vendors.length === 1
+      ? vendors[0].vendorId
+      : undefined
+
+  return { ...user, name: sessionDisplayName(user.role, user.name), roles, vendors, vendorId }
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -48,6 +71,13 @@ export const useAuthStore = create<AuthState>()(
 
       completeOtpLogin(session) {
         get().applySession(session)
+      },
+
+      selectVendor(vendorId) {
+        set((state) => {
+          if (!state.user?.vendors.some((entry) => entry.vendorId === vendorId)) return {}
+          return { user: { ...state.user, vendorId } }
+        })
       },
 
       async login(input) {
@@ -78,7 +108,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       hasRole(role) {
-        return get().user?.role === role
+        return get().user?.roles?.includes(role) ?? false
       },
     }),
     {
@@ -96,10 +126,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         if (state.user) {
-          state.user = {
-            ...state.user,
-            name: sessionDisplayName(state.user.role, state.user.name),
-          }
+          state.user = normalizePersistedUser(state.user)
         }
 
         state.setHydrated(true)
