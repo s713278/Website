@@ -5,7 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { getClientConfig } from './config';
-import { ApiError, assertApiSuccess, toApiError } from './errors';
+import { ApiError, apiErrorFromResponse, assertApiSuccess, envelopeFailureStatus, toApiError } from './errors';
 import { refreshAccessToken } from './refresh';
 import { getAccessToken } from './tokens';
 import type { ApiEnvelope, RequestConfig } from './types';
@@ -46,21 +46,54 @@ function createHttp(): AxiosInstance {
     return config;
   });
 
+  async function retryWithFreshToken(original: RetryConfig) {
+    original._retry = true;
+    try {
+      const token = await refreshAccessToken();
+      if (token) {
+        original.headers = AxiosHeaders.from(original.headers ?? {});
+        original.headers.set('Authorization', `Bearer ${token}`);
+        return instance.request(original);
+      }
+      getClientConfig().onUnauthorized?.();
+      return null;
+    } catch (refreshError) {
+      // Transient refresh failure (network/5xx/timeout) — don't force logout.
+      throw toApiError(refreshError, original.url);
+    }
+  }
+
   instance.interceptors.response.use(
-    (response) => response,
+    async (response) => {
+      const original = (response.config || {}) as RetryConfig;
+      // Backend often returns HTTP 200 + success:false for expired access tokens.
+      if (
+        envelopeFailureStatus(response.data) === 401 &&
+        !original.skipAuth &&
+        !original.skipRefresh &&
+        !original._retry
+      ) {
+        try {
+          const retried = await retryWithFreshToken(original);
+          if (retried) return retried;
+        } catch (refreshError) {
+          return Promise.reject(refreshError);
+        }
+        return Promise.reject(apiErrorFromResponse(401, response.data, original.url));
+      }
+      return response;
+    },
     async (error) => {
       const original = (error.config || {}) as RetryConfig;
       const status = error.response?.status;
 
       if (status === 401 && !original.skipAuth && !original.skipRefresh && !original._retry) {
-        original._retry = true;
-        const token = await refreshAccessToken();
-        if (token) {
-          original.headers = original.headers || {};
-          original.headers.Authorization = `Bearer ${token}`;
-          return instance.request(original);
+        try {
+          const retried = await retryWithFreshToken(original);
+          if (retried) return retried;
+        } catch (refreshError) {
+          return Promise.reject(refreshError);
         }
-        getClientConfig().onUnauthorized?.();
       }
 
       return Promise.reject(toApiError(error, original.url));

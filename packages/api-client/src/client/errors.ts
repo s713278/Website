@@ -288,23 +288,35 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
 }
 
 /**
+ * Map Mithra envelope failures (HTTP 200 + success:false) to an HTTP-like status.
+ * Returns null when the payload is not a failure envelope.
+ */
+export function envelopeFailureStatus(data: unknown): number | null {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('success' in (data as object)) ||
+    (data as { success?: boolean }).success !== false
+  ) {
+    return null;
+  }
+
+  const record = data as Record<string, unknown>;
+  const label = `${record.status ?? ''} ${record.reason_code ?? ''} ${record.failure_reason ?? ''}`;
+  if (/unauthorized|access_token_expired|token.*expired/i.test(label)) return 401;
+  if (/forbidden/i.test(label)) return 403;
+  if (/not[_ ]?found/i.test(label)) return 404;
+  if (/valid/i.test(label)) return 422;
+  return 400;
+}
+
+/**
  * Mithra envelopes sometimes return HTTP 200 with `success: false`.
  * Normalize those to ApiError so UI never treats them as success.
  */
 export function assertApiSuccess<T>(data: T, path?: string): T {
-  if (
-    data &&
-    typeof data === 'object' &&
-    'success' in (data as object) &&
-    (data as { success?: boolean }).success === false
-  ) {
-    const record = data as Record<string, unknown>;
-    const label = String(record.status ?? record.reason_code ?? '');
-    let status = 400;
-    if (/unauthorized/i.test(label)) status = 401;
-    else if (/forbidden/i.test(label)) status = 403;
-    else if (/not[_ ]?found/i.test(label)) status = 404;
-    else if (/valid/i.test(label)) status = 422;
+  const status = envelopeFailureStatus(data);
+  if (status != null) {
     throw apiErrorFromResponse(status, data, path);
   }
   return data;

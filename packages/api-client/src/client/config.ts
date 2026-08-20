@@ -10,7 +10,10 @@ export function getApiBaseUrl(override?: string): string {
 export type ClientConfig = {
   baseURL: string;
   timeoutMs: number;
+  /** Called when refresh fails hard (missing/invalid refresh) — clear UI session */
   onUnauthorized?: () => void;
+  /** Called after a successful silent refresh so UI can sync access token */
+  onTokenRefreshed?: (accessToken: string) => void;
 };
 
 let clientConfig: ClientConfig = {

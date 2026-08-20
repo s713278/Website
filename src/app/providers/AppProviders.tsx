@@ -14,6 +14,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       onUnauthorized: () => {
         useAuthStore.getState().clearSession()
       },
+      // Keep Zustand access token in sync after silent refresh
+      onTokenRefreshed: (accessToken) => {
+        useAuthStore.setState({ token: accessToken })
+      },
     })
   }, [])
 
