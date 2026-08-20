@@ -15,7 +15,7 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
 import { maskPhone } from '../../lib/onboarding-adapter'
-import { draftOnlyReason, isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
+import { isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
@@ -196,6 +196,7 @@ export function OnboardingWizard() {
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
+  const setLivePublication = useOnboardingStore((state) => state.setLivePublication)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
@@ -464,7 +465,42 @@ export function OnboardingWizard() {
     if (draft.currentStep === 10) {
       const nextIssues = readinessIssues(draft, runtime)
       if (nextIssues.length) return showIssues(nextIssues)
-      completePrototype(normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName))
+
+      const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
+      if (!isLiveApi() || access.state !== 'ready') {
+        completePrototype(slug)
+        return
+      }
+
+      const controller = beginRequest()
+      setStatusMessage('Submitting your store…')
+      try {
+        await vendorOnboardingService.goLive(access.vendorId)
+        // Go-live activates the vendor but approval is a separate admin step, so the
+        // real state is read back rather than assumed.
+        const context = await vendorOnboardingService.getVendorContext(access.vendorId)
+        if (!requestIsCurrent(controller, 10)) return
+        setLivePublication({
+          storeIdentifier: context.storeIdentifier,
+          approvalStatus: context.approvalStatus,
+          vendorStatus: context.vendorStatus,
+          completedAt: new Date().toISOString(),
+        })
+        setStatusMessage(null)
+        completePrototype(slug)
+      } catch (error) {
+        if (!requestIsCurrent(controller, 10)) return
+        setStatusMessage(null)
+        showIssues([
+          {
+            step: 10,
+            field: 'store-name',
+            message: getErrorMessage(error, 'Could not submit your store. Please try again.'),
+          },
+        ])
+      } finally {
+        finishRequest(controller)
+      }
       return
     }
     const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit)
@@ -538,10 +574,8 @@ export function OnboardingWizard() {
   const saveLabel = persistenceLabel(persistenceStatus)
   // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
   // rather than only on the ones with an open contract gap.
-  const stepNotice = currentStep >= 3
-    ? (!isLiveApi()
-        ? 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
-        : draftOnlyReason(currentStep))
+  const stepNotice = currentStep >= 3 && !isLiveApi()
+    ? 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
     : null
   const moveMobileTab = (view: 'form' | 'preview') => {
     setMobileView(view)

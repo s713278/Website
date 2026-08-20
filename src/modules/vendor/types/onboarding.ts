@@ -141,6 +141,17 @@ export type StorefrontDraft = {
   trustStrip: StorefrontBadgeDraft[]
 }
 
+/**
+ * Result of a real go-live. Never persisted: approval state belongs to the server,
+ * and a stale local copy would let the wizard claim a store is public when it is not.
+ */
+export type LivePublication = {
+  storeIdentifier: string | null
+  approvalStatus: string | null
+  vendorStatus: string | null
+  completedAt: string
+}
+
 export type PublicationDraft = {
   state: 'draft' | 'prototype-complete'
   draftSlug: string | null

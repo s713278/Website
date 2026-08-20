@@ -3,10 +3,13 @@ import { Link } from 'react-router-dom'
 import {
   CheckCircle2Icon,
   ChevronDownIcon,
+  ClockIcon,
+  CopyIcon,
   ExternalLinkIcon,
   ImageIcon,
   LayoutGridIcon,
   MessageSquareIcon,
+  QrCodeIcon,
   PaletteIcon,
   PlusIcon,
   StoreIcon,
@@ -24,6 +27,7 @@ import {
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type {
+  LivePublication,
   OnboardingStep,
   StorefrontButtonShape,
   StorefrontCardStyle,
@@ -365,21 +369,105 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
   )
 }
 
+
+/** Public store URL. Only meaningful once the backend has approved the vendor. */
+function storeUrl(storeIdentifier: string): string {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin
+  return `${origin}/stores/${storeIdentifier}`
+}
+
+function ShareStore({ publication }: { publication: LivePublication }) {
+  const [copied, setCopied] = useState(false)
+  const approved = publication.approvalStatus?.toUpperCase() === 'APPROVED'
+  const identifier = publication.storeIdentifier
+  const url = identifier ? storeUrl(identifier) : null
+  const shareable = approved && Boolean(url)
+
+  const copy = async () => {
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl bg-muted/35 p-4">
+      <h3 className="font-display text-sm font-semibold">Share your store</h3>
+      {!shareable ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          Sharing unlocks once MithraDirect approves your store. Until then the link would not open
+          for anyone you sent it to.
+        </p>
+      ) : (
+        <p className="break-all rounded-lg bg-background p-2 text-sm">{url}</p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={!shareable} onClick={() => void copy()}>
+          <CopyIcon /> {copied ? 'Copied' : 'Copy link'}
+        </Button>
+        <Button size="sm" variant="outline" disabled={!shareable} asChild={shareable}>
+          {shareable && url ? (
+            <a href={`https://wa.me/?text=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer">
+              <MessageSquareIcon /> WhatsApp
+            </a>
+          ) : (
+            <span><MessageSquareIcon /> WhatsApp</span>
+          )}
+        </Button>
+        <Button size="sm" variant="outline" disabled title="QR sharing is not built yet">
+          <QrCodeIcon /> QR code
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function LiveCompletion({ publication }: { publication: LivePublication }) {
+  const approved = publication.approvalStatus?.toUpperCase() === 'APPROVED'
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl bg-primary/[0.07] p-5 text-foreground">
+        {approved ? (
+          <CheckCircle2Icon className="size-7 text-primary" />
+        ) : (
+          <ClockIcon className="size-7 text-primary" />
+        )}
+        <h3 className="mt-3 font-display text-xl font-semibold">
+          {approved ? 'Your store is live' : 'Submitted — waiting for approval'}
+        </h3>
+        <p className="mt-2 text-sm leading-6">
+          {approved
+            ? 'Your storefront is public and customers can order from it.'
+            : 'Everything you set up has been saved to your store. MithraDirect reviews new stores before they go public, so it is not reachable by customers yet.'}
+        </p>
+      </div>
+      <ShareStore publication={publication} />
+    </div>
+  )
+}
+
 export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) => void }) {
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
+  const livePublication = useOnboardingStore((state) => state.livePublication)
   const issues = readinessIssues(draft, runtime)
   const completed =
     draft.publication.state === 'prototype-complete' &&
     draft.completedSteps.includes(10) &&
     Boolean(draft.publication.draftSlug)
 
+  if (livePublication) return <LiveCompletion publication={livePublication} />
+
   if (!completed) {
     return (
       <div className="space-y-5">
         <div className={cn('rounded-xl p-4', issues.length ? 'bg-amber-50/80 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100' : 'bg-primary/[0.07] text-foreground')}>
-          <h3 className="font-display font-semibold">{issues.length ? `${issues.length} readiness item${issues.length === 1 ? '' : 's'} to resolve` : 'Ready to complete the local prototype'}</h3>
-          <p className="mt-1 text-sm leading-6">{issues.length ? 'Each item links back to the step where it can be fixed.' : 'Continue creates a private browser preview. Nothing will be published.'}</p>
+          <h3 className="font-display font-semibold">{issues.length ? `${issues.length} readiness item${issues.length === 1 ? '' : 's'} to resolve` : 'Ready to submit your store'}</h3>
+          <p className="mt-1 text-sm leading-6">{issues.length ? 'Each item links back to the step where it can be fixed.' : 'Submitting saves everything to your store and sends it for approval.'}</p>
         </div>
         {issues.length ? (
           <ul className="space-y-2" aria-label="Readiness issues">

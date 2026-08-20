@@ -1,4 +1,11 @@
-import { vendorOnboardingService, type StorefrontConfigInput } from '@/shared/api'
+import {
+  getErrorMessage,
+  vendorOnboardingService,
+  vendorProductIdByPlatformId,
+  type CheckoutDeliveryInput,
+  type CheckoutPaymentInput,
+  type StorefrontConfigInput,
+} from '@/shared/api'
 import type {
   OnboardingRuntimeState,
   OnboardingStep,
@@ -6,21 +13,12 @@ import type {
 } from '../types/onboarding'
 
 /**
- * Steps persisted to the vendor account on Continue.
+ * Steps written to the vendor account on Continue.
  *
- * Steps 5-8 and 10 are absent because their contract is unresolved, not because
- * they are unimportant:
- *  - 5/6: the assign-products response is an untyped APIResponseObject with no
- *    example, so the vendor-assigned product ID that ItemSkuCreateRequest
- *    requires cannot be resolved.
- *  - 7/8: scheduling_config and shipping_config are generic JSON, and the
- *    payment `details` keys for bank/account-holder are undefined.
- *  - 10: go-live has no canonical public URL and only generic error objects.
- *
- * See docs/API_GAPS.md. Sending a guessed payload to a real vendor account is
- * worse than keeping the step in the local draft.
+ * Step 10 is absent because go-live is not a "save" — the wizard runs it explicitly
+ * and then reconciles the returned approval state.
  */
-export const LIVE_PERSISTED_STEPS: readonly OnboardingStep[] = [3, 4, 9]
+export const LIVE_PERSISTED_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 
 export function isLivePersistedStep(step: OnboardingStep): boolean {
   return LIVE_PERSISTED_STEPS.includes(step)
@@ -30,8 +28,20 @@ export function isLivePersistedStep(step: OnboardingStep): boolean {
 export function stepErrorField(step: OnboardingStep): string {
   if (step === 3) return 'business-type'
   if (step === 4) return 'categories'
+  if (step === 5) return 'products'
+  if (step === 6) return 'skus'
+  if (step === 7) return 'fulfillment'
+  if (step === 8) return 'payments'
   return 'store-name'
 }
+
+/**
+ * Removing a product is Admin/Customer_Care only — `PATCH /delete/products` returns
+ * 403 for a vendor — so assignment is additive. Surfaced to the vendor rather than
+ * silently doing nothing.
+ */
+export const PRODUCT_REMOVAL_UNSUPPORTED =
+  'Products already added to your store cannot be removed here yet. Contact support to remove one.'
 
 function toStorefrontInput(
   draft: VendorOnboardingDraftV1,
@@ -58,10 +68,121 @@ function toStorefrontInput(
       cardStyle: draft.storefront.cardStyle,
       themePreset: draft.storefront.themePreset,
     },
-    // Image upload stays gated: the contract does not say which classification is
-    // the storefront logo, and a local object URL must never be sent.
+    // Image upload stays out until the wizard uploads through the images endpoint;
+    // a local object URL must never be sent.
     uploadedLogoUrl: null,
     uploadedBannerUrl: null,
+  }
+}
+
+function toDeliveryInput(draft: VendorOnboardingDraftV1): CheckoutDeliveryInput {
+  const d = draft.delivery
+  return {
+    fulfillmentType: d.fulfillmentType,
+    orderAcceptancePolicy: d.orderAcceptancePolicy,
+    schedulingStrategy: d.schedulingStrategy,
+    fixedWindow: d.fixedWindow,
+    customerSelectDate: d.customerSelectDate,
+    predefinedDays: { days: d.predefinedDays.days, maxOrdersPerDay: d.predefinedDays.maxOrdersPerDay },
+    instant: d.instant,
+    shippingStrategy: d.shippingStrategy,
+    shipping: {
+      charge: d.shipping.charge,
+      freeDeliveryThreshold: d.shipping.freeDeliveryThreshold,
+    },
+    slots: d.slots.map((slot) => ({ startTime: slot.startTime, endTime: slot.endTime })),
+    consentTitle: d.consentTitle,
+    consentText: d.consentText,
+  }
+}
+
+function toPaymentInput(
+  draft: VendorOnboardingDraftV1,
+  runtime: OnboardingRuntimeState,
+): CheckoutPaymentInput {
+  return {
+    options: draft.payments.map((option) => ({
+      type: option.type,
+      enabled: option.enabled,
+      isDefault: option.isDefault,
+    })),
+    details: runtime.paymentDetails,
+  }
+}
+
+/** The backend stores a SKU as `<name>-<value> <unit>`; match that to detect duplicates. */
+function serverSkuName(name: string, quantity: number, unit: string): string {
+  return `${name.trim()}-${quantity} ${unit}`
+}
+
+/** The DB unique constraint on (name, weight, vendor_product_id) surfaces as a 417. */
+function isDuplicateSkuError(error: unknown): boolean {
+  return /duplicate key|tb_sku_unique/i.test(getErrorMessage(error, ''))
+}
+
+async function persistProducts(
+  vendorId: string,
+  draft: VendorOnboardingDraftV1,
+): Promise<void> {
+  const existing = await vendorOnboardingService.getVendorProducts(vendorId)
+  const assigned = new Set(existing.map((product) => product.platformProductId))
+
+  // `category_id` here is the PLATFORM category, despite the endpoint description.
+  const byCategory = new Map<number, number[]>()
+  for (const product of draft.products) {
+    if (assigned.has(product.id)) continue
+    const bucket = byCategory.get(product.categoryId) ?? []
+    bucket.push(product.id)
+    byCategory.set(product.categoryId, bucket)
+  }
+
+  for (const [platformCategoryId, productIds] of byCategory) {
+    await vendorOnboardingService.assignProducts(vendorId, platformCategoryId, productIds)
+  }
+}
+
+async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Promise<void> {
+  const [products, skus] = await Promise.all([
+    vendorOnboardingService.getVendorProducts(vendorId),
+    vendorOnboardingService.getVendorSkus(vendorId),
+  ])
+  const vendorProductIds = vendorProductIdByPlatformId(products)
+  const existing = new Set(skus.map((sku) => `${sku.vendorProductId}::${sku.name}`))
+
+  for (const sku of draft.skus) {
+    if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
+
+    const vendorProductId = vendorProductIds.get(sku.productId)
+    if (!vendorProductId) {
+      throw new Error(
+        `“${sku.name}” could not be saved because its product is not in your store yet. Go back to Products and continue again.`,
+      )
+    }
+
+    const key = `${vendorProductId}::${serverSkuName(sku.name, sku.quantity, sku.unit)}`
+    if (existing.has(key)) continue
+
+    try {
+      await vendorOnboardingService.createSku(
+        vendorId,
+        {
+          name: sku.name,
+          description: sku.description,
+          measurementType: sku.measurementType,
+          unit: sku.unit,
+          quantity: sku.quantity,
+          listPrice: sku.listPrice,
+          salePrice: sku.salePrice,
+          active: sku.active,
+          homeDelivery: sku.homeDelivery,
+          storePickup: sku.storePickup,
+        },
+        vendorProductId,
+      )
+    } catch (error) {
+      // Already on the account under a slightly different local name — not a failure.
+      if (!isDuplicateSkuError(error)) throw error
+    }
   }
 }
 
@@ -91,6 +212,20 @@ export async function persistStep(
     return
   }
 
+  if (step === 5) return persistProducts(vendorId, draft)
+  if (step === 6) return persistSkus(vendorId, draft)
+
+  // Steps 7 and 8 share one payload, and payment_options replaces the existing set,
+  // so both always send the complete current configuration.
+  if (step === 7 || step === 8) {
+    await vendorOnboardingService.saveCheckoutOptions(
+      vendorId,
+      toDeliveryInput(draft),
+      toPaymentInput(draft, runtime),
+    )
+    return
+  }
+
   if (step === 9) {
     await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, runtime))
     // owner_name and contact_person have no home in the storefront config, so they
@@ -105,19 +240,4 @@ export async function persistStep(
       })
     }
   }
-}
-
-/**
- * Steps that work end to end locally but cannot be written to the account yet.
- * Each reason names the specific contract gap so the message is not vague.
- */
-export const DRAFT_ONLY_REASONS: Partial<Record<OnboardingStep, string>> = {
-  5: 'Saving your product selection to your store is waiting on the backend to return the assigned product IDs.',
-  6: 'Prices are waiting on the same backend change as your product selection, because a SKU needs its assigned product ID.',
-  7: 'Saving delivery settings is waiting on the backend to confirm the scheduling and shipping configuration format.',
-  8: 'Saving payment settings is waiting on the backend to confirm the bank and UPI detail fields.',
-}
-
-export function draftOnlyReason(step: OnboardingStep): string | null {
-  return DRAFT_ONLY_REASONS[step] ?? null
 }

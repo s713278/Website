@@ -1,5 +1,6 @@
 import { apiRequest, getHttp } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
+import type { components } from '../schema';
 import { vendorsService } from './vendors';
 import { catalogService } from './catalog';
 import { cartService } from './cart';
@@ -113,7 +114,10 @@ export async function uploadVendorImage(vendorId: number | string, formData: For
   return imagesService.upload(vendorId, formData);
 }
 
-export async function createSku(vendorId: number | string, body: Record<string, unknown>) {
+export async function createSku(
+  vendorId: number | string,
+  body: components['schemas']['ItemSkuCreateRequest'],
+) {
   return vendorsService.createSku(vendorId, body);
 }
 

@@ -417,3 +417,331 @@ export function mapAssignCategoriesRequest(categoryIds: number[]): AssignCategor
   }
   return { category_ids: unique }
 }
+
+/* -------------------------------------------------------------------------
+ * Vendor-scoped resources
+ *
+ * The backend keeps two separate ID spaces and every onboarding write depends on
+ * using the right one. Verified against the live API:
+ *
+ *   GET /v1/vendors/{id}/categories -> { id: <vendor cat>, ref_id: <platform cat> }
+ *   GET /v1/vendors/{id}/products   -> { id: <vendor product>, ref_id: <platform product> }
+ *
+ * `ref_id` always points back at the platform catalog. SKUs are keyed by the
+ * vendor product ID (`vendor_product_id`), never the platform one.
+ * ---------------------------------------------------------------------- */
+
+export type VendorCategoryRef = {
+  vendorCategoryId: number
+  platformCategoryId: number
+  name: string
+  imageUrl: string | null
+}
+
+export type VendorProductRef = {
+  vendorProductId: number
+  platformProductId: number
+  platformCategoryId: number
+  name: string
+  measurementId: number | null
+}
+
+export type VendorSkuRef = {
+  vendorProductId: number
+  skuId: number
+  /** Server-side name; it appends the size, e.g. "Cow Milk 1L-1 L". */
+  name: string
+  size: string
+}
+
+/** SKU price measurements the wizard supports, keyed by the catalog's measurement_id. */
+export type SkuMeasurementType = 'WEIGHT' | 'VOLUME' | 'COUNT'
+
+export const MEASUREMENT_TYPE_BY_ID: Readonly<Record<number, SkuMeasurementType>> = {
+  1: 'WEIGHT',
+  2: 'VOLUME',
+  3: 'COUNT',
+}
+
+/** Accepts `data: []` and `data: { result: [] }`; both occur on vendor resources. */
+function vendorList(payload: unknown): UnknownRecord[] {
+  if (!isRecord(payload)) throw new InvalidVendorContextError()
+  const data = payload.data
+  if (Array.isArray(data)) return data.filter(isRecord)
+  if (isRecord(data) && Array.isArray(data.result)) return data.result.filter(isRecord)
+  throw new InvalidVendorContextError()
+}
+
+function requiredId(value: unknown): number {
+  const id = lenientInteger(value)
+  if (id == null || id <= 0) throw new InvalidVendorContextError()
+  return id
+}
+
+export function mapVendorCategories(payload: unknown): VendorCategoryRef[] {
+  return vendorList(payload).map((item) => ({
+    vendorCategoryId: requiredId(item.id),
+    platformCategoryId: requiredId(item.ref_id),
+    name: lenientString(item.name) ?? '',
+    imageUrl: lenientString(item.image_path),
+  }))
+}
+
+export function mapVendorProducts(payload: unknown): VendorProductRef[] {
+  return vendorList(payload).map((item) => ({
+    vendorProductId: requiredId(item.id),
+    platformProductId: requiredId(item.ref_id),
+    platformCategoryId: requiredId(item.category_id),
+    name: lenientString(item.name) ?? '',
+    measurementId: lenientInteger(item.measurement_id),
+  }))
+}
+
+export function mapVendorSkus(payload: unknown): VendorSkuRef[] {
+  return vendorList(payload).map((item) => ({
+    vendorProductId: requiredId(item.vendor_product_id),
+    skuId: requiredId(item.sku_id),
+    name: lenientString(item.sku_name) ?? '',
+    size: lenientString(item.sku_size) ?? '',
+  }))
+}
+
+/** platform product ID -> vendor product ID, the lookup every SKU write needs. */
+export function vendorProductIdByPlatformId(products: VendorProductRef[]): Map<number, number> {
+  return new Map(products.map((p) => [p.platformProductId, p.vendorProductId]))
+}
+
+/* -------------------------------------------------------------------------
+ * Vendor catalog + checkout writes
+ *
+ * Shapes below are verified against the live API, not inferred from the schema.
+ * Where behaviour contradicts the published contract it is called out inline,
+ * so nobody "corrects" it back to the documented-but-broken form.
+ * ---------------------------------------------------------------------- */
+
+export type AssignProductsRequest = components['schemas']['AssignProductsRequest']
+export type SkuCreateRequest = components['schemas']['ItemSkuCreateRequest']
+export type CheckoutOptionsRequest = components['schemas']['SaveVendorDeliveryConfigRequest']
+
+/**
+ * The endpoint description says `category_id` is the vendor category ID from
+ * `/{vendor_id}/categories`. It is not — passing that returns
+ * `400 Invalid vendor category id`. The API requires the PLATFORM category ID.
+ */
+export function mapAssignProductsRequest(
+  platformCategoryId: number,
+  platformProductIds: number[],
+): AssignProductsRequest {
+  return {
+    category_id: platformCategoryId,
+    selected_products: platformProductIds.map((product_id) => ({ product_id })),
+  }
+}
+
+export type SkuCreateInput = {
+  name: string
+  description: string
+  measurementType: SkuMeasurementType
+  unit: string
+  quantity: number
+  listPrice: number
+  salePrice: number
+  active: boolean
+  homeDelivery: boolean
+  storePickup: boolean
+}
+
+/**
+ * `eligible_sub_plans` is effectively required: omitting it crashes the backend
+ * validator (`HV000028`, HTTP 417) rather than returning a validation error, and an
+ * empty array is rejected with "SKU must have at least one eligible subscription
+ * plan". Onboarding does not collect subscription plans, so every SKU gets the
+ * one-time/flexible plan.
+ */
+export function mapSkuCreateRequest(
+  input: SkuCreateInput,
+  vendorProductId: number,
+  effectiveDate = new Date().toISOString().slice(0, 10),
+): SkuCreateRequest {
+  return {
+    product_id: vendorProductId,
+    name: input.name.trim(),
+    description: optionalTrimmed(input.description),
+    sku_type: 'ITEM',
+    is_active: input.active,
+    home_delivery: input.homeDelivery,
+    store_pickup: input.storePickup,
+    price_list: [
+      {
+        measurement_type: input.measurementType,
+        unit: input.unit,
+        value: String(input.quantity),
+        effective_date: effectiveDate,
+        list_price: input.listPrice,
+        sale_price: input.salePrice,
+        shipping_price: 0,
+      },
+    ],
+    eligible_sub_plans: [
+      { sub_plan_id: 4, sub_frequency: 'ONE_TIME', delivery_mode: 'FLEXIBLE' },
+    ],
+  }
+}
+
+export type CheckoutDeliveryInput = {
+  fulfillmentType: 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
+  orderAcceptancePolicy: 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
+  schedulingStrategy: 'FIXED_WINDOW' | 'CUSTOMER_SELECT_DATE' | 'PREDEFINED_DAYS' | 'INSTANT'
+  fixedWindow: { minDeliveryDays: number; maxDeliveryDays: number }
+  customerSelectDate: {
+    minAdvanceBookingDays: number
+    maxAdvanceBookingDays: number
+    cutoffTime: string
+  }
+  predefinedDays: { days: string[]; maxOrdersPerDay: number }
+  instant: {
+    minPrepTimeMinutes: number
+    maxPrepTimeMinutes: number
+    operatingUntil: string
+    orderCutoffTime: string
+  }
+  shippingStrategy: 'FLAT' | 'ORDER_AMOUNT_THRESHOLD'
+  shipping: { charge: number; freeDeliveryThreshold: number }
+  slots: Array<{ startTime: string; endTime: string }>
+  consentTitle: string
+  consentText: string
+}
+
+export type CheckoutPaymentInput = {
+  options: Array<{
+    type: 'PRE_PAID' | 'ONLINE' | 'CASH_ON_DELIVERY'
+    enabled: boolean
+    isDefault: boolean
+  }>
+  details: {
+    upiId: string
+    upiAccountHolderName: string
+    bankAccountHolderName: string
+    bankAccountNumber: string
+    bankIfscCode: string
+    bankName: string
+  }
+}
+
+const PAYMENT_LABEL: Record<CheckoutPaymentInput['options'][number]['type'], string> = {
+  PRE_PAID: 'UPI',
+  ONLINE: 'Bank transfer',
+  CASH_ON_DELIVERY: 'Cash on delivery',
+}
+
+/**
+ * `openapi-typescript` renders Spring's free-form `JsonNode` as `Record<string, never>`,
+ * which cannot hold any real value. The generated files must never be hand-edited, so the
+ * cast is confined to this one boundary rather than leaking into callers.
+ */
+type GeneratedJsonNode = NonNullable<CheckoutOptionsRequest['scheduling_config']>
+
+function asJsonNode(value: Record<string, unknown>): GeneratedJsonNode {
+  return value as unknown as GeneratedJsonNode
+}
+
+function schedulingConfig(input: CheckoutDeliveryInput): Record<string, unknown> {
+  if (input.schedulingStrategy === 'FIXED_WINDOW') {
+    return {
+      min_delivery_days: input.fixedWindow.minDeliveryDays,
+      max_delivery_days: input.fixedWindow.maxDeliveryDays,
+    }
+  }
+  if (input.schedulingStrategy === 'CUSTOMER_SELECT_DATE') {
+    return {
+      min_advance_booking_days: input.customerSelectDate.minAdvanceBookingDays,
+      max_advance_booking_days: input.customerSelectDate.maxAdvanceBookingDays,
+      cutoff_time: input.customerSelectDate.cutoffTime,
+    }
+  }
+  if (input.schedulingStrategy === 'PREDEFINED_DAYS') {
+    return {
+      delivery_days: input.predefinedDays.days,
+      max_orders_per_day: input.predefinedDays.maxOrdersPerDay,
+    }
+  }
+  return {
+    min_prep_time_minutes: input.instant.minPrepTimeMinutes,
+    max_prep_time_minutes: input.instant.maxPrepTimeMinutes,
+    operating_until: input.instant.operatingUntil,
+    order_cutoff_time: input.instant.orderCutoffTime,
+  }
+}
+
+function mapPaymentDetails(
+  type: CheckoutPaymentInput['options'][number]['type'],
+  details: CheckoutPaymentInput['details'],
+): GeneratedJsonNode | undefined {
+  const value = paymentDetails(type, details)
+  return value ? asJsonNode(value) : undefined
+}
+
+function paymentDetails(
+  type: CheckoutPaymentInput['options'][number]['type'],
+  details: CheckoutPaymentInput['details'],
+): Record<string, string> | undefined {
+  if (type === 'PRE_PAID') {
+    const upi = details.upiId.trim()
+    if (!upi) return undefined
+    const holder = details.upiAccountHolderName.trim()
+    return { upi_account: upi, ...(holder ? { account_holder_name: holder } : {}) }
+  }
+  if (type === 'ONLINE') {
+    const account = details.bankAccountNumber.trim()
+    if (!account) return undefined
+    return {
+      account_holder_name: details.bankAccountHolderName.trim(),
+      account_number: account,
+      ifsc_code: details.bankIfscCode.trim(),
+      bank_name: details.bankName.trim(),
+    }
+  }
+  return undefined
+}
+
+/**
+ * Steps 7 and 8 share one payload, and `payment_options` replaces the existing set,
+ * so both steps always send the complete current configuration.
+ *
+ * Only ORDER_AMOUNT_THRESHOLD and ZIPCODE_THRESHOLD are actually implemented
+ * server-side; FLAT, ZIPCODE_TIERED and WEIGHT_BASED all return "No validator
+ * registered" despite being in the enum. A flat charge is therefore expressed as
+ * ORDER_AMOUNT_THRESHOLD with a zero threshold, which means nothing is ever free —
+ * a genuine flat charge, not a workaround.
+ */
+export function mapCheckoutOptionsRequest(
+  delivery: CheckoutDeliveryInput,
+  payments: CheckoutPaymentInput,
+): CheckoutOptionsRequest {
+  const enabled = payments.options.filter((option) => option.enabled)
+  return {
+    fulfillment_type: delivery.fulfillmentType,
+    order_acceptance_policy: delivery.orderAcceptancePolicy,
+    scheduling_strategy: delivery.schedulingStrategy,
+    scheduling_config: asJsonNode(schedulingConfig(delivery)),
+    shipping_strategy_type: 'ORDER_AMOUNT_THRESHOLD',
+    shipping_config: asJsonNode({
+      delivery_charge: delivery.shipping.charge,
+      free_delivery_threshold:
+        delivery.shippingStrategy === 'FLAT' ? 0 : delivery.shipping.freeDeliveryThreshold,
+    }),
+    delivery_slots: delivery.slots
+      .filter((slot) => slot.startTime && slot.endTime)
+      .map((slot) => `${slot.startTime} - ${slot.endTime}`),
+    customer_consent_title: optionalTrimmed(delivery.consentTitle),
+    customer_consent_text: optionalTrimmed(delivery.consentText),
+    payment_options: enabled.map((option, index) => ({
+      type: option.type,
+      label: PAYMENT_LABEL[option.type],
+      // The request field is `is_default`; the response echoes it back as `default`.
+      is_default: option.isDefault,
+      display_order: index + 1,
+      details: mapPaymentDetails(option.type, payments.details),
+    })),
+  }
+}

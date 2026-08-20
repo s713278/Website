@@ -11,6 +11,7 @@ import {
 import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
+  type LivePublication,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
   type OnboardingRuntimeState,
@@ -36,6 +37,9 @@ type OnboardingStore = {
   /** Live plan limit from vendor context; falls back to the configured default. */
   categoryLimit: number
   setCategoryLimit: (limit: number | null) => void
+  /** Server-confirmed publication state; not persisted. */
+  livePublication: LivePublication | null
+  setLivePublication: (publication: LivePublication | null) => void
   initializePersistence: () => void
   flushPersistence: () => void
   loadNewerDraft: () => void
@@ -187,6 +191,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   recoveryMessage: null,
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
+  livePublication: null,
+
+  setLivePublication(publication) {
+    set({ livePublication: publication })
+  },
 
   setCategoryLimit(limit) {
     set({ categoryLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxCategories })
@@ -403,6 +412,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       persistenceUpdatedAt: null,
       recoveryMessage: null,
       pendingConflict: null,
+      livePublication: null,
     })
   },
 }))
