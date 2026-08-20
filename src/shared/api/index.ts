@@ -47,15 +47,18 @@ export {
   InvalidVendorContextError,
   mapBusinessTypePage,
   mapCategoryPage,
-  mapFutureStorefrontConfig,
+  mapAssignCategoriesRequest,
+  mapBusinessTypeRequest,
+  mapStorefrontConfigRequest,
   mapProductPage,
   mapVendorContext,
 } from './mappers/vendor-onboarding'
 export type {
   BusinessTypeReference,
   CategoryReference,
-  FutureStorefrontConfigInput,
-  FutureStorefrontConfigRequest,
+  BusinessTypeSaveInput,
+  StorefrontConfigInput,
+  StorefrontConfigRequest,
   ProductReference,
   ReferencePage,
 } from './mappers/vendor-onboarding'

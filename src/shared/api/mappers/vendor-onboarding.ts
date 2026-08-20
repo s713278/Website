@@ -34,7 +34,7 @@ export type ProductReference = {
   measurementName: string | null
 }
 
-export type FutureStorefrontConfigInput = {
+export type StorefrontConfigInput = {
   storeName: string
   tagline: string
   businessLocation: string
@@ -64,7 +64,7 @@ export type FutureStorefrontConfigInput = {
   uploadedBannerUrl?: string | null
 }
 
-export type FutureStorefrontConfigRequest =
+export type StorefrontConfigRequest =
   components['schemas']['SaveStorefrontConfigRequest']
 
 export class InvalidReferencePayloadError extends Error {
@@ -214,9 +214,9 @@ function uploadedImageUrl(value: string | null | undefined): string | undefined 
  * Pure future mapper for the protected storefront-save contract. The local prototype deliberately
  * does not call the endpoint; this keeps wire naming and enum alignment reviewable in one place.
  */
-export function mapFutureStorefrontConfig(
-  input: FutureStorefrontConfigInput,
-): FutureStorefrontConfigRequest {
+export function mapStorefrontConfigRequest(
+  input: StorefrontConfigInput,
+): StorefrontConfigRequest {
   return {
     business_name: input.storeName.trim(),
     tagline: optionalTrimmed(input.tagline),
@@ -378,4 +378,42 @@ export function mapVendorContext(payload: unknown): VendorContext {
     },
     eligibleFeatures: lenientStringList(data.eligible_features),
   }
+}
+
+/* -------------------------------------------------------------------------
+ * Vendor-scoped write payloads
+ *
+ * Only the operations whose request schema is unambiguous are mapped here.
+ * Assign-products and SKU creation are deliberately absent: their responses are
+ * untyped `APIResponseObject` with no example, so the vendor-assigned product ID
+ * that `ItemSkuCreateRequest.product_id` requires cannot be resolved. See
+ * docs/API_GAPS.md before adding them.
+ * ---------------------------------------------------------------------- */
+
+export type BusinessTypeSaveInput = {
+  /** The exact backend `type` value, not the display label. */
+  businessType: string
+  businessName?: string
+  ownerName?: string
+  contactPerson?: string
+}
+
+export type BusinessTypeSaveRequest = components['schemas']['VendorBusinessTypeRequest']
+export type AssignCategoriesRequest = components['schemas']['AssignCategoriesRequest']
+
+export function mapBusinessTypeRequest(input: BusinessTypeSaveInput): BusinessTypeSaveRequest {
+  return {
+    business_type: input.businessType.trim(),
+    business_name: optionalTrimmed(input.businessName ?? ''),
+    owner_name: optionalTrimmed(input.ownerName ?? ''),
+    contact_person: optionalTrimmed(input.contactPerson ?? ''),
+  }
+}
+
+export function mapAssignCategoriesRequest(categoryIds: number[]): AssignCategoriesRequest {
+  const unique = Array.from(new Set(categoryIds))
+  for (const id of unique) {
+    if (!Number.isSafeInteger(id) || id <= 0) throw new InvalidReferencePayloadError()
+  }
+  return { category_ids: unique }
 }

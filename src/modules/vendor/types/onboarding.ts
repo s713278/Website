@@ -6,7 +6,10 @@ import type {
 
 export const ONBOARDING_DRAFT_VERSION = 2 as const
 export const ONBOARDING_CONFIG = {
+  /** Fallback only. The real limit comes from vendor context subscription limits. */
   maxCategories: 2,
+  /** Structural sanity bound for a stored draft — not a plan limit. */
+  maxPersistedCategories: 50,
   businessTypePageSize: 6,
   businessTypeSearchDebounceMs: 650,
   draftSaveDelayMs: 1200,

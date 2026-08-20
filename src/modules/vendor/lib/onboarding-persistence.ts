@@ -306,7 +306,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
   if (!isRecord(value.business) || !hasOnlyKeys(value.business, ['businessType', 'businessName', 'ownerName', 'contactPerson'])) return false
   if (value.business.businessType !== null && !isBusinessTypeReference(value.business.businessType)) return false
   if (!isString(value.business.businessName) || !isString(value.business.ownerName) || !isString(value.business.contactPerson)) return false
-  if (!Array.isArray(value.categories) || value.categories.length > ONBOARDING_CONFIG.maxCategories || !value.categories.every(isCategoryReference)) return false
+  if (!Array.isArray(value.categories) || value.categories.length > ONBOARDING_CONFIG.maxPersistedCategories || !value.categories.every(isCategoryReference)) return false
   if (!Array.isArray(value.products) || !value.products.every(isSelectedProduct)) return false
   if (!Array.isArray(value.skus) || !value.skus.every(isDraftSku)) return false
   if (!isDelivery(value.delivery)) return false

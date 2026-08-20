@@ -215,6 +215,7 @@ export function validateStep(
   step: OnboardingStep,
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
+  maxCategories: number = ONBOARDING_CONFIG.maxCategories,
 ): ValidationIssue[] {
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
@@ -233,8 +234,8 @@ export function validateStep(
   }
   if (step === 4) {
     if (!draft.categories.length) return [issue(4, 'categories', 'Choose at least one category.')]
-    if (draft.categories.length > ONBOARDING_CONFIG.maxCategories) {
-      return [issue(4, 'categories', `Choose no more than ${ONBOARDING_CONFIG.maxCategories} categories.`)]
+    if (draft.categories.length > maxCategories) {
+      return [issue(4, 'categories', `Choose no more than ${maxCategories} categories.`)]
     }
     return []
   }

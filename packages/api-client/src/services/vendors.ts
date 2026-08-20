@@ -65,8 +65,10 @@ export const vendorsService = {
 
   getCategories: (vendorId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`),
-  assignCategories: (vendorId: number | string, body: Record<string, unknown>) =>
-    apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`, body),
+  assignCategories: (
+    vendorId: number | string,
+    body: components['schemas']['AssignCategoriesRequest'],
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`, body),
 
   getServiceArea: (vendorId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/geo/service_area`),

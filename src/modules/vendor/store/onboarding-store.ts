@@ -9,6 +9,7 @@ import {
   toPersistedDraft,
 } from '../lib/onboarding-persistence'
 import {
+  ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
@@ -32,6 +33,9 @@ type OnboardingStore = {
   persistenceUpdatedAt: string | null
   recoveryMessage: string | null
   pendingConflict: VendorOnboardingPersistedEnvelopeV1 | null
+  /** Live plan limit from vendor context; falls back to the configured default. */
+  categoryLimit: number
+  setCategoryLimit: (limit: number | null) => void
   initializePersistence: () => void
   flushPersistence: () => void
   loadNewerDraft: () => void
@@ -182,6 +186,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   persistenceUpdatedAt: null,
   recoveryMessage: null,
   pendingConflict: null,
+  categoryLimit: ONBOARDING_CONFIG.maxCategories,
+
+  setCategoryLimit(limit) {
+    set({ categoryLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxCategories })
+  },
 
   initializePersistence() {
     if (useOnboardingStore.getState().persistenceInitialized) return

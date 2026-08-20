@@ -16,7 +16,7 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
-import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
+import type { ValidationIssue } from '../../types/onboarding'
 import {
   CatalogError,
   CatalogLoading,
@@ -316,6 +316,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const [search, setSearch] = useState('')
+  const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const businessTypeId = draft.business.businessType?.id ?? null
   const references = useCategoryReferences(draft.referenceMode, businessTypeId)
   const query = search.trim().toLowerCase()
@@ -326,7 +327,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   const toggle = (category: (typeof draft.categories)[number]) => {
     const selected = draft.categories.some((item) => item.id === category.id)
-    if (!selected && draft.categories.length >= ONBOARDING_CONFIG.maxCategories) return
+    if (!selected && draft.categories.length >= categoryLimit) return
     const apply = () => updateDraft(
       (current) => {
         const categories = selected
@@ -357,7 +358,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{draft.categories.length} of {ONBOARDING_CONFIG.maxCategories} selected</p>
+      <p className="text-sm text-muted-foreground">{draft.categories.length} of {categoryLimit} selected</p>
       <div className="relative">
         <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" />
         <input
@@ -378,7 +379,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         <div id="categories" className="grid gap-3 @min-[32rem]:grid-cols-2">
           {loadedItems.map((category) => {
             const selected = draft.categories.some((item) => item.id === category.id)
-            const atLimit = !selected && draft.categories.length >= ONBOARDING_CONFIG.maxCategories
+            const atLimit = !selected && draft.categories.length >= categoryLimit
             return (
               <button
                 key={category.id}

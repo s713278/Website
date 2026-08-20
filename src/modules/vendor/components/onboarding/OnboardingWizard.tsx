@@ -10,11 +10,12 @@ import {
   RotateCcwIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { authService, getErrorMessage } from '@/shared/api'
+import { authService, getErrorMessage, vendorOnboardingService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
 import { maskPhone } from '../../lib/onboarding-adapter'
+import { isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
@@ -193,6 +194,8 @@ export function OnboardingWizard() {
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
+  const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
+  const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
@@ -241,6 +244,27 @@ export function OnboardingWizard() {
     if (access.state === 'anonymous') revokeVerifiedSession()
     else adoptVerifiedSession(null)
   }, [access.state, persistenceInitialized, adoptVerifiedSession, revokeVerifiedSession])
+
+  useEffect(() => {
+    if (access.state !== 'ready') {
+      setCategoryLimit(null)
+      return
+    }
+    const controller = new AbortController()
+    let ignore = false
+    vendorOnboardingService
+      .getVendorContext(access.vendorId, { signal: controller.signal })
+      .then((context) => {
+        if (!ignore) setCategoryLimit(context.subscription.limits.maxCategories)
+      })
+      .catch(() => {
+        // Limits are an enhancement; the configured fallback keeps the step usable.
+      })
+    return () => {
+      ignore = true
+      controller.abort()
+    }
+  }, [access, setCategoryLimit])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -443,9 +467,39 @@ export function OnboardingWizard() {
       completePrototype(normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName))
       return
     }
-    const nextIssues = validateStep(draft.currentStep, draft, runtime)
+    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit)
     if (nextIssues.length) return showIssues(nextIssues)
-    completeStep(draft.currentStep, (draft.currentStep + 1) as OnboardingStep)
+
+    const step = draft.currentStep
+    // Sample data carries synthetic IDs, so it is never written to a real account.
+    const shouldPersist =
+      isLivePersistedStep(step) && access.state === 'ready' && draft.referenceMode === 'live'
+
+    if (shouldPersist && access.state === 'ready') {
+      const controller = beginRequest()
+      setStatusMessage('Saving to your store…')
+      try {
+        await persistStep(step, access.vendorId, draft, runtime)
+        if (!requestIsCurrent(controller, step)) return
+        setStatusMessage(null)
+      } catch (error) {
+        if (!requestIsCurrent(controller, step)) return
+        setStatusMessage(null)
+        // A failed write is never reported as local success.
+        showIssues([
+          {
+            step,
+            field: stepErrorField(step),
+            message: getErrorMessage(error, 'Could not save this step. Please try again.'),
+          },
+        ])
+        return
+      } finally {
+        finishRequest(controller)
+      }
+    }
+
+    completeStep(step, (step + 1) as OnboardingStep)
   }
 
   const navigateToStep = (step: OnboardingStep) => {
