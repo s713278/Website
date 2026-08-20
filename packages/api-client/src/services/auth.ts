@@ -30,7 +30,11 @@ export async function verifyOtp(body: OTPVerificationRequest) {
     skipAuth: true,
   });
   const parsed = parseTokenResponse(res);
-  if (parsed.accessToken) setTokens(parsed.accessToken, parsed.refreshToken);
+  // Never pass refresh=null — that deletes mithra_refresh_token and causes logout after ~10m.
+  if (parsed.accessToken) {
+    if (parsed.refreshToken) setTokens(parsed.accessToken, parsed.refreshToken);
+    else setTokens(parsed.accessToken);
+  }
   return res;
 }
 

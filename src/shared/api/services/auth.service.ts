@@ -128,9 +128,11 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
   }
 
   const data = (unwrapData(res) || {}) as VerifyOtpData
+  // Prefer parsed refresh; fall back to whatever verifyOtp already stored in localStorage.
+  const refreshToken = parsed.refreshToken ?? getRefreshToken()
   return {
     token: parsed.accessToken,
-    refreshToken: parsed.refreshToken,
+    refreshToken,
     user: mapSessionUser(data, input),
   }
 }
@@ -150,7 +152,8 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     )
   }
   const session = await demoLogin(input)
-  setTokens(session.token, null)
+  clearTokens()
+  setTokens(session.token)
   return session
 }
 
@@ -159,7 +162,8 @@ export async function register(input: RegisterInput): Promise<AuthSession> {
     throw toApiError(new Error('Live registration uses OTP.'), '/auth/register', 400)
   }
   const session = await demoRegister(input)
-  setTokens(session.token, null)
+  clearTokens()
+  setTokens(session.token)
   return session
 }
 

@@ -8,16 +8,17 @@ Shared lifecycle for **Customer** (storefront) and **Vendor / Owner** (store-set
 |--------|----------|------|
 | Token store | `@mithra/api-client` `tokens.ts` | `mithra_access_token` + `mithra_refresh_token` in `localStorage` |
 | Request interceptor | `http.ts` | Attaches `Authorization: Bearer <access>` unless `skipAuth` |
-| Response interceptor | `http.ts` | `401` → single-flight refresh → retry once; else `onUnauthorized` |
+| Response interceptor | `http.ts` | HTTP **401** *or* HTTP **200** + `success:false` / `ACCESS_TOKEN_EXPIRED` → single-flight refresh → retry once; else `onUnauthorized` |
 | Auth UI state | `src/shared/auth/store/auth-store.ts` | Zustand user + access token; syncs into token store |
-| Route gates | `ProtectedRoute` | `customer` → checkout/orders; `vendor` → `/vendor/*` |
+| Route gates | `ProtectedRoute` | `customer` → checkout/orders; `vendor` → `/vendor/*`. Stays signed in if **access or refresh** exists; only clears when **both** are gone |
 
 ## Lifecycle
 
-1. **Login (OTP or demo)** → `applySession` / `completeOtpLogin` → writes access (+ refresh when present) and user  
+1. **Login (OTP or demo)** → `applySession` / `completeOtpLogin` → writes access (+ refresh when present) and user. **Never write `refresh=null`** — that deletes `mithra_refresh_token` and forces logout after access TTL.  
 2. **Reload** → Zustand rehydrates user; access token synced to api-client **without clearing refresh**  
-3. **Expired access** → interceptor refreshes with refresh token, retries once  
-4. **Refresh fails** → `clearSession()` (tokens + user); protected routes redirect to `/login`  
+3. **Expired access** → interceptor refreshes (HTTP 401 **or** `200` + `ACCESS_TOKEN_EXPIRED` envelope), retries once, syncs Zustand via `onTokenRefreshed`.  
+   Note: `/v1/auth/refresh` returns `{ success: true, data: "<access_jwt_string>" }` (not `data.access_token`).  
+4. **Refresh fails** → `clearSession()` (tokens + user); protected routes redirect to login  
 5. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`  
 6. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
 
@@ -33,8 +34,19 @@ Until that migration, keep CSP tight, avoid `dangerouslySetInnerHTML` with untru
 
 ## Manual test checklist
 
-- [ ] OTP (or demo) login → reload → still authenticated on protected route  
-- [ ] With valid refresh, expired access → API call succeeds after silent refresh  
-- [ ] Invalid/missing refresh on 401 → session cleared → `/login`  
-- [ ] Sign out → tokens gone, protected routes redirect  
+### Customer
+- [ ] `/login` OTP → land on cart/checkout resume path  
+- [ ] Reload on `/orders` or `/checkout` → still authenticated  
+- [ ] Wait for access TTL (~10m) → open Orders → Network shows refresh then retry; **no login redirect**  
+- [ ] Cart → checkout still works after idle (local cart + refresh on protected call)
+
+### Vendor
+- [ ] `/vendor/login` OTP → `/vendor` dashboard  
+- [ ] Reload on `/vendor` / orders / products → still authenticated  
+- [ ] Wait for access TTL → click dashboard/orders → refresh + retry; **no `/vendor/login` redirect**  
+- [ ] After login, Local Storage has both `mithra_access_token` and `mithra_refresh_token`
+
+### Shared
+- [ ] Invalid/missing refresh on hard 401 → session cleared → role login page  
+- [ ] Manual Log out → tokens gone, protected routes redirect  
 - [ ] `/stores` public load works without login (`skipAuth`)

@@ -4,6 +4,7 @@ import {
   authService,
   clearTokens,
   getAccessToken,
+  getRefreshToken,
   sessionDisplayName,
   setTokens,
   type AuthSession,
@@ -37,7 +38,12 @@ export const useAuthStore = create<AuthState>()(
       isHydrated: false,
 
       applySession(session) {
-        setTokens(session.token, session.refreshToken ?? null)
+        // Never pass refresh=null — that wipes mithra_refresh_token saved by verify-otp.
+        if (session.refreshToken) {
+          setTokens(session.token, session.refreshToken)
+        } else {
+          setTokens(session.token)
+        }
         set({ user: session.user, token: session.token })
       },
 
@@ -62,7 +68,6 @@ export const useAuthStore = create<AuthState>()(
 
       async logout() {
         try {
-          // Only hit server when we still have an access token
           if (getAccessToken()) {
             await authService.signOut()
           }
@@ -87,11 +92,13 @@ export const useAuthStore = create<AuthState>()(
       // localStorage key only (see docs/SESSION.md) — never wipe it on rehydrate.
       partialize: (state) => ({ user: state.user, token: state.token }),
       onRehydrateStorage: () => (state) => {
-        if (!state) return
+        if (!state) {
+          useAuthStore.getState().setHydrated(true)
+          return
+        }
 
         const access = state.token || getAccessToken()
         if (access) {
-          // Important: do NOT pass refresh=null — that cleared refresh on every reload.
           setTokens(access)
         }
 
@@ -104,10 +111,9 @@ export const useAuthStore = create<AuthState>()(
 
         state.setHydrated(true)
 
-        // Persisted user but no access token left → signed out
         queueMicrotask(() => {
           const current = useAuthStore.getState()
-          if (current.user && !getAccessToken()) {
+          if (current.user && !getAccessToken() && !getRefreshToken()) {
             current.clearSession()
           }
         })

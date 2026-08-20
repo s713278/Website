@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getApiBaseUrl, getClientConfig } from './config';
-import { clearTokens, getRefreshToken, parseTokenResponse, setTokens } from './tokens';
+import { envelopeFailureStatus } from './errors';
+import { clearTokens, getAccessToken, getRefreshToken, parseTokenResponse, setTokens } from './tokens';
 
 type QueueItem = {
   resolve: (token: string | null) => void;
@@ -18,22 +19,12 @@ function flushQueue(error: unknown, token: string | null) {
   queue = [];
 }
 
-/**
- * Single-flight refresh — concurrent 401s wait on one refresh call.
- */
-export async function refreshAccessToken(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) {
-    clearTokens();
-    return null;
-  }
+function persistAccess(accessToken: string, refreshToken: string) {
+  setTokens(accessToken, refreshToken);
+  getClientConfig().onTokenRefreshed?.(accessToken);
+}
 
-  if (refreshing) {
-    return new Promise((resolve, reject) => {
-      queue.push({ resolve, reject });
-    });
-  }
-
+async function doRefresh(refresh: string): Promise<string | null> {
   refreshing = true;
   try {
     const { baseURL, timeoutMs } = getClientConfig();
@@ -42,18 +33,26 @@ export async function refreshAccessToken(): Promise<string | null> {
       { refresh_token: refresh },
       {
         timeout: timeoutMs,
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
       },
     );
 
-    const parsed = parseTokenResponse(res.data);
-    if (!parsed.accessToken) {
+    if (envelopeFailureStatus(res.data) != null) {
       clearTokens();
       flushQueue(null, null);
       return null;
     }
 
-    setTokens(parsed.accessToken, parsed.refreshToken ?? refresh);
+    const parsed = parseTokenResponse(res.data);
+    if (!parsed.accessToken) {
+      flushQueue(null, null);
+      return null;
+    }
+
+    persistAccess(parsed.accessToken, parsed.refreshToken ?? refresh);
     flushQueue(null, parsed.accessToken);
     return parsed.accessToken;
   } catch (error) {
@@ -62,7 +61,6 @@ export async function refreshAccessToken(): Promise<string | null> {
 
     if (isHardAuthFailure) {
       clearTokens();
-      // Resolve null so callers handle logout once (http interceptor calls onUnauthorized).
       flushQueue(null, null);
       return null;
     }
@@ -73,6 +71,38 @@ export async function refreshAccessToken(): Promise<string | null> {
   } finally {
     refreshing = false;
   }
+}
+
+/**
+ * Single-flight refresh — concurrent 401s in this tab wait on one refresh call.
+ * Also uses a cross-tab Web Lock (when available) so multiple open tabs don't
+ * both hit /v1/auth/refresh with the same refresh_token.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) {
+    if (queue.length) flushQueue(null, null);
+    return null;
+  }
+
+  if (refreshing) {
+    return new Promise((resolve, reject) => {
+      queue.push({ resolve, reject });
+    });
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('mithra-token-refresh', async () => {
+      const latestRefresh = getRefreshToken();
+      if (!latestRefresh) return null;
+      if (latestRefresh !== refresh) {
+        return getAccessToken();
+      }
+      return doRefresh(latestRefresh);
+    });
+  }
+
+  return doRefresh(refresh);
 }
 
 export function isRefreshing() {
