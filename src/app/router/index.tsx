@@ -15,6 +15,7 @@ import { VendorOrdersPage } from '@/modules/vendor/pages/VendorOrdersPage'
 import { VendorProductsPage } from '@/modules/vendor/pages/VendorProductsPage'
 import { LoginPage } from '@/shared/auth/pages/LoginPage'
 import { RegisterPage } from '@/shared/auth/pages/RegisterPage'
+import { VendorLoginPage } from '@/shared/auth/pages/VendorLoginPage'
 import { Spinner } from '@/shared/components/ui'
 
 const VendorOnboardingPage = lazy(() =>
@@ -45,10 +46,11 @@ export function AppRouter() {
           <Route index element={<MarketingHomePage />} />
         </Route>
 
-        <Route element={<RootLayout />}>
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="vendor/login" element={<VendorLoginPage />} />
+        <Route path="register" element={<RegisterPage />} />
 
+        <Route element={<RootLayout />}>
           <Route path="stores" element={<StoreListPage />} />
           <Route path="stores/:storeId" element={<StoreDetailPage />} />
           <Route path="cart" element={<CartPage />} />

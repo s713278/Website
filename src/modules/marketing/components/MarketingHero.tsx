@@ -116,13 +116,13 @@ export function MarketingHero() {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/register">
+            <Link to="/vendor/login">
               <Button size="lg" className="rounded-full px-6">
                 Start Your Store Free
               </Button>
             </Link>
             <Link
-              to="/stores/r1"
+              to="/stores"
               className="inline-flex h-12 items-center gap-2 rounded-full border-2 border-emerald-600 bg-white px-5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -168,7 +168,7 @@ export function MarketingHero() {
                 type="button"
                 className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-left text-slate-600 hover:bg-slate-100"
                 onClick={() => {
-                  void navigator.clipboard?.writeText(`${window.location.origin}/stores/r1`)
+                  void navigator.clipboard?.writeText(`${window.location.origin}/stores`)
                 }}
               >
                 Copy store link

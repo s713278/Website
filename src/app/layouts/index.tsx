@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { homePathForRole } from '@/app/router/role-home'
+import { homePathForUser, loginPathForRole } from '@/app/router/role-home'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
@@ -37,7 +37,7 @@ export function RootLayout() {
                 <NavLink to="/orders" className={linkClass}>Orders</NavLink>
               ) : null}
               {user?.role === 'vendor' ? (
-                <NavLink to="/vendor" className={linkClass}>Vendor</NavLink>
+                <NavLink to="/vendor" className={linkClass}>Dashboard</NavLink>
               ) : null}
             </nav>
           </div>
@@ -49,16 +49,22 @@ export function RootLayout() {
             )}
             {user ? (
               <>
-                <span className="hidden text-sm text-slate-500 sm:inline">{user.name}</span>
+                <span className="hidden text-sm text-slate-500 sm:inline">Welcome, {user.name}</span>
                 <Button size="sm" variant="secondary" onClick={() => void logout()}>Log out</Button>
-                <NavLink to={homePathForRole(user.role)}>
-                  <Button size="sm" variant="ghost">Home</Button>
-                </NavLink>
+                {user.role === 'vendor' ? (
+                  <NavLink to="/vendor">
+                    <Button size="sm" variant="ghost">Store setup</Button>
+                  </NavLink>
+                ) : (
+                  <NavLink to={homePathForUser(user)}>
+                    <Button size="sm" variant="ghost">Home</Button>
+                  </NavLink>
+                )}
               </>
             ) : (
               <>
-                <NavLink to="/login"><Button size="sm" variant="secondary">Sign in</Button></NavLink>
-                <NavLink to="/register"><Button size="sm">Join</Button></NavLink>
+                <NavLink to={loginPathForRole('customer')}><Button size="sm" variant="secondary">Sign in</Button></NavLink>
+                <NavLink to={loginPathForRole('vendor')}><Button size="sm">Open store</Button></NavLink>
               </>
             )}
           </div>

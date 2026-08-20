@@ -7,7 +7,7 @@ import { cn } from '@/shared/lib/utils'
 const NAV = [
   { label: 'About Us', href: '#about' },
   { label: 'Search Stores', to: '/stores' },
-  { label: 'Store Demo', to: '/stores/r1' },
+  { label: 'Store Demo', to: '/stores' },
   { label: 'Features', href: '#features' },
   { label: 'Pricing', href: '#pricing' },
 ] as const
@@ -82,10 +82,10 @@ export function MarketingHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Link to="/login" className="text-sm font-medium text-slate-700 hover:text-emerald-700">
+          <Link to="/vendor/login" className="text-sm font-medium text-slate-700 hover:text-emerald-700">
             Vendor Login
           </Link>
-          <Link to="/register">
+          <Link to="/vendor/login">
             <Button className="rounded-full px-5">Get Started Free</Button>
           </Link>
         </div>
@@ -113,10 +113,10 @@ export function MarketingHeader() {
               </a>
             ),
           )}
-          <Link to="/login" onClick={() => setOpen(false)}>
+          <Link to="/vendor/login" onClick={() => setOpen(false)}>
             Vendor Login
           </Link>
-          <Link to="/register" onClick={() => setOpen(false)}>
+          <Link to="/vendor/login" onClick={() => setOpen(false)}>
             <Button fullWidth className="rounded-full">
               Get Started Free
             </Button>

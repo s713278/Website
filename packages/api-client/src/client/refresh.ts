@@ -57,10 +57,19 @@ export async function refreshAccessToken(): Promise<string | null> {
     flushQueue(null, parsed.accessToken);
     return parsed.accessToken;
   } catch (error) {
-    clearTokens();
-    // Resolve null so callers handle logout once (http interceptor calls onUnauthorized).
-    flushQueue(null, null);
-    return null;
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    const isHardAuthFailure = status === 400 || status === 401 || status === 403;
+
+    if (isHardAuthFailure) {
+      clearTokens();
+      // Resolve null so callers handle logout once (http interceptor calls onUnauthorized).
+      flushQueue(null, null);
+      return null;
+    }
+
+    // Transient failures (network/5xx/timeouts) should not force logout.
+    flushQueue(error, null);
+    throw error;
   } finally {
     refreshing = false;
   }
