@@ -43,6 +43,22 @@ export type {
 } from '@mithra/api-client'
 
 export {
+  InvalidReferencePayloadError,
+  mapBusinessTypePage,
+  mapCategoryPage,
+  mapFutureStorefrontConfig,
+  mapProductPage,
+} from './mappers/vendor-onboarding'
+export type {
+  BusinessTypeReference,
+  CategoryReference,
+  FutureStorefrontConfigInput,
+  FutureStorefrontConfigRequest,
+  ProductReference,
+  ReferencePage,
+} from './mappers/vendor-onboarding'
+
+export {
   configureApiClient,
   getApiBaseUrl,
   getClientConfig,

@@ -38,3 +38,5 @@ export {
   setProductAvailability,
   vendorProductsService,
 } from './vendor-products.service'
+export { vendorOnboardingService } from './vendor-onboarding.service'
+export type { ReferenceRequestConfig } from './vendor-onboarding.service'
