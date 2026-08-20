@@ -1,10 +1,17 @@
 # Authentication architecture handoff
 
-> **Status:** Planning context for a future authentication feature session. This document does not
-> describe an implemented lifecycle and is not the backend contract. The current implementation is
-> documented in [SESSION.md](./SESSION.md); the live `/api/v3/api-docs` document remains authoritative
-> for HTTP behavior. Once the feature is implemented, move durable lifecycle facts into `SESSION.md`,
-> record unresolved contract problems in [API_GAPS.md](./API_GAPS.md), and retire this handoff.
+> **Status: partially delivered.** PR #17 shipped live WhatsApp OTP for customer and vendor, and the
+> vendor-onboarding integration then hardened the session mapping. What is implemented now lives in
+> [SESSION.md](./SESSION.md); the live `/api/v3/api-docs` document remains authoritative for HTTP
+> behavior.
+>
+> **Delivered:** OTP request/verify UI, `mobile_verified` enforcement, verified roles instead of the
+> requested role, vendor memberships with explicit selection, one-shot startup restoration, and
+> `401` versus `403` separation.
+>
+> **Still outstanding:** the approved HttpOnly refresh-cookie model (§"Approved target web-session
+> model"), server-confirmed session restoration, and the five non-negotiable backend answers below.
+> Tokens remain in `localStorage`. Retire this handoff only when those land.
 
 Last updated: 2026-08-18. It was prepared on `setup/agentic-workflow` while unrelated documentation
 changes were already present. Recheck the branch and complete working tree before starting feature

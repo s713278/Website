@@ -1,4 +1,4 @@
-import { BuildingIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -88,4 +88,21 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
   }
 
   return null
+}
+
+/**
+ * Shown on steps that are fully usable but cannot yet be saved to the vendor account,
+ * because their backend contract is unresolved. Deliberately specific: a vendor should
+ * know what is and is not stored on their store.
+ */
+export function DraftOnlyNotice({ reason }: { reason: string }) {
+  return (
+    <div className="flex gap-3 rounded-lg border border-amber-300/70 bg-amber-50 p-3 text-sm leading-5 dark:border-amber-400/30 dark:bg-amber-950/30">
+      <CloudOffIcon className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+      <p className="text-amber-900 dark:text-amber-100">
+        <span className="font-semibold">Saved in this browser only. </span>
+        {reason}
+      </p>
+    </div>
+  )
 }

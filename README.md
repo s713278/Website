@@ -6,11 +6,12 @@ catalog, and order operations. Production identity uses WhatsApp phone-number OT
 vendor roles. The React 19 + TypeScript frontend consumes a separately maintained Spring Boot API
 through an OpenAPI/Axios integration.
 
-> **Current status:** demo mode is the default. The React login/register screens still use demo-only
-> email/password actions; the production WhatsApp OTP flow is not wired into those screens yet.
-> Vendor onboarding is available as an explicit local prototype at `/onboarding`: public reference
-> data is live-first with a labelled sample option, while a privacy-filtered draft is saved only in
-> the current browser. No protected endpoint is called and completion makes no publication claim.
+> **Current status:** demo mode is the default. Live WhatsApp OTP is wired at `/login` (customer)
+> and `/vendor/login` (vendor); the email/password forms remain demo-only.
+> Vendor onboarding at `/onboarding` verifies the vendor's number through the shared OTP session and
+> persists business type, categories and storefront settings to the vendor account. Products, SKUs,
+> delivery, payments and go-live are still saved in the browser only, each labelled with the backend
+> contract gap that blocks it — see [docs/API_GAPS.md](./docs/API_GAPS.md).
 
 ## Product surfaces
 
@@ -19,7 +20,7 @@ through an OpenAPI/Axios integration.
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
 | Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
-| Vendor onboarding prototype | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
+| Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/register` |
 
 ## Stack
@@ -227,10 +228,13 @@ attaches the access token as a Bearer header, and attempts one single-flight ref
 describes current behavior. A backend-coordinated target using an in-memory access token and a rotating
 Secure HttpOnly refresh cookie is approved but not implemented yet.
 
-The React login/register pages are not yet connected to the OTP services. Their email/password forms
-are demo-only and intentionally fail when live API mode is enabled. Backend accounts may also contain
-multiple roles, while the current frontend session model represents one active role; production auth
-must resolve that mismatch.
+Live OTP is wired at `/login` and `/vendor/login`. The email/password forms are demo-only and
+intentionally fail when live API mode is enabled.
+
+A session is created only when the backend reports `mobile_verified: true` and lists the requested
+role in `roles`; the role picked on the login screen is never treated as a grant. Multi-role
+identities and multi-vendor memberships are represented on the session, and a vendor with several
+stores must choose one explicitly.
 
 Demo credentials when `VITE_USE_API=false`:
 
@@ -250,8 +254,9 @@ alongside the production auth implementation.
 | `/stores` | Store list |
 | `/stores/:storeId` | Store detail |
 | `/cart` | Cart |
-| `/login`, `/register` | Authentication |
-| `/onboarding` | Ten-step local vendor-onboarding prototype |
+| `/login`, `/register` | Customer authentication |
+| `/vendor/login` | Vendor WhatsApp OTP login |
+| `/onboarding` | Ten-step vendor onboarding; Steps 1-2 verify the vendor by WhatsApp OTP |
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |

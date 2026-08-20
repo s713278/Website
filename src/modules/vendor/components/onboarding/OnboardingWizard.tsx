@@ -15,7 +15,7 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
 import { maskPhone } from '../../lib/onboarding-adapter'
-import { isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
+import { draftOnlyReason, isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
@@ -24,7 +24,7 @@ import {
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice } from './AccessNotice'
+import { AccessNotice, DraftOnlyNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpStep, PhoneStep } from './IdentitySteps'
@@ -607,6 +607,9 @@ export function OnboardingWizard() {
                     <div className="px-5 pt-4 pb-6 sm:px-7 min-[900px]:px-8 min-[900px]:pb-8">
                       {currentStep === 1 ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
                       {currentStep === 2 ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
+                      {catalogUnlocked && draftOnlyReason(currentStep) ? (
+                        <div className="mb-4"><DraftOnlyNotice reason={draftOnlyReason(currentStep) as string} /></div>
+                      ) : null}
                       {currentStep >= 3 && !catalogUnlocked ? (
                         <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
                       ) : null}

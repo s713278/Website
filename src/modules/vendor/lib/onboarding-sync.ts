@@ -106,3 +106,18 @@ export async function persistStep(
     }
   }
 }
+
+/**
+ * Steps that work end to end locally but cannot be written to the account yet.
+ * Each reason names the specific contract gap so the message is not vague.
+ */
+export const DRAFT_ONLY_REASONS: Partial<Record<OnboardingStep, string>> = {
+  5: 'Saving your product selection to your store is waiting on the backend to return the assigned product IDs.',
+  6: 'Prices are waiting on the same backend change as your product selection, because a SKU needs its assigned product ID.',
+  7: 'Saving delivery settings is waiting on the backend to confirm the scheduling and shipping configuration format.',
+  8: 'Saving payment settings is waiting on the backend to confirm the bank and UPI detail fields.',
+}
+
+export function draftOnlyReason(step: OnboardingStep): string | null {
+  return DRAFT_ONLY_REASONS[step] ?? null
+}
