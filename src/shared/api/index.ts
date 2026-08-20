@@ -44,10 +44,12 @@ export type {
 
 export {
   InvalidReferencePayloadError,
+  InvalidVendorContextError,
   mapBusinessTypePage,
   mapCategoryPage,
   mapFutureStorefrontConfig,
   mapProductPage,
+  mapVendorContext,
 } from './mappers/vendor-onboarding'
 export type {
   BusinessTypeReference,

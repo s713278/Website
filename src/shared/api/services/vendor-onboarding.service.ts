@@ -1,5 +1,6 @@
 import {
   catalogService as apiCatalogService,
+  vendorsService as apiVendorsService,
   type BusinessTypeQuery,
   type CategoryQuery,
   type ProductsByCategoryQuery,
@@ -8,10 +9,12 @@ import {
   mapBusinessTypePage,
   mapCategoryPage,
   mapProductPage,
+  mapVendorContext,
   type BusinessTypeReference,
   type CategoryReference,
   type ProductReference,
   type ReferencePage,
+  type VendorContext,
 } from '../mappers/vendor-onboarding'
 
 export type ReferenceRequestConfig = {
@@ -45,8 +48,21 @@ async function getProductsByCategory(
   )
 }
 
+/**
+ * Authoritative vendor state for a signed-in vendor. This is the only trustworthy source
+ * of membership, approval status and subscription limits — a persisted session is just a
+ * cache of what the browser was told at login.
+ */
+async function getVendorContext(
+  vendorId: number | string,
+  config: ReferenceRequestConfig = {},
+): Promise<VendorContext> {
+  return mapVendorContext(await apiVendorsService.getContext(vendorId, config))
+}
+
 export const vendorOnboardingService = {
   getBusinessTypes,
   getCategories,
   getProductsByCategory,
+  getVendorContext,
 }

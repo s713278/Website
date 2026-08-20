@@ -248,3 +248,134 @@ export function mapFutureStorefrontConfig(
     },
   }
 }
+
+/* -------------------------------------------------------------------------
+ * Vendor context
+ *
+ * `GET /v1/vendors/{vendor_id}/context` is declared as a generic APIResponse,
+ * so nothing about `data` is guaranteed by the contract. Everything below is
+ * validated leniently: only `vendor_id` is fatal, because without it there is
+ * no vendor to scope calls to. Missing optional fields become null rather than
+ * throwing, so a backend that adds or omits a field cannot break the wizard.
+ * ---------------------------------------------------------------------- */
+
+export type VendorOnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'UNKNOWN'
+
+export type VendorSubscriptionLimits = {
+  maxCategories: number | null
+  maxProducts: number | null
+  maxSkus: number | null
+  maxImages: number | null
+}
+
+export type VendorSubscriptionUsage = {
+  categories: number | null
+  products: number | null
+  skus: number | null
+  images: number | null
+}
+
+export type VendorContext = {
+  vendorId: string
+  businessName: string | null
+  storeIdentifier: string | null
+  vendorStatus: string | null
+  approvalStatus: string | null
+  /** Membership role within the store, e.g. OWNER. Not an authentication role. */
+  membershipRole: string | null
+  onboarding: {
+    status: VendorOnboardingStatus
+    description: string | null
+    /**
+     * The contract documents only `status` and a human-readable `description`
+     * ("Step 2 is completed"). There is no machine-readable next step, so this is
+     * mapped only if a backend actually starts sending one. Resume must reconcile
+     * real server resources instead of trusting this.
+     */
+    nextStep: number | null
+  }
+  subscription: {
+    tier: string | null
+    planName: string | null
+    status: string | null
+    limits: VendorSubscriptionLimits
+    usage: VendorSubscriptionUsage
+  }
+  eligibleFeatures: string[]
+}
+
+export class InvalidVendorContextError extends Error {
+  constructor() {
+    super('The vendor account could not be loaded. Please retry.')
+    this.name = 'InvalidVendorContextError'
+  }
+}
+
+/** Lenient: anything that is not a usable string becomes null. */
+function lenientString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  return value.trim() || null
+}
+
+/** Lenient: accepts a number or a numeric string, otherwise null. */
+function lenientInteger(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return value
+  if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) return Number(value.trim())
+  return null
+}
+
+function lenientStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.map(lenientString).filter((entry): entry is string => entry !== null)
+}
+
+function mapOnboardingStatus(value: unknown): VendorOnboardingStatus {
+  const raw = lenientString(value)?.toUpperCase()
+  if (raw === 'NOT_STARTED' || raw === 'IN_PROGRESS' || raw === 'COMPLETED') return raw
+  return 'UNKNOWN'
+}
+
+export function mapVendorContext(payload: unknown): VendorContext {
+  if (!isRecord(payload) || !isRecord(payload.data)) throw new InvalidVendorContextError()
+
+  const data = payload.data
+  const vendorId = lenientInteger(data.vendor_id) ?? lenientString(data.vendor_id)
+  if (vendorId == null || String(vendorId).trim() === '') throw new InvalidVendorContextError()
+
+  const onboarding = isRecord(data.onboarding) ? data.onboarding : {}
+  const subscription = isRecord(data.subscription) ? data.subscription : {}
+  const limits = isRecord(subscription.limits) ? subscription.limits : {}
+  const usage = isRecord(subscription.usage) ? subscription.usage : {}
+
+  return {
+    vendorId: String(vendorId),
+    businessName: lenientString(data.business_name),
+    storeIdentifier: lenientString(data.store_identifier),
+    vendorStatus: lenientString(data.vendor_status),
+    approvalStatus: lenientString(data.approval_status),
+    membershipRole: lenientString(data.role),
+    onboarding: {
+      status: mapOnboardingStatus(onboarding.status),
+      description: lenientString(onboarding.description),
+      nextStep: lenientInteger(onboarding.next_step),
+    },
+    subscription: {
+      tier: lenientString(subscription.tier),
+      planName: lenientString(subscription.plan_name),
+      status: lenientString(subscription.status),
+      limits: {
+        maxCategories: lenientInteger(limits.max_categories),
+        maxProducts: lenientInteger(limits.max_products),
+        maxSkus: lenientInteger(limits.max_skus),
+        maxImages: lenientInteger(limits.max_images),
+      },
+      usage: {
+        categories: lenientInteger(usage.categories),
+        products: lenientInteger(usage.products),
+        skus: lenientInteger(usage.skus),
+        images: lenientInteger(usage.images),
+      },
+    },
+    eligibleFeatures: lenientStringList(data.eligible_features),
+  }
+}

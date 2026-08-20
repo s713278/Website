@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
-import type { ApiEnvelope } from '../client/types';
+import type { ApiEnvelope, RequestConfig } from '../client/types';
 import type { components } from '../schema';
 
 /** Vendor profile + catalog assignment (tag 07) + public listing (tag 02) */
@@ -22,8 +22,8 @@ export const vendorsService = {
     vendorId: number | string,
     body: components['schemas']['VendorBusinessTypeRequest'],
   ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/business-type`, body),
-  getContext: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/context`),
+  getContext: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/context`, config),
   saveStorefront: (
     vendorId: number | string,
     body: components['schemas']['SaveStorefrontConfigRequest'],
