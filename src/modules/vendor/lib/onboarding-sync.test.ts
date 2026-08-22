@@ -161,3 +161,45 @@ describe('explicit fulfillment edits on a resumed SKU', () => {
     expect(plan.creates[0].sku.storePickup).toBe(false)
   })
 })
+
+describe('a replaced SKU is recognised despite the stale draft id', () => {
+  // An edit is delete-then-create, so the account row gets a new id while the draft keeps
+  // the old `sku-<id>`. `createSku` cannot return the new id — the response is untyped —
+  // so reconciliation falls back to the backend's own uniqueness key. Without that, every
+  // later Continue deleted the replacement and created another.
+  const stale = () => draft({ id: 'sku-4021', productId: 31 })
+
+  it('schedules nothing when only the server id moved', () => {
+    const plan = planSkuWrites(shown([stale()]), [account({ skuId: 4055 })], productIds)
+
+    expect(plan.creates).toEqual([])
+    expect(plan.deletes).toEqual([])
+  })
+
+  it('does not delete the replacement row', () => {
+    const plan = planSkuWrites(shown([stale()]), [account({ skuId: 4055 })], productIds)
+
+    expect(plan.deletes).not.toContain(4055)
+  })
+
+  it('still replaces when the vendor actually changed something', () => {
+    const edited = { ...stale(), salePrice: 140 }
+    const plan = planSkuWrites(shown([edited]), [account({ skuId: 4055 })], productIds)
+
+    expect(plan.deletes).toEqual([4055])
+    expect(plan.creates).toHaveLength(1)
+    expect(plan.creates[0].sku.salePrice).toBe(140)
+  })
+
+  it('does not attach two draft rows to the same account row', () => {
+    const plan = planSkuWrites(
+      shown([stale(), draft({ id: 'draft-sku-31-2', productId: 31 })]),
+      [account({ skuId: 4055 })],
+      productIds,
+    )
+
+    // One keeps the account row; the other is a genuine create, not a second claim on it.
+    expect(plan.creates).toHaveLength(1)
+    expect(plan.deletes).toEqual([])
+  })
+})

@@ -113,6 +113,25 @@ function toPaymentInput(
   }
 }
 
+/**
+ * The backend's uniqueness key for a SKU row, normalized for comparison.
+ *
+ * Used to re-attach a draft row to its replacement after an edit changed the server id.
+ */
+function skuIdentity(
+  vendorProductId: number,
+  name: string,
+  quantity: number | null,
+  unit: string,
+): string {
+  return [
+    vendorProductId,
+    name.trim().toLowerCase(),
+    quantity ?? '',
+    unit.trim().toLowerCase(),
+  ].join('::')
+}
+
 /** The backend stores a SKU as `<name>-<value> <unit>`; match that to detect duplicates. */
 function serverSkuName(name: string, quantity: number, unit: string): string {
   return `${name.trim()}-${quantity} ${unit}`
@@ -209,6 +228,14 @@ export function planSkuWrites(
       .filter((id): id is number => id != null),
   )
   const serverById = new Map(serverSkus.map((sku) => [sku.skuId, sku]))
+  // The server's own uniqueness key, `(name, weight, vendor_product_id)`. Two rows that
+  // agree on it are the same SKU as far as the backend is concerned.
+  const serverByIdentity = new Map(
+    serverSkus.map((sku) => [
+      skuIdentity(sku.vendorProductId, sku.displayName, sku.quantity, sku.unit),
+      sku,
+    ]),
+  )
   const keptServerIds = new Set<number>()
 
   for (const sku of draftSkus) {
@@ -221,7 +248,22 @@ export function planSkuWrites(
     }
 
     const serverId = serverSkuIdOf(sku.id)
-    const existing = serverId == null ? undefined : serverById.get(serverId)
+    let existing = serverId == null ? undefined : serverById.get(serverId)
+
+    if (!existing) {
+      // An edit is delete-then-create, so the replacement carries a new server id while
+      // the draft still holds the old one — `createSku` cannot hand the new id back,
+      // because the response is an untyped envelope. Matching on the backend's own
+      // uniqueness key recognises the row anyway. Without this, every later Continue on
+      // Step 6 deleted the replacement and created another, churning the catalog and
+      // reopening the non-atomic replacement window each time.
+      const candidate = serverByIdentity.get(
+        skuIdentity(vendorProductId, sku.name, sku.quantity, sku.unit),
+      )
+      if (candidate && !keptServerIds.has(candidate.skuId) && !deletes.includes(candidate.skuId)) {
+        existing = candidate
+      }
+    }
 
     if (!existing) {
       creates.push({ sku, vendorProductId })
