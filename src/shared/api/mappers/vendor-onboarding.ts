@@ -19,7 +19,11 @@ export type BusinessTypeReference = {
 export type CategoryReference = {
   id: number
   name: string
-  businessTypeId: number
+  /**
+   * `null` only on resume, when the business-type lookup failed and the category cannot
+   * be attributed. The catalog read still requires a real id — see `mapCategoryPage`.
+   */
+  businessTypeId: number | null
   description: string | null
   imageUrl: string | null
   displayOrder: number | null

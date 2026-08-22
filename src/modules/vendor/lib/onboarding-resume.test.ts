@@ -22,6 +22,7 @@ import {
   type ServerOnboardingState,
 } from './onboarding-resume'
 import { readinessIssues } from './onboarding-validation'
+import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
 
 const BUSINESS_TYPE: BusinessTypeReference = {
   id: 7,
@@ -315,5 +316,48 @@ describe('a resumed draft is submittable', () => {
     }
 
     expect(readinessIssues(draft, runtime)).toEqual([])
+  })
+})
+
+describe('a partial resume still produces a loadable draft', () => {
+  // `getBusinessTypes` is wrapped in `optional()`, so it can fail while the vendor's
+  // categories load fine. Attributing those categories to business type `0` used to make
+  // the draft unpersistable — the validator rejects a zero reference id — so a transient
+  // read failure came back as "your saved draft is damaged" on the next reload.
+  function stateWithoutBusinessTypes(): ServerOnboardingState {
+    return fullState({ businessTypes: [] })
+  }
+
+  it('records unknown attribution as null rather than zero', () => {
+    const { draft } = buildResumeDraft(stateWithoutBusinessTypes())
+
+    expect(draft.business.businessType).toBeNull()
+    expect(draft.categories.length).toBeGreaterThan(0)
+    for (const category of draft.categories) {
+      expect(category.businessTypeId).toBeNull()
+    }
+  })
+
+  it('round-trips through the draft validator', () => {
+    const { draft, furthestVisitedStep } = buildResumeDraft(stateWithoutBusinessTypes())
+    const envelope = {
+      version: 3,
+      revision: 1,
+      updatedAt: new Date().toISOString(),
+      ownerId: '91',
+      furthestVisitedStep,
+      hasLocalEdits: false,
+      draft: toPersistedDraft(draft),
+      previewSnapshot: null,
+    }
+
+    expect(parsePersistedEnvelope(JSON.parse(JSON.stringify(envelope)))).not.toBeNull()
+  })
+
+  it('still attributes categories when the lookup succeeds', () => {
+    const { draft } = buildResumeDraft(fullState())
+    for (const category of draft.categories) {
+      expect(category.businessTypeId).toBe(BUSINESS_TYPE.id)
+    }
   })
 })

@@ -396,7 +396,10 @@ export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
         id: category.platformCategoryId,
         name: category.name,
         imageUrl: category.imageUrl,
-        businessTypeId: businessType?.id ?? 0,
+        // Never 0: the draft validator rejects a zero reference id, so synthesizing one
+        // here turned a failed business-type lookup into an unloadable draft on the next
+        // reload. Unknown attribution is recorded as unknown.
+        businessTypeId: businessType?.id ?? null,
         description: null,
         displayOrder: null,
       })),

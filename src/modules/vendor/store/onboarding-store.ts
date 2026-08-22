@@ -78,7 +78,17 @@ type OnboardingStore = {
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
   updatePhone: (phone: string) => void
   setImage: (kind: ImageKind, file: File | null, url: string | null) => void
-  completeStep: (step: OnboardingStep, nextStep: OnboardingStep) => void
+  /**
+   * Advance past `step`. `syncedWithAccount` says whether the step actually reached the
+   * vendor account — false for demo and sample mode, where the write is deliberately
+   * skipped. Defaults to true so identity Steps 1-2, which have nothing to persist, keep
+   * letting the account read hydrate.
+   */
+  completeStep: (
+    step: OnboardingStep,
+    nextStep: OnboardingStep,
+    options?: { syncedWithAccount?: boolean },
+  ) => void
   goToStep: (step: OnboardingStep) => void
   completePrototype: (draftSlug: string) => void
   /** Steps 1-2 already satisfied by an existing vendor session. */
@@ -499,11 +509,14 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     queuePersistence()
   },
 
-  completeStep(step, nextStep) {
+  completeStep(step, nextStep, options = {}) {
+    const { syncedWithAccount = true } = options
     set((state) => ({
       furthestVisitedStep: Math.max(state.furthestVisitedStep, nextStep) as OnboardingStep,
-      // Continue only reaches here once the step is on the account, so the two agree.
-      hasLocalEdits: false,
+      // Only clear this when the step genuinely reached the account. Clearing it after a
+      // skipped write tells the next account read that there is nothing local worth
+      // keeping, and it overwrites work still visible on screen.
+      hasLocalEdits: syncedWithAccount ? false : state.hasLocalEdits,
       draft: {
         ...state.draft,
         currentStep: nextStep,

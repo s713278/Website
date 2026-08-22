@@ -118,7 +118,7 @@ function isCategoryReference(
     hasOnlyKeys(value, ['id', 'name', 'businessTypeId', 'description', 'imageUrl', 'displayOrder']) &&
     isReferenceId(value.id) &&
     isString(value.name) &&
-    isReferenceId(value.businessTypeId) &&
+    (value.businessTypeId === null || isReferenceId(value.businessTypeId)) &&
     isNullableString(value.description) &&
     isSafeAssetUrl(value.imageUrl) &&
     (value.displayOrder === null || Number.isSafeInteger(value.displayOrder))

@@ -55,3 +55,31 @@ describe('updateDraft and earlier progress', () => {
     expect(state.draft.currentStep).toBe(6)
   })
 })
+
+describe('completeStep and account sync', () => {
+  // Demo and sample mode deliberately skip the backend write. Reporting those steps as
+  // synced let the next account read overwrite work the vendor could still see.
+  beforeEach(() => {
+    seedAt(5)
+    useOnboardingStore.setState({ hasLocalEdits: true })
+  })
+
+  it('keeps hasLocalEdits when the step was not written to the account', () => {
+    useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: false })
+
+    expect(useOnboardingStore.getState().hasLocalEdits).toBe(true)
+    expect(useOnboardingStore.getState().furthestVisitedStep).toBe(6)
+  })
+
+  it('clears hasLocalEdits once the step reached the account', () => {
+    useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: true })
+
+    expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
+  })
+
+  it('defaults to synced, so identity steps still let the account hydrate', () => {
+    useOnboardingStore.getState().completeStep(5, 6)
+
+    expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
+  })
+})
