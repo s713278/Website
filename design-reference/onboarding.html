@@ -342,7 +342,7 @@
                     <!-- Step 9: Store Settings -->
                     <section class="step-panel" data-step="9" id="panel-9">
                         <h2 class="text-xl font-bold mb-1">Store Settings</h2>
-                        <p class="text-gray-500 text-sm mb-6">Name your store, set branding, and personalize how your shop looks.</p>
+                        <p class="text-gray-500 text-sm mb-6">Name your store, pick a shop link, and personalize how your shop looks.</p>
                         <div class="settings-form space-y-3 max-w-3xl">
                             <div class="settings-field settings-field--row" data-field="storeName">
                                 <label class="settings-label" for="input-store-name">
@@ -351,6 +351,37 @@
                                 <div class="settings-control">
                                     <input type="text" id="input-store-name" name="storeName" required maxlength="80" autocomplete="organization" class="settings-input w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="e.g. Anitha Homemade Pickles" aria-required="true">
                                     <p class="field-error" id="err-store-name" role="alert"></p>
+                                </div>
+                            </div>
+
+                            <div class="settings-field settings-field--row" data-field="storeLink">
+                                <label class="settings-label" for="input-store-link">
+                                    Shop link <span class="settings-req" aria-hidden="true">*</span>
+                                </label>
+                                <div class="settings-control">
+                                    <div class="ob-slug-field">
+                                        <span class="ob-slug-prefix">mithradirect.com/store/</span>
+                                        <input
+                                            type="text"
+                                            id="input-store-link"
+                                            name="storeLink"
+                                            required
+                                            maxlength="40"
+                                            spellcheck="false"
+                                            autocomplete="off"
+                                            autocapitalize="none"
+                                            enterkeyhint="done"
+                                            class="settings-input ob-slug-input"
+                                            placeholder="anitha-pickles"
+                                            aria-required="true"
+                                            aria-describedby="hint-store-link"
+                                        >
+                                    </div>
+                                    <p class="settings-hint" id="hint-store-link">
+                                        Paste this in WhatsApp chats and Instagram bio. Short is easier to share.
+                                        <button type="button" class="ob-slug-reset" id="btn-slug-from-name" hidden>Use store name</button>
+                                    </p>
+                                    <p class="field-error" id="err-store-link" role="alert"></p>
                                 </div>
                             </div>
 

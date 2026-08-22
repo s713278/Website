@@ -689,14 +689,22 @@
     return (prefix || 'id') + '_' + Math.random().toString(36).slice(2, 9);
   }
 
-  function slugify(text) {
-    return String(text || '')
+  var STORE_SLUG_MAX = 40;
+
+  function normalizeStoreSlug(raw, opts) {
+    var keepTrailing = opts && opts.keepTrailing;
+    var s = String(raw || '')
       .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'my-store';
+      .replace(/['’]/g, '')
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-');
+    if (keepTrailing) s = s.replace(/^-/, '');
+    else s = s.replace(/^-|-$/g, '');
+    return s.slice(0, STORE_SLUG_MAX);
+  }
+
+  function slugify(text) {
+    return normalizeStoreSlug(text) || 'my-store';
   }
 
   function getMeasurement(id) {
@@ -1038,6 +1046,7 @@
         pickupMessage: ''
       },
       slug: '',
+      slugCustom: false,
       vendorId: null,
       subscription: defaultSubscription(),
       currentStep: 1,
@@ -1973,6 +1982,17 @@
       if (!draft.settings.backgroundColor) draft.settings.backgroundColor = DEFAULT_BG;
       if (!draft.settings.fontId) draft.settings.fontId = DEFAULT_FONT;
       if (draft.settings.instagramUrl == null) draft.settings.instagramUrl = '';
+      if (typeof draft.slugCustom !== 'boolean') {
+        var autoSlug = slugify(draft.settings.storeName || '');
+        draft.slugCustom = !!(
+          draft.slug &&
+          draft.slug !== autoSlug &&
+          draft.slug !== 'my-store'
+        );
+      }
+      if (!draft.slug && draft.settings.storeName) {
+        draft.slug = slugify(draft.settings.storeName);
+      }
       if (!Array.isArray(draft.subscription.features) || !draft.subscription.features.length) {
         draft.subscription.features = blank.subscription.features;
       }
@@ -1993,7 +2013,9 @@
   }
 
   function saveDraft(draft) {
-    if (draft.settings && draft.settings.storeName) {
+    if (draft.settings && draft.settings.storeName && !draft.slugCustom) {
+      draft.slug = slugify(draft.settings.storeName);
+    } else if (draft.settings && draft.settings.storeName && !String(draft.slug || '').trim()) {
       draft.slug = slugify(draft.settings.storeName);
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -2344,6 +2366,8 @@
     DEFAULT_FONT: DEFAULT_FONT,
     uid: uid,
     slugify: slugify,
+    normalizeStoreSlug: normalizeStoreSlug,
+    STORE_SLUG_MAX: STORE_SLUG_MAX,
     normalizeHex: normalizeHex,
     hexToRgba: hexToRgba,
     isLightHex: isLightHex,

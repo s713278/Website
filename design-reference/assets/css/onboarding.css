@@ -2831,6 +2831,82 @@ body.onboarding-page .phone-screen {
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
 }
 
+.ob-slug-field {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+.ob-slug-field:focus-within {
+  border-color: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35);
+}
+
+.ob-slug-prefix {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 0.7rem 0 0.9rem;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-right: 1px solid #e5e7eb;
+}
+
+.ob-slug-input {
+  flex: 1;
+  min-width: 4.5rem;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.settings-field.is-invalid .ob-slug-field {
+  border-color: #f87171;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
+}
+
+.ob-slug-reset {
+  display: inline;
+  margin-left: 0.2rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: #047857;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ob-slug-reset:hover,
+.ob-slug-reset:focus-visible {
+  color: #065f46;
+}
+
+@media (max-width: 639px) {
+  .ob-slug-field {
+    flex-direction: column;
+  }
+
+  .ob-slug-prefix {
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.7rem;
+  }
+}
+
 .settings-examples-btn {
   font-size: 0.72rem;
   font-weight: 600;
