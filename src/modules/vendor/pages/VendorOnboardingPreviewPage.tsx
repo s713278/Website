@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
 import { ArrowLeftIcon, LockKeyholeIcon, StoreIcon } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { Button, Spinner } from '@/shared/components/ui'
 import { StorefrontPreview } from '../components/onboarding/StorefrontPreview'
+import { useOnboardingDraftSession } from '../hooks/use-onboarding-draft-session'
 import { hydratePersistedDraft } from '../lib/onboarding-persistence'
 import { useOnboardingStore } from '../store/onboarding-store'
 
@@ -10,14 +10,14 @@ export function VendorOnboardingPreviewPage() {
   const { draftSlug } = useParams()
   const previewSnapshot = useOnboardingStore((state) => state.previewSnapshot)
   const previewRestored = useOnboardingStore((state) => state.previewRestored)
-  const persistenceInitialized = useOnboardingStore((state) => state.persistenceInitialized)
-  const initializePersistence = useOnboardingStore((state) => state.initializePersistence)
   const logoUrl = useOnboardingStore((state) => state.runtime.logoUrl)
   const bannerUrl = useOnboardingStore((state) => state.runtime.bannerUrl)
 
-  useEffect(() => initializePersistence(), [initializePersistence])
+  // The snapshot travels inside the draft envelope, so the same ownership rule applies:
+  // a preview belongs to the vendor who produced it, not to whoever opens the link.
+  const { ready } = useOnboardingDraftSession()
 
-  if (!persistenceInitialized) {
+  if (!ready) {
     return <main className="grid min-h-[100dvh] place-items-center bg-background"><Spinner label="Opening private preview…" /></main>
   }
 

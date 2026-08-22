@@ -1,4 +1,4 @@
-import { BuildingIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CircleAlertIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -18,11 +18,11 @@ function Shell({
   children: React.ReactNode
 }) {
   return (
-    <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-card p-6">
-      <div className="flex gap-3">
-        <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">{icon}</span>
-        <div className="space-y-2">
-          <h3 className="font-display text-lg font-semibold text-foreground">{title}</h3>
+    <div className="mx-auto max-w-lg rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-6">
+      <div className="flex gap-3.5">
+        <span className="mt-0.5 shrink-0 text-[var(--ob-ink-soft)]" aria-hidden="true">{icon}</span>
+        <div className="space-y-2.5">
+          <h3 className="font-display text-lg font-semibold tracking-[-0.02em] text-[var(--ob-ink)]">{title}</h3>
           {children}
         </div>
       </div>
@@ -38,7 +38,7 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
   if (access.state === 'not-a-vendor') {
     return (
       <Shell icon={<UserXIcon className="size-5" />} title="This number is not a vendor account">
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="text-sm leading-5 text-[var(--ob-ink-soft)]">
           The number you verified is registered, but it does not have vendor access. Sign in with a
           vendor number to continue setting up a store.
         </p>
@@ -50,11 +50,11 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
   if (access.state === 'vendor-not-provisioned') {
     return (
       <Shell icon={<BuildingIcon className="size-5" />} title="Your vendor account is not ready yet">
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="text-sm leading-5 text-[var(--ob-ink-soft)]">
           Your number is verified as a vendor, but no store record has been created for it yet, so
           there is nothing to save your setup against.
         </p>
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="text-sm leading-5 text-[var(--ob-ink-soft)]">
           Everything you have entered stays saved in this browser. Please contact MithraDirect
           support to have your store created, then return here.
         </p>
@@ -66,7 +66,7 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
   if (access.state === 'vendor-selection-required') {
     return (
       <Shell icon={<StoreIcon className="size-5" />} title="Choose which store to set up">
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="text-sm leading-5 text-[var(--ob-ink-soft)]">
           This number manages more than one store. Pick the one you want to configure — the rest are
           left untouched.
         </p>
@@ -91,14 +91,30 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
 }
 
 /**
+ * A neutral step-level notice.
+ *
+ * Kept separate from `DraftOnlyNotice` because that one asserts where the data lives.
+ * Saying "Saved in this browser only" about, say, a failed account read tells the vendor
+ * something false about their store.
+ */
+export function StepNotice({ message }: { message: string }) {
+  return (
+    <div className="flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35">
+      <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+      <p className="text-amber-900 dark:text-amber-100">{message}</p>
+    </div>
+  )
+}
+
+/**
  * Shown on steps that are fully usable but cannot yet be saved to the vendor account,
  * because their backend contract is unresolved. Deliberately specific: a vendor should
  * know what is and is not stored on their store.
  */
 export function DraftOnlyNotice({ reason }: { reason: string }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-amber-300/70 bg-amber-50 p-3 text-sm leading-5 dark:border-amber-400/30 dark:bg-amber-950/30">
-      <CloudOffIcon className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+    <div className="flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35">
+      <CloudOffIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
       <p className="text-amber-900 dark:text-amber-100">
         <span className="font-semibold">Saved in this browser only. </span>
         {reason}

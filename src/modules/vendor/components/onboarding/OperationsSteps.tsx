@@ -1,21 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   BanknoteIcon,
   CheckCircle2Icon,
-  ChevronDownIcon,
   CircleAlertIcon,
-  Clock3Icon,
   LandmarkIcon,
   PlusIcon,
   SmartphoneIcon,
   Trash2Icon,
-  TruckIcon,
   WalletCardsIcon,
 } from 'lucide-react'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState, Input } from '@/shared/components/ui'
+import { localSkuId } from '../../lib/onboarding-sku-id'
 import { validateDraftSku } from '../../lib/onboarding-validation'
+import { useSingleOpen } from '../../hooks/use-single-open'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type {
   DeliveryDraft,
@@ -27,7 +26,7 @@ import type {
   ValidationIssue,
   Weekday,
 } from '../../types/onboarding'
-import { FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
+import { AccordionPanel, FieldError, FieldLabel, Hint, type RequestConfirmation, StepSection } from './StepPrimitives'
 
 const MEASUREMENT_UNITS: Record<MeasurementType, string[]> = {
   WEIGHT: ['g', 'kg'],
@@ -105,15 +104,6 @@ function SkuProductThumb({ src }: { src: string | null }) {
   )
 }
 
-function nextSkuId(productId: number, skus: DraftSku[]): string {
-  const prefix = `draft-sku-${Math.abs(productId)}-`
-  const sequence = skus
-    .filter((sku) => sku.id.startsWith(prefix))
-    .map((sku) => Number.parseInt(sku.id.slice(prefix.length), 10))
-    .filter(Number.isFinite)
-  return `${prefix}${Math.max(0, ...sequence) + 1}`
-}
-
 function makeSku(
   product: { id: number; name: string; measurementName: string | null },
   skus: DraftSku[],
@@ -121,7 +111,7 @@ function makeSku(
   const measurementType = measurementFromProduct(product.measurementName)
   const isFirstSku = !skus.some((sku) => sku.productId === product.id)
   return {
-    id: nextSkuId(product.id, skus),
+    id: localSkuId(product.id, skus),
     productId: product.id,
     name: isFirstSku ? product.name : '',
     description: '',
@@ -140,10 +130,14 @@ function makeSku(
 export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confirm: RequestConfirmation }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
-  const [expandedProductIds, setExpandedProductIds] = useState<Set<number>>(
-    () => new Set(draft.products.map((product) => product.id)),
-  )
+  const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
+  const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
+  // Deliberately no `invalidateFrom`. These are empty scaffolding rows for products that
+  // have none yet, not an edit the vendor made — and invalidating from Step 6 would drop
+  // `furthestVisitedStep` to 6 and filter `completedSteps`. A vendor who resumed at Step 9
+  // with one unpriced product left over (the exact case `furthestSavedStep` exists to
+  // protect) would lose Steps 7-10 just by opening Step 6 to look at it.
   useEffect(() => {
     if (!draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))) return
     updateDraft((current) => {
@@ -152,25 +146,22 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
         if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus))
       }
       return { ...current, skus }
-    }, 6)
+    })
   }, [draft.products, draft.skus, updateDraft])
 
+  // A problem inside a closed product would otherwise be reported with nothing on
+  // screen to fix. Only one panel can be open, so open the first product that has one.
   useEffect(() => {
     if (!issues.length) return
-    const productIds = new Set<number>()
-    for (const product of draft.products) {
-      if (issues.some((item) => item.field === `product-${product.id}`)) productIds.add(product.id)
-    }
-    for (const sku of draft.skus) {
-      if (issues.some((item) => item.field.startsWith(`sku-${sku.id}`))) productIds.add(sku.productId)
-    }
-    if (!productIds.size) return
-    setExpandedProductIds((current) => {
-      const next = new Set(current)
-      productIds.forEach((productId) => next.add(productId))
-      return next
-    })
-  }, [draft.products, draft.skus, issues])
+    const faulty = draft.products.find(
+      (product) =>
+        issues.some((item) => item.field === `product-${product.id}`) ||
+        draft.skus.some(
+          (sku) => sku.productId === product.id && issues.some((item) => item.field.startsWith(`sku-${sku.id}`)),
+        ),
+    )
+    if (faulty) setOpenId(faulty.id)
+  }, [draft.products, draft.skus, issues, setOpenId])
 
   const updateSku = (skuId: string, patch: Partial<DraftSku>) => updateDraft(
     (current) => ({
@@ -185,9 +176,9 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
     if (productSkuCount <= 1) return
 
     confirm({
-      title: 'Remove this SKU?',
-      description: 'Its measurement, fulfillment choices, and prices will be removed.',
-      confirmLabel: 'Remove SKU',
+      title: 'Remove this size?',
+      description: 'Its measurement, fulfilment choices, and prices will be removed.',
+      confirmLabel: 'Remove size',
       tone: 'danger',
       onConfirm: () => updateDraft(
         (current) => {
@@ -206,9 +197,9 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
 
   return (
     <div className="space-y-5">
-      <p className="rounded-lg bg-muted/55 px-4 py-3 text-sm leading-6 text-muted-foreground">
-        Create one sellable SKU for each product. Add another only when a size or pack needs different pricing.
-      </p>
+      <Hint className="mb-5">
+        Give each product at least one size and its price. Add another size only when a different pack sells for a different price.
+      </Hint>
       {draft.products.map((product) => {
         const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
         const productSkuIssues = productSkus.flatMap((sku) => validateDraftSku(sku, productSkus))
@@ -217,67 +208,57 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
         )
         const ready = hasValidActiveSku && productSkuIssues.length === 0
         return (
-          <details
+          <AccordionPanel
             key={product.id}
             id={`product-${product.id}`}
-            className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_10px_28px_-24px_rgba(15,23,42,0.45)]"
-            open={expandedProductIds.has(product.id)}
-            onToggle={(event) => {
-              const isOpen = event.currentTarget.open
-              setExpandedProductIds((current) => {
-                if (current.has(product.id) === isOpen) return current
-                const next = new Set(current)
-                if (isOpen) next.add(product.id)
-                else next.delete(product.id)
-                return next
-              })
-            }}
+            open={openId === product.id}
+            onToggle={onToggle(product.id)}
+            summary={
+              <>
+                <SkuProductThumb src={product.imageUrl} />
+                <div className="min-w-0 flex-1">
+                  <h3 id={`sku-product-${product.id}`} className="truncate font-display font-semibold text-[var(--ob-ink)]">{product.name}</h3>
+                  <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">
+                    {productSkus.length} {productSkus.length === 1 ? 'size' : 'sizes'} added
+                  </p>
+                </div>
+                <span className={cn(
+                  'hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex',
+                  ready
+                    ? 'bg-[var(--ob-brand-soft)] text-[var(--ob-brand)]'
+                    : 'bg-amber-100/80 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200',
+                )}>
+                  {ready ? <CheckCircle2Icon className="size-3.5" /> : <CircleAlertIcon className="size-3.5" />}
+                  {ready ? 'Ready' : 'Needs pricing'}
+                </span>
+              </>
+            }
           >
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 outline-none transition-colors hover:bg-muted/30 focus-visible:ring-3 focus-visible:ring-primary/25 [&::-webkit-details-marker]:hidden">
-              <SkuProductThumb src={product.imageUrl} />
-              <div className="min-w-0 flex-1">
-                <h3 id={`sku-product-${product.id}`} className="truncate font-display font-semibold">{product.name}</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {productSkus.length} {productSkus.length === 1 ? 'SKU' : 'SKUs'} present
-                </p>
-              </div>
-              <span className={cn(
-                'hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex',
-                ready
-                  ? 'bg-primary/[0.09] text-primary'
-                  : 'bg-amber-100/80 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200',
-              )}>
-                {ready ? <CheckCircle2Icon className="size-3.5" /> : <CircleAlertIcon className="size-3.5" />}
-                {ready ? 'Ready' : 'Needs pricing'}
-              </span>
-              <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
-            </summary>
-
-            <div className="border-t border-border/60 bg-muted/15 p-4">
+            <div>
               <div className="mb-3 flex justify-end">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => updateDraft((current) => ({ ...current, skus: [...current.skus, makeSku(product, current.skus)] }), 6)}
                 >
-                  <PlusIcon /> Add SKU
+                  <PlusIcon /> Add another size
                 </Button>
               </div>
               <FieldError issues={issues} field={`product-${product.id}`} />
               <div className="space-y-3">
                 {productSkus.map((sku) => (
-                  <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-border/60 ring-inset" aria-label={`${sku.name || product.name} SKU`}>
+                  <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${sku.name || product.name} size`}>
                     {productSkus.length > 1 ? (
                       <div className="mb-3 flex justify-end">
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${sku.name || 'SKU'}`} onClick={() => removeSku(sku)}>
-                          <Trash2Icon /> Remove SKU
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${sku.name || 'size'}`} onClick={() => removeSku(sku)}>
+                          <Trash2Icon /> Remove size
                         </Button>
                       </div>
                     ) : null}
                     <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[46rem]:grid-cols-3">
                       <Input
                         id={`sku-${sku.id}-name`}
-                        label="SKU name"
+                        label="Size name"
                         value={sku.name}
                         error={issues.find((item) => item.field === `sku-${sku.id}-name`)?.message}
                         onChange={(event) => updateSku(sku.id, { name: event.target.value })}
@@ -291,7 +272,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                             const measurementType = event.target.value as MeasurementType
                             updateSku(sku.id, { measurementType, unit: MEASUREMENT_UNITS[measurementType][0] })
                           }}
-                          className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
+                          className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
                         >
                           <option value="WEIGHT">Weight</option>
                           <option value="VOLUME">Volume</option>
@@ -306,7 +287,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                           aria-invalid={issues.some((item) => item.field === `sku-${sku.id}-unit`) || undefined}
                           aria-describedby={issues.some((item) => item.field === `sku-${sku.id}-unit`) ? `sku-${sku.id}-unit-error` : undefined}
                           onChange={(event) => updateSku(sku.id, { unit: event.target.value })}
-                          className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
+                          className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
                         >
                           {MEASUREMENT_UNITS[sku.measurementType].map((unit) => (
                             <option key={unit} value={unit}>{UNIT_LABELS[unit] ?? unit}</option>
@@ -350,7 +331,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                       <div className="@min-[32rem]:col-span-2 @min-[46rem]:col-span-3">
                         <Input
                           id={`sku-${sku.id}-description`}
-                          label="SKU description (optional)"
+                          label="Description (optional)"
                           value={sku.description}
                           maxLength={240}
                           error={issues.find((item) => item.field === `sku-${sku.id}-description`)?.message}
@@ -368,7 +349,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                 ))}
               </div>
             </div>
-          </details>
+          </AccordionPanel>
         )
       })}
     </div>
@@ -392,16 +373,16 @@ function RadioCard({
 }) {
   return (
     <label className={cn(
-      'relative block cursor-pointer overflow-hidden rounded-xl p-3 outline-none transition-[background-color,box-shadow,transform] focus-within:ring-3 focus-within:ring-primary/25 active:scale-[0.99] motion-reduce:transform-none',
+      'relative block cursor-pointer overflow-hidden rounded-xl border p-3 outline-none transition-[border-color,background-color] focus-within:ring-3 focus-within:ring-[var(--ob-brand-soft)]',
       checked
-        ? 'bg-primary/[0.09] ring-1 ring-primary/25 ring-inset'
-        : 'bg-muted/35 hover:bg-muted/65',
+        ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
+        : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
     )}>
       <span className="flex items-start gap-3">
         <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="mt-1" />
         <span>
-          <strong className="block text-sm">{title}</strong>
-          <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+          <strong className="block text-sm text-[var(--ob-ink)]">{title}</strong>
+          <span className="mt-1 block text-xs leading-5 text-[var(--ob-ink-soft)]">{description}</span>
         </span>
       </span>
     </label>
@@ -433,28 +414,25 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
   }))
 
   return (
-    <div className="space-y-5">
-      <section>
-        <div className="mb-3 flex items-center gap-2"><TruckIcon className="size-5 text-primary" /><h3 className="font-display font-semibold">Fulfillment</h3></div>
+    <div>
+      <StepSection id="fulfillment" title="Fulfilment" description="How orders reach your customers.">
         <div className="grid gap-3 @min-[38rem]:grid-cols-3">
           <RadioCard name="fulfillment" value="HOME_DELIVERY" checked={delivery.fulfillmentType === 'HOME_DELIVERY'} title="Home delivery" description="Deliver orders to customers." onChange={() => setFulfillment('HOME_DELIVERY')} />
           <RadioCard name="fulfillment" value="STORE_PICKUP" checked={delivery.fulfillmentType === 'STORE_PICKUP'} title="Store pickup" description="Customers collect from your store." onChange={() => setFulfillment('STORE_PICKUP')} />
           <RadioCard name="fulfillment" value="BOTH" checked={delivery.fulfillmentType === 'BOTH'} title="Both" description="Let customers choose at checkout." onChange={() => setFulfillment('BOTH')} />
         </div>
-      </section>
+      </StepSection>
 
-      <section>
-        <FieldLabel>Order acceptance</FieldLabel>
+      <StepSection id="order-acceptance" title="Order acceptance" description="Whether a new order needs your say-so before it moves.">
         <div className="grid gap-3 @min-[32rem]:grid-cols-2">
           <RadioCard name="acceptance" value="AUTO_ACCEPT" checked={delivery.orderAcceptancePolicy === 'AUTO_ACCEPT'} title="Automatic" description="Orders move ahead without manual review." onChange={() => updateDelivery((current) => ({ ...current, orderAcceptancePolicy: 'AUTO_ACCEPT' }))} />
           <RadioCard name="acceptance" value="MANUAL_APPROVAL" checked={delivery.orderAcceptancePolicy === 'MANUAL_APPROVAL'} title="Manual approval" description="Review each order before accepting it." onChange={() => updateDelivery((current) => ({ ...current, orderAcceptancePolicy: 'MANUAL_APPROVAL' }))} />
         </div>
-      </section>
+      </StepSection>
 
       {hasHomeDelivery ? (
         <>
-          <section>
-            <div className="mb-3 flex items-center gap-2"><Clock3Icon className="size-5 text-primary" /><h3 className="font-display font-semibold">Delivery schedule</h3></div>
+          <StepSection id="delivery-schedule" title="Delivery schedule" description="When you deliver, and how far ahead customers can order.">
             <div className="grid gap-2 @min-[32rem]:grid-cols-2">
               {([
                 ['FIXED_WINDOW', 'Fixed window', 'Deliver within a minimum and maximum number of days.'],
@@ -465,7 +443,7 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
                 <RadioCard key={value} name="schedule" value={value} checked={delivery.schedulingStrategy === value} title={title} description={description} onChange={() => updateDelivery((current) => ({ ...current, schedulingStrategy: value }))} />
               ))}
             </div>
-            <div className="mt-3 rounded-lg bg-muted/35 p-4">
+            <div className="mt-3 rounded-lg bg-[var(--ob-canvas)] p-4">
               {delivery.schedulingStrategy === 'FIXED_WINDOW' ? (
                 <div id="fixed-window" className="grid gap-3 @min-[32rem]:grid-cols-2">
                   <Input label="Minimum delivery days" type="number" min="0" value={delivery.fixedWindow.minDeliveryDays} onChange={(event) => updateDelivery((current) => ({ ...current, fixedWindow: { ...current.fixedWindow, minDeliveryDays: Number(event.target.value) } }))} />
@@ -500,10 +478,9 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
               ) : null}
               {issues.filter((item) => ['fixed-window', 'customer-date-range', 'customer-cutoff', 'predefined-days', 'max-orders', 'prep-range', 'operating-until', 'order-cutoff'].includes(item.field)).map((item) => <p key={`${item.field}-${item.message}`} className="mt-2 text-xs text-destructive">{item.message}</p>)}
             </div>
-          </section>
+          </StepSection>
 
-          <section>
-            <FieldLabel>Shipping charge</FieldLabel>
+          <StepSection id="shipping-charge-section" title="Delivery charge" description="What a customer pays to have an order brought to them.">
             <div className="grid gap-3 @min-[32rem]:grid-cols-2">
               <RadioCard name="shipping" value="FLAT" checked={delivery.shippingStrategy === 'FLAT'} title="Flat charge" description="Use one delivery charge for every order." onChange={() => updateDelivery((current) => ({ ...current, shippingStrategy: 'FLAT' }))} />
               <RadioCard name="shipping" value="ORDER_AMOUNT_THRESHOLD" checked={delivery.shippingStrategy === 'ORDER_AMOUNT_THRESHOLD'} title="Free over a threshold" description="Charge delivery below a chosen order amount." onChange={() => updateDelivery((current) => ({ ...current, shippingStrategy: 'ORDER_AMOUNT_THRESHOLD' }))} />
@@ -512,35 +489,40 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
               <Input id="shipping-charge" label="Delivery charge (₹)" type="number" min="0" step="0.01" value={delivery.shipping.charge} error={issues.find((item) => item.field === 'shipping-charge')?.message} onChange={(event) => updateDelivery((current) => ({ ...current, shipping: { ...current.shipping, charge: Number(event.target.value) } }))} />
               {delivery.shippingStrategy === 'ORDER_AMOUNT_THRESHOLD' ? <Input id="free-threshold" label="Free delivery above (₹)" type="number" min="0" step="0.01" value={delivery.shipping.freeDeliveryThreshold} error={issues.find((item) => item.field === 'free-threshold')?.message} onChange={(event) => updateDelivery((current) => ({ ...current, shipping: { ...current.shipping, freeDeliveryThreshold: Number(event.target.value) } }))} /> : null}
             </div>
-          </section>
+          </StepSection>
 
-          <section>
-            <div className="flex items-center justify-between gap-2">
-              <FieldLabel optional>Delivery slots</FieldLabel>
-              <Button variant="outline" size="sm" onClick={addSlot}><PlusIcon /> Add slot</Button>
-            </div>
+          <StepSection
+            id="delivery-slots"
+            title="Delivery slots"
+            description="Optional. Restrict deliveries to set windows in the day."
+            aside={<Button variant="outline" size="sm" onClick={addSlot}><PlusIcon /> Add slot</Button>}
+          >
             <div className="space-y-2">
               {delivery.slots.map((slot) => (
-                <div key={slot.id} id={`slot-${slot.id}`} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-lg bg-muted/35 p-3">
+                <div key={slot.id} id={`slot-${slot.id}`} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-lg bg-[var(--ob-canvas)] p-3">
                   <Input label="Starts" type="time" value={slot.startTime} onChange={(event) => updateDelivery((current) => ({ ...current, slots: current.slots.map((item) => item.id === slot.id ? { ...item, startTime: event.target.value } : item) }))} />
                   <Input label="Ends" type="time" value={slot.endTime} onChange={(event) => updateDelivery((current) => ({ ...current, slots: current.slots.map((item) => item.id === slot.id ? { ...item, endTime: event.target.value } : item) }))} />
                   <Button variant="ghost" size="sm" aria-label="Remove delivery slot" onClick={() => updateDelivery((current) => ({ ...current, slots: current.slots.filter((item) => item.id !== slot.id) }))}><Trash2Icon /></Button>
                   <div className="col-span-full"><FieldError issues={issues} field={`slot-${slot.id}`} /></div>
                 </div>
               ))}
-              {!delivery.slots.length ? <p className="text-sm text-muted-foreground">No restricted time slots. Customers can use the configured scheduling strategy.</p> : null}
+              {!delivery.slots.length ? <p className="text-sm text-[var(--ob-ink-soft)]">No restricted time slots. Customers can use the configured scheduling strategy.</p> : null}
             </div>
-          </section>
+          </StepSection>
         </>
       ) : (
-        <p className="rounded-lg bg-muted/55 px-4 py-3 text-sm leading-6 text-muted-foreground">Home-delivery scheduling and shipping charges are hidden because this store currently offers pickup only.</p>
+        <div className="mt-6">
+          <Hint>Home-delivery scheduling and shipping charges are hidden because this store currently offers pickup only.</Hint>
+        </div>
       )}
 
-      <section id="consent" className="grid gap-3 @min-[32rem]:grid-cols-2">
-        <Input label="Consent title (optional)" value={delivery.consentTitle} onChange={(event) => updateDelivery((current) => ({ ...current, consentTitle: event.target.value }))} />
-        <Input label="Consent message (optional)" value={delivery.consentText} onChange={(event) => updateDelivery((current) => ({ ...current, consentText: event.target.value }))} />
-        <div className="@min-[32rem]:col-span-2"><FieldError issues={issues} field="consent" /></div>
-      </section>
+      <StepSection id="consent" title="Order consent" description="Optional. Shown to a customer before they confirm an order.">
+        <div className="grid gap-3 @min-[32rem]:grid-cols-2">
+          <Input label="Consent title (optional)" value={delivery.consentTitle} onChange={(event) => updateDelivery((current) => ({ ...current, consentTitle: event.target.value }))} />
+          <Input label="Consent message (optional)" value={delivery.consentText} onChange={(event) => updateDelivery((current) => ({ ...current, consentText: event.target.value }))} />
+          <div className="@min-[32rem]:col-span-2"><FieldError issues={issues} field="consent" /></div>
+        </div>
+      </StepSection>
     </div>
   )
 }
@@ -585,25 +567,26 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-3 rounded-xl bg-primary/[0.06] p-4 text-sm leading-6 text-muted-foreground">
-        <WalletCardsIcon className="mt-0.5 size-5 shrink-0 text-primary" />
-        <p>Choose every payment method you accept and mark one as the default.</p>
-      </div>
+      <Hint icon={<WalletCardsIcon className="size-4 text-[var(--ob-brand)]" />}>
+        Choose every payment method you accept and mark one as the default.
+      </Hint>
       <div id="payment-options" className="space-y-3">
         {draft.payments.map((payment) => {
           const label = PAYMENT_LABELS[payment.type]
           return (
             <section key={payment.type} className={cn(
-              'rounded-xl bg-muted/35 p-4 transition-[background-color,box-shadow]',
-              payment.enabled && 'bg-primary/[0.09] ring-1 ring-primary/25 ring-inset',
+              'rounded-xl border p-4 transition-[border-color,background-color]',
+              payment.enabled
+                ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
+                : 'border-[var(--ob-line)] bg-[var(--ob-sheet)]',
             )}>
               <div className="flex items-start justify-between gap-4">
                 <label className="flex min-w-0 cursor-pointer items-start gap-3">
                   <input type="checkbox" checked={payment.enabled} onChange={(event) => toggle(payment.type, event.target.checked)} className="mt-2.5" />
                   <PaymentMethodIcon type={payment.type} />
                   <span className="pt-0.5">
-                    <strong className="block text-sm">{label.title}</strong>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">{label.description}</span>
+                    <strong className="block text-sm text-[var(--ob-ink)]">{label.title}</strong>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--ob-ink-soft)]">{label.description}</span>
                   </span>
                 </label>
                 <label className={cn('flex shrink-0 items-center gap-2 text-xs font-medium', !payment.enabled && 'opacity-50')}>
@@ -612,7 +595,7 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
               </div>
 
               {payment.enabled && payment.type === 'PRE_PAID' ? (
-                <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 @min-[32rem]:grid-cols-2">
+                <div className="mt-4 grid gap-3 border-t border-[var(--ob-line)] pt-4 @min-[32rem]:grid-cols-2">
                   <Input
                     id="upi-id"
                     label="UPI ID"
@@ -636,7 +619,7 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
               ) : null}
 
               {payment.enabled && payment.type === 'ONLINE' ? (
-                <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 @min-[32rem]:grid-cols-2">
+                <div className="mt-4 grid gap-3 border-t border-[var(--ob-line)] pt-4 @min-[32rem]:grid-cols-2">
                   <Input
                     id="bank-account-holder-name"
                     label="Account holder name"
@@ -679,7 +662,7 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
       </div>
       <FieldError issues={issues} field="payment-options" />
       <FieldError issues={issues} field="payment-default" />
-      <p className="text-xs leading-5 text-muted-foreground">Payment details stay only in this tab during prototype mode.</p>
+      <p className="text-xs leading-5 text-[var(--ob-ink-soft)]">Payment details stay only in this tab during prototype mode.</p>
     </div>
   )
 }

@@ -1,37 +1,50 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  CheckIcon,
   DatabaseIcon,
   EyeIcon,
   LockKeyholeIcon,
   Loader2Icon,
   RotateCcwIcon,
+  StoreIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { authService, getErrorMessage, isLiveApi, vendorOnboardingService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
-import { canEnterCatalogSteps, resolveOnboardingAccess } from '../../lib/onboarding-access'
+import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
+import { canEnterCatalogSteps } from '../../lib/onboarding-access'
+import {
+  buildResumeDraft,
+  isVendorLive,
+  resumePaymentDetails,
+  type ServerOnboardingState,
+} from '../../lib/onboarding-resume'
+import {
+  invalidateVendorOnboardingState,
+  loadVendorOnboardingState,
+  peekVendorOnboardingState,
+} from '../../lib/onboarding-server-state'
 import { maskPhone } from '../../lib/onboarding-adapter'
 import { isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
   ONBOARDING_STEPS,
-  type OnboardingPersistenceStatus,
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice, DraftOnlyNotice } from './AccessNotice'
+import { AccessNotice, DraftOnlyNotice, StepNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
-import { OtpStep, PhoneStep } from './IdentitySteps'
+import { OtpStep, PhoneStep, VerifiedIdentityNotice } from './IdentitySteps'
 import { DeliveryStep, PaymentStep, SkuStep } from './OperationsSteps'
 import { CorruptDraftDialog, DraftConflictDialog } from './RecoveryDialogs'
+import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
+import { PreviewStats } from './PreviewStats'
 import type { RequestConfirmation } from './StepPrimitives'
 
 const EMPTY_CONFIRM: ConfirmDialogState = {
@@ -50,129 +63,41 @@ function LivePreviewPane() {
   return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} />
 }
 
+/** The bay where the shop takes shape: the storefront as a customer will see it. */
 function PhonePreviewStage({ className, id, labelledBy }: { className?: string; id?: string; labelledBy?: string }) {
   return (
-    <aside id={id} role={labelledBy ? 'tabpanel' : undefined} aria-labelledby={labelledBy} className={cn('onboarding-preview-stage relative min-h-0 overflow-hidden bg-muted/35', className)} aria-label={labelledBy ? undefined : 'Storefront preview'}>
-      <div className="onboarding-phone-frame">
-        <LivePreviewPane />
+    <aside
+      id={id}
+      role={labelledBy ? 'tabpanel' : undefined}
+      aria-labelledby={labelledBy}
+      className={cn('onboarding-preview-stage relative min-h-0', className)}
+      aria-label={labelledBy ? undefined : 'Storefront preview'}
+    >
+      <div className="flex w-full max-w-[17.5rem] shrink-0 items-center gap-2 text-[var(--ob-ink-soft)]">
+        <StoreIcon className="size-3.5" aria-hidden="true" />
+        <span className="ob-eyebrow">Live preview</span>
+        <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium">
+          <LockKeyholeIcon className="size-2.5" aria-hidden="true" />
+          Private
+        </span>
       </div>
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><LockKeyholeIcon className="size-3" aria-hidden="true" />Private preview</span>
+      <LivePreviewPane />
+      <PreviewStats className="shrink-0" />
     </aside>
   )
 }
 
-function persistenceLabel(status: OnboardingPersistenceStatus): string {
-  if (status === 'loading') return 'Checking saved draft'
-  if (status === 'saving') return 'Saving…'
-  if (status === 'saved') return 'Saved in this browser'
-  if (status === 'unavailable') return 'Browser recovery unavailable'
-  if (status === 'conflict') return 'Saving paused'
-  if (status === 'corrupt') return 'Saved draft needs reset'
-  return 'Browser draft ready'
-}
-
-function PersistenceStatus({ status, label }: { status: OnboardingPersistenceStatus; label: string }) {
-  const pending = status === 'loading' || status === 'saving'
-  const saved = status === 'saved'
-  const unavailable = status === 'unavailable' || status === 'corrupt' || status === 'conflict'
-
-  return (
-    <span
-      role="status"
-      aria-label={label}
-      title={label}
-      className={cn(
-        'inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground',
-        unavailable && 'text-amber-700 dark:text-amber-300',
-      )}
-    >
-      {pending ? (
-        <Loader2Icon className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-      ) : saved ? (
-        <CheckIcon className="size-3.5 text-primary" aria-hidden="true" />
-      ) : (
-        <LockKeyholeIcon className="size-3.5" aria-hidden="true" />
-      )}
-      <span className="hidden max-w-40 truncate min-[560px]:inline">{label}</span>
-    </span>
-  )
-}
-
-function StepJourney({
-  currentStep,
-  completedSteps,
-  furthestVisitedStep,
-  onNavigate,
-}: {
-  currentStep: OnboardingStep
-  completedSteps: OnboardingStep[]
-  furthestVisitedStep: OnboardingStep
-  onNavigate: (step: OnboardingStep) => void
-}) {
-  return (
-    <nav aria-label="Onboarding progress" className="w-full">
-      <ol className="isolate grid grid-cols-10">
-        {ONBOARDING_STEPS.map((item, index) => {
-          const completed = completedSteps.includes(item.step)
-          const current = currentStep === item.step
-          const reachable = item.step <= furthestVisitedStep
-          const previousStep = ONBOARDING_STEPS[index - 1]
-          const connectorComplete = previousStep ? completedSteps.includes(previousStep.step) : false
-          const stateLabel = current ? 'Current step' : completed ? 'Completed' : reachable ? 'Available' : 'Locked'
-
-          return (
-            <li key={item.step} className="relative min-w-0">
-              {index > 0 ? (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'absolute top-3 right-1/2 -left-1/2 z-0 h-0.5 bg-border/70 transition-colors min-[400px]:top-3.5',
-                    connectorComplete && 'bg-primary/60',
-                  )}
-                />
-              ) : null}
-              <button
-                type="button"
-                disabled={!reachable}
-                aria-current={current ? 'step' : undefined}
-                aria-label={`${item.short}. ${stateLabel}.`}
-                title={`${item.short}: ${stateLabel.toLowerCase()}`}
-                onClick={() => onNavigate(item.step)}
-                className={cn(
-                  'group relative z-10 flex min-h-10 w-full min-w-0 flex-col items-center gap-1.5 rounded-md px-0.5 outline-none',
-                  !reachable && 'cursor-not-allowed',
-                )}
-              >
-                <span
-                  className={cn(
-                    'grid size-6 place-items-center rounded-full border bg-background text-[9px] font-bold tabular-nums text-muted-foreground transition-[background-color,border-color,color,box-shadow] group-focus-visible:ring-2 group-focus-visible:ring-primary/20 min-[400px]:size-7 min-[400px]:text-[10px] sm:group-focus-visible:ring-4',
-                    completed && !current && 'border-primary bg-primary text-primary-foreground group-hover:bg-primary/90',
-                    current && 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/12 sm:ring-4',
-                    reachable && !current && !completed && 'border-primary/35 bg-primary/[0.07] text-primary group-hover:border-primary/55 group-hover:bg-primary/10',
-                    !reachable && 'border-border/70 bg-muted/70 text-muted-foreground/45',
-                  )}
-                  aria-hidden="true"
-                >
-                  {completed && !current ? <CheckIcon className="size-3.5 stroke-[2.5]" /> : item.step}
-                </span>
-                <span
-                  className={cn(
-                    'hidden max-w-full truncate text-[10px] font-medium leading-none text-muted-foreground min-[1160px]:block',
-                    current && 'font-semibold text-primary',
-                    completed && !current && 'text-foreground/75',
-                    !reachable && 'opacity-45',
-                  )}
-                  aria-hidden="true"
-                >
-                  {item.short}
-                </span>
-              </button>
-            </li>
-          )
-        })}
-      </ol>
-    </nav>
-  )
+/**
+ * Whether a typed number is provably the one already signed in.
+ *
+ * `maskedPhone` keeps the last four digits and is deliberately never persisted, so after
+ * a reload this returns false and the vendor is asked to confirm. Erring towards showing
+ * the warning is the safe direction — the alternative is switching accounts silently.
+ */
+function matchesSessionPhone(phone: string, maskedPhone: string | null): boolean {
+  if (!maskedPhone) return false
+  const digits = phone.replace(/\D/g, '')
+  return digits.length >= 4 && maskedPhone.endsWith(digits.slice(-4))
 }
 
 export function OnboardingWizard() {
@@ -189,7 +114,6 @@ export function OnboardingWizard() {
   const goToStep = useOnboardingStore((state) => state.goToStep)
   const completePrototype = useOnboardingStore((state) => state.completePrototype)
   const reset = useOnboardingStore((state) => state.reset)
-  const initializePersistence = useOnboardingStore((state) => state.initializePersistence)
   const flushPersistence = useOnboardingStore((state) => state.flushPersistence)
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
@@ -197,20 +121,32 @@ export function OnboardingWizard() {
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setLivePublication = useOnboardingStore((state) => state.setLivePublication)
+  const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
+  const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
+  const livePublication = useOnboardingStore((state) => state.livePublication)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
-  const user = useAuthStore((state) => state.user)
   const completeOtpLogin = useAuthStore((state) => state.completeOtpLogin)
   const selectVendor = useAuthStore((state) => state.selectVendor)
   const logout = useAuthStore((state) => state.logout)
-  const access = useMemo(() => resolveOnboardingAccess(user), [user])
+  const { access, hasSession } = useOnboardingDraftSession()
   const catalogUnlocked = canEnterCatalogSteps(access)
 
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
-  const [serverProgress, setServerProgress] = useState<number | null>(null)
+  // The wizard must not paint an interactive step before the account has been read:
+  // Step 3 would flash and then jump to wherever the resume actually lands.
+  const [accountState, setAccountState] = useState<'idle' | 'loading' | 'ready'>('idle')
+  const [contextError, setContextError] = useState<string | null>(null)
+  const [vendorIsLive, setVendorIsLive] = useState(false)
+  // A vendor may change their number until their store goes live. Re-running OTP still
+  // signs a different vendor in underneath this draft, so it is a confirmed switch
+  // rather than something that can happen by accident. Once the store is live the
+  // identity is settled: changing it would mean a second store, not an edit.
+  const identitySettled = hasSession && vendorIsLive
+  const firstNavigableStep: OnboardingStep = identitySettled ? 3 : 1
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form')
   const [confirmState, setConfirmState] = useState<ConfirmDialogState>(EMPTY_CONFIRM)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -224,7 +160,6 @@ export function OnboardingWizard() {
   }
 
   useEffect(() => {
-    initializePersistence()
     const handlePageHide = () => flushPersistence()
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') flushPersistence()
@@ -235,8 +170,11 @@ export function OnboardingWizard() {
       requestControllerRef.current?.abort()
       window.removeEventListener('pagehide', handlePageHide)
       document.removeEventListener('visibilitychange', handleVisibility)
+      // Leaving the wizard must not leave a queued write behind: it would land after
+      // any sign-out cleanup and restore the draft that was just cleared.
+      flushPersistence()
     }
-  }, [flushPersistence, initializePersistence])
+  }, [flushPersistence])
 
   // Steps 1-2 exist to establish a session. If one already exists (for example the vendor
   // signed in at /vendor/login first) they are already satisfied; if it disappears, the
@@ -245,41 +183,100 @@ export function OnboardingWizard() {
     if (!persistenceInitialized) return
     if (access.state === 'anonymous') revokeVerifiedSession()
     else adoptVerifiedSession(null)
-  }, [access.state, persistenceInitialized, adoptVerifiedSession, revokeVerifiedSession])
+    // Keyed on `access`, not `access.state`: the active vendor can change while the
+    // state stays 'ready', and that resets the draft to Step 1 with the identity steps
+    // locked — leaving no reachable step unless this runs again.
+  }, [access, persistenceInitialized, adoptVerifiedSession, revokeVerifiedSession])
 
+  /**
+   * Bring the wizard in line with the vendor's account.
+   *
+   * The account is the record and this browser only buffers what has not reached it, so
+   * this runs on every entry — not once per browser. The one thing it will not do is
+   * overwrite edits the vendor has made and not yet saved.
+   */
   useEffect(() => {
     if (access.state !== 'ready') {
       setCategoryLimit(null)
+      setContextError(null)
+      setVendorIsLive(false)
+      setLivePublication(null)
+      setAccountCatalog({ categoryIds: [], productIds: [] })
+      setAccountState('idle')
       return
     }
-    const controller = new AbortController()
+    // Demo mode has no account to read; the local draft is all there is.
+    if (!isLiveApi()) {
+      setAccountState('ready')
+      return
+    }
+
+    const apply = (server: ServerOnboardingState) => {
+      setContextError(null)
+      setCategoryLimit(server.context.subscription.limits.maxCategories)
+      setVendorIsLive(isVendorLive(server))
+      // What is already on the store, and therefore can no longer be unpicked.
+      setAccountCatalog({
+        categoryIds: server.categories.map((category) => category.platformCategoryId),
+        productIds: server.products.map((product) => product.platformProductId),
+      })
+
+      // A submitted store still has to show its own catalog and settings on Steps 3-9,
+      // so it is hydrated like any other — it just opens on the review step instead.
+      setLivePublication(
+        isVendorLive(server)
+          ? {
+              storeIdentifier: server.context.storeIdentifier,
+              approvalStatus: server.context.approvalStatus,
+              vendorStatus: server.context.vendorStatus,
+            }
+          : null,
+      )
+
+      // Unsaved local work is the vendor's newest and outranks the account copy.
+      const current = useOnboardingStore.getState()
+      if (current.hasLocalEdits) return
+
+      const resumed = buildResumeDraft(server)
+      applyResumedDraft(resumed.draft, resumed.furthestVisitedStep, {
+        paymentDetails: resumePaymentDetails(server.checkout, current.runtime.paymentDetails),
+        orderWhatsapp: resumed.orderWhatsapp,
+      })
+    }
+
+    // Sign-in resolved this already. Applying it here rather than waiting on the promise
+    // keeps the very first paint correct, instead of one frame of the un-hydrated draft.
+    const cached = peekVendorOnboardingState(access.vendorId)
+    if (cached) {
+      apply(cached)
+      setAccountState('ready')
+      return
+    }
+
     let ignore = false
-    vendorOnboardingService
-      .getVendorContext(access.vendorId, { signal: controller.signal })
-      .then((context) => {
+    setAccountState('loading')
+
+    loadVendorOnboardingState(access.vendorId)
+      .then((server) => {
+        if (!ignore) apply(server)
+      })
+      .catch((error: unknown) => {
         if (ignore) return
-        setCategoryLimit(context.subscription.limits.maxCategories)
-        // A vendor who already finished must see their real store state, not an
-        // empty wizard, even from a browser with no local draft.
-        if (context.onboarding.status === 'COMPLETED') {
-          setLivePublication({
-            storeIdentifier: context.storeIdentifier,
-            approvalStatus: context.approvalStatus,
-            vendorStatus: context.vendorStatus,
-            completedAt: new Date().toISOString(),
-          })
-        }
-        setServerProgress(context.onboarding.nextStep)
+        // The category limit has a usable fallback, but this same call decides whether a
+        // finished store is shown at all. A vendor whose store is live and awaiting
+        // approval must not be handed an empty wizard with no explanation.
+        setContextError(
+          getErrorMessage(error, 'Could not load your store details. Some steps may show defaults.'),
+        )
       })
-      .catch(() => {
-        // Limits and resume are enhancements; the configured fallback keeps the
-        // step usable and the local draft still governs.
+      .finally(() => {
+        if (!ignore) setAccountState('ready')
       })
+
     return () => {
       ignore = true
-      controller.abort()
     }
-  }, [access, setCategoryLimit, setLivePublication])
+  }, [access, setCategoryLimit, setLivePublication, setAccountCatalog, applyResumedDraft])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -328,7 +325,7 @@ export function OnboardingWizard() {
     if (referenceMode === 'sample') return
     requestConfirmation({
       title: 'Switch the whole catalog to sample data?',
-      description: 'This clears the current business type, categories, products, and SKUs because sample and live IDs cannot be mixed.',
+      description: 'This clears the current business type, categories, products, and their sizes and prices, because sample and live IDs cannot be mixed.',
       confirmLabel: 'Use sample catalog',
       tone: 'danger',
       onConfirm: () => {
@@ -386,6 +383,7 @@ export function OnboardingWizard() {
   }
 
   const handleOtpRequest = async () => {
+    if (identitySettled) return
     const { draft, runtime } = useOnboardingStore.getState()
     const phoneIssues = validateStep(1, draft, runtime)
     if (phoneIssues.length) {
@@ -393,6 +391,19 @@ export function OnboardingWizard() {
       return
     }
     const phone = runtime.phone
+
+    // `request-otp` is what creates the account, so the warning belongs here rather
+    // than before verification. Skipped only when the number is provably the one
+    // already signed in.
+    if (hasSession && !matchesSessionPhone(phone, draft.maskedPhone)) {
+      confirmNumberChange(phone)
+      return
+    }
+
+    await sendOtp(phone)
+  }
+
+  const sendOtp = async (phone: string) => {
     const controller = beginRequest()
     setStatusMessage('Sending your WhatsApp code…')
     try {
@@ -414,7 +425,21 @@ export function OnboardingWizard() {
     }
   }
 
+  const confirmNumberChange = (phone: string) => requestConfirmation({
+    title: 'Set up with a different number?',
+    description:
+      'This signs you out of the number you are using now and starts setup on the new one, creating a new store if that number has never been used. '
+      + 'Anything already saved to your current store stays with it — sign in with that number again to pick it up. '
+      + 'Unsaved details in this browser, and any photos you picked, are cleared.',
+    confirmLabel: 'Use this number',
+    tone: 'danger',
+    onConfirm: () => {
+      void sendOtp(phone)
+    },
+  })
+
   const handleOtpVerify = async () => {
+    if (identitySettled) return
     const { runtime } = useOnboardingStore.getState()
     const otp = runtime.otpDigits.join('')
     if (runtime.otpDigits.some((digit) => !digit)) {
@@ -444,6 +469,7 @@ export function OnboardingWizard() {
   }
 
   const resendOtp = async () => {
+    if (identitySettled) return false
     const { runtime } = useOnboardingStore.getState()
     if (!runtime.phone) {
       setStatusMessage('Return to the first step and enter the phone number again.')
@@ -477,7 +503,7 @@ export function OnboardingWizard() {
     if (draft.currentStep === 2) return handleOtpVerify()
     if (!catalogUnlocked) return
     if (draft.currentStep === 10) {
-      const nextIssues = readinessIssues(draft, runtime)
+      const nextIssues = readinessIssues(draft, runtime, categoryLimit)
       if (nextIssues.length) return showIssues(nextIssues)
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
@@ -489,29 +515,46 @@ export function OnboardingWizard() {
       const controller = beginRequest()
       setStatusMessage('Submitting your store…')
       try {
-        await vendorOnboardingService.goLive(access.vendorId)
-        // Go-live activates the vendor but approval is a separate admin step, so the
-        // real state is read back rather than assumed.
-        const context = await vendorOnboardingService.getVendorContext(access.vendorId)
-        if (!requestIsCurrent(controller, 10)) return
-        setLivePublication({
-          storeIdentifier: context.storeIdentifier,
-          approvalStatus: context.approvalStatus,
-          vendorStatus: context.vendorStatus,
-          completedAt: new Date().toISOString(),
-        })
+        try {
+          await vendorOnboardingService.goLive(access.vendorId)
+        } catch (error) {
+          if (!requestIsCurrent(controller, 10)) return
+          setStatusMessage(null)
+          showIssues([
+            {
+              step: 10,
+              field: 'store-name',
+              message: getErrorMessage(error, 'Could not submit your store. Please try again.'),
+            },
+          ])
+          return
+        }
+
+        // Past this point the store is submitted. The read-back only refines what is
+        // shown, so its failure must never be reported as a failed submission — that
+        // wording sends the vendor back to press Complete setup again on a store that
+        // is already live.
+        //
+        // The account just changed: anything cached from before go-live is now stale.
+        invalidateVendorOnboardingState(access.vendorId)
+        try {
+          // Go-live activates the vendor but approval is a separate admin step, so the
+          // real state is read back rather than assumed.
+          const context = await vendorOnboardingService.getVendorContext(access.vendorId)
+          if (!requestIsCurrent(controller, 10)) return
+          setLivePublication({
+            storeIdentifier: context.storeIdentifier,
+            approvalStatus: context.approvalStatus,
+            vendorStatus: context.vendorStatus,
+          })
+        } catch {
+          if (!requestIsCurrent(controller, 10)) return
+          setContextError(
+            'Your store was submitted. We could not load its latest status just now — reload to see it.',
+          )
+        }
         setStatusMessage(null)
         completePrototype(slug)
-      } catch (error) {
-        if (!requestIsCurrent(controller, 10)) return
-        setStatusMessage(null)
-        showIssues([
-          {
-            step: 10,
-            field: 'store-name',
-            message: getErrorMessage(error, 'Could not submit your store. Please try again.'),
-          },
-        ])
       } finally {
         finishRequest(controller)
       }
@@ -534,6 +577,8 @@ export function OnboardingWizard() {
       setStatusMessage('Saving to your store…')
       try {
         await persistStep(step, access.vendorId, draft, runtime)
+        // This step is now on the account, so a cached read from before it is stale.
+        invalidateVendorOnboardingState(access.vendorId)
         if (!requestIsCurrent(controller, step)) return
         setStatusMessage(null)
       } catch (error) {
@@ -558,12 +603,15 @@ export function OnboardingWizard() {
 
   const navigateToStep = (step: OnboardingStep) => {
     cancelActiveRequest()
-    const target = step <= 2 && !useOnboardingStore.getState().runtime.phone ? 1 : step
-    goToStep(target)
+    if (identitySettled) {
+      goToStep(Math.max(step, firstNavigableStep) as OnboardingStep)
+      return
+    }
+    goToStep(step <= 2 && !useOnboardingStore.getState().runtime.phone ? 1 : step)
   }
 
   const goBack = () => {
-    if (currentStep > 1) navigateToStep((currentStep - 1) as OnboardingStep)
+    if (currentStep > firstNavigableStep) navigateToStep((currentStep - 1) as OnboardingStep)
   }
 
   const confirmReset = () => requestConfirmation({
@@ -579,60 +627,75 @@ export function OnboardingWizard() {
   })
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
-  const isComplete = publicationState === 'prototype-complete' && completedSteps.includes(10)
+  // A submitted store is finished whatever the local draft says: `livePublication` comes
+  // from the account, and there is nothing left for "Complete setup" to do.
+  const isComplete =
+    livePublication != null || (publicationState === 'prototype-complete' && completedSteps.includes(10))
   const continueLabel = currentStep === 1 ? 'Send code on WhatsApp'
     : currentStep === 2 ? 'Verify and continue'
       : currentStep === 9 ? 'Review readiness'
         : currentStep === 10 ? 'Complete setup'
           : 'Continue'
-  const saveLabel = persistenceLabel(persistenceStatus)
   // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
   // rather than only on the ones with an open contract gap.
-  const behindServer =
-    isLiveApi() && serverProgress != null && serverProgress > furthestVisitedStep
-  const stepNotice = currentStep >= 3 && !isLiveApi()
-    ? 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
-    : behindServer
-      ? `Your store already has setup saved up to step ${Math.min(serverProgress! - 1, 10)}. Continuing from here will not remove it.`
-      : null
+  //
+  // There is deliberately no "your store is further along than this" notice. The only
+  // value that could drive one is `onboarding.next_step`, which the backend derives and
+  // moves backwards (docs/API_GAPS.md) — it reported steps the vendor had already passed.
+  const draftOnlyNotice = currentStep < 3 || isLiveApi()
+    ? null
+    : 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
   const moveMobileTab = (view: 'form' | 'preview') => {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
   }
+  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep }
 
-  if (!persistenceInitialized) {
+  if (!persistenceInitialized || accountState === 'loading') {
+    // One gate for both reads. Painting between them shows Step 3 to a vendor whose
+    // account puts them on Step 9, and then moves the form under them.
     return (
-      <div className="grid h-full min-h-0 place-items-center bg-background text-sm text-muted-foreground">
-        <span className="flex items-center gap-2"><Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" /> Restoring browser draft…</span>
+      <div className="onboarding-shell grid h-full min-h-0 place-items-center text-sm text-[var(--ob-ink-soft)]">
+        <span className="flex items-center gap-2">
+          <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+          {persistenceInitialized ? 'Restoring your setup…' : 'Restoring browser draft…'}
+        </span>
       </div>
     )
   }
 
   return (
-    <div className="h-full min-h-0 overflow-hidden bg-background text-foreground [contain:paint]">
-      <div className="grid h-full min-h-0 min-[900px]:grid-cols-[minmax(0,1fr)_clamp(17rem,22vw,19rem)]">
-        <div className="flex min-h-0 min-w-0 flex-col bg-background">
-          <div className="grid shrink-0 grid-cols-2 border-b border-border/45 bg-background p-1 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
-            <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-primary/25', mobileView === 'form' && 'bg-muted/70 text-foreground')}>Form</button>
-            <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-primary/25', mobileView === 'preview' && 'bg-muted/70 text-foreground')}><EyeIcon className="size-4" /> Preview</button>
+    <div className="onboarding-shell h-full min-h-0 overflow-hidden text-[var(--ob-ink)] [contain:paint]">
+      <div className="ob-grid">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="grid shrink-0 grid-cols-2 gap-1 p-1.5 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
+            <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>
+            <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'preview' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}><EyeIcon className="size-4" /> Your shop</button>
           </div>
 
           <div className="min-h-0 flex-1">
             <main id="onboarding-form-panel" role="tabpanel" aria-labelledby="onboarding-form-tab" className={cn('h-full min-h-0 min-w-0', mobileView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
-              <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-                <div className="shrink-0 border-b border-border/45">
-                  <div className="mx-auto w-full max-w-[52rem] px-5 pt-3.5 pb-4 sm:px-7 min-[900px]:px-8 min-[900px]:pt-4">
-                    <div className="mb-2.5 flex min-h-8 items-center justify-between gap-3">
-                      <PersistenceStatus status={persistenceStatus} label={saveLabel} />
-                      <div className="flex shrink-0 items-center gap-1.5">
+              <section className="flex h-full min-h-0 flex-col">
+                <div className="shrink-0">
+                  <OnboardingStepper {...stepperProps} onNavigate={navigateToStep} />
+                </div>
+
+                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 [scrollbar-gutter:stable] sm:px-6 min-[900px]:px-8 min-[900px]:pt-5">
+                  <div className="mx-auto w-full max-w-[54rem]">
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                      <div className="min-w-0 flex-1">
+                        <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.625rem] leading-[1.15] font-bold tracking-[-0.03em] text-[var(--ob-ink)] outline-none sm:text-[1.875rem]">{stepMeta.title}</h1>
+                        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">{stepMeta.description}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1 pt-1">
                         <button
                           type="button"
                           onClick={referenceMode === 'live' ? requestSampleCatalog : requestLiveCatalog}
                           aria-label={`${referenceMode === 'live' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
                           className={cn(
-                            'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-primary/25',
+                            'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                             referenceMode === 'live'
-                              ? 'bg-primary/[0.08] text-primary hover:bg-primary/[0.12]'
+                              ? 'text-[var(--ob-ink-soft)] hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)]'
                               : 'bg-amber-100 text-amber-900 hover:bg-amber-200/80 dark:bg-amber-950/45 dark:text-amber-200',
                           )}
                         >
@@ -640,58 +703,68 @@ export function OnboardingWizard() {
                           <span className="sm:hidden">{referenceMode === 'live' ? 'Live' : 'Sample'}</span>
                           <span className="hidden sm:inline">{referenceMode === 'live' ? 'Live catalog' : 'Sample catalog'}</span>
                         </button>
-                        <Button variant="ghost" size="sm" aria-label="Start over" className="px-2" onClick={confirmReset}>
-                          <RotateCcwIcon />
+                        <button
+                          type="button"
+                          onClick={confirmReset}
+                          aria-label="Start over"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]"
+                        >
+                          <RotateCcwIcon className="size-3.5" aria-hidden="true" />
                           <span className="hidden min-[700px]:inline">Start over</span>
-                        </Button>
+                        </button>
                       </div>
                     </div>
-                    <StepJourney currentStep={currentStep} completedSteps={completedSteps} furthestVisitedStep={furthestVisitedStep} onNavigate={navigateToStep} />
-                    <div className="mt-2.5">
-                      <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.45rem] font-semibold tracking-[-0.025em] outline-none sm:text-[1.625rem]">{stepMeta.title}</h1>
-                      <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">{stepMeta.description}</p>
+
+                    <div>
+                      {recoveryMessage ? <p role="status" className="mt-4 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-2 text-xs leading-5">{recoveryMessage}</p> : null}
+                      {persistenceStatus === 'unavailable' ? <p role="status" className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
+
+                      {issues.length ? (
+                        <div className="mt-5 rounded-xl border-l-2 border-l-destructive bg-destructive/[0.06] p-4" role="alert" aria-labelledby="error-summary-heading">
+                          <h2 id="error-summary-heading" className="font-display text-sm font-semibold text-destructive">Please fix {issues.length} item{issues.length === 1 ? '' : 's'}</h2>
+                          <ul className="mt-2 space-y-1.5 text-sm">
+                            {issues.map((item, index) => <li key={`${item.field}-${index}`}><button type="button" onClick={() => item.step === currentStep ? focusField(item.field) : navigateToStep(item.step)} className="text-left underline decoration-destructive/40 underline-offset-2 hover:text-destructive">{item.message}{item.step !== currentStep ? ` (Step ${item.step})` : ''}</button></li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {/* Keyed on the step so each one arrives rather than swapping in place. */}
+                      <div key={currentStep} className="ob-step-enter mt-6">
+                        {currentStep <= 2 && identitySettled ? (
+                          catalogUnlocked
+                            ? <VerifiedIdentityNotice onSignOut={() => void logout()} />
+                            : <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
+                        ) : null}
+                        {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
+                        {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
+                        {catalogUnlocked && draftOnlyNotice ? (
+                          <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>
+                        ) : null}
+                        {catalogUnlocked && currentStep >= 3 && contextError ? (
+                          <div className="mb-4"><StepNotice message={contextError} /></div>
+                        ) : null}
+                        {currentStep >= 3 && !catalogUnlocked ? (
+                          <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
+                        ) : null}
+                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                        {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
+                        {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
+                        {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
+                        {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
+                        {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} /> : null}
+                      </div>
                     </div>
-                    {recoveryMessage ? <p role="status" className="mt-2.5 rounded-lg bg-primary/[0.07] px-3 py-2 text-xs leading-5 text-foreground">{recoveryMessage}</p> : null}
-                    {persistenceStatus === 'unavailable' ? <p role="status" className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
                   </div>
                 </div>
 
-                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-                  <div className="mx-auto w-full max-w-[52rem]">
-                    {issues.length ? (
-                      <div className="mx-5 mt-4 rounded-xl border border-destructive/30 bg-destructive/[0.06] p-4 sm:mx-7 min-[900px]:mx-8" role="alert" aria-labelledby="error-summary-heading">
-                        <h2 id="error-summary-heading" className="font-display text-sm font-semibold text-destructive">Please fix {issues.length} item{issues.length === 1 ? '' : 's'}</h2>
-                        <ul className="mt-2 space-y-1.5 text-sm text-foreground/80">
-                          {issues.map((item, index) => <li key={`${item.field}-${index}`}><button type="button" onClick={() => item.step === currentStep ? focusField(item.field) : navigateToStep(item.step)} className="text-left underline decoration-destructive/40 underline-offset-2 hover:text-foreground">{item.message}{item.step !== currentStep ? ` (Step ${item.step})` : ''}</button></li>)}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    <div className="px-5 pt-4 pb-6 sm:px-7 min-[900px]:px-8 min-[900px]:pb-8">
-                      {currentStep === 1 ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
-                      {currentStep === 2 ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
-                      {catalogUnlocked && stepNotice ? (
-                        <div className="mb-4"><DraftOnlyNotice reason={stepNotice} /></div>
-                      ) : null}
-                      {currentStep >= 3 && !catalogUnlocked ? (
-                        <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
-                      ) : null}
-                      {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                      {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
-                      {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
-                      {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
-                      {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                      {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} /> : null}
+                <div className="shrink-0 border-t border-[var(--ob-line)] bg-[var(--ob-canvas-base)]">
+                  <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
+                    <div className="flex items-center gap-2">
+                      {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
+                      {!(currentStep === 10 && isComplete) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
-                  </div>
-                </div>
-
-                <div className="shrink-0 border-t border-border/45 bg-background">
-                  <div className={cn('mx-auto flex w-full max-w-[52rem] flex-wrap items-center gap-3 px-5 py-3 sm:px-7 min-[900px]:px-8', currentStep === 1 ? 'justify-end' : 'justify-between')}>
-                    {currentStep > 1 ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                    {!(currentStep === 10 && isComplete) && !(currentStep >= 3 && !catalogUnlocked) ? <Button className="sm:min-w-44" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                   </div>
                 </div>
               </section>
@@ -700,7 +773,7 @@ export function OnboardingWizard() {
           </div>
         </div>
 
-        <PhonePreviewStage className="hidden h-full border-l border-border/55 min-[900px]:flex" />
+        <PhonePreviewStage className="hidden h-full min-[900px]:flex" />
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />

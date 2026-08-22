@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ToggleEvent } from 'react'
 import {
   RefreshCwIcon,
   SearchIcon,
@@ -14,17 +14,12 @@ import {
   useCategoryReferences,
   useProductReferences,
 } from '../../hooks/use-onboarding-catalog'
+import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { StepNotice } from './AccessNotice'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
-import {
-  CatalogError,
-  CatalogLoading,
-  ChoiceCard,
-  FieldError,
-  FieldLabel,
-  type RequestConfirmation,
-} from './StepPrimitives'
+import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -78,7 +73,7 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
   return (
     <span
       aria-hidden="true"
-      className="grid size-10 place-items-center rounded-lg bg-primary/[0.07] text-primary"
+      className="grid size-10 place-items-center rounded-lg bg-[var(--ob-brand-soft)] text-primary"
     >
       {!icon || failed ? (
         <StoreIcon className="size-5" />
@@ -195,7 +190,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
     if (selected) {
       confirm({
         title: 'Change business type?',
-        description: 'Changing the business type removes all selected categories, products, and draft SKUs because they belong to the previous catalog.',
+        description: 'Changing the business type removes all selected categories, products, and their sizes and prices, because they belong to the previous catalog.',
         confirmLabel: 'Change and clear catalog',
         tone: 'danger',
         onConfirm: apply,
@@ -216,7 +211,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
         >
           <FieldLabel htmlFor="business-search">Business type</FieldLabel>
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" />
+            <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
             <input
               id="business-search"
               type="search"
@@ -227,7 +222,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
               aria-busy={references.searchPending || references.loading}
               enterKeyHint="search"
               autoComplete="off"
-              className="h-11 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
+              className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
             />
           </div>
         </form>
@@ -316,7 +311,9 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const [search, setSearch] = useState('')
+  const [blocked, setBlocked] = useState<string | null>(null)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
+  const onAccount = useOnboardingStore((state) => state.accountCatalog)
   const businessTypeId = draft.business.businessType?.id ?? null
   const references = useCategoryReferences(draft.referenceMode, businessTypeId)
   const query = search.trim().toLowerCase()
@@ -328,6 +325,13 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const toggle = (category: (typeof draft.categories)[number]) => {
     const selected = draft.categories.some((item) => item.id === category.id)
     if (!selected && draft.categories.length >= categoryLimit) return
+    if (selected && onAccount.categoryIds.includes(category.id)) {
+      setBlocked(
+        `${category.name} is already saved to your store. Categories cannot be removed here yet — contact support if you need it taken off.`,
+      )
+      return
+    }
+    setBlocked(null)
     const apply = () => updateDraft(
       (current) => {
         const categories = selected
@@ -344,7 +348,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     if (selected && dependentCount) {
       confirm({
         title: `Remove ${category.name}?`,
-        description: `This also removes ${dependentCount} selected product${dependentCount === 1 ? '' : 's'} and every related draft SKU.`,
+        description: `This also removes ${dependentCount} selected product${dependentCount === 1 ? '' : 's'} and every size priced under ${dependentCount === 1 ? 'it' : 'them'}.`,
         confirmLabel: 'Remove category',
         tone: 'danger',
         onConfirm: apply,
@@ -358,16 +362,17 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{draft.categories.length} of {categoryLimit} selected</p>
+      {blocked ? <StepNotice message={blocked} /> : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{draft.categories.length} of {categoryLimit} selected</p>
       <div className="relative">
-        <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" />
+        <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
         <input
           id="category-search"
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search loaded categories"
-          className="h-11 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
+          className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
         />
       </div>
       {references.loading ? <CatalogLoading /> : null}
@@ -380,25 +385,28 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           {loadedItems.map((category) => {
             const selected = draft.categories.some((item) => item.id === category.id)
             const atLimit = !selected && draft.categories.length >= categoryLimit
+            const onStore = selected && onAccount.categoryIds.includes(category.id)
             return (
               <button
                 key={category.id}
                 type="button"
                 aria-pressed={selected}
-                aria-disabled={atLimit}
+                aria-disabled={atLimit || onStore}
                 onClick={() => toggle(category)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl p-3 text-left outline-none transition-[background-color,box-shadow,transform] focus-visible:ring-3 focus-visible:ring-primary/25 active:scale-[0.99] motion-reduce:transform-none',
+                  'flex items-center gap-3 rounded-xl border p-3 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                   selected
-                    ? 'bg-primary/[0.09] ring-1 ring-primary/25 ring-inset'
-                    : 'bg-muted/35 hover:bg-muted/65',
-                  atLimit && 'cursor-not-allowed opacity-45',
+                    ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
+                    : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
+                  atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
                 )}
               >
                 <ReferenceThumb src={category.imageUrl} fallbackSrc={categoryFallbackImage} />
                 <span className="min-w-0">
-                  <strong className="block truncate text-sm">{category.name}</strong>
-                  <span className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{category.description || 'Catalog category'}</span>
+                  <strong className="block truncate text-sm text-[var(--ob-ink)]">{category.name}</strong>
+                  <span className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
+                    {onStore ? 'Saved to your store' : category.description || 'Catalog category'}
+                  </span>
                 </span>
               </button>
             )
@@ -420,16 +428,22 @@ function ProductCategoryPicker({
   categoryName,
   confirm,
   onUseSample,
+  open,
+  onToggle,
 }: {
   categoryId: number
   categoryName: string
   confirm: RequestConfirmation
   onUseSample: () => void
+  open: boolean
+  onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
 }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const references = useProductReferences(draft.referenceMode, categoryId)
   const [search, setSearch] = useState('')
+  const [blocked, setBlocked] = useState<string | null>(null)
+  const onAccount = useOnboardingStore((state) => state.accountCatalog)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
   const availableItems = appendMissingReferenceItems<ProductReference>(
@@ -442,6 +456,13 @@ function ProductCategoryPicker({
 
   const toggle = (product: ProductReference) => {
     const selected = draft.products.some((item) => item.id === product.id)
+    if (selected && onAccount.productIds.includes(product.id)) {
+      setBlocked(
+        `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
+      )
+      return
+    }
+    setBlocked(null)
     const apply = () => updateDraft(
       (current) => ({
         ...current,
@@ -458,7 +479,7 @@ function ProductCategoryPicker({
     if (selected && dependentSkus) {
       confirm({
         title: `Remove ${product.name}?`,
-        description: `This also removes ${dependentSkus} draft SKU${dependentSkus === 1 ? '' : 's'} and its pricing.`,
+        description: `This also removes ${dependentSkus} size${dependentSkus === 1 ? '' : 's'} and ${dependentSkus === 1 ? 'its' : 'their'} pricing.`,
         confirmLabel: 'Remove product',
         tone: 'danger',
         onConfirm: apply,
@@ -467,24 +488,33 @@ function ProductCategoryPicker({
   }
 
   return (
-    <section className="rounded-xl bg-muted/25 p-4" aria-labelledby={`category-products-${categoryId}`}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 id={`category-products-${categoryId}`} className="font-display font-semibold">{categoryName}</h3>
-          <p className="text-xs text-muted-foreground">{selectedForCategory.length} selected</p>
+    <AccordionPanel
+      id={`category-products-${categoryId}`}
+      open={open}
+      onToggle={onToggle}
+      summary={
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)]">{categoryName}</h3>
+          <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">
+            {selectedForCategory.length ? `${selectedForCategory.length} chosen` : 'Nothing chosen yet'}
+          </p>
         </div>
-        <div className="relative w-full sm:w-64">
-          <SearchIcon className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
-          <input
-            type="search"
-            aria-label={`Search products in ${categoryName}`}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search loaded products"
-            className="h-9 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
-          />
-        </div>
+      }
+    >
+      {/* Search lives in the panel, not the summary: a click inside the summary row
+          would collapse the group the vendor is trying to search. */}
+      <div className="relative mb-3">
+        <SearchIcon className="pointer-events-none absolute top-2.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
+        <input
+          type="search"
+          aria-label={`Search products in ${categoryName}`}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search loaded products"
+          className="h-9 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+        />
       </div>
+      {blocked ? <div className="mb-3"><StepNotice message={blocked} /></div> : null}
       {references.loading ? <CatalogLoading count={4} /> : null}
       {references.error && draft.referenceMode === 'live' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !items.length ? (
@@ -494,23 +524,27 @@ function ProductCategoryPicker({
         <div className="grid gap-2 @min-[32rem]:grid-cols-2">
           {items.map((product) => {
             const selected = draft.products.some((item) => item.id === product.id)
+            const onStore = selected && onAccount.productIds.includes(product.id)
             return (
               <button
                 key={product.id}
                 type="button"
                 aria-pressed={selected}
+                aria-disabled={onStore}
                 onClick={() => toggle(product)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl p-2.5 text-left outline-none transition-[background-color,box-shadow,transform] focus-visible:ring-3 focus-visible:ring-primary/25 active:scale-[0.99] motion-reduce:transform-none',
+                  'flex items-center gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                   selected
-                    ? 'bg-primary/[0.09] ring-1 ring-primary/25 ring-inset'
-                    : 'bg-background/75 hover:bg-background',
+                    ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
+                    : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
                 )}
               >
                 <ReferenceThumb src={product.imageUrl} fallbackSrc={productFallbackImage} />
                 <span className="min-w-0">
-                  <strong className="block truncate text-sm">{product.name}</strong>
-                  <span className="mt-1 block truncate text-xs text-muted-foreground">{product.measurementName || 'Item'}</span>
+                  <strong className="block truncate text-sm text-[var(--ob-ink)]">{product.name}</strong>
+                  <span className="mt-1 block truncate text-xs text-[var(--ob-ink-soft)]">
+                    {onStore ? 'Saved to your store' : product.measurementName || 'Item'}
+                  </span>
                 </span>
               </button>
             )
@@ -522,7 +556,7 @@ function ProductCategoryPicker({
           {references.loadingMore ? 'Loading…' : `Load more in ${categoryName}`}
         </Button>
       ) : null}
-    </section>
+    </AccordionPanel>
   )
 }
 
@@ -533,6 +567,8 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
     () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
     [categories, selectedProducts],
   )
+  const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
+  const { openId, onToggle } = useSingleOpen(categoryIds)
 
   if (!categories.length) {
     return <EmptyState title="Choose categories first" description="Return to Step 4 to select at least one category." />
@@ -547,7 +583,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
           </span>
         ))}
       </div>
-      <div id="products" className="space-y-4">
+      <div id="products" className="space-y-3">
         {categories.map((category) => (
           <ProductCategoryPicker
             key={category.id}
@@ -555,6 +591,8 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             categoryName={category.name}
             confirm={confirm}
             onUseSample={onUseSample}
+            open={openId === category.id}
+            onToggle={onToggle(category.id)}
           />
         ))}
       </div>

@@ -57,6 +57,9 @@ export {
   mapVendorSkus,
   vendorProductIdByPlatformId,
   MEASUREMENT_TYPE_BY_ID,
+  schedulingConfigList,
+  schedulingConfigNumber,
+  schedulingConfigString,
 } from './mappers/vendor-onboarding'
 export type {
   BusinessTypeReference,
@@ -70,8 +73,11 @@ export type {
   SkuMeasurementType,
   StorefrontConfigInput,
   StorefrontConfigRequest,
+  CheckoutOptionsSnapshot,
+  CheckoutPaymentSnapshot,
   VendorCategoryRef,
   VendorContext,
+  VendorProfile,
   VendorOnboardingStatus,
   VendorProductRef,
   VendorSkuRef,

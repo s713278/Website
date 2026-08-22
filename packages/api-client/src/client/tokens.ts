@@ -36,6 +36,20 @@ export function clearTokens() {
   safeSet(REFRESH_KEY, null);
 }
 
+/** Three base64url segments. Used to tell a bearer token from any other string. */
+const JWT_PATTERN = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+
+/**
+ * A bare token string, or `null` for anything else.
+ *
+ * Several endpoints put a plain string in `data` — go-live returns a sentence, refresh
+ * returns the token itself. Only a JWT-shaped value is accepted so a success message
+ * can never be stored as credentials.
+ */
+function asBearerToken(value: unknown): string | null {
+  return typeof value === 'string' && JWT_PATTERN.test(value) ? value : null;
+}
+
 export function parseTokenResponse(payload: unknown): {
   accessToken: string | null;
   refreshToken: string | null;
@@ -57,7 +71,11 @@ export function parseTokenResponse(payload: unknown): {
     null;
 
   return {
-    accessToken: pickAccess(data) || pickAccess(root),
+    // `POST /v1/auth/refresh` answers `{ success, status, data: "<jwt>" }` — the new
+    // access token is the whole of `data`, not a field inside it, and no refresh token
+    // comes back. Verified against the deployed API; the contract types it as a generic
+    // APIResponseObject with no example, so the shape is not discoverable from OpenAPI.
+    accessToken: pickAccess(data) || pickAccess(root) || asBearerToken(root.data),
     refreshToken: pickRefresh(data) || pickRefresh(root),
   };
 }

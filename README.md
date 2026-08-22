@@ -87,16 +87,22 @@ Set the value explicitly for live development. Never commit `.env`, credentials,
 | `npm run dev` | Run Vite on port 5173 |
 | `npm run typecheck` | Type-check the project references |
 | `npm run lint` | Run ESLint over `src` |
+| `npm run test` | Run the Vitest unit suite once |
+| `npm run test:watch` | Run Vitest in watch mode |
 | `npm run build` | Type-check and create `dist/` |
 | `npm run preview` | Serve an existing production build |
 | `npm run fetch:openapi` | Fetch backend Swagger into `packages/api-client/openapi.json` |
 | `npm run generate:api` | Generate `packages/api-client/src/schema.d.ts` |
 
-There is no test runner. The available baseline verification for source changes is:
+The baseline verification for source changes is:
 
 ```bash
-npm run typecheck && npm run lint
+npm run typecheck && npm run lint && npm run test
 ```
+
+Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers the pure vendor
+onboarding logic — account resume, step validation, login routing, and payload mapping. There is no
+DOM, component, or end-to-end runner, so UI behaviour is verified by running the app.
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:

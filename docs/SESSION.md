@@ -26,12 +26,20 @@ This describes what is implemented today, not the target cookie model — see
 The role chosen on the login screen is a request, not a grant. Unknown authorities
 (`ADMIN`, `CUSTOMER_CARE`) are dropped rather than mapped.
 
+**A refused verification clears the tokens.** The package-level `verifyOtp` writes whatever
+credentials come back *before* the app service can check `mobile_verified` or `roles`, so both
+refusal paths call `clearTokens()` on the way out. Without that the browser keeps a live bearer
+token for a login the app rejected — and when a signed-in vendor changes their number from inside
+the wizard, the refused number's token would be left sitting under the first vendor's still-persisted
+`md-auth` user, so every later request would carry the wrong identity. Tokens are only ever adopted
+into a session by `applySession()`.
+
 | Field | Meaning |
 |-------|---------|
 | `role` | Active audience for this session. Always one of `roles`. |
-| `roles` | Every role the backend verified. `hasRole()` consults this. |
+| `roles` | Every role the backend verified. `hasRole()` and `ProtectedRoute` consult this, never `role` — the same number opens both login forms, so the screen a vendor happened to use must not decide what they may reach. |
 | `vendors` | Vendor memberships from the response `vendors[]`. |
-| `vendorId` | Set **only** when there is exactly one membership. Several memberships require an explicit `selectVendor()` choice; the first entry is never taken silently. |
+| `vendorId` | Set **only** when there is exactly one membership, whichever login form was used — memberships come from the backend, not from the requested role. Several memberships require an explicit `selectVendor()` choice; the first entry is never taken silently. |
 
 ## Lifecycle
 
@@ -41,14 +49,79 @@ The role chosen on the login screen is a request, not a grant. Unknown authoriti
    - if only the refresh token remains, refresh once before deciding;
    - a transient refresh failure keeps the session rather than signing the user out;
    - the session is cleared only when **both** credentials are gone.
-3. **Expired access** → interceptor refreshes with the refresh token, retries once
+3. **Expired access** → interceptor refreshes with the refresh token, retries once.
+   Access tokens live **600 seconds**, so this path runs constantly during a long form;
+   it is a main path, not an edge case.
 4. **Refresh fails (400/401/403)** → `clearSession()`; protected routes redirect to the role's login
 5. **Refresh fails transiently (network/5xx)** → session kept; the error is normalized to `ApiError`
-6. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
-7. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`
-8. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
+6. **Refresh returns 200 but no recognizable token** → session kept and the attempt fails. The server
+   accepted the credentials, so they are alive; clearing would destroy a working refresh token over a
+   response-shape surprise
+7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
+8. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
+   handler registered through `onExplicitSignOut()`
+9. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
+
+### Refresh response shape
+
+`POST /v1/auth/refresh` answers with the new access token as a **bare string in `data`**:
+
+```json
+{ "timestamp": "…", "success": true, "status": 200, "data": "<jwt>" }
+```
+
+There is no object to read a field from, and **no new refresh token** — the existing one is reused.
+`parseTokenResponse` therefore accepts a JWT-shaped `data` string, gated on three base64url segments
+so that endpoints returning a plain sentence in `data` (go-live, for one) can never be mistaken for
+credentials. The contract types this operation as a bare `APIResponseObject` with no example, so the
+shape is only knowable by calling it — see [API_GAPS.md](./API_GAPS.md).
 
 Route guards wait for `isHydrated`, so they never act on a half-restored session.
+
+## Where a session lands
+
+`resolveLandingPath(user, from)` decides, and sign-in **awaits it before navigating**.
+
+It reads the verified roles, not the form that was used. A vendor signing in through the customer
+page still owns a store, so sending them to `/cart` would strand a half-finished setup with no route
+back to it. An explicit customer destination in `from` still wins, so a vendor heading to checkout is
+not dragged into store setup.
+
+For a vendor it then reads the account — one cached call, the same one the wizard needs — and routes
+on what is actually saved: a submitted store (`vendor_status: ACTIVE`) goes to `/vendor`, anything
+else to `/onboarding`. Routing every vendor into the wizard and letting it redirect back out is what
+produced a visible flash through setup for vendors who had already finished it.
+
+Any failure falls back to the role-only answer, which is `/onboarding`. That direction is deliberate:
+being sent to setup wrongly costs a click, while being sent to a dashboard wrongly leaves a
+half-finished store with no route back. `resumePathAfterLogin` remains the pure role-only function
+underneath, and is what the fallback calls.
+
+## Swapping identity in place
+
+Verifying a second number while already signed in is an identity **swap**, not a sign-out:
+`applySession()` replaces the user and tokens, and deliberately does not fire the
+`onExplicitSignOut` handlers — the vendor is not leaving, they are moving to another account.
+Feature state keyed on the previous identity still has to go, and does: changing `user.vendorId`
+is what drives the onboarding draft's ownership check into discarding the old vendor's draft.
+
+Use `logout()` when the user is leaving, `applySession()` when they are changing who they are.
+
+## Browser-local state owned by a session
+
+Features that keep their own browser-local state must not let it outlive the identity that created
+it. Two mechanisms cover the two ways a session can end:
+
+| Mechanism | Fires on | Use for |
+|-----------|----------|---------|
+| `onExplicitSignOut(handler)` | `logout()` only | Dropping local state the moment the user chooses to leave |
+| Feature-side ownership check | Any read of that state | Every other path — expiry, failed refresh, a second account in the same browser |
+
+`onExplicitSignOut` is deliberately **not** wired to `clearSession()`: an expired token or a failed
+refresh is not a decision to discard work. The ownership check is what makes that safe, so it is the
+required half — a feature that only clears on sign-out still leaks across identities after a session
+expires. The vendor onboarding draft implements both; see
+[VENDOR_ONBOARDING_SPEC.md](./VENDOR_ONBOARDING_SPEC.md) §4.2.
 
 ## Known limitation: persisted identity is not server-confirmed
 
@@ -75,11 +148,16 @@ Until that migration, keep CSP tight, avoid `dangerouslySetInnerHTML` with untru
 ## Manual test checklist
 
 - [ ] OTP (or demo) login → reload → still authenticated on protected route
-- [ ] With valid refresh, expired access → API call succeeds after silent refresh
+- [ ] With valid refresh, expired access → API call succeeds after silent refresh, tokens still in
+      storage afterwards, and in-progress form work intact
 - [ ] Invalid/missing refresh on 401 → session cleared → role login
 - [ ] Transient network failure during refresh → session survives, error shown
 - [ ] `403` on a protected call → still signed in, unsaved work intact
-- [ ] `mobile_verified: false` or missing vendor role → no session created
+- [ ] `mobile_verified: false` or missing vendor role → no session created **and no tokens left in
+      `localStorage`** (check `mithra_access_token` / `mithra_refresh_token` are gone)
+- [ ] Signed-in vendor verifies a second number that is refused → not left holding the other
+      number's token
 - [ ] Identity with several vendors → wizard asks which store, none chosen silently
-- [ ] Sign out → tokens gone, protected routes redirect
+- [ ] Sign out → tokens gone, protected routes redirect, session-owned local state cleared
+- [ ] Second vendor signs in on the same browser → no first-vendor state survives anywhere
 - [ ] `/stores` public load works without login (`skipAuth`)

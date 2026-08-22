@@ -6,7 +6,8 @@ import type { components } from '../schema';
 export const vendorsService = {
   list: () => apiGet<ApiEnvelope>('/v1/vendors/'),
   create: (body: Record<string, unknown>) => apiPost<ApiEnvelope>('/v1/vendors/', body),
-  getById: (vendorId: number | string) => apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}`),
+  getById: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}`, config),
   update: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}`, body),
   getByMobile: (params?: Record<string, unknown>) =>
@@ -31,8 +32,8 @@ export const vendorsService = {
   goLive: (vendorId: number | string) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/go-live`),
 
-  getCheckoutOptions: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`),
+  getCheckoutOptions: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, config),
   saveCheckoutOptions: (
     vendorId: number | string,
     body: components['schemas']['SaveVendorDeliveryConfigRequest'],

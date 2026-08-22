@@ -16,6 +16,22 @@ import type { User, UserRole } from '@/shared/types'
 /** Backend refused an action the UI believed was allowed. Not an authentication failure. */
 export type SessionProblem = 'forbidden' | null
 
+const signOutHandlers = new Set<() => void>()
+
+/**
+ * Run cleanup when the user deliberately signs out.
+ *
+ * Deliberately not wired to `clearSession()`: an expired token or a failed refresh is
+ * not a decision to discard local work. Features register here to drop browser-local
+ * state that belongs to the identity that just left. Returns an unsubscribe function.
+ */
+export function onExplicitSignOut(handler: () => void): () => void {
+  signOutHandlers.add(handler)
+  return () => {
+    signOutHandlers.delete(handler)
+  }
+}
+
 type AuthState = {
   user: User | null
   token: string | null
@@ -136,6 +152,13 @@ export const useAuthStore = create<AuthState>()(
           /* network/signout failures must not block local clear */
         } finally {
           get().clearSession()
+          for (const handler of signOutHandlers) {
+            try {
+              handler()
+            } catch {
+              /* one failed cleanup must not strand the rest of sign-out */
+            }
+          }
         }
       },
 

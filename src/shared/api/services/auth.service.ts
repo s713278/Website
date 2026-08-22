@@ -184,7 +184,10 @@ function mapSessionUser(
     role: input.role,
     roles,
     vendors,
-    vendorId: input.role === 'vendor' && vendors.length === 1 ? vendors[0].vendorId : undefined,
+    // Memberships come from the backend, so an unambiguous single store is resolved
+    // whichever screen was used to sign in. Only the ambiguous case is left open —
+    // picking `vendors[0]` would silently choose a store for a multi-vendor identity.
+    vendorId: vendors.length === 1 ? vendors[0].vendorId : undefined,
   }
 }
 
@@ -208,7 +211,16 @@ export async function requestOtp(input: OtpRequestInput) {
   })
 }
 
-/** POST /v1/auth/verify-otp via @mithra/api-client — stores tokens on success */
+/**
+ * POST /v1/auth/verify-otp via @mithra/api-client.
+ *
+ * The package-level call stores whatever tokens come back *before* this function can
+ * judge the response, so every refusal below has to undo that. Leaving them would put a
+ * live bearer credential in `localStorage` for a login the app deliberately rejected —
+ * and when a vendor was already signed in and is changing their number, it would leave
+ * the refused number's token sitting under the first vendor's still-persisted user.
+ * Tokens are only ever adopted into a session by `applySession()`.
+ */
 export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
   const mobile = digitsPhone(input.phone)
   const otp = input.otp.replace(/\D/g, '')
@@ -231,37 +243,45 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
     otp,
   })
 
-  const parsed = parseTokenResponse(res)
-  if (!parsed.accessToken) {
-    throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
-  }
+  try {
+    const parsed = parseTokenResponse(res)
+    if (!parsed.accessToken) {
+      throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
+    }
 
-  const data = (unwrapData(res) || {}) as VerifyOtpData
+    const data = (unwrapData(res) || {}) as VerifyOtpData
 
-  // An unverified phone must not produce a session even when tokens came back.
-  if (data.mobile_verified !== true) {
-    throw new AuthSessionError(
-      'mobile-unverified',
-      'This number is not verified yet. Request a new code and try again.',
-    )
-  }
+    // An unverified phone must not produce a session even when tokens came back.
+    if (data.mobile_verified !== true) {
+      throw new AuthSessionError(
+        'mobile-unverified',
+        'This number is not verified yet. Request a new code and try again.',
+      )
+    }
 
-  // The role chosen on the login screen is a request, not a grant.
-  const roles = mapVerifiedRoles(data.roles)
-  if (!roles.includes(input.role)) {
-    throw new AuthSessionError(
-      'role-not-granted',
-      input.role === 'vendor'
-        ? 'This number is not registered as a vendor yet.'
-        : 'This number is not registered as a customer yet.',
-    )
-  }
+    // The role chosen on the login screen is a request, not a grant.
+    const roles = mapVerifiedRoles(data.roles)
+    if (!roles.includes(input.role)) {
+      throw new AuthSessionError(
+        'role-not-granted',
+        input.role === 'vendor'
+          ? 'This number is not registered as a vendor yet.'
+          : 'This number is not registered as a customer yet.',
+      )
+    }
 
-  const vendors = mapVendorMemberships(data.vendors)
-  return {
-    token: parsed.accessToken,
-    refreshToken: parsed.refreshToken,
-    user: mapSessionUser(data, input, roles, vendors),
+    const vendors = mapVendorMemberships(data.vendors)
+    return {
+      token: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      user: mapSessionUser(data, input, roles, vendors),
+    }
+  } catch (error) {
+    // No session is being created, so nothing may keep the credentials the package just
+    // wrote. Any prior session's tokens are already gone — overwritten by that same
+    // write — so the caller is signed out either way; that is the safe direction.
+    clearTokens()
+    throw error
   }
 }
 

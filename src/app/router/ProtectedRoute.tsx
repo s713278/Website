@@ -33,7 +33,10 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
     return <Navigate to={loginPathForRole(intended)} replace state={{ from: location.pathname }} />
   }
 
-  if (roles && !roles.includes(user.role)) {
+  // `roles` is what the backend verified; `role` is only the audience picked at login.
+  // Guarding on the latter locks a vendor out of their own store setup for having used
+  // the customer form, and loops against any redirect that sends them back to it.
+  if (roles && !roles.some((role) => user.roles.includes(role))) {
     const needed = roles[0]
     return <Navigate to={loginPathForRole(needed)} replace state={{ from: location.pathname }} />
   }

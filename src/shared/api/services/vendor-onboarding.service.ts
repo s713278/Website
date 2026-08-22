@@ -20,6 +20,8 @@ import {
   mapVendorContext,
   mapVendorProducts,
   mapVendorSkus,
+  mapVendorProfile,
+  mapCheckoutOptionsResponse,
   type BusinessTypeReference,
   type CategoryReference,
   type ProductReference,
@@ -33,6 +35,8 @@ import {
   type VendorContext,
   type VendorProductRef,
   type VendorSkuRef,
+  type VendorProfile,
+  type CheckoutOptionsSnapshot,
 } from '../mappers/vendor-onboarding'
 
 export type ReferenceRequestConfig = {
@@ -153,6 +157,16 @@ async function createSku(
   await apiVendorsService.createSku(vendorId, mapSkuCreateRequest(input, vendorProductId))
 }
 
+/**
+ * DELETE /v1/vendors/{vendor_id}/skus/{sku_id}
+ *
+ * The only removal a vendor is allowed to perform on their own catalog: products and
+ * categories are additive-only for this role. See docs/API_GAPS.md.
+ */
+async function deleteSku(vendorId: number | string, skuId: number): Promise<void> {
+  await apiVendorsService.deleteSku(vendorId, skuId)
+}
+
 /** PUT /v1/vendors/{vendor_id}/checkout_options — Steps 7 and 8 combined. */
 async function saveCheckoutOptions(
   vendorId: number | string,
@@ -169,13 +183,24 @@ async function saveCheckoutOptions(
  * A first-time vendor legitimately gets 404 here — it means "not configured yet",
  * not a failure. Every other error still propagates.
  */
-async function getCheckoutOptions(vendorId: number | string): Promise<unknown | null> {
+async function getCheckoutOptions(
+  vendorId: number | string,
+  config: ReferenceRequestConfig = {},
+): Promise<CheckoutOptionsSnapshot | null> {
   try {
-    return await apiVendorsService.getCheckoutOptions(vendorId)
+    return mapCheckoutOptionsResponse(await apiVendorsService.getCheckoutOptions(vendorId, config))
   } catch (error) {
     if (isApiError(error) && error.status === 404) return null
     throw error
   }
+}
+
+/** GET /v1/vendors/{vendor_id} — the only read that exposes the vendor's business type. */
+async function getVendorProfile(
+  vendorId: number | string,
+  config: ReferenceRequestConfig = {},
+): Promise<VendorProfile> {
+  return mapVendorProfile(await apiVendorsService.getById(vendorId, config))
 }
 
 /** POST /v1/vendors/{vendor_id}/go-live — activates, then awaits admin approval. */
@@ -194,8 +219,10 @@ export const vendorOnboardingService = {
   getVendorCategories,
   getVendorProducts,
   getVendorSkus,
+  getVendorProfile,
   assignProducts,
   createSku,
+  deleteSku,
   getCheckoutOptions,
   saveCheckoutOptions,
   goLive,

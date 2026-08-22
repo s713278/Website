@@ -287,10 +287,15 @@ export type VendorContext = {
     status: VendorOnboardingStatus
     description: string | null
     /**
-     * The contract documents only `status` and a human-readable `description`
-     * ("Step 2 is completed"). There is no machine-readable next step, so this is
-     * mapped only if a backend actually starts sending one. Resume must reconcile
-     * real server resources instead of trusting this.
+     * 1-based over the ten wizard steps; `11` means setup is complete.
+     *
+     * The checked-in OpenAPI *example* omits this field, which is why it was once
+     * believed not to exist — but the deployed API returns it from both
+     * `GET /v1/vendors/{id}/context` and `POST /v1/auth/verify-otp` (per vendor, under
+     * `vendors[].onboarding`), with identical values. It is the authoritative resume
+     * position: see `backendResumeStep` in `modules/vendor/lib/onboarding-resume.ts`,
+     * and docs/API_GAPS.md for the verification that settled it. Resource-derived
+     * resume is a fallback for this field disappearing, not a second opinion.
      */
     nextStep: number | null
   }
@@ -452,6 +457,15 @@ export type VendorSkuRef = {
   /** Server-side name; it appends the size, e.g. "Cow Milk 1L-1 L". */
   name: string
   size: string
+  /** `name` with the size suffix removed — what the vendor actually typed. */
+  displayName: string
+  description: string
+  isActive: boolean
+  listPrice: number | null
+  salePrice: number | null
+  /** Parsed back out of `size`: "1 L" -> 1 and "L". */
+  quantity: number | null
+  unit: string
 }
 
 /** SKU price measurements the wizard supports, keyed by the catalog's measurement_id. */
@@ -497,13 +511,84 @@ export function mapVendorProducts(payload: unknown): VendorProductRef[] {
   }))
 }
 
+/** Splits the server's `sku_size` ("1 L", "500 ml", "12 pcs") into quantity and unit. */
+function parseSkuSize(size: string): { quantity: number | null; unit: string } {
+  const match = size.trim().match(/^([\d.]+)\s*(.*)$/)
+  if (!match) return { quantity: null, unit: size.trim() }
+  const quantity = Number.parseFloat(match[1])
+  return {
+    quantity: Number.isFinite(quantity) ? quantity : null,
+    unit: match[2].trim(),
+  }
+}
+
+/**
+ * `mapSkuCreateRequest` sends `name` and the server stores `"<name>-<size>"`, so the
+ * suffix is stripped to recover what the vendor typed. Anything that does not match
+ * the convention is left alone rather than guessed at.
+ */
+function stripSizeSuffix(name: string, size: string): string {
+  const suffix = `-${size}`
+  return size && name.endsWith(suffix) ? name.slice(0, -suffix.length) : name
+}
+
+function lenientNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 export function mapVendorSkus(payload: unknown): VendorSkuRef[] {
-  return vendorList(payload).map((item) => ({
-    vendorProductId: requiredId(item.vendor_product_id),
-    skuId: requiredId(item.sku_id),
-    name: lenientString(item.sku_name) ?? '',
-    size: lenientString(item.sku_size) ?? '',
-  }))
+  return vendorList(payload).map((item) => {
+    const name = lenientString(item.sku_name) ?? ''
+    const size = lenientString(item.sku_size) ?? ''
+    const { quantity, unit } = parseSkuSize(size)
+    return {
+      vendorProductId: requiredId(item.vendor_product_id),
+      skuId: requiredId(item.sku_id),
+      name,
+      size,
+      displayName: stripSizeSuffix(name, size),
+      description: lenientString(item.description) ?? '',
+      // Absent means active: the write path only ever creates active SKUs.
+      isActive: item.is_active !== false,
+      listPrice: lenientNumber(item.list_price),
+      salePrice: lenientNumber(item.sale_price),
+      quantity,
+      unit,
+    }
+  })
+}
+
+export type VendorProfile = {
+  businessName: string
+  /** Display string, e.g. "Beverages & Juice Center" — not an id. */
+  businessType: string | null
+  ownerName: string
+  contactPerson: string
+  contactNumber: string
+}
+
+/**
+ * `GET /v1/vendors/{id}`.
+ *
+ * Typed as a bare `APIResponseObject` in the contract, but the deployed API returns the
+ * profile fields below — this is the only read that exposes `business_type`, which Step 3
+ * needs. Verified live; do not "simplify" it away because the schema looks empty.
+ */
+export function mapVendorProfile(payload: unknown): VendorProfile {
+  if (!isRecord(payload) || !isRecord(payload.data)) throw new InvalidVendorContextError()
+  const data = payload.data
+  return {
+    businessName: lenientString(data.business_name) ?? '',
+    businessType: lenientString(data.business_type),
+    ownerName: lenientString(data.owner_name) ?? '',
+    contactPerson: lenientString(data.contact_person) ?? '',
+    contactNumber: lenientString(data.contact_number) ?? '',
+  }
 }
 
 /** platform product ID -> vendor product ID, the lookup every SKU write needs. */
@@ -744,4 +829,126 @@ export function mapCheckoutOptionsRequest(
       details: mapPaymentDetails(option.type, payments.details),
     })),
   }
+}
+
+/* -------------------------------------------------------------------------
+ * Checkout options read-back
+ *
+ * `GET /checkout_options` returns considerably more than its five OpenAPI examples
+ * show: `payment_options` (with UPI/bank `details`), `order_acceptance_policy`,
+ * `delivery_slots` and both consent fields all come back. Verified live against a
+ * configured vendor. This is the inverse of `mapCheckoutOptionsRequest`.
+ * ---------------------------------------------------------------------- */
+
+export type CheckoutPaymentSnapshot = {
+  type: 'PRE_PAID' | 'ONLINE' | 'CASH_ON_DELIVERY'
+  isDefault: boolean
+  details: Record<string, string>
+}
+
+export type CheckoutOptionsSnapshot = {
+  fulfillmentType: CheckoutDeliveryInput['fulfillmentType'] | null
+  orderAcceptancePolicy: CheckoutDeliveryInput['orderAcceptancePolicy'] | null
+  schedulingStrategy: CheckoutDeliveryInput['schedulingStrategy'] | null
+  schedulingConfig: UnknownRecord
+  shippingConfig: { deliveryCharge: number | null; freeDeliveryThreshold: number | null }
+  slots: Array<{ startTime: string; endTime: string }>
+  consentTitle: string
+  consentText: string
+  payments: CheckoutPaymentSnapshot[]
+}
+
+const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
+const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
+const SCHEDULING_STRATEGIES = new Set([
+  'FIXED_WINDOW',
+  'CUSTOMER_SELECT_DATE',
+  'PREDEFINED_DAYS',
+  'INSTANT',
+])
+const PAYMENT_TYPES = new Set(['PRE_PAID', 'ONLINE', 'CASH_ON_DELIVERY'])
+
+function oneOf<T extends string>(value: unknown, allowed: Set<string>): T | null {
+  const text = lenientString(value)
+  return text && allowed.has(text) ? (text as T) : null
+}
+
+/** "09:00 - 12:00" back into its two halves; anything else is dropped. */
+function parseSlot(value: unknown): { startTime: string; endTime: string } | null {
+  const text = lenientString(value)
+  if (!text) return null
+  const [startTime, endTime] = text.split('-').map((part) => part.trim())
+  return startTime && endTime ? { startTime, endTime } : null
+}
+
+/** Every value in `details` coerced to a string; the wire type is free-form JSON. */
+function stringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {}
+  const entries = Object.entries(value)
+    .map(([key, item]) => [key, lenientString(item) ?? ''] as const)
+    .filter(([, item]) => item !== '')
+  return Object.fromEntries(entries)
+}
+
+export function mapCheckoutOptionsResponse(payload: unknown): CheckoutOptionsSnapshot | null {
+  if (!isRecord(payload)) return null
+  const data = isRecord(payload.data) ? payload.data : null
+  if (!data) return null
+
+  const delivery = isRecord(data.delivery_options) ? data.delivery_options : {}
+  const shipping = isRecord(delivery.shipping_config) ? delivery.shipping_config : {}
+  const scheduling = isRecord(delivery.scheduling_config) ? delivery.scheduling_config : {}
+  const payments = Array.isArray(data.payment_options) ? data.payment_options.filter(isRecord) : []
+
+  return {
+    fulfillmentType: oneOf(data.fulfillment_type, FULFILLMENT_TYPES),
+    orderAcceptancePolicy: oneOf(data.order_acceptance_policy, ACCEPTANCE_POLICIES),
+    schedulingStrategy: oneOf(delivery.scheduling_strategy, SCHEDULING_STRATEGIES),
+    // Kept raw: the keys differ per strategy, and the response casing does not always
+    // match what we write (`min_prep_time_minutes` out, `minPrepTimeMinutes` back).
+    schedulingConfig: scheduling,
+    shippingConfig: {
+      deliveryCharge: lenientNumber(shipping.delivery_charge ?? shipping.charge),
+      freeDeliveryThreshold: lenientNumber(shipping.free_delivery_threshold),
+    },
+    slots: Array.isArray(data.delivery_slots)
+      ? data.delivery_slots.map(parseSlot).filter((slot) => slot !== null)
+      : [],
+    consentTitle: lenientString(data.customer_consent_title) ?? '',
+    consentText: lenientString(data.customer_consent_text) ?? '',
+    payments: payments.flatMap((option) => {
+      const type = oneOf<CheckoutPaymentSnapshot['type']>(option.type, PAYMENT_TYPES)
+      if (!type) return []
+      return [{
+        type,
+        // The request field is `is_default`; the response echoes it back as `default`.
+        isDefault: option.default === true || option.is_default === true,
+        details: stringRecord(option.details),
+      }]
+    }),
+  }
+}
+
+/** Reads a scheduling-config value under any of the casings the API has used. */
+export function schedulingConfigNumber(config: UnknownRecord, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = lenientNumber(config[key])
+    if (value != null) return value
+  }
+  return null
+}
+
+export function schedulingConfigString(config: UnknownRecord, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = lenientString(config[key])
+    if (value) return value
+  }
+  return null
+}
+
+export function schedulingConfigList(config: UnknownRecord, ...keys: string[]): string[] {
+  for (const key of keys) {
+    if (Array.isArray(config[key])) return lenientStringList(config[key])
+  }
+  return []
 }

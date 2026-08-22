@@ -4,7 +4,7 @@ import type {
   ProductReference,
 } from '@/shared/api'
 
-export const ONBOARDING_DRAFT_VERSION = 2 as const
+export const ONBOARDING_DRAFT_VERSION = 3 as const
 export const ONBOARDING_CONFIG = {
   /** Fallback only. The real limit comes from vendor context subscription limits. */
   maxCategories: 2,
@@ -149,7 +149,6 @@ export type LivePublication = {
   storeIdentifier: string | null
   approvalStatus: string | null
   vendorStatus: string | null
-  completedAt: string
 }
 
 export type PublicationDraft = {
@@ -204,7 +203,27 @@ export type VendorOnboardingPersistedEnvelopeV1 = {
   version: typeof ONBOARDING_DRAFT_VERSION
   revision: number
   updatedAt: string
+  /**
+   * Vendor this draft belongs to, or `null` before verification.
+   *
+   * A draft is private to one signed-in vendor. Anything read back under a different
+   * identity — including no session at all — is discarded rather than adopted, so one
+   * vendor can never resume, see, or submit another vendor's selections.
+   */
+  ownerId: string | null
   furthestVisitedStep: OnboardingStep
+  /**
+   * The draft holds edits that have not been written to the vendor account.
+   *
+   * The account is the record; this browser only buffers what has not reached it yet.
+   * When nothing is buffered the wizard re-reads the account on entry, so a stale or
+   * malformed local copy can never outlive one visit. When something is, the vendor's
+   * unsaved work wins and the account copy is left alone.
+   *
+   * Absent on envelopes written before this field existed — read those as `true`, which
+   * preserves whatever they hold rather than overwriting it.
+   */
+  hasLocalEdits?: boolean
   draft: PersistedOnboardingDraftV1
   previewSnapshot: LocalPreviewSnapshotV1 | null
 }
@@ -217,6 +236,14 @@ export type OnboardingPersistenceStatus =
   | 'unavailable'
   | 'conflict'
   | 'corrupt'
+  /**
+   * A draft exists in this browser but no one is signed in to claim it.
+   *
+   * It is neither shown nor written to, and it is not deleted: an expired session is
+   * not a decision to abandon work. Signing in as its owner restores it; signing in as
+   * anyone else discards it.
+   */
+  | 'deferred'
 
 export type ValidationIssue = {
   step: OnboardingStep
@@ -235,7 +262,7 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the closest match for your catalog.' },
   { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Pick the categories your store sells.' },
   { step: 5, short: 'Products', title: 'Choose products to sell', description: 'Build a focused starting catalog.' },
-  { step: 6, short: 'Prices', title: 'Set SKUs and prices', description: 'Every selected product needs at least one active SKU.' },
+  { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Every product you sell needs at least one size with a price.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how and when orders are fulfilled.' },
   { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Offer at least one method and choose a default.' },
   { step: 9, short: 'Store', title: 'Add your store details', description: 'Name your store, add its contacts, and make the preview yours.' },

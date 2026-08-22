@@ -66,15 +66,21 @@ cp .env.example .env
 npm run dev
 npm run typecheck
 npm run lint
+npm run test
 npm run build
 npm run preview
 ```
 
-There is no test runner. For code changes, the available baseline is:
+For code changes, the baseline is:
 
 ```bash
-npm run typecheck && npm run lint
+npm run typecheck && npm run lint && npm run test
 ```
+
+Vitest runs in the node environment over `src/**/*.test.ts` and covers the pure onboarding logic
+only — resume, validation, entry routing, and payload mapping. There is no DOM, component, or
+end-to-end runner: verify UI behaviour by running the app. `vitest.config.ts` merges `vite.config.ts`,
+so path aliases are defined once.
 
 `npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
 

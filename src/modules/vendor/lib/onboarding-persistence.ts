@@ -13,8 +13,9 @@ import {
   type VendorOnboardingDraftV1,
   type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
+import { clearOnboardingDraft, ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
 
-export const ONBOARDING_DRAFT_STORAGE_KEY = 'md-vendor-onboarding-draft-v2'
+export { ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
 
 type UnknownRecord = Record<string, unknown>
 type IdleWindow = Window & {
@@ -351,13 +352,18 @@ export function parsePersistedEnvelope(value: unknown): VendorOnboardingPersiste
     'version',
     'revision',
     'updatedAt',
+    'ownerId',
     'furthestVisitedStep',
+    'hasLocalEdits',
     'draft',
     'previewSnapshot',
   ])) return null
   if (value.version !== ONBOARDING_DRAFT_VERSION) return null
+  if (value.ownerId !== null && !isString(value.ownerId)) return null
   if (!Number.isSafeInteger(value.revision) || Number(value.revision) < 0) return null
   if (!isIsoDate(value.updatedAt) || !isStep(value.furthestVisitedStep)) return null
+  // Optional: envelopes written before the field existed are still valid.
+  if (value.hasLocalEdits !== undefined && typeof value.hasLocalEdits !== 'boolean') return null
   if (!isPersistedDraft(value.draft)) return null
   if (value.previewSnapshot !== null && !isPreviewSnapshot(value.previewSnapshot)) return null
   return value as VendorOnboardingPersistedEnvelopeV1
@@ -484,8 +490,7 @@ export const onboardingDraftStorage = {
   },
 
   clear(): void {
-    if (typeof window === 'undefined') return
-    window.localStorage.removeItem(ONBOARDING_DRAFT_STORAGE_KEY)
+    clearOnboardingDraft()
   },
 
   subscribe(listener: (envelope: VendorOnboardingPersistedEnvelopeV1) => void): () => void {

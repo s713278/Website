@@ -1,9 +1,20 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
+import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { configureApiClient, setApiErrorLogger } from '@/shared/api'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { onExplicitSignOut, useAuthStore } from '@/shared/auth/store/auth-store'
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  // Signing out must not leave the previous vendor's onboarding draft in this browser,
+  // whatever route it happened on. The wizard's own ownership check is the backstop for
+  // sessions that end without an explicit sign-out.
+  useEffect(() => onExplicitSignOut(clearOnboardingDraft), [])
+
+  // Cached account reads are one vendor's store details and must not outlive their
+  // session — the next sign-in on this browser may be someone else.
+  useEffect(() => onExplicitSignOut(() => invalidateVendorOnboardingState()), [])
+
   useEffect(() => {
     setApiErrorLogger((payload) => {
       console.error('[api]', payload)

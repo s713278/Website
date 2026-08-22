@@ -9,6 +9,7 @@ import {
   type ValidationIssue,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import { isKnownSkuId } from './onboarding-sku-id'
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -67,19 +68,29 @@ function nonNegative(value: number): boolean {
   return Number.isFinite(value) && value >= 0
 }
 
+/**
+ * The server's uniqueness key is (name, weight, vendor_product_id), so two SKUs of one
+ * product may share a name as long as they differ in size. That matters on resume: the
+ * account stores "Milk-1 L" and "Milk-500 ml", both of which strip back to "Milk".
+ */
+function skuIdentity(sku: DraftSku): string {
+  return `${sku.name.trim().toLowerCase()}::${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
+}
+
 export function validateDraftSku(sku: DraftSku, siblingSkus: DraftSku[]): ValidationIssue[] {
   const prefix = `sku-${sku.id}`
   const issues: ValidationIssue[] = []
-  if (!sku.id.startsWith('draft-sku-')) issues.push(issue(6, prefix, 'This SKU needs a local draft ID.'))
+  // Local drafts and SKUs resumed from the account are both legitimate; anything else
+  // came from neither producer and must not reach a write.
+  if (!isKnownSkuId(sku.id)) issues.push(issue(6, prefix, 'This SKU has an unrecognised ID.'))
   if (!sku.name.trim()) issues.push(issue(6, `${prefix}-name`, 'Add a name for this SKU.'))
   if (sku.description.length > 240) issues.push(issue(6, `${prefix}-description`, 'Keep the SKU description under 240 characters.'))
+  const identity = skuIdentity(sku)
   const duplicateName = siblingSkus.some(
-    (candidate) =>
-      candidate.id !== sku.id &&
-      candidate.name.trim().toLowerCase() === sku.name.trim().toLowerCase(),
+    (candidate) => candidate.id !== sku.id && skuIdentity(candidate) === identity,
   )
   if (sku.name.trim() && duplicateName) {
-    issues.push(issue(6, `${prefix}-name`, 'SKU names must be unique for this product.'))
+    issues.push(issue(6, `${prefix}-name`, 'Each size of a product needs its own name.'))
   }
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
   if (!positive(sku.quantity)) issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
@@ -252,7 +263,7 @@ export function validateStep(
         (sku) => sku.active && validateDraftSku(sku, productSkus).length === 0,
       )
       if (!validActiveSkus.length) {
-        issues.push(issue(6, `product-${product.id}`, `${product.name} needs at least one valid active SKU.`))
+        issues.push(issue(6, `product-${product.id}`, `${product.name} needs at least one size with a price.`))
       }
       for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus))
     }
@@ -292,15 +303,25 @@ export function validateStep(
     }
     return issues
   }
-  return readinessIssues(draft, runtime)
+  return readinessIssues(draft, runtime, maxCategories)
 }
 
+/**
+ * Step 10 re-checks every earlier step before go-live.
+ *
+ * `maxCategories` has to be the live plan limit, not the fallback. Step 4 accepts up to
+ * the vendor's real limit and writes those categories to the account, so re-checking here
+ * against `ONBOARDING_CONFIG.maxCategories` reports a violation the vendor cannot fix —
+ * categories already on the account cannot be unassigned (403, Admin only), so go-live
+ * would be blocked permanently for anyone on a plan above the fallback.
+ */
 export function readinessIssues(
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
+  maxCategories: number = ONBOARDING_CONFIG.maxCategories,
 ): ValidationIssue[] {
   return ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).flatMap((step) =>
-    validateStep(step, draft, runtime),
+    validateStep(step, draft, runtime, maxCategories),
   )
 }
 
