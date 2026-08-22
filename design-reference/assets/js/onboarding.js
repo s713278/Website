@@ -285,6 +285,18 @@
         firstInvalid = firstInvalid || 'input-store-name';
       }
 
+      var slugEl = document.getElementById('input-store-link');
+      var slugRaw = slugEl ? slugEl.value : draft.slug || '';
+      var slug = D.normalizeStoreSlug
+        ? D.normalizeStoreSlug(slugRaw)
+        : D.slugify(slugRaw);
+      if (slugEl) slugEl.value = slug;
+      var slugErr = shopLinkError(slug);
+      if (slugErr) {
+        markSettingsFieldInvalid('storeLink', slugErr);
+        firstInvalid = firstInvalid || 'input-store-link';
+      }
+
       if (tagline.length > 120) {
         markSettingsFieldInvalid('tagline', 'Keep the tagline under 120 characters.');
         firstInvalid = firstInvalid || 'input-tagline';
@@ -339,7 +351,7 @@
         draft.settings.backgroundColor ||
         (D.DEFAULT_BG || '#f9fafb');
       draft.settings.fontId = draft.settings.fontId || D.DEFAULT_FONT || 'poppins';
-      draft.slug = D.slugify(name);
+      draft.slug = slug;
       return true;
     }
     return true;
@@ -402,6 +414,70 @@
     return parsed.handle || '';
   }
 
+  var STORE_LINK_MIN = 3;
+  var STORE_LINK_MAX = D.STORE_SLUG_MAX || 40;
+  var RESERVED_SHOP_LINKS = {
+    store: true,
+    stores: true,
+    admin: true,
+    vendor: true,
+    dashboard: true,
+    login: true,
+    signup: true,
+    www: true,
+    api: true,
+    help: true,
+    support: true,
+    cart: true,
+    checkout: true,
+    mithra: true,
+    mithradirect: true,
+    onboarding: true
+  };
+
+  function suggestedShopLink(name) {
+    if (!String(name || '').trim()) return '';
+    if (D.normalizeStoreSlug) return D.normalizeStoreSlug(name);
+    var s = D.slugify(name || '');
+    return s === 'my-store' && !/[a-z0-9]/i.test(name || '') ? '' : s;
+  }
+
+  function readShopLinkInput() {
+    var el = document.getElementById('input-store-link');
+    return el ? String(el.value || '').trim() : String(draft.slug || '').trim();
+  }
+
+  function setShopLinkInput(value) {
+    var el = document.getElementById('input-store-link');
+    if (el && el.value !== value) el.value = value;
+  }
+
+  function syncShopLinkResetBtn() {
+    var btn = document.getElementById('btn-slug-from-name');
+    if (!btn) return;
+    var suggested = suggestedShopLink(draft.settings.storeName || '');
+    var current = readShopLinkInput();
+    btn.hidden = !(draft.slugCustom && suggested && suggested !== current);
+  }
+
+  function applySuggestedShopLink() {
+    var next = suggestedShopLink(draft.settings.storeName || '');
+    draft.slug = next;
+    setShopLinkInput(next);
+    syncShopLinkResetBtn();
+  }
+
+  function shopLinkError(slug) {
+    if (!slug) return 'Add a shop link so customers can open your store.';
+    if (slug.length < STORE_LINK_MIN) return 'Use at least 3 characters.';
+    if (slug.length > STORE_LINK_MAX) return 'Keep the link under ' + STORE_LINK_MAX + ' characters.';
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return 'Use letters, numbers, and hyphens — like anitha-pickles.';
+    }
+    if (RESERVED_SHOP_LINKS[slug]) return 'That link is reserved. Try your shop name plus area.';
+    return '';
+  }
+
   function hideErrors() {
     [
       'phone-error',
@@ -448,6 +524,11 @@
     if (step === 9) {
       clearSettingsFieldErrors();
       document.getElementById('input-store-name').value = draft.settings.storeName || '';
+      if (!draft.slug && draft.settings.storeName && !draft.slugCustom) {
+        draft.slug = suggestedShopLink(draft.settings.storeName);
+      }
+      setShopLinkInput(draft.slug || suggestedShopLink(draft.settings.storeName || ''));
+      syncShopLinkResetBtn();
       document.getElementById('input-tagline').value = draft.settings.tagline || '';
       document.getElementById('input-location').value = draft.settings.location || '';
       document.getElementById('input-whatsapp').value = draft.settings.whatsapp || draft.phone || '';
@@ -2439,7 +2520,10 @@
   }
 
   function finalizeLive(apiResult) {
-    draft.slug = D.slugify(draft.settings.storeName);
+    var liveSlug = D.normalizeStoreSlug
+      ? D.normalizeStoreSlug(draft.slug || draft.settings.storeName)
+      : D.slugify(draft.slug || draft.settings.storeName);
+    draft.slug = liveSlug || D.slugify(draft.settings.storeName);
     var sub = activateFreeSubscription(
       apiResult && (apiResult.subscription || apiResult.plan || apiResult)
     );
@@ -3012,7 +3096,11 @@
             var err = wrap.querySelector('.field-error');
             if (err) err.textContent = '';
           }
-          if (id === 'input-store-name') draft.settings.storeName = el.value;
+          if (id === 'input-store-name') {
+            draft.settings.storeName = el.value;
+            if (!draft.slugCustom) applySuggestedShopLink();
+            else syncShopLinkResetBtn();
+          }
           if (id === 'input-tagline') draft.settings.tagline = el.value;
           if (id === 'input-location') draft.settings.location = el.value;
           if (id === 'input-whatsapp') {
@@ -3023,7 +3111,6 @@
             var parsed = normalizeInstagramInput(el.value);
             draft.settings.instagramUrl = parsed.error ? '' : parsed.url;
           }
-          draft.slug = D.slugify(draft.settings.storeName);
           persist();
           if (id === 'input-store-name' || id === 'input-tagline') renderPreview();
         });
@@ -3035,6 +3122,50 @@
         });
       }
     );
+
+    var slugInput = document.getElementById('input-store-link');
+    if (slugInput) {
+      slugInput.addEventListener('input', function () {
+        var wrap = slugInput.closest('.settings-field');
+        if (wrap) {
+          wrap.classList.remove('is-invalid');
+          var err = wrap.querySelector('.field-error');
+          if (err) err.textContent = '';
+        }
+        var next = D.normalizeStoreSlug
+          ? D.normalizeStoreSlug(slugInput.value, { keepTrailing: true })
+          : slugInput.value.toLowerCase();
+        if (slugInput.value !== next) {
+          var start = slugInput.selectionStart;
+          slugInput.value = next;
+          if (typeof start === 'number') {
+            slugInput.setSelectionRange(Math.min(start, next.length), Math.min(start, next.length));
+          }
+        }
+        draft.slugCustom = true;
+        draft.slug = D.normalizeStoreSlug ? D.normalizeStoreSlug(next) : D.slugify(next);
+        syncShopLinkResetBtn();
+        persist();
+      });
+      slugInput.addEventListener('blur', function () {
+        var cleaned = D.normalizeStoreSlug
+          ? D.normalizeStoreSlug(slugInput.value)
+          : D.slugify(slugInput.value);
+        slugInput.value = cleaned;
+        draft.slug = cleaned;
+        persist();
+      });
+    }
+
+    var slugReset = document.getElementById('btn-slug-from-name');
+    if (slugReset) {
+      slugReset.addEventListener('click', function () {
+        draft.slugCustom = false;
+        applySuggestedShopLink();
+        persist();
+        if (slugInput) slugInput.focus();
+      });
+    }
 
     bindTaglineModal();
 
