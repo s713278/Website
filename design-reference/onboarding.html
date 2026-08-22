@@ -187,13 +187,8 @@
 
                     <!-- Step 5: Products -->
                     <section class="step-panel" data-step="5" id="panel-5">
-                        <h2 class="text-xl font-bold mb-1">Add Products</h2>
-                        <p class="text-gray-500 text-sm mb-3">Open a category, name a few items, tap the icon to add a photo. You can finish the rest later.</p>
-
-                        <p class="ob-tip-line" aria-label="Product photo guidelines">
-                            <span class="ob-tip-icon" aria-hidden="true">📷</span>
-                            Photo tip: square <span class="ob-note-pill">1:1</span>, ideally <span class="ob-note-pill">1200×1200</span>, JPG/PNG under <span class="ob-note-pill">1 MB</span>
-                        </p>
+                        <h2 class="text-xl font-bold mb-1">Pick Products</h2>
+                        <p class="text-gray-500 text-sm mb-6">Open a category to load products. Search by name, select what you sell, or add a new item. Catalog items keep their units; new items let you choose measurement.</p>
 
                         <div id="product-list" class="mt-3"></div>
                         <p id="product-error" class="text-red-500 text-sm mt-3 hidden"></p>
@@ -206,7 +201,7 @@
                     <!-- Step 6: Variants / SKUs -->
                     <section class="step-panel" data-step="6" id="panel-6">
                         <h2 class="text-xl font-bold mb-1">Set Prices</h2>
-                        <p class="text-gray-500 text-sm mb-4">Open a category and set size + price. One size is enough to go live.</p>
+                        <p class="text-gray-500 text-sm mb-4">Open a category and set quantity, unit, and price. Units match each product’s measurement. One size is enough to go live.</p>
                         <div id="sku-editor"></div>
                         <p id="sku-error" class="text-red-500 text-sm mt-3 hidden"></p>
                         <div class="flex justify-between mt-8">
@@ -347,7 +342,7 @@
                     <!-- Step 9: Store Settings -->
                     <section class="step-panel" data-step="9" id="panel-9">
                         <h2 class="text-xl font-bold mb-1">Store Settings</h2>
-                        <p class="text-gray-500 text-sm mb-6">Name your store, set branding, and personalize how your shop looks.</p>
+                        <p class="text-gray-500 text-sm mb-6">Name your store, pick a shop link, and personalize how your shop looks.</p>
                         <div class="settings-form space-y-3 max-w-3xl">
                             <div class="settings-field settings-field--row" data-field="storeName">
                                 <label class="settings-label" for="input-store-name">
@@ -356,6 +351,37 @@
                                 <div class="settings-control">
                                     <input type="text" id="input-store-name" name="storeName" required maxlength="80" autocomplete="organization" class="settings-input w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="e.g. Anitha Homemade Pickles" aria-required="true">
                                     <p class="field-error" id="err-store-name" role="alert"></p>
+                                </div>
+                            </div>
+
+                            <div class="settings-field settings-field--row" data-field="storeLink">
+                                <label class="settings-label" for="input-store-link">
+                                    Shop link <span class="settings-req" aria-hidden="true">*</span>
+                                </label>
+                                <div class="settings-control">
+                                    <div class="ob-slug-field">
+                                        <span class="ob-slug-prefix">mithradirect.com/store/</span>
+                                        <input
+                                            type="text"
+                                            id="input-store-link"
+                                            name="storeLink"
+                                            required
+                                            maxlength="40"
+                                            spellcheck="false"
+                                            autocomplete="off"
+                                            autocapitalize="none"
+                                            enterkeyhint="done"
+                                            class="settings-input ob-slug-input"
+                                            placeholder="anitha-pickles"
+                                            aria-required="true"
+                                            aria-describedby="hint-store-link"
+                                        >
+                                    </div>
+                                    <p class="settings-hint" id="hint-store-link">
+                                        Paste this in WhatsApp chats and Instagram bio. Short is easier to share.
+                                        <button type="button" class="ob-slug-reset" id="btn-slug-from-name" hidden>Use store name</button>
+                                    </p>
+                                    <p class="field-error" id="err-store-link" role="alert"></p>
                                 </div>
                             </div>
 

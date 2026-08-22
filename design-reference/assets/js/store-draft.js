@@ -185,100 +185,705 @@
 
   var CATEGORY_CATALOG = {
     pickles: [
-      { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh },
-      { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup },
-      { id: 'powders', name: 'Powders', image: IMG.fallbacks.flower },
-      { id: 'chutneys', name: 'Chutneys', image: IMG.fallbacks.batch }
+      { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup, measurement: 'COUNT' },
+      { id: 'powders', name: 'Powders', image: IMG.fallbacks.flower, measurement: 'WEIGHT' },
+      { id: 'chutneys', name: 'Chutneys', image: IMG.fallbacks.batch, measurement: 'WEIGHT' }
     ],
     'home-kitchen': [
-      { id: 'meals', name: 'Meals', image: IMG.fallbacks.fresh },
-      { id: 'snacks', name: 'Snacks', image: IMG.fallbacks.cup },
-      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.flower }
+      { id: 'meals', name: 'Meals', image: IMG.fallbacks.fresh, measurement: 'COUNT' },
+      { id: 'snacks', name: 'Snacks', image: IMG.fallbacks.cup, measurement: 'WEIGHT' },
+      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.flower, measurement: 'WEIGHT' }
     ],
     bakery: [
-      { id: 'breads', name: 'Breads', image: IMG.fallbacks.fresh },
-      { id: 'cakes', name: 'Cakes', image: IMG.fallbacks.cup },
-      { id: 'cookies', name: 'Cookies', image: IMG.fallbacks.flower }
+      { id: 'breads', name: 'Breads', image: IMG.fallbacks.fresh, measurement: 'COUNT' },
+      { id: 'cakes', name: 'Cakes', image: IMG.fallbacks.cup, measurement: 'COUNT' },
+      { id: 'cookies', name: 'Cookies', image: IMG.fallbacks.flower, measurement: 'WEIGHT' }
     ],
     spices: [
-      { id: 'masalas', name: 'Masalas', image: IMG.fallbacks.fresh },
-      { id: 'whole-spices', name: 'Whole Spices', image: IMG.fallbacks.cup }
+      { id: 'masalas', name: 'Masalas', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'whole-spices', name: 'Whole Spices', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     snacks: [
-      { id: 'savory', name: 'Savory', image: IMG.fallbacks.fresh },
-      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.cup }
+      { id: 'savory', name: 'Savory', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'sweets', name: 'Sweets', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     dairy: [
-      { id: 'milk', name: 'Milk Products', image: IMG.fallbacks.fresh },
-      { id: 'curd', name: 'Curd & Paneer', image: IMG.fallbacks.cup }
+      { id: 'milk', name: 'Milk Products', image: IMG.fallbacks.fresh, measurement: 'VOLUME' },
+      { id: 'curd', name: 'Curd & Paneer', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     organic: [
-      { id: 'veggies', name: 'Vegetables', image: IMG.fallbacks.fresh },
-      { id: 'fruits', name: 'Fruits', image: IMG.fallbacks.cup }
+      { id: 'veggies', name: 'Vegetables', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'fruits', name: 'Fruits', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     crafts: [
-      { id: 'decor', name: 'Home Decor', image: IMG.fallbacks.flower },
-      { id: 'gifts', name: 'Gift Items', image: IMG.fallbacks.batch }
+      { id: 'decor', name: 'Home Decor', image: IMG.fallbacks.flower, measurement: 'COUNT' },
+      { id: 'gifts', name: 'Gift Items', image: IMG.fallbacks.batch, measurement: 'COUNT' }
     ],
     florist: [
-      { id: 'bouquets', name: 'Bouquets', image: IMG.fallbacks.flower },
-      { id: 'plants', name: 'Plants', image: IMG.fallbacks.fresh }
+      { id: 'bouquets', name: 'Bouquets', image: IMG.fallbacks.flower, measurement: 'COUNT' },
+      { id: 'plants', name: 'Plants', image: IMG.fallbacks.fresh, measurement: 'COUNT' }
     ],
     clothing: [
-      { id: 'women', name: 'Women', image: IMG.fallbacks.cup },
-      { id: 'men', name: 'Men', image: IMG.fallbacks.batch }
+      { id: 'women', name: 'Women', image: IMG.fallbacks.cup, measurement: 'COUNT' },
+      { id: 'men', name: 'Men', image: IMG.fallbacks.batch, measurement: 'COUNT' }
     ],
     jewellery: [
-      { id: 'earrings', name: 'Earrings', image: IMG.fallbacks.flower },
-      { id: 'necklaces', name: 'Necklaces', image: IMG.fallbacks.cup }
+      { id: 'earrings', name: 'Earrings', image: IMG.fallbacks.flower, measurement: 'COUNT' },
+      { id: 'necklaces', name: 'Necklaces', image: IMG.fallbacks.cup, measurement: 'COUNT' }
     ],
     beauty: [
-      { id: 'skincare', name: 'Skincare', image: IMG.fallbacks.fresh },
-      { id: 'makeup', name: 'Makeup', image: IMG.fallbacks.flower }
+      { id: 'skincare', name: 'Skincare', image: IMG.fallbacks.fresh, measurement: 'VOLUME' },
+      { id: 'makeup', name: 'Makeup', image: IMG.fallbacks.flower, measurement: 'COUNT' }
     ],
     stationery: [
-      { id: 'notebooks', name: 'Notebooks', image: IMG.fallbacks.batch },
-      { id: 'gifts', name: 'Gift Sets', image: IMG.fallbacks.cup }
+      { id: 'notebooks', name: 'Notebooks', image: IMG.fallbacks.batch, measurement: 'COUNT' },
+      { id: 'gifts', name: 'Gift Sets', image: IMG.fallbacks.cup, measurement: 'COUNT' }
     ],
     electronics: [
-      { id: 'accessories', name: 'Accessories', image: IMG.fallbacks.cup },
-      { id: 'gadgets', name: 'Gadgets', image: IMG.fallbacks.batch }
+      { id: 'accessories', name: 'Accessories', image: IMG.fallbacks.cup, measurement: 'COUNT' },
+      { id: 'gadgets', name: 'Gadgets', image: IMG.fallbacks.batch, measurement: 'COUNT' }
     ],
     pets: [
-      { id: 'pet-food', name: 'Pet Food', image: IMG.fallbacks.fresh },
-      { id: 'pet-care', name: 'Pet Care', image: IMG.fallbacks.cup }
+      { id: 'pet-food', name: 'Pet Food', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'pet-care', name: 'Pet Care', image: IMG.fallbacks.cup, measurement: 'COUNT' }
     ],
     grocery: [
-      { id: 'staples', name: 'Staples', image: IMG.fallbacks.fresh },
-      { id: 'daily', name: 'Daily Needs', image: IMG.fallbacks.cup }
+      { id: 'staples', name: 'Staples', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'daily', name: 'Daily Needs', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     meat: [
-      { id: 'chicken', name: 'Chicken', image: IMG.fallbacks.fresh },
-      { id: 'seafood', name: 'Seafood', image: IMG.fallbacks.cup }
+      { id: 'chicken', name: 'Chicken', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+      { id: 'seafood', name: 'Seafood', image: IMG.fallbacks.cup, measurement: 'WEIGHT' }
     ],
     others: [
-      { id: 'general', name: 'General', image: IMG.fallbacks.fresh },
-      { id: 'bestsellers', name: 'Bestsellers', image: IMG.fallbacks.cup },
-      { id: 'new-arrivals', name: 'New Arrivals', image: IMG.fallbacks.flower }
+      { id: 'general', name: 'General', image: IMG.fallbacks.fresh, measurement: 'COUNT' },
+      { id: 'bestsellers', name: 'Bestsellers', image: IMG.fallbacks.cup, measurement: 'COUNT' },
+      { id: 'new-arrivals', name: 'New Arrivals', image: IMG.fallbacks.flower, measurement: 'COUNT' }
     ]
+  };
+
+  function catProd(id, name, icon) {
+    return { id: id, name: name, icon: icon };
+  }
+
+  /** Platform products by business type → category. Assigned to the vendor on select. */
+  var PRODUCT_CATALOG = {
+    'home-kitchen': {
+      meals: [
+        catProd('home-kitchen__meals__veg-thali', 'Veg Thali', '🍛'),
+        catProd('home-kitchen__meals__chicken-curry-meal', 'Chicken Curry Meal', '🍗'),
+        catProd('home-kitchen__meals__millet-power-bowl', 'Millet Power Bowl', '🥗'),
+        catProd('home-kitchen__meals__tiffin-combo', 'Tiffin Combo', '🍱')
+      ],
+      snacks: [
+        catProd('home-kitchen__snacks__murukku', 'Murukku', '🥨'),
+        catProd('home-kitchen__snacks__mixture', 'Mixture', '🥜'),
+        catProd('home-kitchen__snacks__banana-chips', 'Banana Chips', '🍌')
+      ],
+      sweets: [
+        catProd('home-kitchen__sweets__millet-laddu', 'Millet Laddu', '🍬'),
+        catProd('home-kitchen__sweets__besan-laddu', 'Besan Laddu', '🍯'),
+        catProd('home-kitchen__sweets__coconut-barfi', 'Coconut Barfi', '🥥')
+      ]
+    },
+    pickles: {
+      pickles: [
+        catProd('pickles__pickles__mango', 'Mango Pickle', '🥭'),
+        catProd('pickles__pickles__gongura', 'Gongura Pickle', '🌿'),
+        catProd('pickles__pickles__lemon', 'Lemon Pickle', '🍋'),
+        catProd('pickles__pickles__garlic', 'Garlic Pickle', '🧄')
+      ],
+      'combo-packs': [
+        catProd('pickles__combo-packs__trio', 'Pickle Trio Combo', '🎁'),
+        catProd('pickles__combo-packs__family', 'Family Combo Pack', '📦'),
+        catProd('pickles__combo-packs__gift-box', 'Gift Box', '🎀')
+      ],
+      powders: [
+        catProd('pickles__powders__karam-podi', 'Karam Podi', '🌶️'),
+        catProd('pickles__powders__idli-podi', 'Idli Podi', '🥄'),
+        catProd('pickles__powders__kandi-podi', 'Kandi Podi', '🫘'),
+        catProd('pickles__powders__karivepaku', 'Karivepaku Kaaram', '🍃')
+      ],
+      chutneys: [
+        catProd('pickles__chutneys__coconut', 'Coconut Chutney', '🥥'),
+        catProd('pickles__chutneys__tomato', 'Tomato Chutney', '🍅'),
+        catProd('pickles__chutneys__ginger', 'Ginger Chutney', '🫚')
+      ]
+    },
+    bakery: {
+      breads: [
+        catProd('bakery__breads__sandwich', 'Sandwich Bread', '🍞'),
+        catProd('bakery__breads__multigrain', 'Multigrain Loaf', '🌾'),
+        catProd('bakery__breads__pav', 'Pav Buns', '🥐')
+      ],
+      cakes: [
+        catProd('bakery__cakes__chocolate', 'Chocolate Cake', '🎂'),
+        catProd('bakery__cakes__butterscotch', 'Butterscotch Cake', '🍰'),
+        catProd('bakery__cakes__cupcakes', 'Cupcakes', '🧁')
+      ],
+      cookies: [
+        catProd('bakery__cookies__butter', 'Butter Cookies', '🍪'),
+        catProd('bakery__cookies__jeera', 'Jeera Biscuits', '🥨'),
+        catProd('bakery__cookies__choco-chip', 'Chocolate Chip Cookies', '🍫')
+      ]
+    },
+    spices: {
+      masalas: [
+        catProd('spices__masalas__garam', 'Garam Masala', '🌶️'),
+        catProd('spices__masalas__sambar', 'Sambar Powder', '🥄'),
+        catProd('spices__masalas__biryani', 'Biryani Masala', '🍛'),
+        catProd('spices__masalas__rasam', 'Rasam Powder', '🥣')
+      ],
+      'whole-spices': [
+        catProd('spices__whole-spices__cardamom', 'Green Cardamom', '🟢'),
+        catProd('spices__whole-spices__cloves', 'Cloves', '🟤'),
+        catProd('spices__whole-spices__cinnamon', 'Cinnamon Sticks', '🪵')
+      ]
+    },
+    snacks: {
+      savory: [
+        catProd('snacks__savory__mixture', 'Namkeen Mixture', '🥨'),
+        catProd('snacks__savory__murukku', 'Murukku', '🥨'),
+        catProd('snacks__savory__thattai', 'Thattai', '🍘')
+      ],
+      sweets: [
+        catProd('snacks__sweets__mysore-pak', 'Mysore Pak', '🍬'),
+        catProd('snacks__sweets__laddu', 'Besan Laddu', '🍯'),
+        catProd('snacks__sweets__halwa', 'Carrot Halwa', '🥕')
+      ]
+    },
+    dairy: {
+      milk: [
+        catProd('dairy__milk__toned', 'Toned Milk', '🥛'),
+        catProd('dairy__milk__ghee', 'Cow Ghee', '🧈'),
+        catProd('dairy__milk__buttermilk', 'Buttermilk', '🥤')
+      ],
+      curd: [
+        catProd('dairy__curd__fresh-curd', 'Fresh Curd', '🥣'),
+        catProd('dairy__curd__paneer', 'Malai Paneer', '🧀'),
+        catProd('dairy__curd__hung-curd', 'Hung Curd', '🥛')
+      ]
+    },
+    organic: {
+      veggies: [
+        catProd('organic__veggies__tomato', 'Organic Tomato', '🍅'),
+        catProd('organic__veggies__spinach', 'Palak / Spinach', '🥬'),
+        catProd('organic__veggies__carrot', 'Farm Carrot', '🥕')
+      ],
+      fruits: [
+        catProd('organic__fruits__banana', 'Farm Banana', '🍌'),
+        catProd('organic__fruits__mango', 'Seasonal Mango', '🥭'),
+        catProd('organic__fruits__apple', 'Apple', '🍎')
+      ]
+    },
+    crafts: {
+      decor: [
+        catProd('crafts__decor__wall-hanging', 'Wall Hanging', '🖼️'),
+        catProd('crafts__decor__diya-set', 'Diya Set', '🪔'),
+        catProd('crafts__decor__cushion', 'Handloom Cushion', '🧵')
+      ],
+      gifts: [
+        catProd('crafts__gifts__gift-hamper', 'Gift Hamper', '🎁'),
+        catProd('crafts__gifts__handmade-card', 'Handmade Card', '💌'),
+        catProd('crafts__gifts__keychain', 'Craft Keychain', '🔑')
+      ]
+    },
+    florist: {
+      bouquets: [
+        catProd('florist__bouquets__rose', 'Rose Bouquet', '🌹'),
+        catProd('florist__bouquets__mixed', 'Mixed Bouquet', '💐'),
+        catProd('florist__bouquets__garland', 'Jasmine Garland', '🌼')
+      ],
+      plants: [
+        catProd('florist__plants__money-plant', 'Money Plant', '🪴'),
+        catProd('florist__plants__tulsi', 'Tulsi Plant', '🌿'),
+        catProd('florist__plants__snake-plant', 'Snake Plant', '🌱')
+      ]
+    },
+    clothing: {
+      women: [
+        catProd('clothing__women__kurti', 'Cotton Kurti', '👗'),
+        catProd('clothing__women__saree', 'Handloom Saree', '🧵'),
+        catProd('clothing__women__dupatta', 'Dupatta', '🧣')
+      ],
+      men: [
+        catProd('clothing__men__shirt', 'Casual Shirt', '👔'),
+        catProd('clothing__men__kurta', 'Cotton Kurta', '👕'),
+        catProd('clothing__men__dhoti', 'Dhoti', '🩳')
+      ]
+    },
+    jewellery: {
+      earrings: [
+        catProd('jewellery__earrings__jhumka', 'Jhumka Earrings', '💎'),
+        catProd('jewellery__earrings__studs', 'Gold-plated Studs', '✨'),
+        catProd('jewellery__earrings__hoops', 'Hoop Earrings', '⭕')
+      ],
+      necklaces: [
+        catProd('jewellery__necklaces__chain', 'Pendant Chain', '📿'),
+        catProd('jewellery__necklaces__choker', 'Temple Choker', '💍'),
+        catProd('jewellery__necklaces__mangalsutra', 'Mangalsutra', '🟡')
+      ]
+    },
+    beauty: {
+      skincare: [
+        catProd('beauty__skincare__face-pack', 'Herbal Face Pack', '🌿'),
+        catProd('beauty__skincare__oil', 'Coconut Hair Oil', '🧴'),
+        catProd('beauty__skincare__soap', 'Handmade Soap', '🧼')
+      ],
+      makeup: [
+        catProd('beauty__makeup__kajal', 'Kajal', '✒️'),
+        catProd('beauty__makeup__lipstick', 'Lipstick', '💄'),
+        catProd('beauty__makeup__bindi', 'Bindi Pack', '🔴')
+      ]
+    },
+    stationery: {
+      notebooks: [
+        catProd('stationery__notebooks__ruled', 'Ruled Notebook', '📓'),
+        catProd('stationery__notebooks__diary', 'Hardcover Diary', '📔'),
+        catProd('stationery__notebooks__sticky', 'Sticky Notes', '📝')
+      ],
+      gifts: [
+        catProd('stationery__gifts__pen-set', 'Pen Gift Set', '✒️'),
+        catProd('stationery__gifts__art-kit', 'Art Kit', '🎨'),
+        catProd('stationery__gifts__bookmark', 'Bookmark Set', '🔖')
+      ]
+    },
+    electronics: {
+      accessories: [
+        catProd('electronics__accessories__earphones', 'Wired Earphones', '🎧'),
+        catProd('electronics__accessories__charger', 'Phone Charger', '🔌'),
+        catProd('electronics__accessories__case', 'Phone Case', '📱')
+      ],
+      gadgets: [
+        catProd('electronics__gadgets__power-bank', 'Power Bank', '🔋'),
+        catProd('electronics__gadgets__trimmer', 'Trimmer', '🪒'),
+        catProd('electronics__gadgets__led-lamp', 'LED Lamp', '💡')
+      ]
+    },
+    pets: {
+      'pet-food': [
+        catProd('pets__pet-food__dog-kibble', 'Dog Kibble', '🐶'),
+        catProd('pets__pet-food__cat-food', 'Cat Food', '🐱'),
+        catProd('pets__pet-food__treats', 'Pet Treats', '🦴')
+      ],
+      'pet-care': [
+        catProd('pets__pet-care__shampoo', 'Pet Shampoo', '🧴'),
+        catProd('pets__pet-care__collar', 'Collar & Leash', '🦮'),
+        catProd('pets__pet-care__bowl', 'Feeding Bowl', '🥣')
+      ]
+    },
+    grocery: {
+      staples: [
+        catProd('grocery__staples__rice', 'Sona Masoori Rice', '🍚'),
+        catProd('grocery__staples__toor-dal', 'Toor Dal', '🫘'),
+        catProd('grocery__staples__atta', 'Wheat Atta', '🌾')
+      ],
+      daily: [
+        catProd('grocery__daily__oil', 'Groundnut Oil', '🫒'),
+        catProd('grocery__daily__sugar', 'Sugar', '🧂'),
+        catProd('grocery__daily__tea', 'Tea Dust', '🍵')
+      ]
+    },
+    meat: {
+      chicken: [
+        catProd('meat__chicken__curry-cut', 'Curry Cut Chicken', '🍗'),
+        catProd('meat__chicken__boneless', 'Boneless Chicken', '🍖'),
+        catProd('meat__chicken__eggs', 'Farm Eggs', '🥚')
+      ],
+      seafood: [
+        catProd('meat__seafood__rohu', 'Rohu Fish', '🐟'),
+        catProd('meat__seafood__prawns', 'Prawns', '🦐'),
+        catProd('meat__seafood__crab', 'Crab', '🦀')
+      ]
+    },
+    others: {
+      general: [
+        catProd('others__general__starter', 'Starter Item', '📦'),
+        catProd('others__general__daily', 'Daily Essential', '🛒'),
+        catProd('others__general__custom', 'Custom Product', '✨')
+      ],
+      bestsellers: [
+        catProd('others__bestsellers__house-special', 'House Special', '⭐'),
+        catProd('others__bestsellers__most-ordered', 'Most Ordered', '🔥'),
+        catProd('others__bestsellers__combo', 'Combo Deal', '🎁')
+      ],
+      'new-arrivals': [
+        catProd('others__new-arrivals__this-week', "This Week's New", '🆕'),
+        catProd('others__new-arrivals__limited', 'Limited Batch', '⏳'),
+        catProd('others__new-arrivals__seasonal', 'Seasonal Pick', '🍂')
+      ]
+    }
   };
 
   var PRODUCT_COLORS = [
     '#FEF3C7', '#FECACA', '#D1FAE5', '#DBEAFE', '#E9D5FF', '#FFEDD5'
   ];
 
+  /**
+   * Platform measurements + units (mirrors /v1/measurements).
+   * Product picks a measurement; Set Prices only offers that measurement's units.
+   */
+  var MEASUREMENTS = [
+    {
+      id: 'WEIGHT',
+      label: 'Weight',
+      units: [
+        { id: 'g', label: 'g' },
+        { id: 'kg', label: 'kg' }
+      ],
+      defaultUnit: 'g',
+      defaultValue: '250',
+      presets: [
+        { value: '250', unit: 'g' },
+        { value: '500', unit: 'g' },
+        { value: '1', unit: 'kg' }
+      ]
+    },
+    {
+      id: 'VOLUME',
+      label: 'Volume',
+      units: [
+        { id: 'ml', label: 'ml' },
+        { id: 'L', label: 'L' }
+      ],
+      defaultUnit: 'ml',
+      defaultValue: '500',
+      presets: [
+        { value: '250', unit: 'ml' },
+        { value: '500', unit: 'ml' },
+        { value: '1', unit: 'L' }
+      ]
+    },
+    {
+      id: 'COUNT',
+      label: 'Count',
+      units: [
+        { id: 'pcs', label: 'pcs' },
+        { id: 'pack', label: 'pack' },
+        { id: 'dozen', label: 'dozen' }
+      ],
+      defaultUnit: 'pcs',
+      defaultValue: '1',
+      presets: [
+        { value: '1', unit: 'pcs' },
+        { value: '2', unit: 'pcs' },
+        { value: '6', unit: 'pcs' }
+      ]
+    },
+    {
+      id: 'AREA',
+      label: 'Area',
+      units: [
+        { id: 'sqft', label: 'sq ft' },
+        { id: 'sqm', label: 'sq m' }
+      ],
+      defaultUnit: 'sqft',
+      defaultValue: '1',
+      presets: [
+        { value: '1', unit: 'sqft' },
+        { value: '10', unit: 'sqft' }
+      ]
+    },
+    {
+      id: 'SERVICE_UNIT',
+      label: 'Service',
+      units: [
+        { id: 'session', label: 'session' },
+        { id: 'visit', label: 'visit' }
+      ],
+      defaultUnit: 'session',
+      defaultValue: '1',
+      presets: [
+        { value: '1', unit: 'session' },
+        { value: '5', unit: 'session' }
+      ]
+    },
+    {
+      id: 'DURATION',
+      label: 'Duration',
+      units: [
+        { id: 'min', label: 'min' },
+        { id: 'hr', label: 'hr' },
+        { id: 'day', label: 'day' }
+      ],
+      defaultUnit: 'min',
+      defaultValue: '30',
+      presets: [
+        { value: '30', unit: 'min' },
+        { value: '1', unit: 'hr' }
+      ]
+    },
+    {
+      id: 'PER_PERSON',
+      label: 'Per person',
+      units: [{ id: 'person', label: 'person' }],
+      defaultUnit: 'person',
+      defaultValue: '1',
+      presets: [{ value: '1', unit: 'person' }]
+    },
+    {
+      id: 'SLOT',
+      label: 'Slot',
+      units: [{ id: 'slot', label: 'slot' }],
+      defaultUnit: 'slot',
+      defaultValue: '1',
+      presets: [{ value: '1', unit: 'slot' }]
+    }
+  ];
+
+  var UNIT_ALIASES = {
+    g: 'g',
+    gm: 'g',
+    gms: 'g',
+    grms: 'g',
+    gram: 'g',
+    grams: 'g',
+    kg: 'kg',
+    kgs: 'kg',
+    kilo: 'kg',
+    ml: 'ml',
+    l: 'L',
+    ltr: 'L',
+    litre: 'L',
+    liter: 'L',
+    pcs: 'pcs',
+    pc: 'pcs',
+    piece: 'pcs',
+    pieces: 'pcs',
+    pack: 'pack',
+    dozen: 'dozen',
+    sqft: 'sqft',
+    sqm: 'sqm',
+    session: 'session',
+    visit: 'visit',
+    min: 'min',
+    hr: 'hr',
+    day: 'day',
+    person: 'person',
+    slot: 'slot'
+  };
+
+  var UNIT_SCALE_MAP = {
+    g: 'ml',
+    kg: 'L',
+    ml: 'g',
+    L: 'kg'
+  };
+
+  var WEIGHT_BUSINESS_TYPES = {
+    pickles: true,
+    spices: true,
+    snacks: true,
+    organic: true,
+    grocery: true,
+    meat: true,
+    pets: true
+  };
+
+  var VOLUME_BUSINESS_TYPES = {
+    dairy: true
+  };
+
   function uid(prefix) {
     return (prefix || 'id') + '_' + Math.random().toString(36).slice(2, 9);
   }
 
-  function slugify(text) {
-    return String(text || '')
+  var STORE_SLUG_MAX = 40;
+
+  function normalizeStoreSlug(raw, opts) {
+    var keepTrailing = opts && opts.keepTrailing;
+    var s = String(raw || '')
       .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'my-store';
+      .replace(/['’]/g, '')
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-');
+    if (keepTrailing) s = s.replace(/^-/, '');
+    else s = s.replace(/^-|-$/g, '');
+    return s.slice(0, STORE_SLUG_MAX);
+  }
+
+  function slugify(text) {
+    return normalizeStoreSlug(text) || 'my-store';
+  }
+
+  function getMeasurement(id) {
+    var found = null;
+    MEASUREMENTS.forEach(function (m) {
+      if (m.id === id) found = m;
+    });
+    return found || MEASUREMENTS[0];
+  }
+
+  function unitsForMeasurement(id) {
+    return getMeasurement(id).units.slice();
+  }
+
+  function defaultMeasurementForBusiness(businessTypeId) {
+    var id = String(businessTypeId || '');
+    if (VOLUME_BUSINESS_TYPES[id]) return 'VOLUME';
+    if (WEIGHT_BUSINESS_TYPES[id]) return 'WEIGHT';
+    return 'COUNT';
+  }
+
+  function inferMeasurementType(name, category, businessTypeId) {
+    var hay = String(name || '').toLowerCase();
+    if (
+      /\b(milk|buttermilk|lassi|juice|oil|shampoo|tonic|drink)\b/.test(hay)
+    ) {
+      return 'VOLUME';
+    }
+    if (
+      /\b(ghee|paneer|curd|dal|pulse|pulses|rice|atta|flour|sugar|pickle|powder|masala|tea|chips|mixture)\b/.test(
+        hay
+      )
+    ) {
+      return 'WEIGHT';
+    }
+    if (
+      /\b(thali|meal|combo|bouquet|shirt|kurti|saree|cake|loaf|plant|egg)\b/.test(hay)
+    ) {
+      return 'COUNT';
+    }
+    if (category && category.measurement) return category.measurement;
+    return defaultMeasurementForBusiness(businessTypeId);
+  }
+
+  function formatSkuLabel(value, unit) {
+    var v = String(value == null ? '' : value).trim();
+    var u = String(unit || '').trim();
+    if (!v && !u) return '';
+    if (!u) return v;
+    if (!v) return u;
+    return v + ' ' + u;
+  }
+
+  function parseSkuLabel(label) {
+    var s = String(label || '').trim();
+    var m = s.match(/^([\d]+(?:[.,]\d+)?)\s*([a-zA-Z]+)?/);
+    if (!m) return { value: '', unit: '' };
+    return { value: m[1].replace(',', '.'), unit: m[2] || '' };
+  }
+
+  function normalizeUnitId(raw, measurementId) {
+    var key = String(raw || '').trim();
+    var mapped = UNIT_ALIASES[key.toLowerCase()] || key;
+    var units = unitsForMeasurement(measurementId);
+    var match = null;
+    units.forEach(function (u) {
+      if (
+        u.id === mapped ||
+        u.id.toLowerCase() === key.toLowerCase() ||
+        String(u.label || '').toLowerCase() === key.toLowerCase()
+      ) {
+        match = u;
+      }
+    });
+    if (match) return match.id;
+    var scaled = UNIT_SCALE_MAP[mapped];
+    if (scaled) {
+      units.forEach(function (u) {
+        if (u.id === scaled) match = u;
+      });
+      if (match) return match.id;
+    }
+    return getMeasurement(measurementId).defaultUnit;
+  }
+
+  function composeVariantLabel(variant) {
+    if (!variant) return '';
+    variant.label = formatSkuLabel(variant.value, variant.unit);
+    return variant.label;
+  }
+
+  function createSkuVariant(opts) {
+    opts = opts || {};
+    var m = getMeasurement(opts.measurementType);
+    var value =
+      opts.value != null && String(opts.value).trim() !== ''
+        ? String(opts.value).trim()
+        : m.defaultValue;
+    var unit = normalizeUnitId(opts.unit || m.defaultUnit, m.id);
+    var variant = {
+      id: opts.id || uid('sku'),
+      value: value,
+      unit: unit,
+      label: formatSkuLabel(value, unit),
+      price: opts.price != null ? opts.price : 199,
+      mrp: opts.mrp != null ? opts.mrp : 249,
+      active: opts.active !== false
+    };
+    return variant;
+  }
+
+  function alignVariantToMeasurement(variant, measurementType) {
+    if (!variant) return variant;
+    var parsed = parseSkuLabel(variant.label);
+    if (variant.value == null || String(variant.value).trim() === '') {
+      variant.value = parsed.value || getMeasurement(measurementType).defaultValue;
+    }
+    variant.unit = normalizeUnitId(variant.unit || parsed.unit, measurementType);
+    composeVariantLabel(variant);
+    return variant;
+  }
+
+  function nextSkuPreset(product) {
+    var m = getMeasurement(product && product.measurementType);
+    var used = {};
+    ((product && product.variants) || []).forEach(function (v) {
+      used[String(v.value) + '|' + v.unit] = true;
+    });
+    var i;
+    for (i = 0; i < m.presets.length; i++) {
+      var preset = m.presets[i];
+      if (!used[preset.value + '|' + preset.unit]) {
+        return createSkuVariant({
+          measurementType: m.id,
+          value: preset.value,
+          unit: preset.unit,
+          price: '',
+          mrp: '',
+          active: true
+        });
+      }
+    }
+    return createSkuVariant({
+      measurementType: m.id,
+      value: '',
+      unit: m.defaultUnit,
+      price: '',
+      mrp: '',
+      active: true
+    });
+  }
+
+  function applyMeasurementToProduct(product, measurementType) {
+    if (!product) return product;
+    product.measurementType = getMeasurement(measurementType).id;
+    (product.variants || []).forEach(function (v) {
+      alignVariantToMeasurement(v, product.measurementType);
+    });
+    return product;
+  }
+
+  function normalizeProductMeasurement(product, category, businessTypeId) {
+    if (!product) return product;
+    if (!product.measurementType) {
+      product.measurementType = inferMeasurementType(
+        product.name,
+        category,
+        businessTypeId
+      );
+    } else {
+      product.measurementType = getMeasurement(product.measurementType).id;
+    }
+    (product.variants || []).forEach(function (v) {
+      alignVariantToMeasurement(v, product.measurementType);
+    });
+    if (!(product.variants || []).length) {
+      product.variants = [createSkuVariant({ measurementType: product.measurementType })];
+    }
+    return product;
   }
 
   var THEME_PRESETS = [
@@ -346,6 +951,13 @@
       hint: 'Classic',
       display: "'Source Sans 3', system-ui, sans-serif",
       body: "'Source Sans 3', system-ui, sans-serif"
+    },
+    {
+      id: 'inter',
+      label: 'Inter',
+      hint: 'Neutral',
+      display: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      body: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
     }
   ];
 
@@ -409,6 +1021,7 @@
       settings: {
         storeName: '',
         tagline: '',
+        description: '',
         location: '',
         whatsapp: '',
         instagramUrl: '',
@@ -417,14 +1030,312 @@
         themeColor: DEFAULT_THEME,
         accentColor: DEFAULT_ACCENT,
         backgroundColor: DEFAULT_BG,
-        fontId: DEFAULT_FONT
+        textColor: '',
+        fontId: DEFAULT_FONT,
+        buttonShape: 'ROUNDED',
+        cardStyle: 'SHADOW',
+        themePreset: '',
+        heroBadges: [],
+        trustStrip: [],
+        shareLink: '',
+        announcementBar: '',
+        welcomeMessage: '',
+        whatsappCta: 'Order on WhatsApp',
+        paymentNote: '',
+        deliveryMessage: '',
+        pickupMessage: ''
       },
       slug: '',
+      slugCustom: false,
       vendorId: null,
       subscription: defaultSubscription(),
       currentStep: 1,
       maxReachedStep: 1
     };
+  }
+
+  /** Drop API placeholders like "string" so broken images never render. */
+  function isUsableMediaUrl(value) {
+    var s = String(value || '').trim();
+    if (!s) return '';
+    var lower = s.toLowerCase();
+    if (lower === 'string' || lower === 'null' || lower === 'undefined' || lower === 'none' || lower === 'n/a') {
+      return '';
+    }
+    if (
+      s.indexOf('http://') === 0 ||
+      s.indexOf('https://') === 0 ||
+      s.indexOf('data:image') === 0 ||
+      s.indexOf('/') === 0 ||
+      s.indexOf('assets/') === 0
+    ) {
+      return s;
+    }
+    return '';
+  }
+
+  function categoryIconForName(name) {
+    var n = String(name || '').toLowerCase();
+    if (n.indexOf('podi') !== -1 || n.indexOf('spice') !== -1 || n.indexOf('masala') !== -1) return '🌶️';
+    if (n.indexOf('herbal') !== -1 || n.indexOf('hair') !== -1) return '🌿';
+    if (n.indexOf('flour') !== -1) return '🌾';
+    if (n.indexOf('snack') !== -1) return '🥨';
+    if (n.indexOf('healthy') !== -1) return '🥗';
+    if (n.indexOf('eco') !== -1) return '♻️';
+    if (n.indexOf('sweet') !== -1 || n.indexOf('mithai') !== -1) return '🍬';
+    if (n.indexOf('pickle') !== -1 || n.indexOf('achar') !== -1) return '🫙';
+    return '📦';
+  }
+
+  function firstLine(text, maxLen) {
+    var raw = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    var cut = raw.split(/[.!?]/)[0].trim();
+    var line = cut || raw;
+    var limit = maxLen || 96;
+    if (line.length > limit) return line.slice(0, limit - 1).replace(/\s+\S*$/, '') + '…';
+    return line;
+  }
+
+  /**
+   * Map GET /v1/vendors/{id}/storefront (VendorStorefrontResponse) → store draft.
+   * Home products are lightweight collection tiles (id, name, image_path) — not SKUs.
+   */
+  function fromVendorStorefront(raw) {
+    var src = raw || {};
+    if (src.data && typeof src.data === 'object' && (src.data.business_name || src.data.store_identifier)) {
+      src = src.data;
+    }
+    var draft = emptyDraft();
+    var theme = src.theme || {};
+    var fulfill = src.fulfillment || {};
+    var cats = Array.isArray(src.categories) ? src.categories : [];
+    var products = Array.isArray(src.products) ? src.products : [];
+
+    draft.vendorId = src.vendor_id != null ? src.vendor_id : null;
+    draft.slug = src.store_identifier || slugify(src.business_name || '');
+    draft.verified = !!src.verified;
+    draft.phone = String(src.support_whatsapp_number || src.order_whatsapp_number || '').replace(/\D/g, '');
+    draft.meta = { source: 'api', version: 1, fetchedAt: new Date().toISOString() };
+
+    draft.settings.storeName = src.business_name || '';
+    draft.settings.tagline = src.tagline || firstLine(src.description, 88);
+    draft.settings.description = src.description || '';
+    draft.settings.location = src.business_location || '';
+    draft.settings.whatsapp = src.support_whatsapp_number || src.order_whatsapp_number || '';
+    draft.settings.instagramUrl = src.instagram_url || '';
+    draft.settings.logo = isUsableMediaUrl(src.logo || src.thumbnail_image || theme.logo_image);
+    draft.settings.banner = isUsableMediaUrl(src.banner_image || theme.banner_image);
+    draft.settings.richBanner = !!draft.settings.banner;
+    draft.settings.themeColor = theme.primary_color || DEFAULT_THEME;
+    draft.settings.accentColor = theme.accent_color || DEFAULT_ACCENT;
+    draft.settings.backgroundColor = theme.background_color || DEFAULT_BG;
+    draft.settings.textColor = theme.text_color || '';
+    draft.settings.fontId = fontIdFromFamily(theme.font_family);
+    draft.settings.buttonShape = String(theme.button_shape || 'ROUNDED').toUpperCase();
+    draft.settings.cardStyle = String(theme.card_style || 'SHADOW').toUpperCase();
+    draft.settings.themePreset = String(theme.theme_preset || '').toUpperCase();
+    draft.settings.heroBadges = Array.isArray(src.hero_badges) ? src.hero_badges.filter(Boolean) : [];
+    draft.settings.trustStrip = Array.isArray(src.trust_strip) ? src.trust_strip : [];
+    draft.settings.shareLink = src.share_link || '';
+    draft.settings.announcementBar = src.announcement_bar || '';
+    draft.settings.welcomeMessage = src.welcome_message || '';
+    draft.settings.whatsappCta = src.whatsapp_cta_text || 'Order on WhatsApp';
+    draft.settings.paymentNote = src.payment_note || '';
+    draft.settings.deliveryMessage = fulfill.delivery_message || '';
+    draft.settings.pickupMessage = fulfill.pickup_message || '';
+
+    draft.delivery.homeDelivery.enabled = !!fulfill.home_delivery_available;
+    draft.delivery.storePickup.enabled = !!fulfill.store_pickup_available;
+    if (!draft.delivery.homeDelivery.enabled && !draft.delivery.storePickup.enabled) {
+      draft.delivery.homeDelivery.enabled = true;
+    }
+
+    draft.categories = cats.map(function (c, i) {
+      return {
+        id: String(c.id != null ? c.id : 'cat-' + i),
+        name: c.name || 'Category',
+        image: isUsableMediaUrl(c.image_path || c.image),
+        icon: categoryIconForName(c.name),
+        description: c.description || ''
+      };
+    });
+
+    function categoryIdForProduct(p) {
+      if (p.category_id != null && p.category_id !== '') return String(p.category_id);
+      var name = String(p.name || '').toLowerCase();
+      for (var i = 0; i < draft.categories.length; i++) {
+        if (String(draft.categories[i].name || '').toLowerCase() === name) {
+          return String(draft.categories[i].id);
+        }
+      }
+      return '';
+    }
+
+    draft.products = products.map(function (p, i) {
+      var image = isUsableMediaUrl(p.image_path || p.image);
+      var variants = Array.isArray(p.variants) ? p.variants : [];
+      return {
+        id: String(p.id != null ? p.id : 'prod-' + i),
+        name: p.name || 'Item',
+        image: image,
+        icon: categoryIconForName(p.name),
+        color: PRODUCT_COLORS[i % PRODUCT_COLORS.length],
+        order: i,
+        categoryId: categoryIdForProduct(p),
+        rating: p.rating || 0,
+        reviews: p.reviews || 0,
+        description: p.description || '',
+        popular: p.popular !== false,
+        kind: variants.length ? 'product' : 'collection',
+        variants: variants
+      };
+    });
+
+    draft.categories.forEach(function (c) {
+      if (c.image) return;
+      var match = draft.products.find(function (p) {
+        return (
+          p.image &&
+          (p.categoryId === c.id || String(p.name || '').toLowerCase() === String(c.name || '').toLowerCase())
+        );
+      });
+      if (match) c.image = match.image;
+    });
+
+    return draft;
+  }
+
+  function isVendorStorefrontPayload(raw) {
+    var src = raw && raw.data && typeof raw.data === 'object' ? raw.data : raw;
+    if (!src || typeof src !== 'object') return false;
+    if (src.settings && src.settings.storeName) return false;
+    return !!(src.business_name || src.store_identifier || (src.vendor_id && src.theme));
+  }
+
+  /**
+   * Live sample: SVADA public storefront (GET /v1/vendors/1/storefront).
+   * Used as the Instagram-bio / WhatsApp-status reference store.
+   */
+  function seedSvadaApiPayload() {
+    return {
+      vendor_id: 1,
+      store_identifier: 'svad',
+      business_name: 'SVADA [Fixed Window]',
+      description:
+        'A homegrown, farm-to-table brand offering a wide range of traditionally prepared, natural, and chemical-free products rooted in Telugu culinary and wellness heritage. From hand-pounded spice powders, seasonal pickles, and multigrain flours to wild forest honey, herbal hair care, and eco-friendly daily essentials — every product is crafted with care, using authentic recipes passed down through generations.',
+      banner_image:
+        'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/vendors/1/homebanners/home_banner_jpeg.jpeg',
+      logo: 'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/vendors/1/thumbnails/logo_jpg.jpeg',
+      verified: true,
+      theme: {
+        primary_color: '#F97316',
+        accent_color: '#15803D',
+        background_color: '#FFFFFF',
+        text_color: '#1F2937',
+        font_family: 'Inter',
+        button_shape: 'ROUNDED',
+        card_style: 'SHADOW',
+        theme_preset: 'WARM'
+      },
+      hero_badges: ['100% Natural', 'No Preservatives', 'Home-style Taste'],
+      business_location: 'Hyderabad, Telangana',
+      fulfillment: {
+        home_delivery_available: true,
+        store_pickup_available: false,
+        delivery_message: 'Delivery Available'
+      },
+      categories: [
+        { id: 217, name: 'Podi', image_path: 'string' },
+        {
+          id: 218,
+          name: 'Herbal Products',
+          image_path: 'https://mithrabucket.s3.ap-south-1.amazonaws.com/images/category/farm_stay.jpg'
+        },
+        { id: 219, name: 'Flours', image_path: 'string' },
+        { id: 220, name: 'Snacks' },
+        { id: 221, name: 'Spices', image_path: 'string' },
+        { id: 222, name: 'Healthy Foods' },
+        { id: 223, name: 'Eco Friendly' },
+        {
+          id: 224,
+          name: 'Sweets',
+          image_path: 'https://mithrabucket.s3.ap-south-1.amazonaws.com/images/category/farm_stay.jpg'
+        },
+        { id: 225, name: 'Pickles', image_path: 'string' }
+      ],
+      products: [
+        {
+          id: 161,
+          name: 'Eco Friendly',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/all_eco_friendly_products_jpeg.jpeg'
+        },
+        {
+          id: 157,
+          name: 'Flours',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_12pm_jpeg.jpeg'
+        },
+        {
+          id: 160,
+          name: 'Healthy Foods',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_11pm2_jpeg.jpeg'
+        },
+        {
+          id: 156,
+          name: 'Herbal Products',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_10pm_jpeg.jpeg'
+        },
+        {
+          id: 163,
+          name: 'Pickles',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_10pm1_jpeg.jpeg'
+        },
+        {
+          id: 155,
+          name: 'Podi',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_10pm2_jpeg.jpeg'
+        },
+        {
+          id: 158,
+          name: 'Snacks',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_10pm3_jpeg.jpeg'
+        },
+        {
+          id: 159,
+          name: 'Spices',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/chatgptimagemay29202606_01_55a_jpeg.jpeg'
+        },
+        {
+          id: 162,
+          name: 'Sweets',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/whatsappimage2026-04-30at3_47_11pm1_jpeg.jpeg'
+        }
+      ],
+      trust_strip: [
+        { icon: 'shield', title: 'Hygienic & Safe', subtitle: 'Prepared with care' },
+        { icon: 'leaf', title: 'Made Fresh Daily', subtitle: 'No compromise' },
+        { icon: 'truck', title: 'Quick Delivery', subtitle: 'On-time, every time' },
+        { icon: 'lock', title: 'Secure Payments', subtitle: '100% safe & secure' }
+      ],
+      share_link: '/api/v1/deeplink?vendor_id=1',
+      support_whatsapp_number: '+919000955239'
+    };
+  }
+
+  function seedSvadaDraft() {
+    var draft = fromVendorStorefront(seedSvadaApiPayload());
+    draft.meta.source = 'seed';
+    draft.isStatic = true;
+    return draft;
   }
 
   /**
@@ -927,10 +1838,29 @@
         color: p.color,
         order: i,
         categoryId: 'pickles',
+        measurementType: 'WEIGHT',
         variants: [
-          { id: uid('sku'), label: '250g', price: 189 + i * 10, mrp: 249 + i * 10, active: true },
-          { id: uid('sku'), label: '500g', price: 349 + i * 15, mrp: 449 + i * 15, active: true },
-          { id: uid('sku'), label: '1kg', price: 599 + i * 20, mrp: 749 + i * 20, active: true }
+          createSkuVariant({
+            measurementType: 'WEIGHT',
+            value: '250',
+            unit: 'g',
+            price: 189 + i * 10,
+            mrp: 249 + i * 10
+          }),
+          createSkuVariant({
+            measurementType: 'WEIGHT',
+            value: '500',
+            unit: 'g',
+            price: 349 + i * 15,
+            mrp: 449 + i * 15
+          }),
+          createSkuVariant({
+            measurementType: 'WEIGHT',
+            value: '1',
+            unit: 'kg',
+            price: 599 + i * 20,
+            mrp: 749 + i * 20
+          })
         ].slice(0, i === 0 ? 3 : 2)
       };
     });
@@ -946,10 +1876,29 @@
         color: p.color,
         order: pickleProducts.length + i,
         categoryId: 'combo-packs',
+        measurementType: 'COUNT',
         variants: [
-          { id: uid('sku'), label: '3 x 250g', price: 499 + i * 50, mrp: 649 + i * 50, active: true },
-          { id: uid('sku'), label: '5 x 250g', price: 799 + i * 50, mrp: 999 + i * 50, active: true },
-          { id: uid('sku'), label: 'Gift Box', price: 999 + i * 50, mrp: 1299 + i * 50, active: true }
+          createSkuVariant({
+            measurementType: 'COUNT',
+            value: '3',
+            unit: 'pack',
+            price: 499 + i * 50,
+            mrp: 649 + i * 50
+          }),
+          createSkuVariant({
+            measurementType: 'COUNT',
+            value: '5',
+            unit: 'pack',
+            price: 799 + i * 50,
+            mrp: 999 + i * 50
+          }),
+          createSkuVariant({
+            measurementType: 'COUNT',
+            value: '1',
+            unit: 'pack',
+            price: 999 + i * 50,
+            mrp: 1299 + i * 50
+          })
         ]
       };
     });
@@ -961,8 +1910,8 @@
       verified: true,
       businessType: 'pickles',
       categories: [
-        { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh },
-        { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup }
+        { id: 'pickles', name: 'Pickles', image: IMG.fallbacks.fresh, measurement: 'WEIGHT' },
+        { id: 'combo-packs', name: 'Combo Packs', image: IMG.fallbacks.cup, measurement: 'COUNT' }
       ],
       products: products,
       delivery: {
@@ -1033,6 +1982,17 @@
       if (!draft.settings.backgroundColor) draft.settings.backgroundColor = DEFAULT_BG;
       if (!draft.settings.fontId) draft.settings.fontId = DEFAULT_FONT;
       if (draft.settings.instagramUrl == null) draft.settings.instagramUrl = '';
+      if (typeof draft.slugCustom !== 'boolean') {
+        var autoSlug = slugify(draft.settings.storeName || '');
+        draft.slugCustom = !!(
+          draft.slug &&
+          draft.slug !== autoSlug &&
+          draft.slug !== 'my-store'
+        );
+      }
+      if (!draft.slug && draft.settings.storeName) {
+        draft.slug = slugify(draft.settings.storeName);
+      }
       if (!Array.isArray(draft.subscription.features) || !draft.subscription.features.length) {
         draft.subscription.features = blank.subscription.features;
       }
@@ -1053,7 +2013,9 @@
   }
 
   function saveDraft(draft) {
-    if (draft.settings && draft.settings.storeName) {
+    if (draft.settings && draft.settings.storeName && !draft.slugCustom) {
+      draft.slug = slugify(draft.settings.storeName);
+    } else if (draft.settings && draft.settings.storeName && !String(draft.slug || '').trim()) {
       draft.slug = slugify(draft.settings.storeName);
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -1091,6 +2053,56 @@
     return (CATEGORY_CATALOG[businessTypeId] || []).slice();
   }
 
+  function catalogProductsFor(businessTypeId, categoryId) {
+    var byBiz = PRODUCT_CATALOG[businessTypeId] || {};
+    return (byBiz[categoryId] || []).slice();
+  }
+
+  var PRODUCT_PAGE_SIZE = 3;
+
+  /**
+   * Simulated GET /v1/categories/{id}/products?q=&page=&size=
+   * extras: vendor-added custom products for this category.
+   */
+  function fetchCatalogProductsPage(opts) {
+    opts = opts || {};
+    var page = Math.max(1, Number(opts.page) || 1);
+    var size = Math.max(1, Number(opts.size) || PRODUCT_PAGE_SIZE);
+    var q = String(opts.q || '')
+      .toLowerCase()
+      .trim();
+    var extras = Array.isArray(opts.extras) ? opts.extras : [];
+    var catalog = catalogProductsFor(opts.businessTypeId, opts.categoryId);
+    var seen = {};
+    var all = [];
+    extras.forEach(function (p) {
+      if (!p || !p.id || seen[p.id]) return;
+      seen[p.id] = true;
+      all.push(p);
+    });
+    catalog.forEach(function (p) {
+      if (!p || !p.id || seen[p.id]) return;
+      seen[p.id] = true;
+      all.push(p);
+    });
+    var filtered = all.filter(function (p) {
+      if (!q) return true;
+      return String(p.name || '')
+        .toLowerCase()
+        .indexOf(q) >= 0;
+    });
+    var start = (page - 1) * size;
+    var items = filtered.slice(start, start + size);
+    return {
+      items: items,
+      page: page,
+      size: size,
+      total: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / size) || 1),
+      hasMore: start + items.length < filtered.length
+    };
+  }
+
   function normalizeHex(color) {
     var c = String(color || '').trim();
     if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
@@ -1124,8 +2136,22 @@
     return relativeLuminance(hex) < 140;
   }
 
+  function fontIdFromFamily(family) {
+    var key = String(family || '')
+      .toLowerCase()
+      .replace(/['"]/g, '')
+      .trim();
+    if (!key) return DEFAULT_FONT;
+    for (var i = 0; i < FONT_PRESETS.length; i++) {
+      var p = FONT_PRESETS[i];
+      if (p.id === key || String(p.label || '').toLowerCase() === key) return p.id;
+      if (key.indexOf(String(p.label || '').toLowerCase()) !== -1) return p.id;
+    }
+    return DEFAULT_FONT;
+  }
+
   function getFontPreset(fontId) {
-    var id = String(fontId || DEFAULT_FONT);
+    var id = fontIdFromFamily(fontId);
     var found = null;
     for (var i = 0; i < FONT_PRESETS.length; i++) {
       if (FONT_PRESETS[i].id === id) {
@@ -1191,7 +2217,12 @@
     var bgRaw = String(settings.backgroundColor || '').trim();
     var bg = /^#[0-9a-fA-F]{3,6}$/.test(bgRaw) ? normalizeHex(bgRaw) : DEFAULT_BG;
 
-    var font = getFontPreset(settings.fontId);
+    var font = getFontPreset(settings.fontId || settings.fontFamily);
+    var shape = String(settings.buttonShape || 'ROUNDED').toUpperCase();
+    var card = String(settings.cardStyle || 'SHADOW').toUpperCase();
+    var preset = String(settings.themePreset || '').toUpperCase();
+    var textRaw = String(settings.textColor || '').trim();
+    var textColor = /^#[0-9a-fA-F]{3,6}$/.test(textRaw) ? normalizeHex(textRaw) : '';
 
     el.style.setProperty('--store-accent', accent);
     el.style.setProperty('--store-accent-soft', hexToRgba(accent, 0.16));
@@ -1199,11 +2230,24 @@
     el.setAttribute('data-store-accent', accent);
     el.setAttribute('data-store-font', font.id);
     el.setAttribute('data-store-bg', bg);
+    el.setAttribute('data-store-btn', shape);
+    el.setAttribute('data-store-card', card);
+    if (preset) el.setAttribute('data-store-preset', preset);
+    if (typeof document !== 'undefined' && document.body && (surface === 'store' || root)) {
+      document.body.setAttribute('data-store-btn', shape);
+      document.body.setAttribute('data-store-card', card);
+      if (preset) document.body.setAttribute('data-store-preset', preset);
+    }
 
     // Background + ink: storefront canvas; dashboard keeps Mithra atmosphere
     if (surface === 'store' || root) {
       el.style.setProperty('--store-bg', bg);
-      if (isDarkHex(bg)) {
+      if (textColor) {
+        el.style.setProperty('--store-ink', textColor);
+        el.style.setProperty('--store-muted', hexToRgba(textColor, 0.62));
+        el.style.setProperty('--store-border', isDarkHex(bg) ? 'rgba(255,255,255,0.12)' : '#e5e7eb');
+        el.style.setProperty('--md-panel-bg', isDarkHex(bg) ? '#1f2937' : '#ffffff');
+      } else if (isDarkHex(bg)) {
         el.style.setProperty('--store-ink', '#f9fafb');
         el.style.setProperty('--store-muted', '#9ca3af');
         el.style.setProperty('--store-border', 'rgba(255,255,255,0.12)');
@@ -1294,7 +2338,24 @@
     TAGLINE_EXAMPLES: TAGLINE_EXAMPLES,
     taglinesForBusiness: taglinesForBusiness,
     fetchBusinessTypesPage: fetchBusinessTypesPage,
+    PRODUCT_PAGE_SIZE: PRODUCT_PAGE_SIZE,
+    catalogProductsFor: catalogProductsFor,
+    fetchCatalogProductsPage: fetchCatalogProductsPage,
     PRODUCT_COLORS: PRODUCT_COLORS,
+    MEASUREMENTS: MEASUREMENTS,
+    getMeasurement: getMeasurement,
+    unitsForMeasurement: unitsForMeasurement,
+    defaultMeasurementForBusiness: defaultMeasurementForBusiness,
+    inferMeasurementType: inferMeasurementType,
+    formatSkuLabel: formatSkuLabel,
+    parseSkuLabel: parseSkuLabel,
+    normalizeUnitId: normalizeUnitId,
+    composeVariantLabel: composeVariantLabel,
+    createSkuVariant: createSkuVariant,
+    alignVariantToMeasurement: alignVariantToMeasurement,
+    nextSkuPreset: nextSkuPreset,
+    applyMeasurementToProduct: applyMeasurementToProduct,
+    normalizeProductMeasurement: normalizeProductMeasurement,
     THEME_PRESETS: THEME_PRESETS,
     ACCENT_PRESETS: ACCENT_PRESETS,
     BG_PRESETS: BG_PRESETS,
@@ -1305,6 +2366,8 @@
     DEFAULT_FONT: DEFAULT_FONT,
     uid: uid,
     slugify: slugify,
+    normalizeStoreSlug: normalizeStoreSlug,
+    STORE_SLUG_MAX: STORE_SLUG_MAX,
     normalizeHex: normalizeHex,
     hexToRgba: hexToRgba,
     isLightHex: isLightHex,
@@ -1312,6 +2375,12 @@
     getFontPreset: getFontPreset,
     applyTheme: applyTheme,
     applyStoreBrand: applyStoreBrand,
+    isUsableMediaUrl: isUsableMediaUrl,
+    fontIdFromFamily: fontIdFromFamily,
+    fromVendorStorefront: fromVendorStorefront,
+    isVendorStorefrontPayload: isVendorStorefrontPayload,
+    seedSvadaApiPayload: seedSvadaApiPayload,
+    seedSvadaDraft: seedSvadaDraft,
     emptyDraft: emptyDraft,
     defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,
