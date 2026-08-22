@@ -392,11 +392,9 @@ export function mapVendorContext(payload: unknown): VendorContext {
 /* -------------------------------------------------------------------------
  * Vendor-scoped write payloads
  *
- * Only the operations whose request schema is unambiguous are mapped here.
- * Assign-products and SKU creation are deliberately absent: their responses are
- * untyped `APIResponseObject` with no example, so the vendor-assigned product ID
- * that `ItemSkuCreateRequest.product_id` requires cannot be resolved. See
- * docs/API_GAPS.md before adding them.
+ * Request shapes come from the generated schemas plus verified live behavior.
+ * Generic write envelopes are not used to infer assigned IDs; IDs needed by a
+ * follow-up write are resolved through the strict vendor-scoped read mappers below.
  * ---------------------------------------------------------------------- */
 
 export type BusinessTypeSaveInput = {

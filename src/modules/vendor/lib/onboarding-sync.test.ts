@@ -203,3 +203,35 @@ describe('a replaced SKU is recognised despite the stale draft id', () => {
     expect(plan.deletes).toEqual([])
   })
 })
+
+describe('the identity fallback is limited to rows that were on the account', () => {
+  // The fallback exists for a row whose server id moved during a replacement. Letting a
+  // brand-new `draft-sku-*` row use it is order-dependent data loss: listed before the
+  // resumed row it adopts the account SKU, schedules its deletion, and the resumed row
+  // then matches by id and is "kept" — but the delete is already queued, so the vendor's
+  // existing SKU is destroyed and never recreated.
+  const resumed = () => draft({ id: 'sku-4021', productId: 31 })
+  const colliding = () => draft({ id: 'draft-sku-31-9', productId: 31, salePrice: 99 })
+
+  it('keeps the resumed row when a new colliding row is listed first', () => {
+    const plan = planSkuWrites(
+      shown([colliding(), resumed()]),
+      [account({ skuId: 4021 })],
+      productIds,
+    )
+
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates.map((entry) => entry.sku.id)).toEqual(['draft-sku-31-9'])
+  })
+
+  it('gives the same answer with the order reversed', () => {
+    const plan = planSkuWrites(
+      shown([resumed(), colliding()]),
+      [account({ skuId: 4021 })],
+      productIds,
+    )
+
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates.map((entry) => entry.sku.id)).toEqual(['draft-sku-31-9'])
+  })
+})

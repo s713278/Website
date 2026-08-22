@@ -83,10 +83,9 @@ async function getVendorContext(
 }
 
 /* --- Vendor-scoped writes -------------------------------------------------
- * Only operations with an unambiguous request schema are exposed. Assigning
- * products and creating SKUs are absent on purpose: their responses are untyped,
- * so the vendor-assigned product ID that SKU creation requires cannot be
- * resolved. Adding them would mean guessing a wire format.
+ * Request payloads use the generated schemas plus verified live behavior. Generic
+ * write responses are not treated as read models: when a later operation needs an
+ * assigned ID, the service resolves it through the mapped vendor-scoped reads.
  * ------------------------------------------------------------------------ */
 
 /** PATCH /v1/vendors/{vendor_id}/business-type */

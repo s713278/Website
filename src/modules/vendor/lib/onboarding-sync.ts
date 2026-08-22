@@ -250,13 +250,18 @@ export function planSkuWrites(
     const serverId = serverSkuIdOf(sku.id)
     let existing = serverId == null ? undefined : serverById.get(serverId)
 
-    if (!existing) {
-      // An edit is delete-then-create, so the replacement carries a new server id while
-      // the draft still holds the old one — `createSku` cannot hand the new id back,
-      // because the response is an untyped envelope. Matching on the backend's own
-      // uniqueness key recognises the row anyway. Without this, every later Continue on
-      // Step 6 deleted the replacement and created another, churning the catalog and
-      // reopening the non-atomic replacement window each time.
+    // Only for a row that was already on the account. An edit is delete-then-create, so
+    // the replacement carries a new server id while the draft still holds the old one —
+    // the wrapper discards the create response, so the new id never reaches us. Matching
+    // on the backend's own uniqueness key recognises the row anyway. Without this, every
+    // later Continue on Step 6 deleted the replacement and created another, churning the
+    // catalog and reopening the non-atomic replacement window each time.
+    //
+    // Deliberately not applied to a `draft-sku-*` row, which was never on the account: a
+    // new row that merely collides on name and size would adopt the existing SKU and
+    // delete it, destroying a row the vendor never asked to touch. Those keep the old
+    // path, where the duplicate guard and the 417 catch handle the collision.
+    if (!existing && serverId != null) {
       const candidate = serverByIdentity.get(
         skuIdentity(vendorProductId, sku.name, sku.quantity, sku.unit),
       )
