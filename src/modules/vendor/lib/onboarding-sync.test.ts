@@ -128,3 +128,36 @@ describe('planSkuWrites', () => {
       .toThrow(/not in your store yet/)
   })
 })
+
+describe('explicit fulfillment edits on a resumed SKU', () => {
+  // No SKU read returns home_delivery / store_pickup, so a resume seeds both to true.
+  // They were once left out of the fingerprints entirely, which meant a vendor could turn
+  // one off, press Continue, be told it saved, and have nothing written.
+  const resumed = () => draft({ id: 'sku-4021', productId: 31 })
+  const onAccount = [account({ skuId: 4021 })]
+
+  it('writes nothing when the vendor did not touch them', () => {
+    const plan = planSkuWrites(shown([resumed()]), onAccount, productIds)
+
+    expect(plan.creates).toEqual([])
+    expect(plan.deletes).toEqual([])
+  })
+
+  it('replaces the row when home delivery is turned off', () => {
+    const edited = { ...resumed(), homeDelivery: false }
+    const plan = planSkuWrites(shown([edited]), onAccount, productIds)
+
+    expect(plan.deletes).toEqual([4021])
+    expect(plan.creates).toHaveLength(1)
+    expect(plan.creates[0].sku.homeDelivery).toBe(false)
+  })
+
+  it('replaces the row when store pickup is turned off', () => {
+    const edited = { ...resumed(), storePickup: false }
+    const plan = planSkuWrites(shown([edited]), onAccount, productIds)
+
+    expect(plan.deletes).toEqual([4021])
+    expect(plan.creates).toHaveLength(1)
+    expect(plan.creates[0].sku.storePickup).toBe(false)
+  })
+})

@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
 import {
   authService,
-  AuthSessionError,
   getErrorMessage,
   isValidMobile,
   OTP_LENGTH,
@@ -93,10 +92,6 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
       navigate(destination, { replace: true })
     } catch (err) {
       if (gen !== requestGen.current) return
-      // The number verified but the app refused the session, and `verifyOtp` already
-      // dropped the tokens. Clear any existing app session too, so the header cannot keep
-      // showing a signed-in user with no credentials behind them.
-      if (err instanceof AuthSessionError) useAuthStore.getState().clearSession()
       setError(getErrorMessage(err, 'Invalid or expired OTP. Try again.'))
     } finally {
       if (gen === requestGen.current) setVerifying(false)

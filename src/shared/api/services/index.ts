@@ -9,6 +9,7 @@ export {
   digitsPhone,
   getProfile,
   isValidMobile,
+  onCredentialsRefused,
   login,
   register,
   refreshToken,

@@ -10,13 +10,7 @@ import {
   StoreIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  authService,
-  AuthSessionError,
-  getErrorMessage,
-  isLiveApi,
-  vendorOnboardingService,
-} from '@/shared/api'
+import { authService, getErrorMessage, isLiveApi, vendorOnboardingService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
@@ -134,7 +128,6 @@ export function OnboardingWizard() {
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
   const completeOtpLogin = useAuthStore((state) => state.completeOtpLogin)
-  const clearSession = useAuthStore((state) => state.clearSession)
   const selectVendor = useAuthStore((state) => state.selectVendor)
   const logout = useAuthStore((state) => state.logout)
   const { access, hasSession } = useOnboardingDraftSession()
@@ -466,11 +459,6 @@ export function OnboardingWizard() {
       completeStep(2, 3)
     } catch (error) {
       if (!requestIsCurrent(controller, 2)) return
-      // An AuthSessionError means the backend verified the number but the app refused the
-      // session, and `verifyOtp` has already dropped the tokens on the way out. The Zustand
-      // session has to go too, or the wizard keeps showing the previous vendor as signed in
-      // with no credentials behind them until some later request happens to 401.
-      if (error instanceof AuthSessionError) clearSession()
       setStatusMessage(null)
       showIssues([
         { step: 2, field: 'otp-0', message: getErrorMessage(error, 'That code is incorrect or has expired.') },

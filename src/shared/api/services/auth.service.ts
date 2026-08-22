@@ -107,6 +107,38 @@ export class AuthSessionError extends Error {
   }
 }
 
+const credentialRefusalHandlers = new Set<() => void>()
+
+/**
+ * Run cleanup when a verification is refused *after* the backend accepted the request.
+ *
+ * `verifyOtp` clears the api-client token store on those paths, but the app session lives
+ * in Zustand and persists its own copy of the access token under `md-auth`. Leaving that
+ * behind is not cosmetic: `onRehydrateStorage` pushes `state.token` back into the token
+ * store on the next load, so the refused session comes back if the old access token is
+ * still inside its ten-minute life.
+ *
+ * Registered here rather than in the OTP screens because those callers return early when
+ * their request is stale or the component unmounted, and cleanup must not depend on a
+ * component still being mounted. Returns an unsubscribe function.
+ */
+export function onCredentialsRefused(handler: () => void): () => void {
+  credentialRefusalHandlers.add(handler)
+  return () => {
+    credentialRefusalHandlers.delete(handler)
+  }
+}
+
+function notifyCredentialsRefused() {
+  for (const handler of credentialRefusalHandlers) {
+    try {
+      handler()
+    } catch {
+      /* one failed cleanup must not strand the rest */
+    }
+  }
+}
+
 export function digitsPhone(phone: string) {
   return phone.replace(/\D/g, '').slice(-10)
 }
@@ -280,7 +312,12 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
     // No session is being created, so nothing may keep the credentials the package just
     // wrote. Any prior session's tokens are already gone — overwritten by that same
     // write — so the caller is signed out either way; that is the safe direction.
+    //
+    // This covers every post-response refusal, not just `AuthSessionError`: a success
+    // envelope with no recognizable access token lands here too, and it has written
+    // credentials just the same.
     clearTokens()
+    notifyCredentialsRefused()
     throw error
   }
 }

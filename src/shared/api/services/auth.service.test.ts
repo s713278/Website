@@ -108,3 +108,56 @@ describe('verifyOtp credential handling', () => {
     expect(getAccessToken()).toBeNull()
   })
 })
+
+describe('credential-refusal cleanup is independent of any UI', () => {
+  // The OTP screens return early when their request is stale or the component unmounted,
+  // so cleanup cannot live there. It also has to cover post-response failures that are
+  // not AuthSessionError — a success envelope with no usable token has written
+  // credentials just the same.
+  beforeEach(() => {
+    installLocalStorage()
+  })
+
+  it('fires on a role refusal, with no caller involved', async () => {
+    const { authService, onCredentialsRefused } = await import('./auth.service')
+    let fired = 0
+    const off = onCredentialsRefused(() => { fired += 1 })
+    verifyOtpResponse = envelope({ mobile_verified: true, roles: ['USER'] })
+
+    await expect(
+      authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' }),
+    ).rejects.toThrow()
+
+    expect(fired).toBe(1)
+    off()
+  })
+
+  it('fires when a successful envelope carries no usable token', async () => {
+    const { authService, onCredentialsRefused } = await import('./auth.service')
+    const { setTokens } = await import('@mithra/api-client')
+    let fired = 0
+    const off = onCredentialsRefused(() => { fired += 1 })
+    // Tokens are written by the package, then the payload turns out to be unusable.
+    setTokens(ACCESS_TOKEN, REFRESH_TOKEN)
+    verifyOtpResponse = { success: true, status: 200, data: { mobile_verified: true, roles: ['VENDOR'] } }
+
+    await expect(
+      authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' }),
+    ).rejects.toThrow(/access token/i)
+
+    expect(fired).toBe(1)
+    off()
+  })
+
+  it('does not fire when the session is accepted', async () => {
+    const { authService, onCredentialsRefused } = await import('./auth.service')
+    let fired = 0
+    const off = onCredentialsRefused(() => { fired += 1 })
+    verifyOtpResponse = envelope({ mobile_verified: true, roles: ['VENDOR'], user_id: 7, vendors: [{ vendor_id: 42 }] })
+
+    await authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' })
+
+    expect(fired).toBe(0)
+    off()
+  })
+})

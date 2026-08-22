@@ -129,6 +129,21 @@ export type SkuWritePlan = {
   deletes: number[]
 }
 
+/**
+ * No SKU read returns `home_delivery` or `store_pickup`, so a resumed row cannot report
+ * what was actually written. `draftSkus` seeds both to these values on resume, and the
+ * account side below compares against the same constants.
+ *
+ * That is what makes including them safe: an untouched resumed SKU carries exactly these
+ * values and still matches, so the catalog is not rewritten on every Continue — while a
+ * vendor who actually toggles one produces a difference and gets a real write. Leaving
+ * them out meant an explicit fulfillment edit compared equal and was silently dropped
+ * while the UI reported success.
+ *
+ * The change still cannot be read back afterwards; see docs/API_GAPS.md.
+ */
+const RESUMED_FULFILLMENT = { homeDelivery: true, storePickup: true } as const
+
 /** Everything a SKU row carries that the vendor can change. */
 function draftFingerprint(sku: DraftSku): string {
   return [
@@ -139,6 +154,8 @@ function draftFingerprint(sku: DraftSku): string {
     sku.salePrice ?? '',
     sku.active,
     sku.description.trim(),
+    sku.homeDelivery,
+    sku.storePickup,
   ].join('|')
 }
 
@@ -151,6 +168,8 @@ function accountFingerprint(sku: VendorSkuRef): string {
     sku.salePrice ?? '',
     sku.isActive,
     sku.description.trim(),
+    RESUMED_FULFILLMENT.homeDelivery,
+    RESUMED_FULFILLMENT.storePickup,
   ].join('|')
 }
 
@@ -164,6 +183,9 @@ function accountFingerprint(sku: VendorSkuRef): string {
  * Edits are expressed as delete + create rather than an update: `PATCH /skus/{id}` covers
  * only name, description and is_active — never price or size — and currently fails with a
  * JDBC 417 regardless. See docs/API_GAPS.md.
+ *
+ * Fulfillment flags participate in the comparison against the defaults a resume applies,
+ * so an explicit toggle is written rather than silently dropped.
  *
  * SKUs belonging to a product that is not in the draft are left alone. A vendor cannot
  * unassign a product (403, Admin only), so that state means the account holds a product
