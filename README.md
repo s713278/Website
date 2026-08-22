@@ -276,7 +276,6 @@ alongside the production auth implementation.
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
-| [docs/VENDOR_ONBOARDING_SPEC.md](./docs/VENDOR_ONBOARDING_SPEC.md) | Vendor-onboarding requirements, prototype state, and production gates |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |
 | [design-reference/README.md](./design-reference/README.md) | Static reference purpose and inventory |
 

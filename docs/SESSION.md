@@ -1,8 +1,8 @@
 # Session handling (JWT)
 
 Shared lifecycle for **Customer** (storefront) and **Vendor / Owner** (store-setup) roles.
-This describes what is implemented today, not the target cookie model — see
-[AUTHENTICATION_HANDOFF.md](./AUTHENTICATION_HANDOFF.md) for that.
+This describes what is implemented today. The agreed target model and the backend answers it
+still needs are recorded under "Outstanding: the approved target session model" below.
 
 ## Components
 
@@ -120,8 +120,14 @@ it. Two mechanisms cover the two ways a session can end:
 `onExplicitSignOut` is deliberately **not** wired to `clearSession()`: an expired token or a failed
 refresh is not a decision to discard work. The ownership check is what makes that safe, so it is the
 required half — a feature that only clears on sign-out still leaks across identities after a session
-expires. The vendor onboarding draft implements both; see
-[VENDOR_ONBOARDING_SPEC.md](./VENDOR_ONBOARDING_SPEC.md) §4.2.
+expires.
+
+The vendor onboarding draft implements both, and is the worked example: `useOnboardingDraftSession`
+binds the stored draft to the signed-in vendor on every read and remount, an explicit sign-out clears
+it, and an involuntary session loss *parks* it — kept in storage, taken off screen, and refused all
+writes until the same vendor verifies again. A draft read under the wrong identity is both a
+disclosure and a write hazard, because Continue would submit the previous vendor's details to the
+account signed in now.
 
 ## Known limitation: persisted identity is not server-confirmed
 
@@ -144,6 +150,33 @@ returns plain text and cannot serve it.
 **Future direction:** move to **httpOnly, Secure, SameSite cookies** (or BFF) so refresh/access are not readable from JavaScript; pair with CSRF protections as needed. Feature code must never read a token directly — only `useAuthStore` and `@/shared/api` — so that migration stays invisible to features.
 
 Until that migration, keep CSP tight, avoid `dangerouslySetInnerHTML` with untrusted content, and treat XSS as a session-compromise bug.
+
+## Outstanding: the approved target session model
+
+Tokens are in `localStorage` today. The direction below was accepted by the senior backend developer
+as the MVP target and has **not** shipped; it is recorded here because it is the only place it is
+written down.
+
+1. `/verify-otp` returns the short-lived access token; the frontend holds it in memory only.
+2. The refresh credential lives in a `Secure`, `HttpOnly` cookie that JavaScript never reads.
+3. `/refresh` authenticates through that cookie, rotates it, and returns a new access token.
+4. Assume the refresh credential is single-use and its predecessor dies on rotation — no grace period.
+5. Coordinate refresh across concurrent requests and, if required, across tabs.
+6. `/signout` revokes the session and expires the cookie; local state clears even if the call fails.
+7. Credentialed CORS, `SameSite`, CSRF, cookie scope and the frontend/API domain topology are one
+   design, not separate decisions.
+8. The existing mobile token contract must keep working alongside it.
+
+HttpOnly mitigates theft of the long-lived credential by injected JavaScript. It does not eliminate
+XSS or CSRF.
+
+Five backend answers are still required before this can be built: the executable contract for all
+five `/v1/auth` operations; the exact production frontend/API origins (which decide `SameSite`,
+credentialed CORS and the CSRF defence); an authoritative session-restoration payload, since
+`/v1/auth/profile` currently returns plain text and cannot serve one; the multi-role and
+vendor-context switching rules; and explicit confirmation of the pre-verification invariants — that
+an unverified identity is inert, that no credential is issued before verification, and that public
+registration cannot request `ADMIN` or `CUSTOMER_CARE`.
 
 ## Manual test checklist
 
