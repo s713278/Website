@@ -171,8 +171,48 @@
                     <!-- Step 4: Categories -->
                     <section class="step-panel" data-step="4" id="panel-4">
                         <h2 class="text-xl font-bold mb-1">Pick Categories</h2>
-                        <p class="text-gray-500 text-sm mb-6">Choose up to <strong>2</strong> — start small, add more later from your dashboard.</p>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="category-grid"></div>
+                        <p class="text-gray-500 text-sm mb-4">Choose up to <strong>2</strong> — start small, add more later from your dashboard.</p>
+
+                        <div class="ob-biz-search">
+                            <label class="md-field-label" for="input-category-search">Search category</label>
+                            <div class="md-search" id="category-search-wrap">
+                                <svg class="md-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="7"></circle>
+                                    <path stroke-linecap="round" d="M20 20l-3.5-3.5"></path>
+                                </svg>
+                                <input
+                                    type="search"
+                                    id="input-category-search"
+                                    class="md-search-input"
+                                    placeholder="Search e.g. pickles, meals, cakes…"
+                                    autocomplete="off"
+                                    enterkeyhint="search"
+                                    aria-controls="category-grid"
+                                >
+                                <button type="button" class="md-search-clear" id="btn-clear-category-search" aria-label="Clear search">✕</button>
+                            </div>
+                            <div class="md-search-meta">
+                                <span id="category-search-count"></span>
+                                <span id="category-selected-label" class="ob-biz-selected" hidden></span>
+                            </div>
+                        </div>
+
+                        <div class="ob-biz-scroll" id="category-scroll" data-api-list="categories">
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="category-grid" role="listbox" aria-multiselectable="true" aria-label="Categories"></div>
+                            <div class="ob-biz-more" id="category-more" hidden>
+                                <div class="ob-biz-more-fade" aria-hidden="true"></div>
+                                <p class="ob-biz-more-hint" id="category-more-hint">
+                                    <span class="ob-biz-more-chevron" aria-hidden="true">↓</span>
+                                    Scroll to see more categories
+                                </p>
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-load-more-categories" data-cta="load_more_categories">
+                                    Load more categories
+                                </button>
+                            </div>
+                            <p class="ob-biz-loading" id="category-loading" hidden>Loading more…</p>
+                            <p class="ob-biz-end" id="category-end" hidden>You’re all caught up — that’s every category.</p>
+                        </div>
+                        <p id="category-empty" class="ob-biz-empty hidden" hidden>No categories match your search. Try another word or add a custom category.</p>
                         <div class="mt-4 flex flex-wrap gap-2 items-center">
                             <input type="text" id="input-new-category" placeholder="Custom category name"
                                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 max-w-xs">
