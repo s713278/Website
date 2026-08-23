@@ -2053,6 +2053,50 @@
     return (CATEGORY_CATALOG[businessTypeId] || []).slice();
   }
 
+  var CATEGORY_PAGE_SIZE = 9;
+
+  /**
+   * Simulated GET /v1/business-types/{id}/categories?q=&page=&size=
+   * extras: vendor-added custom categories for this business type.
+   */
+  function fetchCategoriesPage(opts) {
+    opts = opts || {};
+    var page = Math.max(1, Number(opts.page) || 1);
+    var size = Math.max(1, Number(opts.size) || CATEGORY_PAGE_SIZE);
+    var q = String(opts.q || '')
+      .toLowerCase()
+      .trim();
+    var extras = Array.isArray(opts.extras) ? opts.extras : [];
+    var catalog = categoriesForBusiness(opts.businessTypeId);
+    var seen = {};
+    var all = [];
+    catalog.forEach(function (c) {
+      if (!c || !c.id || seen[c.id]) return;
+      seen[c.id] = true;
+      all.push(c);
+    });
+    extras.forEach(function (c) {
+      if (!c || !c.id || seen[c.id]) return;
+      seen[c.id] = true;
+      all.push(c);
+    });
+    var filtered = all.filter(function (c) {
+      if (!q) return true;
+      var hay = [c.id, c.name || '', c.keywords || ''].join(' ').toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+    var start = (page - 1) * size;
+    var items = filtered.slice(start, start + size);
+    return {
+      items: items,
+      page: page,
+      size: size,
+      total: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / size)),
+      hasMore: start + items.length < filtered.length
+    };
+  }
+
   function catalogProductsFor(businessTypeId, categoryId) {
     var byBiz = PRODUCT_CATALOG[businessTypeId] || {};
     return (byBiz[categoryId] || []).slice();
@@ -2338,6 +2382,8 @@
     TAGLINE_EXAMPLES: TAGLINE_EXAMPLES,
     taglinesForBusiness: taglinesForBusiness,
     fetchBusinessTypesPage: fetchBusinessTypesPage,
+    CATEGORY_PAGE_SIZE: CATEGORY_PAGE_SIZE,
+    fetchCategoriesPage: fetchCategoriesPage,
     PRODUCT_PAGE_SIZE: PRODUCT_PAGE_SIZE,
     catalogProductsFor: catalogProductsFor,
     fetchCatalogProductsPage: fetchCatalogProductsPage,
