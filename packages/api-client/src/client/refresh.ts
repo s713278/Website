@@ -48,9 +48,16 @@ export async function refreshAccessToken(): Promise<string | null> {
 
     const parsed = parseTokenResponse(res.data);
     if (!parsed.accessToken) {
-      clearTokens();
-      flushQueue(null, null);
-      return null;
+      // The server accepted the refresh, so the credentials are alive; we simply did not
+      // recognize the payload. Clearing here would destroy a refresh token that still
+      // works — which is exactly how an unannounced response-shape change turns into a
+      // silent logout. Fail this attempt instead and let the next 401 try again.
+      // Falls through to the catch below, which treats it as a transient failure.
+      // `toApiError` surfaces this message to the user when it looks UI-safe, so it is
+      // written for a vendor; the technical detail rides along in `cause`.
+      const error = new Error('Could not refresh your session. Please try again.');
+      error.cause = 'auth/refresh returned no recognizable access token';
+      throw error;
     }
 
     setTokens(parsed.accessToken, parsed.refreshToken ?? refresh);

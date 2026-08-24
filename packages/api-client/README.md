@@ -17,22 +17,24 @@ src/
 From repo root:
 
 ```bash
-pnpm fetch:openapi
-pnpm generate:api
+npm run fetch:openapi
+npm run generate:api
 ```
 
-Or: `pnpm --filter @mithra/api-client sync` / `npm run sync:api`
+Run those two commands separately until the root `sync:api` script stops delegating to `pnpm`.
 
 ## Service coverage checklist
 
 | Area | Status | Entry |
 |------|--------|-------|
 | OTP | Done | `authService.requestOtp` / `verifyOtp` |
-| Categories | Done | `catalogService.getCategories` / `getCategoriesGrouped` |
+| Public reference catalog | Done | `catalogService.getBusinessTypes` / `getCategories` / `getProductsByCategory`, with generated query types and request cancellation |
 | Products | Done | `catalogService.*Product*` + `vendorsService.getProducts` / SKUs |
 | Prices | Done | `pricesService.getSkuPrice` / `updateSkuPrice` |
 | Order History | Done | `ordersService.userHistory` / `userHistoryPaged` |
 | Account History | Done | `usersService.accountHistory` / `accountHistoryPaged` |
+| Vendor onboarding operations | Wrapped, integration gated | `vendorsService.updateBusinessType` / `getContext` / `saveStorefront` / `goLive` |
+| Public storefront identifier | Done | `storefrontService.get(identifier)` |
 
 Gaps / workarounds: `docs/API_GAPS.md`.
 
@@ -53,10 +55,11 @@ configureApiClient({
 })
 
 await authService.requestOtp({ ... })
-const store = await storefrontService.get(vendorId)
+const store = await storefrontService.get(identifier)
 ```
 
-Feature code must not create its own Axios client — import from `@mithra/api-client` (or the app shared wrapper over it).
+Feature code must not create its own Axios client. React application code imports the app façade at
+`@/shared/api`; package consumers use `@mithra/api-client`.
 
 ## Session (JWT)
 

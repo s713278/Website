@@ -6,10 +6,11 @@ alwaysApply: false
 
 # design-reference JS
 
-Reference-only scripts. Prefer React/`src` for product features.
+Read root `AGENTS.md` and `design-reference/README.md` first. These scripts are reference-only;
+implement shipping features in React under `src/`.
 
 - Depend on `MithraDraft` / `StoreAPI` / `MithraAssets` — load order: assets-config → store-draft → store-api → page script.
-- Persist via `MithraDraft.saveDraft` / `StoreAPI.saveRelease`; don’t invent new localStorage keys unless extending `StoreAPI.KEYS`.
+- Persist via `MithraDraft.saveDraft` / `StoreAPI.saveRelease`; don't invent new localStorage keys unless extending `StoreAPI.KEYS`.
 - Theme helpers on static pages: `MithraDraft.applyTheme` after loading draft/release.
 - Share helpers: `qrImageUrl`, `downloadQrImage`, `absoluteUrl`, `whatsappLink` on `MithraDraft`.
 - Keep vanilla ES5-compatible IIFEs (no bundler on these pages).

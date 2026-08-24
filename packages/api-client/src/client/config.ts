@@ -10,7 +10,14 @@ export function getApiBaseUrl(override?: string): string {
 export type ClientConfig = {
   baseURL: string;
   timeoutMs: number;
+  /** 401 that refresh could not recover. The session is over. */
   onUnauthorized?: () => void;
+  /**
+   * 403 — authenticated, but not allowed to touch this resource. Deliberately separate
+   * from onUnauthorized: signing the user out here would discard a valid session and any
+   * unsaved work along with it.
+   */
+  onForbidden?: (path?: string) => void;
 };
 
 let clientConfig: ClientConfig = {

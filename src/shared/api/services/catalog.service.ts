@@ -66,8 +66,14 @@ export async function listStores(query?: string, location?: CustomerLocation): P
   return stores
 }
 
+/** Demo fixture ids like `r1`, which have no live equivalent. */
+const DEMO_STORE_ID = /^r\d+$/
+
 async function resolveLiveVendorId(storeId: string): Promise<string | null> {
   if (isNumericVendorId(storeId)) return storeId
+  // A published `store_identifier` slug is accepted directly by the storefront
+  // operation, so share links resolve without a lookup.
+  if (!DEMO_STORE_ID.test(storeId)) return storeId
   const stores = await listStores()
   return stores[0]?.id ?? null
 }

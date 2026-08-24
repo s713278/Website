@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { resumePathAfterLogin } from '@/app/router/role-home'
+import { resolveLandingPath } from '@/app/router/vendor-landing'
 import {
   authService,
   getErrorMessage,
@@ -85,11 +85,11 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
       const session = await authService.verifyOtp({ phone, otp: code, role })
       if (gen !== requestGen.current) return
       completeOtpLogin(session)
-      if (isVendor) {
-        navigate('/vendor', { replace: true })
-        return
-      }
-      navigate(resumePathAfterLogin('customer', from), { replace: true })
+      // Resolved before navigating: a vendor whose store is already submitted goes
+      // straight to their dashboard instead of flashing through the setup wizard.
+      const destination = await resolveLandingPath(session.user, from)
+      if (gen !== requestGen.current) return
+      navigate(destination, { replace: true })
     } catch (err) {
       if (gen !== requestGen.current) return
       setError(getErrorMessage(err, 'Invalid or expired OTP. Try again.'))

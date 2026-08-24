@@ -11,5 +11,3 @@ coverage
 .vite
 *.tsbuildinfo
 website.zip
-.claude/
-PROJECT_REVIEW.md
