@@ -1,4 +1,4 @@
-import type { Product, Store, StoreTheme } from '@/modules/storefront/types'
+import type { Product, Store, StoreCategory, StoreTheme } from '@/modules/storefront/types'
 import { DEFAULT_ACCENT_COLOR, DEFAULT_PRIMARY_COLOR, normalizeHex } from '@/shared/lib/theme'
 
 const FALLBACK_COVER = 'linear-gradient(135deg, #059669 0%, #047857 45%, #0f766e 100%)'
@@ -62,6 +62,29 @@ export function mapProducts(raw: unknown, vendorId: string): Product[] {
     .map((item, index) => mapProduct(item, index, vendorId))
 }
 
+function mapCategory(raw: Record<string, unknown>, index: number): StoreCategory | null {
+  const label = String(raw.name ?? raw.label ?? '').trim()
+  if (!label) return null
+  const id = String(raw.id ?? raw.category_id ?? raw.slug ?? label)
+    .trim()
+    .toLowerCase()
+  const imagePath =
+    (typeof raw.image_path === 'string' && raw.image_path) ||
+    (typeof raw.imagePath === 'string' && raw.imagePath) ||
+    httpUrl(raw.image) ||
+    undefined
+  return { id: id || `cat-${index}`, label, imagePath }
+}
+
+export function mapCategories(raw: unknown): StoreCategory[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const categories = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map(mapCategory)
+    .filter((item): item is StoreCategory => item != null)
+  return categories.length ? categories : undefined
+}
+
 /** Raw vendor / storefront payload → Store. */
 export function mapVendorToStore(raw: Record<string, unknown>): Store {
   const id = liveVendorId(raw)
@@ -80,6 +103,7 @@ export function mapVendorToStore(raw: Record<string, unknown>): Store {
         ? String(raw.offer)
         : undefined,
     theme: mapVendorTheme(raw),
+    categories: mapCategories(raw.categories),
     products: Array.isArray(raw.products)
       ? mapProducts(raw.products, id)
       : Array.isArray(raw.menu)

@@ -4,9 +4,13 @@ import { ProtectedRoute } from '@/app/router/ProtectedRoute'
 import { MarketingLayout } from '@/modules/marketing/components/MarketingLayout'
 import { MarketingHomePage } from '@/modules/marketing/pages/MarketingHomePage'
 import { NotFoundPage } from '@/modules/marketing/pages/NotFoundPage'
+import { StorefrontLayout } from '@/modules/storefront/components'
 import { CartPage } from '@/modules/storefront/pages/CartPage'
 import { CheckoutPage } from '@/modules/storefront/pages/CheckoutPage'
+import { LocationMapPage } from '@/modules/storefront/pages/LocationMapPage'
+import { OrderSuccessPage } from '@/modules/storefront/pages/OrderSuccessPage'
 import { OrdersPage } from '@/modules/storefront/pages/OrdersPage'
+import { ProductDetailPage } from '@/modules/storefront/pages/ProductDetailPage'
 import { StoreDetailPage } from '@/modules/storefront/pages/StoreDetailPage'
 import { StoreListPage } from '@/modules/storefront/pages/StoreListPage'
 import { VendorDashboardPage } from '@/modules/vendor/pages/VendorDashboardPage'
@@ -28,9 +32,19 @@ export function AppRouter() {
         <Route path="vendor/login" element={<VendorLoginPage />} />
         <Route path="register" element={<RegisterPage />} />
 
+        <Route element={<StorefrontLayout />}>
+          <Route path="stores/:storeId" element={<StoreDetailPage />} />
+          <Route path="stores/:storeId/products/:productId" element={<ProductDetailPage />} />
+          <Route path="stores/:storeId/cart" element={<CartPage />} />
+          <Route path="stores/:storeId/location" element={<LocationMapPage />} />
+          <Route element={<ProtectedRoute roles={['customer']} />}>
+            <Route path="stores/:storeId/checkout" element={<CheckoutPage />} />
+            <Route path="stores/:storeId/orders/:orderId/success" element={<OrderSuccessPage />} />
+          </Route>
+        </Route>
+
         <Route element={<RootLayout />}>
           <Route path="stores" element={<StoreListPage />} />
-          <Route path="stores/:storeId" element={<StoreDetailPage />} />
           <Route path="cart" element={<CartPage />} />
           <Route element={<ProtectedRoute roles={['customer']} />}>
             <Route path="checkout" element={<CheckoutPage />} />

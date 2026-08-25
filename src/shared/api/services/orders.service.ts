@@ -1,15 +1,25 @@
 import type { CartLine } from '@/modules/storefront/types'
+import { getStoreById } from '@/modules/storefront/data/catalog'
+import { findProductForCartLine } from '@/modules/storefront/lib/cart-utils'
 import { apiGet, apiPost, unwrapData } from '../client'
 import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
+export type CustomerOrderItem = {
+  name: string
+  qty: number
+  itemId?: string
+  imageUrl?: string
+}
+
 export type CustomerOrder = {
   id: string
+  storeId?: string
   storeName: string
   total: number
   status: 'placed' | 'preparing' | 'on_the_way' | 'delivered' | string
   placedAt: string
-  items: Array<{ name: string; qty: number }>
+  items: CustomerOrderItem[]
 }
 
 export type PlaceOrderInput = {
@@ -24,6 +34,19 @@ export type PlaceOrderInput = {
 }
 
 const ORDERS_KEY = 'md-customer-orders'
+
+function mapOrderItems(lines: CartLine[], storeId: string): CustomerOrderItem[] {
+  const store = getStoreById(storeId)
+  return lines.map((line) => {
+    const product = store ? findProductForCartLine(store.products, line.itemId) : undefined
+    return {
+      name: line.name,
+      qty: line.qty,
+      itemId: line.itemId,
+      imageUrl: product?.imageUrl,
+    }
+  })
+}
 
 function readDemoOrders(): CustomerOrder[] {
   try {
@@ -42,11 +65,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     await new Promise((r) => setTimeout(r, 400))
     const order: CustomerOrder = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
+      storeId: input.storeId,
       storeName: input.storeName,
       total: input.total,
       status: 'placed',
       placedAt: new Date().toISOString(),
-      items: input.lines.map((line) => ({ name: line.name, qty: line.qty })),
+      items: mapOrderItems(input.lines, input.storeId),
     }
     writeDemoOrders([order, ...readDemoOrders()])
     return order
@@ -67,11 +91,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   const data = unwrapData(res) || {}
   return {
     id: String(data.id ?? data.order_id ?? `ORD-${Date.now()}`),
+    storeId: input.storeId,
     storeName: input.storeName,
     total: Number(data.total ?? input.total),
     status: String(data.status ?? 'placed'),
     placedAt: String(data.created_at ?? new Date().toISOString()),
-    items: input.lines.map((line) => ({ name: line.name, qty: line.qty })),
+    items: mapOrderItems(input.lines, input.storeId),
   }
 }
 

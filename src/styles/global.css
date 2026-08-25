@@ -256,3 +256,43 @@
     min-height: 100vh;
   }
 }
+
+/*Storefront shell */
+.store-shell {
+  --store-shell-max: 76rem;
+  color: var(--store-ink, var(--md-ink));
+  background: var(--store-bg, #f8fafc);
+}
+
+.store-shell-inner {
+  width: 100%;
+  max-width: var(--store-shell-max);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .store-shell-inner {
+    padding-inline: 1.25rem;
+  }
+}
+
+.store-category-scroller {
+  scroll-snap-type: x mandatory;
+}
+
+.store-category-scroller > button {
+  scroll-snap-align: start;
+}
+
+.store-product-grid {
+  align-items: stretch;
+}
+
+.store-offer-banner {
+  box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.55);
+}
+
+.store-offer-banner--dark {
+  color-scheme: dark;
+}

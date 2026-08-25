@@ -1,8 +1,5 @@
 import type { User, UserRole } from '@/shared/types'
 
-/** Vendor setup route (React page). */
-export const VENDOR_ONBOARDING_HREF = '/vendor'
-
 export function homePathForRole(role: UserRole) {
   return role === 'vendor' ? '/vendor' : '/cart'
 }
@@ -21,7 +18,7 @@ export function homePathForUser(user: User) {
 
 /** Customer resumes checkout/orders/cart. Vendor always continues to `/vendor`. */
 export function resumePathAfterLogin(role: UserRole, from?: string | null) {
-  if (role === 'vendor') return VENDOR_ONBOARDING_HREF
+  if (role === 'vendor') return '/vendor'
 
   if (
     from &&

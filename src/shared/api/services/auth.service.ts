@@ -91,6 +91,7 @@ function mapSessionUser(data: VerifyOtpData, input: OtpVerifyInput): User {
     id: String(data.user_id ?? `u-${mobile}`),
     name: sessionDisplayName(input.role, data.name),
     email: `${mobile}@mithra.local`,
+    phone: mobile,
     role: input.role,
     vendorId: input.role === 'vendor' ? firstVendorId(data) : undefined,
   }
