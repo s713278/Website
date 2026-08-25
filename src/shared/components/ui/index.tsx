@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import { Loader2Icon } from 'lucide-react'
 import { Badge as ShadBadge } from '@/components/ui/badge'
 import { Button as ShadButton } from '@/components/ui/button'
@@ -78,18 +78,22 @@ type InputProps = ComponentProps<typeof ShadInput> & {
   error?: string
 }
 
-export function Input({ className, label, error, id, ...props }: InputProps) {
-  const inputId = id ?? props.name
+export function Input({ className, label, error, id, 'aria-describedby': describedBy, ...props }: InputProps) {
+  const generatedId = useId()
+  const inputId = id ?? props.name ?? generatedId
+  const errorId = error ? `${inputId}-error` : undefined
+  const descriptionIds = [describedBy, errorId].filter(Boolean).join(' ') || undefined
   return (
     <div className="grid w-full gap-1.5">
       {label ? <Label htmlFor={inputId}>{label}</Label> : null}
       <ShadInput
+        {...props}
         id={inputId}
         aria-invalid={Boolean(error) || undefined}
+        aria-describedby={descriptionIds}
         className={className}
-        {...props}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p id={errorId} className="text-xs text-destructive">{error}</p> : null}
     </div>
   )
 }

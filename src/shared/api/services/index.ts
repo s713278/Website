@@ -1,12 +1,15 @@
 export {
   AUTH_REG_PLATFORM,
+  AuthSessionError,
   OTP_LENGTH,
   OTP_RESEND_SECONDS,
   authService,
   DEMO_CREDENTIALS,
+  DEMO_OTP,
   digitsPhone,
   getProfile,
   isValidMobile,
+  onCredentialsRefused,
   login,
   register,
   refreshToken,
@@ -15,6 +18,7 @@ export {
   signOut,
   verifyOtp,
   type AuthSession,
+  type AuthSessionProblem,
   type LoginInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -45,3 +49,5 @@ export {
   setProductAvailability,
   vendorProductsService,
 } from './vendor-products.service'
+export { vendorOnboardingService } from './vendor-onboarding.service'
+export type { ReferenceRequestConfig } from './vendor-onboarding.service'

@@ -23,6 +23,8 @@ const DEMO_USERS: Array<User & { password: string }> = [
     email: 'customer@demo.com',
     password: 'demo1234',
     role: 'customer',
+    roles: ['customer'],
+    vendors: [],
   },
   {
     id: 'u-vendor',
@@ -30,6 +32,8 @@ const DEMO_USERS: Array<User & { password: string }> = [
     email: 'vendor@demo.com',
     password: 'demo1234',
     role: 'vendor',
+    roles: ['vendor'],
+    vendors: [{ vendorId: 'r1', name: 'Demo Store' }],
     vendorId: 'r1',
   },
 ]
@@ -52,6 +56,8 @@ export async function demoLogin(input: LoginInput): Promise<AuthSession> {
       name: found.name,
       email: found.email,
       role: found.role,
+      roles: found.roles,
+      vendors: found.vendors,
       vendorId: found.vendorId,
     },
     token: `demo-token-${found.id}`,
@@ -64,12 +70,15 @@ export async function demoRegister(input: RegisterInput): Promise<AuthSession> {
     (user) => user.email.toLowerCase() === input.email.trim().toLowerCase(),
   )
   if (exists) throw new Error('An account with this email already exists')
+  const vendorId = input.role === 'vendor' ? `v-${crypto.randomUUID().slice(0, 6)}` : undefined
   const user: User = {
     id: `u-${crypto.randomUUID().slice(0, 8)}`,
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     role: input.role,
-    vendorId: input.role === 'vendor' ? `v-${crypto.randomUUID().slice(0, 6)}` : undefined,
+    roles: [input.role],
+    vendors: vendorId ? [{ vendorId }] : [],
+    vendorId,
   }
   DEMO_USERS.push({ ...user, password: input.password })
   return { user, token: `demo-token-${user.id}` }

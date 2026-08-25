@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, Menu, X } from 'lucide-react'
+import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
@@ -33,6 +35,9 @@ function BrandMark() {
 export function MarketingHeader() {
   const [open, setOpen] = useState(false)
   const [resourcesOpen, setResourcesOpen] = useState(false)
+  // The onboarding wizard mounts this header, so a signed-in vendor must not be
+  // shown a login link while they are part-way through store setup.
+  const isVendor = useAuthStore((state) => state.user?.roles.includes('vendor') ?? false)
 
   return (
     <header className="sticky top-0 z-40 border-b border-emerald-100/70 bg-white/95 backdrop-blur">
@@ -82,12 +87,20 @@ export function MarketingHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Link to="/vendor/login" className="text-sm font-medium text-slate-700 hover:text-emerald-700">
-            Vendor Login
-          </Link>
-          <Link to="/vendor/login">
-            <Button className="rounded-full px-5">Get Started Free</Button>
-          </Link>
+          {isVendor ? (
+            <Link to={VENDOR_ONBOARDING_HREF}>
+              <Button className="rounded-full px-5">Continue store setup</Button>
+            </Link>
+          ) : (
+            <>
+              <Link to="/vendor/login" className="text-sm font-medium text-slate-700 hover:text-emerald-700">
+                Vendor Login
+              </Link>
+              <Link to="/vendor/login">
+                <Button className="rounded-full px-5">Get Started Free</Button>
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -113,14 +126,24 @@ export function MarketingHeader() {
               </a>
             ),
           )}
-          <Link to="/vendor/login" onClick={() => setOpen(false)}>
-            Vendor Login
-          </Link>
-          <Link to="/vendor/login" onClick={() => setOpen(false)}>
-            <Button fullWidth className="rounded-full">
-              Get Started Free
-            </Button>
-          </Link>
+          {isVendor ? (
+            <Link to={VENDOR_ONBOARDING_HREF} onClick={() => setOpen(false)}>
+              <Button fullWidth className="rounded-full">
+                Continue store setup
+              </Button>
+            </Link>
+          ) : (
+            <>
+              <Link to="/vendor/login" onClick={() => setOpen(false)}>
+                Vendor Login
+              </Link>
+              <Link to="/vendor/login" onClick={() => setOpen(false)}>
+                <Button fullWidth className="rounded-full">
+                  Get Started Free
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

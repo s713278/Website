@@ -86,6 +86,123 @@
   --sidebar-ring: oklch(0.596 0.145 163.2);
 }
 
+@layer components {
+  /* The bay the shop takes shape in: phone above, a short count below. */
+  .onboarding-preview-stage {
+    container-type: size;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.875rem;
+    padding: 1.25rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Device frame, following design-reference/onboarding.html: 280x560, 2rem corners
+     and a deep soft shadow, with a slimmer bezel than the reference's 10px. The
+     reference can hard-code its size because its whole page scrolls; this bay does
+     not, so the phone takes whatever height is going and holds the 1:2 ratio. */
+  .onboarding-phone {
+    --phone-w: min(17.5rem, 100cqw, calc((100cqh - 7rem) / 2));
+    flex: none;
+    width: var(--phone-w);
+    height: calc(var(--phone-w) * 2);
+    border: 7px solid #1f2937;
+    border-radius: 2rem;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(15, 23, 42, 0.18);
+  }
+
+}
+
+/* ── Vendor onboarding ──────────────────────────────────────────────────────
+   Scoped to `.onboarding-shell` on purpose — these are not app-wide tokens, and
+   the storefront preview inside the shell still owns its own vendor theming via
+   [data-store-mode]. */
+.onboarding-shell {
+  /* One plane. The stepper, the form and the preview bay are all transparent and sit on
+     this single tinted ground — matching design-reference/onboarding.html, where every
+     one of those zones computes to rgba(0,0,0,0) and only the phone carries a shadow.
+     Anything raised (inputs, choice cards) reads white against it. */
+  --ob-canvas-base: #f8fafc;
+  --ob-canvas: #eef3f1;
+  --ob-sheet: #ffffff;
+  --ob-ink: #10241d;
+  --ob-ink-soft: #59706a;
+  --ob-line: #dde7e2;
+  --ob-line-soft: #e9f0ec;
+  --ob-brand: var(--md-green-600);
+  --ob-brand-soft: rgba(5, 150, 105, 0.09);
+  --ob-pending: #b6c6bf;
+
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
+    radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
+    var(--ob-canvas-base);
+}
+
+.dark .onboarding-shell {
+  --ob-canvas-base: oklch(0.15 0.02 163);
+  --ob-canvas: oklch(0.19 0.02 163);
+  --ob-sheet: oklch(0.21 0.02 163);
+  --ob-ink: oklch(0.96 0.01 163);
+  --ob-ink-soft: oklch(0.7 0.02 163);
+  --ob-line: rgba(255, 255, 255, 0.12);
+  --ob-line-soft: rgba(255, 255, 255, 0.07);
+  --ob-brand-soft: rgba(16, 185, 129, 0.14);
+  --ob-pending: oklch(0.45 0.02 163);
+
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.1), transparent 42%),
+    var(--ob-canvas-base);
+}
+
+@layer components {
+  /* The utility type role. Poppins carries the display voice and Inter the body
+     voice; this is the third — step labels, field eyebrows, the preview counts.
+     Tabular figures keep those counts from shifting as they reach double digits. */
+  .ob-eyebrow {
+    font-size: 0.6875rem;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ob-numeric {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Each step arriving. Small on purpose: the vendor is filling a form, not
+     watching a transition. */
+  .ob-step-enter {
+    animation: ob-step-in 200ms ease-out both;
+  }
+
+  @keyframes ob-step-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ob-step-enter {
+      animation: none;
+    }
+  }
+
+}
+
 @theme inline {
   --font-heading: var(--font-display);
   --font-sans: var(--font-body);
@@ -295,4 +412,42 @@
 
 .store-offer-banner--dark {
   color-scheme: dark;
+}
+@layer components {
+  /* The step row scrolls when it outgrows the window. Without a container edge to
+     clip against, a half-cut node at x=0 just looks broken, so the ends fade instead —
+     which also reads as "there is more this way". Invisible at widths where the row
+     fits, because the fade then falls on empty gutter. */
+  .ob-stepper-scroll {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 1.5rem,
+      #000 calc(100% - 1.5rem),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 1.5rem,
+      #000 calc(100% - 1.5rem),
+      transparent 100%
+    );
+  }
+
+  /* Form column · preview bay. Declared here rather than as Tailwind breakpoint
+     variants so the preview track collapses out of the grid entirely below 900px,
+     where it becomes a tab instead. */
+  .ob-grid {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 900px) {
+    .ob-grid {
+      grid-template-columns: minmax(0, 1fr) clamp(17rem, 24vw, 20.5rem);
+    }
+  }
 }

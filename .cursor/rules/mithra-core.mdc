@@ -1,15 +1,12 @@
 ---
-description: MithraDirect core — stack, brand, secrets; see AGENTS.md
+description: Load MithraDirect's canonical repository instructions
 alwaysApply: true
 ---
 
-# MithraDirect core
+# Repository instructions
 
-Read root `AGENTS.md` for full agent guidance. README for human setup.
+Read root `AGENTS.md` before making repository changes. It is the canonical tracked guidance.
+Use `README.md` for human setup and `docs/API_ARCHITECTURE.md` for detailed API behavior.
 
-- **Stack:** Vite + React 19 + TypeScript + Tailwind v4 + shadcn. Single app under `src/` — modules `marketing`, `storefront`, `vendor`.
-- **Not this branch:** no `apps/web`, no `src/features/*`, no axios (use `src/shared/api/client.ts` fetch wrapper).
-- **Brand:** emerald + Poppins display + Inter body via `src/styles/global.css`. Prefer `--md-*` / shadcn vars. No purple-glow / cream-serif AI defaults.
-- **UX:** one job per screen, clear primary CTA; small-vendor simplicity.
-- **design-reference/** is visual reference only — not served by Vite; don’t treat as product source.
-- **Never commit** `.env` or secrets. Keep diffs scoped to the task.
+Do not duplicate repository-wide instructions in this rule. If source, OpenAPI, and documentation
+disagree, follow the precedence and gap-reporting rules in `AGENTS.md`.

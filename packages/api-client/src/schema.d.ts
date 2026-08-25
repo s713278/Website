@@ -35,11 +35,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get vendor storefront
-         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
-         */
-        get: operations["getStorefront"];
+        get?: never;
         /**
          * Save vendor storefront configuration
          * @description Saves the storefront settings, theme, messaging and badges for a vendor in a single API
@@ -1427,6 +1423,12 @@ export interface paths {
          * Update vendor business type
          * @description Self-onboarding step 3: choose business type and initial details for an empty vendor
          *     created during OTP verification.
+         *
+         *     Only the vendor owner can call this endpoint. The `business_type` must match an existing
+         *     value in the master table. Partial updates are supported: only non-blank fields are
+         *     persisted. The fields collected here are mandatory preconditions for the go-live endpoint.
+         *
+         *     On success, the vendor's `onboarding_step` is set to `STEP_3_COMPLETED`.
          */
         patch: operations["updateVendorBusinessType"];
         trace?: never;
@@ -1847,6 +1849,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor dashboard context
+         * @description Returns onboarding, subscription tier, usage, and eligible features.
+         */
+        get: operations["getVendorContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/cart": {
         parameters: {
             query?: never;
@@ -1885,6 +1907,27 @@ export interface paths {
          *     <br>• Remove all items before logout
          */
         delete: operations["clearCart"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor storefront
+         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
+         *     <br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).
+         */
+        get: operations["getStorefront"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4361,6 +4404,83 @@ export interface components {
              */
             preference_type?: "VENDOR" | "PRODUCT" | "CATEGORY";
         };
+        APIResponseSkuInfoDTO: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["SkuInfoDTO"];
+        };
+        /** @description SKU information response containing core display fields */
+        SkuInfoDTO: {
+            /**
+             * Format: int64
+             * @description SKU identifier
+             * @example 1001
+             */
+            sku_id?: number;
+            /**
+             * Format: int64
+             * @description Vendor product identifier
+             * @example 10002
+             */
+            product_id?: number;
+            /**
+             * @description SKU name
+             * @example Organic Tomato 1kg
+             */
+            name?: string;
+            /**
+             * @description SKU description
+             * @example Fresh organic tomatoes
+             */
+            description?: string;
+            /** @description SKU features as a JSON value */
+            features?: components["schemas"]["JsonNode"];
+            /**
+             * @description Whether SKU is active
+             * @example true
+             */
+            is_active?: boolean;
+        };
+        APIResponseListSkuSubscriptionPlanResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["SkuSubscriptionPlanResponse"][];
+        };
+        SkuSubscriptionPlanResponse: {
+            /** Format: int64 */
+            id?: number;
+            /** @enum {string} */
+            frequency?: "ONE_TIME" | "DAILY" | "ALTERNATE_DAY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
+            /** @enum {string} */
+            delivery_mode?: "FIXED" | "FLEXIBLE";
+            eligible_delivery_days?: string[];
+        };
         StorefrontFulfillmentResponse: {
             /**
              * @description Enabled delivery method codes
@@ -4550,83 +4670,6 @@ export interface components {
              * @example +919900000000
              */
             support_whatsapp_number?: string;
-        };
-        APIResponseSkuInfoDTO: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["SkuInfoDTO"];
-        };
-        /** @description SKU information response containing core display fields */
-        SkuInfoDTO: {
-            /**
-             * Format: int64
-             * @description SKU identifier
-             * @example 1001
-             */
-            sku_id?: number;
-            /**
-             * Format: int64
-             * @description Vendor product identifier
-             * @example 10002
-             */
-            product_id?: number;
-            /**
-             * @description SKU name
-             * @example Organic Tomato 1kg
-             */
-            name?: string;
-            /**
-             * @description SKU description
-             * @example Fresh organic tomatoes
-             */
-            description?: string;
-            /** @description SKU features as a JSON value */
-            features?: components["schemas"]["JsonNode"];
-            /**
-             * @description Whether SKU is active
-             * @example true
-             */
-            is_active?: boolean;
-        };
-        APIResponseListSkuSubscriptionPlanResponse: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["SkuSubscriptionPlanResponse"][];
-        };
-        SkuSubscriptionPlanResponse: {
-            /** Format: int64 */
-            id?: number;
-            /** @enum {string} */
-            frequency?: "ONE_TIME" | "DAILY" | "ALTERNATE_DAY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
-            /** @enum {string} */
-            delivery_mode?: "FIXED" | "FLEXIBLE";
-            eligible_delivery_days?: string[];
         };
         APIResponsePaginationResponseOrderDetailsDTO: {
             /**
@@ -5001,50 +5044,6 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-        };
-    };
-    getStorefront: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description Vendor ID
-                 * @example 91
-                 */
-                vendor_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Storefront loaded successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VendorStorefrontResponse"];
-                };
-            };
-            /** @description Vendor not found or not active/approved */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6885,19 +6884,29 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Mobile OTP request for a USER or a VENDOR */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MobileSignUpRequest"];
             };
         };
         responses: {
-            /** @description OK */
+            /** @description OTP sent successfully to an already registered user/vendor */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description OTP sent successfully to a new user */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -7661,19 +7670,47 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Business type and initial vendor details */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VendorBusinessTypeRequest"];
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Vendor business type updated successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Validation failed or invalid business type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not the vendor owner or lacks STORE_CONFIG permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -8448,6 +8485,47 @@ export interface operations {
             };
         };
     };
+    getVendorContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vendor context retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Access denied to the vendor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     getCart: {
         parameters: {
             query?: never;
@@ -8490,6 +8568,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    getStorefront: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Storefront loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorStorefrontResponse"];
+                };
+            };
+            /** @description Vendor not found or not active/approved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
                 };
             };
         };

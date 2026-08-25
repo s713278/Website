@@ -5,7 +5,7 @@ import {
   unwrapData,
   verifyOtp as apiVerifyOtp,
 } from '@mithra/api-client'
-import type { User, UserRole } from '@/shared/types'
+import type { User, UserRole, VendorMembership } from '@/shared/types'
 import {
   DEMO_CREDENTIALS,
   demoLogin,
@@ -34,6 +34,35 @@ export const AUTH_REG_PLATFORM = 'Web' as const
 export const OTP_LENGTH = 4
 export const OTP_RESEND_SECONDS = 30
 
+/**
+ * Demo mode has no backend. `.env.example` ships with VITE_USE_API=false, so the OTP
+ * screens must stay usable there rather than failing with a network error.
+ */
+export const DEMO_OTP = '1234'
+const DEMO_VENDOR_ID = 'r1'
+
+function demoDelay(ms = 400) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function demoSession(input: OtpVerifyInput): AuthSession {
+  const mobile = digitsPhone(input.phone)
+  const isVendor = input.role === 'vendor'
+  return {
+    token: `demo-token-${mobile}`,
+    refreshToken: null,
+    user: {
+      id: `u-${mobile}`,
+      name: sessionDisplayName(input.role),
+      email: `${mobile}@mithra.local`,
+      role: input.role,
+      roles: [input.role],
+      vendors: isVendor ? [{ vendorId: DEMO_VENDOR_ID, name: 'Demo Store' }] : [],
+      vendorId: isVendor ? DEMO_VENDOR_ID : undefined,
+    },
+  }
+}
+
 export type OtpRequestInput = {
   phone: string
   role: UserRole
@@ -47,13 +76,67 @@ export type OtpVerifyInput = {
   countryCode?: string
 }
 
+type VendorEntry = {
+  vendor_id?: number | string
+  vendorId?: number | string
+  name?: string
+}
+
 type VerifyOtpData = {
   user_id?: number | string
   name?: string | null
   phoneNumber?: string
   roles?: string[]
-  vendors?: Array<{ vendor_id?: number | string; vendorId?: number | string; name?: string }>
+  vendors?: VendorEntry[]
   mobile_verified?: boolean
+}
+
+/**
+ * Why a verified session can still be refused. Callers map these to a specific screen
+ * instead of a generic "login failed".
+ */
+export type AuthSessionProblem = 'mobile-unverified' | 'role-not-granted'
+
+export class AuthSessionError extends Error {
+  readonly problem: AuthSessionProblem
+
+  constructor(problem: AuthSessionProblem, message: string) {
+    super(message)
+    this.name = 'AuthSessionError'
+    this.problem = problem
+  }
+}
+
+const credentialRefusalHandlers = new Set<() => void>()
+
+/**
+ * Run cleanup when a verification is refused *after* the backend accepted the request.
+ *
+ * `verifyOtp` clears the api-client token store on those paths, but the app session lives
+ * in Zustand and persists its own copy of the access token under `md-auth`. Leaving that
+ * behind is not cosmetic: `onRehydrateStorage` pushes `state.token` back into the token
+ * store on the next load, so the refused session comes back if the old access token is
+ * still inside its ten-minute life.
+ *
+ * Registered here rather than in the OTP screens because those callers return early when
+ * their request is stale or the component unmounted, and cleanup must not depend on a
+ * component still being mounted. Returns an unsubscribe function.
+ */
+export function onCredentialsRefused(handler: () => void): () => void {
+  credentialRefusalHandlers.add(handler)
+  return () => {
+    credentialRefusalHandlers.delete(handler)
+  }
+}
+
+function notifyCredentialsRefused() {
+  for (const handler of credentialRefusalHandlers) {
+    try {
+      handler()
+    } catch {
+      /* one failed cleanup must not strand the rest */
+    }
+  }
 }
 
 export function digitsPhone(phone: string) {
@@ -68,9 +151,39 @@ function apiRole(role: UserRole) {
   return role === 'vendor' ? 'VENDOR' : 'USER'
 }
 
-function firstVendorId(data: VerifyOtpData): string | undefined {
-  const id = data.vendors?.[0]?.vendor_id ?? data.vendors?.[0]?.vendorId
-  return id == null ? undefined : String(id)
+/**
+ * Map the backend's authority strings onto app roles. Unknown authorities (ADMIN,
+ * CUSTOMER_CARE) are dropped rather than granted, and a `ROLE_` prefix is tolerated.
+ */
+function mapVerifiedRoles(raw: unknown): UserRole[] {
+  if (!Array.isArray(raw)) return []
+  const roles = new Set<UserRole>()
+  for (const entry of raw) {
+    const value = String(entry ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/^ROLE_/, '')
+    if (value === 'USER' || value === 'CUSTOMER') roles.add('customer')
+    else if (value === 'VENDOR') roles.add('vendor')
+  }
+  return [...roles]
+}
+
+/** Normalise `vendors[]` into stable memberships, dropping entries without a usable ID. */
+function mapVendorMemberships(raw: unknown): VendorMembership[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const memberships: VendorMembership[] = []
+  for (const entry of raw as VendorEntry[]) {
+    const rawId = entry?.vendor_id ?? entry?.vendorId
+    if (rawId == null) continue
+    const vendorId = String(rawId).trim()
+    if (!vendorId || seen.has(vendorId)) continue
+    seen.add(vendorId)
+    const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined
+    memberships.push({ vendorId, name })
+  }
+  return memberships
 }
 
 function isPhoneLikeName(value: string) {
@@ -84,8 +197,17 @@ export function sessionDisplayName(role: UserRole, apiName?: string | null) {
   return role === 'vendor' ? 'Vendor' : 'User'
 }
 
-/** Session role is the static login-page role (USER vs VENDOR), not inferred from other roles. */
-function mapSessionUser(data: VerifyOtpData, input: OtpVerifyInput): User {
+/**
+ * Build the session from what the backend verified, not from what the login screen asked
+ * for. `vendorId` is set only for an unambiguous single membership — picking `vendors[0]`
+ * would silently choose a store for a multi-vendor identity.
+ */
+function mapSessionUser(
+  data: VerifyOtpData,
+  input: OtpVerifyInput,
+  roles: UserRole[],
+  vendors: VendorMembership[],
+): User {
   const mobile = digitsPhone(input.phone)
   return {
     id: String(data.user_id ?? `u-${mobile}`),
@@ -93,7 +215,12 @@ function mapSessionUser(data: VerifyOtpData, input: OtpVerifyInput): User {
     email: `${mobile}@mithra.local`,
     phone: mobile,
     role: input.role,
-    vendorId: input.role === 'vendor' ? firstVendorId(data) : undefined,
+    roles,
+    vendors,
+    // Memberships come from the backend, so an unambiguous single store is resolved
+    // whichever screen was used to sign in. Only the ambiguous case is left open —
+    // picking `vendors[0]` would silently choose a store for a multi-vendor identity.
+    vendorId: vendors.length === 1 ? vendors[0].vendorId : undefined,
   }
 }
 
@@ -104,6 +231,11 @@ export async function requestOtp(input: OtpRequestInput) {
     throw toApiError(new Error('Enter a valid 10-digit mobile number'), '/v1/auth/request-otp', 400)
   }
 
+  if (!isLiveApi()) {
+    await demoDelay()
+    return { success: true, status: 200, data: { mobile_verified: false } }
+  }
+
   return apiRequestOtp({
     country_code: input.countryCode || '+91',
     mobile_number: mobile,
@@ -112,10 +244,31 @@ export async function requestOtp(input: OtpRequestInput) {
   })
 }
 
-/** POST /v1/auth/verify-otp via @mithra/api-client — stores tokens on success */
+/**
+ * POST /v1/auth/verify-otp via @mithra/api-client.
+ *
+ * The package-level call stores whatever tokens come back *before* this function can
+ * judge the response, so every refusal below has to undo that. Leaving them would put a
+ * live bearer credential in `localStorage` for a login the app deliberately rejected —
+ * and when a vendor was already signed in and is changing their number, it would leave
+ * the refused number's token sitting under the first vendor's still-persisted user.
+ * Tokens are only ever adopted into a session by `applySession()`.
+ */
 export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
   const mobile = digitsPhone(input.phone)
   const otp = input.otp.replace(/\D/g, '')
+
+  if (!isLiveApi()) {
+    await demoDelay()
+    if (otp !== DEMO_OTP) {
+      throw toApiError(
+        new Error(`Demo mode: enter ${DEMO_OTP} to continue.`),
+        '/v1/auth/verify-otp',
+        400,
+      )
+    }
+    return demoSession(input)
+  }
 
   const res = await apiVerifyOtp({
     country_code: input.countryCode || '+91',
@@ -123,16 +276,50 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
     otp,
   })
 
-  const parsed = parseTokenResponse(res)
-  if (!parsed.accessToken) {
-    throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
-  }
+  try {
+    const parsed = parseTokenResponse(res)
+    if (!parsed.accessToken) {
+      throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
+    }
 
-  const data = (unwrapData(res) || {}) as VerifyOtpData
-  return {
-    token: parsed.accessToken,
-    refreshToken: parsed.refreshToken,
-    user: mapSessionUser(data, input),
+    const data = (unwrapData(res) || {}) as VerifyOtpData
+
+    // An unverified phone must not produce a session even when tokens came back.
+    if (data.mobile_verified !== true) {
+      throw new AuthSessionError(
+        'mobile-unverified',
+        'This number is not verified yet. Request a new code and try again.',
+      )
+    }
+
+    // The role chosen on the login screen is a request, not a grant.
+    const roles = mapVerifiedRoles(data.roles)
+    if (!roles.includes(input.role)) {
+      throw new AuthSessionError(
+        'role-not-granted',
+        input.role === 'vendor'
+          ? 'This number is not registered as a vendor yet.'
+          : 'This number is not registered as a customer yet.',
+      )
+    }
+
+    const vendors = mapVendorMemberships(data.vendors)
+    return {
+      token: parsed.accessToken,
+      refreshToken: parsed.refreshToken,
+      user: mapSessionUser(data, input, roles, vendors),
+    }
+  } catch (error) {
+    // No session is being created, so nothing may keep the credentials the package just
+    // wrote. Any prior session's tokens are already gone — overwritten by that same
+    // write — so the caller is signed out either way; that is the safe direction.
+    //
+    // This covers every post-response refusal, not just `AuthSessionError`: a success
+    // envelope with no recognizable access token lands here too, and it has written
+    // credentials just the same.
+    clearTokens()
+    notifyCredentialsRefused()
+    throw error
   }
 }
 
