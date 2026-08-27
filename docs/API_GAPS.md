@@ -42,6 +42,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approved-vendor path end to end | `PATCH /approval` returns `500` for a vendor token, so an approved store cannot be produced without an admin account. The frontend's approved branch is verified against a forced status only. |
 | Onboarding-aware dashboard | Landing an approved vendor somewhere real | `/vendor` renders `VendorDashboardPage`, still backed by the mock `vendorService` with a hardcoded `'r1'` fallback id, showing invented order counts and revenue. An approved vendor is redirected there today; replacing it with real data is a separate task. |
+| Creating a vendor's own category or product | A vendor whose range is not in the platform catalog | **No vendor-scoped create exists.** Both create endpoints write the shared platform catalog; both vendor-callable writes carry identifiers only, never names. Detailed below. A vendor can therefore only take on what the platform catalog already holds. |
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
 | Updating a SKU in place | Changing a price, size or name at Step 6 | `PATCH /vendors/{id}/skus/{sku_id}` returns **`417`** with a JDBC error on `update tb_sku` for every body tried, and `SkuInfoUpdateRequest` carries only `name`, `description`, `features`, `is_active` — never price or size. Step 6 expresses an edit as delete-then-create, which mints a new `sku_id`. |
@@ -84,6 +85,39 @@ visit the deselection was allowed and quietly discarded. Both steps also carry a
 before anything is saved, saying a saved choice cannot be removed. Neither the notice nor
 the refusal appears in demo mode or on the sample catalog, where nothing reaches an
 account.
+
+### Backend request: let a vendor create a catalog entry of their own
+
+Every category and product a vendor can choose comes from a catalog someone else wrote.
+There is no way to say "my store sells this thing you have never heard of", so a vendor
+whose range is not in the platform catalog cannot build their actual store.
+
+**The contract has no vendor-scoped catalog create.** Checked against the current
+`openapi.json`; the endpoints that look like one are not:
+
+| Endpoint | Why it does not serve this |
+|----------|----------------------------|
+| `POST /v1/categories/` | Tagged *Platform APIs - Product Catalog*. Writes the **marketplace-wide** catalog every vendor picks from, so a vendor's private category would appear in every other vendor's Step 4. Body is `CategoryDTO` (`id`, `name`, `business_type`, `image_path`, `description`). |
+| `POST /v1/categories/{category_id}/products/` | "Create **platform level** product", same Platform APIs tag, same pollution problem. |
+| `PATCH /v1/vendors/{vendor_id}/categories` | The category write the frontend actually uses. Body is `AssignCategoriesRequest` = `{category_ids: int64[]}` — identifiers only, no name field, so it can only take on what already exists. |
+| `PATCH /v1/vendors/{vendor_id}/assign/products` | The product write the frontend actually uses. Body is `AssignProductsRequest` = `{category_id, selected_products: [{product_id, features_map}]}`. `features_map` is a free-form `JsonNode`, but it *decorates* an existing `product_id`; it cannot mint one. |
+| `POST /v1/admin/vendors/{vendorId}/catalog-import-json` | The **only** free-text create in the contract. `CategoryImportData` (`category_name`, `category_type`, `products`) and `ProductImportData` (`product_name`, `product_description`, `skus`) build the whole tree by name. Admin-gated. |
+
+The objection is **not** the role annotations. Those are not reliably enforced in this
+document — `assign/products` is documented "by Admin/Customer_Care role" and the frontend
+calls it successfully with a vendor token. The objection is that both create endpoints
+write the **shared platform catalog**, which is a marketplace product decision, not
+something a frontend should reach for as a workaround.
+
+**Minimum needed:** a vendor-scoped equivalent of `catalog-import-json`, scoped by the
+path's own `vendor_id` — the admin import's request shape is already the right one, since
+it is the only place in the contract that takes a category or product *by name*. That
+would also **subsume the un-assign gap above**: an endpoint that accepts the vendor's
+whole intended catalog replaces both the additive assign calls and the missing removals.
+
+Until it exists, the wizard offers no way to create a category or a product anywhere, on
+either catalog source. A demo-mode walk is therefore limited to the sample catalog's own
+fixtures, which is the cost of not pretending a made-up entry could ever be saved.
 
 ### Onboarding continuity a vendor still loses
 

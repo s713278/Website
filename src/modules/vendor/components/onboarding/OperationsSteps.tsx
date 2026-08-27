@@ -26,23 +26,13 @@ import type {
   ValidationIssue,
   Weekday,
 } from '../../types/onboarding'
+import {
+  MEASUREMENT_UNITS,
+  UNIT_LABELS,
+  defaultUnitForProduct,
+  measurementFromProduct,
+} from '../../lib/onboarding-measurement'
 import { AccordionPanel, FieldError, FieldLabel, Hint, type RequestConfirmation, StepSection } from './StepPrimitives'
-
-const MEASUREMENT_UNITS: Record<MeasurementType, string[]> = {
-  WEIGHT: ['g', 'kg'],
-  VOLUME: ['ml', 'l'],
-  COUNT: ['piece', 'pack', 'dozen'],
-}
-
-const UNIT_LABELS: Record<string, string> = {
-  g: 'Gram (g)',
-  kg: 'Kilogram (kg)',
-  ml: 'Millilitre (ml)',
-  l: 'Litre (l)',
-  piece: 'Piece',
-  pack: 'Pack',
-  dozen: 'Dozen',
-}
 
 const WEEKDAYS: Array<{ value: Weekday; label: string }> = [
   { value: 'MONDAY', label: 'Mon' },
@@ -73,13 +63,6 @@ function PaymentMethodIcon({ type }: { type: PaymentType }) {
   )
 }
 
-function measurementFromProduct(value: string | null): MeasurementType {
-  const normalized = value?.toUpperCase()
-  return normalized === 'WEIGHT' || normalized === 'VOLUME' || normalized === 'COUNT'
-    ? normalized
-    : 'COUNT'
-}
-
 function parseDraftNumber(value: string): number | null {
   if (!value.trim()) return null
   const parsed = Number(value)
@@ -108,7 +91,6 @@ function makeSku(
   product: { id: number; name: string; measurementName: string | null },
   skus: DraftSku[],
 ): DraftSku {
-  const measurementType = measurementFromProduct(product.measurementName)
   const isFirstSku = !skus.some((sku) => sku.productId === product.id)
   return {
     id: localSkuId(product.id, skus),
@@ -116,8 +98,8 @@ function makeSku(
     name: isFirstSku ? product.name : '',
     description: '',
     skuType: 'ITEM',
-    measurementType,
-    unit: MEASUREMENT_UNITS[measurementType][0],
+    measurementType: measurementFromProduct(product.measurementName),
+    unit: defaultUnitForProduct(product.measurementName),
     quantity: 1,
     listPrice: null,
     salePrice: null,
