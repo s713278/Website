@@ -76,6 +76,15 @@ Until then, Steps 4 and 5 refuse the deselection and say so. That is deliberate:
 allowing it was worse — Continue made no request, the draft was marked as matching the
 account, and the next resume handed the discarded selection straight back.
 
+The refusal takes effect the moment the assigning write succeeds, not only after a
+reload. The account catalog is read on entry and then grown by each write that
+succeeds — the write is the evidence, and nothing is re-read to confirm it — so a vendor who assigns something and comes back to the step in the
+same visit is refused there — earlier, the entry read was the only source, and within one
+visit the deselection was allowed and quietly discarded. Both steps also carry a notice,
+before anything is saved, saying a saved choice cannot be removed. Neither the notice nor
+the refusal appears in demo mode or on the sample catalog, where nothing reaches an
+account.
+
 ### Onboarding continuity a vendor still loses
 
 Symptom-first, because these are what a vendor actually reports. Each is caused by a gap
@@ -157,9 +166,11 @@ the frontend works around it with an inline comment at the call site.
   un-assign or an admin flow exists:
   - Step 6 reconciles SKUs against the account — create, and delete what the vendor
     removed. A price or size change is delete-then-create, because update is unavailable.
-  - Steps 4 and 5 refuse to deselect anything already saved to the account and say why.
-    Silently allowing it produced the worst outcome: Continue was a no-op, the draft was
-    marked clean, and the next resume handed the selection straight back.
+  - Steps 4 and 5 refuse to deselect anything already saved to the account and say why,
+    from the moment the write succeeds rather than only after a reload, and warn that a
+    choice is permanent before it is made. Silently allowing it produced the worst
+    outcome: Continue was a no-op, the draft was marked clean, and the next resume handed
+    the selection straight back.
   - Resume position comes from `onboarding.next_step`, not from the resources. A leftover
     unpriced product is permanent, and deriving the step from gaps reopened Step 6 for it
     forever, discarding the delivery, payment and storefront work already saved.

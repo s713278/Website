@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ToggleEvent } from 'react'
 import {
+  InfoIcon,
   RefreshCwIcon,
   SearchIcon,
   StoreIcon,
@@ -16,10 +17,11 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { writesReachAccount } from '../../lib/onboarding-sync'
 import { StepNotice } from './AccessNotice'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
-import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
+import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, Hint, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -307,6 +309,25 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
   )
 }
 
+/**
+ * Assignment is one-way, so a vendor should know that while they are still choosing —
+ * not when they try to undo it.
+ *
+ * A `Hint`, not a `StepNotice`: nothing has gone wrong, and the amber alert is what the
+ * refusal itself uses. Rendered only where a choice can actually reach an account, which
+ * is why the caller decides — in demo mode or on the sample catalog nothing is written,
+ * and claiming permanence there would be a lie the vendor can disprove.
+ */
+function PermanenceNotice({ kind }: { kind: 'categories' | 'products' }) {
+  return (
+    <Hint icon={<InfoIcon className="size-4" />}>
+      {kind === 'categories'
+        ? 'Once you continue, the categories you pick are saved to your store for good. You can add more later, but removing one needs support.'
+        : 'Once you continue, the products you pick are saved to your store for good. Removing one needs support — but you can set a product inactive on the next step.'}
+    </Hint>
+  )
+}
+
 export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
@@ -362,6 +383,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
+      {writesReachAccount(draft.referenceMode) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
       <p className="text-sm text-[var(--ob-ink-soft)]">{draft.categories.length} of {categoryLimit} selected</p>
       <div className="relative">
@@ -562,6 +584,7 @@ function ProductCategoryPicker({
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const categories = useOnboardingStore((state) => state.draft.categories)
+  const referenceMode = useOnboardingStore((state) => state.draft.referenceMode)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
   const summary = useMemo(
     () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
@@ -576,6 +599,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
 
   return (
     <div className="space-y-4">
+      {writesReachAccount(referenceMode) ? <PermanenceNotice kind="products" /> : null}
       <div className="flex flex-wrap gap-2 text-xs">
         {summary.map((category) => (
           <span key={category.id} className="rounded-full bg-muted px-2.5 py-1 font-medium">

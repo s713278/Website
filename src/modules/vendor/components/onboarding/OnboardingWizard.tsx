@@ -27,7 +27,12 @@ import {
   peekVendorOnboardingState,
 } from '../../lib/onboarding-server-state'
 import { maskPhone } from '../../lib/onboarding-adapter'
-import { isLivePersistedStep, persistStep, stepErrorField } from '../../lib/onboarding-sync'
+import {
+  isLivePersistedStep,
+  persistStep,
+  stepErrorField,
+  writesReachAccount,
+} from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import {
@@ -122,6 +127,7 @@ export function OnboardingWizard() {
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setLivePublication = useOnboardingStore((state) => state.setLivePublication)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
+  const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
   const livePublication = useOnboardingStore((state) => state.livePublication)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
@@ -510,7 +516,7 @@ export function OnboardingWizard() {
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
       // synthetic and nothing behind them was ever written. Without this, go-live would
       // submit a real vendor account from a wizard the UI is presenting as sample data.
-      if (!isLiveApi() || access.state !== 'ready' || draft.referenceMode !== 'live') {
+      if (!writesReachAccount(draft.referenceMode) || access.state !== 'ready') {
         completePrototype(slug)
         return
       }
@@ -567,19 +573,19 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep
-    // Demo mode has no backend, and sample data carries synthetic IDs. Neither is
-    // ever written to a real account.
     const shouldPersist =
-      isLiveApi() &&
+      writesReachAccount(draft.referenceMode) &&
       isLivePersistedStep(step) &&
-      access.state === 'ready' &&
-      draft.referenceMode === 'live'
+      access.state === 'ready'
 
     if (shouldPersist && access.state === 'ready') {
       const controller = beginRequest()
       setStatusMessage('Saving to your store…')
       try {
-        await persistStep(step, access.vendorId, draft, runtime)
+        // Each write reports what it put on the account, so a step that fails part way
+        // still records the part that landed. No re-read: the write is the evidence, and
+        // confirming it would add a request to every Continue.
+        await persistStep(step, access.vendorId, draft, runtime, recordAssignment)
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
         if (!requestIsCurrent(controller, step)) return

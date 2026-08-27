@@ -1,5 +1,6 @@
 import {
   getErrorMessage,
+  isLiveApi,
   vendorOnboardingService,
   vendorProductIdByPlatformId,
   type CheckoutDeliveryInput,
@@ -11,6 +12,7 @@ import type {
   DraftSku,
   OnboardingRuntimeState,
   OnboardingStep,
+  ReferenceMode,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
 import { serverSkuIdOf } from './onboarding-sku-id'
@@ -27,6 +29,17 @@ export function isLivePersistedStep(step: OnboardingStep): boolean {
   return LIVE_PERSISTED_STEPS.includes(step)
 }
 
+/**
+ * Whether what the vendor does now can reach their account at all.
+ *
+ * Demo mode has no backend, and the sample catalog carries synthetic IDs that are never
+ * written to a real account. Both the Continue write and the steps that warn a choice is
+ * permanent ask this, so a notice cannot claim a permanence that demo mode doesn't have.
+ */
+export function writesReachAccount(referenceMode: ReferenceMode): boolean {
+  return isLiveApi() && referenceMode === 'live'
+}
+
 /** Field to focus when a save for this step fails. */
 export function stepErrorField(step: OnboardingStep): string {
   if (step === 3) return 'business-type'
@@ -37,6 +50,19 @@ export function stepErrorField(step: OnboardingStep): string {
   if (step === 8) return 'payments'
   return 'store-name'
 }
+
+/** What one successful write added to the vendor's account catalog. */
+export type AccountAssignment = { categoryIds?: number[]; productIds?: number[] }
+
+/**
+ * Told what reached the account, as each write lands.
+ *
+ * Reported per write rather than once per step because a step is not always one request:
+ * products are assigned a category at a time, and a batch that fails must not discard
+ * the evidence of the batches before it. Assignment is one-way, so anything reported
+ * here can no longer be deselected.
+ */
+export type OnAssigned = (assignment: AccountAssignment) => void
 
 /**
  * Removing a product is Admin/Customer_Care only — `PATCH /delete/products` returns
@@ -296,6 +322,7 @@ export function planSkuWrites(
 async function persistProducts(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
+  onAssigned: OnAssigned,
 ): Promise<void> {
   const existing = await vendorOnboardingService.getVendorProducts(vendorId)
   const assigned = new Set(existing.map((product) => product.platformProductId))
@@ -311,6 +338,9 @@ async function persistProducts(
 
   for (const [platformCategoryId, productIds] of byCategory) {
     await vendorOnboardingService.assignProducts(vendorId, platformCategoryId, productIds)
+    // Reported here, not after the loop: a later category that fails leaves these on the
+    // account all the same, and the vendor must not be offered them back.
+    onAssigned({ productIds })
   }
 }
 
@@ -364,12 +394,16 @@ async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Pr
 /**
  * Persist one step to the vendor account. Throws on failure so the caller keeps the
  * vendor on the step — a failed write must never be reported as local success.
+ *
+ * `onAssigned` is called as each write lands, including on the way to a failure. It is
+ * required rather than optional so a new call site cannot drop the evidence silently.
  */
 export async function persistStep(
   step: OnboardingStep,
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
+  onAssigned: OnAssigned,
 ): Promise<void> {
   if (step === 3) {
     const businessType = draft.business.businessType
@@ -380,14 +414,13 @@ export async function persistStep(
   }
 
   if (step === 4) {
-    await vendorOnboardingService.saveCategories(
-      vendorId,
-      draft.categories.map((category) => category.id),
-    )
+    const categoryIds = draft.categories.map((category) => category.id)
+    await vendorOnboardingService.saveCategories(vendorId, categoryIds)
+    onAssigned({ categoryIds })
     return
   }
 
-  if (step === 5) return persistProducts(vendorId, draft)
+  if (step === 5) return persistProducts(vendorId, draft, onAssigned)
   if (step === 6) return persistSkus(vendorId, draft)
 
   // Steps 7 and 8 share one payload, and payment_options replaces the existing set,

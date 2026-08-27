@@ -126,3 +126,47 @@ describe('assignment', () => {
     expect(state.isProductAssigned(45)).toBe(true)
   })
 })
+
+/**
+ * The account catalog used to be read once on entry, so a vendor could assign a
+ * category, continue, come back and deselect it — and only discover on their next visit
+ * that nothing had been removed. The successful write now grows the catalog, and the
+ * refusal follows in the same visit.
+ *
+ * `recordAssignment` is what the write path calls as each request lands. No request is
+ * involved here, which is the point — Continue gains no re-read.
+ */
+describe('an assignment recorded mid-visit', () => {
+  beforeEach(() => {
+    // A fresh account: the entry read found nothing assigned.
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+  })
+
+  it('refuses a category from the moment its write succeeds', () => {
+    expect(useOnboardingStore.getState().isCategoryAssigned(12)).toBe(false)
+
+    useOnboardingStore.getState().recordAssignment({ categoryIds: [12] })
+
+    expect(useOnboardingStore.getState().isCategoryAssigned(12)).toBe(true)
+  })
+
+  it('refuses a product from the moment its write succeeds', () => {
+    expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(false)
+
+    useOnboardingStore.getState().recordAssignment({ productIds: [44] })
+
+    expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(true)
+    // A product write says nothing about categories.
+    expect(useOnboardingStore.getState().isCategoryAssigned(12)).toBe(false)
+  })
+
+  it('keeps the batches that landed before a later one failed', () => {
+    // Products are assigned a category at a time, so a step can report more than once
+    // and then throw. What already reached the account still cannot be deselected.
+    useOnboardingStore.getState().recordAssignment({ productIds: [44] })
+    useOnboardingStore.getState().recordAssignment({ productIds: [45] })
+
+    expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(true)
+    expect(useOnboardingStore.getState().isProductAssigned(45)).toBe(true)
+  })
+})
