@@ -336,6 +336,13 @@ function flushPersistence(): void {
 
 export type CatalogSource = 'account' | 'sample'
 
+/** Catalog-source vocabulary for the persisted version-3 draft shape. */
+export function selectCatalogSource(
+  state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode'> },
+): CatalogSource {
+  return state.draft.referenceMode === 'live' ? 'account' : 'sample'
+}
+
 /** Whether the draft may move from its current catalog source to `target`. */
 export function selectCanSwitchCatalogSource(
   state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode' | 'completedSteps'> },
@@ -343,7 +350,7 @@ export function selectCanSwitchCatalogSource(
 ): boolean {
   // `referenceMode: 'live'` is the persisted version-3 vocabulary. Its schema rename is
   // deliberately deferred; the public rule should not make transport and source synonyms.
-  const current: CatalogSource = state.draft.referenceMode === 'live' ? 'account' : 'sample'
+  const current = selectCatalogSource(state)
   if (target === current) return false
   return target === 'account' || !state.draft.completedSteps.includes(3)
 }

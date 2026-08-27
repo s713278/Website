@@ -36,6 +36,7 @@ import {
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import {
   selectCanSwitchCatalogSource,
+  selectCatalogSource,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
@@ -100,10 +101,10 @@ export function OnboardingWizard() {
   const currentStep = useOnboardingStore((state) => state.draft.currentStep)
   const completedSteps = useOnboardingStore((state) => state.draft.completedSteps)
   const furthestVisitedStep = useOnboardingStore((state) => state.furthestVisitedStep)
-  const referenceMode = useOnboardingStore((state) => state.draft.referenceMode)
+  const catalogSource = useOnboardingStore(selectCatalogSource)
   const canSwitchCatalogSource = useOnboardingStore((state) => selectCanSwitchCatalogSource(
     state,
-    state.draft.referenceMode === 'live' ? 'sample' : 'account',
+    selectCatalogSource(state) === 'account' ? 'sample' : 'account',
   ))
   const canUseSampleCatalog = useOnboardingStore((state) =>
     selectCanSwitchCatalogSource(state, 'sample'))
@@ -745,18 +746,18 @@ export function OnboardingWizard() {
                         <button
                           type="button"
                           disabled={busy || !canSwitchCatalogSource}
-                          onClick={referenceMode === 'live' ? requestSampleCatalog : requestLiveCatalog}
-                          aria-label={`${referenceMode === 'live' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
+                          onClick={catalogSource === 'account' ? requestSampleCatalog : requestLiveCatalog}
+                          aria-label={`${catalogSource === 'account' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
                           className={cn(
                             'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50',
-                            referenceMode === 'live'
+                            catalogSource === 'account'
                               ? 'text-[var(--ob-ink-soft)] hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)]'
                               : 'bg-amber-100 text-amber-900 hover:bg-amber-200/80 dark:bg-amber-950/45 dark:text-amber-200',
                           )}
                         >
                           <DatabaseIcon className="size-3.5" aria-hidden="true" />
-                          <span className="sm:hidden">{referenceMode === 'live' ? 'Live' : 'Sample'}</span>
-                          <span className="hidden sm:inline">{referenceMode === 'live' ? 'Live catalog' : 'Sample catalog'}</span>
+                          <span className="sm:hidden">{catalogSource === 'account' ? 'Live' : 'Sample'}</span>
+                          <span className="hidden sm:inline">{catalogSource === 'account' ? 'Live catalog' : 'Sample catalog'}</span>
                         </button>
                         ) : null}
                         <button
