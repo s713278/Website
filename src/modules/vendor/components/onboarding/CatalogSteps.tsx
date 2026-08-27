@@ -313,7 +313,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
-  const onAccount = useOnboardingStore((state) => state.accountCatalog)
+  const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
   const businessTypeId = draft.business.businessType?.id ?? null
   const references = useCategoryReferences(draft.referenceMode, businessTypeId)
   const query = search.trim().toLowerCase()
@@ -325,7 +325,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const toggle = (category: (typeof draft.categories)[number]) => {
     const selected = draft.categories.some((item) => item.id === category.id)
     if (!selected && draft.categories.length >= categoryLimit) return
-    if (selected && onAccount.categoryIds.includes(category.id)) {
+    if (selected && isCategoryAssigned(category.id)) {
       setBlocked(
         `${category.name} is already saved to your store. Categories cannot be removed here yet — contact support if you need it taken off.`,
       )
@@ -385,7 +385,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           {loadedItems.map((category) => {
             const selected = draft.categories.some((item) => item.id === category.id)
             const atLimit = !selected && draft.categories.length >= categoryLimit
-            const onStore = selected && onAccount.categoryIds.includes(category.id)
+            const onStore = selected && isCategoryAssigned(category.id)
             return (
               <button
                 key={category.id}
@@ -443,7 +443,7 @@ function ProductCategoryPicker({
   const references = useProductReferences(draft.referenceMode, categoryId)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
-  const onAccount = useOnboardingStore((state) => state.accountCatalog)
+  const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
   const availableItems = appendMissingReferenceItems<ProductReference>(
@@ -456,7 +456,7 @@ function ProductCategoryPicker({
 
   const toggle = (product: ProductReference) => {
     const selected = draft.products.some((item) => item.id === product.id)
-    if (selected && onAccount.productIds.includes(product.id)) {
+    if (selected && isProductAssigned(product.id)) {
       setBlocked(
         `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
       )
@@ -524,7 +524,7 @@ function ProductCategoryPicker({
         <div className="grid gap-2 @min-[32rem]:grid-cols-2">
           {items.map((product) => {
             const selected = draft.products.some((item) => item.id === product.id)
-            const onStore = selected && onAccount.productIds.includes(product.id)
+            const onStore = selected && isProductAssigned(product.id)
             return (
               <button
                 key={product.id}

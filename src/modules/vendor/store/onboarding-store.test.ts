@@ -83,3 +83,46 @@ describe('completeStep and account sync', () => {
     expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
   })
 })
+
+/**
+ * Assignment is one-way, so these predicates are the whole of what stops a vendor
+ * unpicking something their account already holds. Seeded through `setAccountCatalog`
+ * rather than `setState`, because that is the write path the wizard uses and the one
+ * that keeps the predicates and the catalog in step.
+ */
+describe('assignment', () => {
+  beforeEach(() => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+  })
+
+  it('reports a platform category the account already holds as assigned', () => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [12], productIds: [] })
+
+    expect(useOnboardingStore.getState().isCategoryAssigned(12)).toBe(true)
+    expect(useOnboardingStore.getState().isCategoryAssigned(13)).toBe(false)
+  })
+
+  it('reports a platform product the account already holds as assigned', () => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [12], productIds: [44] })
+
+    expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(true)
+    expect(useOnboardingStore.getState().isProductAssigned(45)).toBe(false)
+  })
+
+  it('refuses nothing while the account catalog is empty, as in demo mode', () => {
+    expect(useOnboardingStore.getState().isCategoryAssigned(12)).toBe(false)
+    expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(false)
+  })
+
+  it('records an assignment on top of what the account already held', () => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [12], productIds: [44] })
+
+    useOnboardingStore.getState().recordAssignment({ categoryIds: [13], productIds: [45] })
+
+    const state = useOnboardingStore.getState()
+    expect(state.isCategoryAssigned(12)).toBe(true)
+    expect(state.isCategoryAssigned(13)).toBe(true)
+    expect(state.isProductAssigned(44)).toBe(true)
+    expect(state.isProductAssigned(45)).toBe(true)
+  })
+})

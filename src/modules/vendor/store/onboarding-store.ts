@@ -24,6 +24,37 @@ import {
 
 type ImageKind = 'logo' | 'banner'
 
+type AccountCatalog = { categoryIds: number[]; productIds: number[] }
+
+/**
+ * The account catalog and the questions asked of it, built together.
+ *
+ * The predicates close over the catalog instead of reading it back through `get()`
+ * because a step subscribes to one *by identity*. A `get()` closure would read fresh
+ * state but be the same reference for the store's lifetime, so a step already on screen
+ * would never re-render and would keep painting the catalog it first saw — which is what
+ * happens when the account read lands after the step mounts.
+ *
+ * The invariant that buys: every write of `accountCatalog` must go through here, so the
+ * predicates are rebuilt with it. A bare `set({ accountCatalog })` elsewhere leaves them
+ * answering for the previous catalog, and nothing would fail to compile.
+ */
+function accountCatalogSlice(catalog: AccountCatalog) {
+  return {
+    accountCatalog: catalog,
+    isCategoryAssigned: (categoryId: number) => catalog.categoryIds.includes(categoryId),
+    isProductAssigned: (productId: number) => catalog.productIds.includes(productId),
+  }
+}
+
+const EMPTY_ACCOUNT_CATALOG: AccountCatalog = { categoryIds: [], productIds: [] }
+
+/** Adds what is new, and returns `current` untouched when nothing is. */
+function mergeIds(current: number[], added: number[] | undefined): number[] {
+  const missing = added?.filter((id) => !current.includes(id)) ?? []
+  return missing.length ? [...current, ...missing] : current
+}
+
 type OnboardingStore = {
   draft: VendorOnboardingDraftV1
   runtime: OnboardingRuntimeState
@@ -64,8 +95,20 @@ type OnboardingStore = {
    * store, and the wizard must not offer to. Not persisted: it describes the account,
    * not the draft.
    */
-  accountCatalog: { categoryIds: number[]; productIds: number[] }
-  setAccountCatalog: (catalog: { categoryIds: number[]; productIds: number[] }) => void
+  accountCatalog: AccountCatalog
+  setAccountCatalog: (catalog: AccountCatalog) => void
+  /** Whether the account already holds this platform category. */
+  isCategoryAssigned: (categoryId: number) => boolean
+  /** Whether the account already holds this platform product. */
+  isProductAssigned: (productId: number) => boolean
+  /**
+   * Record that the account now holds these platform categories and products.
+   *
+   * Assignment is additive, so this only ever grows the catalog. It is for writes that
+   * have already succeeded: the account is still re-read on entry, and that read stays
+   * the reconciliation.
+   */
+  recordAssignment: (assignment: Partial<AccountCatalog>) => void
   initializePersistence: (ownerId: string | null) => void
   flushPersistence: () => void
   loadNewerDraft: () => void
@@ -175,7 +218,7 @@ function emptyDraftState(
     recoveryMessage,
     pendingConflict: null,
     livePublication: null,
-    accountCatalog: { categoryIds: [], productIds: [] },
+    ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
     hasLocalEdits: false,
   }
@@ -305,7 +348,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
   livePublication: null,
-  accountCatalog: { categoryIds: [], productIds: [] },
+  ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
   hasLocalEdits: false,
 
@@ -361,7 +404,15 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   setAccountCatalog(catalog) {
-    set({ accountCatalog: catalog })
+    set(accountCatalogSlice(catalog))
+  },
+
+  recordAssignment(assignment) {
+    const { accountCatalog } = useOnboardingStore.getState()
+    const categoryIds = mergeIds(accountCatalog.categoryIds, assignment.categoryIds)
+    const productIds = mergeIds(accountCatalog.productIds, assignment.productIds)
+    if (categoryIds === accountCatalog.categoryIds && productIds === accountCatalog.productIds) return
+    set(accountCatalogSlice({ categoryIds, productIds }))
   },
 
   setCategoryLimit(limit) {
