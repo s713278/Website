@@ -119,7 +119,7 @@ describe('catalog source switching', () => {
       },
     })
 
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')).toBe(true)
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')).toBe(true)
 
     useOnboardingStore.setState((state) => ({
       draft: {
@@ -128,7 +128,7 @@ describe('catalog source switching', () => {
       },
     }))
 
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')).toBe(true)
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')).toBe(true)
   })
 })
 

@@ -18,7 +18,6 @@ import {
   type OnboardingPersistenceStatus,
   type OnboardingRuntimeState,
   type OnboardingStep,
-  type ReferenceMode,
   type VendorOnboardingDraftV1,
   type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
@@ -335,13 +334,18 @@ function flushPersistence(): void {
   flushPendingSave()
 }
 
+export type CatalogSource = 'account' | 'sample'
+
 /** Whether the draft may move from its current catalog source to `target`. */
 export function selectCanSwitchCatalogSource(
   state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode' | 'completedSteps'> },
-  target: ReferenceMode,
+  target: CatalogSource,
 ): boolean {
-  if (target === state.draft.referenceMode) return false
-  return target === 'live' || !state.draft.completedSteps.includes(3)
+  // `referenceMode: 'live'` is the persisted version-3 vocabulary. Its schema rename is
+  // deliberately deferred; the public rule should not make transport and source synonyms.
+  const current: CatalogSource = state.draft.referenceMode === 'live' ? 'account' : 'sample'
+  if (target === current) return false
+  return target === 'account' || !state.draft.completedSteps.includes(3)
 }
 
 /**

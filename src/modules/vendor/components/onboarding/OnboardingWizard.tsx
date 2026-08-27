@@ -103,7 +103,7 @@ export function OnboardingWizard() {
   const referenceMode = useOnboardingStore((state) => state.draft.referenceMode)
   const canSwitchCatalogSource = useOnboardingStore((state) => selectCanSwitchCatalogSource(
     state,
-    state.draft.referenceMode === 'live' ? 'sample' : 'live',
+    state.draft.referenceMode === 'live' ? 'sample' : 'account',
   ))
   const canUseSampleCatalog = useOnboardingStore((state) =>
     selectCanSwitchCatalogSource(state, 'sample'))
@@ -353,7 +353,7 @@ export function OnboardingWizard() {
   }
 
   const requestLiveCatalog = () => {
-    if (!selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')) return
+    if (!selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')) return
     requestConfirmation({
       title: 'Return to the live catalog?',
       description: 'Sample selections will be cleared before live data loads because their IDs are not compatible.',
@@ -689,6 +689,9 @@ export function OnboardingWizard() {
   const draftOnlyNotice = currentStep < 3 || liveApi
     ? null
     : 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
+  const sampleCatalogFallback = !liveApi && canUseSampleCatalog
+    ? requestSampleCatalog
+    : undefined
   const moveMobileTab = (view: 'form' | 'preview') => {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
@@ -814,9 +817,9 @@ export function OnboardingWizard() {
                           disabled={storeIsSubmitted && currentStep < 10}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
-                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
-                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
+                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
