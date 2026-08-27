@@ -32,7 +32,8 @@ function Shell({
 
 /**
  * Shown instead of Steps 3-10 when the session cannot be scoped to a vendor. Each case
- * keeps the local draft intact so nothing the vendor typed is lost.
+ * keeps the local draft intact so nothing the vendor typed is lost — until the vendor
+ * takes the one action that leaves, which discards it and says so first.
  */
 export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNoticeProps) {
   if (access.state === 'not-a-vendor') {
@@ -55,8 +56,8 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
           there is nothing to save your setup against.
         </p>
         <p className="text-sm leading-5 text-[var(--ob-ink-soft)]">
-          Everything you have entered stays saved in this browser. Please contact MithraDirect
-          support to have your store created, then return here.
+          Everything you have entered stays saved in this browser as long as you stay signed in.
+          Please contact MithraDirect support to have your store created, then return here.
         </p>
         <Button variant="outline" size="sm" onClick={onSignOut}>Use a different number</Button>
       </Shell>

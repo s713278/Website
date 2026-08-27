@@ -6,7 +6,7 @@ import { ONBOARDING_STEPS, type OnboardingStep } from '../../types/onboarding'
 type StepState = 'settled' | 'done' | 'current' | 'open' | 'locked'
 
 const STATE_LABEL: Record<StepState, string> = {
-  settled: 'Verified. Your store is live, so this is fixed',
+  settled: 'Verified, so this step is behind you',
   done: 'Done',
   current: 'You are here',
   open: 'Ready when you are',
@@ -17,7 +17,7 @@ export type StepperProps = {
   currentStep: OnboardingStep
   completedSteps: OnboardingStep[]
   furthestVisitedStep: OnboardingStep
-  /** Steps below this belong to a live store and can no longer be changed. */
+  /** The lowest step navigation may reach. Steps below it are settled and not offered. */
   firstNavigableStep: OnboardingStep
   onNavigate: (step: OnboardingStep) => void
 }

@@ -14,36 +14,32 @@ type StepProps = {
 }
 
 /**
- * Steps 1-2 once the store is live.
+ * Shown at the navigation floor, in place of the identity steps it replaced.
  *
- * Until go-live a vendor can change their number from Step 1 after confirming. Once the
- * store is live the number is the store's identity: changing it would mean starting a
- * second store, not editing this one, so the only way out is signing out.
+ * Once a number is verified there is nothing left for Steps 1-2 to ask, so they are
+ * closed rather than left reachable and re-asking. That makes this the only route to a
+ * different number, which is why the action is on the screen rather than implied: a
+ * vendor who typed the wrong number would otherwise be held in an account they cannot
+ * leave. Setting up on another number is a second store, not a move, and signing out is
+ * what starts it.
  */
-export function VerifiedIdentityNotice({ onSignOut }: { onSignOut: () => void }) {
+export function VerifiedIdentityNotice({ onUseDifferentNumber }: { onUseDifferentNumber: () => void }) {
   const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
 
   return (
-    <div className="space-y-4">
-      <Hint tone="brand" icon={<CheckCircle2Icon className="size-4 text-[var(--ob-brand)]" />}>
-        <p className="font-semibold">Your store is live on this number</p>
-        <p className="mt-0.5 text-sm leading-5 text-[var(--ob-ink-soft)]">
+    <Hint tone="brand" icon={<CheckCircle2Icon className="size-4 text-[var(--ob-brand)]" />}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="min-w-0 leading-5">
+          <span className="font-semibold">Number verified. </span>
           {maskedPhone
-            ? <>You submitted this store as <strong className="text-[var(--ob-ink)]">{maskedPhone}</strong>. Customers reach you on that number.</>
-            : <>Customers reach this store on the number you signed up with.</>}
+            ? <>This setup belongs to <strong className="text-[var(--ob-ink)]">{maskedPhone}</strong>. Another number would be a separate store.</>
+            : <>This setup belongs to the number you signed in with. Another number would be a separate store.</>}
         </p>
-      </Hint>
-
-      <Hint>
-        <p className="leading-5">
-          Setting up on a different number creates a separate store rather than moving this one.
-          Sign out first if that is what you want; this store stays exactly as it is.
-        </p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={onSignOut}>
-          Sign out to set up another store
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onUseDifferentNumber}>
+          Use a different number
         </Button>
-      </Hint>
-    </div>
+      </div>
+    </Hint>
   )
 }
 
@@ -90,7 +86,8 @@ export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
           : 'Demo mode is on, so no WhatsApp message is sent.'}
       </Hint>
       <Hint icon={<SmartphoneIcon className="size-4" />}>
-        This becomes the number customers order on. You can change it later, until your shop goes live.
+        This becomes the number customers order on. Once it is verified, reaching a different
+        number means signing out and starting setup again.
       </Hint>
       {statusMessage ? <p role="status" className="text-sm font-medium text-[var(--ob-brand)]">{statusMessage}</p> : null}
     </div>

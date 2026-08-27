@@ -14,7 +14,7 @@ import { authService, getErrorMessage, isLiveApi, vendorOnboardingService } from
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
-import { canEnterCatalogSteps } from '../../lib/onboarding-access'
+import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import {
   buildResumeDraft,
   isVendorLive,
@@ -92,19 +92,6 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
   )
 }
 
-/**
- * Whether a typed number is provably the one already signed in.
- *
- * `maskedPhone` keeps the last four digits and is deliberately never persisted, so after
- * a reload this returns false and the vendor is asked to confirm. Erring towards showing
- * the warning is the safe direction — the alternative is switching accounts silently.
- */
-function matchesSessionPhone(phone: string, maskedPhone: string | null): boolean {
-  if (!maskedPhone) return false
-  const digits = phone.replace(/\D/g, '')
-  return digits.length >= 4 && maskedPhone.endsWith(digits.slice(-4))
-}
-
 export function OnboardingWizard() {
   const currentStep = useOnboardingStore((state) => state.draft.currentStep)
   const completedSteps = useOnboardingStore((state) => state.draft.completedSteps)
@@ -136,7 +123,7 @@ export function OnboardingWizard() {
   const completeOtpLogin = useAuthStore((state) => state.completeOtpLogin)
   const selectVendor = useAuthStore((state) => state.selectVendor)
   const logout = useAuthStore((state) => state.logout)
-  const { access, hasSession } = useOnboardingDraftSession()
+  const { access } = useOnboardingDraftSession()
   const catalogUnlocked = canEnterCatalogSteps(access)
 
   const [issues, setIssues] = useState<ValidationIssue[]>([])
@@ -146,13 +133,12 @@ export function OnboardingWizard() {
   // Step 3 would flash and then jump to wherever the resume actually lands.
   const [accountState, setAccountState] = useState<'idle' | 'loading' | 'ready'>('idle')
   const [contextError, setContextError] = useState<string | null>(null)
-  const [vendorIsLive, setVendorIsLive] = useState(false)
-  // A vendor may change their number until their store goes live. Re-running OTP still
-  // signs a different vendor in underneath this draft, so it is a confirmed switch
-  // rather than something that can happen by accident. Once the store is live the
-  // identity is settled: changing it would mean a second store, not an edit.
-  const identitySettled = hasSession && vendorIsLive
-  const firstNavigableStep: OnboardingStep = identitySettled ? 3 : 1
+  // A session is what Steps 1-2 exist to produce, so having one closes them. The floor
+  // is owned by the access module rather than computed here, because it is a statement
+  // about the session and nothing else — it used to also require a submitted store,
+  // which let every vendor mid-setup walk back into the identity steps.
+  const firstNavigableStep = navigationFloor(access)
+  const identitySettled = firstNavigableStep > 1
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form')
   const [confirmState, setConfirmState] = useState<ConfirmDialogState>(EMPTY_CONFIRM)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -205,7 +191,6 @@ export function OnboardingWizard() {
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setContextError(null)
-      setVendorIsLive(false)
       setLivePublication(null)
       setAccountCatalog({ categoryIds: [], productIds: [] })
       setAccountState('idle')
@@ -220,7 +205,6 @@ export function OnboardingWizard() {
     const apply = (server: ServerOnboardingState) => {
       setContextError(null)
       setCategoryLimit(server.context.subscription.limits.maxCategories)
-      setVendorIsLive(isVendorLive(server))
       // What is already on the store, and therefore can no longer be unpicked.
       setAccountCatalog({
         categoryIds: server.categories.map((category) => category.platformCategoryId),
@@ -389,6 +373,9 @@ export function OnboardingWizard() {
   }
 
   const handleOtpRequest = async () => {
+    // Only reachable without a session: the floor closes Steps 1-2 the moment one
+    // exists, so `request-otp` can no longer swap the signed-in vendor underneath a
+    // draft. Changing number now goes through sign-out instead.
     if (identitySettled) return
     const { draft, runtime } = useOnboardingStore.getState()
     const phoneIssues = validateStep(1, draft, runtime)
@@ -396,17 +383,7 @@ export function OnboardingWizard() {
       showIssues(phoneIssues)
       return
     }
-    const phone = runtime.phone
-
-    // `request-otp` is what creates the account, so the warning belongs here rather
-    // than before verification. Skipped only when the number is provably the one
-    // already signed in.
-    if (hasSession && !matchesSessionPhone(phone, draft.maskedPhone)) {
-      confirmNumberChange(phone)
-      return
-    }
-
-    await sendOtp(phone)
+    await sendOtp(runtime.phone)
   }
 
   const sendOtp = async (phone: string) => {
@@ -430,19 +407,6 @@ export function OnboardingWizard() {
       finishRequest(controller)
     }
   }
-
-  const confirmNumberChange = (phone: string) => requestConfirmation({
-    title: 'Set up with a different number?',
-    description:
-      'This signs you out of the number you are using now and starts setup on the new one, creating a new store if that number has never been used. '
-      + 'Anything already saved to your current store stays with it — sign in with that number again to pick it up. '
-      + 'Unsaved details in this browser, and any photos you picked, are cleared.',
-    confirmLabel: 'Use this number',
-    tone: 'danger',
-    onConfirm: () => {
-      void sendOtp(phone)
-    },
-  })
 
   const handleOtpVerify = async () => {
     if (identitySettled) return
@@ -615,16 +579,32 @@ export function OnboardingWizard() {
 
   const navigateToStep = (step: OnboardingStep) => {
     cancelActiveRequest()
-    if (identitySettled) {
-      goToStep(Math.max(step, firstNavigableStep) as OnboardingStep)
-      return
-    }
-    goToStep(step <= 2 && !useOnboardingStore.getState().runtime.phone ? 1 : step)
+    // The floor is the single clamp: below it the identity steps are closed, and above
+    // it Step 2 without a number to verify is a dead end, so it becomes Step 1.
+    const target = Math.max(step, firstNavigableStep) as OnboardingStep
+    goToStep(target <= 2 && !useOnboardingStore.getState().runtime.phone ? 1 : target)
   }
 
   const goBack = () => {
     if (currentStep > firstNavigableStep) navigateToStep((currentStep - 1) as OnboardingStep)
   }
+
+  // With the identity steps closed, this is the only route backwards, wherever it is
+  // offered from. It has to be explicit, because a vendor who typed the wrong number
+  // would otherwise be held in an account they cannot leave — and because signing out
+  // discards whatever the browser draft still holds.
+  const confirmUseDifferentNumber = () => requestConfirmation({
+    title: 'Use a different number?',
+    description:
+      'This signs you out and starts setup again from the first step. Anything already saved to your store stays with it — sign in on this number again to pick it up. '
+      + 'Unsaved details in this browser, and any photos you picked, are cleared.',
+    confirmLabel: 'Sign out and start again',
+    tone: 'danger',
+    onConfirm: () => {
+      cancelActiveRequest()
+      void logout()
+    },
+  })
 
   const confirmReset = () => requestConfirmation({
     title: 'Start onboarding over?',
@@ -742,21 +722,21 @@ export function OnboardingWizard() {
 
                       {/* Keyed on the step so each one arrives rather than swapping in place. */}
                       <div key={currentStep} className="ob-step-enter mt-6">
-                        {currentStep <= 2 && identitySettled ? (
-                          catalogUnlocked
-                            ? <VerifiedIdentityNotice onSignOut={() => void logout()} />
-                            : <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
-                        ) : null}
                         {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
                         {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
+                        {/* The identity steps are no longer reachable, so the floor states
+                            which number this setup belongs to and carries the one way out. */}
+                        {catalogUnlocked && identitySettled && currentStep <= firstNavigableStep ? (
+                          <div className="mb-4"><VerifiedIdentityNotice onUseDifferentNumber={confirmUseDifferentNumber} /></div>
+                        ) : null}
                         {catalogUnlocked && draftOnlyNotice ? (
                           <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>
                         ) : null}
                         {catalogUnlocked && currentStep >= 3 && contextError ? (
                           <div className="mb-4"><StepNotice message={contextError} /></div>
                         ) : null}
-                        {currentStep >= 3 && !catalogUnlocked ? (
-                          <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={() => void logout()} />
+                        {!catalogUnlocked && (currentStep >= 3 || identitySettled) ? (
+                          <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmUseDifferentNumber} />
                         ) : null}
                         {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
                         {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
