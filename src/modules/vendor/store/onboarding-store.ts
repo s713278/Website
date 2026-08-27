@@ -18,6 +18,7 @@ import {
   type OnboardingPersistenceStatus,
   type OnboardingRuntimeState,
   type OnboardingStep,
+  type ReferenceMode,
   type VendorOnboardingDraftV1,
   type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
@@ -332,6 +333,15 @@ function flushPendingSave(): void {
 
 function flushPersistence(): void {
   flushPendingSave()
+}
+
+/** Whether the draft may move from its current catalog source to `target`. */
+export function selectCanSwitchCatalogSource(
+  state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode' | 'completedSteps'> },
+  target: ReferenceMode,
+): boolean {
+  if (target === state.draft.referenceMode) return false
+  return target === 'live' || !state.draft.completedSteps.includes(3)
 }
 
 /**

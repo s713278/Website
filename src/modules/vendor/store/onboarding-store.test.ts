@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import type { OnboardingStep } from '../types/onboarding'
-import { selectStoreIsSubmitted, useOnboardingStore } from './onboarding-store'
+import {
+  selectCanSwitchCatalogSource,
+  selectStoreIsSubmitted,
+  useOnboardingStore,
+} from './onboarding-store'
 
 /**
  * `updateDraft`'s second argument is destructive by design: it exists to throw away
@@ -81,6 +85,50 @@ describe('completeStep and account sync', () => {
     useOnboardingStore.getState().completeStep(5, 6)
 
     expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
+  })
+})
+
+describe('catalog source switching', () => {
+  it('allows switching from the account catalog to the sample catalog only before the business type step is complete', () => {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        referenceMode: 'live',
+        completedSteps: [1, 2],
+      },
+    })
+
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')).toBe(true)
+
+    useOnboardingStore.setState((state) => ({
+      draft: {
+        ...state.draft,
+        completedSteps: [1, 2, 3],
+      },
+    }))
+
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')).toBe(false)
+  })
+
+  it('allows switching from the sample catalog to the account catalog before or after the business type step is complete', () => {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        referenceMode: 'sample',
+        completedSteps: [1, 2],
+      },
+    })
+
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')).toBe(true)
+
+    useOnboardingStore.setState((state) => ({
+      draft: {
+        ...state.draft,
+        completedSteps: [1, 2, 3],
+      },
+    }))
+
+    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')).toBe(true)
   })
 })
 

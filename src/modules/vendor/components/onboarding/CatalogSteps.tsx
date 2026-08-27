@@ -26,7 +26,7 @@ import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, F
 type CatalogStepProps = {
   issues: ValidationIssue[]
   confirm: RequestConfirmation
-  onUseSample: () => void
+  onUseSample?: () => void
 }
 
 function ReferenceThumb({
@@ -232,7 +232,12 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
           <CatalogError message={references.error ?? 'The live business catalog could not be loaded.'} onRetry={references.retry} onUseSample={onUseSample} />
         ) : null}
         {!references.loading && !references.error && !references.searchPending && !items.length ? (
-          <EmptyState title="No business types found" description="Try a broader search or switch explicitly to the sample catalog." />
+          <EmptyState
+            title="No business types found"
+            description={onUseSample
+              ? 'Try a broader search or switch explicitly to the sample catalog.'
+              : 'Try a broader search.'}
+          />
         ) : null}
         {showInitialSkeleton || items.length ? (
           <div
@@ -456,7 +461,7 @@ function ProductCategoryPicker({
   categoryId: number
   categoryName: string
   confirm: RequestConfirmation
-  onUseSample: () => void
+  onUseSample?: () => void
   open: boolean
   onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
 }) {

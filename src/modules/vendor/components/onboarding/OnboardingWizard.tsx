@@ -34,7 +34,11 @@ import {
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { selectStoreIsSubmitted, useOnboardingStore } from '../../store/onboarding-store'
+import {
+  selectCanSwitchCatalogSource,
+  selectStoreIsSubmitted,
+  useOnboardingStore,
+} from '../../store/onboarding-store'
 import {
   ONBOARDING_STEPS,
   type OnboardingStep,
@@ -97,6 +101,12 @@ export function OnboardingWizard() {
   const completedSteps = useOnboardingStore((state) => state.draft.completedSteps)
   const furthestVisitedStep = useOnboardingStore((state) => state.furthestVisitedStep)
   const referenceMode = useOnboardingStore((state) => state.draft.referenceMode)
+  const canSwitchCatalogSource = useOnboardingStore((state) => selectCanSwitchCatalogSource(
+    state,
+    state.draft.referenceMode === 'live' ? 'sample' : 'live',
+  ))
+  const canUseSampleCatalog = useOnboardingStore((state) =>
+    selectCanSwitchCatalogSource(state, 'sample'))
   const publicationState = useOnboardingStore((state) => state.draft.publication.state)
   const persistenceInitialized = useOnboardingStore((state) => state.persistenceInitialized)
   const persistenceStatus = useOnboardingStore((state) => state.persistenceStatus)
@@ -128,6 +138,7 @@ export function OnboardingWizard() {
   const logout = useAuthStore((state) => state.logout)
   const { access } = useOnboardingDraftSession()
   const catalogUnlocked = canEnterCatalogSteps(access)
+  const liveApi = isLiveApi()
 
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -318,7 +329,10 @@ export function OnboardingWizard() {
   }
 
   const requestSampleCatalog = () => {
-    if (referenceMode === 'sample') return
+    if (
+      liveApi ||
+      !selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')
+    ) return
     requestConfirmation({
       title: 'Switch the whole catalog to sample data?',
       description: 'This clears the current business type, categories, products, and their sizes and prices, because sample and live IDs cannot be mixed.',
@@ -339,7 +353,7 @@ export function OnboardingWizard() {
   }
 
   const requestLiveCatalog = () => {
-    if (referenceMode === 'live') return
+    if (!selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'live')) return
     requestConfirmation({
       title: 'Return to the live catalog?',
       description: 'Sample selections will be cleared before live data loads because their IDs are not compatible.',
@@ -478,6 +492,16 @@ export function OnboardingWizard() {
     if (draft.currentStep === 1) return handleOtpRequest()
     if (draft.currentStep === 2) return handleOtpVerify()
     if (!catalogUnlocked) return
+    // A draft created in demo mode can survive a later deployment/configuration change.
+    // It must not retain the old silent-success path after the sample controls disappear.
+    if (liveApi && draft.referenceMode === 'sample') {
+      showIssues([{
+        step: draft.currentStep,
+        field: stepErrorField(draft.currentStep),
+        message: 'The sample catalog is available only in demo mode. Start over to load the account catalog before continuing.',
+      }])
+      return
+    }
     if (draft.currentStep === 10) {
       const nextIssues = readinessIssues(draft, runtime, categoryLimit)
       if (nextIssues.length) return showIssues(nextIssues)
@@ -662,7 +686,7 @@ export function OnboardingWizard() {
   // There is deliberately no "your store is further along than this" notice. The only
   // value that could drive one is `onboarding.next_step`, which the backend derives and
   // moves backwards (docs/API_GAPS.md) — it reported steps the vendor had already passed.
-  const draftOnlyNotice = currentStep < 3 || isLiveApi()
+  const draftOnlyNotice = currentStep < 3 || liveApi
     ? null
     : 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
   const moveMobileTab = (view: 'form' | 'preview') => {
@@ -714,13 +738,14 @@ export function OnboardingWizard() {
                           does, so a submitted store is shown neither. */}
                       <div className="flex shrink-0 items-center gap-1 pt-1">
                         {storeIsSubmitted ? null : <>
+                        {!liveApi ? (
                         <button
                           type="button"
-                          disabled={busy}
+                          disabled={busy || !canSwitchCatalogSource}
                           onClick={referenceMode === 'live' ? requestSampleCatalog : requestLiveCatalog}
                           aria-label={`${referenceMode === 'live' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
                           className={cn(
-                            'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
+                            'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50',
                             referenceMode === 'live'
                               ? 'text-[var(--ob-ink-soft)] hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)]'
                               : 'bg-amber-100 text-amber-900 hover:bg-amber-200/80 dark:bg-amber-950/45 dark:text-amber-200',
@@ -730,6 +755,7 @@ export function OnboardingWizard() {
                           <span className="sm:hidden">{referenceMode === 'live' ? 'Live' : 'Sample'}</span>
                           <span className="hidden sm:inline">{referenceMode === 'live' ? 'Live catalog' : 'Sample catalog'}</span>
                         </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={busy}
@@ -788,9 +814,9 @@ export function OnboardingWizard() {
                           disabled={storeIsSubmitted && currentStep < 10}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
-                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
+                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
+                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
+                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={!liveApi && canUseSampleCatalog ? requestSampleCatalog : undefined} /> : null}
                         {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
