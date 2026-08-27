@@ -13,7 +13,7 @@ import {
   type VendorSkuRef,
 } from '@/shared/api'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
-import { isVendorLive } from './onboarding-liveness'
+import { isStoreSubmitted } from './onboarding-account-status'
 import { accountSkuId } from './onboarding-sku-id'
 import type {
   DraftSku,
@@ -110,16 +110,16 @@ function everyProductPriced(state: ServerOnboardingState): boolean {
   return state.products.every((product) => priced.has(product.vendorProductId))
 }
 
-// Defined in a leaf module so the login screens can ask "is this store live?" without
+// Defined in a leaf module so the login screens can ask "is this store submitted?" without
 // pulling this file's dependency graph into the initial bundle. Re-exported here because
 // this is where callers expect to find them.
-export { isVendorApproved, isVendorLive } from './onboarding-liveness'
+export { isStoreSubmitted, isVendorApproved } from './onboarding-account-status'
 
 /**
  * The first step that is genuinely unfinished, judged by what is actually saved.
  *
  * Deliberately not `onboarding.next_step`: that value is derived and moves backwards.
- * A vendor who has gone live still reports `IN_PROGRESS` with `next_step` pointing at
+ * A vendor who has submitted still reports `IN_PROGRESS` with `next_step` pointing at
  * Step 5 whenever any assigned product lacks a SKU.
  */
 export function earliestIncompleteStep(state: ServerOnboardingState): OnboardingStep {
@@ -130,7 +130,7 @@ export function earliestIncompleteStep(state: ServerOnboardingState): Onboarding
   if (!state.checkout?.schedulingStrategy) return 7
   if (!state.checkout?.payments.length) return 8
   // Step 9 branding cannot be read back, so a resuming vendor always re-confirms it.
-  if (!isVendorLive(state)) return 9
+  if (!isStoreSubmitted(state)) return 9
   return 10
 }
 
@@ -146,7 +146,7 @@ export function earliestIncompleteStep(state: ServerOnboardingState): Onboarding
  * reports for a vendor still in setup is 8.
  */
 export function furthestSavedStep(state: ServerOnboardingState): OnboardingStep | null {
-  if (isVendorLive(state)) return 10
+  if (isStoreSubmitted(state)) return 10
   if (state.checkout?.payments.length) return 8
   if (state.checkout?.schedulingStrategy) return 7
   if (state.skus.length) return 6
@@ -187,7 +187,7 @@ export function backendResumeStep(context: VendorContext): OnboardingStep | null
  * It is not a second opinion, and nothing should prefer it.
  */
 export function resumeStep(state: ServerOnboardingState): OnboardingStep {
-  if (isVendorLive(state)) return 10
+  if (isStoreSubmitted(state)) return 10
   return backendResumeStep(state.context) ?? derivedResumeStep(state)
 }
 
@@ -197,7 +197,7 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
   if (saved === 10) return 10
   const earliest = earliestIncompleteStep(state)
   if (saved === null) return earliest
-  // Step 9 is always re-confirmed, so it is the ceiling for a vendor who is not live.
+  // Step 9 is always re-confirmed, so it is the ceiling before submission.
   const next = Math.min(saved + 1, 9) as OnboardingStep
   return Math.max(earliest, next) as OnboardingStep
 }

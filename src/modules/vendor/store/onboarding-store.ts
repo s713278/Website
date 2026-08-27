@@ -13,7 +13,7 @@ import {
 import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
-  type LivePublication,
+  type StoreSubmission,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
   type OnboardingRuntimeState,
@@ -84,9 +84,9 @@ type OnboardingStore = {
   /** Live plan limit from vendor context; falls back to the configured default. */
   categoryLimit: number
   setCategoryLimit: (limit: number | null) => void
-  /** Server-confirmed publication state; not persisted. */
-  livePublication: LivePublication | null
-  setLivePublication: (publication: LivePublication | null) => void
+  /** Account-confirmed store submission; not persisted. */
+  storeSubmission: StoreSubmission | null
+  setStoreSubmission: (submission: StoreSubmission | null) => void
   /**
    * Platform IDs already assigned on the vendor's account.
    *
@@ -217,7 +217,7 @@ function emptyDraftState(
     persistenceUpdatedAt: null,
     recoveryMessage,
     pendingConflict: null,
-    livePublication: null,
+    storeSubmission: null,
     ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
     hasLocalEdits: false,
@@ -334,6 +334,20 @@ function flushPersistence(): void {
   flushPendingSave()
 }
 
+/**
+ * Whether the vendor has sent their store for review.
+ *
+ * Read from `storeSubmission`, which only the account read and the submit call ever
+ * fill — never from `draft.publication`, which lives in this browser and says
+ * `prototype-complete` after a demo-mode walk that reached no account at all.
+ *
+ * Submission is not approval. A store awaiting an administrator is still submitted, and
+ * still cannot be changed, so this stays true for both.
+ */
+export function selectStoreIsSubmitted(state: { storeSubmission: StoreSubmission | null }): boolean {
+  return state.storeSubmission !== null
+}
+
 export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draft: createEmptyOnboardingDraft(),
   runtime: createEmptyRuntimeState(),
@@ -347,7 +361,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   recoveryMessage: null,
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
-  livePublication: null,
+  storeSubmission: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
   hasLocalEdits: false,
@@ -399,8 +413,8 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     discardDraft(null, SIGNED_OUT_MESSAGE)
   },
 
-  setLivePublication(publication) {
-    set({ livePublication: publication })
+  setStoreSubmission(submission) {
+    set({ storeSubmission: submission })
   },
 
   setAccountCatalog(catalog) {

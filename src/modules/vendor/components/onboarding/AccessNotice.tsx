@@ -1,4 +1,4 @@
-import { BuildingIcon, CircleAlertIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CircleAlertIcon, ClockIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -103,6 +103,27 @@ export function StepNotice({ message }: { message: string }) {
     <div className="flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35">
       <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
       <p className="text-amber-900 dark:text-amber-100">{message}</p>
+    </div>
+  )
+}
+
+/**
+ * Shown on the steps of a store that has already been sent for review.
+ *
+ * Deliberately not the amber `StepNotice`: nothing is wrong here. The vendor did the
+ * thing setup asked of them, and read-only is the consequence of that, so it reads as a
+ * status. It also says what happens next, because a vendor who cannot change anything
+ * and is not told why will assume the page is broken.
+ */
+export function UnderReviewNotice() {
+  return (
+    <div role="status" className="flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5 text-[var(--ob-ink)]">
+      <ClockIcon className="mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
+      <p>
+        <span className="font-semibold">Your store is with us for review. </span>
+        You can look through everything you sent, but it cannot be changed from here while an
+        administrator is deciding. Contact MithraDirect support if something needs to change.
+      </p>
     </div>
   )
 }

@@ -17,7 +17,7 @@ import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-sess
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import {
   buildResumeDraft,
-  isVendorLive,
+  isStoreSubmitted,
   resumePaymentDetails,
   type ServerOnboardingState,
 } from '../../lib/onboarding-resume'
@@ -34,13 +34,13 @@ import {
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { useOnboardingStore } from '../../store/onboarding-store'
+import { selectStoreIsSubmitted, useOnboardingStore } from '../../store/onboarding-store'
 import {
   ONBOARDING_STEPS,
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice, DraftOnlyNotice, StepNotice } from './AccessNotice'
+import { AccessNotice, DraftOnlyNotice, StepNotice, UnderReviewNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpStep, PhoneStep, VerifiedIdentityNotice } from './IdentitySteps'
@@ -112,11 +112,14 @@ export function OnboardingWizard() {
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
-  const setLivePublication = useOnboardingStore((state) => state.setLivePublication)
+  const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
-  const livePublication = useOnboardingStore((state) => state.livePublication)
+  // Read from the account, not the draft: a browser can claim setup needs no more work when
+  // nothing ever reached an account. Once true, setup shows what was sent and stops
+  // offering controls that cannot reach a store already under review.
+  const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
@@ -191,7 +194,7 @@ export function OnboardingWizard() {
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setContextError(null)
-      setLivePublication(null)
+      setStoreSubmission(null)
       setAccountCatalog({ categoryIds: [], productIds: [] })
       setAccountState('idle')
       return
@@ -205,6 +208,7 @@ export function OnboardingWizard() {
     const apply = (server: ServerOnboardingState) => {
       setContextError(null)
       setCategoryLimit(server.context.subscription.limits.maxCategories)
+      const accountStoreIsSubmitted = isStoreSubmitted(server)
       // What is already on the store, and therefore can no longer be unpicked.
       setAccountCatalog({
         categoryIds: server.categories.map((category) => category.platformCategoryId),
@@ -213,8 +217,8 @@ export function OnboardingWizard() {
 
       // A submitted store still has to show its own catalog and settings on Steps 3-9,
       // so it is hydrated like any other — it just opens on the review step instead.
-      setLivePublication(
-        isVendorLive(server)
+      setStoreSubmission(
+        accountStoreIsSubmitted
           ? {
               storeIdentifier: server.context.storeIdentifier,
               approvalStatus: server.context.approvalStatus,
@@ -223,9 +227,11 @@ export function OnboardingWizard() {
           : null,
       )
 
-      // Unsaved local work is the vendor's newest and outranks the account copy.
+      // Unsaved local work is newest only while setup can still accept it. Once the
+      // account says the store was submitted, its snapshot wins: the vendor must land
+      // on review and see what was sent, not an un-actionable browser-only draft.
       const current = useOnboardingStore.getState()
-      if (current.hasLocalEdits) return
+      if (current.hasLocalEdits && !accountStoreIsSubmitted) return
 
       const resumed = buildResumeDraft(server)
       applyResumedDraft(resumed.draft, resumed.furthestVisitedStep, {
@@ -253,7 +259,7 @@ export function OnboardingWizard() {
       .catch((error: unknown) => {
         if (ignore) return
         // The category limit has a usable fallback, but this same call decides whether a
-        // finished store is shown at all. A vendor whose store is live and awaiting
+        // submitted store is shown at all. A vendor whose store is awaiting
         // approval must not be handed an empty wizard with no explanation.
         setContextError(
           getErrorMessage(error, 'Could not load your store details. Some steps may show defaults.'),
@@ -266,7 +272,7 @@ export function OnboardingWizard() {
     return () => {
       ignore = true
     }
-  }, [access, setCategoryLimit, setLivePublication, setAccountCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setStoreSubmission, setAccountCatalog, applyResumedDraft])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -478,7 +484,7 @@ export function OnboardingWizard() {
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
-      // synthetic and nothing behind them was ever written. Without this, go-live would
+      // synthetic and nothing behind them was ever written. Without this, activation would
       // submit a real vendor account from a wizard the UI is presenting as sample data.
       if (!writesReachAccount(draft.referenceMode) || access.state !== 'ready') {
         completePrototype(slug)
@@ -503,19 +509,31 @@ export function OnboardingWizard() {
           return
         }
 
+        // The account just changed, even if local navigation stopped tracking this
+        // request while it was in flight. Never let a stale cache hide the submission.
+        invalidateVendorOnboardingState(access.vendorId)
+        // Do not let a late response attach the previous vendor's state to a new session.
+        if (useAuthStore.getState().user?.vendorId !== access.vendorId) return
+        // The successful account action is enough to establish submission. Details stay
+        // unknown until the read-back below, but a failed status read must not make the
+        // submitted store writable again.
+        setStoreSubmission({
+          storeIdentifier: null,
+          approvalStatus: null,
+          vendorStatus: null,
+        })
+
         // Past this point the store is submitted. The read-back only refines what is
         // shown, so its failure must never be reported as a failed submission — that
         // wording sends the vendor back to press Complete setup again on a store that
-        // is already live.
-        //
-        // The account just changed: anything cached from before go-live is now stale.
-        invalidateVendorOnboardingState(access.vendorId)
+        // is already submitted.
+        if (!requestIsCurrent(controller, 10)) return
         try {
-          // Go-live activates the vendor but approval is a separate admin step, so the
+          // Submission activates the vendor but approval is a separate admin step, so the
           // real state is read back rather than assumed.
           const context = await vendorOnboardingService.getVendorContext(access.vendorId)
           if (!requestIsCurrent(controller, 10)) return
-          setLivePublication({
+          setStoreSubmission({
             storeIdentifier: context.storeIdentifier,
             approvalStatus: context.approvalStatus,
             vendorStatus: context.vendorStatus,
@@ -533,6 +551,14 @@ export function OnboardingWizard() {
       }
       return
     }
+    // A submitted store takes no writes, so Continue is pure navigation through the
+    // steps the vendor is reading back. Validating would be worse than pointless: it
+    // would report readiness problems on a store that is already with an administrator.
+    if (storeIsSubmitted && draft.currentStep < 10) {
+      navigateToStep((draft.currentStep + 1) as OnboardingStep)
+      return
+    }
+
     const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit)
     if (nextIssues.length) return showIssues(nextIssues)
 
@@ -619,15 +645,17 @@ export function OnboardingWizard() {
   })
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
-  // A submitted store is finished whatever the local draft says: `livePublication` comes
-  // from the account, and there is nothing left for "Complete setup" to do.
-  const isComplete =
-    livePublication != null || (publicationState === 'prototype-complete' && completedSteps.includes(10))
+  // A submitted store needs no further setup whatever the local draft says:
+  // `storeSubmission` comes from the account, so "Complete setup" has nothing to do.
+  const setupNeedsNoFurtherAction =
+    storeIsSubmitted || (publicationState === 'prototype-complete' && completedSteps.includes(10))
+  // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send code on WhatsApp'
     : currentStep === 2 ? 'Verify and continue'
-      : currentStep === 9 ? 'Review readiness'
-        : currentStep === 10 ? 'Complete setup'
-          : 'Continue'
+      : storeIsSubmitted ? 'Continue'
+        : currentStep === 9 ? 'Review readiness'
+          : currentStep === 10 ? 'Complete setup'
+            : 'Continue'
   // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
   // rather than only on the ones with an open contract gap.
   //
@@ -679,9 +707,16 @@ export function OnboardingWizard() {
                         <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.625rem] leading-[1.15] font-bold tracking-[-0.03em] text-[var(--ob-ink)] outline-none sm:text-[1.875rem]">{stepMeta.title}</h1>
                         <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">{stepMeta.description}</p>
                       </div>
+                      {/* Both controls act on a draft. Neither can reach a store that is already
+                          with an administrator: the catalog source clears selections the account
+                          still holds, and "start over" deletes this browser's copy of a store that
+                          stays submitted regardless. Offering either would be a lie about what it
+                          does, so a submitted store is shown neither. */}
                       <div className="flex shrink-0 items-center gap-1 pt-1">
+                        {storeIsSubmitted ? null : <>
                         <button
                           type="button"
+                          disabled={busy}
                           onClick={referenceMode === 'live' ? requestSampleCatalog : requestLiveCatalog}
                           aria-label={`${referenceMode === 'live' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
                           className={cn(
@@ -697,6 +732,7 @@ export function OnboardingWizard() {
                         </button>
                         <button
                           type="button"
+                          disabled={busy}
                           onClick={confirmReset}
                           aria-label="Start over"
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]"
@@ -704,6 +740,7 @@ export function OnboardingWizard() {
                           <RotateCcwIcon className="size-3.5" aria-hidden="true" />
                           <span className="hidden min-[700px]:inline">Start over</span>
                         </button>
+                        </>}
                       </div>
                     </div>
 
@@ -729,6 +766,9 @@ export function OnboardingWizard() {
                         {catalogUnlocked && identitySettled && currentStep <= firstNavigableStep ? (
                           <div className="mb-4"><VerifiedIdentityNotice onUseDifferentNumber={confirmUseDifferentNumber} /></div>
                         ) : null}
+                        {catalogUnlocked && storeIsSubmitted && currentStep >= 3 && currentStep < 10 ? (
+                          <div className="mb-4"><UnderReviewNotice /></div>
+                        ) : null}
                         {catalogUnlocked && draftOnlyNotice ? (
                           <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>
                         ) : null}
@@ -738,6 +778,16 @@ export function OnboardingWizard() {
                         {!catalogUnlocked && (currentStep >= 3 || identitySettled) ? (
                           <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmUseDifferentNumber} />
                         ) : null}
+                        {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
+                            hold for every control on Steps 3-9, and threading a flag through six
+                            step components is a rule anything new can be added without. It wraps
+                            the steps only — the notices above carry the sign-out action, which
+                            stays available because it is the only route backwards. Step 10 is the
+                            landing step for a submitted vendor and stays interactive. */}
+                        <fieldset
+                          disabled={storeIsSubmitted && currentStep < 10}
+                          className="min-w-0 border-0 p-0"
+                        >
                         {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
                         {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
                         {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={requestSampleCatalog} /> : null}
@@ -746,6 +796,7 @@ export function OnboardingWizard() {
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                         {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
                         {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} /> : null}
+                        </fieldset>
                       </div>
                     </div>
                   </div>
@@ -755,7 +806,7 @@ export function OnboardingWizard() {
                   <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                      {!(currentStep === 10 && isComplete) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
+                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
                   </div>
                 </div>

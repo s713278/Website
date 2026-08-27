@@ -31,7 +31,7 @@ export function homePathForUser(user: User) {
  * vendor who still needs it must never be stranded on a dashboard with no route back.
  */
 export function vendorLandingPath(entry: OnboardingEntry | null) {
-  return entry?.kind === 'complete' ? homePathForRole('vendor') : VENDOR_ONBOARDING_HREF
+  return entry?.kind === 'submitted' ? homePathForRole('vendor') : VENDOR_ONBOARDING_HREF
 }
 
 /**
@@ -44,7 +44,7 @@ export function vendorLandingPath(entry: OnboardingEntry | null) {
  * checkout is not dragged into store setup instead.
  *
  * `entry` carries the vendor's account state when the caller has already resolved it,
- * so a finished store is not routed into the wizard only to be bounced out again.
+ * so a submitted store is not routed into setup only to be bounced out again.
  */
 export function resumePathAfterLogin(
   user: User,

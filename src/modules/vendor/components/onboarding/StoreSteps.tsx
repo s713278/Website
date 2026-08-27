@@ -27,7 +27,7 @@ import { readinessIssues } from '../../lib/onboarding-validation'
 import { StepNotice } from './AccessNotice'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type {
-  LivePublication,
+  StoreSubmission,
   OnboardingStep,
   StorefrontButtonShape,
   StorefrontCardStyle,
@@ -384,10 +384,10 @@ function storeUrl(storeIdentifier: string): string {
   return `${origin}/stores/${storeIdentifier}`
 }
 
-function ShareStore({ publication }: { publication: LivePublication }) {
+function ShareStore({ submission }: { submission: StoreSubmission }) {
   const [copied, setCopied] = useState(false)
-  const approved = publication.approvalStatus?.toUpperCase() === 'APPROVED'
-  const identifier = publication.storeIdentifier
+  const approved = submission.approvalStatus?.toUpperCase() === 'APPROVED'
+  const identifier = submission.storeIdentifier
   const url = identifier ? storeUrl(identifier) : null
   const shareable = approved && Boolean(url)
 
@@ -434,8 +434,8 @@ function ShareStore({ publication }: { publication: LivePublication }) {
   )
 }
 
-function LiveCompletion({ publication }: { publication: LivePublication }) {
-  const approved = publication.approvalStatus?.toUpperCase() === 'APPROVED'
+function SubmissionStatus({ submission }: { submission: StoreSubmission }) {
+  const approved = submission.approvalStatus?.toUpperCase() === 'APPROVED'
   return (
     <div className="space-y-5">
       <div className="rounded-xl bg-[var(--ob-brand-soft)] p-5 text-foreground">
@@ -453,7 +453,7 @@ function LiveCompletion({ publication }: { publication: LivePublication }) {
             : 'Everything you set up has been saved to your store. MithraDirect reviews new stores before they go public, so it is not reachable by customers yet.'}
         </p>
       </div>
-      <ShareStore publication={publication} />
+      <ShareStore submission={submission} />
     </div>
   )
 }
@@ -461,7 +461,7 @@ function LiveCompletion({ publication }: { publication: LivePublication }) {
 export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) => void }) {
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
-  const livePublication = useOnboardingStore((state) => state.livePublication)
+  const storeSubmission = useOnboardingStore((state) => state.storeSubmission)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const issues = readinessIssues(draft, runtime, categoryLimit)
   const completed =
@@ -469,7 +469,7 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
     draft.completedSteps.includes(10) &&
     Boolean(draft.publication.draftSlug)
 
-  if (livePublication) return <LiveCompletion publication={livePublication} />
+  if (storeSubmission) return <SubmissionStatus submission={storeSubmission} />
 
   if (!completed) {
     return (

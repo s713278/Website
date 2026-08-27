@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import type { OnboardingStep } from '../types/onboarding'
-import { useOnboardingStore } from './onboarding-store'
+import { selectStoreIsSubmitted, useOnboardingStore } from './onboarding-store'
 
 /**
  * `updateDraft`'s second argument is destructive by design: it exists to throw away
@@ -168,5 +168,56 @@ describe('an assignment recorded mid-visit', () => {
 
     expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(true)
     expect(useOnboardingStore.getState().isProductAssigned(45)).toBe(true)
+  })
+})
+
+/**
+ * A submitted store cannot be changed or started over, so setup has to know it is
+ * submitted before it decides what to offer. The answer comes from `storeSubmission`,
+ * which the entry read fills from the account — never from the local draft, which a
+ * vendor's own browser can claim anything about.
+ */
+describe('whether the store is submitted', () => {
+  beforeEach(() => {
+    useOnboardingStore.getState().setStoreSubmission(null)
+  })
+
+  it('is false while the account reports no submission', () => {
+    expect(selectStoreIsSubmitted(useOnboardingStore.getState())).toBe(false)
+  })
+
+  it('is true once the account reports one', () => {
+    useOnboardingStore.getState().setStoreSubmission({
+      storeIdentifier: 'sk-organic-store',
+      vendorStatus: 'ACTIVE',
+      approvalStatus: 'PENDING',
+    })
+
+    expect(selectStoreIsSubmitted(useOnboardingStore.getState())).toBe(true)
+  })
+
+  it('stays true when submission succeeded but its status read-back failed', () => {
+    // The successful account action is evidence of submission even when the follow-up
+    // read cannot yet refine the store identifier and approval details.
+    useOnboardingStore.getState().setStoreSubmission({
+      storeIdentifier: null,
+      vendorStatus: null,
+      approvalStatus: null,
+    })
+
+    expect(selectStoreIsSubmitted(useOnboardingStore.getState())).toBe(true)
+  })
+
+  it('ignores a local draft that claims completion', () => {
+    // `publication.state` lives in the browser draft. Demo mode and a prototype walk
+    // both set it, and neither means anything reached an account.
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        publication: { state: 'prototype-complete', draftSlug: 'my-store', completedAt: '2026-08-27' },
+      },
+    })
+
+    expect(selectStoreIsSubmitted(useOnboardingStore.getState())).toBe(false)
   })
 })

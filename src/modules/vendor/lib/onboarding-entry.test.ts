@@ -18,7 +18,7 @@ function state(
     vendorStatus,
     approvalStatus,
     membershipRole: 'OWNER',
-    // Deliberately claims IN_PROGRESS even when live — the backend really does this.
+    // Deliberately claims IN_PROGRESS after submission — the backend really does this.
     onboarding: { status: 'IN_PROGRESS', description: 'Step 5 is completed', nextStep: 5 },
     subscription: {
       tier: 'SILVER',
@@ -72,19 +72,19 @@ const vendor: User = {
 }
 
 describe('resolveOnboardingEntry', () => {
-  it('treats a submitted store awaiting approval as complete', () => {
-    expect(resolveOnboardingEntry(state('ACTIVE', 'PENDING'))).toEqual({ kind: 'complete' })
+  it('reports a submitted store awaiting approval as submitted', () => {
+    expect(resolveOnboardingEntry(state('ACTIVE', 'PENDING'))).toEqual({ kind: 'submitted' })
   })
 
-  it('treats an approved store as complete', () => {
-    expect(resolveOnboardingEntry(state('ACTIVE', 'APPROVED'))).toEqual({ kind: 'complete' })
+  it('keeps an approved store in the submitted route state', () => {
+    expect(resolveOnboardingEntry(state('ACTIVE', 'APPROVED'))).toEqual({ kind: 'submitted' })
   })
 
-  it('ignores the backend onboarding block, which reports IN_PROGRESS even when live', () => {
-    const live = state('ACTIVE', 'PENDING')
-    expect(live.context.onboarding.status).toBe('IN_PROGRESS')
-    expect(live.context.onboarding.nextStep).toBe(5)
-    expect(resolveOnboardingEntry(live).kind).toBe('complete')
+  it('ignores the backend onboarding block, which reports IN_PROGRESS after submission', () => {
+    const submitted = state('ACTIVE', 'PENDING')
+    expect(submitted.context.onboarding.status).toBe('IN_PROGRESS')
+    expect(submitted.context.onboarding.nextStep).toBe(5)
+    expect(resolveOnboardingEntry(submitted).kind).toBe('submitted')
   })
 
   it('resumes an unfinished store at its first unsaved step', () => {
@@ -101,7 +101,7 @@ describe('resolveOnboardingEntry', () => {
 })
 
 describe('vendorLandingPath', () => {
-  it('sends a completed store to the dashboard, never back into setup', () => {
+  it('sends a submitted store to the dashboard, never back into setup', () => {
     expect(vendorLandingPath(resolveOnboardingEntry(state('ACTIVE', 'PENDING')))).toBe('/vendor')
     expect(vendorLandingPath(resolveOnboardingEntry(state('ACTIVE', 'APPROVED')))).toBe('/vendor')
   })

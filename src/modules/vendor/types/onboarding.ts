@@ -142,10 +142,10 @@ export type StorefrontDraft = {
 }
 
 /**
- * Result of a real go-live. Never persisted: approval state belongs to the server,
+ * Account-confirmed submission. Never persisted: approval state belongs to the server,
  * and a stale local copy would let the wizard claim a store is public when it is not.
  */
-export type LivePublication = {
+export type StoreSubmission = {
   storeIdentifier: string | null
   approvalStatus: string | null
   vendorStatus: string | null
