@@ -352,14 +352,46 @@ export function selectCatalogSource(
   return state.draft.catalogSource
 }
 
-/** Whether the draft may move from its current catalog source to `target`. */
-export function selectCanSwitchCatalogSource(
+/** Which catalog source a switch would move to and back from. */
+export type CatalogPolicy = {
+  /** Whether the draft may move from its current catalog source to `target`. */
+  canSwitchTo: (target: CatalogSource) => boolean
+  /** Whether the catalog-source control that offers the sample catalog is rendered. */
+  sampleControlVisible: boolean
+  /** Whether the control that authors into the platform catalog is rendered. */
+  createControlVisible: boolean
+  /** Whether Continue is refused because the draft cannot reach an account from here. */
+  continueBlocked: boolean
+}
+
+/**
+ * The one answer to every question about which catalog controls appear and what they do.
+ *
+ * The transport is an explicit argument rather than read from `isLiveApi()` so the whole
+ * rule is a pure function of state — testable without rendering, and unable to drift from
+ * the catalog-source control the way six scattered `liveApi` reads in the wizard could.
+ *
+ * A live API has one catalog: the vendor's account. Sample data is synthetic, so it is
+ * offered only in demo mode, and only until the business type step fixes the catalog its
+ * IDs belong to. A draft that carried a sample source into a live deployment is refused at
+ * Continue, because nothing behind those IDs was ever written to an account.
+ */
+export function selectCatalogPolicy(
   state: { draft: Pick<VendorOnboardingDraftV1, 'catalogSource' | 'completedSteps'> },
-  target: CatalogSource,
-): boolean {
+  { liveApi }: { liveApi: boolean },
+): CatalogPolicy {
   const current = selectCatalogSource(state)
-  if (target === current) return false
-  return target === 'account' || !state.draft.completedSteps.includes(3)
+  const businessTypeStepComplete = state.draft.completedSteps.includes(3)
+  return {
+    canSwitchTo(target) {
+      if (liveApi) return false
+      if (target === current) return false
+      return target === 'account' || !businessTypeStepComplete
+    },
+    sampleControlVisible: !liveApi,
+    createControlVisible: current === 'account',
+    continueBlocked: liveApi && current === 'sample',
+  }
 }
 
 /**

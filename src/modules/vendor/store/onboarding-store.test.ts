@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
-import type { OnboardingStep } from '../types/onboarding'
+import type { CatalogSource, OnboardingStep } from '../types/onboarding'
 import {
-  selectCanSwitchCatalogSource,
+  selectCatalogPolicy,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from './onboarding-store'
@@ -88,47 +88,96 @@ describe('completeStep and account sync', () => {
   })
 })
 
-describe('catalog source switching', () => {
-  it('allows switching from the account catalog to the sample catalog only before the business type step is complete', () => {
-    useOnboardingStore.setState({
-      draft: {
-        ...createEmptyOnboardingDraft(),
-        catalogSource: 'account',
-        completedSteps: [1, 2],
-      },
+/**
+ * The whole catalog rule — which controls appear, which switches are allowed, and when
+ * Continue is refused — is answered by one selector so it can be checked without rendering
+ * the wizard. The transport is an explicit argument, not read from the environment, so a
+ * live API and demo mode are both reachable here. These lock the two behaviours that used
+ * to live untested in the component: sample is unreachable under a live API, and a stale
+ * sample draft cannot Continue there.
+ */
+describe('selectCatalogPolicy', () => {
+  function catalogState(catalogSource: CatalogSource, completedSteps: OnboardingStep[]) {
+    return { draft: { ...createEmptyOnboardingDraft(), catalogSource, completedSteps } }
+  }
+
+  describe('canSwitchTo, in demo mode', () => {
+    it('allows account→sample only before the business type step is complete', () => {
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).canSwitchTo('sample'),
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2, 3]), { liveApi: false }).canSwitchTo('sample'),
+      ).toBe(false)
     })
 
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')).toBe(true)
+    it('allows sample→account before or after the business type step is complete', () => {
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).canSwitchTo('account'),
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2, 3]), { liveApi: false }).canSwitchTo('account'),
+      ).toBe(true)
+    })
 
-    useOnboardingStore.setState((state) => ({
-      draft: {
-        ...state.draft,
-        completedSteps: [1, 2, 3],
-      },
-    }))
-
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')).toBe(false)
+    it('refuses switching to the source already in effect', () => {
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).canSwitchTo('account'),
+      ).toBe(false)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).canSwitchTo('sample'),
+      ).toBe(false)
+    })
   })
 
-  it('allows switching from the sample catalog to the account catalog before or after the business type step is complete', () => {
-    useOnboardingStore.setState({
-      draft: {
-        ...createEmptyOnboardingDraft(),
-        catalogSource: 'sample',
-        completedSteps: [1, 2],
-      },
+  describe('under a live API', () => {
+    it('refuses every catalog-source switch, including to sample before the business type step', () => {
+      // The demo-mode rule would allow account→sample here; the transport overrides it,
+      // which is the whole reason the transport is an argument.
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true }).canSwitchTo('sample'),
+      ).toBe(false)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: true }).canSwitchTo('account'),
+      ).toBe(false)
     })
 
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')).toBe(true)
+    it('blocks Continue for a stale sample draft, and only then', () => {
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: true }).continueBlocked,
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true }).continueBlocked,
+      ).toBe(false)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).continueBlocked,
+      ).toBe(false)
+    })
+  })
 
-    useOnboardingStore.setState((state) => ({
-      draft: {
-        ...state.draft,
-        completedSteps: [1, 2, 3],
-      },
-    }))
+  describe('control visibility', () => {
+    it('shows the sample catalog control only in demo mode', () => {
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).sampleControlVisible,
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true }).sampleControlVisible,
+      ).toBe(false)
+    })
 
-    expect(selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')).toBe(true)
+    it('shows the create control only while the account catalog is in effect', () => {
+      // Authoring writes into the account catalog; there is nothing to author into the
+      // synthetic sample data, so the control follows the source, not the transport.
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true }).createControlVisible,
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).createControlVisible,
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).createControlVisible,
+      ).toBe(false)
+    })
   })
 })
 

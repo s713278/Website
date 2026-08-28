@@ -35,7 +35,7 @@ import {
 } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import {
-  selectCanSwitchCatalogSource,
+  selectCatalogPolicy,
   selectCatalogSource,
   selectStoreIsSubmitted,
   useOnboardingStore,
@@ -102,12 +102,6 @@ export function OnboardingWizard() {
   const completedSteps = useOnboardingStore((state) => state.draft.completedSteps)
   const furthestVisitedStep = useOnboardingStore((state) => state.furthestVisitedStep)
   const catalogSource = useOnboardingStore(selectCatalogSource)
-  const canSwitchCatalogSource = useOnboardingStore((state) => selectCanSwitchCatalogSource(
-    state,
-    selectCatalogSource(state) === 'account' ? 'sample' : 'account',
-  ))
-  const canUseSampleCatalog = useOnboardingStore((state) =>
-    selectCanSwitchCatalogSource(state, 'sample'))
   const publicationState = useOnboardingStore((state) => state.draft.publication.state)
   const persistenceInitialized = useOnboardingStore((state) => state.persistenceInitialized)
   const persistenceStatus = useOnboardingStore((state) => state.persistenceStatus)
@@ -141,6 +135,10 @@ export function OnboardingWizard() {
   const { access } = useOnboardingDraftSession()
   const catalogUnlocked = canEnterCatalogSteps(access)
   const liveApi = isLiveApi()
+  // One answer for every catalog control below: switch permission, control visibility, and
+  // the Continue block. Recomputes from the subscribed `catalogSource`/`completedSteps`, so
+  // the handlers and the render agree without re-reading the store in each one.
+  const catalogPolicy = selectCatalogPolicy({ draft: { catalogSource, completedSteps } }, { liveApi })
 
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -333,10 +331,7 @@ export function OnboardingWizard() {
   }
 
   const requestSampleCatalog = () => {
-    if (
-      liveApi ||
-      !selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'sample')
-    ) return
+    if (!catalogPolicy.canSwitchTo('sample')) return
     requestConfirmation({
       title: 'Switch the whole catalog to sample data?',
       description: 'This clears the current business type, categories, products, and their sizes and prices, because sample and live IDs cannot be mixed.',
@@ -357,7 +352,7 @@ export function OnboardingWizard() {
   }
 
   const requestLiveCatalog = () => {
-    if (!selectCanSwitchCatalogSource(useOnboardingStore.getState(), 'account')) return
+    if (!catalogPolicy.canSwitchTo('account')) return
     requestConfirmation({
       title: 'Return to the live catalog?',
       description: 'Sample selections will be cleared before live data loads because their IDs are not compatible.',
@@ -498,7 +493,7 @@ export function OnboardingWizard() {
     if (!catalogUnlocked) return
     // A draft created in demo mode can survive a later deployment/configuration change.
     // It must not retain the old silent-success path after the sample controls disappear.
-    if (liveApi && draft.catalogSource === 'sample') {
+    if (catalogPolicy.continueBlocked) {
       showIssues([{
         step: draft.currentStep,
         field: stepErrorField(draft.currentStep),
@@ -693,7 +688,7 @@ export function OnboardingWizard() {
   const draftOnlyNotice = currentStep < 3 || liveApi
     ? null
     : 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
-  const sampleCatalogFallback = !liveApi && canUseSampleCatalog
+  const sampleCatalogFallback = catalogPolicy.canSwitchTo('sample')
     ? requestSampleCatalog
     : undefined
   const moveMobileTab = (view: 'form' | 'preview') => {
@@ -745,10 +740,10 @@ export function OnboardingWizard() {
                           does, so a submitted store is shown neither. */}
                       <div className="flex shrink-0 items-center gap-1 pt-1">
                         {storeIsSubmitted ? null : <>
-                        {!liveApi ? (
+                        {catalogPolicy.sampleControlVisible ? (
                         <button
                           type="button"
-                          disabled={busy || !canSwitchCatalogSource}
+                          disabled={busy || !catalogPolicy.canSwitchTo(catalogSource === 'account' ? 'sample' : 'account')}
                           onClick={catalogSource === 'account' ? requestSampleCatalog : requestLiveCatalog}
                           aria-label={`${catalogSource === 'account' ? 'Live' : 'Sample'} catalog. Change catalog mode.`}
                           className={cn(
