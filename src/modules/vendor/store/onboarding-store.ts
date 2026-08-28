@@ -13,6 +13,7 @@ import {
 import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
+  type CatalogSource,
   type StoreSubmission,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
@@ -334,22 +335,20 @@ function flushPersistence(): void {
   flushPendingSave()
 }
 
-export type CatalogSource = 'account' | 'sample'
+export type { CatalogSource }
 
-/** Catalog-source vocabulary for the persisted version-3 draft shape. */
+/** The catalog the vendor is choosing from. */
 export function selectCatalogSource(
-  state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode'> },
+  state: { draft: Pick<VendorOnboardingDraftV1, 'catalogSource'> },
 ): CatalogSource {
-  return state.draft.referenceMode === 'live' ? 'account' : 'sample'
+  return state.draft.catalogSource
 }
 
 /** Whether the draft may move from its current catalog source to `target`. */
 export function selectCanSwitchCatalogSource(
-  state: { draft: Pick<VendorOnboardingDraftV1, 'referenceMode' | 'completedSteps'> },
+  state: { draft: Pick<VendorOnboardingDraftV1, 'catalogSource' | 'completedSteps'> },
   target: CatalogSource,
 ): boolean {
-  // `referenceMode: 'live'` is the persisted version-3 vocabulary. Its schema rename is
-  // deliberately deferred; the public rule should not make transport and source synonyms.
   const current = selectCatalogSource(state)
   if (target === current) return false
   return target === 'account' || !state.draft.completedSteps.includes(3)

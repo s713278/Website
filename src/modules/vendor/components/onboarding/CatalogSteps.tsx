@@ -102,7 +102,7 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
 export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
-  const references = useBusinessTypeReferences(draft.referenceMode)
+  const references = useBusinessTypeReferences(draft.catalogSource)
   const loadMoreBusinessTypes = references.loadMore
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [infiniteScrollArmed, setInfiniteScrollArmed] = useState(false)
@@ -130,7 +130,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   useEffect(() => {
     setInfiniteScrollArmed(false)
-  }, [draft.referenceMode, references.committedQuery])
+  }, [draft.catalogSource, references.committedQuery])
 
   useEffect(() => {
     if (infiniteScrollArmed) return
@@ -170,7 +170,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
     return () => observer.disconnect()
   }, [
     canLoadMore,
-    draft.referenceMode,
+    draft.catalogSource,
     infiniteScrollArmed,
     loadMoreBusinessTypes,
     references.committedQuery,
@@ -219,7 +219,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
               type="search"
               value={references.searchInput}
               onChange={(event) => references.setSearchInput(event.target.value)}
-              placeholder={draft.referenceMode === 'live' ? 'Search live business types' : 'Search sample business types'}
+              placeholder={draft.catalogSource === 'account' ? 'Search live business types' : 'Search sample business types'}
               aria-controls="business-type"
               aria-busy={references.searchPending || references.loading}
               enterKeyHint="search"
@@ -228,7 +228,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
             />
           </div>
         </form>
-        {initialError && draft.referenceMode === 'live' ? (
+        {initialError && draft.catalogSource === 'account' ? (
           <CatalogError message={references.error ?? 'The live business catalog could not be loaded.'} onRetry={references.retry} onUseSample={onUseSample} />
         ) : null}
         {!references.loading && !references.error && !references.searchPending && !items.length ? (
@@ -341,7 +341,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
   const businessTypeId = draft.business.businessType?.id ?? null
-  const references = useCategoryReferences(draft.referenceMode, businessTypeId)
+  const references = useCategoryReferences(draft.catalogSource, businessTypeId)
   const query = search.trim().toLowerCase()
   const availableItems = appendMissingReferenceItems(references.items, draft.categories)
   const loadedItems = query
@@ -388,7 +388,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      {writesReachAccount(draft.referenceMode) ? <PermanenceNotice kind="categories" /> : null}
+      {writesReachAccount(draft.catalogSource) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
       <p className="text-sm text-[var(--ob-ink-soft)]">{draft.categories.length} of {categoryLimit} selected</p>
       <div className="relative">
@@ -403,7 +403,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         />
       </div>
       {references.loading ? <CatalogLoading /> : null}
-      {references.error && draft.referenceMode === 'live' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
@@ -467,7 +467,7 @@ function ProductCategoryPicker({
 }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
-  const references = useProductReferences(draft.referenceMode, categoryId)
+  const references = useProductReferences(draft.catalogSource, categoryId)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
@@ -543,7 +543,7 @@ function ProductCategoryPicker({
       </div>
       {blocked ? <div className="mb-3"><StepNotice message={blocked} /></div> : null}
       {references.loading ? <CatalogLoading count={4} /> : null}
-      {references.error && draft.referenceMode === 'live' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !items.length ? (
         <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
       ) : null}
@@ -589,7 +589,7 @@ function ProductCategoryPicker({
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const categories = useOnboardingStore((state) => state.draft.categories)
-  const referenceMode = useOnboardingStore((state) => state.draft.referenceMode)
+  const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
   const summary = useMemo(
     () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
@@ -604,7 +604,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
 
   return (
     <div className="space-y-4">
-      {writesReachAccount(referenceMode) ? <PermanenceNotice kind="products" /> : null}
+      {writesReachAccount(catalogSource) ? <PermanenceNotice kind="products" /> : null}
       <div className="flex flex-wrap gap-2 text-xs">
         {summary.map((category) => (
           <span key={category.id} className="rounded-full bg-muted px-2.5 py-1 font-medium">

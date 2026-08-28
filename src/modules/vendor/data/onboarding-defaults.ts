@@ -30,7 +30,7 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     version: ONBOARDING_DRAFT_VERSION,
     currentStep: 1,
     completedSteps: [],
-    referenceMode: 'live',
+    catalogSource: 'account',
     maskedPhone: null,
     mobileVerified: false,
     business: {

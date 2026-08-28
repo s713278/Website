@@ -346,7 +346,7 @@ describe('a partial resume still produces a loadable draft', () => {
   it('round-trips through the draft validator', () => {
     const { draft, furthestVisitedStep } = buildResumeDraft(stateWithoutBusinessTypes())
     const envelope = {
-      version: 3,
+      version: 4,
       revision: 1,
       updatedAt: new Date().toISOString(),
       ownerId: '91',

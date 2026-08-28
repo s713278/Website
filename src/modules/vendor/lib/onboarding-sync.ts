@@ -9,10 +9,10 @@ import {
   type VendorSkuRef,
 } from '@/shared/api'
 import type {
+  CatalogSource,
   DraftSku,
   OnboardingRuntimeState,
   OnboardingStep,
-  ReferenceMode,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
 import { serverSkuIdOf } from './onboarding-sku-id'
@@ -36,8 +36,8 @@ export function isLivePersistedStep(step: OnboardingStep): boolean {
  * written to a real account. Both the Continue write and the steps that warn a choice is
  * permanent ask this, so a notice cannot claim a permanence that demo mode doesn't have.
  */
-export function writesReachAccount(referenceMode: ReferenceMode): boolean {
-  return isLiveApi() && referenceMode === 'live'
+export function writesReachAccount(catalogSource: CatalogSource): boolean {
+  return isLiveApi() && catalogSource === 'account'
 }
 
 /** Field to focus when a save for this step fails. */

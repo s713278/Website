@@ -16,7 +16,7 @@ import {
   readReferenceCache,
   writeReferenceCache,
 } from '../lib/onboarding-catalog-cache'
-import { ONBOARDING_CONFIG, type ReferenceMode } from '../types/onboarding'
+import { ONBOARDING_CONFIG, type CatalogSource } from '../types/onboarding'
 
 type PagedReferenceState<T> = {
   items: T[]
@@ -290,7 +290,7 @@ function usePagedReference<T extends { id: number }>(
 }
 
 export function useBusinessTypeReferences(
-  mode: ReferenceMode,
+  mode: CatalogSource,
 ): BusinessTypeReferenceResult {
   const search = useBusinessTypeSearch(
     ONBOARDING_CONFIG.businessTypeSearchDebounceMs,
@@ -381,7 +381,7 @@ export function useBusinessTypeReferences(
 }
 
 export function useCategoryReferences(
-  mode: ReferenceMode,
+  mode: CatalogSource,
   businessTypeId: number | null,
 ): PagedReferenceResult<CategoryReference> {
   return usePagedReference(
@@ -415,7 +415,7 @@ export function useCategoryReferences(
 }
 
 export function useProductReferences(
-  mode: ReferenceMode,
+  mode: CatalogSource,
   categoryId: number,
 ): PagedReferenceResult<ProductReference> {
   return usePagedReference(

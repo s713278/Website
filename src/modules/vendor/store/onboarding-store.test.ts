@@ -93,7 +93,7 @@ describe('catalog source switching', () => {
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
-        referenceMode: 'live',
+        catalogSource: 'account',
         completedSteps: [1, 2],
       },
     })
@@ -114,7 +114,7 @@ describe('catalog source switching', () => {
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
-        referenceMode: 'sample',
+        catalogSource: 'sample',
         completedSteps: [1, 2],
       },
     })

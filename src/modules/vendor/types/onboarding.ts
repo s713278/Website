@@ -4,7 +4,7 @@ import type {
   ProductReference,
 } from '@/shared/api'
 
-export const ONBOARDING_DRAFT_VERSION = 3 as const
+export const ONBOARDING_DRAFT_VERSION = 4 as const
 export const ONBOARDING_CONFIG = {
   /** Fallback only. The real limit comes from vendor context subscription limits. */
   maxCategories: 2,
@@ -16,7 +16,11 @@ export const ONBOARDING_CONFIG = {
 } as const
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-export type ReferenceMode = 'live' | 'sample'
+/**
+ * Which catalog a vendor is choosing from. `live` survives only as a transport name
+ * (`isLiveApi`, `LIVE_PERSISTED_STEPS`); it never names a catalog source. See `CONTEXT.md`.
+ */
+export type CatalogSource = 'account' | 'sample'
 export type MeasurementType = 'WEIGHT' | 'VOLUME' | 'COUNT'
 export type FulfillmentType = 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
 export type OrderAcceptancePolicy = 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
@@ -40,9 +44,23 @@ export type Weekday =
   | 'SATURDAY'
   | 'SUNDAY'
 
-export type SelectedProduct = ProductReference & {
-  categoryId: number
+/**
+ * A vendor-authored entry that exists only in the draft and has not yet been created in
+ * the platform catalog. It carries a negative id from the pending band (see
+ * `onboarding-pending-id.ts`) so draft-internal references keep working, and `pending: true`
+ * so the persistence invariant can tell it from an account entry. On a successful create the
+ * negative id is replaced by the returned positive one and `pending` is dropped.
+ */
+export type PendingEntry = {
+  pending?: true
 }
+
+export type DraftCategory = CategoryReference & PendingEntry
+
+export type SelectedProduct = ProductReference &
+  PendingEntry & {
+    categoryId: number
+  }
 
 export type DraftSku = {
   id: string
@@ -161,7 +179,7 @@ export type VendorOnboardingDraftV1 = {
   version: typeof ONBOARDING_DRAFT_VERSION
   currentStep: OnboardingStep
   completedSteps: OnboardingStep[]
-  referenceMode: ReferenceMode
+  catalogSource: CatalogSource
   maskedPhone: string | null
   mobileVerified: boolean
   business: {
@@ -170,7 +188,7 @@ export type VendorOnboardingDraftV1 = {
     ownerName: string
     contactPerson: string
   }
-  categories: CategoryReference[]
+  categories: DraftCategory[]
   products: SelectedProduct[]
   skus: DraftSku[]
   delivery: DeliveryDraft

@@ -50,6 +50,12 @@ Which catalog the vendor is choosing from — the account catalog or the sample 
 Chosen once at the start of setup.
 _Avoid_: reference mode, live catalog, catalog mode
 
+**Pending entry**:
+A vendor-authored category or product that exists only in the draft and has not yet
+been created in the platform catalog. It stops being pending the moment Continue
+succeeds; in demo mode it stays pending forever.
+_Avoid_: unsaved entry, local entry, draft category
+
 ### Modes
 
 **Live API**:

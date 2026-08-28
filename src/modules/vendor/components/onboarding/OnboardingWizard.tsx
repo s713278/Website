@@ -343,7 +343,7 @@ export function OnboardingWizard() {
         cancelActiveRequest()
         updateDraft((current) => ({
           ...current,
-          referenceMode: 'sample',
+          catalogSource: 'sample',
           business: { ...current.business, businessType: null },
           categories: [],
           products: [],
@@ -364,7 +364,7 @@ export function OnboardingWizard() {
         cancelActiveRequest()
         updateDraft((current) => ({
           ...current,
-          referenceMode: 'live',
+          catalogSource: 'account',
           business: { ...current.business, businessType: null },
           categories: [],
           products: [],
@@ -495,7 +495,7 @@ export function OnboardingWizard() {
     if (!catalogUnlocked) return
     // A draft created in demo mode can survive a later deployment/configuration change.
     // It must not retain the old silent-success path after the sample controls disappear.
-    if (liveApi && draft.referenceMode === 'sample') {
+    if (liveApi && draft.catalogSource === 'sample') {
       showIssues([{
         step: draft.currentStep,
         field: stepErrorField(draft.currentStep),
@@ -511,7 +511,7 @@ export function OnboardingWizard() {
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
       // synthetic and nothing behind them was ever written. Without this, activation would
       // submit a real vendor account from a wizard the UI is presenting as sample data.
-      if (!writesReachAccount(draft.referenceMode) || access.state !== 'ready') {
+      if (!writesReachAccount(draft.catalogSource) || access.state !== 'ready') {
         completePrototype(slug)
         return
       }
@@ -589,7 +589,7 @@ export function OnboardingWizard() {
 
     const step = draft.currentStep
     const shouldPersist =
-      writesReachAccount(draft.referenceMode) &&
+      writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
       access.state === 'ready'
 
