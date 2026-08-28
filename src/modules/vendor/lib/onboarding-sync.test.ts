@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { VendorSkuRef } from '@/shared/api'
 import type { DraftSku, SelectedProduct } from '../types/onboarding'
-import { planSkuWrites } from './onboarding-sync'
+import { categoriesToAssign, planSkuWrites } from './onboarding-sync'
 
 /** platform product id -> vendor product id */
 const productIds = new Map([[31, 900], [32, 901]])
@@ -233,5 +233,23 @@ describe('the identity fallback is limited to rows that were on the account', ()
 
     expect(plan.deletes).toEqual([])
     expect(plan.creates.map((entry) => entry.sku.id)).toEqual(['draft-sku-31-9'])
+  })
+})
+
+describe('categoriesToAssign', () => {
+  it('keeps only draft categories the account does not already hold', () => {
+    expect(categoriesToAssign([10, 11, 12], [11])).toEqual([10, 12])
+  })
+
+  it('returns nothing when every draft category is already assigned', () => {
+    expect(categoriesToAssign([10, 11], [10, 11, 99])).toEqual([])
+  })
+
+  it('assigns everything when the account holds no categories yet', () => {
+    expect(categoriesToAssign([10, 11], [])).toEqual([10, 11])
+  })
+
+  it('preserves the draft order of the categories it keeps', () => {
+    expect(categoriesToAssign([12, 10, 11], [10])).toEqual([12, 11])
   })
 })

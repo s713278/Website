@@ -319,6 +319,40 @@ export function planSkuWrites(
   return { creates, deletes }
 }
 
+/**
+ * The platform categories to send on a category write: the draft's, minus the ones the
+ * account already holds.
+ *
+ * `PATCH /v1/vendors/{id}/categories` is additive and answers 417 if any id in the body
+ * is already assigned, failing the whole request — so re-sending a held id traps the
+ * vendor on the step. An empty result means there is nothing new and the caller skips the
+ * request entirely. Mirrors the account filter `persistProducts` already applies. See
+ * docs/API_GAPS.md.
+ */
+export function categoriesToAssign(
+  draftCategoryIds: number[],
+  assignedPlatformCategoryIds: Iterable<number>,
+): number[] {
+  const assigned = new Set(assignedPlatformCategoryIds)
+  return draftCategoryIds.filter((id) => !assigned.has(id))
+}
+
+async function persistCategories(
+  vendorId: string,
+  draft: VendorOnboardingDraftV1,
+  onAssigned: OnAssigned,
+): Promise<void> {
+  const existing = await vendorOnboardingService.getVendorCategories(vendorId)
+  const categoryIds = categoriesToAssign(
+    draft.categories.map((category) => category.id),
+    existing.map((category) => category.platformCategoryId),
+  )
+  // Nothing new to assign: skip the additive PATCH that would 417, and let Continue advance.
+  if (!categoryIds.length) return
+  await vendorOnboardingService.saveCategories(vendorId, categoryIds)
+  onAssigned({ categoryIds })
+}
+
 async function persistProducts(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
@@ -413,13 +447,7 @@ export async function persistStep(
     return
   }
 
-  if (step === 4) {
-    const categoryIds = draft.categories.map((category) => category.id)
-    await vendorOnboardingService.saveCategories(vendorId, categoryIds)
-    onAssigned({ categoryIds })
-    return
-  }
-
+  if (step === 4) return persistCategories(vendorId, draft, onAssigned)
   if (step === 5) return persistProducts(vendorId, draft, onAssigned)
   if (step === 6) return persistSkus(vendorId, draft)
 
