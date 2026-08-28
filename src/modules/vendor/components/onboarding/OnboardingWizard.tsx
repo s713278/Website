@@ -121,6 +121,7 @@ export function OnboardingWizard() {
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
   const setMeasurementCatalog = useOnboardingStore((state) => state.setMeasurementCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
+  const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
@@ -598,7 +599,7 @@ export function OnboardingWizard() {
         // Each write reports what it put on the account, so a step that fails part way
         // still records the part that landed. No re-read: the write is the evidence, and
         // confirming it would add a request to every Continue.
-        await persistStep(step, access.vendorId, draft, runtime, recordAssignment)
+        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry)
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
         if (!requestIsCurrent(controller, step)) return

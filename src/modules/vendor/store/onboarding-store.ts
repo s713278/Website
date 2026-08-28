@@ -5,6 +5,8 @@ import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sampl
 import type { MeasurementCatalog } from '../lib/onboarding-measurement'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import { purgeLegacyOnboardingDrafts } from '../lib/onboarding-draft-keys'
+import { nextPendingId } from '../lib/onboarding-pending-id'
+import { applyCreatedEntry, type CreatedCatalogEntry } from '../lib/onboarding-sync'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
@@ -16,6 +18,8 @@ import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
   type CatalogSource,
+  type DraftCategory,
+  type SelectedProduct,
   type StoreSubmission,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
@@ -118,6 +122,38 @@ type OnboardingStore = {
    * the reconciliation.
    */
   recordAssignment: (assignment: Partial<AccountCatalog>) => void
+  /**
+   * Author a category into the draft that does not exist in the platform catalog yet.
+   *
+   * It is minted into the reserved pending band so its negative id can carry draft-internal
+   * references until Continue creates it for real. Returns the minted id.
+   */
+  addPendingCategory: (input: {
+    name: string
+    businessTypeId: number
+    description?: string | null
+  }) => number
+  /** Author a product into the draft under a category, minted into the pending band. */
+  addPendingProduct: (input: {
+    name: string
+    categoryId: number
+    measurementId: number | null
+    measurementName?: string | null
+    description?: string | null
+  }) => number
+  /**
+   * Remove a still-pending category or product by id, cascading to its dependents. It never
+   * reached the platform, so this is a pure draft edit — nothing is left behind and no
+   * request is made. A non-pending id is ignored.
+   */
+  removePendingEntry: (id: number) => void
+  /**
+   * Record the platform id a create returned, replacing the pending id and dropping `pending`.
+   *
+   * Flushed to storage immediately so a reload after a create but before its assign cannot
+   * mint the entry a second time.
+   */
+  recordCreatedEntry: (entry: CreatedCatalogEntry) => void
   initializePersistence: (ownerId: string | null) => void
   flushPersistence: () => void
   loadNewerDraft: () => void
@@ -488,6 +524,74 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     const productIds = mergeIds(accountCatalog.productIds, assignment.productIds)
     if (categoryIds === accountCatalog.categoryIds && productIds === accountCatalog.productIds) return
     set(accountCatalogSlice({ categoryIds, productIds }))
+  },
+
+  addPendingCategory(input) {
+    let mintedId = 0
+    useOnboardingStore.getState().updateDraft((current) => {
+      mintedId = nextPendingId(current)
+      const category: DraftCategory = {
+        id: mintedId,
+        name: input.name,
+        businessTypeId: input.businessTypeId,
+        description: input.description ?? null,
+        imageUrl: null,
+        displayOrder: null,
+        pending: true,
+      }
+      return { ...current, categories: [...current.categories, category] }
+    }, 4)
+    return mintedId
+  },
+
+  addPendingProduct(input) {
+    let mintedId = 0
+    useOnboardingStore.getState().updateDraft((current) => {
+      mintedId = nextPendingId(current)
+      const product: SelectedProduct = {
+        id: mintedId,
+        name: input.name,
+        description: input.description ?? null,
+        imageUrl: null,
+        measurementId: input.measurementId,
+        measurementName: input.measurementName ?? null,
+        categoryId: input.categoryId,
+        pending: true,
+      }
+      return { ...current, products: [...current.products, product] }
+    }, 5)
+    return mintedId
+  },
+
+  removePendingEntry(id) {
+    const { draft } = useOnboardingStore.getState()
+    const isPendingCategory = draft.categories.some((c) => c.id === id && c.pending === true)
+    const isPendingProduct = draft.products.some((p) => p.id === id && p.pending === true)
+    if (!isPendingCategory && !isPendingProduct) return
+    useOnboardingStore.getState().updateDraft((current) => {
+      if (isPendingCategory) {
+        const categories = current.categories.filter((c) => c.id !== id)
+        const products = current.products.filter((p) => p.categoryId !== id)
+        const productIds = new Set(products.map((p) => p.id))
+        return {
+          ...current,
+          categories,
+          products,
+          skus: current.skus.filter((sku) => productIds.has(sku.productId)),
+        }
+      }
+      return {
+        ...current,
+        products: current.products.filter((p) => p.id !== id),
+        skus: current.skus.filter((sku) => sku.productId !== id),
+      }
+    }, isPendingCategory ? 4 : 5)
+  },
+
+  recordCreatedEntry(entry) {
+    set((state) => ({ draft: applyCreatedEntry(state.draft, entry) }))
+    // Persist now — the id must survive a reload before the assign that follows.
+    flushScheduledDraftSave(persistCurrentDraft)
   },
 
   setCategoryLimit(limit) {

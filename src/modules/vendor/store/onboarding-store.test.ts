@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import type { CatalogSource, OnboardingStep } from '../types/onboarding'
+import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
   selectCatalogPolicy,
   selectStoreIsSubmitted,
@@ -316,5 +317,93 @@ describe('whether the store is submitted', () => {
     })
 
     expect(selectStoreIsSubmitted(useOnboardingStore.getState())).toBe(false)
+  })
+})
+
+describe('authored pending entries', () => {
+  beforeEach(() => {
+    useOnboardingStore.setState({
+      draft: { ...createEmptyOnboardingDraft(), currentStep: 4, completedSteps: [1, 2, 3] as OnboardingStep[] },
+      furthestVisitedStep: 4,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+      hasLocalEdits: false,
+    })
+  })
+
+  it('mints a category into the reserved band and marks it pending', () => {
+    const id = useOnboardingStore.getState().addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+
+    expect(id).toBe(PENDING_ID_BASE)
+    const [category] = useOnboardingStore.getState().draft.categories
+    expect(category).toMatchObject({ id: PENDING_ID_BASE, name: 'Bakery', businessTypeId: 7, pending: true })
+    // Authoring is a local edit that has not reached the account.
+    expect(useOnboardingStore.getState().hasLocalEdits).toBe(true)
+  })
+
+  it('mints a product one below the lowest pending id and links its category', () => {
+    const store = useOnboardingStore.getState()
+    const categoryId = store.addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+    const productId = store.addPendingProduct({ name: 'Sourdough', categoryId, measurementId: 3 })
+
+    expect(productId).toBe(PENDING_ID_BASE - 1)
+    const [product] = useOnboardingStore.getState().draft.products
+    expect(product).toMatchObject({ id: PENDING_ID_BASE - 1, categoryId, measurementId: 3, pending: true })
+  })
+
+  it('removes a still-pending category and everything under it, leaving nothing behind', () => {
+    const store = useOnboardingStore.getState()
+    const categoryId = store.addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+    const productId = store.addPendingProduct({ name: 'Sourdough', categoryId, measurementId: 3 })
+    useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      skus: [{ id: 'draft-sku-1', productId, name: 'A', description: '', skuType: 'ITEM', measurementType: 'VOLUME', unit: 'L', quantity: 1, listPrice: 1, salePrice: 1, active: true, homeDelivery: true, storePickup: true }],
+    }))
+
+    useOnboardingStore.getState().removePendingEntry(categoryId)
+
+    const draft = useOnboardingStore.getState().draft
+    expect(draft.categories).toEqual([])
+    expect(draft.products).toEqual([])
+    expect(draft.skus).toEqual([])
+  })
+
+  it('removes a still-pending product and its SKUs but keeps its category', () => {
+    const store = useOnboardingStore.getState()
+    const categoryId = store.addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+    const productId = store.addPendingProduct({ name: 'Sourdough', categoryId, measurementId: 3 })
+
+    useOnboardingStore.getState().removePendingEntry(productId)
+
+    const draft = useOnboardingStore.getState().draft
+    expect(draft.categories.map((c) => c.id)).toEqual([categoryId])
+    expect(draft.products).toEqual([])
+  })
+
+  it('ignores a non-pending id', () => {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        categories: [{ id: 42, name: 'Account', businessTypeId: 7, description: null, imageUrl: null, displayOrder: null }],
+      },
+    })
+
+    useOnboardingStore.getState().removePendingEntry(42)
+
+    expect(useOnboardingStore.getState().draft.categories.map((c) => c.id)).toEqual([42])
+  })
+
+  it('records a created id into the draft, replacing the pending id and dropping pending', () => {
+    const store = useOnboardingStore.getState()
+    const categoryId = store.addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+    store.addPendingProduct({ name: 'Sourdough', categoryId, measurementId: 3 })
+
+    useOnboardingStore.getState().recordCreatedEntry({ kind: 'category', pendingId: categoryId, platformId: 5001 })
+
+    const draft = useOnboardingStore.getState().draft
+    expect(draft.categories[0]).toMatchObject({ id: 5001 })
+    expect(draft.categories[0].pending).toBeUndefined()
+    // The product that pointed at the pending category follows it to the platform id.
+    expect(draft.products[0].categoryId).toBe(5001)
   })
 })

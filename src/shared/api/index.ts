@@ -64,7 +64,9 @@ export {
 export type {
   BusinessTypeReference,
   BusinessTypeSaveInput,
+  CategoryCreateInput,
   CategoryReference,
+  ProductCreateInput,
   CheckoutDeliveryInput,
   CheckoutPaymentInput,
   ProductReference,

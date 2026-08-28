@@ -12,8 +12,12 @@ import {
   mapAssignProductsRequest,
   mapBusinessTypePage,
   mapBusinessTypeRequest,
+  mapCategoryCreateRequest,
   mapCategoryPage,
   mapCheckoutOptionsRequest,
+  mapCreatedCategory,
+  mapCreatedProduct,
+  mapProductCreateRequest,
   mapProductPage,
   mapSkuCreateRequest,
   mapStorefrontConfigRequest,
@@ -25,7 +29,9 @@ import {
   mapCheckoutOptionsResponse,
   mapMeasurementCatalog,
   type BusinessTypeReference,
+  type CategoryCreateInput,
   type CategoryReference,
+  type ProductCreateInput,
   type ProductReference,
   type BusinessTypeSaveInput,
   type CheckoutDeliveryInput,
@@ -145,6 +151,28 @@ async function getVendorSkus(
   return mapVendorSkus(await apiVendorsService.getProductSkus(vendorId, config))
 }
 
+/* --- Platform catalog authoring ------------------------------------------
+ * A vendor authoring their own catalog creates the entry in the shared platform
+ * catalog first (below), then assigns the returned platform id to their store through
+ * the vendor-scoped writes. Both return the created positive id so the wizard can record
+ * it into the draft before assigning — a create-then-failed-assign must never re-mint.
+ * ------------------------------------------------------------------------ */
+
+/** POST /v1/categories/ — returns the created platform category id. */
+async function createCategory(input: CategoryCreateInput): Promise<number> {
+  return mapCreatedCategory(await apiCatalogService.createCategory(mapCategoryCreateRequest(input)))
+}
+
+/** POST /v1/categories/{category_id}/products/ — returns the created platform product id. */
+async function createProduct(
+  platformCategoryId: number,
+  input: ProductCreateInput,
+): Promise<number> {
+  return mapCreatedProduct(
+    await apiCatalogService.addProduct(platformCategoryId, mapProductCreateRequest(input)),
+  )
+}
+
 /* --- Catalog and checkout writes ----------------------------------------- */
 
 /** PATCH /v1/vendors/{vendor_id}/assign/products — one call per selected category. */
@@ -233,6 +261,8 @@ export const vendorOnboardingService = {
   getVendorProducts,
   getVendorSkus,
   getVendorProfile,
+  createCategory,
+  createProduct,
   assignProducts,
   createSku,
   deleteSku,

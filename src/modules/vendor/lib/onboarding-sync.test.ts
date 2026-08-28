@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { VendorSkuRef } from '@/shared/api'
-import type { DraftSku, SelectedProduct } from '../types/onboarding'
-import { categoriesToAssign, planSkuWrites } from './onboarding-sync'
+import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import type {
+  DraftCategory,
+  DraftSku,
+  SelectedProduct,
+  VendorOnboardingDraftV1,
+} from '../types/onboarding'
+import { PENDING_ID_BASE } from './onboarding-pending-id'
+import { applyCreatedEntry, categoriesToAssign, planCatalogCreates, planSkuWrites } from './onboarding-sync'
 
 /** platform product id -> vendor product id */
 const productIds = new Map([[31, 900], [32, 901]])
@@ -251,5 +258,95 @@ describe('categoriesToAssign', () => {
 
   it('preserves the draft order of the categories it keeps', () => {
     expect(categoriesToAssign([12, 10, 11], [10])).toEqual([12, 11])
+  })
+})
+
+function pendingCategory(id: number, overrides: Partial<DraftCategory> = {}): DraftCategory {
+  return { id, name: 'Authored', businessTypeId: 7, description: null, imageUrl: null, displayOrder: null, pending: true, ...overrides }
+}
+
+function sampleCategory(id: number): DraftCategory {
+  return { id, name: 'Sample', businessTypeId: 7, description: null, imageUrl: null, displayOrder: null }
+}
+
+function pendingProduct(id: number, categoryId: number, overrides: Partial<SelectedProduct> = {}): SelectedProduct {
+  return { id, name: 'Authored', description: null, imageUrl: null, measurementId: 3, measurementName: 'Litre', categoryId, pending: true, ...overrides }
+}
+
+function draftWith(overrides: Partial<VendorOnboardingDraftV1>): VendorOnboardingDraftV1 {
+  return { ...createEmptyOnboardingDraft(), ...overrides }
+}
+
+describe('planCatalogCreates', () => {
+  it('returns the pending categories on step 4 in an account draft', () => {
+    const draft = draftWith({ categories: [pendingCategory(PENDING_ID_BASE), sampleCategory(-101)] })
+    const plan = planCatalogCreates(draft, 4)
+    expect(plan.categories.map((c) => c.id)).toEqual([PENDING_ID_BASE])
+    expect(plan.products).toEqual([])
+  })
+
+  it('mints nothing on step 4 for a sample draft — its negative ids were never authored here', () => {
+    const draft = draftWith({ catalogSource: 'sample', categories: [sampleCategory(-101), sampleCategory(-102)] })
+    expect(planCatalogCreates(draft, 4).categories).toEqual([])
+  })
+
+  it('returns the pending products on step 5 in an account draft', () => {
+    const draft = draftWith({
+      categories: [pendingCategory(5001 as unknown as number)],
+      products: [pendingProduct(PENDING_ID_BASE - 1, 5001), { ...pendingProduct(-201, 5001), pending: undefined } as SelectedProduct],
+    })
+    const plan = planCatalogCreates(draft, 5)
+    expect(plan.products.map((p) => p.id)).toEqual([PENDING_ID_BASE - 1])
+    expect(plan.categories).toEqual([])
+  })
+
+  it('mints nothing on step 5 for a sample draft', () => {
+    const draft = draftWith({
+      catalogSource: 'sample',
+      products: [{ ...pendingProduct(-201, -101), pending: undefined } as SelectedProduct],
+    })
+    expect(planCatalogCreates(draft, 5).products).toEqual([])
+  })
+
+  it('mints nothing on a step that authors neither', () => {
+    const draft = draftWith({
+      categories: [pendingCategory(PENDING_ID_BASE)],
+      products: [pendingProduct(PENDING_ID_BASE - 1, PENDING_ID_BASE)],
+    })
+    expect(planCatalogCreates(draft, 6)).toEqual({ categories: [], products: [] })
+  })
+})
+
+describe('applyCreatedEntry', () => {
+  it('swaps a category pending id for the platform id, drops pending, and follows its products', () => {
+    const draft = draftWith({
+      categories: [pendingCategory(PENDING_ID_BASE)],
+      products: [pendingProduct(PENDING_ID_BASE - 1, PENDING_ID_BASE)],
+    })
+    const next = applyCreatedEntry(draft, { kind: 'category', pendingId: PENDING_ID_BASE, platformId: 5001 })
+    expect(next.categories[0].id).toBe(5001)
+    expect(next.categories[0].pending).toBeUndefined()
+    // The product that pointed at the pending category now points at the platform id.
+    expect(next.products[0].categoryId).toBe(5001)
+    // Still pending itself — only its parent was created.
+    expect(next.products[0].pending).toBe(true)
+  })
+
+  it('swaps a product pending id for the platform id, drops pending, and follows its SKUs', () => {
+    const draft = draftWith({
+      products: [pendingProduct(PENDING_ID_BASE, 5001)],
+      skus: [{ id: 'draft-sku-1', productId: PENDING_ID_BASE, name: 'A', description: '', skuType: 'ITEM', measurementType: 'VOLUME', unit: 'L', quantity: 1, listPrice: 1, salePrice: 1, active: true, homeDelivery: true, storePickup: true }],
+    })
+    const next = applyCreatedEntry(draft, { kind: 'product', pendingId: PENDING_ID_BASE, platformId: 6001 })
+    expect(next.products[0].id).toBe(6001)
+    expect(next.products[0].pending).toBeUndefined()
+    expect(next.skus[0].productId).toBe(6001)
+  })
+
+  it('leaves entries that do not match untouched', () => {
+    const draft = draftWith({ categories: [pendingCategory(PENDING_ID_BASE), pendingCategory(PENDING_ID_BASE - 1)] })
+    const next = applyCreatedEntry(draft, { kind: 'category', pendingId: PENDING_ID_BASE, platformId: 5001 })
+    expect(next.categories.map((c) => c.id)).toEqual([5001, PENDING_ID_BASE - 1])
+    expect(next.categories[1].pending).toBe(true)
   })
 })

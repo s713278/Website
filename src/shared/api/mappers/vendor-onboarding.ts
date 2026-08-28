@@ -687,6 +687,82 @@ export function mapAssignProductsRequest(
   }
 }
 
+export type CategoryCreateInput = {
+  businessTypeId: number
+  name: string
+  description?: string | null
+}
+
+export type ProductCreateInput = {
+  name: string
+  measurementUnitId: number
+  description?: string | null
+}
+
+/**
+ * POST /v1/categories/ — author a platform category.
+ *
+ * The published `CategoryDTO` names the business type as a string (`business_type`), but the
+ * deployed API keys a new category by `business_type_id` — which is what the draft carries.
+ * A name would force a reverse lookup the wizard does not have.
+ */
+export function mapCategoryCreateRequest(input: CategoryCreateInput): Record<string, unknown> {
+  const name = input.name.trim()
+  if (!name) throw new InvalidReferencePayloadError()
+  if (!Number.isSafeInteger(input.businessTypeId) || input.businessTypeId <= 0) {
+    throw new InvalidReferencePayloadError()
+  }
+  return {
+    business_type_id: input.businessTypeId,
+    name,
+    description: optionalTrimmed(input.description ?? ''),
+  }
+}
+
+/**
+ * POST /v1/categories/{category_id}/products/ — author a platform product.
+ *
+ * `measurement_unit_id` is required: a product with no unit cannot be priced at Step 6. The
+ * name must be at least three characters. `description` defaults to the name so the field is
+ * never sent empty. The category is the PLATFORM id and rides in the path, not this body — by
+ * the time a product is minted the pending category it belongs to already has a platform id.
+ */
+export function mapProductCreateRequest(input: ProductCreateInput): Record<string, unknown> {
+  const name = input.name.trim()
+  if (name.length < 3) throw new InvalidReferencePayloadError()
+  if (!Number.isSafeInteger(input.measurementUnitId) || input.measurementUnitId <= 0) {
+    throw new InvalidReferencePayloadError()
+  }
+  return {
+    name,
+    measurement_unit_id: input.measurementUnitId,
+    description: (input.description ?? '').trim() || name,
+  }
+}
+
+/**
+ * The positive platform id a create echoed back, read from the envelope's `data`.
+ *
+ * It is recorded into the draft before the assign that follows, so a create that lands then
+ * an assign that fails never mints a second, undeletable copy. A response with no usable id
+ * is a contract violation, not something to paper over — see `mithra-openapi-unreliable`.
+ */
+function createdId(payload: unknown): number {
+  if (!isRecord(payload)) throw new InvalidReferencePayloadError()
+  const data = payload.data
+  if (typeof data === 'number') return requiredPositiveInteger(data)
+  if (isRecord(data)) return requiredPositiveInteger(data.id)
+  throw new InvalidReferencePayloadError()
+}
+
+export function mapCreatedCategory(payload: unknown): number {
+  return createdId(payload)
+}
+
+export function mapCreatedProduct(payload: unknown): number {
+  return createdId(payload)
+}
+
 export type SkuCreateInput = {
   name: string
   description: string

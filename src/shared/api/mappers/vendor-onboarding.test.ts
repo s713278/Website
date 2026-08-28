@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { mapVendorContext, mapVendorProfile, mapVendorSkus } from './vendor-onboarding'
+import {
+  InvalidReferencePayloadError,
+  mapCategoryCreateRequest,
+  mapCreatedCategory,
+  mapCreatedProduct,
+  mapProductCreateRequest,
+  mapVendorContext,
+  mapVendorProfile,
+  mapVendorSkus,
+} from './vendor-onboarding'
 
 /**
  * These three reads decide whether the wizard thinks a store is finished and whether a
@@ -104,5 +113,56 @@ describe('mapVendorProfile', () => {
       contactPerson: 'Sanjay Kumar',
       contactNumber: '9876543210',
     })
+  })
+})
+
+describe('mapCategoryCreateRequest', () => {
+  it('sends business_type_id, name and an optional description', () => {
+    expect(mapCategoryCreateRequest({ businessTypeId: 7, name: '  Bakery  ', description: '  Fresh  ' }))
+      .toEqual({ business_type_id: 7, name: 'Bakery', description: 'Fresh' })
+  })
+
+  it('omits an empty description', () => {
+    expect(mapCategoryCreateRequest({ businessTypeId: 7, name: 'Bakery' }))
+      .toEqual({ business_type_id: 7, name: 'Bakery', description: undefined })
+  })
+
+  it('rejects a blank name or a non-positive business type', () => {
+    expect(() => mapCategoryCreateRequest({ businessTypeId: 7, name: '  ' })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCategoryCreateRequest({ businessTypeId: 0, name: 'Bakery' })).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('mapProductCreateRequest', () => {
+  it('sends name, measurement_unit_id and a description that defaults to the name', () => {
+    expect(mapProductCreateRequest({ name: '  Sourdough  ', measurementUnitId: 3 }))
+      .toEqual({ name: 'Sourdough', measurement_unit_id: 3, description: 'Sourdough' })
+  })
+
+  it('keeps an explicit description', () => {
+    expect(mapProductCreateRequest({ name: 'Sourdough', measurementUnitId: 3, description: 'Crusty' }))
+      .toEqual({ name: 'Sourdough', measurement_unit_id: 3, description: 'Crusty' })
+  })
+
+  it('rejects a name shorter than three characters or a missing unit', () => {
+    expect(() => mapProductCreateRequest({ name: 'ab', measurementUnitId: 3 })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapProductCreateRequest({ name: 'Sourdough', measurementUnitId: 0 })).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('created-id readers', () => {
+  it('read the positive id out of the envelope data object', () => {
+    expect(mapCreatedCategory({ data: { id: 5001, name: 'Bakery' } })).toBe(5001)
+    expect(mapCreatedProduct({ data: { id: 6001 } })).toBe(6001)
+  })
+
+  it('tolerate a bare numeric data payload', () => {
+    expect(mapCreatedCategory({ data: 5001 })).toBe(5001)
+  })
+
+  it('reject a response with no usable id', () => {
+    expect(() => mapCreatedCategory({ data: {} })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCreatedProduct({ data: { id: -1 } })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCreatedCategory(null)).toThrow(InvalidReferencePayloadError)
   })
 })
