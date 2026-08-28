@@ -42,10 +42,11 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approved-vendor path end to end | `PATCH /approval` returns `500` for a vendor token, so an approved store cannot be produced without an admin account. The frontend's approved branch is verified against a forced status only. |
 | Onboarding-aware dashboard | Landing an approved vendor somewhere real | `/vendor` renders `VendorDashboardPage`, still backed by the mock `vendorService` with a hardcoded `'r1'` fallback id, showing invented order counts and revenue. An approved vendor is redirected there today; replacing it with real data is a separate task. |
-| Creating a vendor's own category or product | A vendor whose range is not in the platform catalog | **No vendor-scoped create exists.** Both create endpoints write the shared platform catalog; both vendor-callable writes carry identifiers only, never names. Detailed below. A vendor can therefore only take on what the platform catalog already holds. |
+| Ownership and lifecycle for vendor-authored catalog entries | Letting a vendor control what they add to the shared catalog | Vendor tokens can create categories and products, but the entries are shared immediately and have no vendor ownership, delete-own or moderation lifecycle. Detailed below. |
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
 | Updating a SKU in place | Changing a price, size or name at Step 6 | `PATCH /vendors/{id}/skus/{sku_id}` returns **`417`** with a JDBC error on `update tb_sku` for every body tried, and `SkuInfoUpdateRequest` carries only `name`, `description`, `features`, `is_active` — never price or size. Step 6 expresses an edit as delete-then-create, which mints a new `sku_id`. |
+| Legacy SKU unit vocabulary | Keeping existing real-account sizes aligned with the backend measurement catalog | New writes use the backend's units, but this work does not migrate SKUs already written with the frontend's old unit vocabulary. Detailed below. |
 | Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
 | Unvalidated `scheduling_config` | Trusting the delivery schedule a vendor configures | The backend stores `scheduling_config` **verbatim without validation** — even `{}` is accepted. `FIXED_WINDOW` and `CUSTOMER_SELECT_DATE` keys come from documented examples; `PREDEFINED_DAYS` and `INSTANT` keys are our own snake_case and no consumer contract confirms them. |
 
@@ -86,38 +87,43 @@ before anything is saved, saying a saved choice cannot be removed. Neither the n
 the refusal appears in demo mode or on the sample catalog, where nothing reaches an
 account.
 
-### Backend request: let a vendor create a catalog entry of their own
+### Backend request: give vendor-authored catalog entries an owner and lifecycle
 
-Every category and product a vendor can choose comes from a catalog someone else wrote.
-There is no way to say "my store sells this thing you have never heard of", so a vendor
-whose range is not in the platform catalog cannot build their actual store.
+A vendor can now introduce a missing category or product during setup. The wizard creates
+the entry in the shared platform catalog, records the returned platform identifier, and
+then assigns it to the vendor's store. The deployed API accepts both creates with a vendor
+token:
 
-**The contract has no vendor-scoped catalog create.** Checked against the current
-`openapi.json`; the endpoints that look like one are not:
+| Operation | Verified result | Consequence |
+|-----------|-----------------|-------------|
+| `POST /v1/categories/` | **201** | Creates a platform category, not a vendor-private category. |
+| `POST /v1/categories/{id}/products/` | **201** | Creates a platform product under that platform category. |
+| `GET /v1/categories/` after the category create | The new category is visible immediately | Every other vendor browsing that business type sees it too. |
+| `PATCH /v1/vendors/{id}/delete/products` | **403** for a vendor | The author cannot remove the assigned product from their own store. |
+| `DELETE /v1/categories/{id}` | **403** for a vendor | The author cannot delete the platform category they introduced. |
 
-| Endpoint | Why it does not serve this |
-|----------|----------------------------|
-| `POST /v1/categories/` | Tagged *Platform APIs - Product Catalog*. Writes the **marketplace-wide** catalog every vendor picks from, so a vendor's private category would appear in every other vendor's Step 4. Body is `CategoryDTO` (`id`, `name`, `business_type`, `image_path`, `description`). |
-| `POST /v1/categories/{category_id}/products/` | "Create **platform level** product", same Platform APIs tag, same pollution problem. |
-| `PATCH /v1/vendors/{vendor_id}/categories` | The category write the frontend actually uses. Body is `AssignCategoriesRequest` = `{category_ids: int64[]}` — identifiers only, no name field, so it can only take on what already exists. |
-| `PATCH /v1/vendors/{vendor_id}/assign/products` | The product write the frontend actually uses. Body is `AssignProductsRequest` = `{category_id, selected_products: [{product_id, features_map}]}`. `features_map` is a free-form `JsonNode`, but it *decorates* an existing `product_id`; it cannot mint one. |
-| `POST /v1/admin/vendors/{vendorId}/catalog-import-json` | The **only** free-text create in the contract. `CategoryImportData` (`category_name`, `category_type`, `products`) and `ProductImportData` (`product_name`, `product_description`, `skus`) build the whole tree by name. Admin-gated. |
+Creation therefore exists, but ownership, deletion and moderation do not. The contract
+exposes no creator or owner for an authored entry and no moderation state. Once Continue
+creates it, the author has no more control over it than any other vendor. The wizard warns
+about that shared, permanent effect before authoring; only a still-pending draft entry can
+be removed for free.
 
-The objection is **not** the role annotations. Those are not reliably enforced in this
-document — `assign/products` is documented "by Admin/Customer_Care role" and the frontend
-calls it successfully with a vendor token. The objection is that both create endpoints
-write the **shared platform catalog**, which is a marketplace product decision, not
-something a frontend should reach for as a workaround.
+**Needed:** vendor-owned entries with an explicit ownership and moderation lifecycle, so a
+vendor can manage what they introduced without gaining control over somebody else's
+platform entries. At minimum, provide delete-own for vendor-authored categories and
+products, plus vendor-callable un-assign for the author's own store. The frontend cannot
+reconstruct ownership or safely emulate those permissions from the current shared records.
 
-**Minimum needed:** a vendor-scoped equivalent of `catalog-import-json`, scoped by the
-path's own `vendor_id` — the admin import's request shape is already the right one, since
-it is the only place in the contract that takes a category or product *by name*. That
-would also **subsume the un-assign gap above**: an endpoint that accepts the vendor's
-whole intended catalog replaces both the additive assign calls and the missing removals.
+### Existing SKU units are not migrated
 
-Until it exists, the wizard offers no way to create a category or a product anywhere, on
-either catalog source. A demo-mode walk is therefore limited to the sample catalog's own
-fixtures, which is the cost of not pretending a made-up entry could ever be saved.
+Step 6 now takes its unit vocabulary from `GET /v1/measurements/`, so new writes consistently
+use the backend spellings (`gr`, `pcs`, `L`) rather than the frontend's removed hardcoded
+spellings (`g`, `piece`, `l`). This applies to every product, not only a vendor-authored one.
+
+SKUs already written to real accounts under the old vocabulary are not rewritten or
+migrated by this work. Reconciling those stored units requires a separate backend migration
+or an explicit update contract; the frontend must not claim that replacing its picker also
+changed existing account data.
 
 ### Onboarding continuity a vendor still loses
 
