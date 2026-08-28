@@ -193,20 +193,6 @@ export function validatePayments(
       issues.push(issue(8, 'upi-account-holder-name', 'Enter the UPI account holder name.'))
     }
   }
-  if (payments.some((payment) => payment.type === 'ONLINE' && payment.enabled)) {
-    if (!paymentDetails.bankAccountHolderName.trim()) {
-      issues.push(issue(8, 'bank-account-holder-name', 'Enter the bank account holder name.'))
-    }
-    if (!paymentDetails.bankAccountNumber.trim()) {
-      issues.push(issue(8, 'bank-account-number', 'Enter the account number.'))
-    }
-    if (!paymentDetails.bankIfscCode.trim()) {
-      issues.push(issue(8, 'bank-ifsc-code', 'Enter the IFSC code.'))
-    }
-    if (!paymentDetails.bankName.trim()) {
-      issues.push(issue(8, 'bank-name', 'Enter the bank name.'))
-    }
-  }
   return issues
 }
 

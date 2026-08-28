@@ -50,7 +50,7 @@ const SCHEDULING_STRATEGIES = new Set([
   'INSTANT',
 ])
 const SHIPPING_STRATEGIES = new Set(['FLAT', 'ORDER_AMOUNT_THRESHOLD'])
-const PAYMENT_TYPES = new Set(['PRE_PAID', 'ONLINE', 'CASH_ON_DELIVERY'])
+const PAYMENT_TYPES = new Set(['PRE_PAID', 'CASH_ON_DELIVERY'])
 const WEEKDAYS = new Set([
   'MONDAY',
   'TUESDAY',
@@ -470,7 +470,7 @@ export function reconcilePersistedDraft(
   }
 
   const needsPaymentDetails = draft.payments.some(
-    (payment) => payment.enabled && (payment.type === 'PRE_PAID' || payment.type === 'ONLINE'),
+    (payment) => payment.enabled && payment.type === 'PRE_PAID',
   )
   const reopenAt: OnboardingStep = needsPaymentDetails ? 8 : 9
   const requestedStep = Math.max(3, draft.currentStep) as OnboardingStep

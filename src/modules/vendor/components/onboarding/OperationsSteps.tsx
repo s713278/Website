@@ -610,45 +610,6 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
                   />
                 </div>
               ) : null}
-
-              {payment.enabled && payment.type === 'ONLINE' ? (
-                <div className="mt-4 grid gap-3 border-t border-[var(--ob-line)] pt-4 @min-[32rem]:grid-cols-2">
-                  <Input
-                    id="bank-account-holder-name"
-                    label="Account holder name"
-                    value={runtime.paymentDetails.bankAccountHolderName}
-                    error={issues.find((item) => item.field === 'bank-account-holder-name')?.message}
-                    onChange={(event) => updatePaymentDetails({ bankAccountHolderName: event.target.value })}
-                    autoComplete="off"
-                  />
-                  <Input
-                    id="bank-account-number"
-                    label="Account number"
-                    value={runtime.paymentDetails.bankAccountNumber}
-                    error={issues.find((item) => item.field === 'bank-account-number')?.message}
-                    onChange={(event) => updatePaymentDetails({ bankAccountNumber: event.target.value })}
-                    inputMode="numeric"
-                    autoComplete="off"
-                  />
-                  <Input
-                    id="bank-ifsc-code"
-                    label="IFSC code"
-                    value={runtime.paymentDetails.bankIfscCode}
-                    error={issues.find((item) => item.field === 'bank-ifsc-code')?.message}
-                    onChange={(event) => updatePaymentDetails({ bankIfscCode: event.target.value })}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <Input
-                    id="bank-name"
-                    label="Bank name"
-                    value={runtime.paymentDetails.bankName}
-                    error={issues.find((item) => item.field === 'bank-name')?.message}
-                    onChange={(event) => updatePaymentDetails({ bankName: event.target.value })}
-                    autoComplete="off"
-                  />
-                </div>
-              ) : null}
             </section>
           )
         })}
