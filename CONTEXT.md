@@ -62,6 +62,12 @@ not have what they sell. It is a pending entry until Continue creates it for eve
 with that business type and assigns it to the author's store.
 _Avoid_: custom category, private category, vendor category
 
+**Vendor-authored product**:
+A platform product introduced by a vendor during setup under one of their chosen platform
+categories because the shared catalog did not have what they sell. It is a pending entry
+until Continue creates it in that category and assigns it to the author's store.
+_Avoid_: custom product, private product, vendor product
+
 ### Modes
 
 **Live API**:

@@ -24,8 +24,8 @@ import {
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
-import type { DraftCategory, ValidationIssue } from '../../types/onboarding'
-import { AuthorCategoryForm, PermanenceNotice } from './CatalogAuthoring'
+import type { ValidationIssue } from '../../types/onboarding'
+import { AuthorCategoryForm, AuthorProductForm, PermanenceNotice } from './CatalogAuthoring'
 import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
@@ -34,14 +34,14 @@ type CatalogStepProps = {
   onUseSample?: () => void
 }
 
-function categoryChoiceState(
-  categories: ReadonlyArray<DraftCategory>,
-  categoryId: number,
+function catalogChoiceState(
+  entries: ReadonlyArray<{ id: number; pending?: true }>,
+  entryId: number,
 ) {
-  const matchingDraftCategory = categories.find((category) => category.id === categoryId)
+  const matchingEntry = entries.find((entry) => entry.id === entryId)
   return {
-    chosen: matchingDraftCategory !== undefined,
-    pending: matchingDraftCategory?.pending === true,
+    chosen: matchingEntry !== undefined,
+    pending: matchingEntry?.pending === true,
   }
 }
 
@@ -352,7 +352,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     : availableItems
 
   const toggle = (category: (typeof draft.categories)[number]) => {
-    const choice = categoryChoiceState(draft.categories, category.id)
+    const choice = catalogChoiceState(draft.categories, category.id)
     if (!choice.chosen && draft.categories.length >= categoryLimit) return
     if (choice.chosen && isCategoryAssigned(category.id)) {
       setBlocked(
@@ -422,7 +422,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
       {loadedItems.length ? (
         <div id="categories" className="grid gap-3 @min-[32rem]:grid-cols-2">
           {loadedItems.map((category) => {
-            const choice = categoryChoiceState(draft.categories, category.id)
+            const choice = catalogChoiceState(draft.categories, category.id)
             const atLimit = !choice.chosen && draft.categories.length >= categoryLimit
             const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
@@ -473,6 +473,7 @@ function ProductCategoryPicker({
   onUseSample,
   open,
   onToggle,
+  createControlVisible,
 }: {
   categoryId: number
   categoryName: string
@@ -480,9 +481,11 @@ function ProductCategoryPicker({
   onUseSample?: () => void
   open: boolean
   onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
+  createControlVisible: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
+  const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const references = useProductReferences(draft.catalogSource, categoryId)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
@@ -498,36 +501,42 @@ function ProductCategoryPicker({
     : availableItems
 
   const toggle = (product: ProductReference) => {
-    const selected = draft.products.some((item) => item.id === product.id)
-    if (selected && isProductAssigned(product.id)) {
+    const choice = catalogChoiceState(draft.products, product.id)
+    if (choice.chosen && isProductAssigned(product.id)) {
       setBlocked(
         `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
       )
       return
     }
     setBlocked(null)
-    const apply = () => updateDraft(
-      (current) => ({
-        ...current,
-        products: selected
-          ? current.products.filter((item) => item.id !== product.id)
-          : [...current.products, { ...product, categoryId }],
-        skus: selected
-          ? current.skus.filter((sku) => sku.productId !== product.id)
-          : current.skus,
-      }),
-      5,
-    )
+    const applyProductChoice = () => {
+      if (choice.pending) {
+        removePendingEntry(product.id)
+        return
+      }
+      updateDraft(
+        (current) => ({
+          ...current,
+          products: choice.chosen
+            ? current.products.filter((item) => item.id !== product.id)
+            : [...current.products, { ...product, categoryId }],
+          skus: choice.chosen
+            ? current.skus.filter((sku) => sku.productId !== product.id)
+            : current.skus,
+        }),
+        5,
+      )
+    }
     const dependentSkus = draft.skus.filter((sku) => sku.productId === product.id).length
-    if (selected && dependentSkus) {
+    if (choice.chosen && dependentSkus) {
       confirm({
         title: `Remove ${product.name}?`,
         description: `This also removes ${dependentSkus} size${dependentSkus === 1 ? '' : 's'} and ${dependentSkus === 1 ? 'its' : 'their'} pricing.`,
         confirmLabel: 'Remove product',
         tone: 'danger',
-        onConfirm: apply,
+        onConfirm: applyProductChoice,
       })
-    } else apply()
+    } else applyProductChoice()
   }
 
   return (
@@ -544,6 +553,13 @@ function ProductCategoryPicker({
         </div>
       }
     >
+      {createControlVisible ? (
+        <AuthorProductForm
+          categoryId={categoryId}
+          categoryName={categoryName}
+          onAdded={() => setSearch('')}
+        />
+      ) : null}
       {/* Search lives in the panel, not the summary: a click inside the summary row
           would collapse the group the vendor is trying to search. */}
       <div className="relative mb-3">
@@ -566,18 +582,18 @@ function ProductCategoryPicker({
       {items.length ? (
         <div className="grid gap-2 @min-[32rem]:grid-cols-2">
           {items.map((product) => {
-            const selected = draft.products.some((item) => item.id === product.id)
-            const onStore = selected && isProductAssigned(product.id)
+            const choice = catalogChoiceState(draft.products, product.id)
+            const onStore = choice.chosen && isProductAssigned(product.id)
             return (
               <button
                 key={product.id}
                 type="button"
-                aria-pressed={selected}
+                aria-pressed={choice.chosen}
                 aria-disabled={onStore}
                 onClick={() => toggle(product)}
                 className={cn(
                   'flex items-center gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
-                  selected
+                  choice.chosen
                     ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
                     : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
                 )}
@@ -586,7 +602,11 @@ function ProductCategoryPicker({
                 <span className="min-w-0">
                   <strong className="block truncate text-sm text-[var(--ob-ink)]">{product.name}</strong>
                   <span className="mt-1 block truncate text-xs text-[var(--ob-ink-soft)]">
-                    {onStore ? 'Saved to your store' : product.measurementName || 'Item'}
+                    {onStore
+                      ? 'Saved to your store'
+                      : choice.pending
+                        ? 'Not saved yet — select to remove'
+                        : product.measurementName || 'Item'}
                   </span>
                 </span>
               </button>
@@ -607,6 +627,11 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
   const categories = useOnboardingStore((state) => state.draft.categories)
   const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
+  const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
+  const liveApi = isLiveApi()
+  const createControlVisible = useOnboardingStore(
+    (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
+  )
   const summary = useMemo(
     () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
     [categories, selectedProducts],
@@ -638,6 +663,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             onUseSample={onUseSample}
             open={openId === category.id}
             onToggle={onToggle(category.id)}
+            createControlVisible={createControlVisible && !storeIsSubmitted}
           />
         ))}
       </div>

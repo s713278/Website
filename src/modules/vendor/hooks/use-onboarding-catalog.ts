@@ -16,6 +16,7 @@ import {
   readReferenceCache,
   writeReferenceCache,
 } from '../lib/onboarding-catalog-cache'
+import { isPendingId } from '../lib/onboarding-pending-id'
 import { ONBOARDING_CONFIG, type CatalogSource } from '../types/onboarding'
 
 type PagedReferenceState<T> = {
@@ -421,6 +422,16 @@ export function useProductReferences(
   return usePagedReference(
     `product:${mode}:${categoryId}`,
     async (pageNumber, signal) => {
+      if (isPendingId(categoryId)) {
+        return {
+          items: [],
+          pageNumber: 0,
+          pageSize: 12,
+          totalElements: 0,
+          totalPages: 0,
+          lastPage: true,
+        }
+      }
       if (mode === 'sample') {
         return getSampleProducts(categoryId, pageNumber, 12)
       }
