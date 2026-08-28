@@ -21,7 +21,15 @@ export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
  * (`isLiveApi`, `LIVE_PERSISTED_STEPS`); it never names a catalog source. See `CONTEXT.md`.
  */
 export type CatalogSource = 'account' | 'sample'
-export type MeasurementType = 'WEIGHT' | 'VOLUME' | 'COUNT'
+export type MeasurementType =
+  | 'WEIGHT'
+  | 'VOLUME'
+  | 'COUNT'
+  | 'AREA'
+  | 'SERVICE_UNIT'
+  | 'DURATION'
+  | 'PER_PERSON'
+  | 'SLOT'
 export type FulfillmentType = 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
 export type OrderAcceptancePolicy = 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
 export type SchedulingStrategy =

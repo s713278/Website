@@ -1,6 +1,7 @@
 import {
   catalogService as apiCatalogService,
   isApiError,
+  platformService as apiPlatformService,
   vendorsService as apiVendorsService,
   type BusinessTypeQuery,
   type CategoryQuery,
@@ -22,6 +23,7 @@ import {
   mapVendorSkus,
   mapVendorProfile,
   mapCheckoutOptionsResponse,
+  mapMeasurementCatalog,
   type BusinessTypeReference,
   type CategoryReference,
   type ProductReference,
@@ -37,6 +39,7 @@ import {
   type VendorSkuRef,
   type VendorProfile,
   type CheckoutOptionsSnapshot,
+  type MeasurementCatalog,
 } from '../mappers/vendor-onboarding'
 
 export type ReferenceRequestConfig = {
@@ -68,6 +71,16 @@ async function getProductsByCategory(
   return mapProductPage(
     await apiCatalogService.getProductsByCategory(categoryId, params, config),
   )
+}
+
+/**
+ * GET /v1/measurements/ — the authoritative platform measurement catalog. Units at Step 6 come
+ * from here, not a table baked into the frontend. Requires auth, so it rides the vendor session.
+ */
+async function getMeasurements(
+  config: ReferenceRequestConfig = {},
+): Promise<MeasurementCatalog> {
+  return mapMeasurementCatalog(await apiPlatformService.listMeasurements(config))
 }
 
 /**
@@ -211,6 +224,7 @@ export const vendorOnboardingService = {
   getBusinessTypes,
   getCategories,
   getProductsByCategory,
+  getMeasurements,
   getVendorContext,
   saveBusinessType,
   saveCategories,

@@ -27,10 +27,12 @@ import type {
   Weekday,
 } from '../../types/onboarding'
 import {
-  MEASUREMENT_UNITS,
-  UNIT_LABELS,
-  defaultUnitForProduct,
+  defaultUnitForMeasurement,
   measurementFromProduct,
+  measurementLabel,
+  unitOptionsForMeasurement,
+  unitsForMeasurement,
+  type MeasurementCatalog,
 } from '../../lib/onboarding-measurement'
 import { AccordionPanel, FieldError, FieldLabel, Hint, type RequestConfirmation, StepSection } from './StepPrimitives'
 
@@ -88,18 +90,20 @@ function SkuProductThumb({ src }: { src: string | null }) {
 }
 
 function makeSku(
-  product: { id: number; name: string; measurementName: string | null },
+  product: { id: number; name: string; measurementId: number | null; measurementName: string | null },
   skus: DraftSku[],
+  catalog: MeasurementCatalog,
 ): DraftSku {
   const isFirstSku = !skus.some((sku) => sku.productId === product.id)
+  const measurementType = measurementFromProduct(product.measurementId, product.measurementName, catalog)
   return {
     id: localSkuId(product.id, skus),
     productId: product.id,
     name: isFirstSku ? product.name : '',
     description: '',
     skuType: 'ITEM',
-    measurementType: measurementFromProduct(product.measurementName),
-    unit: defaultUnitForProduct(product.measurementName),
+    measurementType,
+    unit: defaultUnitForMeasurement(measurementType, catalog),
     quantity: 1,
     listPrice: null,
     salePrice: null,
@@ -112,6 +116,7 @@ function makeSku(
 export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confirm: RequestConfirmation }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
+  const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
   const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
@@ -125,11 +130,11 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
     updateDraft((current) => {
       const skus = [...current.skus]
       for (const product of current.products) {
-        if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus))
+        if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus, measurementCatalog))
       }
       return { ...current, skus }
     })
-  }, [draft.products, draft.skus, updateDraft])
+  }, [draft.products, draft.skus, updateDraft, measurementCatalog])
 
   // A problem inside a closed product would otherwise be reported with nothing on
   // screen to fix. Only one panel can be open, so open the first product that has one.
@@ -221,7 +226,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateDraft((current) => ({ ...current, skus: [...current.skus, makeSku(product, current.skus)] }), 6)}
+                  onClick={() => updateDraft((current) => ({ ...current, skus: [...current.skus, makeSku(product, current.skus, measurementCatalog)] }), 6)}
                 >
                   <PlusIcon /> Add another size
                 </Button>
@@ -252,13 +257,13 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                           value={sku.measurementType}
                           onChange={(event) => {
                             const measurementType = event.target.value as MeasurementType
-                            updateSku(sku.id, { measurementType, unit: MEASUREMENT_UNITS[measurementType][0] })
+                            updateSku(sku.id, { measurementType, unit: defaultUnitForMeasurement(measurementType, measurementCatalog) })
                           }}
                           className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
                         >
-                          <option value="WEIGHT">Weight</option>
-                          <option value="VOLUME">Volume</option>
-                          <option value="COUNT">Count</option>
+                          {measurementCatalog.map((entry) => (
+                            <option key={entry.id} value={entry.type}>{measurementLabel(entry.type)}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -271,8 +276,8 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                           onChange={(event) => updateSku(sku.id, { unit: event.target.value })}
                           className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
                         >
-                          {MEASUREMENT_UNITS[sku.measurementType].map((unit) => (
-                            <option key={unit} value={unit}>{UNIT_LABELS[unit] ?? unit}</option>
+                          {unitsForMeasurement(sku.measurementType, measurementCatalog).map((unit) => (
+                            <option key={unit} value={unit}>{unit}</option>
                           ))}
                         </select>
                         <FieldError issues={issues} field={`sku-${sku.id}-unit`} />
@@ -287,7 +292,13 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         error={issues.find((item) => item.field === `sku-${sku.id}-quantity`)?.message}
                         onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
                         onWheel={(event) => event.currentTarget.blur()}
+                        list={`sku-${sku.id}-quantity-options`}
                       />
+                      <datalist id={`sku-${sku.id}-quantity-options`}>
+                        {unitOptionsForMeasurement(sku.measurementType, measurementCatalog).map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
                       <Input
                         id={`sku-${sku.id}-list-price`}
                         label="List price (₹)"

@@ -470,13 +470,75 @@ export type VendorSkuRef = {
   unit: string
 }
 
-/** SKU price measurements the wizard supports, keyed by the catalog's measurement_id. */
-export type SkuMeasurementType = 'WEIGHT' | 'VOLUME' | 'COUNT'
+/** SKU price measurements, matching the backend's measurement_type enum. */
+export type SkuMeasurementType =
+  | 'WEIGHT'
+  | 'VOLUME'
+  | 'COUNT'
+  | 'AREA'
+  | 'SERVICE_UNIT'
+  | 'DURATION'
+  | 'PER_PERSON'
+  | 'SLOT'
 
-export const MEASUREMENT_TYPE_BY_ID: Readonly<Record<number, SkuMeasurementType>> = {
-  1: 'WEIGHT',
-  2: 'VOLUME',
-  3: 'COUNT',
+const MEASUREMENT_TYPES = new Set<SkuMeasurementType>([
+  'WEIGHT',
+  'VOLUME',
+  'COUNT',
+  'AREA',
+  'SERVICE_UNIT',
+  'DURATION',
+  'PER_PERSON',
+  'SLOT',
+])
+
+function measurementTypeOf(value: unknown): SkuMeasurementType | null {
+  return typeof value === 'string' && MEASUREMENT_TYPES.has(value as SkuMeasurementType)
+    ? (value as SkuMeasurementType)
+    : null
+}
+
+/** One platform measurement: its id, type, the units it is priced in, and quantity suggestions. */
+export type MeasurementCatalogEntry = {
+  id: number
+  type: SkuMeasurementType
+  units: string[]
+  unitOptions: number[]
+}
+
+export type MeasurementCatalog = MeasurementCatalogEntry[]
+
+/**
+ * Maps `GET /v1/measurements/`. The operation is typed as a bare `APIResponseObject`, so this
+ * reads the shape verified live on 2026-08-28 defensively: `id`, a `measurement_type` enum, a
+ * comma-separated `unit`, and an optional numeric `unit_options`. Identifiers are not
+ * contiguous and are never assumed. An entry missing an id or a recognised type is dropped
+ * rather than guessed at — a measurement the frontend cannot place is worse than one it omits.
+ */
+export function mapMeasurementCatalog(payload: unknown): MeasurementCatalog {
+  if (!isRecord(payload)) return []
+  const data = payload.data
+  const rows = Array.isArray(data)
+    ? data
+    : isRecord(data) && Array.isArray(data.result)
+      ? data.result
+      : []
+  const catalog: MeasurementCatalog = []
+  for (const row of rows) {
+    if (!isRecord(row)) continue
+    const id = optionalInteger(row.id)
+    const type = measurementTypeOf(row.measurement_type ?? row.type ?? row.name)
+    if (id == null || type == null) continue
+    const units =
+      typeof row.unit === 'string'
+        ? row.unit.split(',').map((unit) => unit.trim()).filter((unit) => unit.length > 0)
+        : []
+    const unitOptions = Array.isArray(row.unit_options)
+      ? row.unit_options.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      : []
+    catalog.push({ id, type, units, unitOptions })
+  }
+  return catalog
 }
 
 /** Accepts `data: []` and `data: { result: [] }`; both occur on vendor resources. */

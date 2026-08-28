@@ -1,11 +1,11 @@
 import {
-  MEASUREMENT_TYPE_BY_ID,
   schedulingConfigList,
   schedulingConfigNumber,
   schedulingConfigString,
   vendorOnboardingService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
+  type MeasurementCatalog,
   type VendorCategoryRef,
   type VendorContext,
   type VendorProductRef,
@@ -15,6 +15,8 @@ import {
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { accountSkuId } from './onboarding-sku-id'
+import { measurementFromProduct } from './onboarding-measurement'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import type {
   DraftSku,
   OnboardingRuntimeState,
@@ -44,6 +46,7 @@ export type ServerOnboardingState = {
   skus: VendorSkuRef[]
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
+  measurements: MeasurementCatalog
 }
 
 /** A never-configured vendor reports this, so it cannot be read as a real choice. */
@@ -68,7 +71,7 @@ export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
 ): Promise<ServerOnboardingState> {
-  const [context, profile, categories, products, skus, checkout, businessTypes] = await Promise.all([
+  const [context, profile, categories, products, skus, checkout, businessTypes, measurements] = await Promise.all([
     // Deliberately not optional. Context decides liveness, limits and whether a resume
     // happens at all, so losing it is a real failure the vendor has to be told about —
     // not an empty wizard with no explanation.
@@ -85,6 +88,10 @@ export async function loadServerOnboardingState(
       { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
       config,
     )),
+    // Authoritative units for Step 6, part of the same cumulative entry read. A dead read
+    // falls back to the sample catalog, which mirrors the backend shape, so a size still
+    // opens with real units rather than an empty dropdown.
+    optional(vendorOnboardingService.getMeasurements(config)),
   ])
 
   return {
@@ -95,6 +102,7 @@ export async function loadServerOnboardingState(
     skus: skus ?? [],
     checkout,
     businessTypes: businessTypes?.items ?? [],
+    measurements: measurements ?? SAMPLE_MEASUREMENT_CATALOG,
   }
 }
 
@@ -241,7 +249,7 @@ function draftSkus(state: ServerOnboardingState): DraftSku[] {
       name: sku.displayName,
       description: sku.description,
       skuType: 'ITEM' as const,
-      measurementType: (measurementId != null && MEASUREMENT_TYPE_BY_ID[measurementId]) || 'COUNT',
+      measurementType: measurementFromProduct(measurementId ?? null, null, state.measurements),
       unit: sku.unit,
       quantity: sku.quantity,
       listPrice: sku.listPrice,

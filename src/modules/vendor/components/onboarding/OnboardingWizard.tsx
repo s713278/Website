@@ -125,6 +125,7 @@ export function OnboardingWizard() {
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
+  const setMeasurementCatalog = useOnboardingStore((state) => state.setMeasurementCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
@@ -226,6 +227,8 @@ export function OnboardingWizard() {
         categoryIds: server.categories.map((category) => category.platformCategoryId),
         productIds: server.products.map((product) => product.platformProductId),
       })
+      // Account data, not draft — applied even when local edits win the draft below.
+      setMeasurementCatalog(server.measurements)
 
       // A submitted store still has to show its own catalog and settings on Steps 3-9,
       // so it is hydrated like any other — it just opens on the review step instead.
@@ -284,7 +287,7 @@ export function OnboardingWizard() {
     return () => {
       ignore = true
     }
-  }, [access, setCategoryLimit, setStoreSubmission, setAccountCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, applyResumedDraft])
 
   useEffect(() => {
     requestControllerRef.current?.abort()

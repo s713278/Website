@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
+import type { MeasurementCatalog } from '../lib/onboarding-measurement'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import { purgeLegacyOnboardingDrafts } from '../lib/onboarding-draft-keys'
 import {
@@ -85,6 +87,12 @@ type OnboardingStore = {
   /** Live plan limit from vendor context; falls back to the configured default. */
   categoryLimit: number
   setCategoryLimit: (limit: number | null) => void
+  /**
+   * Platform measurement catalog for Step 6 units. Defaults to the sample catalog so demo
+   * mode and a failed live fetch still offer real units; the entry read replaces it.
+   */
+  measurementCatalog: MeasurementCatalog
+  setMeasurementCatalog: (catalog: MeasurementCatalog) => void
   /** Account-confirmed store submission; not persisted. */
   storeSubmission: StoreSubmission | null
   setStoreSubmission: (submission: StoreSubmission | null) => void
@@ -381,6 +389,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   recoveryMessage: null,
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   storeSubmission: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
@@ -451,6 +460,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   setCategoryLimit(limit) {
     set({ categoryLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxCategories })
+  },
+
+  setMeasurementCatalog(catalog) {
+    // An empty fetch keeps the sample fallback rather than emptying every Step 6 dropdown.
+    set({ measurementCatalog: catalog.length ? catalog : SAMPLE_MEASUREMENT_CATALOG })
   },
 
   initializePersistence(ownerId) {

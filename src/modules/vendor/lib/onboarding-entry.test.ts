@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { resumePathAfterLogin, vendorLandingPath } from '@/app/router/role-home'
 import type { User } from '@/shared/types'
 import { resolveOnboardingEntry } from './onboarding-entry'
@@ -57,6 +58,7 @@ function state(
       payments: [{ type: 'CASH_ON_DELIVERY', isDefault: true, details: {} }],
     },
     businessTypes: [{ id: 7, name: 'Beverages & Juice Center', icon: null, displayOrder: 1 }],
+    measurements: SAMPLE_MEASUREMENT_CATALOG,
     ...saved,
   }
 }

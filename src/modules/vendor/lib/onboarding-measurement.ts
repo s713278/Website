@@ -1,48 +1,102 @@
+import type { MeasurementCatalog, MeasurementCatalogEntry } from '@/shared/api'
 import type { MeasurementType } from '../types/onboarding'
 
-/**
- * How a product is measured, and the units that follow from it.
- *
- * A product carries its measurement as a name rather than an identifier — the sample
- * catalog writes one and the account catalog reads one back. Step 6 turns that name into
- * the units a size is priced in, and the first unit of the list is the one a new size
- * opens with.
- *
- * This is the whole of that rule. It lives here rather than in the step so that the
- * mapping from what a vendor chose to what they are then offered is testable, which the
- * step component is not.
- */
-export const MEASUREMENT_UNITS: Record<MeasurementType, string[]> = {
-  WEIGHT: ['g', 'kg'],
-  VOLUME: ['ml', 'l'],
-  COUNT: ['piece', 'pack', 'dozen'],
-}
-
-export const UNIT_LABELS: Record<string, string> = {
-  g: 'Gram (g)',
-  kg: 'Kilogram (kg)',
-  ml: 'Millilitre (ml)',
-  l: 'Litre (l)',
-  piece: 'Piece',
-  pack: 'Pack',
-  dozen: 'Dozen',
-}
+export type { MeasurementCatalog, MeasurementCatalogEntry }
 
 /**
- * The measurement behind a product's stored measurement name.
+ * How a product is measured, and the units and quantity suggestions that follow from it —
+ * sourced from the backend measurement catalog (`GET /v1/measurements/`), not a table baked
+ * into the frontend.
  *
- * Anything unrecognised — including a product the backend gave no measurement at all —
- * falls back to `COUNT`, which is the one measurement that suits any product badly rather
- * than suiting some products wrongly.
+ * The catalog's identifiers are not contiguous (there is no 6) and nothing here indexes the
+ * list positionally: a product's measurement is resolved by looking its id up in the fetched
+ * catalog, and the units are whatever that entry carries. Every function takes the fetched
+ * catalog as an argument so the mapping from what a vendor chose to what they are then
+ * offered stays testable, which the step component is not.
  */
-export function measurementFromProduct(value: string | null): MeasurementType {
-  const normalized = value?.toUpperCase()
-  return normalized === 'WEIGHT' || normalized === 'VOLUME' || normalized === 'COUNT'
-    ? normalized
-    : 'COUNT'
+/** Split the backend's comma-separated `unit` into trimmed, non-empty units. */
+export function parseMeasurementUnits(unit: string): string[] {
+  return unit
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
 }
 
-/** The unit a newly created size opens with, for a product measured this way. */
-export function defaultUnitForProduct(measurementName: string | null): string {
-  return MEASUREMENT_UNITS[measurementFromProduct(measurementName)][0]
+/** The catalog entry a measurement id names, or null when the catalog does not hold it. */
+export function measurementEntryById(
+  catalog: MeasurementCatalog,
+  id: number | null,
+): MeasurementCatalogEntry | null {
+  if (id == null) return null
+  return catalog.find((entry) => entry.id === id) ?? null
+}
+
+/** The catalog entry for a measurement type, or null when the catalog does not offer it. */
+export function measurementEntryByType(
+  catalog: MeasurementCatalog,
+  type: MeasurementType,
+): MeasurementCatalogEntry | null {
+  return catalog.find((entry) => entry.type === type) ?? null
+}
+
+/**
+ * The measurement a product is priced in.
+ *
+ * Resolved from the product's own measurement id looked up in the fetched catalog, then from
+ * its measurement name (the sample catalog carries a name and no id), and failing both from
+ * the first measurement the catalog offers — so a product the catalog cannot place still
+ * lands on a real, offerable measurement rather than an empty unit list. An empty catalog
+ * (nothing fetched yet) is the only case that falls back to `COUNT`.
+ */
+export function measurementFromProduct(
+  measurementId: number | null,
+  measurementName: string | null,
+  catalog: MeasurementCatalog,
+): MeasurementType {
+  const byId = measurementEntryById(catalog, measurementId)
+  if (byId) return byId.type
+  const name = measurementName?.trim().toUpperCase()
+  const byName = name ? catalog.find((entry) => entry.type === name) : undefined
+  if (byName) return byName.type
+  return catalog[0]?.type ?? 'COUNT'
+}
+
+/** The units a size may be priced in, for a product measured this way. */
+export function unitsForMeasurement(
+  type: MeasurementType,
+  catalog: MeasurementCatalog,
+): string[] {
+  return measurementEntryByType(catalog, type)?.units ?? []
+}
+
+/** The unit a newly created size opens with — the first the catalog offers for this type. */
+export function defaultUnitForMeasurement(
+  type: MeasurementType,
+  catalog: MeasurementCatalog,
+): string {
+  return unitsForMeasurement(type, catalog)[0] ?? ''
+}
+
+/** The quantity suggestions to prefill at Step 6 for a product measured this way. */
+export function unitOptionsForMeasurement(
+  type: MeasurementType,
+  catalog: MeasurementCatalog,
+): number[] {
+  return measurementEntryByType(catalog, type)?.unitOptions ?? []
+}
+
+const MEASUREMENT_LABELS: Record<MeasurementType, string> = {
+  WEIGHT: 'Weight',
+  VOLUME: 'Volume',
+  COUNT: 'Count',
+  AREA: 'Area',
+  SERVICE_UNIT: 'Service unit',
+  DURATION: 'Duration',
+  PER_PERSON: 'Per person',
+  SLOT: 'Slot',
+}
+
+/** A human label for a measurement type in the Step 6 unit picker and the authoring form. */
+export function measurementLabel(type: MeasurementType): string {
+  return MEASUREMENT_LABELS[type] ?? type
 }

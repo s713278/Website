@@ -31,7 +31,16 @@ export type DraftReadResult =
   | { kind: 'unavailable' }
 
 const STEPS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-const MEASUREMENTS = new Set(['WEIGHT', 'VOLUME', 'COUNT'])
+const MEASUREMENTS = new Set([
+  'WEIGHT',
+  'VOLUME',
+  'COUNT',
+  'AREA',
+  'SERVICE_UNIT',
+  'DURATION',
+  'PER_PERSON',
+  'SLOT',
+])
 const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
 const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
 const SCHEDULING_STRATEGIES = new Set([

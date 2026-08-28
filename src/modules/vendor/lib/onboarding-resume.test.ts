@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import type {
   BusinessTypeReference,
   CheckoutOptionsSnapshot,
@@ -106,6 +107,7 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
     skus: SKUS,
     checkout: CHECKOUT,
     businessTypes: [BUSINESS_TYPE],
+    measurements: SAMPLE_MEASUREMENT_CATALOG,
     ...overrides,
   }
 }
@@ -297,6 +299,7 @@ describe('buildResumeDraft', () => {
       skus: [],
       checkout: null,
       businessTypes: [BUSINESS_TYPE],
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
     })
 
     expect(openAt).toBe(3)

@@ -11,7 +11,8 @@ export const platformService = {
   faqsByAudience: (targetAudience: string) =>
     apiGet<ApiEnvelope>(`/v1/faqs/${encodeURIComponent(targetAudience)}`, { skipAuth: true }),
 
-  listMeasurements: () => apiGet<ApiEnvelope>('/v1/measurements/', { skipAuth: true }),
+  listMeasurements: (config: { signal?: AbortSignal } = {}) =>
+    apiGet<ApiEnvelope>('/v1/measurements/', config),
   getMeasurement: (id: number | string) =>
     apiGet<ApiEnvelope>(`/v1/measurements/${id}`, { skipAuth: true }),
 
