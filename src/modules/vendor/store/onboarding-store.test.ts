@@ -3,6 +3,7 @@ import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import type { CatalogSource, OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
+  selectCategoryLimit,
   selectCatalogPolicy,
   selectStoreIsSubmitted,
   useOnboardingStore,
@@ -179,6 +180,14 @@ describe('selectCatalogPolicy', () => {
         selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).createControlVisible,
       ).toBe(false)
     })
+  })
+})
+
+describe('selectCategoryLimit', () => {
+  it('answers the live plan limit held by the onboarding store', () => {
+    useOnboardingStore.getState().setCategoryLimit(7)
+
+    expect(selectCategoryLimit(useOnboardingStore.getState())).toBe(7)
   })
 })
 

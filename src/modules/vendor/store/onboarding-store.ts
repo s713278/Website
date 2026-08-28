@@ -388,6 +388,11 @@ export function selectCatalogSource(
   return state.draft.catalogSource
 }
 
+/** The category cap in effect for this vendor's subscription. */
+export function selectCategoryLimit(state: { categoryLimit: number }): number {
+  return state.categoryLimit
+}
+
 /** Which catalog source a switch would move to and back from. */
 export type CatalogPolicy = {
   /** Whether the draft may move from its current catalog source to `target`. */

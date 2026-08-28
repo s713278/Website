@@ -56,6 +56,12 @@ been created in the platform catalog. It stops being pending the moment Continue
 succeeds; in demo mode it stays pending forever.
 _Avoid_: unsaved entry, local entry, draft category
 
+**Vendor-authored category**:
+A platform category introduced by a vendor during setup because the shared catalog did
+not have what they sell. It is a pending entry until Continue creates it for every vendor
+with that business type and assigns it to the author's store.
+_Avoid_: custom category, private category, vendor category
+
 ### Modes
 
 **Live API**:

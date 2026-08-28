@@ -37,6 +37,7 @@ import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onb
 import {
   selectCatalogPolicy,
   selectCatalogSource,
+  selectCategoryLimit,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
@@ -115,7 +116,7 @@ export function OnboardingWizard() {
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
-  const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
+  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)

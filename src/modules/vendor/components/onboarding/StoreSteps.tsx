@@ -25,7 +25,7 @@ import {
 } from '../../data/onboarding-theme-presets'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { StepNotice } from './AccessNotice'
-import { useOnboardingStore } from '../../store/onboarding-store'
+import { selectCategoryLimit, useOnboardingStore } from '../../store/onboarding-store'
 import type {
   StoreSubmission,
   OnboardingStep,
@@ -462,7 +462,7 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
   const storeSubmission = useOnboardingStore((state) => state.storeSubmission)
-  const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
+  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const issues = readinessIssues(draft, runtime, categoryLimit)
   const completed =
     draft.publication.state === 'prototype-complete' &&
