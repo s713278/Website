@@ -35,6 +35,7 @@ import {
 } from '../../lib/onboarding-sync'
 import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import {
+  continueWithCatalogPolicy,
   selectCatalogPolicy,
   selectCatalogSource,
   selectCategoryLimit,
@@ -487,22 +488,8 @@ export function OnboardingWizard() {
     return false
   }
 
-  const handleContinue = async () => {
+  const handleCatalogContinue = async () => {
     const { draft, runtime } = useOnboardingStore.getState()
-    setStatusMessage(null)
-    if (draft.currentStep === 1) return handleOtpRequest()
-    if (draft.currentStep === 2) return handleOtpVerify()
-    if (!catalogUnlocked) return
-    // A draft created in demo mode can survive a later deployment/configuration change.
-    // It must not retain the old silent-success path after the sample controls disappear.
-    if (catalogPolicy.continueBlocked) {
-      showIssues([{
-        step: draft.currentStep,
-        field: stepErrorField(draft.currentStep),
-        message: 'The sample catalog is available only in demo mode. Start over to load the account catalog before continuing.',
-      }])
-      return
-    }
     if (draft.currentStep === 10) {
       const nextIssues = readinessIssues(draft, runtime, categoryLimit)
       if (nextIssues.length) return showIssues(nextIssues)
@@ -626,6 +613,26 @@ export function OnboardingWizard() {
     // Demo and sample mode skip the write, and claiming otherwise lets the next account
     // read overwrite work the vendor can still see on screen.
     completeStep(step, (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist })
+  }
+
+  const handleContinue = async () => {
+    const { draft } = useOnboardingStore.getState()
+    setStatusMessage(null)
+    if (draft.currentStep === 1) return handleOtpRequest()
+    if (draft.currentStep === 2) return handleOtpVerify()
+    if (!catalogUnlocked) return
+
+    // A draft created in demo mode can survive a later deployment/configuration change.
+    // Route both outcomes through the pure boundary: sample must not retain the old
+    // silent-success path after its controls disappear, and allowed work cannot bypass it.
+    return continueWithCatalogPolicy(catalogPolicy, {
+      blocked: () => showIssues([{
+        step: draft.currentStep,
+        field: stepErrorField(draft.currentStep),
+        message: 'The sample catalog is available only in demo mode. Start over to load the account catalog before continuing.',
+      }]),
+      allowed: handleCatalogContinue,
+    })
   }
 
   const navigateToStep = (step: OnboardingStep) => {

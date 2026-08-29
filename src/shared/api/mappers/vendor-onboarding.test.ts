@@ -4,11 +4,48 @@ import {
   mapCategoryCreateRequest,
   mapCreatedCategory,
   mapCreatedProduct,
+  mapMeasurementCatalog,
+  mergeMeasurementCatalogDetails,
   mapProductCreateRequest,
   mapVendorContext,
   mapVendorProfile,
   mapVendorSkus,
 } from './vendor-onboarding'
+
+describe('measurement catalog detail enrichment', () => {
+  it('adds unit_options from the authenticated detail payload omitted by the live list', () => {
+    const catalog = mapMeasurementCatalog({
+      data: [
+        { id: 4, unit: 'Acre,sqft', display_name: 'AREA with Acre,sqft', type: 'AREA' },
+        { id: 7, unit: 'Time Slot', display_name: 'SLOT with Time Slot', type: 'SLOT' },
+      ],
+    })
+
+    expect(mergeMeasurementCatalogDetails(catalog, [
+      {
+        data: {
+          id: 4,
+          unit: 'Acre,sqft',
+          display_name: 'AREA with Acre,sqft',
+          unit_options: [50, 100, 500, 1000],
+          type: 'AREA',
+        },
+      },
+      {
+        data: {
+          id: 7,
+          unit: 'Time Slot',
+          display_name: 'SLOT with Time Slot',
+          unit_options: [],
+          type: 'SLOT',
+        },
+      },
+    ])).toEqual([
+      { id: 4, type: 'AREA', units: ['Acre', 'sqft'], unitOptions: [50, 100, 500, 1000] },
+      { id: 7, type: 'SLOT', units: ['Time Slot'], unitOptions: [] },
+    ])
+  })
+})
 
 /**
  * These three reads decide whether the wizard thinks a store is finished and whether a

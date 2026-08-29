@@ -57,6 +57,7 @@ export {
   mapVendorSkus,
   vendorProductIdByPlatformId,
   mapMeasurementCatalog,
+  mergeMeasurementCatalogDetails,
   schedulingConfigList,
   schedulingConfigNumber,
   schedulingConfigString,

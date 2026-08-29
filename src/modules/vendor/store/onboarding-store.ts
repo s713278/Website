@@ -436,6 +436,25 @@ export function selectCatalogPolicy(
 }
 
 /**
+ * Enforce the catalog policy at the wizard's Continue boundary.
+ *
+ * Keeping the refusal here makes the branch observable without a DOM test runner while
+ * leaving presentation of the refusal to the component.
+ */
+export function continueWithCatalogPolicy<BlockedResult, AllowedResult>(
+  policy: Pick<CatalogPolicy, 'continueBlocked'>,
+  branches: {
+    blocked: () => BlockedResult
+    allowed: () => AllowedResult
+  },
+): BlockedResult | AllowedResult {
+  if (policy.continueBlocked) {
+    return branches.blocked()
+  }
+  return branches.allowed()
+}
+
+/**
  * Whether the vendor has sent their store for review.
  *
  * Read from `storeSubmission`, which only the account read and the submit call ever

@@ -28,6 +28,7 @@ import {
   mapVendorProfile,
   mapCheckoutOptionsResponse,
   mapMeasurementCatalog,
+  mergeMeasurementCatalogDetails,
   type BusinessTypeReference,
   type CategoryCreateInput,
   type CategoryReference,
@@ -79,14 +80,30 @@ async function getProductsByCategory(
   )
 }
 
+/** Keep usable detail rows while preserving cancellation as a request-level failure. */
+export async function settleMeasurementDetails(
+  requests: Promise<unknown>[],
+  signal?: AbortSignal,
+): Promise<unknown[]> {
+  const results = await Promise.allSettled(requests)
+  if (signal?.aborted) throw signal.reason
+  return results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+}
+
 /**
- * GET /v1/measurements/ — the authoritative platform measurement catalog. Units at Step 6 come
- * from here, not a table baked into the frontend. Requires auth, so it rides the vendor session.
+ * GET /v1/measurements/ plus authenticated GET /v1/measurements/{id} detail reads — the
+ * authoritative platform measurement catalog. Units at Step 6 come from here, not a table baked
+ * into the frontend; detail supplies the quantity options omitted by the deployed list response.
  */
 async function getMeasurements(
   config: ReferenceRequestConfig = {},
 ): Promise<MeasurementCatalog> {
-  return mapMeasurementCatalog(await apiPlatformService.listMeasurements(config))
+  const catalog = mapMeasurementCatalog(await apiPlatformService.listMeasurements(config))
+  const details = await settleMeasurementDetails(
+    catalog.map((measurement) => apiPlatformService.getMeasurement(measurement.id, config)),
+    config.signal,
+  )
+  return mergeMeasurementCatalogDetails(catalog, details)
 }
 
 /**

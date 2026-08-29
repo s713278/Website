@@ -116,9 +116,11 @@ reconstruct ownership or safely emulate those permissions from the current share
 
 ### Existing SKU units are not migrated
 
-Step 6 now takes its unit vocabulary from `GET /v1/measurements/`, so new writes consistently
-use the backend spellings (`gr`, `pcs`, `L`) rather than the frontend's removed hardcoded
-spellings (`g`, `piece`, `l`). This applies to every product, not only a vendor-authored one.
+Step 6 now takes its unit vocabulary from `GET /v1/measurements/`, then hydrates each row from
+authenticated `GET /v1/measurements/{id}` because the deployed list omits `unit_options` even
+though its OpenAPI description says the list includes them. New writes therefore consistently use
+the backend spellings (`gr`, `pcs`, `L`) rather than the frontend's removed hardcoded spellings
+(`g`, `piece`, `l`). This applies to every product, not only a vendor-authored one.
 
 SKUs already written to real accounts under the old vocabulary are not rewritten or
 migrated by this work. Reconciling those stored units requires a separate backend migration

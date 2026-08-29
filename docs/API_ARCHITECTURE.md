@@ -183,7 +183,7 @@ One object per backend domain, all thin wrappers over the primitives above.
 | `users.ts` | `usersService` | Profile, mobile/address updates, dashboard, history, preferences, subscriptions. |
 | `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier + delivery-eligibility check (both `skipAuth`). Exports the `Storefront*` types. |
 | `subscriptions.ts` | `subscriptionsService` | Vendor subscriptions, SKU-level plans, platform plans. |
-| `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, measurements, SKU pricing, vendor image upload, courier admin. |
+| `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, authenticated measurement list/detail reads, SKU pricing, vendor image upload, courier admin. |
 | `social.ts` | `socialService` | Social OAuth connect/callback, profile/media sync. |
 | `admin.ts` | `adminService` | Bulk catalog/vendor import, catalog summary/delete. |
 | `legacy.ts` | flat functions | Back-compat wrappers (`getVendor`, `getCart`, `createOrderFromCart`, `loadVendorStorefront`, …). Also re-declares `VendorStorefront`/`StorefrontProduct`/`DeliveryEligibility` types that overlap `schema.d.ts` — treat those as convenience, not source of truth. |

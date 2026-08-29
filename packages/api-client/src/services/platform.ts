@@ -13,8 +13,8 @@ export const platformService = {
 
   listMeasurements: (config: { signal?: AbortSignal } = {}) =>
     apiGet<ApiEnvelope>('/v1/measurements/', config),
-  getMeasurement: (id: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/measurements/${id}`, { skipAuth: true }),
+  getMeasurement: (id: number | string, config: { signal?: AbortSignal } = {}) =>
+    apiGet<ApiEnvelope>(`/v1/measurements/${id}`, config),
 
   getSkuPrice: (skuId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`, { skipAuth: true }),

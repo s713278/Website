@@ -3,6 +3,7 @@ import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import type { CatalogSource, OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
+  continueWithCatalogPolicy,
   selectCategoryLimit,
   selectCatalogPolicy,
   selectStoreIsSubmitted,
@@ -154,6 +155,22 @@ describe('selectCatalogPolicy', () => {
       expect(
         selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).continueBlocked,
       ).toBe(false)
+    })
+
+    it('routes blocked and allowed continuation through the pure Continue boundary', () => {
+      const blockedPolicy = selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: true })
+      const allowedPolicy = selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true })
+      const events: string[] = []
+      const branches = {
+        blocked: () => events.push('blocked'),
+        allowed: () => events.push('allowed'),
+      }
+
+      expect(continueWithCatalogPolicy(blockedPolicy, branches)).toBe(1)
+      expect(events).toEqual(['blocked'])
+
+      expect(continueWithCatalogPolicy(allowedPolicy, branches)).toBe(2)
+      expect(events).toEqual(['blocked', 'allowed'])
     })
   })
 

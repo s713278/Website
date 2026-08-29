@@ -508,6 +508,23 @@ export type MeasurementCatalogEntry = {
 
 export type MeasurementCatalog = MeasurementCatalogEntry[]
 
+function mapMeasurementRow(value: unknown): MeasurementCatalogEntry | null {
+  if (!isRecord(value)) return null
+  const id = optionalInteger(value.id)
+  const type = measurementTypeOf(value.measurement_type ?? value.type ?? value.name)
+  if (id == null || type == null) return null
+  const units =
+    typeof value.unit === 'string'
+      ? value.unit.split(',').map((unit) => unit.trim()).filter((unit) => unit.length > 0)
+      : []
+  const unitOptions = Array.isArray(value.unit_options)
+    ? value.unit_options.filter(
+        (option): option is number => typeof option === 'number' && Number.isFinite(option),
+      )
+    : []
+  return { id, type, units, unitOptions }
+}
+
 /**
  * Maps `GET /v1/measurements/`. The operation is typed as a bare `APIResponseObject`, so this
  * reads the shape verified live on 2026-08-28 defensively: `id`, a `measurement_type` enum, a
@@ -525,20 +542,29 @@ export function mapMeasurementCatalog(payload: unknown): MeasurementCatalog {
       : []
   const catalog: MeasurementCatalog = []
   for (const row of rows) {
-    if (!isRecord(row)) continue
-    const id = optionalInteger(row.id)
-    const type = measurementTypeOf(row.measurement_type ?? row.type ?? row.name)
-    if (id == null || type == null) continue
-    const units =
-      typeof row.unit === 'string'
-        ? row.unit.split(',').map((unit) => unit.trim()).filter((unit) => unit.length > 0)
-        : []
-    const unitOptions = Array.isArray(row.unit_options)
-      ? row.unit_options.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-      : []
-    catalog.push({ id, type, units, unitOptions })
+    const entry = mapMeasurementRow(row)
+    if (entry) catalog.push(entry)
   }
   return catalog
+}
+
+/**
+ * Enrich list rows with `GET /v1/measurements/{id}` payloads.
+ *
+ * The deployed list omits `unit_options` even though its OpenAPI description says it includes
+ * them. Detail reads are therefore required before Step 6 can offer quantity suggestions.
+ */
+export function mergeMeasurementCatalogDetails(
+  catalog: MeasurementCatalog,
+  detailPayloads: unknown[],
+): MeasurementCatalog {
+  const detailsById = new Map<number, MeasurementCatalogEntry>()
+  for (const payload of detailPayloads) {
+    if (!isRecord(payload)) continue
+    const detail = mapMeasurementRow(payload.data)
+    if (detail) detailsById.set(detail.id, detail)
+  }
+  return catalog.map((entry) => detailsById.get(entry.id) ?? entry)
 }
 
 /** Accepts `data: []` and `data: { result: [] }`; both occur on vendor resources. */
