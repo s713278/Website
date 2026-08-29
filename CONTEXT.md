@@ -31,8 +31,10 @@ one-way: nothing the vendor assigns can be given back.
 _Avoid_: selection, linking, subscribing
 
 **Size**:
-One purchasable variant of a vendor product — a quantity, a unit and a price. A vendor
-product with no active size cannot be sold.
+One purchasable variant of a vendor product — a quantity, a unit and a price. Its
+measurement is the product's, not a choice the size makes: every size of a product shares
+that one measurement, and only the unit within it varies. A vendor product with no active
+size cannot be sold.
 _Avoid_: SKU, variant, option
 
 **Account catalog**:
