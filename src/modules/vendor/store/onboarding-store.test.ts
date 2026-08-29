@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import type { OnboardingAccess } from '../lib/onboarding-access'
 import type { CatalogSource, OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
@@ -33,6 +34,42 @@ function seedAt(step: OnboardingStep) {
     persistenceStatus: 'idle',
   })
 }
+
+describe('reset', () => {
+  it('starts a signed-in vendor at the navigation floor with the account catalog', () => {
+    const access: OnboardingAccess = { state: 'ready', vendorId: 'vendor-17' }
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        catalogSource: 'sample',
+        currentStep: 5,
+        completedSteps: [1, 2, 3, 4],
+      },
+      furthestVisitedStep: 5,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+      draftOwnerId: 'vendor-17',
+    })
+
+    useOnboardingStore.getState().reset(access)
+
+    const state = useOnboardingStore.getState()
+    expect(state.draft.currentStep).toBe(3)
+    expect(state.furthestVisitedStep).toBe(3)
+    expect(state.draft.catalogSource).toBe('account')
+  })
+
+  it('keeps an anonymous session at the phone step', () => {
+    seedAt(3)
+
+    useOnboardingStore.getState().reset({ state: 'anonymous' })
+
+    const state = useOnboardingStore.getState()
+    expect(state.draft.currentStep).toBe(1)
+    expect(state.furthestVisitedStep).toBe(1)
+    expect(state.draft.mobileVerified).toBe(false)
+  })
+})
 
 describe('updateDraft and earlier progress', () => {
   beforeEach(() => {

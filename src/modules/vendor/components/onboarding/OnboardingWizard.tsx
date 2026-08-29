@@ -671,7 +671,7 @@ export function OnboardingWizard() {
     tone: 'danger',
     onConfirm: () => {
       cancelActiveRequest()
-      reset()
+      reset(access)
       setIssues([])
     },
   })
