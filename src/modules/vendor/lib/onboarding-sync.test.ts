@@ -17,6 +17,7 @@ import {
   planCatalogCreates,
   planSkuWrites,
   persistProducts,
+  persistSkus,
 } from './onboarding-sync'
 
 /** platform product id -> vendor product id */
@@ -358,6 +359,75 @@ describe('persistProducts assignment callbacks', () => {
     )
 
     expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([31, 32])
+  })
+})
+
+describe('persistSkus reports the account SKU identity', () => {
+  const vendorProduct = {
+    vendorProductId: 900,
+    platformProductId: 31,
+    platformCategoryId: 10,
+    name: 'Orange Juice',
+    measurementId: null,
+  }
+
+  afterEach(() => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [] })
+  })
+
+  it('reports the current account SKU set after a create so capacity stays cumulative', async () => {
+    // One size already on the account, one new local size added in the draft. After the
+    // create, the account holds both — and that is what a later business-type switch must
+    // count against, since the create clears the draft but not the account.
+    let created = false
+    const captured: number[][] = []
+
+    await persistSkus(
+      'v1',
+      draftWith({
+        products: [product(31)],
+        skus: [draft({ id: 'sku-4001', productId: 31 }), draft({ id: 'draft-sku-31-1', productId: 31, name: 'Family', quantity: 2 })],
+      }),
+      (assignment) => {
+        if (assignment.skuIds) captured.push(assignment.skuIds)
+      },
+      {
+        getVendorProducts: async () => [vendorProduct],
+        getVendorSkus: async () => (created ? [account({ skuId: 4001 }), account({ skuId: 4002, name: 'Orange Juice-2 L', size: '2 L', quantity: 2 })] : [account({ skuId: 4001 })]),
+        createSku: async () => {
+          created = true
+        },
+        deleteSku: async () => undefined,
+      },
+    )
+
+    expect(captured).toEqual([[4001, 4002]])
+  })
+
+  it('reports the unchanged set without a second read when nothing was written', async () => {
+    let reads = 0
+    let reported: number[] | null = null
+
+    await persistSkus(
+      'v1',
+      draftWith({ products: [product(31)], skus: [draft({ id: 'sku-4001', productId: 31 })] }),
+      (assignment) => {
+        if (assignment.skuIds) reported = assignment.skuIds
+      },
+      {
+        getVendorProducts: async () => [vendorProduct],
+        getVendorSkus: async () => {
+          reads += 1
+          return [account({ skuId: 4001 })]
+        },
+        createSku: async () => undefined,
+        deleteSku: async () => undefined,
+      },
+    )
+
+    // The entry read is reused; no extra read is issued when the plan is empty.
+    expect(reads).toBe(1)
+    expect(reported).toEqual([4001])
   })
 })
 

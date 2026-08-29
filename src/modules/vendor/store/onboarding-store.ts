@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { BusinessTypeReference } from '@/shared/api'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
@@ -6,6 +7,12 @@ import type { MeasurementCatalog } from '../lib/onboarding-measurement'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import { purgeLegacyOnboardingDrafts } from '../lib/onboarding-draft-keys'
 import { nextPendingId } from '../lib/onboarding-pending-id'
+import {
+  projectedCategoryTotal,
+  projectedProductTotal,
+  projectedSkuTotal,
+  retainAssignedCatalog,
+} from '../lib/onboarding-catalog-limits'
 import { applyCreatedEntry, type CreatedCatalogEntry } from '../lib/onboarding-sync'
 import {
   cancelScheduledDraftSave,
@@ -31,7 +38,7 @@ import {
 
 type ImageKind = 'logo' | 'banner'
 
-type AccountCatalog = { categoryIds: number[]; productIds: number[] }
+type AccountCatalog = { categoryIds: number[]; productIds: number[]; skuIds: number[] }
 
 /**
  * The account catalog and the questions asked of it, built together.
@@ -54,7 +61,7 @@ function accountCatalogSlice(catalog: AccountCatalog) {
   }
 }
 
-const EMPTY_ACCOUNT_CATALOG: AccountCatalog = { categoryIds: [], productIds: [] }
+const EMPTY_ACCOUNT_CATALOG: AccountCatalog = { categoryIds: [], productIds: [], skuIds: [] }
 
 /** Adds what is new, and returns `current` untouched when nothing is. */
 function mergeIds(current: number[], added: number[] | undefined): number[] {
@@ -91,6 +98,12 @@ type OnboardingStore = {
   /** Live plan limit from vendor context; falls back to the configured default. */
   categoryLimit: number
   setCategoryLimit: (limit: number | null) => void
+  /** Live product cap from vendor context; falls back to the configured default. */
+  productLimit: number
+  setProductLimit: (limit: number | null) => void
+  /** Live size (SKU) cap from vendor context; falls back to the configured default. */
+  skuLimit: number
+  setSkuLimit: (limit: number | null) => void
   /**
    * Platform measurement catalog for Step 6 units. Defaults to the sample catalog so demo
    * mode and a failed live fetch still offer real units; the entry read replaces it.
@@ -101,25 +114,32 @@ type OnboardingStore = {
   storeSubmission: StoreSubmission | null
   setStoreSubmission: (submission: StoreSubmission | null) => void
   /**
-   * Platform IDs already assigned on the vendor's account.
+   * Platform IDs already assigned on the vendor's account, and the account's own SKU ids.
    *
    * Category and product assignment is additive for a vendor — there is no un-assign
-   * they are allowed to call — so anything listed here cannot be taken back off the
-   * store, and the wizard must not offer to. Not persisted: it describes the account,
-   * not the draft.
+   * they are allowed to call — so those ids cannot be taken back off the store, and the
+   * wizard must not offer to. Sizes are different: they can be deleted, so `skuIds` is the
+   * authoritative current set rather than a growing one. All three are the account totals
+   * the cumulative catalog limits are checked against. Not persisted: it describes the
+   * account, not the draft.
    */
   accountCatalog: AccountCatalog
-  setAccountCatalog: (catalog: AccountCatalog) => void
+  setAccountCatalog: (catalog: {
+    categoryIds: number[]
+    productIds: number[]
+    skuIds?: number[]
+  }) => void
   /** Whether the account already holds this platform category. */
   isCategoryAssigned: (categoryId: number) => boolean
   /** Whether the account already holds this platform product. */
   isProductAssigned: (productId: number) => boolean
   /**
-   * Record that the account now holds these platform categories and products.
+   * Record what a successful write left on the account, so the cumulative limits and the
+   * assignment predicates stay right for the rest of the visit without a re-read.
    *
-   * Assignment is additive, so this only ever grows the catalog. It is for writes that
-   * have already succeeded: the account is still re-read on entry, and that read stays
-   * the reconciliation.
+   * Categories and products are additive, so their ids only grow. Sizes can be deleted, so
+   * a reported `skuIds` is the authoritative current set and replaces what was there. The
+   * account is still re-read on entry, and that read stays the reconciliation.
    */
   recordAssignment: (assignment: Partial<AccountCatalog>) => void
   /**
@@ -163,6 +183,14 @@ type OnboardingStore = {
     updater: (draft: VendorOnboardingDraftV1) => VendorOnboardingDraftV1,
     invalidateFrom?: OnboardingStep,
   ) => void
+  /**
+   * Switch the Step 3 business type, keeping only what the account already holds.
+   *
+   * The unsaved selections belong to the previous business type and are cleared; the
+   * assigned categories, products, and account sizes are one-way and stay, so the switch
+   * neither blanks the live preview nor strands a vendor whose account is at a plan limit.
+   */
+  changeBusinessType: (businessType: BusinessTypeReference) => void
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
   updatePhone: (phone: string) => void
   setImage: (kind: ImageKind, file: File | null, url: string | null) => void
@@ -392,6 +420,60 @@ export function selectCategoryLimit(state: { categoryLimit: number }): number {
   return state.categoryLimit
 }
 
+/** The product cap in effect for this vendor's subscription. */
+export function selectProductLimit(state: { productLimit: number }): number {
+  return state.productLimit
+}
+
+/** The size (SKU) cap in effect for this vendor's subscription. */
+export function selectSkuLimit(state: { skuLimit: number }): number {
+  return state.skuLimit
+}
+
+type CatalogLimitState = {
+  draft: Pick<VendorOnboardingDraftV1, 'categories' | 'products' | 'skus'>
+  accountCatalog: AccountCatalog
+  categoryLimit: number
+  productLimit: number
+  skuLimit: number
+}
+
+/**
+ * The projected account totals if this draft were saved — account usage plus what the
+ * draft newly adds, deduped. These, not the draft counts, are what the limits gate, so a
+ * draft-clearing path cannot reopen a fresh allowance on top of a full account.
+ */
+export function selectProjectedCategoryTotal(state: CatalogLimitState): number {
+  return projectedCategoryTotal(
+    state.accountCatalog.categoryIds,
+    state.draft.categories.map((category) => category.id),
+  )
+}
+
+export function selectProjectedProductTotal(state: CatalogLimitState): number {
+  return projectedProductTotal(
+    state.accountCatalog.productIds,
+    state.draft.products.map((product) => product.id),
+  )
+}
+
+export function selectProjectedSkuTotal(state: CatalogLimitState): number {
+  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus)
+}
+
+/** Whether the projected total is at or over the cap, so no further entry may be added. */
+export function selectCategoryLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedCategoryTotal(state) >= state.categoryLimit
+}
+
+export function selectProductLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedProductTotal(state) >= state.productLimit
+}
+
+export function selectSkuLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedSkuTotal(state) >= state.skuLimit
+}
+
 /** Which catalog source a switch would move to and back from. */
 export type CatalogPolicy = {
   /** Whether the draft may move from its current catalog source to `target`. */
@@ -480,6 +562,8 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   recoveryMessage: null,
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
+  productLimit: ONBOARDING_CONFIG.maxProducts,
+  skuLimit: ONBOARDING_CONFIG.maxSkus,
   measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   storeSubmission: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
@@ -538,15 +622,25 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   setAccountCatalog(catalog) {
-    set(accountCatalogSlice(catalog))
+    set(accountCatalogSlice({
+      categoryIds: catalog.categoryIds,
+      productIds: catalog.productIds,
+      skuIds: catalog.skuIds ?? [],
+    }))
   },
 
   recordAssignment(assignment) {
     const { accountCatalog } = useOnboardingStore.getState()
     const categoryIds = mergeIds(accountCatalog.categoryIds, assignment.categoryIds)
     const productIds = mergeIds(accountCatalog.productIds, assignment.productIds)
-    if (categoryIds === accountCatalog.categoryIds && productIds === accountCatalog.productIds) return
-    set(accountCatalogSlice({ categoryIds, productIds }))
+    // Sizes can be deleted, so a reported set is authoritative rather than additive.
+    const skuIds = assignment.skuIds ?? accountCatalog.skuIds
+    if (
+      categoryIds === accountCatalog.categoryIds &&
+      productIds === accountCatalog.productIds &&
+      skuIds === accountCatalog.skuIds
+    ) return
+    set(accountCatalogSlice({ categoryIds, productIds, skuIds }))
   },
 
   addPendingCategory(input) {
@@ -619,6 +713,14 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   setCategoryLimit(limit) {
     set({ categoryLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxCategories })
+  },
+
+  setProductLimit(limit) {
+    set({ productLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxProducts })
+  },
+
+  setSkuLimit(limit) {
+    set({ skuLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxSkus })
   },
 
   setMeasurementCatalog(catalog) {
@@ -726,6 +828,20 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       recoveryMessage: null,
     }))
     queuePersistence()
+  },
+
+  changeBusinessType(businessType) {
+    const state = useOnboardingStore.getState()
+    if (state.draft.business.businessType?.id === businessType.id) return
+    const { accountCatalog } = state
+    state.updateDraft(
+      (current) => ({
+        ...current,
+        business: { ...current.business, businessType },
+        ...retainAssignedCatalog(current, accountCatalog),
+      }),
+      3,
+    )
   },
 
   updateRuntime(patch, invalidateFrom) {

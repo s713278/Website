@@ -118,6 +118,8 @@ export function OnboardingWizard() {
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
+  const setProductLimit = useOnboardingStore((state) => state.setProductLimit)
+  const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
   const setMeasurementCatalog = useOnboardingStore((state) => state.setMeasurementCatalog)
@@ -206,9 +208,11 @@ export function OnboardingWizard() {
   useEffect(() => {
     if (access.state !== 'ready') {
       setCategoryLimit(null)
+      setProductLimit(null)
+      setSkuLimit(null)
       setContextError(null)
       setStoreSubmission(null)
-      setAccountCatalog({ categoryIds: [], productIds: [] })
+      setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [] })
       setAccountState('idle')
       return
     }
@@ -221,11 +225,16 @@ export function OnboardingWizard() {
     const apply = (server: ServerOnboardingState) => {
       setContextError(null)
       setCategoryLimit(server.context.subscription.limits.maxCategories)
+      setProductLimit(server.context.subscription.limits.maxProducts)
+      setSkuLimit(server.context.subscription.limits.maxSkus)
       const accountStoreIsSubmitted = isStoreSubmitted(server)
-      // What is already on the store, and therefore can no longer be unpicked.
+      // What is already on the store, and therefore counts against every plan limit — and,
+      // for categories and products, can no longer be unpicked. `skuIds` is the account's
+      // own size identity, needed for the net-zero size rule across draft-clearing paths.
       setAccountCatalog({
         categoryIds: server.categories.map((category) => category.platformCategoryId),
         productIds: server.products.map((product) => product.platformProductId),
+        skuIds: server.skus.map((sku) => sku.skuId),
       })
       // Account data, not draft — applied even when local edits win the draft below.
       setMeasurementCatalog(server.measurements)
@@ -287,7 +296,7 @@ export function OnboardingWizard() {
     return () => {
       ignore = true
     }
-  }, [access, setCategoryLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, applyResumedDraft])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -488,9 +497,13 @@ export function OnboardingWizard() {
   }
 
   const handleCatalogContinue = async () => {
-    const { draft, runtime, measurementCatalog } = useOnboardingStore.getState()
+    const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } =
+      useOnboardingStore.getState()
+    // The projected account total is what every limit gates, so validation is handed the
+    // account snapshot and the product/size caps alongside the category cap.
+    const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
     if (draft.currentStep === 10) {
-      const nextIssues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog)
+      const nextIssues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
       if (nextIssues.length) return showIssues(nextIssues)
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
@@ -570,7 +583,7 @@ export function OnboardingWizard() {
       return
     }
 
-    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog)
+    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep

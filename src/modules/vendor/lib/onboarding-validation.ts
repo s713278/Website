@@ -10,8 +10,29 @@ import {
   type ValidationIssue,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import {
+  projectedCategoryTotal,
+  projectedProductTotal,
+  projectedSkuTotal,
+} from './onboarding-catalog-limits'
 import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
 import { isKnownSkuId } from './onboarding-sku-id'
+
+/**
+ * What the account already holds and the plan caps that are not passed positionally.
+ *
+ * The projected account total — account usage plus what this draft adds — is what a limit
+ * gates, so validation needs the account snapshot to be the second line of defence behind
+ * the disabled controls. Left empty, it degrades to counting the draft alone against the
+ * configured fallbacks, which is the historical behaviour for a first-time/demo flow.
+ */
+export type CatalogEnforcement = {
+  maxProducts?: number
+  maxSkus?: number
+  account?: { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+}
+
+const EMPTY_ACCOUNT = { categoryIds: [], productIds: [], skuIds: [] }
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -228,7 +249,11 @@ export function validateStep(
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
   measurementCatalog: MeasurementCatalog = [],
+  catalog: CatalogEnforcement = {},
 ): ValidationIssue[] {
+  const account = catalog.account ?? EMPTY_ACCOUNT
+  const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
+  const maxSkus = catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
       ? []
@@ -246,18 +271,26 @@ export function validateStep(
   }
   if (step === 4) {
     if (!draft.categories.length) return [issue(4, 'categories', 'Choose at least one category.')]
-    if (draft.categories.length > maxCategories) {
-      return [issue(4, 'categories', `Choose no more than ${maxCategories} categories.`)]
+    // The projected account total, not the draft count: a business-type change empties the
+    // draft while the account keeps its categories, so the cap is against account ∪ draft.
+    if (projectedCategoryTotal(account.categoryIds, draft.categories.map((category) => category.id)) > maxCategories) {
+      return [issue(4, 'categories', `Your plan allows ${maxCategories} categories in total, including those already saved to your store.`)]
     }
     return []
   }
   if (step === 5) {
-    return draft.products.length
-      ? []
-      : [issue(5, 'products', 'Choose at least one product to continue.')]
+    if (!draft.products.length) return [issue(5, 'products', 'Choose at least one product to continue.')]
+    if (projectedProductTotal(account.productIds, draft.products.map((product) => product.id)) > maxProducts) {
+      return [issue(5, 'products', `Your plan allows ${maxProducts} products in total, including those already saved to your store.`)]
+    }
+    return []
   }
   if (step === 6) {
     const issues: ValidationIssue[] = []
+    // Projected post-save size count: account sizes plus new local ones, an edit net-zero.
+    if (projectedSkuTotal(account.skuIds, draft.skus) > maxSkus) {
+      issues.push(issue(6, 'skus', `Your plan allows ${maxSkus} sizes in total, including those already saved to your store.`))
+    }
     for (const product of draft.products) {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
       // The measurement every size of this product must carry. Undefined when no catalog has
@@ -324,9 +357,10 @@ export function readinessIssues(
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
   measurementCatalog: MeasurementCatalog = [],
+  catalog: CatalogEnforcement = {},
 ): ValidationIssue[] {
   return ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).flatMap((step) =>
-    validateStep(step, draft, runtime, maxCategories, measurementCatalog),
+    validateStep(step, draft, runtime, maxCategories, measurementCatalog, catalog),
   )
 }
 

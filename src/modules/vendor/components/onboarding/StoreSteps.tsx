@@ -25,7 +25,12 @@ import {
 } from '../../data/onboarding-theme-presets'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { StepNotice } from './AccessNotice'
-import { selectCategoryLimit, useOnboardingStore } from '../../store/onboarding-store'
+import {
+  selectCategoryLimit,
+  selectProductLimit,
+  selectSkuLimit,
+  useOnboardingStore,
+} from '../../store/onboarding-store'
 import type {
   StoreSubmission,
   OnboardingStep,
@@ -463,8 +468,15 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
   const runtime = useOnboardingStore((state) => state.runtime)
   const storeSubmission = useOnboardingStore((state) => state.storeSubmission)
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  const skuLimit = useOnboardingStore(selectSkuLimit)
+  const accountCatalog = useOnboardingStore((state) => state.accountCatalog)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
-  const issues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog)
+  const issues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog, {
+    maxProducts: productLimit,
+    maxSkus: skuLimit,
+    account: accountCatalog,
+  })
   const completed =
     draft.publication.state === 'prototype-complete' &&
     draft.completedSteps.includes(10) &&

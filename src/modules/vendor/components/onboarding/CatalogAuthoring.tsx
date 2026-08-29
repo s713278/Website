@@ -5,6 +5,10 @@ import { measurementLabel } from '../../lib/onboarding-measurement'
 import { writesReachAccount } from '../../lib/onboarding-sync'
 import {
   selectCategoryLimit,
+  selectCategoryLimitReached,
+  selectProductLimit,
+  selectProductLimitReached,
+  selectProjectedCategoryTotal,
   useOnboardingStore,
 } from '../../store/onboarding-store'
 import { FieldLabel, Hint, fieldShell } from './StepPrimitives'
@@ -41,14 +45,16 @@ export function AuthorCategoryForm({ onAdded }: { onAdded: () => void }) {
   const businessTypeId = useOnboardingStore(
     (state) => state.draft.business.businessType?.id ?? null,
   )
-  const categoryChoiceCount = useOnboardingStore((state) => state.draft.categories.length)
+  // The projected account total, not the draft count: authoring a category on top of a
+  // full account would exceed the plan the same way selecting one would.
+  const projectedCategories = useOnboardingStore(selectProjectedCategoryTotal)
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const addPendingCategory = useOnboardingStore((state) => state.addPendingCategory)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
-  const atLimit = categoryChoiceCount >= categoryLimit
+  const atLimit = useOnboardingStore(selectCategoryLimitReached)
 
   const close = () => {
     setOpen(false)
@@ -160,7 +166,7 @@ export function AuthorCategoryForm({ onAdded }: { onAdded: () => void }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-[var(--ob-ink-soft)]">
-          {categoryChoiceCount} of {categoryLimit} platform category choices used
+          {projectedCategories} of {categoryLimit} platform category choices used
         </p>
         <Button type="submit" size="sm" disabled={atLimit || businessTypeId === null}>
           <PlusIcon /> Add platform category
@@ -182,6 +188,9 @@ export function AuthorProductForm({
   const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const addPendingProduct = useOnboardingStore((state) => state.addPendingProduct)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  // Authoring a product counts against the same cumulative cap as selecting one.
+  const atLimit = useOnboardingStore(selectProductLimitReached)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -209,7 +218,7 @@ export function AuthorProductForm({
       setNameError('Add a platform product name with at least 3 characters.')
       return
     }
-    if (!selectedMeasurement) return
+    if (!selectedMeasurement || atLimit) return
 
     addPendingProduct({
       name: trimmedName,
@@ -224,17 +233,24 @@ export function AuthorProductForm({
 
   if (!open) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!measurementCatalog.length}
-        onClick={() => {
-          setMeasurementId(measurementCatalog[0]?.id ?? null)
-          setOpen(true)
-        }}
-      >
-        <PlusIcon /> Add a platform product
-      </Button>
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!measurementCatalog.length || atLimit}
+          onClick={() => {
+            setMeasurementId(measurementCatalog[0]?.id ?? null)
+            setOpen(true)
+          }}
+        >
+          <PlusIcon /> Add a platform product
+        </Button>
+        {atLimit ? (
+          <span className="text-xs text-[var(--ob-ink-soft)]">
+            Your plan's product limit of {productLimit} is reached.
+          </span>
+        ) : null}
+      </div>
     )
   }
 
@@ -342,7 +358,7 @@ export function AuthorProductForm({
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={!selectedMeasurement}>
+        <Button type="submit" size="sm" disabled={!selectedMeasurement || atLimit}>
           <PlusIcon /> Add platform product
         </Button>
       </div>

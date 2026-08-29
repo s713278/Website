@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
-import type { CatalogSource, OnboardingStep } from '../types/onboarding'
+import { ONBOARDING_CONFIG, type CatalogSource, type OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
   continueWithCatalogPolicy,
   selectCategoryLimit,
   selectCatalogPolicy,
+  selectCategoryLimitReached,
+  selectProductLimit,
+  selectProductLimitReached,
+  selectProjectedCategoryTotal,
+  selectProjectedProductTotal,
+  selectProjectedSkuTotal,
+  selectSkuLimit,
+  selectSkuLimitReached,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from './onboarding-store'
@@ -53,7 +61,7 @@ describe('abandonDraft on explicit sign-out', () => {
       persistenceStatus: 'idle',
       draftOwnerId: 'vendor-17',
     })
-    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11, 12], productIds: [31] })
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11, 12], productIds: [31], skuIds: [4021] })
     useOnboardingStore.getState().setStoreSubmission({
       storeIdentifier: 'sk-organic-store',
       vendorStatus: 'ACTIVE',
@@ -69,7 +77,7 @@ describe('abandonDraft on explicit sign-out', () => {
     expect(state.draftOwnerId).toBe(null)
     // A retained snapshot is the over-limit bug: read as the whole account, an empty one
     // grants fresh capacity; a stale non-empty one lies about what is assigned.
-    expect(state.accountCatalog).toEqual({ categoryIds: [], productIds: [] })
+    expect(state.accountCatalog).toEqual({ categoryIds: [], productIds: [], skuIds: [] })
     expect(state.storeSubmission).toBe(null)
   })
 })
@@ -332,6 +340,165 @@ describe('an assignment recorded mid-visit', () => {
 
     expect(useOnboardingStore.getState().isProductAssigned(44)).toBe(true)
     expect(useOnboardingStore.getState().isProductAssigned(45)).toBe(true)
+  })
+})
+
+/**
+ * Cumulative catalog limits: the projected account total, not the draft count, is what a
+ * limit is checked against. These lock the store boundary the interactive controls and the
+ * readiness validation both read, so a draft-clearing path (a business-type change) can
+ * never reopen a fresh full allowance on top of a full account.
+ */
+describe('cumulative catalog limits', () => {
+  beforeEach(() => {
+    useOnboardingStore.setState({
+      draft: createEmptyOnboardingDraft(),
+      accountCatalog: { categoryIds: [], productIds: [], skuIds: [] },
+      isCategoryAssigned: () => false,
+      isProductAssigned: () => false,
+    })
+    useOnboardingStore.getState().setCategoryLimit(3)
+    useOnboardingStore.getState().setProductLimit(4)
+    useOnboardingStore.getState().setSkuLimit(5)
+  })
+
+  it('falls back to the configured defaults for a missing or zero live limit', () => {
+    useOnboardingStore.getState().setProductLimit(null)
+    useOnboardingStore.getState().setSkuLimit(0)
+
+    expect(selectProductLimit(useOnboardingStore.getState())).toBe(ONBOARDING_CONFIG.maxProducts)
+    expect(selectSkuLimit(useOnboardingStore.getState())).toBe(ONBOARDING_CONFIG.maxSkus)
+  })
+
+  it('records account SKU identity authoritatively, since sizes can be deleted', () => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [4021, 4022] })
+
+    // Unlike category/product assignment, a size write is the whole current set — a delete
+    // has to shrink it, so the reported ids replace rather than merge.
+    useOnboardingStore.getState().recordAssignment({ skuIds: [4022, 4030] })
+
+    expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4022, 4030])
+  })
+
+  it('leaves SKU identity untouched when a category/product write reports no skuIds', () => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [4021] })
+
+    useOnboardingStore.getState().recordAssignment({ categoryIds: [12] })
+
+    expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4021])
+  })
+
+  it('projects account usage plus new draft entries, reaching the limit early after a switch', () => {
+    // Business type A left two categories, three products and four sizes on the account.
+    useOnboardingStore.getState().setAccountCatalog({
+      categoryIds: [11, 12],
+      productIds: [31, 32, 33],
+      skuIds: [4001, 4002, 4003, 4004],
+    })
+    // The draft is empty, as it is right after switching to business type B.
+    expect(selectProjectedCategoryTotal(useOnboardingStore.getState())).toBe(2)
+    expect(selectProjectedProductTotal(useOnboardingStore.getState())).toBe(3)
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(4)
+
+    // Every limit is already at or past its cap purely from the account.
+    useOnboardingStore.getState().setCategoryLimit(2)
+    useOnboardingStore.getState().setProductLimit(3)
+    useOnboardingStore.getState().setSkuLimit(4)
+    expect(selectCategoryLimitReached(useOnboardingStore.getState())).toBe(true)
+    expect(selectProductLimitReached(useOnboardingStore.getState())).toBe(true)
+    expect(selectSkuLimitReached(useOnboardingStore.getState())).toBe(true)
+  })
+
+  it('counts a first-time account with zero usage against its full allowance', () => {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        categories: [
+          { id: 21, name: 'A', businessTypeId: 7, description: null, imageUrl: null, displayOrder: null },
+          { id: 22, name: 'B', businessTypeId: 7, description: null, imageUrl: null, displayOrder: null },
+        ],
+      },
+    })
+
+    expect(selectProjectedCategoryTotal(useOnboardingStore.getState())).toBe(2)
+    // Limit 3, usage 0, two in the draft: room for one more.
+    expect(selectCategoryLimitReached(useOnboardingStore.getState())).toBe(false)
+  })
+})
+
+/**
+ * Changing the business type on Step 3 is a draft-clearing path. It must clear only the
+ * unsaved selections: assignment is one-way, so categories, products, and account sizes
+ * already saved cannot be dropped from view without blanking the live preview and — at a
+ * plan limit — stranding the vendor on an empty Step 4 they cannot pass.
+ */
+describe('changeBusinessType', () => {
+  const typeA = { id: 1, name: 'Bakery', icon: null, displayOrder: null }
+  const typeB = { id: 2, name: 'Grocery', icon: null, displayOrder: null }
+
+  function seedAssignedCatalog() {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        business: { businessType: typeA, businessName: '', ownerName: '', contactPerson: '' },
+        currentStep: 3,
+        completedSteps: [1, 2, 3, 4, 5] as OnboardingStep[],
+        categories: [
+          { id: 11, name: 'Bread', businessTypeId: 1, description: null, imageUrl: null, displayOrder: null },
+          { id: 12, name: 'Draft only', businessTypeId: 1, description: null, imageUrl: null, displayOrder: null },
+        ],
+        products: [
+          { id: 31, name: 'Loaf', description: null, imageUrl: null, measurementId: null, measurementName: null, categoryId: 11 },
+          { id: 32, name: 'Unsaved', description: null, imageUrl: null, measurementId: null, measurementName: null, categoryId: 12 },
+        ],
+        skus: [
+          { id: 'sku-4001', productId: 31, name: 'Regular', description: '', skuType: 'ITEM', measurementType: 'COUNT', unit: 'pcs', quantity: 1, listPrice: 60, salePrice: 55, active: true, homeDelivery: true, storePickup: true },
+          { id: 'draft-sku-31-2', productId: 31, name: 'Family', description: '', skuType: 'ITEM', measurementType: 'COUNT', unit: 'pcs', quantity: 2, listPrice: 100, salePrice: 90, active: true, homeDelivery: true, storePickup: true },
+        ],
+      },
+      furthestVisitedStep: 5,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+    })
+    // The account holds only category 11, product 31, and size 4001.
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11], productIds: [31], skuIds: [4001] })
+  }
+
+  it('keeps the saved catalog and clears only the unsaved selections', () => {
+    seedAssignedCatalog()
+
+    useOnboardingStore.getState().changeBusinessType(typeB)
+
+    const { draft } = useOnboardingStore.getState()
+    expect(draft.business.businessType).toEqual(typeB)
+    // The saved category, product, and size survive; the browser-only ones are gone.
+    expect(draft.categories.map((c) => c.id)).toEqual([11])
+    expect(draft.products.map((p) => p.id)).toEqual([31])
+    expect(draft.skus.map((s) => s.id)).toEqual(['sku-4001'])
+  })
+
+  it('leaves a maxed-out vendor able to pass Step 4 rather than stranded', () => {
+    seedAssignedCatalog()
+    useOnboardingStore.getState().setCategoryLimit(1)
+
+    useOnboardingStore.getState().changeBusinessType(typeB)
+
+    const state = useOnboardingStore.getState()
+    // The saved category still satisfies "choose at least one", so the vendor is not stuck
+    // on an empty step they cannot leave — even though no further category can be added.
+    expect(state.draft.categories.length).toBe(1)
+    expect(selectCategoryLimitReached(state)).toBe(true)
+  })
+
+  it('is a no-op for the same business type, so it cannot silently drop progress', () => {
+    seedAssignedCatalog()
+
+    useOnboardingStore.getState().changeBusinessType(typeA)
+
+    const { draft } = useOnboardingStore.getState()
+    // Unchanged: the guard prevents an invalidate-from-3 that would reset completed steps.
+    expect(draft.completedSteps).toEqual([1, 2, 3, 4, 5])
+    expect(draft.products.map((p) => p.id)).toEqual([31, 32])
   })
 })
 

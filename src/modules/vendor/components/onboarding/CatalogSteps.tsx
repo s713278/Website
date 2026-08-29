@@ -21,6 +21,11 @@ import { StepNotice } from './AccessNotice'
 import {
   selectCatalogPolicy,
   selectCategoryLimit,
+  selectCategoryLimitReached,
+  selectProductLimit,
+  selectProductLimitReached,
+  selectProjectedCategoryTotal,
+  selectProjectedProductTotal,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
@@ -117,7 +122,7 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
 
 export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
-  const updateDraft = useOnboardingStore((state) => state.updateDraft)
+  const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
   const references = useBusinessTypeReferences(draft.catalogSource)
   const loadMoreBusinessTypes = references.loadMore
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -195,21 +200,12 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
     if (selected?.id === businessType.id) return
-    const apply = () => updateDraft(
-      (current) => ({
-        ...current,
-        business: { ...current.business, businessType },
-        categories: [],
-        products: [],
-        skus: [],
-      }),
-      3,
-    )
+    const apply = () => changeBusinessType(businessType)
     if (selected) {
       confirm({
         title: 'Change business type?',
-        description: 'Changing the business type removes all selected categories, products, and their sizes and prices, because they belong to the previous catalog.',
-        confirmLabel: 'Change and clear catalog',
+        description: 'This clears the categories, products, and sizes you picked for this business type but have not saved yet. Anything already saved to your store stays on it and still counts toward your plan limits.',
+        confirmLabel: 'Change business type',
         tone: 'danger',
         onConfirm: apply,
       })
@@ -337,6 +333,10 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
+  // The projected account total — draft plus what the account already holds — is what the
+  // limit gates, so a business-type change cannot reopen a fresh allowance on a full account.
+  const projectedCategories = useOnboardingStore(selectProjectedCategoryTotal)
+  const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const liveApi = isLiveApi()
@@ -353,7 +353,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   const toggle = (category: (typeof draft.categories)[number]) => {
     const choice = catalogChoiceState(draft.categories, category.id)
-    if (!choice.chosen && draft.categories.length >= categoryLimit) return
+    if (!choice.chosen && categoryLimitReached) return
     if (choice.chosen && isCategoryAssigned(category.id)) {
       setBlocked(
         `${category.name} is already saved to your store. Categories cannot be removed here yet — contact support if you need it taken off.`,
@@ -399,7 +399,10 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     <div className="space-y-4">
       {writesReachAccount(draft.catalogSource) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
-      <p className="text-sm text-[var(--ob-ink-soft)]">{draft.categories.length} of {categoryLimit} selected</p>
+      {categoryLimitReached ? (
+        <StepNotice message={`You've reached your plan's limit of ${categoryLimit} categories, counting those already saved to your store.`} />
+      ) : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedCategories} of {categoryLimit} used</p>
       {createControlVisible && !storeIsSubmitted ? (
         <AuthorCategoryForm onAdded={() => setSearch('')} />
       ) : null}
@@ -423,7 +426,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         <div id="categories" className="grid gap-3 @min-[32rem]:grid-cols-2">
           {loadedItems.map((category) => {
             const choice = catalogChoiceState(draft.categories, category.id)
-            const atLimit = !choice.chosen && draft.categories.length >= categoryLimit
+            const atLimit = !choice.chosen && categoryLimitReached
             const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
               <button
@@ -490,6 +493,8 @@ function ProductCategoryPicker({
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
   const availableItems = appendMissingReferenceItems<ProductReference>(
@@ -505,6 +510,12 @@ function ProductCategoryPicker({
     if (choice.chosen && isProductAssigned(product.id)) {
       setBlocked(
         `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
+      )
+      return
+    }
+    if (!choice.chosen && productLimitReached) {
+      setBlocked(
+        `You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`,
       )
       return
     }
@@ -584,18 +595,20 @@ function ProductCategoryPicker({
           {items.map((product) => {
             const choice = catalogChoiceState(draft.products, product.id)
             const onStore = choice.chosen && isProductAssigned(product.id)
+            const atLimit = !choice.chosen && productLimitReached
             return (
               <button
                 key={product.id}
                 type="button"
                 aria-pressed={choice.chosen}
-                aria-disabled={onStore}
+                aria-disabled={onStore || atLimit}
                 onClick={() => toggle(product)}
                 className={cn(
                   'flex items-center gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                   choice.chosen
                     ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
                     : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
+                  atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
                 )}
               >
                 <ReferenceThumb src={product.imageUrl} fallbackSrc={productFallbackImage} />
@@ -628,6 +641,9 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
   const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  const projectedProducts = useOnboardingStore(selectProjectedProductTotal)
+  const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const liveApi = isLiveApi()
   const createControlVisible = useOnboardingStore(
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
@@ -646,6 +662,10 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
   return (
     <div className="space-y-4">
       {writesReachAccount(catalogSource) ? <PermanenceNotice kind="products" /> : null}
+      {productLimitReached ? (
+        <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
+      ) : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedProducts} of {productLimit} products used</p>
       <div className="flex flex-wrap gap-2 text-xs">
         {summary.map((category) => (
           <span key={category.id} className="rounded-full bg-muted px-2.5 py-1 font-medium">

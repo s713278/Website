@@ -56,7 +56,7 @@ export function stepErrorField(step: OnboardingStep): string {
 }
 
 /** What one successful write added to the vendor's account catalog. */
-export type AccountAssignment = { categoryIds?: number[]; productIds?: number[] }
+export type AccountAssignment = { categoryIds?: number[]; productIds?: number[]; skuIds?: number[] }
 
 /**
  * Told what reached the account, as each write lands.
@@ -562,10 +562,20 @@ export async function persistProducts(
   }
 }
 
-async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Promise<void> {
+type SkuPersistenceService = Pick<
+  typeof vendorOnboardingService,
+  'getVendorProducts' | 'getVendorSkus' | 'createSku' | 'deleteSku'
+>
+
+export async function persistSkus(
+  vendorId: string,
+  draft: VendorOnboardingDraftV1,
+  onAssigned: OnAssigned,
+  service: SkuPersistenceService = vendorOnboardingService,
+): Promise<void> {
   const [products, serverSkus] = await Promise.all([
-    vendorOnboardingService.getVendorProducts(vendorId),
-    vendorOnboardingService.getVendorSkus(vendorId),
+    service.getVendorProducts(vendorId),
+    service.getVendorSkus(vendorId),
   ])
   const vendorProductIds = vendorProductIdByPlatformId(products)
   const plan = planSkuWrites(draft, serverSkus, vendorProductIds)
@@ -574,7 +584,7 @@ async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Pr
   // Deletions first: an edit is delete-then-create, and creating first would collide with
   // the row being replaced on the (name, weight, vendor_product_id) unique constraint.
   for (const skuId of plan.deletes) {
-    await vendorOnboardingService.deleteSku(vendorId, skuId)
+    await service.deleteSku(vendorId, skuId)
     const removed = serverSkus.find((sku) => sku.skuId === skuId)
     if (removed) nameOnAccount.delete(`${removed.vendorProductId}::${removed.name}`)
   }
@@ -585,7 +595,7 @@ async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Pr
     if (nameOnAccount.has(key)) continue
 
     try {
-      await vendorOnboardingService.createSku(
+      await service.createSku(
         vendorId,
         {
           name: sku.name,
@@ -607,6 +617,15 @@ async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Pr
       if (!isDuplicateSkuError(error)) throw error
     }
   }
+
+  // Report the account's current SKU identity so cumulative size capacity stays right for
+  // the rest of the visit. A create returns no id (the wrapper discards it), so the set is
+  // re-read once writes have landed; when nothing changed, the entry read already had it.
+  // Sizes can be deleted, so this replaces rather than grows the retained set.
+  const finalSkus = plan.creates.length || plan.deletes.length
+    ? await service.getVendorSkus(vendorId)
+    : serverSkus
+  onAssigned({ skuIds: finalSkus.map((sku) => sku.skuId) })
 }
 
 /**
@@ -638,7 +657,7 @@ export async function persistStep(
 
   if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
   if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
-  if (step === 6) return persistSkus(vendorId, draft)
+  if (step === 6) return persistSkus(vendorId, draft, onAssigned)
 
   // Steps 7 and 8 share one payload, and payment_options replaces the existing set,
   // so both always send the complete current configuration.

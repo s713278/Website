@@ -15,7 +15,12 @@ import { Button, EmptyState, Input } from '@/shared/components/ui'
 import { localSkuId } from '../../lib/onboarding-sku-id'
 import { validateDraftSku } from '../../lib/onboarding-validation'
 import { useSingleOpen } from '../../hooks/use-single-open'
-import { useOnboardingStore } from '../../store/onboarding-store'
+import {
+  selectProjectedSkuTotal,
+  selectSkuLimit,
+  selectSkuLimitReached,
+  useOnboardingStore,
+} from '../../store/onboarding-store'
 import type {
   DeliveryDraft,
   DraftSku,
@@ -35,6 +40,7 @@ import {
   unitsForMeasurement,
   type MeasurementCatalog,
 } from '../../lib/onboarding-measurement'
+import { StepNotice } from './AccessNotice'
 import { AccordionPanel, FieldError, FieldLabel, Hint, type RequestConfirmation, StepSection } from './StepPrimitives'
 
 const WEEKDAYS: Array<{ value: Weekday; label: string }> = [
@@ -118,6 +124,9 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
+  const skuLimit = useOnboardingStore(selectSkuLimit)
+  const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
+  const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
   const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
   const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
@@ -204,6 +213,10 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
       <Hint className="mb-5">
         Give each product at least one size and its price. Add another size only when a different pack sells for a different price.
       </Hint>
+      {skuLimitReached ? (
+        <StepNotice message={`You've reached your plan's limit of ${skuLimit} sizes, counting those already saved to your store.`} />
+      ) : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedSkus} of {skuLimit} sizes used</p>
       {draft.products.map((product) => {
         const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
         // The one measurement every size of this product must carry. Shown read-only below,
@@ -248,7 +261,11 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateDraft((current) => ({ ...current, skus: [...current.skus, makeSku(product, current.skus, measurementCatalog)] }), 6)}
+                  disabled={skuLimitReached}
+                  onClick={() => {
+                    if (skuLimitReached) return
+                    updateDraft((current) => ({ ...current, skus: [...current.skus, makeSku(product, current.skus, measurementCatalog)] }), 6)
+                  }}
                 >
                   <PlusIcon /> Add another size
                 </Button>

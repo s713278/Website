@@ -167,6 +167,95 @@ describe('readinessIssues respects the live plan limit', () => {
   })
 })
 
+describe('validateStep rejects an over-limit projected account total', () => {
+  // The draft count alone is not what a limit gates. A business-type change empties the
+  // draft while the account keeps every earlier write, so validation has to count the
+  // projected account total — account usage plus what this draft adds — as the second
+  // line of defence behind the disabled controls.
+  function category(id: number): VendorOnboardingDraftV1['categories'][number] {
+    return { id, name: `Category ${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null }
+  }
+
+  it('rejects categories when account usage plus the draft exceeds the limit', () => {
+    // Limit 2, two already on the account under business type A, one chosen under B.
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(21)] }
+    const issues = validateStep(4, draft, runtime, 2, [], {
+      account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
+    })
+    expect(issues.some((item) => item.field === 'categories')).toBe(true)
+  })
+
+  it('accepts categories that fit within the remaining account allowance', () => {
+    // Limit 3, two on the account, one in the draft: projected 3, exactly at the cap.
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(21)] }
+    const issues = validateStep(4, draft, runtime, 3, [], {
+      account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
+    })
+    expect(issues.filter((item) => item.field === 'categories')).toEqual([])
+  })
+
+  it('does not double-count a draft category already on the account', () => {
+    // The same two ids, so the projected total is 2, not 4.
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(11), category(12)] }
+    const issues = validateStep(4, draft, runtime, 2, [], {
+      account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
+    })
+    expect(issues.filter((item) => item.field === 'categories')).toEqual([])
+  })
+
+  it('rejects products when account usage plus the draft exceeds the limit', () => {
+    const draft = draftWith([product(41, 'New')], [])
+    const issues = validateStep(5, draft, runtime, undefined, [], {
+      maxProducts: 3,
+      account: { categoryIds: [], productIds: [31, 32, 33], skuIds: [] },
+    })
+    expect(issues.some((item) => item.field === 'products')).toBe(true)
+  })
+
+  it('does not double-count an already-assigned product', () => {
+    const draft = draftWith([product(31, 'Existing')], [])
+    const issues = validateStep(5, draft, runtime, undefined, [], {
+      maxProducts: 3,
+      account: { categoryIds: [], productIds: [31, 32, 33], skuIds: [] },
+    })
+    expect(issues.filter((item) => item.field === 'products')).toEqual([])
+  })
+
+  it('rejects sizes when the projected post-save count exceeds the limit', () => {
+    // Three sizes on the account, one brand-new local one: projected 4 against a cap of 3.
+    const draft = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'draft-sku-41-1', productId: 41 })],
+    )
+    const issues = validateStep(6, draft, runtime, undefined, [], {
+      maxSkus: 3,
+      account: { categoryIds: [], productIds: [], skuIds: [4001, 4002, 4003] },
+    })
+    expect(issues.some((item) => item.field === 'skus')).toBe(true)
+  })
+
+  it('treats an edited account size as net-zero, not removed-plus-added', () => {
+    // The two account sizes, both edited in place, stay two — never four.
+    const draft = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'sku-4001', productId: 41 }), sku({ id: 'sku-4002', productId: 41 })],
+    )
+    const issues = validateStep(6, draft, runtime, undefined, [], {
+      maxSkus: 2,
+      account: { categoryIds: [], productIds: [], skuIds: [4001, 4002] },
+    })
+    expect(issues.filter((item) => item.field === 'skus')).toEqual([])
+  })
+
+  it('rejects an over-limit projected total through the full readiness pass', () => {
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(21)] }
+    const issues = readinessIssues(draft, runtime, 2, [], {
+      account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
+    })
+    expect(issues.some((item) => item.field === 'categories')).toBe(true)
+  })
+})
+
 describe('validateStep — step 6 measurement guard', () => {
   // A size's measurement is its product's measurement. Step 6 no longer lets a vendor
   // change it, but a stale draft, a restored draft, or a direct store write could still

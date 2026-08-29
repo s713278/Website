@@ -8,6 +8,14 @@ export const ONBOARDING_DRAFT_VERSION = 4 as const
 export const ONBOARDING_CONFIG = {
   /** Fallback only. The real limit comes from vendor context subscription limits. */
   maxCategories: 2,
+  /**
+   * Fallbacks only, used when the vendor context omits a live product/size limit (and in
+   * demo mode, which has no subscription). Deliberately generous: a real plan always sends
+   * its own numbers, so these never bite a live vendor, and they must not newly cap the
+   * demo/first-time flow that has never had a product or size limit.
+   */
+  maxProducts: 50,
+  maxSkus: 200,
   /** Structural sanity bound for a stored draft — not a plan limit. */
   maxPersistedCategories: 50,
   businessTypePageSize: 6,
