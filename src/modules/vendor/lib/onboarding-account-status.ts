@@ -1,5 +1,7 @@
 import type { ServerOnboardingState } from './onboarding-resume'
 
+type AccountStatusState = Pick<ServerOnboardingState, 'context'>
+
 /**
  * Whether the vendor's store has been submitted, and whether an admin has approved it.
  *
@@ -11,10 +13,10 @@ import type { ServerOnboardingState } from './onboarding-resume'
  *
  * The import above is `import type`, so it is erased at build time.
  */
-export function isStoreSubmitted(state: ServerOnboardingState): boolean {
+export function isStoreSubmitted(state: AccountStatusState): boolean {
   return state.context.vendorStatus?.toUpperCase() === 'ACTIVE'
 }
 
-export function isVendorApproved(state: ServerOnboardingState): boolean {
+export function isVendorApproved(state: AccountStatusState): boolean {
   return state.context.approvalStatus?.toUpperCase() === 'APPROVED'
 }

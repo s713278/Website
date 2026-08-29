@@ -11,6 +11,7 @@ import type {
 } from '@/shared/api'
 import { createEmptyRuntimeState } from '../data/onboarding-defaults'
 import {
+  accountReadsForResumeStep,
   backendResumeStep,
   buildResumeDraft,
   derivedResumeStep,
@@ -116,6 +117,21 @@ const SUBMITTED_CONTEXT = context({
   vendorStatus: 'ACTIVE',
   storeIdentifier: 'sk-organic-store',
   approvalStatus: 'PENDING',
+})
+
+describe('accountReadsForResumeStep', () => {
+  it.each([
+    [3, []],
+    [4, ['categories']],
+    [5, ['categories', 'products', 'measurements']],
+    [6, ['categories', 'products', 'measurements', 'skus']],
+    [7, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [8, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [9, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [10, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+  ] as const)('returns the cumulative account reads for resume Step %i', (step, expected) => {
+    expect(accountReadsForResumeStep(step)).toEqual(expected)
+  })
 })
 
 describe('submission and approval', () => {

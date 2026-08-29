@@ -58,6 +58,28 @@ const WEEKDAYS = new Set<Weekday>([
 
 type LoadConfig = { signal?: AbortSignal }
 
+export type OnboardingAccountRead =
+  | 'categories'
+  | 'products'
+  | 'measurements'
+  | 'skus'
+  | 'checkout'
+
+const ACCOUNT_READ_START_STEP: readonly [OnboardingAccountRead, OnboardingStep][] = [
+  ['categories', 4],
+  ['products', 5],
+  ['measurements', 5],
+  ['skus', 6],
+  ['checkout', 7],
+]
+
+/** Account resources needed to rebuild every saved step before the resume step. */
+export function accountReadsForResumeStep(step: OnboardingStep): OnboardingAccountRead[] {
+  return ACCOUNT_READ_START_STEP
+    .filter(([, startStep]) => step >= startStep)
+    .map(([read]) => read)
+}
+
 /** Resolves to `null` instead of rejecting, so one dead read cannot sink the resume. */
 async function optional<T>(work: Promise<T>): Promise<T | null> {
   try {
@@ -71,27 +93,53 @@ export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
 ): Promise<ServerOnboardingState> {
-  const [context, profile, categories, products, skus, checkout, businessTypes, measurements] = await Promise.all([
-    // Deliberately not optional. Context decides liveness, limits and whether a resume
-    // happens at all, so losing it is a real failure the vendor has to be told about —
-    // not an empty wizard with no explanation.
-    vendorOnboardingService.getVendorContext(vendorId, config),
-    optional(vendorOnboardingService.getVendorProfile(vendorId, config)),
-    optional(vendorOnboardingService.getVendorCategories(vendorId, config)),
-    optional(vendorOnboardingService.getVendorProducts(vendorId, config)),
-    optional(vendorOnboardingService.getVendorSkus(vendorId, config)),
+  // Start all three universal reads before awaiting context. The dependent fan-out can
+  // then begin as soon as context reveals the resume step, without waiting for either
+  // of the other universal reads to finish.
+  const contextPromise = vendorOnboardingService.getVendorContext(vendorId, config)
+  const profilePromise = optional(vendorOnboardingService.getVendorProfile(vendorId, config))
+  // One page covers the catalog (30 types); needed to turn the profile's display
+  // string back into the reference object Step 3 stores.
+  const businessTypesPromise = optional(vendorOnboardingService.getBusinessTypes(
+    { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
+    config,
+  ))
+
+  // Deliberately not optional. Context decides liveness, limits and whether a resume
+  // happens at all, so losing it is a real failure the vendor has to be told about —
+  // not an empty wizard with no explanation.
+  const context = await contextPromise
+
+  // A submitted vendor must still be able to navigate back through the complete account.
+  // If the backend ever omits its pointer, load everything so resource-derived resume can
+  // remain the safe fallback rather than deriving from an intentionally partial snapshot.
+  const step = isStoreSubmitted({ context })
+    ? 10
+    : (backendResumeStep(context) ?? 10)
+  const reads = new Set(accountReadsForResumeStep(step))
+
+  const [profile, businessTypes, categories, products, skus, checkout, measurements] = await Promise.all([
+    profilePromise,
+    businessTypesPromise,
+    reads.has('categories')
+      ? optional(vendorOnboardingService.getVendorCategories(vendorId, config))
+      : null,
+    reads.has('products')
+      ? optional(vendorOnboardingService.getVendorProducts(vendorId, config))
+      : null,
+    reads.has('skus')
+      ? optional(vendorOnboardingService.getVendorSkus(vendorId, config))
+      : null,
     // A first-time vendor legitimately 404s here; the service already maps that to null.
-    optional(vendorOnboardingService.getCheckoutOptions(vendorId, config)),
-    // One page covers the catalog (30 types); needed to turn the profile's display
-    // string back into the reference object Step 3 stores.
-    optional(vendorOnboardingService.getBusinessTypes(
-      { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
-      config,
-    )),
-    // Authoritative units for Step 6, part of the same cumulative entry read. A dead read
-    // falls back to the sample catalog, which mirrors the backend shape, so a size still
-    // opens with real units rather than an empty dropdown.
-    optional(vendorOnboardingService.getMeasurements(config)),
+    reads.has('checkout')
+      ? optional(vendorOnboardingService.getCheckoutOptions(vendorId, config))
+      : null,
+    // Authoritative units for Step 6. A dead read falls back to the sample catalog,
+    // which mirrors the backend shape, so a size still opens with real units rather
+    // than an empty dropdown.
+    reads.has('measurements')
+      ? optional(vendorOnboardingService.getMeasurements(config))
+      : null,
   ])
 
   return {

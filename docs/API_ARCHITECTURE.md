@@ -6,8 +6,8 @@ wiring up the next page, or debugging why a call behaves oddly.
 Verified against branch `integration` at commit `ff995c1`, i.e. after the `@mithra/api-client`
 merge (PR #16, `ac4aecb`).
 
-Updated on 2026-08-19 for the 117-path generated contract, vendor-onboarding public-reference
-service, and privacy-filtered local draft recovery.
+Updated on 2026-08-29 for the vendor-onboarding account service, resume-step-sized entry
+hydration, authenticated measurement details, and privacy-filtered local draft recovery.
 
 Companion docs: [`API_GAPS.md`](./API_GAPS.md) (endpoints the backend doesn't have yet),
 [`SESSION.md`](./SESSION.md) (JWT lifecycle + the XSS posture of localStorage tokens).
@@ -37,10 +37,11 @@ inconsistent wire format to the types our components expect.
 
 **The consequence you must internalise:** they are stacked, not merged. Most established Layer 2
 services call Layer 1's raw primitives (`apiGet`/`apiPost`) with hand-written paths rather than its
-typed services. The vendor-onboarding reference service is the first bounded exception: it calls
-Layer 1's `catalogService`, then validates and maps the generic response before exposing it to the
-wizard. So `catalogService` still exists in both layers, means different things in each, and changing
-one does not automatically change the other. Check which one you're importing.
+typed services. The vendor-onboarding service is the first bounded exception: it calls Layer 1's
+`catalogService`, `vendorsService`, and `platformService`, then validates and maps their generic
+responses before exposing them to the wizard. So service names can still exist in both layers, mean
+different things in each, and changing one does not automatically change the other. Check which one
+you're importing.
 
 ### The one import rule
 
@@ -93,11 +94,11 @@ src/shared/api/
   useApiError.ts            # small error-state hook for pages
   mappers/
     vendor.ts               # vendor wire payload → app view-model
-    vendor-onboarding.ts    # strict public-reference mapping + future storefront request mapper
+    vendor-onboarding.ts    # strict setup reference/account mapping + request mappers
   services/                 # the demo/live service layer
     auth.service.ts  catalog.service.ts  cart.service.ts  orders.service.ts
     vendor.service.ts  vendor-orders.service.ts  vendor-products.service.ts
-    vendor-onboarding.service.ts # live public reference reads for the onboarding wizard
+    vendor-onboarding.service.ts # public references + live setup account reads/writes
     index.ts
   client.ts   errors.ts   tokens.ts   types.ts    # ← thin re-export shims only
 ```
@@ -216,11 +217,45 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor-orders.service.ts` | `listVendorOrders`, `updateVendorOrderStatus` | localStorage `md-vendor-orders`, seeded from `modules/vendor/data/demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/orders/*` |
 | `vendor-products.service.ts` | `listVendorProducts`, `setProductAvailability` | localStorage `md-vendor-products`, seeded from same `demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/products/*` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
-| `vendor-onboarding.service.ts` | `getBusinessTypes`, `getCategories`, `getProductsByCategory` | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Public catalog operations through the package `catalogService`; strict `ReferencePage<T>` mappers reject malformed records and deduplicate numeric IDs |
+| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
-The onboarding reference service intentionally ignores the global demo/live switch. It tries the
-public live catalog in either app mode; if that fails, the wizard offers a visibly labelled switch
-to reserved-negative-ID sample records. It never silently converts a live failure into sample data.
+The onboarding service's public reference reads intentionally ignore the global demo/live switch.
+They try the public live catalog in either app mode; if that fails, the wizard offers a visibly
+labelled switch to reserved-negative-ID sample records. It never silently converts a live failure
+into sample data. Vendor-scoped reads and writes are used only when setup is connected to a live
+account.
+
+#### Vendor setup account hydration
+
+`loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
+snapshot for both post-sign-in routing and the setup wizard. It starts the three reads every vendor
+needs together: vendor context, vendor profile, and the business-type catalog. As soon as context
+reveals the backend resume step, it starts only the cumulative account reads needed to reconstruct
+that step and every earlier one:
+
+| Resume step | Additional account reads |
+|---|---|
+| Business type (3) | None |
+| Categories (4) | Vendor categories |
+| Products (5) | Vendor categories, vendor products, and measurements |
+| Sizes (6) | The preceding reads plus vendor sizes |
+| Delivery through review (7–10) | The preceding reads plus checkout options |
+
+Measurements mean one authenticated `GET /v1/measurements/` followed by one authenticated
+`GET /v1/measurements/{id}` per list row. Detail calls fan out together and enrich the list because
+the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
+The entire measurement read starts with the Products-step fan-out and is never one of the three
+universal reads.
+
+Submitted vendors load the complete read set so earlier setup remains reviewable. If context omits
+`onboarding.next_step`, the loader also chooses the complete set so the resource-derived resume
+fallback is computed from real data rather than an intentionally partial snapshot. Context failure
+rejects hydration; the other reads retain the existing optional behavior and become empty/default
+snapshot fields when unavailable.
+
+`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor.
+Sign-in and the wizard therefore share the same fan-out rather than issuing it twice. Failed loads
+are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
 
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
