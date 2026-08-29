@@ -489,9 +489,9 @@ export function OnboardingWizard() {
   }
 
   const handleCatalogContinue = async () => {
-    const { draft, runtime } = useOnboardingStore.getState()
+    const { draft, runtime, measurementCatalog } = useOnboardingStore.getState()
     if (draft.currentStep === 10) {
-      const nextIssues = readinessIssues(draft, runtime, categoryLimit)
+      const nextIssues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog)
       if (nextIssues.length) return showIssues(nextIssues)
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
@@ -571,7 +571,7 @@ export function OnboardingWizard() {
       return
     }
 
-    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit)
+    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog)
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep

@@ -2,6 +2,7 @@ import {
   ONBOARDING_CONFIG,
   type DeliveryDraft,
   type DraftSku,
+  type MeasurementType,
   type OnboardingRuntimeState,
   type OnboardingStep,
   type PaymentDetailsRuntime,
@@ -9,6 +10,7 @@ import {
   type ValidationIssue,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
 import { isKnownSkuId } from './onboarding-sku-id'
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
@@ -77,12 +79,24 @@ function skuIdentity(sku: DraftSku): string {
   return `${sku.name.trim().toLowerCase()}::${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
 }
 
-export function validateDraftSku(sku: DraftSku, siblingSkus: DraftSku[]): ValidationIssue[] {
+export function validateDraftSku(
+  sku: DraftSku,
+  siblingSkus: DraftSku[],
+  expectedMeasurement?: MeasurementType,
+): ValidationIssue[] {
   const prefix = `sku-${sku.id}`
   const issues: ValidationIssue[] = []
   // Local drafts and SKUs resumed from the account are both legitimate; anything else
   // came from neither producer and must not reach a write.
   if (!isKnownSkuId(sku.id)) issues.push(issue(6, prefix, 'This SKU has an unrecognised ID.'))
+  // A size may only be measured the way its product is. Step 6 no longer offers a control
+  // to change it, but a stale draft, a restored draft, or a direct store write could still
+  // carry a size that drifted off. `expectedMeasurement` is omitted when no catalog has
+  // loaded to resolve the product's measurement, in which case the check is skipped rather
+  // than run against an unresolved answer.
+  if (expectedMeasurement && sku.measurementType !== expectedMeasurement) {
+    issues.push(issue(6, prefix, "This size must use its product's measurement."))
+  }
   if (!sku.name.trim()) issues.push(issue(6, `${prefix}-name`, 'Add a name for this SKU.'))
   if (sku.description.length > 240) issues.push(issue(6, `${prefix}-description`, 'Keep the SKU description under 240 characters.'))
   const identity = skuIdentity(sku)
@@ -213,6 +227,7 @@ export function validateStep(
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: MeasurementCatalog = [],
 ): ValidationIssue[] {
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
@@ -245,13 +260,16 @@ export function validateStep(
     const issues: ValidationIssue[] = []
     for (const product of draft.products) {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
+      // The measurement every size of this product must carry. Undefined when no catalog has
+      // loaded to resolve it, so the guard stays quiet rather than resolving to COUNT.
+      const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
       const validActiveSkus = productSkus.filter(
-        (sku) => sku.active && validateDraftSku(sku, productSkus).length === 0,
+        (sku) => sku.active && validateDraftSku(sku, productSkus, expectedMeasurement).length === 0,
       )
       if (!validActiveSkus.length) {
         issues.push(issue(6, `product-${product.id}`, `${product.name} needs at least one size with a price.`))
       }
-      for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus))
+      for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus, expectedMeasurement))
     }
     return issues
   }
@@ -305,9 +323,10 @@ export function readinessIssues(
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: MeasurementCatalog = [],
 ): ValidationIssue[] {
   return ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).flatMap((step) =>
-    validateStep(step, draft, runtime, maxCategories),
+    validateStep(step, draft, runtime, maxCategories, measurementCatalog),
   )
 }
 

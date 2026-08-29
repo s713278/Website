@@ -15,7 +15,7 @@ import {
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { accountSkuId } from './onboarding-sku-id'
-import { measurementFromProduct } from './onboarding-measurement'
+import { measurementFromProduct, reconcileUnitForMeasurement } from './onboarding-measurement'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import type {
   DraftSku,
@@ -290,6 +290,10 @@ function draftSkus(state: ServerOnboardingState): DraftSku[] {
     const productId = platformByVendorProduct.get(sku.vendorProductId)
     if (productId == null) return []
     const measurementId = measurementByVendorProduct.get(sku.vendorProductId)
+    // A size's measurement is its product's, so it is derived here rather than read off the
+    // account SKU. The stored unit is kept only while the product's measurement still offers
+    // it; a unit that no longer fits falls back to a valid one for the measurement.
+    const measurementType = measurementFromProduct(measurementId ?? null, null, state.measurements)
     return [{
       // Server id, so a resumed SKU is never re-created as a duplicate.
       id: accountSkuId(sku.skuId),
@@ -297,8 +301,8 @@ function draftSkus(state: ServerOnboardingState): DraftSku[] {
       name: sku.displayName,
       description: sku.description,
       skuType: 'ITEM' as const,
-      measurementType: measurementFromProduct(measurementId ?? null, null, state.measurements),
-      unit: sku.unit,
+      measurementType,
+      unit: reconcileUnitForMeasurement(measurementType, sku.unit, state.measurements),
       quantity: sku.quantity,
       listPrice: sku.listPrice,
       salePrice: sku.salePrice,

@@ -1,7 +1,10 @@
-import type { MeasurementCatalog, MeasurementCatalogEntry } from '@/shared/api'
-import type { MeasurementType } from '../types/onboarding'
+import type { MeasurementCatalog, MeasurementCatalogEntry, ProductReference } from '@/shared/api'
+import type { DraftSku, MeasurementType } from '../types/onboarding'
 
 export type { MeasurementCatalog, MeasurementCatalogEntry }
+
+/** Just the two fields that decide a product's measurement — all the reconcile/guard path needs. */
+export type ProductMeasurement = Pick<ProductReference, 'measurementId' | 'measurementName'>
 
 /**
  * How a product is measured, and the units and quantity suggestions that follow from it —
@@ -75,6 +78,57 @@ export function defaultUnitForMeasurement(
   catalog: MeasurementCatalog,
 ): string {
   return unitsForMeasurement(type, catalog)[0] ?? ''
+}
+
+/**
+ * A unit valid for this measurement: the one already stored when the catalog still offers
+ * it, otherwise the measurement's first unit. When the catalog lists no units for the
+ * measurement — because nothing has been fetched, or it does not carry this type — there is
+ * nothing to fall back to, so the stored unit is left as-is rather than blanked.
+ */
+export function reconcileUnitForMeasurement(
+  type: MeasurementType,
+  unit: string,
+  catalog: MeasurementCatalog,
+): string {
+  const units = unitsForMeasurement(type, catalog)
+  if (units.length === 0) return unit
+  return units.includes(unit) ? unit : units[0]
+}
+
+/**
+ * The one measurement every size of a product must carry, or `undefined` when no catalog has
+ * loaded to resolve it. An empty catalog is reported as unknown rather than resolved to
+ * `COUNT`, so both the reconcile pass and the validation guard treat "cannot resolve yet" the
+ * same way — neither snaps a size nor rejects it against an answer it does not have.
+ */
+export function expectedMeasurementFor(
+  product: ProductMeasurement,
+  catalog: MeasurementCatalog,
+): MeasurementType | undefined {
+  return catalog.length
+    ? measurementFromProduct(product.measurementId, product.measurementName, catalog)
+    : undefined
+}
+
+/**
+ * Snap a size to its product's measurement, the only measurement it may carry, and fall a
+ * now-invalid unit back to a valid one for it. Returns the same reference when nothing needs
+ * to change, so a reconcile pass is idempotent and cannot loop a subscribing effect.
+ *
+ * A size is never reconciled against a catalog that has not loaded — the validation guard,
+ * not this, is what rejects a mismatch that survives (see `expectedMeasurementFor`).
+ */
+export function reconcileSkuToProductMeasurement(
+  sku: DraftSku,
+  product: ProductMeasurement,
+  catalog: MeasurementCatalog,
+): DraftSku {
+  const measurementType = expectedMeasurementFor(product, catalog)
+  if (!measurementType) return sku
+  const unit = reconcileUnitForMeasurement(measurementType, sku.unit, catalog)
+  if (sku.measurementType === measurementType && sku.unit === unit) return sku
+  return { ...sku, measurementType, unit }
 }
 
 /** The quantity suggestions to prefill at Step 6 for a product measured this way. */

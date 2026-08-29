@@ -8,6 +8,7 @@ import type {
   SelectedProduct,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import type { MeasurementCatalog } from './onboarding-measurement'
 import { readinessIssues, validateStep } from './onboarding-validation'
 
 function product(id: number, name: string): SelectedProduct {
@@ -163,5 +164,62 @@ describe('readinessIssues respects the live plan limit', () => {
   it('still flags categories beyond the plan limit', () => {
     const issues = readinessIssues(draftWithCategories(6), createEmptyRuntimeState(), 5)
     expect(issues.some((item) => item.field === 'categories')).toBe(true)
+  })
+})
+
+describe('validateStep — step 6 measurement guard', () => {
+  // A size's measurement is its product's measurement. Step 6 no longer lets a vendor
+  // change it, but a stale draft, a restored draft, or a direct store write could still
+  // carry a size whose measurement drifted off its product. Readiness must reject it.
+  const CATALOG: MeasurementCatalog = [
+    { id: 1, type: 'WEIGHT', units: ['kg', 'gr'], unitOptions: [0.5, 1, 2, 5] },
+    { id: 2, type: 'VOLUME', units: ['L', 'ml'], unitOptions: [0.5, 1, 2, 5] },
+    { id: 3, type: 'COUNT', units: ['pcs', 'dozen'], unitOptions: [1, 5, 10, 20] },
+  ]
+
+  function weightProduct(id: number, name: string): SelectedProduct {
+    return { ...product(id, name), measurementId: 1, measurementName: null }
+  }
+
+  it('accepts a size measured in its product measurement', () => {
+    const draft = draftWith(
+      [weightProduct(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'WEIGHT', unit: 'kg' })],
+    )
+
+    expect(validateStep(6, draft, runtime, undefined, CATALOG)).toEqual([])
+  })
+
+  it('rejects a size whose measurement drifted off its product', () => {
+    const draft = draftWith(
+      [weightProduct(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'COUNT', unit: 'pcs' })],
+    )
+
+    const issues = validateStep(6, draft, runtime, undefined, CATALOG)
+    expect(issues.some((item) => item.field === 'sku-sku-1')).toBe(true)
+    // The off-measurement size cannot be the product's one valid active size either.
+    expect(issues.some((item) => item.field === 'product-1')).toBe(true)
+  })
+
+  it('rejects the drift through the full readiness pass', () => {
+    const draft = draftWith(
+      [weightProduct(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'COUNT', unit: 'pcs' })],
+    )
+
+    const issues = readinessIssues(draft, runtime, undefined, CATALOG)
+    expect(issues.some((item) => item.field === 'sku-sku-1')).toBe(true)
+  })
+
+  it('skips the measurement check when no catalog is available to resolve the product', () => {
+    // Without a catalog the product measurement cannot be resolved, so the guard stays
+    // quiet rather than resolving everything to COUNT and flagging valid sizes.
+    const draft = draftWith(
+      [weightProduct(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'WEIGHT', unit: 'kg' })],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([])
   })
 })

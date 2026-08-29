@@ -4,6 +4,8 @@ import {
   defaultUnitForMeasurement,
   measurementFromProduct,
   parseMeasurementUnits,
+  reconcileSkuToProductMeasurement,
+  reconcileUnitForMeasurement,
   unitOptionsForMeasurement,
   unitsForMeasurement,
 } from './onboarding-measurement'
@@ -88,5 +90,76 @@ describe('unitOptionsForMeasurement', () => {
 
   it('returns an empty list for a measurement with no suggestions', () => {
     expect(unitOptionsForMeasurement('SLOT', CATALOG)).toEqual([])
+  })
+})
+
+describe('reconcileUnitForMeasurement', () => {
+  it('keeps a unit the catalog still offers for the measurement', () => {
+    expect(reconcileUnitForMeasurement('WEIGHT', 'gr', CATALOG)).toBe('gr')
+  })
+
+  it('falls a unit no longer valid for the measurement back to its first unit', () => {
+    // 'pcs' belongs to COUNT, not WEIGHT — it snaps to WEIGHT's first unit.
+    expect(reconcileUnitForMeasurement('WEIGHT', 'pcs', CATALOG)).toBe('kg')
+  })
+
+  it('leaves the unit untouched for a measurement the catalog lists no units for', () => {
+    // AREA is absent from this catalog, so there is nothing to fall back to.
+    expect(reconcileUnitForMeasurement('AREA', 'sqft', CATALOG)).toBe('sqft')
+  })
+})
+
+describe('reconcileSkuToProductMeasurement', () => {
+  const baseSku = {
+    id: 'sku-1',
+    productId: 1,
+    name: 'Regular',
+    description: '',
+    skuType: 'ITEM' as const,
+    measurementType: 'WEIGHT' as const,
+    unit: 'kg',
+    quantity: 1,
+    listPrice: 60,
+    salePrice: 55,
+    active: true,
+    homeDelivery: true,
+    storePickup: true,
+  }
+
+  it('snaps a size whose measurement drifted off its product back to the product measurement', () => {
+    const drifted = { ...baseSku, measurementType: 'COUNT' as const, unit: 'pcs' }
+    const product = { measurementId: 1, measurementName: null } // WEIGHT
+    const reconciled = reconcileSkuToProductMeasurement(drifted, product, CATALOG)
+    expect(reconciled.measurementType).toBe('WEIGHT')
+    expect(reconciled.unit).toBe('kg')
+  })
+
+  it('resolves the product measurement by name when it carries no id', () => {
+    const drifted = { ...baseSku, measurementType: 'WEIGHT' as const, unit: 'kg' }
+    const product = { measurementId: null, measurementName: 'VOLUME' }
+    const reconciled = reconcileSkuToProductMeasurement(drifted, product, CATALOG)
+    expect(reconciled.measurementType).toBe('VOLUME')
+    expect(reconciled.unit).toBe('L')
+  })
+
+  it('keeps a still-valid unit when only the measurement was already correct', () => {
+    const sku = { ...baseSku, measurementType: 'WEIGHT' as const, unit: 'gr' }
+    const product = { measurementId: 1, measurementName: null } // WEIGHT
+    const reconciled = reconcileSkuToProductMeasurement(sku, product, CATALOG)
+    expect(reconciled.measurementType).toBe('WEIGHT')
+    expect(reconciled.unit).toBe('gr')
+  })
+
+  it('returns the same reference when nothing needs to change', () => {
+    const sku = { ...baseSku, measurementType: 'WEIGHT' as const, unit: 'kg' }
+    const product = { measurementId: 1, measurementName: null } // WEIGHT
+    expect(reconcileSkuToProductMeasurement(sku, product, CATALOG)).toBe(sku)
+  })
+
+  it('leaves the size untouched when no catalog has loaded yet', () => {
+    // An empty catalog would otherwise resolve every product to COUNT and wipe the unit.
+    const sku = { ...baseSku, measurementType: 'WEIGHT' as const, unit: 'kg' }
+    const product = { measurementId: 1, measurementName: null }
+    expect(reconcileSkuToProductMeasurement(sku, product, [])).toBe(sku)
   })
 })

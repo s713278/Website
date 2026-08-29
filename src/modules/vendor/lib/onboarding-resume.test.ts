@@ -286,6 +286,18 @@ describe('buildResumeDraft', () => {
     expect(draft.storefront.storeName).toBe('SK Organic Store')
   })
 
+  it("derives each SKU's measurement from its product and falls a stale unit back", () => {
+    // The product is measured by VOLUME (id 2); a SKU stored in 'kg' predates that or was
+    // written directly. Resume derives the measurement from the product and snaps the unit
+    // to a valid one for it rather than resuming an off-product measurement.
+    const { draft } = buildResumeDraft(
+      fullState({ skus: [{ ...SKUS[0], unit: 'kg' }] }),
+    )
+
+    expect(draft.skus[0].measurementType).toBe('VOLUME')
+    expect(draft.skus[0].unit).toBe('L')
+  })
+
   it('hydrates a submitted vendor too, not just an unfinished one', () => {
     // A submitted store still has to show its own catalog and settings on Steps 3-9.
     const { draft, openAt } = buildResumeDraft(fullState({ context: SUBMITTED_CONTEXT }))

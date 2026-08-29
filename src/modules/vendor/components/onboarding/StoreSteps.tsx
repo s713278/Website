@@ -463,7 +463,8 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
   const runtime = useOnboardingStore((state) => state.runtime)
   const storeSubmission = useOnboardingStore((state) => state.storeSubmission)
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
-  const issues = readinessIssues(draft, runtime, categoryLimit)
+  const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
+  const issues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog)
   const completed =
     draft.publication.state === 'prototype-complete' &&
     draft.completedSteps.includes(10) &&

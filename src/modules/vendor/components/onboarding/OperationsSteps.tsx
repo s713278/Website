@@ -19,7 +19,6 @@ import { useOnboardingStore } from '../../store/onboarding-store'
 import type {
   DeliveryDraft,
   DraftSku,
-  MeasurementType,
   PaymentDetailsRuntime,
   PaymentType,
   SchedulingStrategy,
@@ -28,8 +27,10 @@ import type {
 } from '../../types/onboarding'
 import {
   defaultUnitForMeasurement,
+  expectedMeasurementFor,
   measurementFromProduct,
   measurementLabel,
+  reconcileSkuToProductMeasurement,
   unitOptionsForMeasurement,
   unitsForMeasurement,
   type MeasurementCatalog,
@@ -120,15 +121,31 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
   const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
-  // Deliberately no `invalidateFrom`. These are empty scaffolding rows for products that
-  // have none yet, not an edit the vendor made — and invalidating from Step 6 would drop
-  // `furthestVisitedStep` to 6 and filter `completedSteps`. A vendor who resumed at Step 9
-  // with one unpriced product left over (the exact case `furthestSavedStep` exists to
-  // protect) would lose Steps 7-10 just by opening Step 6 to look at it.
+  // Scaffold a size for any product without one, and reconcile every existing size to its
+  // product's measurement — a size resumed from the account or restored from persistence can
+  // carry a measurement that drifted off its product, and Step 6 no longer offers a control
+  // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
+  // needs to change, so this is idempotent and cannot loop this effect.
+  //
+  // Deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an edit the
+  // vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6 and
+  // filter `completedSteps`. A vendor who resumed at Step 9 with one unpriced product left
+  // over (the exact case `furthestSavedStep` exists to protect) would lose Steps 7-10 just
+  // by opening Step 6 to look at it.
   useEffect(() => {
-    if (!draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))) return
+    const productById = new Map(draft.products.map((product) => [product.id, product]))
+    const missingSize = draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))
+    const driftedSize = draft.skus.some((sku) => {
+      const product = productById.get(sku.productId)
+      return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) !== sku : false
+    })
+    if (!missingSize && !driftedSize) return
     updateDraft((current) => {
-      const skus = [...current.skus]
+      const currentProductById = new Map(current.products.map((product) => [product.id, product]))
+      const skus = current.skus.map((sku) => {
+        const product = currentProductById.get(sku.productId)
+        return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) : sku
+      })
       for (const product of current.products) {
         if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus, measurementCatalog))
       }
@@ -189,9 +206,14 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
       </Hint>
       {draft.products.map((product) => {
         const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
-        const productSkuIssues = productSkus.flatMap((sku) => validateDraftSku(sku, productSkus))
+        // The one measurement every size of this product must carry. Shown read-only below,
+        // sources the unit and quantity controls, and feeds the guard so the readiness badge
+        // matches what Step 10 will accept. `sku.measurementType` is the fallback only until
+        // the reconcile effect has synced it to the product.
+        const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
+        const productSkuIssues = productSkus.flatMap((sku) => validateDraftSku(sku, productSkus, expectedMeasurement))
         const hasValidActiveSku = productSkus.some(
-          (sku) => sku.active && validateDraftSku(sku, productSkus).length === 0,
+          (sku) => sku.active && validateDraftSku(sku, productSkus, expectedMeasurement).length === 0,
         )
         const ready = hasValidActiveSku && productSkuIssues.length === 0
         return (
@@ -251,20 +273,16 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         onChange={(event) => updateSku(sku.id, { name: event.target.value })}
                       />
                       <div>
-                        <FieldLabel htmlFor={`sku-${sku.id}-measurement`}>Measurement</FieldLabel>
-                        <select
+                        {/* The measurement is the product's and cannot be changed per size —
+                            it is shown read-only so the vendor can see which one the size uses.
+                            Static text, not a form control, so the label carries no `htmlFor`. */}
+                        <FieldLabel>Measurement</FieldLabel>
+                        <p
                           id={`sku-${sku.id}-measurement`}
-                          value={sku.measurementType}
-                          onChange={(event) => {
-                            const measurementType = event.target.value as MeasurementType
-                            updateSku(sku.id, { measurementType, unit: defaultUnitForMeasurement(measurementType, measurementCatalog) })
-                          }}
-                          className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+                          className="flex h-11 items-center rounded-lg border border-dashed border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm text-[var(--ob-ink-soft)]"
                         >
-                          {measurementCatalog.map((entry) => (
-                            <option key={entry.id} value={entry.type}>{measurementLabel(entry.type)}</option>
-                          ))}
-                        </select>
+                          {measurementLabel(expectedMeasurement ?? sku.measurementType)}
+                        </p>
                       </div>
                       <div>
                         <FieldLabel htmlFor={`sku-${sku.id}-unit`}>Unit</FieldLabel>
@@ -276,7 +294,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                           onChange={(event) => updateSku(sku.id, { unit: event.target.value })}
                           className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
                         >
-                          {unitsForMeasurement(sku.measurementType, measurementCatalog).map((unit) => (
+                          {unitsForMeasurement(expectedMeasurement ?? sku.measurementType, measurementCatalog).map((unit) => (
                             <option key={unit} value={unit}>{unit}</option>
                           ))}
                         </select>
@@ -295,7 +313,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         list={`sku-${sku.id}-quantity-options`}
                       />
                       <datalist id={`sku-${sku.id}-quantity-options`}>
-                        {unitOptionsForMeasurement(sku.measurementType, measurementCatalog).map((option) => (
+                        {unitOptionsForMeasurement(expectedMeasurement ?? sku.measurementType, measurementCatalog).map((option) => (
                           <option key={option} value={option} />
                         ))}
                       </datalist>
