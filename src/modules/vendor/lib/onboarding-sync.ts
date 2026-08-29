@@ -9,6 +9,7 @@ import {
   type StorefrontConfigInput,
   type VendorSkuRef,
 } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type {
   CatalogSource,
   DraftCategory,
@@ -524,15 +525,21 @@ async function persistCategories(
   onAssigned({ categoryIds })
 }
 
-async function persistProducts(
+type ProductPersistenceService = Pick<
+  typeof vendorOnboardingService,
+  'getVendorProducts' | 'assignProducts'
+>
+
+export async function persistProducts(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
+  service: ProductPersistenceService = vendorOnboardingService,
 ): Promise<void> {
   // Author any pending products first, so their platform ids are recorded and assigned below.
   const minted = await mintPendingEntries(draft, 5, onCreated)
-  const existing = await vendorOnboardingService.getVendorProducts(vendorId)
+  const existing = await service.getVendorProducts(vendorId)
   const assigned = new Set(existing.map((product) => product.platformProductId))
 
   // `category_id` here is the PLATFORM category, despite the endpoint description.
@@ -545,7 +552,10 @@ async function persistProducts(
   }
 
   for (const [platformCategoryId, productIds] of byCategory) {
-    await vendorOnboardingService.assignProducts(vendorId, platformCategoryId, productIds)
+    await service.assignProducts(vendorId, platformCategoryId, productIds)
+    // An assignment request cannot currently be aborted. If sign-out or a vendor switch
+    // cleared the shared catalog while it was in flight, do not seed the next vendor's state.
+    if (useAuthStore.getState().user?.vendorId !== vendorId) return
     // Reported here, not after the loop: a later category that fails leaves these on the
     // account all the same, and the vendor must not be offered them back.
     onAssigned({ productIds })
@@ -603,8 +613,9 @@ async function persistSkus(vendorId: string, draft: VendorOnboardingDraftV1): Pr
  * Persist one step to the vendor account. Throws on failure so the caller keeps the
  * vendor on the step — a failed write must never be reported as local success.
  *
- * `onAssigned` is called as each write lands, including on the way to a failure. It is
- * required rather than optional so a new call site cannot drop the evidence silently.
+ * `onAssigned` is called as each write lands, including on the way to a failure. Step 5 stops
+ * reporting if its vendor is no longer active, so an unabortable response cannot cross account
+ * state. The callback is required so a new call site cannot drop assignment evidence silently.
  *
  * `onCreated` records each authored entry's platform id into the draft before it is
  * assigned; it is required for the same reason — dropping it would risk a duplicate mint.

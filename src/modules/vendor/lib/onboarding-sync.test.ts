@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { VendorSkuRef } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
+import type { User } from '@/shared/types'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { useOnboardingStore } from '../store/onboarding-store'
 import type {
   DraftCategory,
   DraftSku,
@@ -8,7 +11,13 @@ import type {
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
 import { PENDING_ID_BASE } from './onboarding-pending-id'
-import { applyCreatedEntry, categoriesToAssign, planCatalogCreates, planSkuWrites } from './onboarding-sync'
+import {
+  applyCreatedEntry,
+  categoriesToAssign,
+  planCatalogCreates,
+  planSkuWrites,
+  persistProducts,
+} from './onboarding-sync'
 
 /** platform product id -> vendor product id */
 const productIds = new Map([[31, 900], [32, 901]])
@@ -276,6 +285,81 @@ function pendingProduct(id: number, categoryId: number, overrides: Partial<Selec
 function draftWith(overrides: Partial<VendorOnboardingDraftV1>): VendorOnboardingDraftV1 {
   return { ...createEmptyOnboardingDraft(), ...overrides }
 }
+
+function vendorUser(vendorId: string, vendorIds = [vendorId]): User {
+  return {
+    id: 'user-1',
+    name: 'Vendor',
+    email: '',
+    role: 'vendor',
+    roles: ['vendor'],
+    vendors: vendorIds.map((id) => ({ vendorId: id })),
+    vendorId,
+  }
+}
+
+function applyVendorSession(vendorId: string, vendorIds = [vendorId]): void {
+  useAuthStore.getState().applySession({
+    user: vendorUser(vendorId, vendorIds),
+    token: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+  })
+}
+
+describe('persistProducts assignment callbacks', () => {
+  const products = [
+    { ...product(31), categoryId: 10 },
+    { ...product(32), categoryId: 11 },
+  ]
+
+  afterEach(() => {
+    useAuthStore.getState().clearSession()
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+  })
+
+  it("does not write the previous vendor's remaining assignment into the next vendor's account catalog", async () => {
+    applyVendorSession('vendor-a', ['vendor-a', 'vendor-b'])
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+    let assignmentBatch = 0
+
+    await persistProducts(
+      'vendor-a',
+      draftWith({ products }),
+      useOnboardingStore.getState().recordAssignment,
+      () => undefined,
+      {
+        getVendorProducts: async () => [],
+        assignProducts: async () => {
+          assignmentBatch += 1
+          if (assignmentBatch !== 2) return
+          useAuthStore.getState().selectVendor('vendor-b')
+          useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+        },
+      },
+    )
+
+    expect(assignmentBatch).toBe(2)
+    expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([])
+  })
+
+  it('records every picked product while the initiating vendor remains active', async () => {
+    applyVendorSession('vendor-a')
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
+
+    await persistProducts(
+      'vendor-a',
+      draftWith({ products }),
+      useOnboardingStore.getState().recordAssignment,
+      () => undefined,
+      {
+        getVendorProducts: async () => [],
+        assignProducts: async () => undefined,
+      },
+    )
+
+    expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([31, 32])
+  })
+})
 
 describe('planCatalogCreates', () => {
   it('returns the pending categories on step 4 in an account draft', () => {
