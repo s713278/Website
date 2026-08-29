@@ -112,7 +112,6 @@ export function OnboardingWizard() {
   const completeStep = useOnboardingStore((state) => state.completeStep)
   const goToStep = useOnboardingStore((state) => state.goToStep)
   const completePrototype = useOnboardingStore((state) => state.completePrototype)
-  const reset = useOnboardingStore((state) => state.reset)
   const flushPersistence = useOnboardingStore((state) => state.flushPersistence)
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
@@ -647,32 +646,22 @@ export function OnboardingWizard() {
     if (currentStep > firstNavigableStep) navigateToStep((currentStep - 1) as OnboardingStep)
   }
 
-  // With the identity steps closed, this is the only route backwards, wherever it is
-  // offered from. It has to be explicit, because a vendor who typed the wrong number
-  // would otherwise be held in an account they cannot leave — and because signing out
-  // discards whatever the browser draft still holds.
-  const confirmUseDifferentNumber = () => requestConfirmation({
-    title: 'Use a different number?',
+  // The single verb for leaving a setup — from the header, the ready-vendor floor, and
+  // the two dead-end notices. It signs out, because that is the only honest thing "start
+  // over" can do: assignment is one-way, so there is no clean slate to hand back. Signing
+  // out abandons this browser's draft; signing back in on the same number rebuilds it
+  // from the authoritative account catalog. It cancels any in-flight save first so a
+  // pending request cannot race the sign-out.
+  const confirmStartOver = () => requestConfirmation({
+    title: 'Start over?',
     description:
-      'This signs you out and starts setup again from the first step. Anything already saved to your store stays with it — sign in on this number again to pick it up. '
+      'This signs you out and returns you to the first step. Anything already saved to your store stays on your account, and is picked up when you sign in again with this number. '
       + 'Unsaved details in this browser, and any photos you picked, are cleared.',
-    confirmLabel: 'Sign out and start again',
-    tone: 'danger',
-    onConfirm: () => {
-      cancelActiveRequest()
-      void logout()
-    },
-  })
-
-  const confirmReset = () => requestConfirmation({
-    title: 'Start onboarding over?',
-    description: 'This removes the saved onboarding draft and local image previews. Other app and authentication data are untouched.',
     confirmLabel: 'Start over',
     tone: 'danger',
     onConfirm: () => {
       cancelActiveRequest()
-      reset(access)
-      setIssues([])
+      void logout()
     },
   })
 
@@ -742,11 +731,11 @@ export function OnboardingWizard() {
                         <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.625rem] leading-[1.15] font-bold tracking-[-0.03em] text-[var(--ob-ink)] outline-none sm:text-[1.875rem]">{stepMeta.title}</h1>
                         <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">{stepMeta.description}</p>
                       </div>
-                      {/* Both controls act on a draft. Neither can reach a store that is already
-                          with an administrator: the catalog source clears selections the account
-                          still holds, and "start over" deletes this browser's copy of a store that
-                          stays submitted regardless. Offering either would be a lie about what it
-                          does, so a submitted store is shown neither. */}
+                      {/* The catalog-source toggle and "Start over" both act on the browser
+                          draft, and a submitted store is one an administrator holds — neither can
+                          touch it, so it is shown neither. "Start over" additionally needs a
+                          resolved vendor session to sign out of: the anonymous identity steps have
+                          nothing to end, and the dead-end notices below carry their own instead. */}
                       <div className="flex shrink-0 items-center gap-1 pt-1">
                         {storeIsSubmitted ? null : <>
                         {catalogPolicy.sampleControlVisible ? (
@@ -767,16 +756,18 @@ export function OnboardingWizard() {
                           <span className="hidden sm:inline">{catalogSource === 'account' ? 'Live catalog' : 'Sample catalog'}</span>
                         </button>
                         ) : null}
+                        {catalogUnlocked ? (
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={confirmReset}
+                          onClick={confirmStartOver}
                           aria-label="Start over"
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors hover:bg-[var(--ob-sheet)] hover:text-[var(--ob-ink)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]"
                         >
                           <RotateCcwIcon className="size-3.5" aria-hidden="true" />
                           <span className="hidden min-[700px]:inline">Start over</span>
                         </button>
+                        ) : null}
                         </>}
                       </div>
                     </div>
@@ -801,7 +792,7 @@ export function OnboardingWizard() {
                         {/* The identity steps are no longer reachable, so the floor states
                             which number this setup belongs to and carries the one way out. */}
                         {catalogUnlocked && identitySettled && currentStep <= firstNavigableStep ? (
-                          <div className="mb-4"><VerifiedIdentityNotice onUseDifferentNumber={confirmUseDifferentNumber} /></div>
+                          <div className="mb-4"><VerifiedIdentityNotice /></div>
                         ) : null}
                         {catalogUnlocked && storeIsSubmitted && currentStep >= 3 && currentStep < 10 ? (
                           <div className="mb-4"><UnderReviewNotice /></div>
@@ -813,7 +804,7 @@ export function OnboardingWizard() {
                           <div className="mb-4"><StepNotice message={contextError} /></div>
                         ) : null}
                         {!catalogUnlocked && (currentStep >= 3 || identitySettled) ? (
-                          <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmUseDifferentNumber} />
+                          <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmStartOver} />
                         ) : null}
                         {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
                             hold for every control on Steps 3-9, and threading a flag through six

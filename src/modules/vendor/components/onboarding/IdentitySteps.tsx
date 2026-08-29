@@ -17,28 +17,21 @@ type StepProps = {
  * Shown at the navigation floor, in place of the identity steps it replaced.
  *
  * Once a number is verified there is nothing left for Steps 1-2 to ask, so they are
- * closed rather than left reachable and re-asking. That makes this the only route to a
- * different number, which is why the action is on the screen rather than implied: a
- * vendor who typed the wrong number would otherwise be held in an account they cannot
- * leave. Setting up on another number is a second store, not a move, and signing out is
- * what starts it.
+ * closed rather than left reachable and re-asking. This is purely informational — it
+ * states whose draft is being edited. Leaving a setup is "Start over" in the header, the
+ * single verb for a sign-out, so the notice no longer carries its own way out.
  */
-export function VerifiedIdentityNotice({ onUseDifferentNumber }: { onUseDifferentNumber: () => void }) {
+export function VerifiedIdentityNotice() {
   const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
 
   return (
     <Hint tone="brand" icon={<CheckCircle2Icon className="size-4 text-[var(--ob-brand)]" />}>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="min-w-0 leading-5">
-          <span className="font-semibold">Number verified. </span>
-          {maskedPhone
-            ? <>This setup belongs to <strong className="text-[var(--ob-ink)]">{maskedPhone}</strong>. Another number would be a separate store.</>
-            : <>This setup belongs to the number you signed in with. Another number would be a separate store.</>}
-        </p>
-        <Button variant="outline" size="sm" className="shrink-0" onClick={onUseDifferentNumber}>
-          Use a different number
-        </Button>
-      </div>
+      <p className="min-w-0 leading-5">
+        <span className="font-semibold">Number verified. </span>
+        {maskedPhone
+          ? <>This setup belongs to <strong className="text-[var(--ob-ink)]">{maskedPhone}</strong>.</>
+          : <>This setup belongs to the number you signed in with.</>}
+      </p>
     </Hint>
   )
 }

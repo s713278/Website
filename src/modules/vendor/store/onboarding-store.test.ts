@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
-import type { OnboardingAccess } from '../lib/onboarding-access'
 import type { CatalogSource, OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import {
@@ -35,39 +34,43 @@ function seedAt(step: OnboardingStep) {
   })
 }
 
-describe('reset', () => {
-  it('starts a signed-in vendor at the navigation floor with the account catalog', () => {
-    const access: OnboardingAccess = { state: 'ready', vendorId: 'vendor-17' }
+describe('abandonDraft on explicit sign-out', () => {
+  // The cleanup the module-scope sign-out subscription runs, and the whole of what
+  // "Start over" does once it routes through logout(). After it runs, nothing about the
+  // signed-in vendor — not the draft, not the account catalog it had read — survives to
+  // read as fresh capacity when they sign back in.
+  it('returns to the anonymous first step and retains no account snapshot', () => {
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
-        catalogSource: 'sample',
+        mobileVerified: true,
+        maskedPhone: '•••• 43210',
         currentStep: 5,
-        completedSteps: [1, 2, 3, 4],
+        completedSteps: [1, 2, 3, 4] as OnboardingStep[],
       },
       furthestVisitedStep: 5,
       persistenceInitialized: true,
       persistenceStatus: 'idle',
       draftOwnerId: 'vendor-17',
     })
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11, 12], productIds: [31] })
+    useOnboardingStore.getState().setStoreSubmission({
+      storeIdentifier: 'sk-organic-store',
+      vendorStatus: 'ACTIVE',
+      approvalStatus: 'PENDING',
+    })
 
-    useOnboardingStore.getState().reset(access)
-
-    const state = useOnboardingStore.getState()
-    expect(state.draft.currentStep).toBe(3)
-    expect(state.furthestVisitedStep).toBe(3)
-    expect(state.draft.catalogSource).toBe('account')
-  })
-
-  it('keeps an anonymous session at the phone step', () => {
-    seedAt(3)
-
-    useOnboardingStore.getState().reset({ state: 'anonymous' })
+    useOnboardingStore.getState().abandonDraft()
 
     const state = useOnboardingStore.getState()
     expect(state.draft.currentStep).toBe(1)
-    expect(state.furthestVisitedStep).toBe(1)
     expect(state.draft.mobileVerified).toBe(false)
+    expect(state.furthestVisitedStep).toBe(1)
+    expect(state.draftOwnerId).toBe(null)
+    // A retained snapshot is the over-limit bug: read as the whole account, an empty one
+    // grants fresh capacity; a stale non-empty one lies about what is assigned.
+    expect(state.accountCatalog).toEqual({ categoryIds: [], productIds: [] })
+    expect(state.storeSubmission).toBe(null)
   })
 })
 

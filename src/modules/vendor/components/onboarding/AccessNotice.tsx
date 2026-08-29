@@ -32,8 +32,9 @@ function Shell({
 
 /**
  * Shown instead of Steps 3-10 when the session cannot be scoped to a vendor. Each case
- * keeps the local draft intact so nothing the vendor typed is lost — until the vendor
- * takes the one action that leaves, which discards it and says so first.
+ * keeps the local draft intact so nothing the vendor typed is lost — until "Start over"
+ * signs them out, which abandons the draft and warns first. The dead ends carry it
+ * because the header control is hidden while there is no vendor to enter the steps as.
  */
 export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNoticeProps) {
   if (access.state === 'not-a-vendor') {
@@ -43,7 +44,7 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
           The number you verified is registered, but it does not have vendor access. Sign in with a
           vendor number to continue setting up a store.
         </p>
-        <Button variant="outline" size="sm" onClick={onSignOut}>Use a different number</Button>
+        <Button variant="outline" size="sm" onClick={onSignOut}>Start over</Button>
       </Shell>
     )
   }
@@ -59,7 +60,7 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
           Everything you have entered stays saved in this browser as long as you stay signed in.
           Please contact MithraDirect support to have your store created, then return here.
         </p>
-        <Button variant="outline" size="sm" onClick={onSignOut}>Use a different number</Button>
+        <Button variant="outline" size="sm" onClick={onSignOut}>Start over</Button>
       </Shell>
     )
   }

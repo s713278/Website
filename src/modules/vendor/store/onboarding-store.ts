@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
-import { navigationFloor, type OnboardingAccess } from '../lib/onboarding-access'
 import type { MeasurementCatalog } from '../lib/onboarding-measurement'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import { purgeLegacyOnboardingDrafts } from '../lib/onboarding-draft-keys'
@@ -190,7 +189,6 @@ type OnboardingStore = {
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
   revokeVerifiedSession: () => void
-  reset: (access: OnboardingAccess) => void
 }
 
 let unsubscribeFromStorage: (() => void) | null = null
@@ -874,14 +872,6 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       }
     })
     flushScheduledDraftSave(persistCurrentDraft)
-  },
-
-  reset(access) {
-    // Starting over is a choice by the signed-in vendor, so the draft stays theirs.
-    discardDraft(useOnboardingStore.getState().draftOwnerId, null)
-    if (navigationFloor(access) > 1) {
-      useOnboardingStore.getState().adoptVerifiedSession(null)
-    }
   },
 }))
 
