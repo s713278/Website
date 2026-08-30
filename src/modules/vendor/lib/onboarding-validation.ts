@@ -16,7 +16,7 @@ import {
   projectedSkuTotal,
 } from './onboarding-catalog-limits'
 import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
-import { isKnownSkuId, isLocalSkuId } from './onboarding-sku-id'
+import { isKnownSkuId } from './onboarding-sku-id'
 
 /**
  * What the account already holds and the plan caps that are not passed positionally.
@@ -376,44 +376,29 @@ export function readinessIssues(
 }
 
 /**
- * What a submitted store may still validate on Steps 4-6: only the additive delta.
+ * What a submitted store may still validate on Steps 4-5: only the additive delta.
  *
  * A submitted store is with an administrator, so the whole-store readiness checks in
  * `validateStep` do not apply here — reporting "every product needs a size" on a store
  * that is already submitted blocks the vendor on a problem they were never asked to fix
  * and cannot (existing entries are read-only). This gates the one thing a submitted store
- * can still do wrong: push its catalog past a plan limit, or create a new size that is
- * malformed. Existing account entries are never re-validated; only new local sizes are.
- * See `CONTEXT.md` ("Submitted", "Plan limit").
+ * can still do wrong: push its catalog past a plan limit. Sizes are excluded — Step 6 is
+ * read-only while under review, because the backend rejects a new size (417) until the
+ * store is approved. See `CONTEXT.md` ("Submitted", "Plan limit").
  */
 export function additiveCatalogIssues(
   step: OnboardingStep,
   draft: VendorOnboardingDraftV1,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
-  measurementCatalog: MeasurementCatalog = [],
   catalog: CatalogEnforcement = {},
 ): ValidationIssue[] {
   const account = catalog.account ?? EMPTY_ACCOUNT
   const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
-  const maxSkus = catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus
   if (step === 4) {
     return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
   }
   if (step === 5) {
     return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
-  }
-  if (step === 6) {
-    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus)
-    // Only sizes minted in this browser are being created; account sizes are read-only and
-    // must never block the write on a problem the vendor cannot reach from here.
-    for (const product of draft.products) {
-      const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
-      const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
-      for (const sku of productSkus) {
-        if (isLocalSkuId(sku.id)) issues.push(...validateDraftSku(sku, productSkus, expectedMeasurement))
-      }
-    }
-    return issues
   }
   return []
 }

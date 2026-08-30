@@ -1,5 +1,11 @@
 # Additive catalog growth while a store is under review
 
+> **Amended 2026-08-30 — sizes excluded.** Step 6 (sizes) is no longer part of the additive
+> seam; a Submitted store may add categories and products only. The backend rejects
+> `POST /v1/vendors/{id}/skus` with a 417 while a store is under review, so a new size cannot
+> be created until the store is approved. See the [Amendment](#amendment-2026-08-30--sizes-are-not-additive-under-review)
+> below; the original decision text is kept unchanged as the historical record.
+
 ## Context and decision
 
 Until now a Submitted store was fully immutable — recent hardening (`50961e9` making "Start
@@ -43,3 +49,25 @@ there, gated to the additive steps and validated against the same cumulative pla
   since there is no go-live gate to force completeness post-submission.
 - Backend caveat to verify: the assign/create endpoints must not flip `vendor_status` off
   `ACTIVE`, which would silently un-submit the store. If they do, record an API gap.
+
+## Amendment (2026-08-30): sizes are not additive under review
+
+The original decision reopened three catalog steps (4, 5 and 6). Step 6 (sizes) is now
+**removed** from the additive seam: a Submitted store may add categories and products only.
+
+- **Why.** The backend rejects `POST /v1/vendors/{id}/skus` with a **417** while a store is
+  under review (PENDING) — recorded in [`docs/API_GAPS.md`](../API_GAPS.md) ("Creating a SKU
+  while under review"), which owns the endpoint detail. Offering size creation on Step 6
+  therefore promised a write the backend refuses. Rather than surface that failure, the
+  capability is withdrawn until approval.
+- **What changed.** `ADDITIVE_CATALOG_STEPS` is now `[4, 5]`. Step 6 falls back to read-only
+  under review (it joins Steps 3, 7-9 behind the wizard's read-only `fieldset`), and
+  `additiveCatalogIssues` validates the category/product delta only. The `additiveOnly` write
+  path (`planSkuWrites` / `persistSkus` / `persistStep`) — added solely to make a submitted
+  store's size write additive — is removed, since no size write reaches the account under review.
+- **Consequence.** The "sizeless product" consequence below is now **permanent until approval**:
+  a product added while under review cannot be given a size or price until an administrator
+  approves the store, at which point Step 6 reopens. The under-review copy on Step 6 and the
+  Step-10 "Add more" affordance say so, so a vendor is not left wondering why pricing is locked.
+- **A separate post-onboarding catalog page** (`VendorProductsPage`) remains the eventual home
+  for growing sizes on an approved store; this amendment does not build it.

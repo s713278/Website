@@ -12,7 +12,7 @@ import {
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState, Input } from '@/shared/components/ui'
-import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
+import { localSkuId } from '../../lib/onboarding-sku-id'
 import { validateDraftSku } from '../../lib/onboarding-validation'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import {
@@ -129,10 +129,6 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
   const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
-  // A submitted store's existing sizes are account records and stay read-only; only sizes
-  // minted in this browser — including any for a product added post-submission — can still
-  // be edited or removed. On a store still in setup nothing here is locked.
-  const sizeLocked = (sku: DraftSku) => storeIsSubmitted && isAccountSkuId(sku.id)
   const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
   const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
@@ -142,12 +138,18 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
   // needs to change, so this is idempotent and cannot loop this effect.
   //
-  // Deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an edit the
-  // vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6 and
-  // filter `completedSteps`. A vendor who resumed at Step 9 with one unpriced product left
-  // over (the exact case `furthestSavedStep` exists to protect) would lose Steps 7-10 just
-  // by opening Step 6 to look at it.
+  // Skipped entirely for a submitted store. Its Step 6 is read-only under review — no size
+  // can be created (the backend rejects it, 417) — so scaffolding a blank size would mint a
+  // phantom row that contradicts the "sizes are locked" notice and inflates the size count.
+  // A product added while under review is meant to stay sizeless until approval.
+  //
+  // Otherwise, deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an
+  // edit the vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6
+  // and filter `completedSteps`. A vendor who resumed at Step 9 with one unpriced product
+  // left over (the exact case `furthestSavedStep` exists to protect) would lose Steps 7-10
+  // just by opening Step 6 to look at it.
   useEffect(() => {
+    if (storeIsSubmitted) return
     const productById = new Map(draft.products.map((product) => [product.id, product]))
     const missingSize = draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))
     const driftedSize = draft.skus.some((sku) => {
@@ -166,7 +168,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
       }
       return { ...current, skus }
     })
-  }, [draft.products, draft.skus, updateDraft, measurementCatalog])
+  }, [draft.products, draft.skus, updateDraft, measurementCatalog, storeIsSubmitted])
 
   // A problem inside a closed product would otherwise be reported with nothing on
   // screen to fix. Only one panel can be open, so open the first product that has one.
@@ -280,17 +282,17 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
               <div className="space-y-3">
                 {productSkus.map((sku) => (
                   <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${sku.name || product.name} size`}>
-                    {productSkus.length > 1 && !sizeLocked(sku) ? (
+                    {productSkus.length > 1 ? (
                       <div className="mb-3 flex justify-end">
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${sku.name || 'size'}`} onClick={() => removeSku(sku)}>
                           <Trash2Icon /> Remove size
                         </Button>
                       </div>
                     ) : null}
-                    {/* An account size on a submitted store is read-only: the native fieldset
-                        disables every control below it without a flag on each one. New draft
-                        sizes stay editable so a submitted store can still price its additions. */}
-                    <fieldset disabled={sizeLocked(sku)} className="min-w-0 border-0 p-0">
+                    {/* Grouping wrapper only. Step 6 is read-only for a submitted store —
+                        the wizard disables the whole step through its outer fieldset — so no
+                        per-size lock is needed here. */}
+                    <fieldset className="min-w-0 border-0 p-0">
                     <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[46rem]:grid-cols-3">
                       <Input
                         id={`sku-${sku.id}-name`}

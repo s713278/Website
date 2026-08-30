@@ -116,20 +116,37 @@ export function StepNotice({ message }: { message: string }) {
  * status. It also says what happens next, because a vendor who cannot change anything
  * and is not told why will assume the page is broken.
  *
- * `catalogOpen` is the exception. On the catalog steps (4-6) a submitted store can still
- * grow within its plan limits, so the copy has to invite that rather than deny it — a
- * vendor told "nothing can change" would never try to add. See `CONTEXT.md` ("Submitted").
+ * The variant tunes the copy to the step:
+ * - `catalog` (Steps 4-5): a submitted store can still add categories and products within
+ *   its plan limits, so the copy has to invite that rather than deny it — a vendor told
+ *   "nothing can change" would never try to add.
+ * - `sizes` (Step 6): sizes are read-only under review, because a new size cannot be
+ *   created until the store is approved. The copy says so, so a vendor with a just-added,
+ *   still-unpriced product knows why they cannot price it yet rather than assuming a bug.
+ * - `locked` (Steps 3, 7-9): fully read-only, nothing to add.
+ *
+ * See `CONTEXT.md` ("Submitted").
  */
-export function UnderReviewNotice({ catalogOpen = false }: { catalogOpen?: boolean }) {
+export function UnderReviewNotice({
+  variant = 'locked',
+}: {
+  variant?: 'catalog' | 'sizes' | 'locked'
+}) {
   return (
     <div role="status" className="flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5 text-[var(--ob-ink)]">
       <ClockIcon className="mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
-      {catalogOpen ? (
+      {variant === 'catalog' ? (
         <p>
           <span className="font-semibold">Your store is under review. </span>
-          You can still add categories, products, and sizes within your plan limits, and each
-          addition saves to your store. Everything else stays locked until an administrator
-          decides.
+          You can still add categories and products within your plan limits, and each addition
+          saves to your store. Everything else stays locked until an administrator decides.
+        </p>
+      ) : variant === 'sizes' ? (
+        <p>
+          <span className="font-semibold">Your store is under review. </span>
+          Sizes and prices are locked for now — you can set them for any newly added product
+          once an administrator approves your store. Contact MithraDirect support if something
+          needs to change.
         </p>
       ) : (
         <p>

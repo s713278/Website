@@ -111,8 +111,11 @@ _Avoid_: next step, current step, last step
 The vendor has sent their finished store for review. From this point nothing already on
 the store can be changed, removed, or started over — with one exception: the vendor may
 still grow their catalog within plan limits, assigning or authoring more categories and
-products and creating more sizes, and those additions reach the account without reopening
-setup. Everything else stays read-only until an administrator decides.
+products, and those additions reach the account without reopening setup. Sizes are the
+boundary of that exception: a new size cannot be created while under review (the backend
+rejects it), so Step 6 is read-only until the store is **approved**, and a product added
+in the meantime stays sizeless until then. Everything else stays read-only until an
+administrator decides.
 _Avoid_: live, complete, published, finished
 
 **Approved**:

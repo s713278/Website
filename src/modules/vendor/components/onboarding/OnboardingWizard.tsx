@@ -585,20 +585,21 @@ export function OnboardingWizard() {
       }
       return
     }
-    // A submitted store is read-only except for catalog growth: Steps 4-6 still take
-    // additive writes within plan limits, so they fall through to validate + persist. On
-    // every other step the vendor is only reading back what was sent, so Continue is pure
-    // navigation — validating there would report readiness problems on a store that is
-    // already with an administrator.
+    // A submitted store is read-only except for catalog growth: Steps 4-5 still take
+    // additive writes within plan limits, so they fall through to validate + persist. Every
+    // other step — including Step 6, whose sizes cannot be created under review — is a pure
+    // read-back, so Continue is pure navigation; validating there would report readiness
+    // problems on a store that is already with an administrator.
     if (submittedStepIsReadOnly(draft.currentStep, storeIsSubmitted)) {
       navigateToStep((draft.currentStep + 1) as OnboardingStep)
       return
     }
 
-    // A submitted store validates only the additive delta — plan limits and any new size —
-    // never the whole-store readiness rules the vendor cannot act on from here.
+    // A submitted store validates only the additive delta on Steps 4-5 — the plan limit on
+    // the categories/products added — never the whole-store readiness rules the vendor
+    // cannot act on from here.
     const nextIssues = storeIsSubmitted
-      ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, measurementCatalog, enforcement)
+      ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement)
       : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
     if (nextIssues.length) return showIssues(nextIssues)
 
@@ -614,12 +615,9 @@ export function OnboardingWizard() {
       try {
         // Each write reports what it put on the account, so a step that fails part way
         // still records the part that landed. No re-read: the write is the evidence, and
-        // confirming it would add a request to every Continue.
-        // A submitted store may only add: its size write creates new sizes and never
-        // deletes or replaces an account row. Steps 4-5 assign-only and ignore the flag.
-        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry, {
-          additiveOnly: storeIsSubmitted,
-        })
+        // confirming it would add a request to every Continue. A submitted store only ever
+        // reaches this for Steps 4-5 (assign-only); Step 6 is read-only under review.
+        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry)
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
         if (!requestIsCurrent(controller, step)) return
@@ -830,7 +828,7 @@ export function OnboardingWizard() {
                           <div className="mb-4"><VerifiedIdentityNotice /></div>
                         ) : null}
                         {catalogUnlocked && storeIsSubmitted && currentStep >= 3 && currentStep < 10 ? (
-                          <div className="mb-4"><UnderReviewNotice catalogOpen={isAdditiveCatalogStep(currentStep)} /></div>
+                          <div className="mb-4"><UnderReviewNotice variant={isAdditiveCatalogStep(currentStep) ? 'catalog' : currentStep === 6 ? 'sizes' : 'locked'} /></div>
                         ) : null}
                         {catalogUnlocked && draftOnlyNotice ? (
                           <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>

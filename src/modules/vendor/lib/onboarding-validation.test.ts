@@ -316,9 +316,11 @@ describe('validateStep — step 6 measurement guard', () => {
 })
 
 describe('isAdditiveCatalogStep', () => {
-  it('is true only for the catalog steps 4, 5 and 6', () => {
+  it('is true only for the catalog steps 4 and 5', () => {
+    // Step 6 (sizes) is not additive: the backend rejects a new SKU while a store is under
+    // review, so a submitted store adds categories and products only. See `CONTEXT.md`.
     const steps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as OnboardingStep[]
-    expect(steps.filter((step) => isAdditiveCatalogStep(step))).toEqual([4, 5, 6])
+    expect(steps.filter((step) => isAdditiveCatalogStep(step))).toEqual([4, 5])
   })
 })
 
@@ -331,21 +333,21 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
     // The account still holds its categories; adding none is allowed for a submitted store.
     const draft = createEmptyOnboardingDraft()
     const enforcement = { account: { categoryIds: [11, 12], productIds: [], skuIds: [] } }
-    expect(additiveCatalogIssues(4, draft, 2, [], enforcement)).toEqual([])
+    expect(additiveCatalogIssues(4, draft, 2, enforcement)).toEqual([])
     // validateStep, by contrast, would demand at least one category.
     expect(validateStep(4, draft, runtime, 2, [], enforcement).some((item) => item.field === 'categories')).toBe(true)
   })
 
   it('still rejects categories past the plan limit', () => {
     const draft = { ...createEmptyOnboardingDraft(), categories: [category(21)] }
-    expect(additiveCatalogIssues(4, draft, 2, [], {
+    expect(additiveCatalogIssues(4, draft, 2, {
       account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
     }).some((item) => item.field === 'categories')).toBe(true)
   })
 
   it('does not require a product or flag whole-store readiness on step 5', () => {
     const draft = createEmptyOnboardingDraft()
-    expect(additiveCatalogIssues(5, draft, undefined, [], {
+    expect(additiveCatalogIssues(5, draft, undefined, {
       maxProducts: 3,
       account: { categoryIds: [], productIds: [31], skuIds: [] },
     })).toEqual([])
@@ -353,47 +355,23 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
 
   it('still rejects products past the plan limit', () => {
     const draft = draftWith([product(41, 'New')], [])
-    expect(additiveCatalogIssues(5, draft, undefined, [], {
+    expect(additiveCatalogIssues(5, draft, undefined, {
       maxProducts: 3,
       account: { categoryIds: [], productIds: [31, 32, 33], skuIds: [] },
     }).some((item) => item.field === 'products')).toBe(true)
   })
 
-  it('does not flag a product that has no size', () => {
-    // validateStep flags `product-41`; a submitted store must not, because a sizeless
-    // product is an allowed intermediate state, not something the vendor is asked to fix.
-    const draft = draftWith([product(41, 'Juice')], [])
-    const enforcement = { maxSkus: 10, account: { categoryIds: [], productIds: [], skuIds: [] } }
-    expect(additiveCatalogIssues(6, draft, undefined, [], enforcement)).toEqual([])
-    expect(validateStep(6, draft, runtime, undefined, [], enforcement).some((item) => item.field === 'product-41')).toBe(true)
-  })
-
-  it('validates a new local size but never an existing account size', () => {
-    // A new, unpriced local size must be caught before it is created; an account size that
-    // is read-only on screen must never block the write, even if its fields look invalid.
+  it('never validates sizes: step 6 is not additive for a submitted store', () => {
+    // The backend rejects a new SKU while a store is under review, so Step 6 is read-only
+    // for a submitted store and its size delta is never reached here. Even a draft carrying
+    // a malformed new local size and a size count past the plan limit reports nothing.
     const draft = draftWith(
       [product(41, 'Juice')],
-      [
-        sku({ id: 'draft-sku-41-1', productId: 41, name: 'Large', listPrice: null, salePrice: null }),
-        sku({ id: 'sku-4001', productId: 41, name: 'Regular', listPrice: null, salePrice: null }),
-      ],
+      [sku({ id: 'draft-sku-41-1', productId: 41, name: 'Large', listPrice: null, salePrice: null })],
     )
-    const issues = additiveCatalogIssues(6, draft, undefined, [], {
-      maxSkus: 10,
-      account: { categoryIds: [], productIds: [], skuIds: [4001] },
-    })
-    expect(issues.some((item) => item.field === 'sku-draft-sku-41-1-list-price')).toBe(true)
-    expect(issues.some((item) => item.field.startsWith('sku-sku-4001'))).toBe(false)
-  })
-
-  it('still rejects sizes past the plan limit', () => {
-    const draft = draftWith(
-      [product(41, 'Juice')],
-      [sku({ id: 'draft-sku-41-1', productId: 41 })],
-    )
-    expect(additiveCatalogIssues(6, draft, undefined, [], {
-      maxSkus: 3,
+    expect(additiveCatalogIssues(6, draft, undefined, {
+      maxSkus: 0,
       account: { categoryIds: [], productIds: [], skuIds: [4001, 4002, 4003] },
-    }).some((item) => item.field === 'skus')).toBe(true)
+    })).toEqual([])
   })
 })

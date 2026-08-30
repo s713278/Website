@@ -304,13 +304,17 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
 ]
 
 /**
- * The three catalog steps a submitted store can still grow: choose or author categories
- * (4), choose or author products (5), and create sizes (6). A submitted store is read-only
- * everywhere else, but these keep taking additive writes within plan limits — nothing on
- * the store may be changed or removed, only added. See `CONTEXT.md` ("Submitted", "Plan
- * limit").
+ * The two catalog steps a submitted store can still grow: choose or author categories (4),
+ * and choose or author products (5). A submitted store is read-only everywhere else, but
+ * these keep taking additive writes within plan limits — nothing on the store may be
+ * changed or removed, only added.
+ *
+ * Step 6 (sizes) is deliberately excluded: the backend rejects `POST /v1/vendors/{id}/skus`
+ * with a 417 while a store is under review, so a new size cannot be created from here. A
+ * product added while submitted stays sizeless until an administrator approves the store,
+ * at which point sizing reopens. See `CONTEXT.md` ("Submitted", "Plan limit").
  */
-export const ADDITIVE_CATALOG_STEPS = [4, 5, 6] as const satisfies readonly OnboardingStep[]
+export const ADDITIVE_CATALOG_STEPS = [4, 5] as const satisfies readonly OnboardingStep[]
 
 export function isAdditiveCatalogStep(step: OnboardingStep): boolean {
   return (ADDITIVE_CATALOG_STEPS as readonly OnboardingStep[]).includes(step)

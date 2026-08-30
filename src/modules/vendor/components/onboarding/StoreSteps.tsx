@@ -466,16 +466,16 @@ function SubmissionStatus({
       </div>
       <ShareStore submission={submission} />
       {/* A submitted store lands here, on Step 10, so the one thing it can still do — grow
-          its catalog — needs a way in from here or it stays hidden behind the stepper. */}
+          its catalog — needs a way in from here or it stays hidden behind the stepper.
+          Sizes are not offered: they cannot be created until the store is approved. */}
       <div className="rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-4">
         <h3 className="font-display text-sm font-semibold text-[var(--ob-ink)]">Add more to your catalog</h3>
         <p className="mt-1 text-sm leading-6 text-[var(--ob-ink-soft)]">
-          You can keep adding categories, products, and sizes within your plan limits. Other setup details stay locked.
+          You can keep adding categories and products within your plan limits. Sizes and prices open up once your store is approved, and other setup details stay locked.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => onGoToStep(4)}><PlusIcon /> Categories</Button>
           <Button variant="outline" size="sm" onClick={() => onGoToStep(5)}><PlusIcon /> Products</Button>
-          <Button variant="outline" size="sm" onClick={() => onGoToStep(6)}><PlusIcon /> Sizes</Button>
         </div>
       </div>
     </div>
