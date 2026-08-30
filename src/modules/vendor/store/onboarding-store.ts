@@ -820,13 +820,23 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   updateDraft(updater, invalidateFrom) {
-    set((state) => ({
-      draft: invalidateDraft(updater(state.draft), invalidateFrom),
-      furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, invalidateFrom),
-      // Edited here and not yet written to the account, so this copy now outranks it.
-      hasLocalEdits: true,
-      recoveryMessage: null,
-    }))
+    set((state) => {
+      // A submitted store is past onboarding: its later steps are already saved to the
+      // account, so an additive category/product write must not tear that completion down.
+      // Invalidation exists to force a still-in-setup vendor to revisit the downstream
+      // steps a change reopens; a submitted store has none to revisit, and its adds are
+      // validated additively. So skip invalidation entirely when submitted — completedSteps,
+      // furthestVisitedStep, currentStep, and publication all stay intact, and the stepper
+      // does not re-lock on an add. See `CONTEXT.md` ("Submitted").
+      const from = state.storeSubmission ? undefined : invalidateFrom
+      return {
+        draft: invalidateDraft(updater(state.draft), from),
+        furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, from),
+        // Edited here and not yet written to the account, so this copy now outranks it.
+        hasLocalEdits: true,
+        recoveryMessage: null,
+      }
+    })
     queuePersistence()
   },
 

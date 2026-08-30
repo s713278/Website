@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { ONBOARDING_CONFIG, type CatalogSource, type OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
@@ -108,6 +108,70 @@ describe('updateDraft and earlier progress', () => {
     expect(state.furthestVisitedStep).toBe(6)
     expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5])
     expect(state.draft.currentStep).toBe(6)
+  })
+})
+
+describe('updateDraft on a submitted store never collapses its completion', () => {
+  // A store past onboarding (submitted for review) may still add categories and products,
+  // but the later steps are already saved to the account, so an additive write must not
+  // tear that completion down. Invalidation exists to make a still-in-setup vendor revisit
+  // downstream steps; a submitted store has none to revisit. Without this, one add on
+  // Step 4 or 5 re-locks the whole stepper. There is no DOM runner here, so these lock the
+  // store behaviour the fix depends on.
+  function seedSubmittedAt(step: OnboardingStep) {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        currentStep: step,
+        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as OnboardingStep[],
+        publication: { state: 'prototype-complete', draftSlug: 'my-store', completedAt: '2026-08-30T00:00:00.000Z' },
+      },
+      furthestVisitedStep: 10,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+    })
+    useOnboardingStore.getState().setStoreSubmission({
+      storeIdentifier: 'sk-store',
+      vendorStatus: 'ACTIVE',
+      approvalStatus: 'PENDING',
+    })
+  }
+
+  afterEach(() => {
+    useOnboardingStore.getState().setStoreSubmission(null)
+  })
+
+  it('keeps the frontier and completion intact when a category is added (invalidateFrom 4)', () => {
+    seedSubmittedAt(4)
+    useOnboardingStore.getState().addPendingCategory({ name: 'Snacks', businessTypeId: 1 })
+
+    const state = useOnboardingStore.getState()
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(state.furthestVisitedStep).toBe(10)
+    expect(state.draft.currentStep).toBe(4)
+    expect(state.draft.publication.state).toBe('prototype-complete')
+    expect(state.draft.categories).toHaveLength(1)
+  })
+
+  it('keeps the frontier intact when a product is added (invalidateFrom 5)', () => {
+    seedSubmittedAt(5)
+    useOnboardingStore.getState().addPendingProduct({ name: 'Chips', categoryId: 1, measurementId: 1 })
+
+    const state = useOnboardingStore.getState()
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(state.furthestVisitedStep).toBe(10)
+    expect(state.draft.products).toHaveLength(1)
+  })
+
+  it('still collapses the frontier for a store that is not submitted', () => {
+    seedSubmittedAt(4)
+    useOnboardingStore.getState().setStoreSubmission(null)
+    useOnboardingStore.getState().addPendingCategory({ name: 'Snacks', businessTypeId: 1 })
+
+    const state = useOnboardingStore.getState()
+    // Not submitted: adding a category is a genuine setup edit, so downstream steps collapse.
+    expect(state.draft.completedSteps).toEqual([1, 2, 3])
+    expect(state.furthestVisitedStep).toBe(4)
   })
 })
 
