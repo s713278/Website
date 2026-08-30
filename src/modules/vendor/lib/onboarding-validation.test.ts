@@ -140,6 +140,102 @@ describe('validateStep — step 6 SKUs', () => {
   })
 })
 
+describe('validateStep — step 6 purchasable size rules', () => {
+  it('rejects a decimal quantity for a COUNT size at the visible quantity field', () => {
+    // A count of things cannot be fractional; the fix must land on the quantity control the
+    // compact card still renders.
+    const draft = draftWith(
+      [product(1, 'Eggs')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'COUNT', unit: 'pcs', quantity: 1.5 })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'sku-sku-1-quantity')).toBe(true)
+  })
+
+  it('accepts a whole-number quantity for a COUNT size', () => {
+    const draft = draftWith(
+      [product(1, 'Eggs')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'COUNT', unit: 'pcs', quantity: 6 })],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([])
+  })
+
+  it('permits a positive decimal quantity for a non-COUNT size', () => {
+    // Weight, volume and the other continuous measurements are sold in fractions.
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, measurementType: 'WEIGHT', unit: 'kg', quantity: 0.5 })],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([])
+  })
+
+  it('rejects an MRP with more than two decimal places', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, listPrice: 60.999, salePrice: 55 })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'sku-sku-1-list-price')).toBe(true)
+  })
+
+  it('rejects a Price with more than two decimal places', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 55.005 })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'sku-sku-1-sale-price')).toBe(true)
+  })
+
+  it('accepts monetary values with one or two decimal places', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, listPrice: 60.55, salePrice: 55.5 })],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([])
+  })
+
+  it('accepts a Price equal to MRP', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 60 })],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([])
+  })
+
+  it('rejects a Price above MRP at the visible sale-price field', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 61 })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'sku-sku-1-sale-price')).toBe(true)
+  })
+
+  it('flags two sizes that share a quantity and unit even with different names and prices', () => {
+    // Duplicate detection keys on the normalized quantity and unit alone: the hidden name
+    // and the differing prices do not let two identical sizes coexist.
+    const draft = draftWith(
+      [product(1, 'Milk')],
+      [
+        sku({ id: 'sku-1', productId: 1, name: 'Small', quantity: 1, unit: 'L', listPrice: 60, salePrice: 50 }),
+        sku({ id: 'sku-2', productId: 1, name: 'Large', quantity: 1, unit: 'L', listPrice: 60, salePrice: 55 }),
+      ],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'sku-sku-2-quantity')).toBe(true)
+  })
+})
+
 describe('readinessIssues respects the live plan limit', () => {
   // Step 4 accepts up to the vendor's real limit and writes those categories to the
   // account. If Step 10 re-checks against the hard-coded fallback of 2, it reports a

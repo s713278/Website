@@ -92,12 +92,24 @@ function nonNegative(value: number): boolean {
 }
 
 /**
- * The server's uniqueness key is (name, weight, vendor_product_id), so two SKUs of one
- * product may share a name as long as they differ in size. That matters on resume: the
- * account stores "Milk-1 L" and "Milk-500 ml", both of which strip back to "Milk".
+ * Two sizes of one product collide when they share a normalized quantity and unit. The
+ * hidden Size name is deliberately absent: it now follows the product (every size of a
+ * product carries the same name), so keying on it would let two identical sizes coexist and
+ * point the vendor at a control the compact card no longer renders. The visible quantity and
+ * unit are the only differentiators a vendor can act on. The backend write path keeps its own
+ * name-aware key (`onboarding-sync.ts`); this is the form-level guard.
  */
 function skuIdentity(sku: DraftSku): string {
-  return `${sku.name.trim().toLowerCase()}::${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
+  return `${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
+}
+
+/**
+ * A monetary value carries no more than two decimal places. Compared against the value's own
+ * two-decimal rounding rather than testing `value * 100` for integrality, so the check stays
+ * exact for larger prices where the scaled product loses precision.
+ */
+function withinTwoDecimals(value: number): boolean {
+  return Math.abs(value - Math.round(value * 100) / 100) < 1e-9
 }
 
 export function validateDraftSku(
@@ -129,9 +141,24 @@ export function validateDraftSku(
     issues.push(issue(6, `${prefix}-quantity`, 'Each size needs a unique quantity and unit.'))
   }
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
-  if (!positive(sku.quantity)) issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
-  if (!positive(sku.listPrice)) issues.push(issue(6, `${prefix}-list-price`, 'MRP must be greater than zero.'))
-  if (!positive(sku.salePrice)) issues.push(issue(6, `${prefix}-sale-price`, 'Price must be greater than zero.'))
+  if (!positive(sku.quantity)) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
+  } else if (sku.measurementType === 'COUNT' && !Number.isInteger(sku.quantity)) {
+    // A count is a tally of whole items; only the continuous measurements (weight, volume, …)
+    // are sold in fractions. The size carries its product's measurement (the guard above keeps
+    // that true), so keying off it here is safe.
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be a whole number for count items.'))
+  }
+  if (!positive(sku.listPrice)) {
+    issues.push(issue(6, `${prefix}-list-price`, 'MRP must be greater than zero.'))
+  } else if (!withinTwoDecimals(sku.listPrice)) {
+    issues.push(issue(6, `${prefix}-list-price`, 'MRP can have at most two decimal places.'))
+  }
+  if (!positive(sku.salePrice)) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price must be greater than zero.'))
+  } else if (!withinTwoDecimals(sku.salePrice)) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price can have at most two decimal places.'))
+  }
   if (positive(sku.salePrice) && positive(sku.listPrice) && sku.salePrice > sku.listPrice) {
     issues.push(issue(6, `${prefix}-sale-price`, 'Price cannot exceed MRP.'))
   }
