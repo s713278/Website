@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2Icon, InfoIcon, MessageCircleIcon, SmartphoneIcon } from 'lucide-react'
+import {
+  ArrowRightIcon,
+  CheckCircle2Icon,
+  InfoIcon,
+  Loader2Icon,
+  MessageCircleIcon,
+  SmartphoneIcon,
+} from 'lucide-react'
 import { DEMO_OTP, isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingStore } from '../../store/onboarding-store'
@@ -11,6 +18,7 @@ type StepProps = {
   issues: ValidationIssue[]
   busy: boolean
   statusMessage: string | null
+  onContinue: () => void
 }
 
 /**
@@ -36,7 +44,7 @@ export function VerifiedIdentityNotice() {
   )
 }
 
-export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
+export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps) {
   const phone = useOnboardingStore((state) => state.runtime.phone)
   const updatePhone = useOnboardingStore((state) => state.updatePhone)
 
@@ -49,29 +57,44 @@ export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
     <div className="space-y-5">
       {/* Step 1 asks for exactly one thing, so the field is the whole screen rather
           than a small input under a stack of explanation. */}
-      <div className="max-w-md">
-        <FieldLabel htmlFor="phone">WhatsApp mobile number</FieldLabel>
-        <div className="flex overflow-hidden rounded-xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] transition-[border-color,box-shadow] focus-within:border-[var(--ob-brand)] focus-within:ring-3 focus-within:ring-[var(--ob-brand-soft)]">
-          <span className="ob-numeric grid min-w-14 place-items-center border-r border-[var(--ob-line)] bg-[var(--ob-canvas)] px-3 text-base font-semibold text-[var(--ob-ink-soft)]">
-            +91
-          </span>
-          <input
-            id="phone"
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            value={phone}
-            maxLength={10}
-            disabled={busy}
-            aria-invalid={issues.some((item) => item.field === 'phone') || undefined}
-            aria-describedby={issues.some((item) => item.field === 'phone') ? 'phone-error' : undefined}
-            placeholder="9876543210"
-            onChange={(event) => changePhone(event.target.value)}
-            className="ob-numeric h-14 min-w-0 flex-1 bg-transparent px-4 text-xl font-semibold tracking-[0.04em] text-[var(--ob-ink)] outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--ob-pending)]"
-          />
+      <form
+        className="max-w-2xl"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onContinue()
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <FieldLabel htmlFor="phone">WhatsApp mobile number</FieldLabel>
+            <div className="flex overflow-hidden rounded-xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] transition-[border-color,box-shadow] focus-within:border-[var(--ob-brand)] focus-within:ring-3 focus-within:ring-[var(--ob-brand-soft)]">
+              <span className="ob-numeric grid min-w-14 place-items-center border-r border-[var(--ob-line)] bg-[var(--ob-canvas)] px-3 text-base font-semibold text-[var(--ob-ink-soft)]">
+                +91
+              </span>
+              <input
+                id="phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                value={phone}
+                maxLength={10}
+                disabled={busy}
+                aria-invalid={issues.some((item) => item.field === 'phone') || undefined}
+                aria-describedby={issues.some((item) => item.field === 'phone') ? 'phone-error' : undefined}
+                placeholder="9876543210"
+                onChange={(event) => changePhone(event.target.value)}
+                className="ob-numeric h-14 min-w-0 flex-1 bg-transparent px-4 text-xl font-semibold tracking-[0.04em] text-[var(--ob-ink)] outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--ob-pending)]"
+              />
+            </div>
+            <FieldError issues={issues} field="phone" />
+          </div>
+          <Button type="submit" className="h-14 shrink-0 px-6 sm:min-w-52" disabled={busy}>
+            {busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}
+            Send code on WhatsApp
+            {!busy ? <ArrowRightIcon /> : null}
+          </Button>
         </div>
-        <FieldError issues={issues} field="phone" />
-      </div>
+      </form>
 
       <Hint icon={<MessageCircleIcon className="size-4" />}>
         {isLiveApi()
@@ -87,7 +110,14 @@ export function PhoneStep({ issues, busy, statusMessage }: StepProps) {
   )
 }
 
-export function OtpStep({ issues, busy, statusMessage, onResend }: StepProps & { onResend: () => Promise<boolean> }) {
+export function OtpStep({
+  issues,
+  busy,
+  statusMessage,
+  onContinue,
+  onResend,
+  onChangePhone,
+}: StepProps & { onResend: () => Promise<boolean>; onChangePhone: () => void }) {
   const otpDigits = useOnboardingStore((state) => state.runtime.otpDigits)
   const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
   const updateRuntime = useOnboardingStore((state) => state.updateRuntime)
@@ -114,19 +144,37 @@ export function OtpStep({ issues, busy, statusMessage, onResend }: StepProps & {
         </p>
       </Hint>
 
-      <div>
-        <FieldLabel>Four-digit code</FieldLabel>
-        <OtpInput
-          value={otpDigits}
-          onChange={(value) => updateRuntime({ otpDigits: value })}
-          disabled={busy}
-          invalid={issues.some((item) => item.field === 'otp-0')}
-        />
-        <FieldError issues={issues} field="otp-0" />
-      </div>
+      <form
+        className="max-w-2xl"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onContinue()
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <FieldLabel htmlFor="otp-0">Four-digit code</FieldLabel>
+            <OtpInput
+              value={otpDigits}
+              onChange={(value) => updateRuntime({ otpDigits: value })}
+              disabled={busy}
+              invalid={issues.some((item) => item.field === 'otp-0')}
+            />
+            <FieldError issues={issues} field="otp-0" />
+          </div>
+          <Button type="submit" className="h-14 shrink-0 px-6 sm:min-w-48" disabled={busy}>
+            {busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}
+            Verify and continue
+            {!busy ? <ArrowRightIcon /> : null}
+          </Button>
+        </div>
+      </form>
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Button variant="outline" size="sm" disabled={busy || seconds > 0} onClick={() => void resend()}>
+        <Button type="button" variant="ghost" size="sm" onClick={onChangePhone}>
+          Change number
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={busy || seconds > 0} onClick={() => void resend()}>
           Resend code
         </Button>
         <span className="text-[var(--ob-ink-soft)]" aria-live="polite">

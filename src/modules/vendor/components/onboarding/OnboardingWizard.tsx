@@ -665,6 +665,15 @@ export function OnboardingWizard() {
     })
   }
 
+  const changeOtpPhone = () => {
+    cancelActiveRequest()
+    setIssues([])
+    setStatusMessage(null)
+    const phone = useOnboardingStore.getState().runtime.phone
+    useOnboardingStore.getState().updatePhone(phone)
+    navigateToStep(1)
+  }
+
   const navigateToStep = (step: OnboardingStep) => {
     cancelActiveRequest()
     // The floor is the single clamp: below it the identity steps are closed, and above
@@ -820,8 +829,8 @@ export function OnboardingWizard() {
 
                       {/* Keyed on the step so each one arrives rather than swapping in place. */}
                       <div key={currentStep} className="ob-step-enter mt-6">
-                        {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} /> : null}
-                        {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onResend={resendOtp} /> : null}
+                        {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} /> : null}
+                        {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} onResend={resendOtp} onChangePhone={changeOtpPhone} /> : null}
                         {/* The identity steps are no longer reachable, so the floor states
                             which number this setup belongs to and carries the one way out. */}
                         {catalogUnlocked && identitySettled && currentStep <= firstNavigableStep ? (
@@ -864,14 +873,14 @@ export function OnboardingWizard() {
                   </div>
                 </div>
 
-                <div className="shrink-0 border-t border-[var(--ob-line)] bg-[var(--ob-canvas-base)]">
+                {currentStep >= 3 ? <div className="shrink-0 border-t border-[var(--ob-line)] bg-[var(--ob-canvas-base)]">
                   <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
                       {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
                   </div>
-                </div>
+                </div> : null}
               </section>
             </main>
             <PhonePreviewStage id="onboarding-preview-panel" labelledBy="onboarding-preview-tab" className={cn('h-full min-[900px]:hidden', mobileView === 'form' ? 'hidden' : 'flex')} />
