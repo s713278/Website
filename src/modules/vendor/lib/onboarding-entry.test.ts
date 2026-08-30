@@ -59,6 +59,7 @@ function state(
     },
     businessTypes: [{ id: 7, name: 'Beverages & Juice Center', icon: null, displayOrder: 1 }],
     measurements: SAMPLE_MEASUREMENT_CATALOG,
+    productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     ...saved,
   }
 }

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -133,6 +133,7 @@ export function OnboardingWizard() {
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
   const setMeasurementCatalog = useOnboardingStore((state) => state.setMeasurementCatalog)
+  const setProductMeasurementCatalog = useOnboardingStore((state) => state.setProductMeasurementCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
@@ -215,7 +216,7 @@ export function OnboardingWizard() {
    * this runs on every entry — not once per browser. The one thing it will not do is
    * overwrite edits the vendor has made and not yet saved.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setProductLimit(null)
@@ -223,6 +224,7 @@ export function OnboardingWizard() {
       setContextError(null)
       setStoreSubmission(null)
       setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [] })
+      if (isLiveApi()) setProductMeasurementCatalog([])
       setAccountState('idle')
       return
     }
@@ -231,6 +233,10 @@ export function OnboardingWizard() {
       setAccountState('ready')
       return
     }
+
+    // The store starts with the demo catalog. Clear it before a live account can paint,
+    // including ready-session mounts, vendor changes, and account reads that later fail.
+    setProductMeasurementCatalog([])
 
     const apply = (server: ServerOnboardingState) => {
       setContextError(null)
@@ -248,6 +254,7 @@ export function OnboardingWizard() {
       })
       // Account data, not draft — applied even when local edits win the draft below.
       setMeasurementCatalog(server.measurements)
+      setProductMeasurementCatalog(server.productMeasurementCatalog)
 
       // A submitted store still has to show its own catalog and settings on Steps 3-9,
       // so it is hydrated like any other — it just opens on the review step instead.
@@ -306,7 +313,7 @@ export function OnboardingWizard() {
     return () => {
       ignore = true
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, setProductMeasurementCatalog, applyResumedDraft])
 
   useEffect(() => {
     requestControllerRef.current?.abort()

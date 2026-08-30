@@ -16,6 +16,7 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { writesReachAccount } from '../../lib/onboarding-sync'
 import { StepNotice } from './AccessNotice'
 import {
@@ -485,6 +486,7 @@ function ProductCategoryPicker({
   createControlVisible: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
+  const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const references = useProductReferences(draft.catalogSource, categoryId)
@@ -589,11 +591,15 @@ function ProductCategoryPicker({
         <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
       ) : null}
       {items.length ? (
-        <div className="grid gap-2 @min-[32rem]:grid-cols-2">
+        <div className="grid gap-2 @min-[32rem]:grid-cols-2 @min-[48rem]:grid-cols-3">
           {items.map((product) => {
             const choice = catalogChoiceState(draft.products, product.id)
             const onStore = choice.chosen && isProductAssigned(product.id)
             const atLimit = !choice.chosen && productLimitReached
+            const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
+            const unitSummary = measurementSummary.units.length
+              ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
+              : 'Units unavailable'
             return (
               <button
                 key={product.id}
@@ -602,7 +608,7 @@ function ProductCategoryPicker({
                 aria-disabled={onStore || atLimit}
                 onClick={() => toggle(product)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
+                  'flex items-start gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                   choice.chosen
                     ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
                     : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
@@ -610,14 +616,23 @@ function ProductCategoryPicker({
                 )}
               >
                 <ReferenceThumb src={product.imageUrl} fallbackSrc={productFallbackImage} />
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <strong className="block truncate text-sm text-[var(--ob-ink)]">{product.name}</strong>
-                  <span className="mt-1 block truncate text-xs text-[var(--ob-ink-soft)]">
-                    {onStore
-                      ? 'Saved to your store'
-                      : choice.pending
-                        ? 'Not saved yet — select to remove'
-                        : product.measurementName || 'Item'}
+                  {onStore || choice.pending ? (
+                    <span className="mt-1 block truncate text-xs text-[var(--ob-ink-soft)]">
+                      {onStore ? 'Saved to your store' : 'Not saved yet — select to remove'}
+                    </span>
+                  ) : null}
+                  <span className="mt-2 block rounded-md bg-[var(--ob-brand-soft)] px-2 py-1.5 text-[11px] leading-4 text-[var(--md-green-800)] dark:text-emerald-200">
+                    {measurementSummary.measurement ? (
+                      <>
+                        <span className="font-semibold">{measurementSummary.measurement}</span>
+                        <span aria-hidden="true"> · </span>
+                        <span>{unitSummary}</span>
+                      </>
+                    ) : (
+                      <span className="font-medium">Measurement unavailable</span>
+                    )}
                   </span>
                 </span>
               </button>

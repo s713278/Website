@@ -42,6 +42,64 @@ export function measurementEntryByType(
   return catalog.find((entry) => entry.type === type) ?? null
 }
 
+export type ProductMeasurementSummary = {
+  measurement: string | null
+  units: string[]
+  additionalUnitCount: number
+}
+
+const MAX_SUMMARY_UNITS = 3
+const MEASUREMENT_LABELS: Record<MeasurementType, string> = {
+  WEIGHT: 'Weight',
+  VOLUME: 'Volume',
+  COUNT: 'Count',
+  AREA: 'Area',
+  SERVICE_UNIT: 'Service unit',
+  DURATION: 'Duration',
+  PER_PERSON: 'Per person',
+  SLOT: 'Slot',
+}
+
+function measurementTypeFromName(name: string | null): MeasurementType | null {
+  const normalized = name?.trim().toUpperCase()
+  return normalized && normalized in MEASUREMENT_LABELS
+    ? normalized as MeasurementType
+    : null
+}
+
+function measurementEntryForProduct(
+  product: ProductMeasurement,
+  catalog: MeasurementCatalog,
+): MeasurementCatalogEntry | null {
+  const type = measurementTypeFromName(product.measurementName)
+  return measurementEntryById(catalog, product.measurementId) ??
+    (type ? measurementEntryByType(catalog, type) : null)
+}
+
+/** Trustworthy Step 5 metadata resolved only from the measurement the product names. */
+export function productMeasurementSummary(
+  product: ProductMeasurement,
+  catalog: MeasurementCatalog,
+): ProductMeasurementSummary {
+  const entry = measurementEntryForProduct(product, catalog)
+  if (!entry) {
+    const type = measurementTypeFromName(product.measurementName)
+    if (type) {
+      return {
+        measurement: measurementLabel(type),
+        units: [],
+        additionalUnitCount: 0,
+      }
+    }
+    return { measurement: null, units: [], additionalUnitCount: 0 }
+  }
+  return {
+    measurement: measurementLabel(entry.type),
+    units: entry.units.slice(0, MAX_SUMMARY_UNITS),
+    additionalUnitCount: Math.max(0, entry.units.length - MAX_SUMMARY_UNITS),
+  }
+}
+
 /**
  * The measurement a product is priced in.
  *
@@ -56,11 +114,8 @@ export function measurementFromProduct(
   measurementName: string | null,
   catalog: MeasurementCatalog,
 ): MeasurementType {
-  const byId = measurementEntryById(catalog, measurementId)
-  if (byId) return byId.type
-  const name = measurementName?.trim().toUpperCase()
-  const byName = name ? catalog.find((entry) => entry.type === name) : undefined
-  if (byName) return byName.type
+  const entry = measurementEntryForProduct({ measurementId, measurementName }, catalog)
+  if (entry) return entry.type
   return catalog[0]?.type ?? 'COUNT'
 }
 
@@ -137,17 +192,6 @@ export function unitOptionsForMeasurement(
   catalog: MeasurementCatalog,
 ): number[] {
   return measurementEntryByType(catalog, type)?.unitOptions ?? []
-}
-
-const MEASUREMENT_LABELS: Record<MeasurementType, string> = {
-  WEIGHT: 'Weight',
-  VOLUME: 'Volume',
-  COUNT: 'Count',
-  AREA: 'Area',
-  SERVICE_UNIT: 'Service unit',
-  DURATION: 'Duration',
-  PER_PERSON: 'Per person',
-  SLOT: 'Slot',
 }
 
 /** A human label for a measurement type in the Step 6 unit picker and the authoring form. */

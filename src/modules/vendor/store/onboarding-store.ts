@@ -110,6 +110,9 @@ type OnboardingStore = {
    */
   measurementCatalog: MeasurementCatalog
   setMeasurementCatalog: (catalog: MeasurementCatalog) => void
+  /** Authoritative catalog for Step 5 metadata; unlike Step 6, it never uses a live-read fallback. */
+  productMeasurementCatalog: MeasurementCatalog
+  setProductMeasurementCatalog: (catalog: MeasurementCatalog) => void
   /** Account-confirmed store submission; not persisted. */
   storeSubmission: StoreSubmission | null
   setStoreSubmission: (submission: StoreSubmission | null) => void
@@ -565,6 +568,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   productLimit: ONBOARDING_CONFIG.maxProducts,
   skuLimit: ONBOARDING_CONFIG.maxSkus,
   measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
+  productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   storeSubmission: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
@@ -726,6 +730,10 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   setMeasurementCatalog(catalog) {
     // An empty fetch keeps the sample fallback rather than emptying every Step 6 dropdown.
     set({ measurementCatalog: catalog.length ? catalog : SAMPLE_MEASUREMENT_CATALOG })
+  },
+
+  setProductMeasurementCatalog(catalog) {
+    set({ productMeasurementCatalog: catalog })
   },
 
   initializePersistence(ownerId) {

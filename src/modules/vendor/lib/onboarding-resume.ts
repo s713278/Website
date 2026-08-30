@@ -47,6 +47,7 @@ export type ServerOnboardingState = {
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
   measurements: MeasurementCatalog
+  productMeasurementCatalog: MeasurementCatalog
 }
 
 /** A never-configured vendor reports this, so it cannot be read as a real choice. */
@@ -68,12 +69,14 @@ export type OnboardingAccountRead =
 const ACCOUNT_READ_START_STEP: readonly [OnboardingAccountRead, OnboardingStep][] = [
   ['categories', 4],
   ['products', 5],
-  ['measurements', 5],
+  // Step 5 needs authoritative unit metadata even when the vendor enters earlier and
+  // advances without another account refresh.
+  ['measurements', 3],
   ['skus', 6],
   ['checkout', 7],
 ]
 
-/** Account resources needed to rebuild every saved step before the resume step. */
+/** Server resources needed to rebuild saved work and continue from the resume step. */
 export function accountReadsForResumeStep(step: OnboardingStep): OnboardingAccountRead[] {
   return ACCOUNT_READ_START_STEP
     .filter(([, startStep]) => step >= startStep)
@@ -86,6 +89,17 @@ async function optional<T>(work: Promise<T>): Promise<T | null> {
     return await work
   } catch {
     return null
+  }
+}
+
+/** Preserve Step 6's usable fallback without presenting fallback units as product metadata. */
+export function measurementCatalogsForResume(measurements: MeasurementCatalog | null): {
+  measurements: MeasurementCatalog
+  productMeasurementCatalog: MeasurementCatalog
+} {
+  return {
+    measurements: measurements ?? SAMPLE_MEASUREMENT_CATALOG,
+    productMeasurementCatalog: measurements ?? [],
   }
 }
 
@@ -150,7 +164,7 @@ export async function loadServerOnboardingState(
     skus: skus ?? [],
     checkout,
     businessTypes: businessTypes?.items ?? [],
-    measurements: measurements ?? SAMPLE_MEASUREMENT_CATALOG,
+    ...measurementCatalogsForResume(measurements),
   }
 }
 

@@ -4,6 +4,7 @@ import {
   defaultUnitForMeasurement,
   measurementFromProduct,
   parseMeasurementUnits,
+  productMeasurementSummary,
   reconcileSkuToProductMeasurement,
   reconcileUnitForMeasurement,
   unitOptionsForMeasurement,
@@ -25,6 +26,70 @@ const CATALOG: MeasurementCatalog = [
   // A gap where 6 would be, then 7, so anything positional or contiguous breaks here.
   { id: 7, type: 'SLOT', units: ['Time Slot'], unitOptions: [] },
 ]
+
+describe('productMeasurementSummary', () => {
+  it('uses the product measurement id and limits the summary to three valid units', () => {
+    const catalog: MeasurementCatalog = [
+      ...CATALOG,
+      {
+        id: 9,
+        type: 'DURATION',
+        units: ['minute', 'hour', 'day', 'week', 'month'],
+        unitOptions: [],
+      },
+    ]
+
+    expect(productMeasurementSummary(
+      { measurementId: 9, measurementName: 'COUNT' },
+      catalog,
+    )).toEqual({
+      measurement: 'Duration',
+      units: ['minute', 'hour', 'day'],
+      additionalUnitCount: 2,
+    })
+  })
+
+  it('matches the product-owned measurement name to the catalog when its id is unavailable', () => {
+    expect(productMeasurementSummary(
+      { measurementId: 999, measurementName: 'volume' },
+      CATALOG,
+    )).toEqual({
+      measurement: 'Volume',
+      units: ['L', 'ml'],
+      additionalUnitCount: 0,
+    })
+  })
+
+  it('keeps a known product measurement type when no catalog units can be resolved', () => {
+    expect(productMeasurementSummary(
+      { measurementId: null, measurementName: 'DURATION' },
+      CATALOG,
+    )).toEqual({
+      measurement: 'Duration',
+      units: [],
+      additionalUnitCount: 0,
+    })
+  })
+
+  it('reports unavailable metadata instead of borrowing another catalog entry', () => {
+    expect(productMeasurementSummary(
+      { measurementId: 999, measurementName: 'LENGTH' },
+      CATALOG,
+    )).toEqual({
+      measurement: null,
+      units: [],
+      additionalUnitCount: 0,
+    })
+    expect(productMeasurementSummary(
+      { measurementId: null, measurementName: null },
+      CATALOG,
+    )).toEqual({
+      measurement: null,
+      units: [],
+      additionalUnitCount: 0,
+    })
+  })
+})
 
 describe('parseMeasurementUnits', () => {
   it('splits the comma-separated backend unit string', () => {

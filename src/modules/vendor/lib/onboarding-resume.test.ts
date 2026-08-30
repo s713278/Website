@@ -20,6 +20,7 @@ import {
   resumeStep,
   isVendorApproved,
   isStoreSubmitted,
+  measurementCatalogsForResume,
   resumePaymentDetails,
   type ServerOnboardingState,
 } from './onboarding-resume'
@@ -98,6 +99,20 @@ const CHECKOUT: CheckoutOptionsSnapshot = {
   payments: [{ type: 'CASH_ON_DELIVERY', isDefault: true, details: {} }],
 }
 
+describe('measurementCatalogsForResume', () => {
+  it('keeps sample units for size authoring but not product metadata after a failed read', () => {
+    expect(measurementCatalogsForResume(null)).toEqual({
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: [],
+    })
+
+    expect(measurementCatalogsForResume(SAMPLE_MEASUREMENT_CATALOG)).toEqual({
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
+    })
+  })
+})
+
 /** A vendor who has saved everything the account can hold, but has not submitted. */
 function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboardingState {
   return {
@@ -109,6 +124,7 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
     checkout: CHECKOUT,
     businessTypes: [BUSINESS_TYPE],
     measurements: SAMPLE_MEASUREMENT_CATALOG,
+    productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     ...overrides,
   }
 }
@@ -121,8 +137,8 @@ const SUBMITTED_CONTEXT = context({
 
 describe('accountReadsForResumeStep', () => {
   it.each([
-    [3, []],
-    [4, ['categories']],
+    [3, ['measurements']],
+    [4, ['categories', 'measurements']],
     [5, ['categories', 'products', 'measurements']],
     [6, ['categories', 'products', 'measurements', 'skus']],
     [7, ['categories', 'products', 'measurements', 'skus', 'checkout']],
@@ -328,6 +344,7 @@ describe('buildResumeDraft', () => {
       checkout: null,
       businessTypes: [BUSINESS_TYPE],
       measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     })
 
     expect(openAt).toBe(3)
