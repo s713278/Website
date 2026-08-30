@@ -194,6 +194,19 @@ function optionalTrimmed(value: string): string | undefined {
   return value.trim() || undefined
 }
 
+/** India's country calling code. The wizard collects ten national digits; the backend
+ *  contract wants E.164, so the code is added here — once — just before the request goes out. */
+const INDIA_DIALING_CODE = '+91'
+
+function toIndianE164(nationalNumber: string): string {
+  return `${INDIA_DIALING_CODE}${nationalNumber.trim()}`
+}
+
+/** An omitted optional number stays omitted rather than becoming a bare `+91`. */
+function optionalIndianE164(value: string): string | undefined {
+  return value.trim() ? toIndianE164(value) : undefined
+}
+
 function normalizeInstagram(value: string): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
@@ -225,9 +238,9 @@ export function mapStorefrontConfigRequest(
     business_name: input.storeName.trim(),
     tagline: optionalTrimmed(input.tagline),
     business_location: optionalTrimmed(input.businessLocation),
-    order_whatsapp_number: input.orderWhatsapp.trim(),
+    order_whatsapp_number: toIndianE164(input.orderWhatsapp),
     instagram_url: normalizeInstagram(input.instagram),
-    support_whatsapp_number: optionalTrimmed(input.supportWhatsapp),
+    support_whatsapp_number: optionalIndianE164(input.supportWhatsapp),
     welcome_message: optionalTrimmed(input.welcomeMessage),
     announcement_bar: optionalTrimmed(input.announcementBar),
     hero_badges: input.heroBadges.map((badge) => badge.trim()).filter(Boolean),

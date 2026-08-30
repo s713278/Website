@@ -491,9 +491,10 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
 object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated
-server persistence or a public storefront. The future `mapFutureStorefrontConfig` mapper aligns the
-typed draft with `SaveStorefrontConfigRequest`, rejects local image URLs, and is not connected to a
-protected request in prototype mode.
+server persistence or a public storefront. The `mapStorefrontConfigRequest` mapper aligns the typed
+draft with `SaveStorefrontConfigRequest`: it adds the `+91` country code to the national ten-digit
+order and support WhatsApp numbers, rejects local image URLs, and is not connected to a protected
+request in prototype mode.
 
 ---
 

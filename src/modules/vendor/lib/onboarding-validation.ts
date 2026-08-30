@@ -37,14 +37,9 @@ const EMPTY_ACCOUNT = { categoryIds: [], productIds: [], skuIds: [] }
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 const INDIA_PHONE_PATTERN = /^[6-9]\d{9}$/
-const E164_PATTERN = /^\+[1-9]\d{7,14}$/
 
 export function isValidIndianMobile(value: string): boolean {
   return INDIA_PHONE_PATTERN.test(value.trim())
-}
-
-export function isValidE164(value: string): boolean {
-  return E164_PATTERN.test(value.trim())
 }
 
 export function isValidHex(value: string): boolean {
@@ -353,8 +348,8 @@ export function validateStep(
     if (draft.storefront.tagline.length > 120) issues.push(issue(9, 'tagline', 'Keep the tagline under 120 characters.'))
     if (!draft.storefront.businessLocation.trim()) issues.push(issue(9, 'business-location', 'Enter a business location.'))
     if (draft.storefront.businessLocation.length > 100) issues.push(issue(9, 'business-location', 'Keep the business location under 100 characters.'))
-    if (!isValidE164(runtime.orderWhatsapp)) issues.push(issue(9, 'order-whatsapp', 'Enter the order WhatsApp number in E.164 format, such as +919876543210.'))
-    if (runtime.supportWhatsapp.trim() && !isValidE164(runtime.supportWhatsapp)) issues.push(issue(9, 'support-whatsapp', 'Enter the support WhatsApp number in E.164 format.'))
+    if (!isValidIndianMobile(runtime.orderWhatsapp)) issues.push(issue(9, 'order-whatsapp', 'Enter the 10-digit order WhatsApp number, such as 9876543210.'))
+    if (runtime.supportWhatsapp.trim() && !isValidIndianMobile(runtime.supportWhatsapp)) issues.push(issue(9, 'support-whatsapp', 'Enter the 10-digit support WhatsApp number.'))
     if (!validateInstagram(draft.storefront.instagram)) issues.push(issue(9, 'instagram', 'Enter an Instagram handle or an https://instagram.com URL.'))
     if (draft.storefront.instagram.length > 200) issues.push(issue(9, 'instagram', 'Keep the Instagram value under 200 characters.'))
     if (draft.storefront.welcomeMessage.length > 160) issues.push(issue(9, 'welcome-message', 'Keep the welcome message under 160 characters.'))

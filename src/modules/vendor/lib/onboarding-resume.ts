@@ -13,6 +13,7 @@ import {
   type VendorSkuRef,
 } from '@/shared/api'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { accountSkuId } from './onboarding-sku-id'
 import { measurementFromProduct, reconcileUnitForMeasurement } from './onboarding-measurement'
@@ -422,23 +423,26 @@ export type ResumeResult = {
   draft: VendorOnboardingDraftV1
   furthestVisitedStep: OnboardingStep
   openAt: OnboardingStep
-  /** Step 9's order number, in the E.164 form its validator expects. */
+  /** Step 9's order number, as the ten-digit national number its control shows. */
   orderWhatsapp: string
 }
 
 /**
  * The vendor record stores the contact number in whatever form it was registered with;
- * Step 9 validates E.164. Nothing else can supply this on resume — runtime state is
- * never persisted and the storefront read 404s until approval — so an unconvertible
- * number yields an empty string and the vendor simply re-enters it.
+ * Step 9 shows a plain ten-digit national number. This strips an Indian `+91`/`0` prefix
+ * and keeps only a valid Indian mobile. Nothing else can supply this on resume — runtime
+ * state is never persisted and the storefront read 404s until approval — so an
+ * unconvertible number yields an empty string and the vendor simply re-enters it.
  */
-function toE164(contactNumber: string | null | undefined): string {
+function toNationalMobile(contactNumber: string | null | undefined): string {
   const digits = (contactNumber ?? '').replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.length === 10) return `+91${digits}`
-  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`
-  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`
-  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : ''
+  const national =
+    digits.length === 12 && digits.startsWith('91')
+      ? digits.slice(2)
+      : digits.length === 11 && digits.startsWith('0')
+        ? digits.slice(1)
+        : digits
+  return isValidIndianMobile(national) ? national : ''
 }
 
 export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
@@ -454,7 +458,7 @@ export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
   return {
     openAt,
     furthestVisitedStep: openAt,
-    orderWhatsapp: toE164(state.profile?.contactNumber),
+    orderWhatsapp: toNationalMobile(state.profile?.contactNumber),
     draft: {
       ...base,
       currentStep: openAt,

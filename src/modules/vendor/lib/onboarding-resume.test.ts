@@ -341,11 +341,27 @@ describe('buildResumeDraft', () => {
     expect(draft.payments.find((payment) => payment.type === 'CASH_ON_DELIVERY')?.enabled).toBe(true)
   })
 
-  it('restores the order WhatsApp number from the vendor record', () => {
+  it('restores the order WhatsApp number as a ten-digit national number', () => {
     // Nothing else can supply it: the storefront read 404s before approval, and runtime
-    // state is never persisted. Without it Step 9 fails E.164 validation on every resume.
+    // state is never persisted. Step 9 now holds national digits, so that is what resume gives.
     const { orderWhatsapp } = buildResumeDraft(fullState())
-    expect(orderWhatsapp).toBe('+919876543210')
+    expect(orderWhatsapp).toBe('9876543210')
+  })
+
+  it('strips a stored +91 country code back to the national number', () => {
+    const { orderWhatsapp } = buildResumeDraft(
+      fullState({ profile: { ...PROFILE, contactNumber: '+919876543210' } }),
+    )
+    expect(orderWhatsapp).toBe('9876543210')
+  })
+
+  it('leaves the order number empty when the stored value is not an Indian mobile', () => {
+    // An unconvertible number yields an empty field and the vendor simply re-enters it,
+    // rather than seeding Step 9 with a value its validator would reject anyway.
+    const { orderWhatsapp } = buildResumeDraft(
+      fullState({ profile: { ...PROFILE, contactNumber: '+14155552671' } }),
+    )
+    expect(orderWhatsapp).toBe('')
   })
 
   it('leaves an unconfigured vendor at Step 3 with an empty draft', () => {

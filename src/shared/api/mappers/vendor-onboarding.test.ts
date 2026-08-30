@@ -7,9 +7,11 @@ import {
   mapMeasurementCatalog,
   mergeMeasurementCatalogDetails,
   mapProductCreateRequest,
+  mapStorefrontConfigRequest,
   mapVendorContext,
   mapVendorProfile,
   mapVendorSkus,
+  type StorefrontConfigInput,
 } from './vendor-onboarding'
 
 describe('measurement catalog detail enrichment', () => {
@@ -201,5 +203,48 @@ describe('created-id readers', () => {
     expect(() => mapCreatedCategory({ data: {} })).toThrow(InvalidReferencePayloadError)
     expect(() => mapCreatedProduct({ data: { id: -1 } })).toThrow(InvalidReferencePayloadError)
     expect(() => mapCreatedCategory(null)).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('mapStorefrontConfigRequest — national WhatsApp numbers reach the backend in E.164', () => {
+  function storefrontInput(overrides: Partial<StorefrontConfigInput> = {}): StorefrontConfigInput {
+    return {
+      storeName: 'Lakshmi Home Foods',
+      tagline: '',
+      businessLocation: 'Hyderabad',
+      instagram: '',
+      orderWhatsapp: '9876543210',
+      supportWhatsapp: '',
+      welcomeMessage: '',
+      announcementBar: '',
+      heroBadges: [],
+      trustStrip: [],
+      theme: {
+        primaryColor: '#10b981',
+        accentColor: '#f59e0b',
+        backgroundColor: '#ffffff',
+        textColor: '#111827',
+        fontFamily: 'Inter',
+        buttonShape: 'ROUNDED',
+        cardStyle: 'SHADOW',
+        themePreset: 'FRESH',
+      },
+      ...overrides,
+    }
+  }
+
+  it('adds the +91 country code to the national order number exactly once', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ orderWhatsapp: '9876543210' }))
+    expect(request.order_whatsapp_number).toBe('+919876543210')
+  })
+
+  it('adds +91 to a provided support number', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ supportWhatsapp: '8123456789' }))
+    expect(request.support_whatsapp_number).toBe('+918123456789')
+  })
+
+  it('leaves an absent support number absent rather than sending a prefix-only value', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ supportWhatsapp: '   ' }))
+    expect(request.support_whatsapp_number).toBeUndefined()
   })
 })

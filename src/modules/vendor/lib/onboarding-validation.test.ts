@@ -473,3 +473,53 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
     })).toEqual([])
   })
 })
+
+describe('validateStep — step 9 WhatsApp numbers', () => {
+  const draft = createEmptyOnboardingDraft()
+
+  function orderIssue(orderWhatsapp: string): boolean {
+    const state = { ...createEmptyRuntimeState(), orderWhatsapp }
+    return validateStep(9, draft, state).some((item) => item.field === 'order-whatsapp')
+  }
+
+  function supportIssue(supportWhatsapp: string): boolean {
+    // Order stays valid so only the support field can raise an issue.
+    const state = { ...createEmptyRuntimeState(), orderWhatsapp: '9876543210', supportWhatsapp }
+    return validateStep(9, draft, state).some((item) => item.field === 'support-whatsapp')
+  }
+
+  it('accepts a plain ten-digit Indian mobile as the order number', () => {
+    expect(orderIssue('9876543210')).toBe(false)
+  })
+
+  it('rejects the order number when it is missing', () => {
+    expect(orderIssue('')).toBe(true)
+  })
+
+  it('rejects an order number with fewer than ten digits', () => {
+    expect(orderIssue('987654321')).toBe(true)
+  })
+
+  it('rejects an order number that does not start with 6, 7, 8, or 9', () => {
+    expect(orderIssue('5876543210')).toBe(true)
+  })
+
+  it('does not ask the vendor for E.164 formatting in the order message', () => {
+    const state = { ...createEmptyRuntimeState(), orderWhatsapp: '' }
+    const message = validateStep(9, draft, state).find((item) => item.field === 'order-whatsapp')?.message ?? ''
+    expect(message).not.toMatch(/E\.?164/i)
+    expect(message).not.toContain('+91')
+  })
+
+  it('treats an empty support number as valid because support is optional', () => {
+    expect(supportIssue('')).toBe(false)
+  })
+
+  it('accepts a valid ten-digit support number', () => {
+    expect(supportIssue('8123456789')).toBe(false)
+  })
+
+  it('rejects an invalid support number when one is provided', () => {
+    expect(supportIssue('12345')).toBe(true)
+  })
+})
