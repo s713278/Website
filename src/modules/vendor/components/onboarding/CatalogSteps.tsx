@@ -26,7 +26,6 @@ import {
   selectProductLimitReached,
   selectProjectedCategoryTotal,
   selectProjectedProductTotal,
-  selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
@@ -338,7 +337,6 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const projectedCategories = useOnboardingStore(selectProjectedCategoryTotal)
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
-  const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const liveApi = isLiveApi()
   const createControlVisible = useOnboardingStore(
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
@@ -403,7 +401,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         <StepNotice message={`You've reached your plan's limit of ${categoryLimit} categories, counting those already saved to your store.`} />
       ) : null}
       <p className="text-sm text-[var(--ob-ink-soft)]">{projectedCategories} of {categoryLimit} used</p>
-      {createControlVisible && !storeIsSubmitted ? (
+      {createControlVisible ? (
         <AuthorCategoryForm onAdded={() => setSearch('')} />
       ) : null}
       <div className="relative">
@@ -640,7 +638,6 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
   const categories = useOnboardingStore((state) => state.draft.categories)
   const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
-  const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const productLimit = useOnboardingStore(selectProductLimit)
   const projectedProducts = useOnboardingStore(selectProjectedProductTotal)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
@@ -683,7 +680,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             onUseSample={onUseSample}
             open={openId === category.id}
             onToggle={onToggle(category.id)}
-            createControlVisible={createControlVisible && !storeIsSubmitted}
+            createControlVisible={createControlVisible}
           />
         ))}
       </div>

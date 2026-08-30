@@ -302,3 +302,16 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   { step: 9, short: 'Store', title: 'Add your store details', description: 'Name your store, add its contacts, and make the preview yours.' },
   { step: 10, short: 'Review', title: 'Review your store', description: 'Resolve readiness items, then preview your store.' },
 ]
+
+/**
+ * The three catalog steps a submitted store can still grow: choose or author categories
+ * (4), choose or author products (5), and create sizes (6). A submitted store is read-only
+ * everywhere else, but these keep taking additive writes within plan limits — nothing on
+ * the store may be changed or removed, only added. See `CONTEXT.md` ("Submitted", "Plan
+ * limit").
+ */
+export const ADDITIVE_CATALOG_STEPS = [4, 5, 6] as const satisfies readonly OnboardingStep[]
+
+export function isAdditiveCatalogStep(step: OnboardingStep): boolean {
+  return (ADDITIVE_CATALOG_STEPS as readonly OnboardingStep[]).includes(step)
+}

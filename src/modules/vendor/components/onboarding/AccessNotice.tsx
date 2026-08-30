@@ -115,16 +115,29 @@ export function StepNotice({ message }: { message: string }) {
  * thing setup asked of them, and read-only is the consequence of that, so it reads as a
  * status. It also says what happens next, because a vendor who cannot change anything
  * and is not told why will assume the page is broken.
+ *
+ * `catalogOpen` is the exception. On the catalog steps (4-6) a submitted store can still
+ * grow within its plan limits, so the copy has to invite that rather than deny it — a
+ * vendor told "nothing can change" would never try to add. See `CONTEXT.md` ("Submitted").
  */
-export function UnderReviewNotice() {
+export function UnderReviewNotice({ catalogOpen = false }: { catalogOpen?: boolean }) {
   return (
     <div role="status" className="flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5 text-[var(--ob-ink)]">
       <ClockIcon className="mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
-      <p>
-        <span className="font-semibold">Your store is with us for review. </span>
-        You can look through everything you sent, but it cannot be changed from here while an
-        administrator is deciding. Contact MithraDirect support if something needs to change.
-      </p>
+      {catalogOpen ? (
+        <p>
+          <span className="font-semibold">Your store is under review. </span>
+          You can still add categories, products, and sizes within your plan limits, and each
+          addition saves to your store. Everything else stays locked until an administrator
+          decides.
+        </p>
+      ) : (
+        <p>
+          <span className="font-semibold">Your store is with us for review. </span>
+          You can look through everything you sent, but it cannot be changed from here while an
+          administrator is deciding. Contact MithraDirect support if something needs to change.
+        </p>
+      )}
     </div>
   )
 }

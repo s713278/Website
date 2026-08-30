@@ -87,6 +87,32 @@ describe('planSkuWrites', () => {
     expect(plan.creates).toEqual([])
   })
 
+  it('additiveOnly creates the new local size and never deletes an edited account size', () => {
+    // A submitted store: an account size shown with a drifted unit (an in-place edit the
+    // full reconcile would delete-and-recreate) plus a brand-new local size. Only the new
+    // size is written, and the account row is left untouched.
+    const plan = planSkuWrites(
+      shown([
+        draft({ id: 'sku-4021', productId: 31, unit: 'ml' }),
+        draft({ id: 'draft-sku-31-1', productId: 31, name: 'Large' }),
+      ]),
+      [account({ skuId: 4021 })],
+      productIds,
+      { additiveOnly: true },
+    )
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates).toHaveLength(1)
+    expect(plan.creates[0].sku.id).toBe('draft-sku-31-1')
+  })
+
+  it('additiveOnly never deletes an account size missing from the draft', () => {
+    // Even with the account size gone from the draft, additive-only leaves it on the
+    // account — the reverse of the removal-delete behaviour a store still in setup gets.
+    const plan = planSkuWrites(shown([]), [account({ skuId: 4021 })], productIds, { additiveOnly: true })
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates).toEqual([])
+  })
+
   it('deletes only the SKU that was removed, keeping its siblings', () => {
     const plan = planSkuWrites(
       shown([draft({ id: 'sku-4021', productId: 31 })]),

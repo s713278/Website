@@ -12,13 +12,14 @@ import {
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState, Input } from '@/shared/components/ui'
-import { localSkuId } from '../../lib/onboarding-sku-id'
+import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
 import { validateDraftSku } from '../../lib/onboarding-validation'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import {
   selectProjectedSkuTotal,
   selectSkuLimit,
   selectSkuLimitReached,
+  selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
 import type {
@@ -127,6 +128,11 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   const skuLimit = useOnboardingStore(selectSkuLimit)
   const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
   const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
+  const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
+  // A submitted store's existing sizes are account records and stay read-only; only sizes
+  // minted in this browser — including any for a product added post-submission — can still
+  // be edited or removed. On a store still in setup nothing here is locked.
+  const sizeLocked = (sku: DraftSku) => storeIsSubmitted && isAccountSkuId(sku.id)
   const productIds = useMemo(() => draft.products.map((product) => product.id), [draft.products])
   const { openId, setOpenId, onToggle } = useSingleOpen(productIds)
 
@@ -274,13 +280,17 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
               <div className="space-y-3">
                 {productSkus.map((sku) => (
                   <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${sku.name || product.name} size`}>
-                    {productSkus.length > 1 ? (
+                    {productSkus.length > 1 && !sizeLocked(sku) ? (
                       <div className="mb-3 flex justify-end">
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${sku.name || 'size'}`} onClick={() => removeSku(sku)}>
                           <Trash2Icon /> Remove size
                         </Button>
                       </div>
                     ) : null}
+                    {/* An account size on a submitted store is read-only: the native fieldset
+                        disables every control below it without a flag on each one. New draft
+                        sizes stay editable so a submitted store can still price its additions. */}
+                    <fieldset disabled={sizeLocked(sku)} className="min-w-0 border-0 p-0">
                     <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[46rem]:grid-cols-3">
                       <Input
                         id={`sku-${sku.id}-name`}
@@ -373,6 +383,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                       <label className="flex items-center gap-2"><input type="checkbox" checked={sku.storePickup} onChange={(event) => updateSku(sku.id, { storePickup: event.target.checked })} /> Store pickup</label>
                     </div>
                     <FieldError issues={issues} field={`sku-${sku.id}-fulfillment`} />
+                    </fieldset>
                   </div>
                 ))}
               </div>

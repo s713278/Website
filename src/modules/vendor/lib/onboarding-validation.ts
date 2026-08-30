@@ -16,7 +16,7 @@ import {
   projectedSkuTotal,
 } from './onboarding-catalog-limits'
 import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
-import { isKnownSkuId } from './onboarding-sku-id'
+import { isKnownSkuId, isLocalSkuId } from './onboarding-sku-id'
 
 /**
  * What the account already holds and the plan caps that are not passed positionally.
@@ -243,6 +243,28 @@ function validateInstagram(value: string): boolean {
   }
 }
 
+// The plan-limit checks are shared by the full per-step validation and the additive check a
+// submitted store uses, so the projected-total comparison and its message live in one place.
+// The projected total — account usage ∪ this draft — is what a limit gates, never the draft
+// count alone. See `CONTEXT.md` ("Plan limit").
+function categoryLimitIssue(accountCategoryIds: number[], draftCategoryIds: number[], maxCategories: number): ValidationIssue[] {
+  return projectedCategoryTotal(accountCategoryIds, draftCategoryIds) > maxCategories
+    ? [issue(4, 'categories', `Your plan allows ${maxCategories} categories in total, including those already saved to your store.`)]
+    : []
+}
+
+function productLimitIssue(accountProductIds: number[], draftProductIds: number[], maxProducts: number): ValidationIssue[] {
+  return projectedProductTotal(accountProductIds, draftProductIds) > maxProducts
+    ? [issue(5, 'products', `Your plan allows ${maxProducts} products in total, including those already saved to your store.`)]
+    : []
+}
+
+function skuLimitIssue(accountSkuIds: number[], draftSkus: DraftSku[], maxSkus: number): ValidationIssue[] {
+  return projectedSkuTotal(accountSkuIds, draftSkus) > maxSkus
+    ? [issue(6, 'skus', `Your plan allows ${maxSkus} sizes in total, including those already saved to your store.`)]
+    : []
+}
+
 export function validateStep(
   step: OnboardingStep,
   draft: VendorOnboardingDraftV1,
@@ -271,26 +293,15 @@ export function validateStep(
   }
   if (step === 4) {
     if (!draft.categories.length) return [issue(4, 'categories', 'Choose at least one category.')]
-    // The projected account total, not the draft count: a business-type change empties the
-    // draft while the account keeps its categories, so the cap is against account ∪ draft.
-    if (projectedCategoryTotal(account.categoryIds, draft.categories.map((category) => category.id)) > maxCategories) {
-      return [issue(4, 'categories', `Your plan allows ${maxCategories} categories in total, including those already saved to your store.`)]
-    }
-    return []
+    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
   }
   if (step === 5) {
     if (!draft.products.length) return [issue(5, 'products', 'Choose at least one product to continue.')]
-    if (projectedProductTotal(account.productIds, draft.products.map((product) => product.id)) > maxProducts) {
-      return [issue(5, 'products', `Your plan allows ${maxProducts} products in total, including those already saved to your store.`)]
-    }
-    return []
+    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
   }
   if (step === 6) {
-    const issues: ValidationIssue[] = []
     // Projected post-save size count: account sizes plus new local ones, an edit net-zero.
-    if (projectedSkuTotal(account.skuIds, draft.skus) > maxSkus) {
-      issues.push(issue(6, 'skus', `Your plan allows ${maxSkus} sizes in total, including those already saved to your store.`))
-    }
+    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus)
     for (const product of draft.products) {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
       // The measurement every size of this product must carry. Undefined when no catalog has
@@ -362,6 +373,49 @@ export function readinessIssues(
   return ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).flatMap((step) =>
     validateStep(step, draft, runtime, maxCategories, measurementCatalog, catalog),
   )
+}
+
+/**
+ * What a submitted store may still validate on Steps 4-6: only the additive delta.
+ *
+ * A submitted store is with an administrator, so the whole-store readiness checks in
+ * `validateStep` do not apply here — reporting "every product needs a size" on a store
+ * that is already submitted blocks the vendor on a problem they were never asked to fix
+ * and cannot (existing entries are read-only). This gates the one thing a submitted store
+ * can still do wrong: push its catalog past a plan limit, or create a new size that is
+ * malformed. Existing account entries are never re-validated; only new local sizes are.
+ * See `CONTEXT.md` ("Submitted", "Plan limit").
+ */
+export function additiveCatalogIssues(
+  step: OnboardingStep,
+  draft: VendorOnboardingDraftV1,
+  maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: MeasurementCatalog = [],
+  catalog: CatalogEnforcement = {},
+): ValidationIssue[] {
+  const account = catalog.account ?? EMPTY_ACCOUNT
+  const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
+  const maxSkus = catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus
+  if (step === 4) {
+    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
+  }
+  if (step === 5) {
+    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
+  }
+  if (step === 6) {
+    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus)
+    // Only sizes minted in this browser are being created; account sizes are read-only and
+    // must never block the write on a problem the vendor cannot reach from here.
+    for (const product of draft.products) {
+      const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
+      const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
+      for (const sku of productSkus) {
+        if (isLocalSkuId(sku.id)) issues.push(...validateDraftSku(sku, productSkus, expectedMeasurement))
+      }
+    }
+    return issues
+  }
+  return []
 }
 
 export function normalizeDraftSlug(value: string): string {

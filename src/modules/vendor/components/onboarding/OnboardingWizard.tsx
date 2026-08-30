@@ -33,7 +33,7 @@ import {
   stepErrorField,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
-import { normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
+import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -44,6 +44,7 @@ import {
 } from '../../store/onboarding-store'
 import {
   ONBOARDING_STEPS,
+  isAdditiveCatalogStep,
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
@@ -97,6 +98,15 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
       <PreviewStats className="shrink-0" />
     </aside>
   )
+}
+
+/**
+ * A submitted store is read-only on every step except the additive catalog steps (4-6),
+ * which still take additions, and the Step 10 status view. The Continue handler and the
+ * `fieldset` guard both read this one predicate so they cannot drift out of lockstep.
+ */
+function submittedStepIsReadOnly(step: OnboardingStep, submitted: boolean): boolean {
+  return submitted && step < 10 && !isAdditiveCatalogStep(step)
 }
 
 export function OnboardingWizard() {
@@ -575,15 +585,21 @@ export function OnboardingWizard() {
       }
       return
     }
-    // A submitted store takes no writes, so Continue is pure navigation through the
-    // steps the vendor is reading back. Validating would be worse than pointless: it
-    // would report readiness problems on a store that is already with an administrator.
-    if (storeIsSubmitted && draft.currentStep < 10) {
+    // A submitted store is read-only except for catalog growth: Steps 4-6 still take
+    // additive writes within plan limits, so they fall through to validate + persist. On
+    // every other step the vendor is only reading back what was sent, so Continue is pure
+    // navigation — validating there would report readiness problems on a store that is
+    // already with an administrator.
+    if (submittedStepIsReadOnly(draft.currentStep, storeIsSubmitted)) {
       navigateToStep((draft.currentStep + 1) as OnboardingStep)
       return
     }
 
-    const nextIssues = validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
+    // A submitted store validates only the additive delta — plan limits and any new size —
+    // never the whole-store readiness rules the vendor cannot act on from here.
+    const nextIssues = storeIsSubmitted
+      ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, measurementCatalog, enforcement)
+      : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep
@@ -599,7 +615,11 @@ export function OnboardingWizard() {
         // Each write reports what it put on the account, so a step that fails part way
         // still records the part that landed. No re-read: the write is the evidence, and
         // confirming it would add a request to every Continue.
-        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry)
+        // A submitted store may only add: its size write creates new sizes and never
+        // deletes or replaces an account row. Steps 4-5 assign-only and ignore the flag.
+        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry, {
+          additiveOnly: storeIsSubmitted,
+        })
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
         if (!requestIsCurrent(controller, step)) return
@@ -686,7 +706,9 @@ export function OnboardingWizard() {
   // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send code on WhatsApp'
     : currentStep === 2 ? 'Verify and continue'
-      : storeIsSubmitted ? 'Continue'
+      // A submitted store only writes on the additive catalog steps; everywhere else
+      // Continue is pure navigation, so the label must not promise a save.
+      : storeIsSubmitted ? (isAdditiveCatalogStep(currentStep) ? 'Save and continue' : 'Continue')
         : currentStep === 9 ? 'Review readiness'
           : currentStep === 10 ? 'Complete setup'
             : 'Continue'
@@ -706,7 +728,7 @@ export function OnboardingWizard() {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
   }
-  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep }
+  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted }
 
   if (!persistenceInitialized || accountState === 'loading') {
     // One gate for both reads. Painting between them shows Step 3 to a vendor whose
@@ -808,7 +830,7 @@ export function OnboardingWizard() {
                           <div className="mb-4"><VerifiedIdentityNotice /></div>
                         ) : null}
                         {catalogUnlocked && storeIsSubmitted && currentStep >= 3 && currentStep < 10 ? (
-                          <div className="mb-4"><UnderReviewNotice /></div>
+                          <div className="mb-4"><UnderReviewNotice catalogOpen={isAdditiveCatalogStep(currentStep)} /></div>
                         ) : null}
                         {catalogUnlocked && draftOnlyNotice ? (
                           <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>
@@ -820,13 +842,14 @@ export function OnboardingWizard() {
                           <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmStartOver} />
                         ) : null}
                         {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
-                            hold for every control on Steps 3-9, and threading a flag through six
-                            step components is a rule anything new can be added without. It wraps
-                            the steps only — the notices above carry the sign-out action, which
-                            stays available because it is the only route backwards. Step 10 is the
-                            landing step for a submitted vendor and stays interactive. */}
+                            hold for every control on the locked steps (3, 7, 8, 9), and threading
+                            a flag through those step components is a rule anything new can be added
+                            without. Steps 4-6 stay interactive on a submitted store so its catalog
+                            can still grow within plan limits; Step 10 is the landing step and stays
+                            interactive too. The notices above carry the sign-out action, which
+                            stays available because it is the only route backwards. */}
                         <fieldset
-                          disabled={storeIsSubmitted && currentStep < 10}
+                          disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted)}
                           className="min-w-0 border-0 p-0"
                         >
                         {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}

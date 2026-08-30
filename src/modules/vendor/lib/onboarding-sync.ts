@@ -19,7 +19,7 @@ import type {
   SelectedProduct,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
-import { serverSkuIdOf } from './onboarding-sku-id'
+import { isLocalSkuId, serverSkuIdOf } from './onboarding-sku-id'
 
 /**
  * Steps written to the vendor account on Continue.
@@ -245,10 +245,30 @@ export function planSkuWrites(
   draft: Pick<VendorOnboardingDraftV1, 'products' | 'skus'>,
   serverSkus: VendorSkuRef[],
   vendorProductIdByPlatform: Map<number, number>,
+  options: { additiveOnly?: boolean } = {},
 ): SkuWritePlan {
   const draftSkus = draft.skus
   const creates: SkuWritePlan['creates'] = []
   const deletes: number[] = []
+
+  // A submitted store may only grow its catalog: create the new local sizes and never touch
+  // an account row, so the write itself — not just the UI — can never delete or replace an
+  // existing size. The full reconcile below belongs to a store still in setup, which may
+  // still edit and remove sizes. See `CONTEXT.md` ("Submitted").
+  if (options.additiveOnly) {
+    for (const sku of draftSkus) {
+      if (!isLocalSkuId(sku.id)) continue
+      if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
+      const vendorProductId = vendorProductIdByPlatform.get(sku.productId)
+      if (!vendorProductId) {
+        throw new Error(
+          `“${sku.name}” could not be saved because its product is not in your store yet. Go back to Products and continue again.`,
+        )
+      }
+      creates.push({ sku, vendorProductId })
+    }
+    return { creates, deletes }
+  }
 
   // Scoped to the products the wizard is showing, not to the SKUs it holds: removing a
   // product's last SKU still has to delete the account row.
@@ -572,13 +592,14 @@ export async function persistSkus(
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   service: SkuPersistenceService = vendorOnboardingService,
+  additiveOnly = false,
 ): Promise<void> {
   const [products, serverSkus] = await Promise.all([
     service.getVendorProducts(vendorId),
     service.getVendorSkus(vendorId),
   ])
   const vendorProductIds = vendorProductIdByPlatformId(products)
-  const plan = planSkuWrites(draft, serverSkus, vendorProductIds)
+  const plan = planSkuWrites(draft, serverSkus, vendorProductIds, { additiveOnly })
   const nameOnAccount = new Set(serverSkus.map((sku) => `${sku.vendorProductId}::${sku.name}`))
 
   // Deletions first: an edit is delete-then-create, and creating first would collide with
@@ -646,6 +667,7 @@ export async function persistStep(
   runtime: OnboardingRuntimeState,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
+  options: { additiveOnly?: boolean } = {},
 ): Promise<void> {
   if (step === 3) {
     const businessType = draft.business.businessType
@@ -655,9 +677,12 @@ export async function persistStep(
     return
   }
 
+  // Category and product writes only ever assign (PATCH is additive; a vendor cannot
+  // unassign — 403, Admin only), so they are additive already and need no flag. Sizes
+  // reconcile by default, so a submitted store's size write is restricted to additions.
   if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
   if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
-  if (step === 6) return persistSkus(vendorId, draft, onAssigned)
+  if (step === 6) return persistSkus(vendorId, draft, onAssigned, undefined, options.additiveOnly ?? false)
 
   // Steps 7 and 8 share one payload, and payment_options replaces the existing set,
   // so both always send the complete current configuration.

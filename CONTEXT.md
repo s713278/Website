@@ -42,6 +42,12 @@ The vendor categories and vendor products a vendor's account already holds. It i
 record; anything on screen that disagrees with it is unsaved.
 _Avoid_: server catalog, saved catalog, remote catalog
 
+**Plan limit**:
+The most categories, products or sizes a vendor's subscription allows, counted against
+everything already on the account rather than against one screen's worth. Reaching it
+stops further catalog growth until the plan changes.
+_Avoid_: account limit, max limit, quota, subscription cap
+
 **Sample catalog**:
 Built-in demonstration data standing in for the platform catalog, so setup can be walked
 through without touching a real account.
@@ -102,8 +108,11 @@ anything this browser remembers.
 _Avoid_: next step, current step, last step
 
 **Submitted**:
-The vendor has sent their finished store for review. Nothing about it can be changed or
-started over from this point.
+The vendor has sent their finished store for review. From this point nothing already on
+the store can be changed, removed, or started over — with one exception: the vendor may
+still grow their catalog within plan limits, assigning or authoring more categories and
+products and creating more sizes, and those additions reach the account without reopening
+setup. Everything else stays read-only until an administrator decides.
 _Avoid_: live, complete, published, finished
 
 **Approved**:
