@@ -35,7 +35,7 @@ import {
   defaultUnitForMeasurement,
   expectedMeasurementFor,
   measurementFromProduct,
-  measurementLabel,
+  productMeasurementSummary,
   reconcileSkuToProductMeasurement,
   unitOptionsForMeasurement,
   unitsForMeasurement,
@@ -102,12 +102,14 @@ function makeSku(
   skus: DraftSku[],
   catalog: MeasurementCatalog,
 ): DraftSku {
-  const isFirstSku = !skus.some((sku) => sku.productId === product.id)
   const measurementType = measurementFromProduct(product.measurementId, product.measurementName, catalog)
   return {
     id: localSkuId(product.id, skus),
     productId: product.id,
-    name: isFirstSku ? product.name : '',
+    // The size name is no longer a vendor field; it follows the platform product name so the
+    // backend's `(name, weight, vendor_product_id)` identity stays populated without asking.
+    // Sibling sizes share this name and are told apart by their quantity and unit.
+    name: product.name,
     description: '',
     skuType: 'ITEM',
     measurementType,
@@ -116,15 +118,29 @@ function makeSku(
     listPrice: null,
     salePrice: null,
     active: true,
+    // No Step 6 control sets these any more; they keep the backend's established
+    // compatibility default so a created size still satisfies the current contract.
     homeDelivery: true,
     storePickup: true,
   }
+}
+
+/**
+ * A size's visible heading. It is derived from quantity and unit rather than the hidden
+ * name, and falls back to a neutral sequential label while a new or cleared size cannot yet
+ * be identified.
+ */
+function skuHeading(sku: DraftSku, index: number): string {
+  return sku.quantity != null && sku.quantity > 0 && sku.unit.trim()
+    ? `${sku.quantity} ${sku.unit}`
+    : `Size ${index + 1}`
 }
 
 export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confirm: RequestConfirmation }) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
+  const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
   const skuLimit = useOnboardingStore(selectSkuLimit)
   const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
   const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
@@ -198,7 +214,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
 
     confirm({
       title: 'Remove this size?',
-      description: 'Its measurement, fulfilment choices, and prices will be removed.',
+      description: 'Its quantity, unit, and prices will be removed.',
       confirmLabel: 'Remove size',
       tone: 'danger',
       onConfirm: () => updateDraft(
@@ -237,6 +253,13 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
           (sku) => sku.active && validateDraftSku(sku, productSkus, expectedMeasurement).length === 0,
         )
         const ready = hasValidActiveSku && productSkuIssues.length === 0
+        // The same trustworthy product metadata Step 5 shows, resolved only from the product's
+        // own measurement — never guessed or borrowed. Keeps the product-owned measurement and
+        // its valid units in view while the vendor prices sizes.
+        const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
+        const unitSummary = measurementSummary.units.length
+          ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
+          : 'Units unavailable'
         return (
           <AccordionPanel
             key={product.id}
@@ -248,9 +271,22 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                 <SkuProductThumb src={product.imageUrl} />
                 <div className="min-w-0 flex-1">
                   <h3 id={`sku-product-${product.id}`} className="truncate font-display font-semibold text-[var(--ob-ink)]">{product.name}</h3>
-                  <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">
-                    {productSkus.length} {productSkus.length === 1 ? 'size' : 'sizes'} added
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="rounded-md bg-[var(--ob-brand-soft)] px-2 py-0.5 text-[11px] leading-4 text-[var(--md-green-800)] dark:text-emerald-200">
+                      {measurementSummary.measurement ? (
+                        <>
+                          <span className="font-semibold">{measurementSummary.measurement}</span>
+                          <span aria-hidden="true"> · </span>
+                          <span>{unitSummary}</span>
+                        </>
+                      ) : (
+                        <span className="font-medium">Measurement unavailable</span>
+                      )}
+                    </span>
+                    <span className="text-xs text-[var(--ob-ink-soft)]">
+                      {productSkus.length} {productSkus.length === 1 ? 'size' : 'sizes'}
+                    </span>
+                  </div>
                 </div>
                 <span className={cn(
                   'hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex',
@@ -280,39 +316,48 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
               </div>
               <FieldError issues={issues} field={`product-${product.id}`} />
               <div className="space-y-3">
-                {productSkus.map((sku) => (
-                  <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${sku.name || product.name} size`}>
-                    {productSkus.length > 1 ? (
-                      <div className="mb-3 flex justify-end">
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${sku.name || 'size'}`} onClick={() => removeSku(sku)}>
-                          <Trash2Icon /> Remove size
-                        </Button>
+                {productSkus.map((sku, index) => {
+                  const heading = skuHeading(sku, index)
+                  return (
+                  <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${heading} size`}>
+                    {/* Active is a sellability control, not a pricing field, so it sits in the
+                        card header beside the derived size heading. The heading identifies the
+                        size from its quantity and unit in place of the removed name field. */}
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{heading}</h4>
+                      <div className="flex shrink-0 items-center gap-3 text-sm">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={sku.active} onChange={(event) => updateSku(sku.id, { active: event.target.checked })} /> Active
+                        </label>
+                        {productSkus.length > 1 ? (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${heading}`} onClick={() => removeSku(sku)}>
+                            <Trash2Icon /> Remove
+                          </Button>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </div>
                     {/* Grouping wrapper only. Step 6 is read-only for a submitted store —
                         the wizard disables the whole step through its outer fieldset — so no
                         per-size lock is needed here. */}
                     <fieldset className="min-w-0 border-0 p-0">
-                    <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[46rem]:grid-cols-3">
+                    <div className="grid gap-3 @min-[22rem]:grid-cols-2 @min-[44rem]:grid-cols-4">
                       <Input
-                        id={`sku-${sku.id}-name`}
-                        label="Size name"
-                        value={sku.name}
-                        error={issues.find((item) => item.field === `sku-${sku.id}-name`)?.message}
-                        onChange={(event) => updateSku(sku.id, { name: event.target.value })}
+                        id={`sku-${sku.id}-quantity`}
+                        label="Quantity"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={sku.quantity ?? ''}
+                        error={issues.find((item) => item.field === `sku-${sku.id}-quantity`)?.message}
+                        onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
+                        onWheel={(event) => event.currentTarget.blur()}
+                        list={`sku-${sku.id}-quantity-options`}
                       />
-                      <div>
-                        {/* The measurement is the product's and cannot be changed per size —
-                            it is shown read-only so the vendor can see which one the size uses.
-                            Static text, not a form control, so the label carries no `htmlFor`. */}
-                        <FieldLabel>Measurement</FieldLabel>
-                        <p
-                          id={`sku-${sku.id}-measurement`}
-                          className="flex h-11 items-center rounded-lg border border-dashed border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm text-[var(--ob-ink-soft)]"
-                        >
-                          {measurementLabel(expectedMeasurement ?? sku.measurementType)}
-                        </p>
-                      </div>
+                      <datalist id={`sku-${sku.id}-quantity-options`}>
+                        {unitOptionsForMeasurement(expectedMeasurement ?? sku.measurementType, measurementCatalog).map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
                       <div>
                         <FieldLabel htmlFor={`sku-${sku.id}-unit`}>Unit</FieldLabel>
                         <select
@@ -330,25 +375,8 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         <FieldError issues={issues} field={`sku-${sku.id}-unit`} />
                       </div>
                       <Input
-                        id={`sku-${sku.id}-quantity`}
-                        label="Quantity / value"
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={sku.quantity ?? ''}
-                        error={issues.find((item) => item.field === `sku-${sku.id}-quantity`)?.message}
-                        onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
-                        onWheel={(event) => event.currentTarget.blur()}
-                        list={`sku-${sku.id}-quantity-options`}
-                      />
-                      <datalist id={`sku-${sku.id}-quantity-options`}>
-                        {unitOptionsForMeasurement(expectedMeasurement ?? sku.measurementType, measurementCatalog).map((option) => (
-                          <option key={option} value={option} />
-                        ))}
-                      </datalist>
-                      <Input
                         id={`sku-${sku.id}-list-price`}
-                        label="List price (₹)"
+                        label="MRP (₹)"
                         type="number"
                         min="1"
                         step="1"
@@ -359,7 +387,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                       />
                       <Input
                         id={`sku-${sku.id}-sale-price`}
-                        label="Sale price (₹)"
+                        label="Price (₹)"
                         type="number"
                         min="1"
                         step="1"
@@ -368,26 +396,11 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         onChange={(event) => updateSku(sku.id, { salePrice: parseDraftNumber(event.target.value) })}
                         onWheel={(event) => event.currentTarget.blur()}
                       />
-                      <div className="@min-[32rem]:col-span-2 @min-[46rem]:col-span-3">
-                        <Input
-                          id={`sku-${sku.id}-description`}
-                          label="Description (optional)"
-                          value={sku.description}
-                          maxLength={240}
-                          error={issues.find((item) => item.field === `sku-${sku.id}-description`)?.message}
-                          onChange={(event) => updateSku(sku.id, { description: event.target.value })}
-                        />
-                      </div>
                     </div>
-                    <div id={`sku-${sku.id}-fulfillment`} className="mt-3 flex flex-wrap gap-4 text-sm">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={sku.active} onChange={(event) => updateSku(sku.id, { active: event.target.checked })} /> Active</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={sku.homeDelivery} onChange={(event) => updateSku(sku.id, { homeDelivery: event.target.checked })} /> Home delivery</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={sku.storePickup} onChange={(event) => updateSku(sku.id, { storePickup: event.target.checked })} /> Store pickup</label>
-                    </div>
-                    <FieldError issues={issues} field={`sku-${sku.id}-fulfillment`} />
                     </fieldset>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </AccordionPanel>

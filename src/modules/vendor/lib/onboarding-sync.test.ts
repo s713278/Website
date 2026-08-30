@@ -106,6 +106,10 @@ describe('planSkuWrites', () => {
     expect(plan.deletes).toEqual([4021])
     expect(plan.creates).toHaveLength(1)
     expect(plan.creates[0].sku.salePrice).toBe(140)
+    // Name and description are no longer editable on Step 6, so a price-only edit must carry
+    // the hidden values through the delete-and-recreate rather than blanking account data.
+    expect(plan.creates[0].sku.name).toBe('Orange Juice')
+    expect(plan.creates[0].sku.description).toBe('Cold pressed')
   })
 
   it('replaces an account SKU that was renamed, resized or deactivated', () => {

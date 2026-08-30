@@ -93,7 +93,7 @@ describe('validateStep — step 6 SKUs', () => {
     expect(validateStep(6, draft, runtime)).toEqual([])
   })
 
-  it('still rejects two SKUs identical in name, quantity and unit', () => {
+  it('still rejects two sizes identical in quantity and unit, pointing at a visible field', () => {
     const draft = draftWith(
       [product(1, 'Milk')],
       [
@@ -102,8 +102,10 @@ describe('validateStep — step 6 SKUs', () => {
       ],
     )
 
+    // The hidden name can no longer differentiate sizes, so the duplicate issue lands on the
+    // quantity control the compact card still renders rather than the removed name field.
     const issues = validateStep(6, draft, runtime)
-    expect(issues.some((issue) => issue.field === 'sku-sku-2-name')).toBe(true)
+    expect(issues.some((issue) => issue.field === 'sku-sku-2-quantity')).toBe(true)
   })
 
   it('still reports a product whose only SKU is inactive', () => {
@@ -132,7 +134,7 @@ describe('validateStep — step 6 SKUs', () => {
     )
 
     const priceIssue = validateStep(6, draft, runtime).find((issue) =>
-      issue.message.includes('Sale price'),
+      issue.message.includes('Price'),
     )
     expect(priceIssue?.field).toBe('sku-sku-4021-sale-price')
   })

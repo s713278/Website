@@ -302,6 +302,20 @@ describe('buildResumeDraft', () => {
     expect(draft.storefront.storeName).toBe('SK Organic Store')
   })
 
+  it('preserves the hidden size fields the account supplies and defaults the rest', () => {
+    // Step 6 no longer edits a size's name, description, or per-size fulfilment. Resume must
+    // still carry the name and description the account holds so hiding the controls never
+    // erases them, and default the fulfilment flags the SKU read never returns.
+    const { draft } = buildResumeDraft(fullState())
+
+    expect(draft.skus[0]).toMatchObject({
+      name: 'Orange Juice',
+      description: 'Cold pressed',
+      homeDelivery: true,
+      storePickup: true,
+    })
+  })
+
   it("derives each SKU's measurement from its product and falls a stale unit back", () => {
     // The product is measured by VOLUME (id 2); a SKU stored in 'kg' predates that or was
     // written directly. Resume derives the measurement from the product and snaps the unit

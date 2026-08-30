@@ -118,24 +118,22 @@ export function validateDraftSku(
   if (expectedMeasurement && sku.measurementType !== expectedMeasurement) {
     issues.push(issue(6, prefix, "This size must use its product's measurement."))
   }
-  if (!sku.name.trim()) issues.push(issue(6, `${prefix}-name`, 'Add a name for this SKU.'))
-  if (sku.description.length > 240) issues.push(issue(6, `${prefix}-description`, 'Keep the SKU description under 240 characters.'))
+  // The name, description and per-size fulfilment fields are no longer vendor controls (the
+  // name follows the product, the description is hidden, fulfilment is set once in Step 7), so
+  // their former rules are gone: an issue must point at a field the compact card still renders.
   const identity = skuIdentity(sku)
-  const duplicateName = siblingSkus.some(
+  const duplicateSize = siblingSkus.some(
     (candidate) => candidate.id !== sku.id && skuIdentity(candidate) === identity,
   )
-  if (sku.name.trim() && duplicateName) {
-    issues.push(issue(6, `${prefix}-name`, 'Each size of a product needs its own name.'))
+  if (duplicateSize) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Each size needs a unique quantity and unit.'))
   }
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
   if (!positive(sku.quantity)) issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
-  if (!positive(sku.listPrice)) issues.push(issue(6, `${prefix}-list-price`, 'List price must be greater than zero.'))
-  if (!positive(sku.salePrice)) issues.push(issue(6, `${prefix}-sale-price`, 'Sale price must be greater than zero.'))
+  if (!positive(sku.listPrice)) issues.push(issue(6, `${prefix}-list-price`, 'MRP must be greater than zero.'))
+  if (!positive(sku.salePrice)) issues.push(issue(6, `${prefix}-sale-price`, 'Price must be greater than zero.'))
   if (positive(sku.salePrice) && positive(sku.listPrice) && sku.salePrice > sku.listPrice) {
-    issues.push(issue(6, `${prefix}-sale-price`, 'Sale price cannot exceed list price.'))
-  }
-  if (!sku.homeDelivery && !sku.storePickup) {
-    issues.push(issue(6, `${prefix}-fulfillment`, 'Choose delivery, pickup, or both.'))
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price cannot exceed MRP.'))
   }
   return issues
 }
