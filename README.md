@@ -274,6 +274,7 @@ alongside the production auth implementation.
 | Document | Purpose |
 |----------|---------|
 | [AGENTS.md](./AGENTS.md) | Canonical repository guidance for coding agents |
+| [CONTEXT.md](./CONTEXT.md) | Product domain glossary for platform, vendor, draft, and storefront concepts |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |

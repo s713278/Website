@@ -23,7 +23,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 
 > **The richer storefront payload is not called from `src/` yet.** The package wrappers are aligned,
 > but the customer storefront still renders from the older catalog service (`/v1/vendors/…`). The
-> onboarding prototype's own preview renders its private same-browser draft; it does not pretend to be this
+> onboarding preview renders its private same-browser draft; it does not pretend to be this
 > public backend response.
 
 ## Still open
@@ -46,7 +46,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
 | Updating a SKU in place | Changing a price, size or name at Step 6 | `PATCH /vendors/{id}/skus/{sku_id}` returns **`417`** with a JDBC error on `update tb_sku` for every body tried, and `SkuInfoUpdateRequest` carries only `name`, `description`, `features`, `is_active` — never price or size. Step 6 expresses an edit as delete-then-create, which mints a new `sku_id`. |
-| Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` returns **`417`** while the store is under review (`vendor_status` PENDING). A submitted store therefore cannot create a new size, so Step 6 is read-only until an administrator approves the store, at which point size creation reopens. A product added while under review stays sizeless until then. This is why `ADDITIVE_CATALOG_STEPS` is `[4, 5]` (categories/products only); see `docs/adr/0001-additive-catalog-growth-while-under-review.md` (amendment). |
+| Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` returns **`417`** while the store is under review (`vendor_status` PENDING). A submitted store therefore cannot create a new size, so Step 6 is read-only until an administrator approves the store, at which point size creation reopens. A product added while under review stays sizeless until then. This is why `ADDITIVE_CATALOG_STEPS` is `[4, 5]` (categories/products only). |
 | Legacy SKU unit vocabulary | Keeping existing real-account sizes aligned with the backend measurement catalog | New writes use the backend's units, but this work does not migrate SKUs already written with the frontend's old unit vocabulary. Detailed below. |
 | Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
 | Unvalidated `scheduling_config` | Trusting the delivery schedule a vendor configures | The backend stores `scheduling_config` **verbatim without validation** — even `{}` is accepted. `FIXED_WINDOW` and `CUSTOMER_SELECT_DATE` keys come from documented examples; `PREDEFINED_DAYS` and `INSTANT` keys are our own snake_case and no consumer contract confirms them. |
@@ -79,14 +79,13 @@ Until then, Steps 4 and 5 refuse the deselection and say so. That is deliberate:
 allowing it was worse — Continue made no request, the draft was marked as matching the
 account, and the next resume handed the discarded selection straight back.
 
-The refusal takes effect the moment the assigning write succeeds, not only after a
-reload. The account catalog is read on entry and then grown by each write that
-succeeds — the write is the evidence, and nothing is re-read to confirm it — so a vendor who assigns something and comes back to the step in the
-same visit is refused there — earlier, the entry read was the only source, and within one
-visit the deselection was allowed and quietly discarded. Both steps also carry a notice,
-before anything is saved, saying a saved choice cannot be removed. Neither the notice nor
-the refusal appears in demo mode or on the sample catalog, where nothing reaches an
-account.
+The refusal takes effect the moment the assigning write succeeds, not only after a reload. The
+account catalog is read on entry and then grown by each successful write; the write itself is the
+evidence, so a vendor who returns to the step during the same visit is refused there too. Earlier,
+the entry read was the only source, so same-visit deselection was allowed and quietly discarded.
+Both steps also carry a notice before anything is saved, saying a saved choice cannot be removed.
+Neither the notice nor the refusal appears in demo mode or on the sample catalog, where nothing
+reaches an account.
 
 ### Backend request: give vendor-authored catalog entries an owner and lifecycle
 

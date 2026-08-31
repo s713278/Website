@@ -3,11 +3,12 @@
 How this frontend talks to the backend. Written for whoever is adding the next endpoint,
 wiring up the next page, or debugging why a call behaves oddly.
 
-Verified against branch `integration` at commit `ff995c1`, i.e. after the `@mithra/api-client`
-merge (PR #16, `ac4aecb`).
+The API-package baseline was verified against `integration` at commit `ff995c1`, after the
+`@mithra/api-client` merge (PR #16, `ac4aecb`).
 
-Updated on 2026-08-29 for the vendor-onboarding account service, resume-step-sized entry
-hydration, authenticated measurement details, and privacy-filtered local draft recovery.
+Updated on 2026-08-31 for the vendor-onboarding account service, resume-step-sized entry
+hydration, authenticated measurement details, explicit demo/sample isolation, and
+privacy-filtered local draft recovery.
 
 Companion docs: [`API_GAPS.md`](./API_GAPS.md) (endpoints the backend doesn't have yet),
 [`SESSION.md`](./SESSION.md) (JWT lifecycle + the XSS posture of localStorage tokens).
@@ -177,7 +178,7 @@ One object per backend domain, all thin wrappers over the primitives above.
 | File | Service | Covers |
 |---|---|---|
 | `auth.ts` | `authService` | `requestOtp`, `verifyOtp`, `refreshToken`, `getProfile`, `signOut`. OTP-first — no email/password. |
-| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search, business-type update, context, storefront save, and go-live. The protected onboarding methods are wrapped but not called by the local prototype. |
+| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search, business-type update, context, storefront save, and go-live. Its protected setup methods back the live vendor-onboarding workflow. |
 | `catalog.ts` | `catalogService` | Platform-wide categories and business types; category-scoped product CRUD. Public onboarding reads accept generated query types plus `AbortSignal`. |
 | `cart.ts` | `cartService` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` — all under `/v1/vendors/{vendorId}/cart`. |
 | `orders.ts` | `ordersService` | `create`, `createFromCart`, vendor-scoped list/update/cancel/tracking, user order history. |
@@ -219,11 +220,11 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
 | `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
-The onboarding service's public reference reads intentionally ignore the global demo/live switch.
-They try the public live catalog in either app mode; if that fails, the wizard offers a visibly
-labelled switch to reserved-negative-ID sample records. It never silently converts a live failure
-into sample data. Vendor-scoped reads and writes are used only when setup is connected to a live
-account.
+In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
+reads and writes. Demo mode never mounts those account-catalog readers: the wizard waits for the
+vendor to explicitly select the reserved-negative-ID sample catalog, then answers from module-local
+sample data. It never silently converts a live failure into sample data. A persisted sample draft
+carried into Live API mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
 #### Vendor setup account hydration
 
@@ -395,7 +396,7 @@ plain `useState`.
 
 State management now includes three Zustand stores: `useAuthStore`, `useCartStore`, and the
 feature-local `useOnboardingStore`. The onboarding store keeps private fields in volatile memory and
-persists only a versioned, validated safe draft through the `local-prototype` adapter. Writes use one
+persists only a versioned, validated safe draft through `onboardingDraftAdapter`. Writes use one
 1200 ms trailing timer followed by `requestIdleCallback` (with a timeout fallback), plus immediate
 flushes on step transitions, completion, and page hiding. It deliberately does not use Zustand's
 per-mutation persistence middleware. The safe snapshot excludes phones, OTP digits, payment
@@ -427,8 +428,9 @@ stores no vendor input. There is no React Query, SWR, or shared server-state sto
    `@/shared/api` façade.
 4. **Normalise wire quirks** in `src/shared/api/mappers/`, not in the page.
 5. **Call it from the component** with the §6 pattern.
-6. **Verify:** `npm run typecheck && npm run lint`. There is no test runner — that pair *is*
-   the verification loop. Exercise both modes by flipping `VITE_USE_API`.
+6. **Verify:** `npm run typecheck && npm run lint && npm run test`. Vitest runs the pure setup
+   logic in the node environment; there is no DOM or end-to-end runner, so also exercise UI behavior
+   in both modes by flipping `VITE_USE_API`.
 7. **If the backend isn't ready,** add a row to `API_GAPS.md` describing the gap and your
    interim workaround, so it's findable when the endpoint lands.
 
@@ -487,14 +489,14 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
-| `md-vendor-onboarding-draft-v1` | `local-prototype` onboarding adapter | versioned safe wizard draft and optional same-browser preview snapshot; no private contact/payment values or files |
+| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
 object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated
 server persistence or a public storefront. The `mapStorefrontConfigRequest` mapper aligns the typed
 draft with `SaveStorefrontConfigRequest`: it adds the `+91` country code to the national ten-digit
-order and support WhatsApp numbers, rejects local image URLs, and is not connected to a protected
-request in prototype mode.
+order and support WhatsApp numbers and rejects local image URLs. Live account setup calls it through
+`vendorOnboardingService.saveStorefront`; demo and sample flows only save the private preview.
 
 ---
 
