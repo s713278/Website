@@ -1,4 +1,8 @@
-import type { Store } from '../types'
+import type { ProductVariant, Store } from '../types'
+
+function demoSku(id: string, unit: string, price: number): ProductVariant {
+  return { id, unit, price, onSale: false, skuType: 'ITEM' }
+}
 
 const DEMO_IMAGES = {
   mango: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&h=600&q=85',
@@ -25,7 +29,6 @@ export const STORES: Store[] = [
     etaMins: 45,
     distanceKm: 2.1,
     offer: '100% HOMEMADE',
-    phone: '919876543210',
     image: 'linear-gradient(135deg, #0b3d2e 0%, #14532d 45%, #166534 100%)',
     heroImage: ANITHA_HERO,
     theme: {
@@ -35,14 +38,14 @@ export const STORES: Store[] = [
       fontFamily: 'Poppins',
     },
     categories: [
-      { id: 'general', label: 'Mango Pickles', imagePath: DEMO_IMAGES.mango },
-      { id: 'bestsellers', label: 'Bestsellers', imagePath: DEMO_IMAGES.spices },
-      { id: 'chicken', label: 'Chicken Pickles', imagePath: DEMO_IMAGES.chicken },
-      { id: 'seafood', label: 'Seafood Pickles', imagePath: DEMO_IMAGES.prawn },
-      { id: 'vegetable', label: 'Veg Pickles', imagePath: DEMO_IMAGES.garlic },
-      { id: 'combo', label: 'Combo Offers', imagePath: DEMO_IMAGES.combo },
-      { id: 'spices', label: 'Spice Mix', imagePath: DEMO_IMAGES.spices },
-      { id: 'gifts', label: 'Gift Packs', imagePath: DEMO_IMAGES.lemon },
+      { label: 'Mango Pickles', imagePath: DEMO_IMAGES.mango },
+      { label: 'Bestsellers', imagePath: DEMO_IMAGES.spices },
+      { label: 'Chicken Pickles', imagePath: DEMO_IMAGES.chicken },
+      { label: 'Seafood Pickles', imagePath: DEMO_IMAGES.prawn },
+      { label: 'Veg Pickles', imagePath: DEMO_IMAGES.garlic },
+      { label: 'Combo Offers', imagePath: DEMO_IMAGES.combo },
+      { label: 'Spice Mix', imagePath: DEMO_IMAGES.spices },
+      { label: 'Gift Packs', imagePath: DEMO_IMAGES.lemon },
     ],
     products: [
       {
@@ -53,7 +56,7 @@ export const STORES: Store[] = [
         price: 199,
         veg: true,
         popular: true,
-        category: 'general',
+        category: 'Mango Pickles',
         imageUrl: DEMO_IMAGES.mango,
         images: [DEMO_IMAGES.mango, DEMO_IMAGES.spices, DEMO_IMAGES.lemon, DEMO_IMAGES.gongura],
         rating: 4.6,
@@ -61,9 +64,9 @@ export const STORES: Store[] = [
         spiceLevel: 'Mild Spicy',
         ingredients: 'Raw mango, mustard powder, red chilli, fenugreek, turmeric, salt, sesame oil',
         variants: [
-          { id: '250g', unit: '250 g', price: 119 },
-          { id: '500g', unit: '500 g', price: 199 },
-          { id: '1kg', unit: '1 kg', price: 349 },
+          demoSku('250g', '250 g', 119),
+          demoSku('500g', '500 g', 199),
+          demoSku('1kg', '1 kg', 349),
         ],
       },
       {
@@ -74,15 +77,15 @@ export const STORES: Store[] = [
         price: 249,
         veg: true,
         popular: true,
-        category: 'bestsellers',
+        category: 'Bestsellers',
         imageUrl: DEMO_IMAGES.spices,
         rating: 4.8,
         reviewCount: 86,
         spiceLevel: 'Medium Spicy',
         ingredients: 'Mixed vegetables, mango, lemon, mustard, chilli, fenugreek, salt, oil',
         variants: [
-          { id: '500g', unit: '500 g', price: 249 },
-          { id: '750g', unit: '750 g', price: 349 },
+          demoSku('500g', '500 g', 249),
+          demoSku('750g', '750 g', 349),
         ],
       },
       {
@@ -93,15 +96,15 @@ export const STORES: Store[] = [
         price: 329,
         veg: false,
         popular: true,
-        category: 'chicken',
+        category: 'Chicken Pickles',
         imageUrl: DEMO_IMAGES.chicken,
         rating: 4.7,
         reviewCount: 94,
         spiceLevel: 'Medium Spicy',
         ingredients: 'Chicken, garlic, red chilli, mustard, fenugreek, turmeric, salt, sesame oil',
         variants: [
-          { id: '400g', unit: '400 g', price: 329 },
-          { id: '750g', unit: '750 g', price: 549 },
+          demoSku('400g', '400 g', 329),
+          demoSku('750g', '750 g', 549),
         ],
       },
       {
@@ -112,7 +115,7 @@ export const STORES: Store[] = [
         price: 349,
         veg: false,
         popular: true,
-        category: 'seafood',
+        category: 'Seafood Pickles',
         imageUrl: DEMO_IMAGES.prawn,
         rating: 4.7,
         reviewCount: 72,
@@ -127,15 +130,15 @@ export const STORES: Store[] = [
           'Whole garlic cloves pickled in a fiery masala — strong, punchy flavour for garlic lovers.',
         price: 179,
         veg: true,
-        category: 'vegetable',
+        category: 'Veg Pickles',
         imageUrl: DEMO_IMAGES.garlic,
         rating: 4.5,
         reviewCount: 58,
         spiceLevel: 'Hot',
         ingredients: 'Garlic, red chilli, mustard, fenugreek, turmeric, salt, oil',
         variants: [
-          { id: '250g', unit: '250 g', price: 99 },
-          { id: '500g', unit: '500 g', price: 179 },
+          demoSku('250g', '250 g', 99),
+          demoSku('500g', '500 g', 179),
         ],
       },
       {
@@ -145,7 +148,7 @@ export const STORES: Store[] = [
           'Tangy lemon pieces with green chilli and spices — light, zesty, and perfect with curd rice.',
         price: 159,
         veg: true,
-        category: 'vegetable',
+        category: 'Veg Pickles',
         imageUrl: DEMO_IMAGES.lemon,
         rating: 4.3,
         reviewCount: 41,
@@ -160,7 +163,7 @@ export const STORES: Store[] = [
           'Classic Andhra gongura (sorrel leaves) pickle — tangy, earthy, and a regional favourite.',
         price: 189,
         veg: true,
-        category: 'vegetable',
+        category: 'Veg Pickles',
         imageUrl: DEMO_IMAGES.gongura,
         rating: 4.4,
         reviewCount: 63,
@@ -176,15 +179,15 @@ export const STORES: Store[] = [
         price: 499,
         veg: true,
         popular: true,
-        category: 'combo',
+        category: 'Combo Offers',
         imageUrl: DEMO_IMAGES.combo,
         rating: 4.9,
         reviewCount: 112,
         spiceLevel: 'Mild Spicy',
         ingredients: 'Mango, lemon, garlic, mustard, chilli, fenugreek, salt, oil',
         variants: [
-          { id: '3x500g', unit: '3 × 500 g', price: 499 },
-          { id: '5x500g', unit: '5 × 500 g', price: 799 },
+          demoSku('3x500g', '3 × 500 g', 499),
+          demoSku('5x500g', '5 × 500 g', 799),
         ],
       },
     ],

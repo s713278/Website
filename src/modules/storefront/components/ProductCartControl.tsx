@@ -56,7 +56,7 @@ export function ProductCartControl({
         type="button"
         onClick={handleAdd}
         className={cn(
-          'inline-flex h-8 min-w-[4.25rem] items-center justify-center gap-1 rounded-lg border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-600))] shadow-[0_2px_10px_rgba(15,23,42,0.14)] transition duration-200 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95',
+          'inline-flex h-8 min-w-[4.5rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-200 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95',
           className,
         )}
         aria-label={aria}
@@ -70,7 +70,7 @@ export function ProductCartControl({
   return (
     <div
       className={cn(
-        'inline-flex h-8 min-w-[5.5rem] items-stretch overflow-hidden rounded-lg bg-[var(--store-theme,var(--md-green-600))] text-white shadow-[0_2px_10px_rgba(15,23,42,0.14)]',
+        'inline-flex h-8 min-w-[5.5rem] items-stretch overflow-hidden rounded-full bg-[var(--store-theme,var(--md-green-600))] text-white shadow-sm',
         className,
       )}
       role="group"

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Check, Copy, MessageCircle, ShieldCheck } from 'lucide-react'
+import { Check, Copy, ShieldCheck } from 'lucide-react'
 import { ordersService, type CustomerOrder } from '@/shared/api'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
-import { whatsappHref } from '@/modules/storefront/lib/whatsapp-order'
 import { Button } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
@@ -15,7 +14,6 @@ type SuccessState = {
   storeName?: string
   deliverySlot?: string
   whatsappMessage?: string
-  storePhone?: string
 }
 
 export function OrderSuccessPage() {
@@ -50,10 +48,6 @@ export function OrderSuccessPage() {
 
   const storeName = state.storeName ?? store?.name ?? order?.storeName ?? 'Store'
   const deliverySlot = state.deliverySlot ?? '6 PM - 9 PM'
-  const whatsappLink =
-    state.storePhone && state.whatsappMessage
-      ? whatsappHref(state.storePhone, state.whatsappMessage)
-      : null
 
   async function copyOrderId() {
     try {
@@ -140,18 +134,6 @@ export function OrderSuccessPage() {
                   </Button>
                 </Link>
               </div>
-
-              {whatsappLink ? (
-                <a
-                  href={whatsappLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
-                >
-                  <MessageCircle className="size-4" aria-hidden />
-                  Open WhatsApp again
-                </a>
-              ) : null}
             </div>
 
             <div className="mx-auto mt-6 flex max-w-lg items-center gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] px-4 py-3 ring-1 ring-[var(--store-theme-muted,rgba(16,185,129,0.22))]">

@@ -98,7 +98,10 @@ export function ProductDetailPanel({
             <div className="mt-3 flex flex-wrap items-center gap-3">
               {product.rating != null ? (
                 <p className="inline-flex items-center gap-1 text-sm text-slate-700">
-                  <Star className="size-4 fill-amber-400 text-amber-400" aria-hidden />
+                  <Star
+                    className="size-4 fill-[var(--store-accent,#f97316)] text-[var(--store-accent,#f97316)]"
+                    aria-hidden
+                  />
                   <span className="font-semibold text-slate-900">{product.rating.toFixed(1)}</span>
                   {reviewCount ? (
                     <span className="text-slate-500">({reviewCount} reviews)</span>
@@ -106,7 +109,7 @@ export function ProductDetailPanel({
                 </p>
               ) : null}
               {inStock ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                <span className="rounded-full bg-[var(--store-accent-soft,rgba(249,115,22,0.16))] px-2.5 py-1 text-xs font-semibold text-[var(--store-accent,#ea580c)] ring-1 ring-[var(--store-accent-muted,rgba(249,115,22,0.28))]">
                   In Stock
                 </span>
               ) : null}

@@ -36,17 +36,16 @@ type StorefrontFooterProps = {
 export function StorefrontFooter({
   storeName,
   logoUrl,
-  tagline = 'Pure ingredients. Authentic taste.',
-  phone = '+91 98765 43210',
-  email = 'hello@anithapickles.in',
+  tagline,
+  phone,
   instagramUrl = 'https://instagram.com',
   id = 'store-contact',
   className,
 }: StorefrontFooterProps) {
   const initial = storeName.trim().slice(0, 1).toUpperCase() || 'A'
   const year = new Date().getFullYear()
-  const digits = phone.replace(/\D/g, '')
-  const tel = digits ? `+${digits}` : phone.replace(/\s/g, '')
+  const digits = phone?.replace(/\D/g, '') ?? ''
+  const tel = digits ? `+${digits}` : phone?.replace(/\s/g, '')
   const whatsappHref = digits ? `https://wa.me/${digits}` : undefined
 
   return (
@@ -72,20 +71,17 @@ export function StorefrontFooter({
           </div>
 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-600 sm:text-xs">
-            <a
-              href={`tel:${tel}`}
-              className="transition hover:text-[var(--store-theme,var(--md-green-700))]"
-            >
-              {phone}
-            </a>
-            <Dot />
-            <a
-              href={`mailto:${email}`}
-              className="transition hover:text-[var(--store-theme,var(--md-green-700))]"
-            >
-              {email}
-            </a>
-            <Dot />
+            {phone ? (
+              <>
+                <a
+                  href={`tel:${tel}`}
+                  className="transition hover:text-[var(--store-theme,var(--md-green-700))]"
+                >
+                  {phone}
+                </a>
+                <Dot />
+              </>
+            ) : null}
             <span className="text-slate-500">Hyderabad, Telangana</span>
             <span className="hidden h-3 w-px bg-slate-200 sm:inline" aria-hidden />
             <div className="flex items-center gap-1">

@@ -35,4 +35,17 @@ export const storefrontService = {
     }),
   checkDeliveryEligibility: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/delivery-eligibility`, body, { skipAuth: true }),
+
+  listProducts: (
+    vendorId: number | string,
+    params?: {
+      page_number?: number
+      page_size?: number
+      category_id?: number
+    },
+  ) =>
+    apiGet<ApiEnvelope>(
+      `/v1/vendors/${encodeURIComponent(vendorId)}/storefront/products`,
+      { params, skipAuth: true },
+    ),
 };

@@ -1,4 +1,5 @@
 import type { Product, ProductVariant } from '@/modules/storefront/types'
+import { formatCurrency } from '@/shared/lib/utils'
 
 const DEFAULT_VARIANT_ID = 'default'
 
@@ -9,15 +10,19 @@ export function getProductVariants(product: Product): ProductVariant[] {
       id: DEFAULT_VARIANT_ID,
       unit: product.unit ?? '',
       price: product.price,
+      onSale: false,
+      skuType: 'ITEM',
     },
   ]
 }
 
 export function getDefaultVariant(product: Product): ProductVariant {
   const variants = getProductVariants(product)
-  return variants.reduce((lowest, variant) =>
-    variant.price < lowest.price ? variant : lowest,
-  )
+  if (product.defaultVariantId) {
+    const preferred = variants.find((variant) => variant.id === product.defaultVariantId)
+    if (preferred) return preferred
+  }
+  return variants[0]!
 }
 
 export function resolveVariant(product: Product, variant?: ProductVariant): ProductVariant {
@@ -26,6 +31,26 @@ export function resolveVariant(product: Product, variant?: ProductVariant): Prod
 
 export function hasMultipleVariants(product: Product): boolean {
   return (product.variants?.length ?? 0) > 1
+}
+
+export function formatVariantLabel(variant: ProductVariant, disambiguate = false): string {
+  if (!variant.unit) return formatCurrency(variant.price)
+  if (!disambiguate) return variant.unit
+  return `${variant.unit} · ${formatCurrency(variant.price)}`
+}
+
+/** Units that appear more than once — show price on the label to tell them apart. */
+export function duplicateVariantUnits(variants: ProductVariant[]): Set<string> {
+  const counts = new Map<string, number>()
+  for (const variant of variants) {
+    const key = variant.unit || variant.id
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const dupes = new Set<string>()
+  for (const [key, count] of counts) {
+    if (count > 1) dupes.add(key)
+  }
+  return dupes
 }
 
 export function variantCartId(productId: string, variantId: string): string {

@@ -1,13 +1,20 @@
 import type { ReactNode, RefObject } from 'react'
 import { Link } from 'react-router-dom'
-import { Button, EmptyState, Spinner } from '@/shared/components'
+import { Button, EmptyState } from '@/shared/components'
+import {
+  StorePageSkeleton,
+  type StorePageSkeletonLayout,
+} from './StorePageSkeleton'
 
 type StorePageStatesProps = {
   wrapperRef: RefObject<HTMLDivElement | null>
   loading: boolean
   error: string
   ready: boolean
+  /** Screen-reader label while the skeleton is visible. */
   loadingLabel: string
+  /** Skeleton layout — `home` for the store landing page, `panel` for sub-pages. */
+  loadingLayout?: StorePageSkeletonLayout
   emptyTitle: string
   emptyDescription: string
   backHref: string
@@ -21,6 +28,7 @@ export function StorePageStates({
   error,
   ready,
   loadingLabel,
+  loadingLayout = 'panel',
   emptyTitle,
   emptyDescription,
   backHref,
@@ -30,8 +38,9 @@ export function StorePageStates({
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
       {loading ? (
-        <div className="store-shell-inner py-24">
-          <Spinner label={loadingLabel} />
+        <div aria-busy="true" aria-live="polite">
+          <span className="sr-only">{loadingLabel}</span>
+          <StorePageSkeleton layout={loadingLayout} />
         </div>
       ) : !ready ? (
         <div className="store-shell-inner py-24">

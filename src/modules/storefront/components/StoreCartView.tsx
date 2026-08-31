@@ -164,7 +164,7 @@ export function StoreCartView({
               <Button
                 size="lg"
                 fullWidth
-                className="h-11 rounded-xl bg-[var(--store-theme,var(--md-green-800))] text-white hover:bg-[var(--store-theme,var(--md-green-900))]"
+                className="h-11 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-white hover:bg-[var(--store-theme,var(--md-green-900))]"
                 onClick={handleCheckout}
               >
                 Proceed to Checkout

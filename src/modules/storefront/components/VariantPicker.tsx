@@ -1,4 +1,8 @@
 import { cn } from '@/lib/utils'
+import {
+  duplicateVariantUnits,
+  formatVariantLabel,
+} from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
 
 type VariantPickerProps = {
@@ -6,12 +10,11 @@ type VariantPickerProps = {
   selectedId: string
   onSelect: (id: string) => void
   label?: string
-  /** Card pills vs PDP filled buttons */
   tone?: 'soft' | 'solid'
   className?: string
 }
 
-/** Pack size selector — shared by product card and PDP. */
+/** Pack size selector — PDP (and any full list). */
 export function VariantPicker({
   variants,
   selectedId,
@@ -20,6 +23,8 @@ export function VariantPicker({
   tone = 'soft',
   className,
 }: VariantPickerProps) {
+  const dupes = duplicateVariantUnits(variants)
+
   return (
     <div className={cn(className)}>
       {label ? <p className="mb-2 text-sm font-semibold text-slate-800">{label}</p> : null}
@@ -44,7 +49,7 @@ export function VariantPicker({
                 tone === 'soft' && 'min-h-9 flex-1 text-xs',
               )}
             >
-              {variant.unit}
+              {formatVariantLabel(variant, dupes.has(variant.unit || variant.id))}
             </button>
           )
         })}

@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { filterProducts } from '@/modules/storefront/lib/catalog-filters'
+import type { CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
 import type { Product, StoreCategory } from '@/modules/storefront/types'
+import { Button } from '@/shared/components/ui'
 import { CategoryScroller } from './CategoryScroller'
 import { ProductGrid } from './ProductGrid'
 
@@ -10,53 +10,104 @@ type CategoryBrowseSectionProps = {
   storeName: string
   categories: StoreCategory[]
   products: Product[]
-  categoryId: string
+  categoryFilter: CategoryFilter
+  /** Raw draft text in the search box (for empty-state copy). */
   query?: string
-  onCategoryChange: (categoryId: string) => void
+  /** True when an active search filter is applied (min length met). */
+  searching?: boolean
+  /** True when user typed 1 character — show hint, keep catalog visible. */
+  searchTooShort?: boolean
+  onCategoryChange: (filter: CategoryFilter) => void
+  totalElements?: number
+  hasMore?: boolean
+  loadingMore?: boolean
+  loading?: boolean
+  onLoadMore?: () => void
   className?: string
 }
+
 export function CategoryBrowseSection({
   storeId,
   storeName,
   categories,
   products,
-  categoryId,
+  categoryFilter,
   query = '',
+  searching = false,
+  searchTooShort = false,
   onCategoryChange,
+  totalElements,
+  hasMore = false,
+  loadingMore = false,
+  loading = false,
+  onLoadMore,
   className,
 }: CategoryBrowseSectionProps) {
-  const filtered = useMemo(
-    () => filterProducts(products, categoryId, query),
-    [products, categoryId, query],
-  )
+  const showSkeleton = loading && products.length === 0 && !searching
+  const count = searching ? products.length : (totalElements ?? products.length)
+  const q = query.trim()
 
   return (
     <section className={cn('flex flex-col gap-4 sm:gap-5', className)}>
       <CategoryScroller
         categories={categories}
-        activeId={categoryId}
+        activeFilter={categoryFilter}
         onSelect={onCategoryChange}
         showAllOption
       />
 
-      {filtered.length > 0 ? (
-        <p className="text-xs text-slate-500 sm:text-sm">
-          {filtered.length} product{filtered.length === 1 ? '' : 's'}
+      {searchTooShort ? (
+        <p className="text-sm text-slate-500">Type 2 or more characters to search</p>
+      ) : !showSkeleton && count > 0 ? (
+        <p className="text-sm text-slate-600">
+          {searching ? (
+            <>
+              <span className="font-semibold text-slate-900">{count}</span>
+              {count === 1 ? ' result' : ' results'}
+              {q ? (
+                <>
+                  {' '}
+                  for <span className="font-medium text-slate-800">“{q}”</span>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-slate-900">{count}</span>
+              {count === 1 ? ' product' : ' products'}
+            </>
+          )}
         </p>
       ) : null}
 
       <ProductGrid
         storeId={storeId}
         storeName={storeName}
-        products={filtered}
+        products={products}
         hideHeader
-        emptyTitle={query.trim() ? 'No results' : 'No products match'}
+        loading={showSkeleton}
+        skeletonCount={6}
+        emptyTitle={searching ? 'No results' : 'No products match'}
         emptyDescription={
-          query.trim()
-            ? `Nothing matched "${query.trim()}". Try another word.`
+          searching
+            ? `Nothing matched "${q}". Try another word.`
             : 'Try another category or tap All.'
         }
       />
+
+      {hasMore && !searching && !searchTooShort && !showSkeleton ? (
+        <div className="flex justify-center pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loadingMore}
+            onClick={onLoadMore}
+            className="min-w-[10rem]"
+          >
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      ) : null}
     </section>
   )
 }

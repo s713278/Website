@@ -10,6 +10,8 @@ export type User = {
   id: string
   name: string
   email: string
+  /** 10-digit mobile from OTP login when available. */
+  phone?: string
   /**
    * Active audience for this session. Always one of `roles` — the role requested on the
    * login screen is never enough on its own.

@@ -45,7 +45,7 @@ export function SectionHeader({
         <button
           type="button"
           onClick={onAction}
-          className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[var(--store-theme,var(--md-green-700))] transition hover:text-[var(--md-green-800)] hover:underline hover:underline-offset-4 sm:text-sm"
+          className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[var(--store-theme,var(--md-green-700))] transition hover:underline hover:underline-offset-4 sm:text-sm"
         >
           {cleanActionLabel(actionLabel)}
           <ChevronRight className="size-3.5 opacity-70 sm:size-4" strokeWidth={2.25} aria-hidden />

@@ -28,7 +28,7 @@ import {
   storeCartPath,
   storeOrderSuccessPath,
 } from '@/modules/storefront/lib/store-paths'
-import { buildWhatsAppOrderMessage, whatsappHref } from '@/modules/storefront/lib/whatsapp-order'
+import { buildWhatsAppOrderMessage } from '@/modules/storefront/lib/whatsapp-order'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -99,17 +99,12 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
 
       clear()
 
-      if (store.phone) {
-        window.open(whatsappHref(store.phone, message), '_blank', 'noopener,noreferrer')
-      }
-
       navigate(storeOrderSuccessPath(store.id, order.id), {
         replace: true,
         state: {
           storeName: store.name,
           deliverySlot: slotLabel,
           whatsappMessage: message,
-          storePhone: store.phone,
         },
       })
     } catch (err) {
@@ -252,7 +247,7 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
               type="button"
               fullWidth
               size="lg"
-              className="h-12 rounded-xl bg-[var(--store-theme,var(--md-green-800))] text-base font-semibold text-white shadow-sm hover:opacity-90"
+              className="h-12 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-base font-semibold text-white shadow-sm hover:opacity-90"
               disabled={placing}
               onClick={() => void placeOrderOnWhatsApp()}
             >

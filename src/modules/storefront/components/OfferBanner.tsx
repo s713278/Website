@@ -1,23 +1,28 @@
 import { useState } from 'react'
+import { MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const DEFAULT_HERO =
   'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=1600&h=900&q=90'
 
 type OfferBannerProps = {
-  badge?: string
   title: string
-  subtitle: string
+  /** Right-side italic line — usually store tagline. */
+  tagline?: string
+  /** Optional location under the title (e.g. city). */
+  location?: string
   heroImage?: string
+  badges?: string[]
   onShopNow?: () => void
   className?: string
 }
 
-/** Dark hero — text on left, photo visible on the right; glass CTA. */
+/** Dark hero — badges + title left; tagline right. Trust strip lives below in ServiceInfoBar. */
 export function OfferBanner({
-  badge = '100% Homemade',
+  badges,
   title,
-  subtitle,
+  tagline,
+  location,
   heroImage = DEFAULT_HERO,
   onShopNow,
   className,
@@ -29,13 +34,13 @@ export function OfferBanner({
     <section
       id="top"
       className={cn(
-        'store-offer-banner store-offer-banner--dark relative isolate min-h-[230px] overflow-hidden rounded-2xl ring-1 ring-black/10 sm:min-h-[260px] lg:min-h-[300px]',
+        'store-offer-banner store-offer-banner--dark relative isolate min-h-[220px] overflow-hidden rounded-2xl ring-1 ring-black/10 sm:min-h-[250px] lg:min-h-[280px]',
         className,
       )}
     >
       <div
         className={cn(
-          'absolute inset-0 bg-[#022c22] transition-opacity duration-500',
+          'absolute inset-0 bg-slate-900 transition-opacity duration-500',
           imgLoaded ? 'opacity-0' : 'opacity-100',
         )}
         aria-hidden
@@ -46,7 +51,7 @@ export function OfferBanner({
         alt=""
         onLoad={() => setImgLoaded(true)}
         className={cn(
-          'absolute inset-0 size-full object-cover object-[center_right] brightness-[0.88] transition-opacity duration-500 sm:object-[70%_center]',
+          'absolute inset-0 size-full object-cover object-[center_right] brightness-[0.82] transition-opacity duration-500 sm:object-[70%_center]',
           imgLoaded ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -55,41 +60,55 @@ export function OfferBanner({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'linear-gradient(to right, rgba(2, 20, 15, 0.93) 0%, rgba(2, 20, 15, 0.72) 38%, rgba(2, 20, 15, 0.22) 58%, transparent 72%)',
+            'linear-gradient(105deg, rgba(8,10,12,0.94) 0%, rgba(8,10,12,0.78) 42%, rgba(8,10,12,0.35) 68%, rgba(8,10,12,0.18) 100%)',
         }}
         aria-hidden
       />
-      <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10"
-        aria-hidden
-      />
 
-      <div className="relative grid min-h-[inherit] lg:grid-cols-[minmax(0,54%)_1fr]">
-        <div className="flex flex-col justify-center px-5 py-7 sm:px-7 sm:py-9 lg:pl-8">
-          <span className="inline-flex w-fit rounded-full border border-white/25 bg-black/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100 backdrop-blur-sm sm:text-[11px]">
-            {badge}
-          </span>
+      <div className="relative grid min-h-[inherit] gap-6 px-5 py-7 sm:px-7 sm:py-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-8 lg:px-8 lg:py-9">
+        <div className="flex flex-col justify-center">
+          {badges && badges.length > 0 ? (
+            <ul className="flex flex-wrap gap-2">
+              {badges.map((label) => (
+                <li
+                  key={label}
+                  className="rounded-full border border-[var(--store-accent-muted,rgba(249,115,22,0.45))] bg-[var(--store-accent-soft,rgba(249,115,22,0.22))] px-3 py-1 text-[11px] font-medium text-white"
+                >
+                  {label}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-          <h1 className="font-display mt-3.5 text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-white [text-shadow:0_2px_20px_rgba(0,0,0,0.5)] sm:text-[1.9rem] lg:text-[2rem]">
+          <h1 className="font-display mt-3.5 text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-white sm:text-[1.85rem] lg:text-[2rem]">
             {title}
           </h1>
 
-          <p className="mt-2.5 max-w-md text-sm leading-relaxed text-slate-200/90 sm:text-[15px]">
-            {subtitle}
-          </p>
+          {location ? (
+            <p className="mt-2.5 flex items-center gap-1.5 text-sm text-white/80">
+              <MapPin className="size-3.5 shrink-0 text-white/70" strokeWidth={2} aria-hidden />
+              <span>{location}</span>
+            </p>
+          ) : null}
 
-          <div className="mt-6">
+          <div className="mt-5">
             <button
               type="button"
               onClick={onShopNow}
-              className="inline-flex h-10 items-center rounded-full border border-white/45 bg-white/10 px-7 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/70 hover:bg-white/20 active:scale-[0.98] sm:h-11"
+              className="inline-flex h-10 items-center rounded-full border border-white/50 bg-black/25 px-7 text-sm font-semibold text-white backdrop-blur-md transition hover:border-white/70 hover:bg-black/35 active:scale-[0.98] sm:h-11"
             >
               Shop Now
             </button>
           </div>
         </div>
 
-        <div className="hidden min-h-[120px] lg:block" aria-hidden />
+        {tagline ? (
+          <div className="flex flex-col items-start justify-center lg:items-end lg:text-right">
+            <p className="max-w-sm font-display text-base italic leading-snug text-white/95 sm:text-lg">
+              {tagline}
+            </p>
+          </div>
+        ) : null}
       </div>
     </section>
   )

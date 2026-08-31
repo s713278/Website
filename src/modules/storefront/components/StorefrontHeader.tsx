@@ -150,7 +150,7 @@ export function StorefrontHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 overflow-visible border-b border-slate-200/80 bg-white/90 backdrop-blur-xl',
+        'sticky top-0 z-50 overflow-visible border-b border-slate-200/70 bg-white',
         className,
       )}
     >

@@ -1,14 +1,13 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, Star } from 'lucide-react'
+import { Package } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CardVariantPicker } from '@/modules/storefront/components/CardVariantPicker'
 import { ProductCartControl } from '@/modules/storefront/components/ProductCartControl'
-import { VariantPicker } from '@/modules/storefront/components/VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
+import { formatProductPriceRange, hasDistinctPriceRange } from '@/modules/storefront/lib/product-price'
 import { storeProductPath } from '@/modules/storefront/lib/store-paths'
 import type { Product } from '@/modules/storefront/types'
 import { formatCurrency } from '@/shared/lib/utils'
-
 type ProductCardProps = {
   storeId: string
   storeName: string
@@ -19,16 +18,18 @@ type ProductCardProps = {
 export function ProductCard({ storeId, storeName, product, className }: ProductCardProps) {
   const productHref = storeProductPath(storeId, product.id)
   const { variants, selected, selectedId, setSelectedId, multi } = useSelectedVariant(product)
-  const [saved, setSaved] = useState(false)
 
-  return (
-    <article
+  return (    <article
       className={cn(
-        'store-product-card group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-100/90 bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] transition duration-200 hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)]',
+        'store-product-card group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white',
         className,
       )}
+      style={{
+        border: 'var(--store-card-border, 1px solid rgb(226 232 240 / 0.9))',
+        boxShadow: 'var(--store-card-shadow, none)',
+      }}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+      <div className="relative aspect-[5/4] overflow-hidden bg-slate-50">
         <Link to={productHref} className="block size-full">
           {product.imageUrl ? (
             <img
@@ -38,11 +39,13 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
               loading="lazy"
             />
           ) : (
-            <div className="flex size-full items-center justify-center bg-slate-50 text-4xl">🥒</div>
+            <div className="flex size-full items-center justify-center text-slate-300">
+              <Package className="size-12" strokeWidth={1.25} aria-hidden />
+            </div>
           )}
         </Link>
-        <ProductCartControl
-          storeId={storeId}
+
+        <ProductCartControl          storeId={storeId}
           storeName={storeName}
           product={product}
           variant={selected}
@@ -50,49 +53,39 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
         />
       </div>
 
-      <button
-        type="button"
-        onClick={() => setSaved((v) => !v)}
-        className={cn(
-          'absolute right-2.5 top-2.5 z-10 inline-flex size-9 items-center justify-center rounded-full border border-slate-200/90 bg-white text-slate-500 shadow-sm transition hover:text-slate-800',
-          saved && 'border-rose-200 text-rose-500',
-        )}
-        aria-label={saved ? 'Remove from wishlist' : 'Save to wishlist'}
-        aria-pressed={saved}
-      >
-        <Heart className={cn('size-4', saved && 'fill-current')} strokeWidth={1.75} />
-      </button>
+      <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-3 sm:px-4">
+        <div className="flex items-start justify-between gap-2">
+          <Link
+            to={productHref}
+            className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold leading-snug text-slate-900 transition hover:text-[var(--store-theme,var(--md-green-700))] sm:text-[15px]"
+          >
+            {product.name}
+          </Link>
+          <p
+            className="shrink-0 text-right text-[15px] font-bold leading-tight text-[var(--store-accent,#ea580c)] sm:text-base"
+            aria-label={`Price ${formatCurrency(selected.price)}`}
+          >
+            {formatCurrency(selected.price)}
+          </p>
+        </div>
 
-      <div className="flex flex-1 flex-col px-3.5 pb-4 pt-3 sm:px-4">
-        <Link
-          to={productHref}
-          className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-900 transition hover:text-[var(--store-theme,var(--md-green-700))]"
-        >
-          {product.name}
-        </Link>
+        <div className="mt-1">
+          {multi && hasDistinctPriceRange(product) ? (
+            <p className="text-[13px] font-bold leading-tight text-[var(--store-accent,#ea580c)]/90 sm:text-[15px]">
+              {formatProductPriceRange(product)}
+            </p>
+          ) : !multi && selected.unit ? (
+            <p className="text-[11px] font-medium leading-none text-slate-500">{selected.unit}</p>
+          ) : null}
+        </div>
 
         {multi ? (
-          <div className="mt-2.5" onClick={(e) => e.preventDefault()}>
-            <VariantPicker
-              variants={variants}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              label="Size"
-            />
-          </div>
-        ) : selected.unit ? (
-          <p className="mt-1.5 text-xs font-medium text-slate-500">{selected.unit}</p>
-        ) : null}
-
-        <p className="mt-2 text-sm font-bold leading-none text-[var(--store-theme,var(--md-green-600))]">
-          {formatCurrency(selected.price)}
-        </p>
-
-        {product.rating != null ? (
-          <p className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-            <Star className="size-3.5 fill-amber-400 text-amber-400" aria-hidden />
-            <span className="font-semibold text-slate-800">{product.rating.toFixed(1)}</span>
-          </p>
+          <CardVariantPicker
+            variants={variants}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            className="mt-2.5"
+          />
         ) : null}
       </div>
     </article>

@@ -1,5 +1,5 @@
-import type { Product, Store, StoreCategory, StoreTheme } from '@/modules/storefront/types'
-import { DEFAULT_ACCENT_COLOR, DEFAULT_PRIMARY_COLOR, normalizeHex } from '@/shared/lib/theme'
+import type { Product, Store, StoreCategory, StoreTheme, StoreFulfillment } from '@/modules/storefront/types'
+import { DEFAULT_ACCENT_COLOR, DEFAULT_PRIMARY_COLOR, DEFAULT_TEXT_COLOR, normalizeHex , DEFAULT_RATING,DEFAULT_ETA_MINS,DEFAULT_DISTANCE_KM } from '@/shared/lib/theme'
 
 const FALLBACK_COVER = 'linear-gradient(135deg, #059669 0%, #047857 45%, #0f766e 100%)'
 
@@ -28,13 +28,40 @@ export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undef
   const accentColor = typeof t?.accent_color === 'string' ? t.accent_color : undefined
   const backgroundColor = typeof t?.background_color === 'string' ? t.background_color : undefined
   const fontFamily = typeof t?.font_family === 'string' ? t.font_family : undefined
-  if (!primaryColor && !accentColor && !backgroundColor && !fontFamily && !logoImage) return undefined
+  const textColor = typeof t?.text_color === 'string' ? t.text_color : undefined
+  const rawShape = typeof t?.button_shape === 'string' ? t.button_shape.toUpperCase() : ''
+  const buttonShape =
+    rawShape === 'PILL' || rawShape === 'ROUNDED' || rawShape === 'SQUARE' ? rawShape : undefined
+  const rawCard = typeof t?.card_style === 'string' ? t.card_style.toUpperCase() : ''
+  const cardStyle =
+    rawCard === 'FLAT' || rawCard === 'SHADOW' || rawCard === 'BORDER' ? rawCard : undefined
+  const themePreset =
+    typeof t?.theme_preset === 'string' && t.theme_preset.trim() ? t.theme_preset.trim() : undefined
+
+  if (
+    !primaryColor &&
+    !accentColor &&
+    !backgroundColor &&
+    !fontFamily &&
+    !logoImage &&
+    !textColor &&
+    !buttonShape &&
+    !cardStyle &&
+    !themePreset
+  ) {
+    return undefined
+  }
+
   return {
     primaryColor: normalizeHex(primaryColor, DEFAULT_PRIMARY_COLOR),
     accentColor: normalizeHex(accentColor, DEFAULT_ACCENT_COLOR),
+    textColor: textColor ? normalizeHex(textColor, DEFAULT_TEXT_COLOR) : undefined,
     logoImage,
     backgroundColor,
     fontFamily,
+    buttonShape,
+    cardStyle,
+    themePreset,
   }
 }
 
@@ -62,18 +89,18 @@ export function mapProducts(raw: unknown, vendorId: string): Product[] {
     .map((item, index) => mapProduct(item, index, vendorId))
 }
 
-function mapCategory(raw: Record<string, unknown>, index: number): StoreCategory | null {
+function mapCategory(raw: Record<string, unknown>): StoreCategory | null {
   const label = String(raw.name ?? raw.label ?? '').trim()
   if (!label) return null
-  const id = String(raw.id ?? raw.category_id ?? raw.slug ?? label)
-    .trim()
-    .toLowerCase()
-  const imagePath =
-    (typeof raw.image_path === 'string' && raw.image_path) ||
-    (typeof raw.imagePath === 'string' && raw.imagePath) ||
-    httpUrl(raw.image) ||
-    undefined
-  return { id: id || `cat-${index}`, label, imagePath }
+  const categoryId = asNumber(raw.id ?? raw.category_id)
+  const imagePath = httpUrl(raw.image_path) || httpUrl(raw.imagePath) || httpUrl(raw.image)
+  return { label, imagePath, ...(categoryId != null ? { categoryId } : {}) }
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+  return undefined
 }
 
 export function mapCategories(raw: unknown): StoreCategory[] | undefined {
@@ -85,29 +112,69 @@ export function mapCategories(raw: unknown): StoreCategory[] | undefined {
   return categories.length ? categories : undefined
 }
 
+function mapFulfillment(raw: unknown): StoreFulfillment | undefined {
+  const f = asRecord(raw)
+  if (!f) return undefined
+  const homeDeliveryAvailable = Boolean(f.home_delivery_available)
+  const storePickupAvailable = Boolean(f.store_pickup_available)
+  if (!homeDeliveryAvailable && !storePickupAvailable) return undefined
+  return { homeDeliveryAvailable, storePickupAvailable }
+}
+
 /** Raw vendor / storefront payload → Store. */
+function trimmedOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function mapTrustStrip(raw: unknown): Store['trustStrip'] {
+  if (!Array.isArray(raw)) return undefined
+  const list = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      icon: String(item.icon ?? 'shield').toLowerCase(),
+      title: String(item.title ?? '').trim(),
+      subtitle: String(item.subtitle ?? '').trim(),
+    }))
+    .filter((item) => item.title)
+  return list.length ? list : undefined
+}
+
+function mapHeroBadges(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const badges = raw
+    .filter((b): b is string => typeof b === 'string')
+    .map((b) => b.trim())
+    .filter(Boolean)
+  return badges.length ? badges : undefined
+}
+
 export function mapVendorToStore(raw: Record<string, unknown>): Store {
   const id = liveVendorId(raw)
-  const categorySource = raw.tagline ?? raw.category ?? raw.cuisine ?? raw.business_location
+  const location = trimmedOrUndefined(raw.business_location) ?? trimmedOrUndefined(raw.location)
+  const categorySource = raw.category ?? raw.cuisine ?? raw.tagline ?? location
+
   return {
     id,
     name: String(raw.business_name ?? raw.name ?? 'Store').trim() || 'Store',
+    tagline: trimmedOrUndefined(raw.tagline),
+    description: trimmedOrUndefined(raw.description),
+    location,
     category: String(categorySource ?? 'Local'),
-    rating: Number(raw.rating ?? 4.2),
-    etaMins: Number(raw.etaMins ?? raw.eta_mins ?? 30),
-    distanceKm: Number(raw.distanceKm ?? raw.distance_km ?? 2),
+    rating: Number(raw.rating ?? DEFAULT_RATING),
+    etaMins: Number(raw.etaMins ?? raw.eta_mins ?? DEFAULT_ETA_MINS),
+    distanceKm: Number(raw.distanceKm ?? raw.distance_km ?? DEFAULT_DISTANCE_KM),
+    heroBadges: mapHeroBadges(raw.hero_badges),
     image: coverImage(raw),
-    offer: raw.announcement_bar
-      ? String(raw.announcement_bar)
-      : raw.offer
-        ? String(raw.offer)
-        : undefined,
+    heroImage: httpUrl(raw.banner_image),
+    trustStrip: mapTrustStrip(raw.trust_strip),
+    fulfillment: mapFulfillment(raw.fulfillment),
+    offer: trimmedOrUndefined(raw.announcement_bar) ?? trimmedOrUndefined(raw.offer),
     theme: mapVendorTheme(raw),
     categories: mapCategories(raw.categories),
     products: Array.isArray(raw.products)
       ? mapProducts(raw.products, id)
       : Array.isArray(raw.menu)
-        ? (raw.menu as Store['products'])
+        ? mapProducts(raw.menu, id)
         : [],
   }
 }

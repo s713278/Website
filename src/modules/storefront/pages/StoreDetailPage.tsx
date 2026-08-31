@@ -6,25 +6,31 @@ import {
   OfferBanner,
   ProductGrid,
   ServiceInfoBar,
+  StoreAboutSection,
   StorePageFooter,
   StorePageStates,
   StorefrontHeader,
 } from '@/modules/storefront/components'
 import { useStoreScrollNav } from '@/modules/storefront/hooks/useStoreScrollNav'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { useStoreProducts } from '@/modules/storefront/hooks/useStoreProducts'
 import {
   ALL_CATEGORY,
   buildCategories,
   categoryLabel,
   filterProducts,
-  previewProducts,
-  PRODUCT_PREVIEW_LIMIT,
+  resolveCategoryFilter,
+  type CategoryFilter,
 } from '@/modules/storefront/lib/catalog-filters'
+import { listCachedStoreProducts } from '@/modules/storefront/lib/product-catalog-cache'
 import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { SearchField } from '@/shared/components'
 import { useSearchQueryParam } from '@/shared/hooks/useSearchQueryParam'
+
+const SEARCH_MIN_CHARS = 2
+const SEARCH_DEBOUNCE_MS = 250
 
 export function StoreDetailPage() {
   const { storeId = 'r1' } = useParams()
@@ -38,6 +44,7 @@ export function StoreDetailPage() {
       error={error}
       ready={Boolean(store)}
       loadingLabel="Loading store…"
+      loadingLayout="home"
       emptyTitle="Store not found"
       emptyDescription="This store may be offline."
       backHref="/stores/r1"
@@ -55,21 +62,64 @@ type StoreHomeProps = {
 
 function StoreHome({ store, itemCount }: StoreHomeProps) {
   const { query, setQuery } = useSearchQueryParam()
-  const hasQuery = Boolean(query.trim())
-  const [searchOpen, setSearchOpen] = useState(hasQuery)
-  const [categoryId, setCategoryId] = useState(ALL_CATEGORY)
-  const [browseOpen, setBrowseOpen] = useState(hasQuery)
+  const [searchDraft, setSearchDraft] = useState(query)
+  const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()))
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(ALL_CATEGORY)
+  const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()))
   const homeRef = useRef<HTMLDivElement>(null)
   const productsRef = useRef<HTMLElement>(null)
   const categoriesRef = useRef<HTMLDivElement>(null)
 
-  const categories = useMemo(() => buildCategories(store), [store])
-  const homeProducts = useMemo(
-    () => filterProducts(store.products, categoryId, ''),
-    [store.products, categoryId],
-  )
-  const displayedProducts = useMemo(() => previewProducts(homeProducts), [homeProducts])
-  const hasMoreProducts = homeProducts.length > PRODUCT_PREVIEW_LIMIT
+  const homePageSize = 6
+  const browsePageSize = 10
+
+  const products = useStoreProducts(store.id, {
+    pageSize: browseOpen ? browsePageSize : homePageSize,
+    categoryFilter,
+  })
+
+  // Re-read on each render when products update — cache lives outside React state.
+  const cachedProducts = listCachedStoreProducts(store.id)
+  const categories = buildCategories(store, cachedProducts)
+
+  const draftTrimmed = searchDraft.trim()
+  const searchTooShort = draftTrimmed.length > 0 && draftTrimmed.length < SEARCH_MIN_CHARS
+  const searchNeedle = draftTrimmed.length >= SEARCH_MIN_CHARS ? draftTrimmed : ''
+  const searching = Boolean(searchNeedle)
+
+  /** Search filters the session cache only — never triggers a products API replace. */
+  const browseProducts = useMemo(() => {
+    if (!searching) return products.items
+    const pool = cachedProducts.length ? cachedProducts : products.items
+    return filterProducts(pool, ALL_CATEGORY, searchNeedle)
+  }, [searching, searchNeedle, cachedProducts, products.items])
+
+  useEffect(() => {
+    setSearchDraft(query)
+  }, [query])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (searchDraft.trim() === query) return
+      setQuery(searchDraft)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchDraft, query, setQuery])
+
+  useEffect(() => {
+    if (!query.trim()) return
+    setSearchOpen(true)
+    setBrowseOpen(true)
+  }, [query])
+
+  function selectCategory(next: CategoryFilter) {
+    setCategoryFilter(resolveCategoryFilter(categories, next))
+  }
+
+  useEffect(() => {
+    const resolved = resolveCategoryFilter(categories, categoryFilter)
+    if (resolved !== categoryFilter) setCategoryFilter(resolved)
+  }, [categories, categoryFilter])
 
   const activeNav = useStoreScrollNav(
     () => [
@@ -82,19 +132,13 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   )
 
   useEffect(() => {
-    if (!hasQuery) return
-    setSearchOpen(true)
-    setBrowseOpen(true)
-    setCategoryId(ALL_CATEGORY)
-  }, [hasQuery])
-
-  useEffect(() => {
     if (browseOpen) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [browseOpen])
 
   function exitBrowse(scrollHome = false) {
     setBrowseOpen(false)
     setSearchOpen(false)
+    setSearchDraft('')
     setQuery('')
     if (scrollHome) categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -105,12 +149,13 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
 
   function handleToggleSearch() {
     if (searchOpen) {
-      if (!hasQuery) setBrowseOpen(false)
+      if (!searchDraft.trim() && !query.trim()) setBrowseOpen(false)
       setSearchOpen(false)
+      setSearchDraft('')
       setQuery('')
       return
     }
-    setCategoryId(ALL_CATEGORY)
+    setCategoryFilter(ALL_CATEGORY)
     setBrowseOpen(true)
     setSearchOpen(true)
   }
@@ -126,16 +171,20 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
     if (id === 'contact') document.getElementById('store-contact')?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  function openBrowse(nextCategoryId: string = ALL_CATEGORY) {
-    setCategoryId(nextCategoryId)
+  function openBrowse(next: CategoryFilter = ALL_CATEGORY) {
+    selectCategory(next)
     setBrowseOpen(true)
   }
 
-  const browseTitle = hasQuery
+  const browseTitle = searching
     ? 'Search results'
     : searchOpen
       ? 'Search'
-      : categoryLabel(categories, categoryId)
+      : categoryLabel(categories, categoryFilter)
+
+  const showHomeViewAll =
+    !browseOpen &&
+    (!products.lastPage || products.totalElements > products.items.length)
 
   return (
     <>
@@ -159,8 +208,8 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
         <div className="border-b border-slate-100 bg-white py-4">
           <div className="store-shell-inner">
             <SearchField
-              value={query}
-              onChange={setQuery}
+              value={searchDraft}
+              onChange={setSearchDraft}
               placeholder="Search pickles, combos, gifts…"
               aria-label="Search products"
               autoFocus
@@ -169,37 +218,65 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
         </div>
       ) : null}
 
-      <main className="store-shell-inner flex flex-1 flex-col gap-4 py-4 sm:gap-5 sm:py-5">
+      <main className="store-shell-inner flex flex-1 flex-col gap-5 py-5 sm:gap-6 sm:py-6">
         {browseOpen ? (
-          <CategoryBrowseSection
-            storeId={store.id}
-            storeName={store.name}
-            categories={categories}
-            products={store.products}
-            categoryId={categoryId}
-            query={query}
-            onCategoryChange={setCategoryId}
-          />
+          products.error && products.items.length === 0 && !products.loading && !searching ? (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
+              <p className="font-medium">{products.error}</p>
+              <button
+                type="button"
+                onClick={() => products.reload()}
+                className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <CategoryBrowseSection
+              storeId={store.id}
+              storeName={store.name}
+              categories={categories}
+              products={browseProducts}
+              categoryFilter={categoryFilter}
+              query={searchDraft}
+              searching={searching}
+              searchTooShort={searchTooShort}
+              onCategoryChange={selectCategory}
+              totalElements={products.totalElements}
+              hasMore={!products.lastPage}
+              loading={products.loading && !searching}
+              loadingMore={products.loadingMore}
+              onLoadMore={products.loadMore}
+            />
+          )
         ) : (
           <>
-            <div ref={homeRef} data-nav-section="home">
+            <div ref={homeRef} data-nav-section="home" className="flex flex-col gap-5 sm:gap-6">
               <OfferBanner
-                badge={store.offer}
                 title={store.name}
-                subtitle={store.tagline ?? store.category}
+                tagline={store.tagline}
+                location={store.location}
                 heroImage={store.heroImage}
+                badges={store.heroBadges}
                 onShopNow={scrollToProducts}
               />
-              <ServiceInfoBar storeId={store.id} className="mt-4 sm:mt-5" />
+              <ServiceInfoBar
+                storeId={store.id}
+                trustStrip={store.trustStrip}
+                fulfillment={store.fulfillment}
+              />
+              {store.description ? (
+                <StoreAboutSection storeName={store.name} description={store.description} />
+              ) : null}
             </div>
 
             <div ref={categoriesRef} data-nav-section="categories">
               <CategoryScroller
                 categories={categories}
-                activeId={categoryId}
+                activeFilter={categoryFilter}
                 showAllOption
-                onSelect={(id) => {
-                  setCategoryId(id)
+                onSelect={(filter) => {
+                  selectCategory(filter)
                   scrollToProducts()
                 }}
                 onViewAll={() => openBrowse(ALL_CATEGORY)}
@@ -208,16 +285,31 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
             </div>
 
             <section ref={productsRef} data-nav-section="products">
-              <ProductGrid
-                storeId={store.id}
-                storeName={store.name}
-                title={categoryLabel(categories, categoryId)}
-                products={displayedProducts}
-                actionLabel="View all"
-                onAction={hasMoreProducts ? () => openBrowse(categoryId) : undefined}
-                emptyTitle="No products match"
-                emptyDescription="No items in this category yet."
-              />
+              {products.error && products.items.length === 0 && !products.loading ? (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
+                  <p className="font-medium">{products.error}</p>
+                  <button
+                    type="button"
+                    onClick={() => products.reload()}
+                    className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <ProductGrid
+                  storeId={store.id}
+                  storeName={store.name}
+                  title={categoryLabel(categories, categoryFilter)}
+                  products={products.items}
+                  loading={products.loading}
+                  skeletonCount={homePageSize}
+                  actionLabel="View all"
+                  onAction={showHomeViewAll ? () => openBrowse(categoryFilter) : undefined}
+                  emptyTitle="No products match"
+                  emptyDescription="No items in this category yet."
+                />
+              )}
             </section>
           </>
         )}
