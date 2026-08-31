@@ -1,11 +1,11 @@
 import {
-  MEASUREMENT_TYPE_BY_ID,
   schedulingConfigList,
   schedulingConfigNumber,
   schedulingConfigString,
   vendorOnboardingService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
+  type MeasurementCatalog,
   type VendorCategoryRef,
   type VendorContext,
   type VendorProductRef,
@@ -13,8 +13,11 @@ import {
   type VendorSkuRef,
 } from '@/shared/api'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
-import { isVendorLive } from './onboarding-liveness'
+import { isValidIndianMobile } from './onboarding-validation'
+import { isStoreSubmitted } from './onboarding-account-status'
 import { accountSkuId } from './onboarding-sku-id'
+import { measurementFromProduct, reconcileUnitForMeasurement } from './onboarding-measurement'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import type {
   DraftSku,
   OnboardingRuntimeState,
@@ -44,6 +47,8 @@ export type ServerOnboardingState = {
   skus: VendorSkuRef[]
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
+  measurements: MeasurementCatalog
+  productMeasurementCatalog: MeasurementCatalog
 }
 
 /** A never-configured vendor reports this, so it cannot be read as a real choice. */
@@ -55,6 +60,30 @@ const WEEKDAYS = new Set<Weekday>([
 
 type LoadConfig = { signal?: AbortSignal }
 
+export type OnboardingAccountRead =
+  | 'categories'
+  | 'products'
+  | 'measurements'
+  | 'skus'
+  | 'checkout'
+
+const ACCOUNT_READ_START_STEP: readonly [OnboardingAccountRead, OnboardingStep][] = [
+  ['categories', 4],
+  ['products', 5],
+  // Step 5 needs authoritative unit metadata even when the vendor enters earlier and
+  // advances without another account refresh.
+  ['measurements', 3],
+  ['skus', 6],
+  ['checkout', 7],
+]
+
+/** Server resources needed to rebuild saved work and continue from the resume step. */
+export function accountReadsForResumeStep(step: OnboardingStep): OnboardingAccountRead[] {
+  return ACCOUNT_READ_START_STEP
+    .filter(([, startStep]) => step >= startStep)
+    .map(([read]) => read)
+}
+
 /** Resolves to `null` instead of rejecting, so one dead read cannot sink the resume. */
 async function optional<T>(work: Promise<T>): Promise<T | null> {
   try {
@@ -64,27 +93,68 @@ async function optional<T>(work: Promise<T>): Promise<T | null> {
   }
 }
 
+/** Preserve Step 6's usable fallback without presenting fallback units as product metadata. */
+export function measurementCatalogsForResume(measurements: MeasurementCatalog | null): {
+  measurements: MeasurementCatalog
+  productMeasurementCatalog: MeasurementCatalog
+} {
+  return {
+    measurements: measurements ?? SAMPLE_MEASUREMENT_CATALOG,
+    productMeasurementCatalog: measurements ?? [],
+  }
+}
+
 export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
 ): Promise<ServerOnboardingState> {
-  const [context, profile, categories, products, skus, checkout, businessTypes] = await Promise.all([
-    // Deliberately not optional. Context decides liveness, limits and whether a resume
-    // happens at all, so losing it is a real failure the vendor has to be told about —
-    // not an empty wizard with no explanation.
-    vendorOnboardingService.getVendorContext(vendorId, config),
-    optional(vendorOnboardingService.getVendorProfile(vendorId, config)),
-    optional(vendorOnboardingService.getVendorCategories(vendorId, config)),
-    optional(vendorOnboardingService.getVendorProducts(vendorId, config)),
-    optional(vendorOnboardingService.getVendorSkus(vendorId, config)),
+  // Start all three universal reads before awaiting context. The dependent fan-out can
+  // then begin as soon as context reveals the resume step, without waiting for either
+  // of the other universal reads to finish.
+  const contextPromise = vendorOnboardingService.getVendorContext(vendorId, config)
+  const profilePromise = optional(vendorOnboardingService.getVendorProfile(vendorId, config))
+  // One page covers the catalog (30 types); needed to turn the profile's display
+  // string back into the reference object Step 3 stores.
+  const businessTypesPromise = optional(vendorOnboardingService.getBusinessTypes(
+    { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
+    config,
+  ))
+
+  // Deliberately not optional. Context decides liveness, limits and whether a resume
+  // happens at all, so losing it is a real failure the vendor has to be told about —
+  // not an empty wizard with no explanation.
+  const context = await contextPromise
+
+  // A submitted vendor must still be able to navigate back through the complete account.
+  // If the backend ever omits its pointer, load everything so resource-derived resume can
+  // remain the safe fallback rather than deriving from an intentionally partial snapshot.
+  const step = isStoreSubmitted({ context })
+    ? 10
+    : (backendResumeStep(context) ?? 10)
+  const reads = new Set(accountReadsForResumeStep(step))
+
+  const [profile, businessTypes, categories, products, skus, checkout, measurements] = await Promise.all([
+    profilePromise,
+    businessTypesPromise,
+    reads.has('categories')
+      ? optional(vendorOnboardingService.getVendorCategories(vendorId, config))
+      : null,
+    reads.has('products')
+      ? optional(vendorOnboardingService.getVendorProducts(vendorId, config))
+      : null,
+    reads.has('skus')
+      ? optional(vendorOnboardingService.getVendorSkus(vendorId, config))
+      : null,
     // A first-time vendor legitimately 404s here; the service already maps that to null.
-    optional(vendorOnboardingService.getCheckoutOptions(vendorId, config)),
-    // One page covers the catalog (30 types); needed to turn the profile's display
-    // string back into the reference object Step 3 stores.
-    optional(vendorOnboardingService.getBusinessTypes(
-      { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
-      config,
-    )),
+    reads.has('checkout')
+      ? optional(vendorOnboardingService.getCheckoutOptions(vendorId, config))
+      : null,
+    // Authoritative units for Step 6. A dead read falls back to the sample catalog,
+    // which mirrors the backend shape, so a size still opens with real units rather
+    // than an empty dropdown.
+    reads.has('measurements')
+      ? optional(vendorOnboardingService.getMeasurements(config))
+      : null,
   ])
 
   return {
@@ -95,6 +165,7 @@ export async function loadServerOnboardingState(
     skus: skus ?? [],
     checkout,
     businessTypes: businessTypes?.items ?? [],
+    ...measurementCatalogsForResume(measurements),
   }
 }
 
@@ -110,16 +181,16 @@ function everyProductPriced(state: ServerOnboardingState): boolean {
   return state.products.every((product) => priced.has(product.vendorProductId))
 }
 
-// Defined in a leaf module so the login screens can ask "is this store live?" without
+// Defined in a leaf module so the login screens can ask "is this store submitted?" without
 // pulling this file's dependency graph into the initial bundle. Re-exported here because
 // this is where callers expect to find them.
-export { isVendorApproved, isVendorLive } from './onboarding-liveness'
+export { isStoreSubmitted, isVendorApproved } from './onboarding-account-status'
 
 /**
  * The first step that is genuinely unfinished, judged by what is actually saved.
  *
  * Deliberately not `onboarding.next_step`: that value is derived and moves backwards.
- * A vendor who has gone live still reports `IN_PROGRESS` with `next_step` pointing at
+ * A vendor who has submitted still reports `IN_PROGRESS` with `next_step` pointing at
  * Step 5 whenever any assigned product lacks a SKU.
  */
 export function earliestIncompleteStep(state: ServerOnboardingState): OnboardingStep {
@@ -130,7 +201,7 @@ export function earliestIncompleteStep(state: ServerOnboardingState): Onboarding
   if (!state.checkout?.schedulingStrategy) return 7
   if (!state.checkout?.payments.length) return 8
   // Step 9 branding cannot be read back, so a resuming vendor always re-confirms it.
-  if (!isVendorLive(state)) return 9
+  if (!isStoreSubmitted(state)) return 9
   return 10
 }
 
@@ -146,7 +217,7 @@ export function earliestIncompleteStep(state: ServerOnboardingState): Onboarding
  * reports for a vendor still in setup is 8.
  */
 export function furthestSavedStep(state: ServerOnboardingState): OnboardingStep | null {
-  if (isVendorLive(state)) return 10
+  if (isStoreSubmitted(state)) return 10
   if (state.checkout?.payments.length) return 8
   if (state.checkout?.schedulingStrategy) return 7
   if (state.skus.length) return 6
@@ -187,7 +258,7 @@ export function backendResumeStep(context: VendorContext): OnboardingStep | null
  * It is not a second opinion, and nothing should prefer it.
  */
 export function resumeStep(state: ServerOnboardingState): OnboardingStep {
-  if (isVendorLive(state)) return 10
+  if (isStoreSubmitted(state)) return 10
   return backendResumeStep(state.context) ?? derivedResumeStep(state)
 }
 
@@ -197,7 +268,7 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
   if (saved === 10) return 10
   const earliest = earliestIncompleteStep(state)
   if (saved === null) return earliest
-  // Step 9 is always re-confirmed, so it is the ceiling for a vendor who is not live.
+  // Step 9 is always re-confirmed, so it is the ceiling before submission.
   const next = Math.min(saved + 1, 9) as OnboardingStep
   return Math.max(earliest, next) as OnboardingStep
 }
@@ -234,6 +305,10 @@ function draftSkus(state: ServerOnboardingState): DraftSku[] {
     const productId = platformByVendorProduct.get(sku.vendorProductId)
     if (productId == null) return []
     const measurementId = measurementByVendorProduct.get(sku.vendorProductId)
+    // A size's measurement is its product's, so it is derived here rather than read off the
+    // account SKU. The stored unit is kept only while the product's measurement still offers
+    // it; a unit that no longer fits falls back to a valid one for the measurement.
+    const measurementType = measurementFromProduct(measurementId ?? null, null, state.measurements)
     return [{
       // Server id, so a resumed SKU is never re-created as a duplicate.
       id: accountSkuId(sku.skuId),
@@ -241,8 +316,8 @@ function draftSkus(state: ServerOnboardingState): DraftSku[] {
       name: sku.displayName,
       description: sku.description,
       skuType: 'ITEM' as const,
-      measurementType: (measurementId != null && MEASUREMENT_TYPE_BY_ID[measurementId]) || 'COUNT',
-      unit: sku.unit,
+      measurementType,
+      unit: reconcileUnitForMeasurement(measurementType, sku.unit, state.measurements),
       quantity: sku.quantity,
       listPrice: sku.listPrice,
       salePrice: sku.salePrice,
@@ -348,23 +423,26 @@ export type ResumeResult = {
   draft: VendorOnboardingDraftV1
   furthestVisitedStep: OnboardingStep
   openAt: OnboardingStep
-  /** Step 9's order number, in the E.164 form its validator expects. */
+  /** Step 9's order number, as the ten-digit national number its control shows. */
   orderWhatsapp: string
 }
 
 /**
  * The vendor record stores the contact number in whatever form it was registered with;
- * Step 9 validates E.164. Nothing else can supply this on resume — runtime state is
- * never persisted and the storefront read 404s until approval — so an unconvertible
- * number yields an empty string and the vendor simply re-enters it.
+ * Step 9 shows a plain ten-digit national number. This strips an Indian `+91`/`0` prefix
+ * and keeps only a valid Indian mobile. Nothing else can supply this on resume — runtime
+ * state is never persisted and the storefront read 404s until approval — so an
+ * unconvertible number yields an empty string and the vendor simply re-enters it.
  */
-function toE164(contactNumber: string | null | undefined): string {
+function toNationalMobile(contactNumber: string | null | undefined): string {
   const digits = (contactNumber ?? '').replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.length === 10) return `+91${digits}`
-  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`
-  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`
-  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : ''
+  const national =
+    digits.length === 12 && digits.startsWith('91')
+      ? digits.slice(2)
+      : digits.length === 11 && digits.startsWith('0')
+        ? digits.slice(1)
+        : digits
+  return isValidIndianMobile(national) ? national : ''
 }
 
 export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
@@ -380,7 +458,7 @@ export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
   return {
     openAt,
     furthestVisitedStep: openAt,
-    orderWhatsapp: toE164(state.profile?.contactNumber),
+    orderWhatsapp: toNationalMobile(state.profile?.contactNumber),
     draft: {
       ...base,
       currentStep: openAt,

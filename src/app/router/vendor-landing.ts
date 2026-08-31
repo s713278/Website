@@ -26,7 +26,7 @@ export function landingPathIfKnown(user: User, from?: string | null): string | n
  * Where a session lands, resolved against the vendor's real account.
  *
  * Routing a vendor purely on their role sends everyone into setup, including vendors who
- * finished it — they then have to be bounced back out, which is the flash this avoids.
+ * submitted it — they then have to be bounced back out, which is the flash this avoids.
  * The read is cached, so the wizard reuses it instead of fetching again.
  *
  * Any failure falls through to the role-only answer. Setup is the safe default: being

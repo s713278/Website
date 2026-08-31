@@ -1,4 +1,5 @@
 import type { User, VendorMembership } from '@/shared/types'
+import type { OnboardingStep } from '../types/onboarding'
 
 /**
  * Whether the current session may perform vendor-scoped onboarding work.
@@ -33,4 +34,23 @@ export function resolveOnboardingAccess(user: User | null): OnboardingAccess {
 /** Steps 3+ perform vendor-scoped work and require a resolved vendor. */
 export function canEnterCatalogSteps(access: OnboardingAccess): boolean {
   return access.state === 'ready'
+}
+
+/**
+ * The lowest step navigation may reach.
+ *
+ * Steps 1-2 exist to produce a session, so once one exists they have nothing left to
+ * ask: re-running OTP would sign a different vendor in underneath the draft rather than
+ * edit anything. The floor is therefore a function of the session alone.
+ *
+ * It used to require a *submitted* store on top of the session, which made it 1 for
+ * every vendor mid-setup — exactly the vendors who could still walk back and be asked
+ * for a number they had already given. Note that the floor clears the identity steps for
+ * every session, including one that turns out not to be a vendor: that identity is still
+ * verified, and `canEnterCatalogSteps` is what decides whether the step is usable.
+ *
+ * The only route back below the floor is signing out.
+ */
+export function navigationFloor(access: OnboardingAccess): OnboardingStep {
+  return access.state === 'anonymous' ? 1 : 3
 }

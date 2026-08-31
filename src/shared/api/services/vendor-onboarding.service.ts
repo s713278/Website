@@ -1,6 +1,7 @@
 import {
   catalogService as apiCatalogService,
   isApiError,
+  platformService as apiPlatformService,
   vendorsService as apiVendorsService,
   type BusinessTypeQuery,
   type CategoryQuery,
@@ -11,8 +12,12 @@ import {
   mapAssignProductsRequest,
   mapBusinessTypePage,
   mapBusinessTypeRequest,
+  mapCategoryCreateRequest,
   mapCategoryPage,
   mapCheckoutOptionsRequest,
+  mapCreatedCategory,
+  mapCreatedProduct,
+  mapProductCreateRequest,
   mapProductPage,
   mapSkuCreateRequest,
   mapStorefrontConfigRequest,
@@ -22,8 +27,12 @@ import {
   mapVendorSkus,
   mapVendorProfile,
   mapCheckoutOptionsResponse,
+  mapMeasurementCatalog,
+  mergeMeasurementCatalogDetails,
   type BusinessTypeReference,
+  type CategoryCreateInput,
   type CategoryReference,
+  type ProductCreateInput,
   type ProductReference,
   type BusinessTypeSaveInput,
   type CheckoutDeliveryInput,
@@ -37,6 +46,7 @@ import {
   type VendorSkuRef,
   type VendorProfile,
   type CheckoutOptionsSnapshot,
+  type MeasurementCatalog,
 } from '../mappers/vendor-onboarding'
 
 export type ReferenceRequestConfig = {
@@ -68,6 +78,32 @@ async function getProductsByCategory(
   return mapProductPage(
     await apiCatalogService.getProductsByCategory(categoryId, params, config),
   )
+}
+
+/** Keep usable detail rows while preserving cancellation as a request-level failure. */
+export async function settleMeasurementDetails(
+  requests: Promise<unknown>[],
+  signal?: AbortSignal,
+): Promise<unknown[]> {
+  const results = await Promise.allSettled(requests)
+  if (signal?.aborted) throw signal.reason
+  return results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+}
+
+/**
+ * GET /v1/measurements/ plus authenticated GET /v1/measurements/{id} detail reads — the
+ * authoritative platform measurement catalog. Units at Step 6 come from here, not a table baked
+ * into the frontend; detail supplies the quantity options omitted by the deployed list response.
+ */
+async function getMeasurements(
+  config: ReferenceRequestConfig = {},
+): Promise<MeasurementCatalog> {
+  const catalog = mapMeasurementCatalog(await apiPlatformService.listMeasurements(config))
+  const details = await settleMeasurementDetails(
+    catalog.map((measurement) => apiPlatformService.getMeasurement(measurement.id, config)),
+    config.signal,
+  )
+  return mergeMeasurementCatalogDetails(catalog, details)
 }
 
 /**
@@ -130,6 +166,28 @@ async function getVendorSkus(
   config: ReferenceRequestConfig = {},
 ): Promise<VendorSkuRef[]> {
   return mapVendorSkus(await apiVendorsService.getProductSkus(vendorId, config))
+}
+
+/* --- Platform catalog authoring ------------------------------------------
+ * A vendor authoring their own catalog creates the entry in the shared platform
+ * catalog first (below), then assigns the returned platform id to their store through
+ * the vendor-scoped writes. Both return the created positive id so the wizard can record
+ * it into the draft before assigning — a create-then-failed-assign must never re-mint.
+ * ------------------------------------------------------------------------ */
+
+/** POST /v1/categories/ — returns the created platform category id. */
+async function createCategory(input: CategoryCreateInput): Promise<number> {
+  return mapCreatedCategory(await apiCatalogService.createCategory(mapCategoryCreateRequest(input)))
+}
+
+/** POST /v1/categories/{category_id}/products/ — returns the created platform product id. */
+async function createProduct(
+  platformCategoryId: number,
+  input: ProductCreateInput,
+): Promise<number> {
+  return mapCreatedProduct(
+    await apiCatalogService.addProduct(platformCategoryId, mapProductCreateRequest(input)),
+  )
 }
 
 /* --- Catalog and checkout writes ----------------------------------------- */
@@ -211,6 +269,7 @@ export const vendorOnboardingService = {
   getBusinessTypes,
   getCategories,
   getProductsByCategory,
+  getMeasurements,
   getVendorContext,
   saveBusinessType,
   saveCategories,
@@ -219,6 +278,8 @@ export const vendorOnboardingService = {
   getVendorProducts,
   getVendorSkus,
   getVendorProfile,
+  createCategory,
+  createProduct,
   assignProducts,
   createSku,
   deleteSku,

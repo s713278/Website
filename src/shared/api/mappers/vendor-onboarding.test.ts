@@ -1,5 +1,53 @@
 import { describe, expect, it } from 'vitest'
-import { mapVendorContext, mapVendorProfile, mapVendorSkus } from './vendor-onboarding'
+import {
+  InvalidReferencePayloadError,
+  mapCategoryCreateRequest,
+  mapCreatedCategory,
+  mapCreatedProduct,
+  mapMeasurementCatalog,
+  mergeMeasurementCatalogDetails,
+  mapProductCreateRequest,
+  mapStorefrontConfigRequest,
+  mapVendorContext,
+  mapVendorProfile,
+  mapVendorSkus,
+  type StorefrontConfigInput,
+} from './vendor-onboarding'
+
+describe('measurement catalog detail enrichment', () => {
+  it('adds unit_options from the authenticated detail payload omitted by the live list', () => {
+    const catalog = mapMeasurementCatalog({
+      data: [
+        { id: 4, unit: 'Acre,sqft', display_name: 'AREA with Acre,sqft', type: 'AREA' },
+        { id: 7, unit: 'Time Slot', display_name: 'SLOT with Time Slot', type: 'SLOT' },
+      ],
+    })
+
+    expect(mergeMeasurementCatalogDetails(catalog, [
+      {
+        data: {
+          id: 4,
+          unit: 'Acre,sqft',
+          display_name: 'AREA with Acre,sqft',
+          unit_options: [50, 100, 500, 1000],
+          type: 'AREA',
+        },
+      },
+      {
+        data: {
+          id: 7,
+          unit: 'Time Slot',
+          display_name: 'SLOT with Time Slot',
+          unit_options: [],
+          type: 'SLOT',
+        },
+      },
+    ])).toEqual([
+      { id: 4, type: 'AREA', units: ['Acre', 'sqft'], unitOptions: [50, 100, 500, 1000] },
+      { id: 7, type: 'SLOT', units: ['Time Slot'], unitOptions: [] },
+    ])
+  })
+})
 
 /**
  * These three reads decide whether the wizard thinks a store is finished and whether a
@@ -104,5 +152,99 @@ describe('mapVendorProfile', () => {
       contactPerson: 'Sanjay Kumar',
       contactNumber: '9876543210',
     })
+  })
+})
+
+describe('mapCategoryCreateRequest', () => {
+  it('sends business_type_id, name and an optional description', () => {
+    expect(mapCategoryCreateRequest({ businessTypeId: 7, name: '  Bakery  ', description: '  Fresh  ' }))
+      .toEqual({ business_type_id: 7, name: 'Bakery', description: 'Fresh' })
+  })
+
+  it('omits an empty description', () => {
+    expect(mapCategoryCreateRequest({ businessTypeId: 7, name: 'Bakery' }))
+      .toEqual({ business_type_id: 7, name: 'Bakery', description: undefined })
+  })
+
+  it('rejects a blank name or a non-positive business type', () => {
+    expect(() => mapCategoryCreateRequest({ businessTypeId: 7, name: '  ' })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCategoryCreateRequest({ businessTypeId: 0, name: 'Bakery' })).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('mapProductCreateRequest', () => {
+  it('sends name, measurement_unit_id and a description that defaults to the name', () => {
+    expect(mapProductCreateRequest({ name: '  Sourdough  ', measurementUnitId: 3 }))
+      .toEqual({ name: 'Sourdough', measurement_unit_id: 3, description: 'Sourdough' })
+  })
+
+  it('keeps an explicit description', () => {
+    expect(mapProductCreateRequest({ name: 'Sourdough', measurementUnitId: 3, description: 'Crusty' }))
+      .toEqual({ name: 'Sourdough', measurement_unit_id: 3, description: 'Crusty' })
+  })
+
+  it('rejects a name shorter than three characters or a missing unit', () => {
+    expect(() => mapProductCreateRequest({ name: 'ab', measurementUnitId: 3 })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapProductCreateRequest({ name: 'Sourdough', measurementUnitId: 0 })).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('created-id readers', () => {
+  it('read the positive id out of the envelope data object', () => {
+    expect(mapCreatedCategory({ data: { id: 5001, name: 'Bakery' } })).toBe(5001)
+    expect(mapCreatedProduct({ data: { id: 6001 } })).toBe(6001)
+  })
+
+  it('tolerate a bare numeric data payload', () => {
+    expect(mapCreatedCategory({ data: 5001 })).toBe(5001)
+  })
+
+  it('reject a response with no usable id', () => {
+    expect(() => mapCreatedCategory({ data: {} })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCreatedProduct({ data: { id: -1 } })).toThrow(InvalidReferencePayloadError)
+    expect(() => mapCreatedCategory(null)).toThrow(InvalidReferencePayloadError)
+  })
+})
+
+describe('mapStorefrontConfigRequest — national WhatsApp numbers reach the backend in E.164', () => {
+  function storefrontInput(overrides: Partial<StorefrontConfigInput> = {}): StorefrontConfigInput {
+    return {
+      storeName: 'Lakshmi Home Foods',
+      tagline: '',
+      businessLocation: 'Hyderabad',
+      instagram: '',
+      orderWhatsapp: '9876543210',
+      supportWhatsapp: '',
+      welcomeMessage: '',
+      announcementBar: '',
+      heroBadges: [],
+      trustStrip: [],
+      theme: {
+        primaryColor: '#10b981',
+        accentColor: '#f59e0b',
+        backgroundColor: '#ffffff',
+        textColor: '#111827',
+        fontFamily: 'Inter',
+        buttonShape: 'ROUNDED',
+        cardStyle: 'SHADOW',
+        themePreset: 'FRESH',
+      },
+      ...overrides,
+    }
+  }
+
+  it('adds the +91 country code to the national order number exactly once', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ orderWhatsapp: '9876543210' }))
+    expect(request.order_whatsapp_number).toBe('+919876543210')
+  })
+
+  it('adds +91 to a provided support number', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ supportWhatsapp: '8123456789' }))
+    expect(request.support_whatsapp_number).toBe('+918123456789')
+  })
+
+  it('leaves an absent support number absent rather than sending a prefix-only value', () => {
+    const request = mapStorefrontConfigRequest(storefrontInput({ supportWhatsapp: '   ' }))
+    expect(request.support_whatsapp_number).toBeUndefined()
   })
 })

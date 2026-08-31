@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { CheckIcon, LockKeyholeIcon } from 'lucide-react'
+import { CheckIcon, LockKeyholeIcon, PlusIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ONBOARDING_STEPS, type OnboardingStep } from '../../types/onboarding'
+import { ONBOARDING_STEPS, isAdditiveCatalogStep, type OnboardingStep } from '../../types/onboarding'
 
 type StepState = 'settled' | 'done' | 'current' | 'open' | 'locked'
 
 const STATE_LABEL: Record<StepState, string> = {
-  settled: 'Verified. Your store is live, so this is fixed',
+  settled: 'Verified, so this step is behind you',
   done: 'Done',
   current: 'You are here',
   open: 'Ready when you are',
@@ -17,8 +17,14 @@ export type StepperProps = {
   currentStep: OnboardingStep
   completedSteps: OnboardingStep[]
   furthestVisitedStep: OnboardingStep
-  /** Steps below this belong to a live store and can no longer be changed. */
+  /** The lowest step navigation may reach. Steps below it are settled and not offered. */
   firstNavigableStep: OnboardingStep
+  /**
+   * A submitted store can still grow its catalog on Steps 4-6. When true, those steps
+   * carry an "open for additions" marker so the one place still actionable stays visible
+   * from the progress bar, not only from inside the step.
+   */
+  catalogAdditiveOpen?: boolean
   onNavigate: (step: OnboardingStep) => void
 }
 
@@ -35,6 +41,7 @@ export function OnboardingStepper({
   completedSteps,
   furthestVisitedStep,
   firstNavigableStep,
+  catalogAdditiveOpen = false,
   onNavigate,
 }: StepperProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -64,6 +71,9 @@ export function OnboardingStepper({
           {ONBOARDING_STEPS.map((item, index) => {
             const state = stateOf(item.step)
             const reachable = state === 'done' || state === 'open' || state === 'current'
+            // A submitted store's catalog steps stay open for additions, so they carry a
+            // small marker even while every other submitted step reads as done-and-locked.
+            const additive = catalogAdditiveOpen && isAdditiveCatalogStep(item.step)
             const previous = ONBOARDING_STEPS[index - 1]
             const linkDone = previous
               ? ['done', 'settled'].includes(stateOf(previous.step))
@@ -89,8 +99,8 @@ export function OnboardingStepper({
                   type="button"
                   disabled={!reachable || state === 'current'}
                   aria-current={state === 'current' ? 'step' : undefined}
-                  aria-label={`Step ${item.step}, ${item.short}. ${STATE_LABEL[state]}.`}
-                  title={`${item.short}: ${STATE_LABEL[state].toLowerCase()}`}
+                  aria-label={`Step ${item.step}, ${item.short}. ${STATE_LABEL[state]}.${additive ? ' You can still add here.' : ''}`}
+                  title={`${item.short}: ${STATE_LABEL[state].toLowerCase()}${additive ? ', still open for additions' : ''}`}
                   onClick={() => onNavigate(item.step)}
                   className={cn(
                     'group flex w-full flex-col items-center gap-1.5 rounded-lg px-1 pb-0.5 outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
@@ -115,6 +125,14 @@ export function OnboardingStepper({
                     ) : (
                       item.step
                     )}
+                    {additive ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -top-1 -right-1 grid size-3.5 place-items-center rounded-full bg-[var(--ob-brand)] text-white ring-2 ring-[var(--ob-canvas-base)]"
+                      >
+                        <PlusIcon className="size-2.5 stroke-[3]" />
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     aria-hidden="true"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import type {
   BusinessTypeReference,
   CheckoutOptionsSnapshot,
@@ -10,6 +11,7 @@ import type {
 } from '@/shared/api'
 import { createEmptyRuntimeState } from '../data/onboarding-defaults'
 import {
+  accountReadsForResumeStep,
   backendResumeStep,
   buildResumeDraft,
   derivedResumeStep,
@@ -17,7 +19,8 @@ import {
   furthestSavedStep,
   resumeStep,
   isVendorApproved,
-  isVendorLive,
+  isStoreSubmitted,
+  measurementCatalogsForResume,
   resumePaymentDetails,
   type ServerOnboardingState,
 } from './onboarding-resume'
@@ -96,7 +99,21 @@ const CHECKOUT: CheckoutOptionsSnapshot = {
   payments: [{ type: 'CASH_ON_DELIVERY', isDefault: true, details: {} }],
 }
 
-/** A vendor who has saved everything the account can hold, but has not gone live. */
+describe('measurementCatalogsForResume', () => {
+  it('keeps sample units for size authoring but not product metadata after a failed read', () => {
+    expect(measurementCatalogsForResume(null)).toEqual({
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: [],
+    })
+
+    expect(measurementCatalogsForResume(SAMPLE_MEASUREMENT_CATALOG)).toEqual({
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
+    })
+  })
+})
+
+/** A vendor who has saved everything the account can hold, but has not submitted. */
 function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboardingState {
   return {
     context: context(),
@@ -106,22 +123,39 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
     skus: SKUS,
     checkout: CHECKOUT,
     businessTypes: [BUSINESS_TYPE],
+    measurements: SAMPLE_MEASUREMENT_CATALOG,
+    productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     ...overrides,
   }
 }
 
-const LIVE_CONTEXT = context({
+const SUBMITTED_CONTEXT = context({
   vendorStatus: 'ACTIVE',
   storeIdentifier: 'sk-organic-store',
   approvalStatus: 'PENDING',
 })
 
-describe('liveness', () => {
-  it('reads liveness from vendor_status and approval from approval_status', () => {
-    expect(isVendorLive(fullState({ context: LIVE_CONTEXT }))).toBe(true)
-    expect(isVendorApproved(fullState({ context: LIVE_CONTEXT }))).toBe(false)
+describe('accountReadsForResumeStep', () => {
+  it.each([
+    [3, ['measurements']],
+    [4, ['categories', 'measurements']],
+    [5, ['categories', 'products', 'measurements']],
+    [6, ['categories', 'products', 'measurements', 'skus']],
+    [7, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [8, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [9, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+    [10, ['categories', 'products', 'measurements', 'skus', 'checkout']],
+  ] as const)('returns the cumulative account reads for resume Step %i', (step, expected) => {
+    expect(accountReadsForResumeStep(step)).toEqual(expected)
+  })
+})
+
+describe('submission and approval', () => {
+  it('reads submission from vendor_status and approval from approval_status', () => {
+    expect(isStoreSubmitted(fullState({ context: SUBMITTED_CONTEXT }))).toBe(true)
+    expect(isVendorApproved(fullState({ context: SUBMITTED_CONTEXT }))).toBe(false)
     expect(isVendorApproved(fullState({ context: context({ approvalStatus: 'APPROVED' }) }))).toBe(true)
-    expect(isVendorLive(fullState())).toBe(false)
+    expect(isStoreSubmitted(fullState())).toBe(false)
   })
 })
 
@@ -135,13 +169,13 @@ describe('earliestIncompleteStep', () => {
     expect(earliestIncompleteStep(fullState({ checkout: { ...CHECKOUT, payments: [] } }))).toBe(8)
   })
 
-  it('stops at 9 for a vendor who has saved everything but not gone live', () => {
+  it('stops at 9 for a vendor who has saved everything but not submitted', () => {
     // Branding cannot be read back before approval, so Step 9 is always re-confirmed.
     expect(earliestIncompleteStep(fullState())).toBe(9)
   })
 
-  it('reports 10 once the store is live', () => {
-    expect(earliestIncompleteStep(fullState({ context: LIVE_CONTEXT }))).toBe(10)
+  it('reports 10 once the store is submitted', () => {
+    expect(earliestIncompleteStep(fullState({ context: SUBMITTED_CONTEXT }))).toBe(10)
   })
 })
 
@@ -156,7 +190,7 @@ function withNextStep(nextStep: number | null, overrides: Partial<ServerOnboardi
 
 describe('resumeStep — the backend pointer decides', () => {
   it('opens where the backend says, not where the resources imply', () => {
-    // The case that proves the point. Verified live on a real vendor: three products,
+    // The case that proves the point. Verified on a submitted account: three products,
     // two priced, delivery and payments saved. The account "looks" incomplete at Step 6;
     // the vendor genuinely finished Step 8 and the backend reports 9.
     const stranded = withNextStep(9, {
@@ -176,7 +210,7 @@ describe('resumeStep — the backend pointer decides', () => {
     }
   })
 
-  it('treats a finished pointer as the review step', () => {
+  it('treats a post-setup pointer as the review step', () => {
     // The backend reports 11 once setup is complete.
     expect(backendResumeStep(withNextStep(11).context)).toBe(10)
     expect(backendResumeStep(withNextStep(99).context)).toBe(10)
@@ -188,9 +222,14 @@ describe('resumeStep — the backend pointer decides', () => {
     expect(backendResumeStep(withNextStep(2).context)).toBe(3)
   })
 
-  it('ignores the pointer once the store is live', () => {
-    const live = withNextStep(6, { context: { ...LIVE_CONTEXT, onboarding: { ...LIVE_CONTEXT.onboarding, nextStep: 6 } } })
-    expect(resumeStep(live)).toBe(10)
+  it('ignores the pointer once the store is submitted', () => {
+    const submitted = withNextStep(6, {
+      context: {
+        ...SUBMITTED_CONTEXT,
+        onboarding: { ...SUBMITTED_CONTEXT.onboarding, nextStep: 6 },
+      },
+    })
+    expect(resumeStep(submitted)).toBe(10)
   })
 
   it('falls back to the derivation only when the field is missing', () => {
@@ -223,7 +262,7 @@ describe('derivedResumeStep — fallback only, if the contract drops next_step',
     expect(furthestSavedStep(fullState({ checkout: null }))).toBe(6)
     expect(furthestSavedStep(fullState({ checkout: { ...CHECKOUT, payments: [] } }))).toBe(7)
     expect(furthestSavedStep(fullState())).toBe(8)
-    expect(furthestSavedStep(fullState({ context: LIVE_CONTEXT }))).toBe(10)
+    expect(furthestSavedStep(fullState({ context: SUBMITTED_CONTEXT }))).toBe(10)
   })
 
   it('never runs ahead of a genuine gap at the front of setup', () => {
@@ -232,9 +271,9 @@ describe('derivedResumeStep — fallback only, if the contract drops next_step',
     expect(derivedResumeStep(early)).toBe(5)
   })
 
-  it('stops at 9 for a vendor who is not live, and 10 once they are', () => {
+  it('stops at 9 before submission, and 10 afterwards', () => {
     expect(derivedResumeStep(fullState())).toBe(9)
-    expect(derivedResumeStep(fullState({ context: LIVE_CONTEXT }))).toBe(10)
+    expect(derivedResumeStep(fullState({ context: SUBMITTED_CONTEXT }))).toBe(10)
   })
 
   it('opens a brand-new account at Step 3', () => {
@@ -263,9 +302,35 @@ describe('buildResumeDraft', () => {
     expect(draft.storefront.storeName).toBe('SK Organic Store')
   })
 
-  it('hydrates a live vendor too, not just an unfinished one', () => {
+  it('preserves the hidden size fields the account supplies and defaults the rest', () => {
+    // Step 6 no longer edits a size's name, description, or per-size fulfilment. Resume must
+    // still carry the name and description the account holds so hiding the controls never
+    // erases them, and default the fulfilment flags the SKU read never returns.
+    const { draft } = buildResumeDraft(fullState())
+
+    expect(draft.skus[0]).toMatchObject({
+      name: 'Orange Juice',
+      description: 'Cold pressed',
+      homeDelivery: true,
+      storePickup: true,
+    })
+  })
+
+  it("derives each SKU's measurement from its product and falls a stale unit back", () => {
+    // The product is measured by VOLUME (id 2); a SKU stored in 'kg' predates that or was
+    // written directly. Resume derives the measurement from the product and snaps the unit
+    // to a valid one for it rather than resuming an off-product measurement.
+    const { draft } = buildResumeDraft(
+      fullState({ skus: [{ ...SKUS[0], unit: 'kg' }] }),
+    )
+
+    expect(draft.skus[0].measurementType).toBe('VOLUME')
+    expect(draft.skus[0].unit).toBe('L')
+  })
+
+  it('hydrates a submitted vendor too, not just an unfinished one', () => {
     // A submitted store still has to show its own catalog and settings on Steps 3-9.
-    const { draft, openAt } = buildResumeDraft(fullState({ context: LIVE_CONTEXT }))
+    const { draft, openAt } = buildResumeDraft(fullState({ context: SUBMITTED_CONTEXT }))
 
     expect(openAt).toBe(10)
     expect(draft.currentStep).toBe(10)
@@ -276,11 +341,27 @@ describe('buildResumeDraft', () => {
     expect(draft.payments.find((payment) => payment.type === 'CASH_ON_DELIVERY')?.enabled).toBe(true)
   })
 
-  it('restores the order WhatsApp number from the vendor record', () => {
+  it('restores the order WhatsApp number as a ten-digit national number', () => {
     // Nothing else can supply it: the storefront read 404s before approval, and runtime
-    // state is never persisted. Without it Step 9 fails E.164 validation on every resume.
+    // state is never persisted. Step 9 now holds national digits, so that is what resume gives.
     const { orderWhatsapp } = buildResumeDraft(fullState())
-    expect(orderWhatsapp).toBe('+919876543210')
+    expect(orderWhatsapp).toBe('9876543210')
+  })
+
+  it('strips a stored +91 country code back to the national number', () => {
+    const { orderWhatsapp } = buildResumeDraft(
+      fullState({ profile: { ...PROFILE, contactNumber: '+919876543210' } }),
+    )
+    expect(orderWhatsapp).toBe('9876543210')
+  })
+
+  it('leaves the order number empty when the stored value is not an Indian mobile', () => {
+    // An unconvertible number yields an empty field and the vendor simply re-enters it,
+    // rather than seeding Step 9 with a value its validator would reject anyway.
+    const { orderWhatsapp } = buildResumeDraft(
+      fullState({ profile: { ...PROFILE, contactNumber: '+14155552671' } }),
+    )
+    expect(orderWhatsapp).toBe('')
   })
 
   it('leaves an unconfigured vendor at Step 3 with an empty draft', () => {
@@ -292,6 +373,8 @@ describe('buildResumeDraft', () => {
       skus: [],
       checkout: null,
       businessTypes: [BUSINESS_TYPE],
+      measurements: SAMPLE_MEASUREMENT_CATALOG,
+      productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     })
 
     expect(openAt).toBe(3)
@@ -304,7 +387,7 @@ describe('a resumed draft is submittable', () => {
   it('raises no readiness issues once Step 9 branding is confirmed', () => {
     // The end-to-end guard: everything the account gave back has to survive the wizard's
     // own validators, or the vendor is blocked on Step 6 and Step 10 with no way forward.
-    const resumed = buildResumeDraft(fullState({ context: LIVE_CONTEXT }))
+    const resumed = buildResumeDraft(fullState({ context: SUBMITTED_CONTEXT }))
     const runtime = {
       ...createEmptyRuntimeState(),
       orderWhatsapp: resumed.orderWhatsapp,
@@ -341,7 +424,7 @@ describe('a partial resume still produces a loadable draft', () => {
   it('round-trips through the draft validator', () => {
     const { draft, furthestVisitedStep } = buildResumeDraft(stateWithoutBusinessTypes())
     const envelope = {
-      version: 3,
+      version: 4,
       revision: 1,
       updatedAt: new Date().toISOString(),
       ownerId: '91',
