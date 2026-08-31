@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, Menu, X } from 'lucide-react'
 import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
+import logoDarkMd from '@/assets/logo_dark_md.png'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
@@ -16,18 +17,12 @@ const NAV = [
 
 function BrandMark() {
   return (
-    <Link to="/" className="flex items-center gap-2.5">
-      <span className="inline-flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-sm">
-        M
-      </span>
-      <span className="leading-tight">
-        <span className="block font-display text-[1.05rem] font-bold tracking-tight text-slate-800">
-          mithra <span className="font-semibold text-slate-700">direct</span>
-        </span>
-        <span className="hidden text-[10px] text-slate-500 sm:block">
-          Shop Local, Support Local, Grow Together.
-        </span>
-      </span>
+    <Link to="/" aria-label="Mithra Direct home">
+      <img
+        src={logoDarkMd}
+        alt="Mithra Direct — Shop Local, Support Local, Grow Together"
+        className="h-10 w-auto sm:h-11"
+      />
     </Link>
   )
 }

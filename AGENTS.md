@@ -30,6 +30,7 @@ consumes a separately maintained Spring Boot API through the repository's OpenAP
 | File | Owns |
 |------|------|
 | [README.md](./README.md) | Human setup, stack, commands, environment, routes, and project map |
+| [CONTEXT.md](./CONTEXT.md) | Product domain glossary and distinctions between platform, vendor, draft, and storefront concepts |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
 | [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |

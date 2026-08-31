@@ -87,10 +87,12 @@ page still owns a store, so sending them to `/cart` would strand a half-finished
 back to it. An explicit customer destination in `from` still wins, so a vendor heading to checkout is
 not dragged into store setup.
 
-For a vendor it then reads the account — one cached call, the same one the wizard needs — and routes
-on what is actually saved: a submitted store (`vendor_status: ACTIVE`) goes to `/vendor`, anything
-else to `/onboarding`. Routing every vendor into the wizard and letting it redirect back out is what
-produced a visible flash through setup for vendors who had already finished it.
+For a vendor it then reads the account — one cached, resume-step-sized hydration shared with the
+wizard — and routes on what is actually saved: a submitted store (`vendor_status: ACTIVE`) goes to
+`/vendor`, anything else to `/onboarding`. The staged read policy and cache lifecycle are documented
+in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration). Routing every vendor
+into the wizard and letting it redirect back out is what produced a visible flash through setup for
+vendors who had already finished it.
 
 Any failure falls back to the role-only answer, which is `/onboarding`. That direction is deliberate:
 being sent to setup wrongly costs a click, while being sent to a dashboard wrongly leaves a

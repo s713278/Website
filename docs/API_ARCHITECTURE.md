@@ -3,11 +3,12 @@
 How this frontend talks to the backend. Written for whoever is adding the next endpoint,
 wiring up the next page, or debugging why a call behaves oddly.
 
-Verified against branch `integration` at commit `ff995c1`, i.e. after the `@mithra/api-client`
-merge (PR #16, `ac4aecb`).
+The API-package baseline was verified against `integration` at commit `ff995c1`, after the
+`@mithra/api-client` merge (PR #16, `ac4aecb`).
 
-Updated on 2026-08-19 for the 117-path generated contract, vendor-onboarding public-reference
-service, and privacy-filtered local draft recovery.
+Updated on 2026-08-31 for the vendor-onboarding account service, resume-step-sized entry
+hydration, authenticated measurement details, explicit demo/sample isolation, and
+privacy-filtered local draft recovery.
 
 Companion docs: [`API_GAPS.md`](./API_GAPS.md) (endpoints the backend doesn't have yet),
 [`SESSION.md`](./SESSION.md) (JWT lifecycle + the XSS posture of localStorage tokens).
@@ -37,10 +38,11 @@ inconsistent wire format to the types our components expect.
 
 **The consequence you must internalise:** they are stacked, not merged. Most established Layer 2
 services call Layer 1's raw primitives (`apiGet`/`apiPost`) with hand-written paths rather than its
-typed services. The vendor-onboarding reference service is the first bounded exception: it calls
-Layer 1's `catalogService`, then validates and maps the generic response before exposing it to the
-wizard. So `catalogService` still exists in both layers, means different things in each, and changing
-one does not automatically change the other. Check which one you're importing.
+typed services. The vendor-onboarding service is the first bounded exception: it calls Layer 1's
+`catalogService`, `vendorsService`, and `platformService`, then validates and maps their generic
+responses before exposing them to the wizard. So service names can still exist in both layers, mean
+different things in each, and changing one does not automatically change the other. Check which one
+you're importing.
 
 ### The one import rule
 
@@ -93,11 +95,11 @@ src/shared/api/
   useApiError.ts            # small error-state hook for pages
   mappers/
     vendor.ts               # vendor wire payload → app view-model
-    vendor-onboarding.ts    # strict public-reference mapping + future storefront request mapper
+    vendor-onboarding.ts    # strict setup reference/account mapping + request mappers
   services/                 # the demo/live service layer
     auth.service.ts  catalog.service.ts  cart.service.ts  orders.service.ts
     vendor.service.ts  vendor-orders.service.ts  vendor-products.service.ts
-    vendor-onboarding.service.ts # live public reference reads for the onboarding wizard
+    vendor-onboarding.service.ts # public references + live setup account reads/writes
     index.ts
   client.ts   errors.ts   tokens.ts   types.ts    # ← thin re-export shims only
 ```
@@ -176,14 +178,14 @@ One object per backend domain, all thin wrappers over the primitives above.
 | File | Service | Covers |
 |---|---|---|
 | `auth.ts` | `authService` | `requestOtp`, `verifyOtp`, `refreshToken`, `getProfile`, `signOut`. OTP-first — no email/password. |
-| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search, business-type update, context, storefront save, and go-live. The protected onboarding methods are wrapped but not called by the local prototype. |
+| `vendors.ts` | `vendorsService` | Vendor CRUD, status/approval, checkout options, products/SKUs, categories, service area, customers, search, business-type update, context, storefront save, and go-live. Its protected setup methods back the live vendor-onboarding workflow. |
 | `catalog.ts` | `catalogService` | Platform-wide categories and business types; category-scoped product CRUD. Public onboarding reads accept generated query types plus `AbortSignal`. |
 | `cart.ts` | `cartService` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` — all under `/v1/vendors/{vendorId}/cart`. |
 | `orders.ts` | `ordersService` | `create`, `createFromCart`, vendor-scoped list/update/cancel/tracking, user order history. |
 | `users.ts` | `usersService` | Profile, mobile/address updates, dashboard, history, preferences, subscriptions. |
 | `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier + delivery-eligibility check (both `skipAuth`). Exports the `Storefront*` types. |
 | `subscriptions.ts` | `subscriptionsService` | Vendor subscriptions, SKU-level plans, platform plans. |
-| `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, measurements, SKU pricing, vendor image upload, courier admin. |
+| `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, authenticated measurement list/detail reads, SKU pricing, vendor image upload, courier admin. |
 | `social.ts` | `socialService` | Social OAuth connect/callback, profile/media sync. |
 | `admin.ts` | `adminService` | Bulk catalog/vendor import, catalog summary/delete. |
 | `legacy.ts` | flat functions | Back-compat wrappers (`getVendor`, `getCart`, `createOrderFromCart`, `loadVendorStorefront`, …). Also re-declares `VendorStorefront`/`StorefrontProduct`/`DeliveryEligibility` types that overlap `schema.d.ts` — treat those as convenience, not source of truth. |
@@ -216,11 +218,45 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor-orders.service.ts` | `listVendorOrders`, `updateVendorOrderStatus` | localStorage `md-vendor-orders`, seeded from `modules/vendor/data/demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/orders/*` |
 | `vendor-products.service.ts` | `listVendorProducts`, `setProductAvailability` | localStorage `md-vendor-products`, seeded from same `demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/products/*` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
-| `vendor-onboarding.service.ts` | `getBusinessTypes`, `getCategories`, `getProductsByCategory` | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Public catalog operations through the package `catalogService`; strict `ReferencePage<T>` mappers reject malformed records and deduplicate numeric IDs |
+| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
-The onboarding reference service intentionally ignores the global demo/live switch. It tries the
-public live catalog in either app mode; if that fails, the wizard offers a visibly labelled switch
-to reserved-negative-ID sample records. It never silently converts a live failure into sample data.
+In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
+reads and writes. Demo mode never mounts those account-catalog readers: the wizard waits for the
+vendor to explicitly select the reserved-negative-ID sample catalog, then answers from module-local
+sample data. It never silently converts a live failure into sample data. A persisted sample draft
+carried into Live API mode is blocked at Continue because its synthetic IDs cannot reach an account.
+
+#### Vendor setup account hydration
+
+`loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
+snapshot for both post-sign-in routing and the setup wizard. It starts the three reads every vendor
+needs together: vendor context, vendor profile, and the business-type catalog. As soon as context
+reveals the backend resume step, it starts only the cumulative account reads needed to reconstruct
+that step and every earlier one:
+
+| Resume step | Additional account reads |
+|---|---|
+| Business type (3) | None |
+| Categories (4) | Vendor categories |
+| Products (5) | Vendor categories, vendor products, and measurements |
+| Sizes (6) | The preceding reads plus vendor sizes |
+| Delivery through review (7–10) | The preceding reads plus checkout options |
+
+Measurements mean one authenticated `GET /v1/measurements/` followed by one authenticated
+`GET /v1/measurements/{id}` per list row. Detail calls fan out together and enrich the list because
+the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
+The entire measurement read starts with the Products-step fan-out and is never one of the three
+universal reads.
+
+Submitted vendors load the complete read set so earlier setup remains reviewable. If context omits
+`onboarding.next_step`, the loader also chooses the complete set so the resource-derived resume
+fallback is computed from real data rather than an intentionally partial snapshot. Context failure
+rejects hydration; the other reads retain the existing optional behavior and become empty/default
+snapshot fields when unavailable.
+
+`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor.
+Sign-in and the wizard therefore share the same fan-out rather than issuing it twice. Failed loads
+are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
 
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
@@ -360,7 +396,7 @@ plain `useState`.
 
 State management now includes three Zustand stores: `useAuthStore`, `useCartStore`, and the
 feature-local `useOnboardingStore`. The onboarding store keeps private fields in volatile memory and
-persists only a versioned, validated safe draft through the `local-prototype` adapter. Writes use one
+persists only a versioned, validated safe draft through `onboardingDraftAdapter`. Writes use one
 1200 ms trailing timer followed by `requestIdleCallback` (with a timeout fallback), plus immediate
 flushes on step transitions, completion, and page hiding. It deliberately does not use Zustand's
 per-mutation persistence middleware. The safe snapshot excludes phones, OTP digits, payment
@@ -392,8 +428,9 @@ stores no vendor input. There is no React Query, SWR, or shared server-state sto
    `@/shared/api` façade.
 4. **Normalise wire quirks** in `src/shared/api/mappers/`, not in the page.
 5. **Call it from the component** with the §6 pattern.
-6. **Verify:** `npm run typecheck && npm run lint`. There is no test runner — that pair *is*
-   the verification loop. Exercise both modes by flipping `VITE_USE_API`.
+6. **Verify:** `npm run typecheck && npm run lint && npm run test`. Vitest runs the pure setup
+   logic in the node environment; there is no DOM or end-to-end runner, so also exercise UI behavior
+   in both modes by flipping `VITE_USE_API`.
 7. **If the backend isn't ready,** add a row to `API_GAPS.md` describing the gap and your
    interim workaround, so it's findable when the endpoint lands.
 
@@ -452,13 +489,14 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
-| `md-vendor-onboarding-draft-v1` | `local-prototype` onboarding adapter | versioned safe wizard draft and optional same-browser preview snapshot; no private contact/payment values or files |
+| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
 object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated
-server persistence or a public storefront. The future `mapFutureStorefrontConfig` mapper aligns the
-typed draft with `SaveStorefrontConfigRequest`, rejects local image URLs, and is not connected to a
-protected request in prototype mode.
+server persistence or a public storefront. The `mapStorefrontConfigRequest` mapper aligns the typed
+draft with `SaveStorefrontConfigRequest`: it adds the `+91` country code to the national ten-digit
+order and support WhatsApp numbers and rejects local image URLs. Live account setup calls it through
+`vendorOnboardingService.saveStorefront`; demo and sample flows only save the private preview.
 
 ---
 

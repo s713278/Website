@@ -8,7 +8,7 @@ import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState } from '@/shared/components/ui'
-import type { ProductReference } from '@/shared/api'
+import { isLiveApi, type ProductReference } from '@/shared/api'
 import {
   useBusinessTypeReferences,
   useCategoryReferences,
@@ -16,15 +16,38 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { productMeasurementSummary } from '../../lib/onboarding-measurement'
+import { writesReachAccount } from '../../lib/onboarding-sync'
 import { StepNotice } from './AccessNotice'
-import { useOnboardingStore } from '../../store/onboarding-store'
+import {
+  selectCatalogPolicy,
+  selectCategoryLimit,
+  selectCategoryLimitReached,
+  selectProductLimit,
+  selectProductLimitReached,
+  selectProjectedCategoryTotal,
+  selectProjectedProductTotal,
+  useOnboardingStore,
+} from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
+import { AuthorCategoryForm, AuthorProductForm, PermanenceNotice } from './CatalogAuthoring'
 import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
   confirm: RequestConfirmation
-  onUseSample: () => void
+  onUseSample?: () => void
+}
+
+function catalogChoiceState(
+  entries: ReadonlyArray<{ id: number; pending?: true }>,
+  entryId: number,
+) {
+  const matchingEntry = entries.find((entry) => entry.id === entryId)
+  return {
+    chosen: matchingEntry !== undefined,
+    pending: matchingEntry?.pending === true,
+  }
 }
 
 function ReferenceThumb({
@@ -99,8 +122,8 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
 
 export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
-  const updateDraft = useOnboardingStore((state) => state.updateDraft)
-  const references = useBusinessTypeReferences(draft.referenceMode)
+  const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
+  const references = useBusinessTypeReferences(draft.catalogSource)
   const loadMoreBusinessTypes = references.loadMore
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [infiniteScrollArmed, setInfiniteScrollArmed] = useState(false)
@@ -128,7 +151,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   useEffect(() => {
     setInfiniteScrollArmed(false)
-  }, [draft.referenceMode, references.committedQuery])
+  }, [draft.catalogSource, references.committedQuery])
 
   useEffect(() => {
     if (infiniteScrollArmed) return
@@ -168,7 +191,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
     return () => observer.disconnect()
   }, [
     canLoadMore,
-    draft.referenceMode,
+    draft.catalogSource,
     infiniteScrollArmed,
     loadMoreBusinessTypes,
     references.committedQuery,
@@ -177,21 +200,12 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
     if (selected?.id === businessType.id) return
-    const apply = () => updateDraft(
-      (current) => ({
-        ...current,
-        business: { ...current.business, businessType },
-        categories: [],
-        products: [],
-        skus: [],
-      }),
-      3,
-    )
+    const apply = () => changeBusinessType(businessType)
     if (selected) {
       confirm({
         title: 'Change business type?',
-        description: 'Changing the business type removes all selected categories, products, and their sizes and prices, because they belong to the previous catalog.',
-        confirmLabel: 'Change and clear catalog',
+        description: 'This clears the categories, products, and sizes you picked for this business type but have not saved yet. Anything already saved to your store stays on it and still counts toward your plan limits.',
+        confirmLabel: 'Change business type',
         tone: 'danger',
         onConfirm: apply,
       })
@@ -217,7 +231,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
               type="search"
               value={references.searchInput}
               onChange={(event) => references.setSearchInput(event.target.value)}
-              placeholder={draft.referenceMode === 'live' ? 'Search live business types' : 'Search sample business types'}
+              placeholder={draft.catalogSource === 'account' ? 'Search live business types' : 'Search sample business types'}
               aria-controls="business-type"
               aria-busy={references.searchPending || references.loading}
               enterKeyHint="search"
@@ -226,11 +240,16 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
             />
           </div>
         </form>
-        {initialError && draft.referenceMode === 'live' ? (
+        {initialError && draft.catalogSource === 'account' ? (
           <CatalogError message={references.error ?? 'The live business catalog could not be loaded.'} onRetry={references.retry} onUseSample={onUseSample} />
         ) : null}
         {!references.loading && !references.error && !references.searchPending && !items.length ? (
-          <EmptyState title="No business types found" description="Try a broader search or switch explicitly to the sample catalog." />
+          <EmptyState
+            title="No business types found"
+            description={onUseSample
+              ? 'Try a broader search or switch explicitly to the sample catalog.'
+              : 'Try a broader search.'}
+          />
         ) : null}
         {showInitialSkeleton || items.length ? (
           <div
@@ -310,12 +329,21 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
 export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
+  const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
-  const categoryLimit = useOnboardingStore((state) => state.categoryLimit)
-  const onAccount = useOnboardingStore((state) => state.accountCatalog)
+  const categoryLimit = useOnboardingStore(selectCategoryLimit)
+  // The projected account total — draft plus what the account already holds — is what the
+  // limit gates, so a business-type change cannot reopen a fresh allowance on a full account.
+  const projectedCategories = useOnboardingStore(selectProjectedCategoryTotal)
+  const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
+  const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
+  const liveApi = isLiveApi()
+  const createControlVisible = useOnboardingStore(
+    (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
+  )
   const businessTypeId = draft.business.businessType?.id ?? null
-  const references = useCategoryReferences(draft.referenceMode, businessTypeId)
+  const references = useCategoryReferences(draft.catalogSource, businessTypeId)
   const query = search.trim().toLowerCase()
   const availableItems = appendMissingReferenceItems(references.items, draft.categories)
   const loadedItems = query
@@ -323,37 +351,43 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     : availableItems
 
   const toggle = (category: (typeof draft.categories)[number]) => {
-    const selected = draft.categories.some((item) => item.id === category.id)
-    if (!selected && draft.categories.length >= categoryLimit) return
-    if (selected && onAccount.categoryIds.includes(category.id)) {
+    const choice = catalogChoiceState(draft.categories, category.id)
+    if (!choice.chosen && categoryLimitReached) return
+    if (choice.chosen && isCategoryAssigned(category.id)) {
       setBlocked(
         `${category.name} is already saved to your store. Categories cannot be removed here yet — contact support if you need it taken off.`,
       )
       return
     }
     setBlocked(null)
-    const apply = () => updateDraft(
-      (current) => {
-        const categories = selected
-          ? current.categories.filter((item) => item.id !== category.id)
-          : [...current.categories, category]
-        const allowedCategoryIds = new Set(categories.map((item) => item.id))
-        const products = current.products.filter((item) => allowedCategoryIds.has(item.categoryId))
-        const productIds = new Set(products.map((item) => item.id))
-        return { ...current, categories, products, skus: current.skus.filter((sku) => productIds.has(sku.productId)) }
-      },
-      4,
-    )
+    const applyCategoryChoice = () => {
+      if (choice.pending) {
+        removePendingEntry(category.id)
+        return
+      }
+      updateDraft(
+        (current) => {
+          const categories = choice.chosen
+            ? current.categories.filter((item) => item.id !== category.id)
+            : [...current.categories, category]
+          const allowedCategoryIds = new Set(categories.map((item) => item.id))
+          const products = current.products.filter((item) => allowedCategoryIds.has(item.categoryId))
+          const productIds = new Set(products.map((item) => item.id))
+          return { ...current, categories, products, skus: current.skus.filter((sku) => productIds.has(sku.productId)) }
+        },
+        4,
+      )
+    }
     const dependentCount = draft.products.filter((item) => item.categoryId === category.id).length
-    if (selected && dependentCount) {
+    if (choice.chosen && dependentCount) {
       confirm({
         title: `Remove ${category.name}?`,
         description: `This also removes ${dependentCount} selected product${dependentCount === 1 ? '' : 's'} and every size priced under ${dependentCount === 1 ? 'it' : 'them'}.`,
         confirmLabel: 'Remove category',
         tone: 'danger',
-        onConfirm: apply,
+        onConfirm: applyCategoryChoice,
       })
-    } else apply()
+    } else applyCategoryChoice()
   }
 
   if (!businessTypeId) {
@@ -362,8 +396,15 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
+      {writesReachAccount(draft.catalogSource) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
-      <p className="text-sm text-[var(--ob-ink-soft)]">{draft.categories.length} of {categoryLimit} selected</p>
+      {categoryLimitReached ? (
+        <StepNotice message={`You've reached your plan's limit of ${categoryLimit} categories, counting those already saved to your store.`} />
+      ) : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedCategories} of {categoryLimit} used</p>
+      {createControlVisible ? (
+        <AuthorCategoryForm onAdded={() => setSearch('')} />
+      ) : null}
       <div className="relative">
         <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
         <input
@@ -376,26 +417,26 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         />
       </div>
       {references.loading ? <CatalogLoading /> : null}
-      {references.error && draft.referenceMode === 'live' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
       {loadedItems.length ? (
         <div id="categories" className="grid gap-3 @min-[32rem]:grid-cols-2">
           {loadedItems.map((category) => {
-            const selected = draft.categories.some((item) => item.id === category.id)
-            const atLimit = !selected && draft.categories.length >= categoryLimit
-            const onStore = selected && onAccount.categoryIds.includes(category.id)
+            const choice = catalogChoiceState(draft.categories, category.id)
+            const atLimit = !choice.chosen && categoryLimitReached
+            const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
               <button
                 key={category.id}
                 type="button"
-                aria-pressed={selected}
+                aria-pressed={choice.chosen}
                 aria-disabled={atLimit || onStore}
                 onClick={() => toggle(category)}
                 className={cn(
                   'flex items-center gap-3 rounded-xl border p-3 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
-                  selected
+                  choice.chosen
                     ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
                     : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
                   atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
@@ -405,7 +446,11 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
                 <span className="min-w-0">
                   <strong className="block truncate text-sm text-[var(--ob-ink)]">{category.name}</strong>
                   <span className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
-                    {onStore ? 'Saved to your store' : category.description || 'Catalog category'}
+                    {onStore
+                      ? 'Saved to your store'
+                      : choice.pending
+                        ? 'Not saved yet — select to remove'
+                        : category.description || 'Catalog category'}
                   </span>
                 </span>
               </button>
@@ -430,20 +475,26 @@ function ProductCategoryPicker({
   onUseSample,
   open,
   onToggle,
+  createControlVisible,
 }: {
   categoryId: number
   categoryName: string
   confirm: RequestConfirmation
-  onUseSample: () => void
+  onUseSample?: () => void
   open: boolean
   onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
+  createControlVisible: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
+  const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
-  const references = useProductReferences(draft.referenceMode, categoryId)
+  const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
+  const references = useProductReferences(draft.catalogSource, categoryId)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
-  const onAccount = useOnboardingStore((state) => state.accountCatalog)
+  const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
   const availableItems = appendMissingReferenceItems<ProductReference>(
@@ -455,36 +506,48 @@ function ProductCategoryPicker({
     : availableItems
 
   const toggle = (product: ProductReference) => {
-    const selected = draft.products.some((item) => item.id === product.id)
-    if (selected && onAccount.productIds.includes(product.id)) {
+    const choice = catalogChoiceState(draft.products, product.id)
+    if (choice.chosen && isProductAssigned(product.id)) {
       setBlocked(
         `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
       )
       return
     }
+    if (!choice.chosen && productLimitReached) {
+      setBlocked(
+        `You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`,
+      )
+      return
+    }
     setBlocked(null)
-    const apply = () => updateDraft(
-      (current) => ({
-        ...current,
-        products: selected
-          ? current.products.filter((item) => item.id !== product.id)
-          : [...current.products, { ...product, categoryId }],
-        skus: selected
-          ? current.skus.filter((sku) => sku.productId !== product.id)
-          : current.skus,
-      }),
-      5,
-    )
+    const applyProductChoice = () => {
+      if (choice.pending) {
+        removePendingEntry(product.id)
+        return
+      }
+      updateDraft(
+        (current) => ({
+          ...current,
+          products: choice.chosen
+            ? current.products.filter((item) => item.id !== product.id)
+            : [...current.products, { ...product, categoryId }],
+          skus: choice.chosen
+            ? current.skus.filter((sku) => sku.productId !== product.id)
+            : current.skus,
+        }),
+        5,
+      )
+    }
     const dependentSkus = draft.skus.filter((sku) => sku.productId === product.id).length
-    if (selected && dependentSkus) {
+    if (choice.chosen && dependentSkus) {
       confirm({
         title: `Remove ${product.name}?`,
         description: `This also removes ${dependentSkus} size${dependentSkus === 1 ? '' : 's'} and ${dependentSkus === 1 ? 'its' : 'their'} pricing.`,
         confirmLabel: 'Remove product',
         tone: 'danger',
-        onConfirm: apply,
+        onConfirm: applyProductChoice,
       })
-    } else apply()
+    } else applyProductChoice()
   }
 
   return (
@@ -501,6 +564,13 @@ function ProductCategoryPicker({
         </div>
       }
     >
+      {createControlVisible ? (
+        <AuthorProductForm
+          categoryId={categoryId}
+          categoryName={categoryName}
+          onAdded={() => setSearch('')}
+        />
+      ) : null}
       {/* Search lives in the panel, not the summary: a click inside the summary row
           would collapse the group the vendor is trying to search. */}
       <div className="relative mb-3">
@@ -516,35 +586,53 @@ function ProductCategoryPicker({
       </div>
       {blocked ? <div className="mb-3"><StepNotice message={blocked} /></div> : null}
       {references.loading ? <CatalogLoading count={4} /> : null}
-      {references.error && draft.referenceMode === 'live' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !items.length ? (
         <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
       ) : null}
       {items.length ? (
-        <div className="grid gap-2 @min-[32rem]:grid-cols-2">
+        <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[52rem]:grid-cols-3">
           {items.map((product) => {
-            const selected = draft.products.some((item) => item.id === product.id)
-            const onStore = selected && onAccount.productIds.includes(product.id)
+            const choice = catalogChoiceState(draft.products, product.id)
+            const onStore = choice.chosen && isProductAssigned(product.id)
+            const atLimit = !choice.chosen && productLimitReached
+            const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
+            const unitSummary = measurementSummary.units.length
+              ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
+              : 'Units unavailable'
             return (
               <button
                 key={product.id}
                 type="button"
-                aria-pressed={selected}
-                aria-disabled={onStore}
+                aria-pressed={choice.chosen}
+                aria-disabled={onStore || atLimit}
                 onClick={() => toggle(product)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl border p-2.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
-                  selected
+                  'grid min-h-28 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 rounded-xl border p-3.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
+                  choice.chosen
                     ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
                     : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
+                  atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
                 )}
               >
                 <ReferenceThumb src={product.imageUrl} fallbackSrc={productFallbackImage} />
                 <span className="min-w-0">
-                  <strong className="block truncate text-sm text-[var(--ob-ink)]">{product.name}</strong>
-                  <span className="mt-1 block truncate text-xs text-[var(--ob-ink-soft)]">
-                    {onStore ? 'Saved to your store' : product.measurementName || 'Item'}
-                  </span>
+                  <strong className="line-clamp-2 text-sm leading-5 text-[var(--ob-ink)]">{product.name}</strong>
+                  {onStore || choice.pending ? (
+                    <span className="mt-1 block line-clamp-2 text-xs leading-4 text-[var(--ob-ink-soft)]">
+                      {onStore ? 'Saved to your store' : 'Not saved yet — select to remove'}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="col-span-2 flex flex-wrap items-baseline gap-x-1.5 border-l-2 border-[var(--ob-brand)]/35 pl-2.5 text-xs leading-5 text-[var(--md-green-800)] dark:text-emerald-200">
+                  {measurementSummary.measurement ? (
+                    <>
+                      <span className="font-semibold">{measurementSummary.measurement}</span>
+                      <span className="text-[var(--ob-ink-soft)] dark:text-emerald-100/70">{unitSummary}</span>
+                    </>
+                  ) : (
+                    <span className="font-medium">Measurement unavailable</span>
+                  )}
                 </span>
               </button>
             )
@@ -562,7 +650,15 @@ function ProductCategoryPicker({
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const categories = useOnboardingStore((state) => state.draft.categories)
+  const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const selectedProducts = useOnboardingStore((state) => state.draft.products)
+  const productLimit = useOnboardingStore(selectProductLimit)
+  const projectedProducts = useOnboardingStore(selectProjectedProductTotal)
+  const productLimitReached = useOnboardingStore(selectProductLimitReached)
+  const liveApi = isLiveApi()
+  const createControlVisible = useOnboardingStore(
+    (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
+  )
   const summary = useMemo(
     () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
     [categories, selectedProducts],
@@ -576,6 +672,11 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
 
   return (
     <div className="space-y-4">
+      {writesReachAccount(catalogSource) ? <PermanenceNotice kind="products" /> : null}
+      {productLimitReached ? (
+        <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
+      ) : null}
+      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedProducts} of {productLimit} products used</p>
       <div className="flex flex-wrap gap-2 text-xs">
         {summary.map((category) => (
           <span key={category.id} className="rounded-full bg-muted px-2.5 py-1 font-medium">
@@ -593,6 +694,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             onUseSample={onUseSample}
             open={openId === category.id}
             onToggle={onToggle(category.id)}
+            createControlVisible={createControlVisible}
           />
         ))}
       </div>

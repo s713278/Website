@@ -2,6 +2,7 @@ import {
   ONBOARDING_CONFIG,
   type DeliveryDraft,
   type DraftSku,
+  type MeasurementType,
   type OnboardingRuntimeState,
   type OnboardingStep,
   type PaymentDetailsRuntime,
@@ -9,19 +10,36 @@ import {
   type ValidationIssue,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import {
+  projectedCategoryTotal,
+  projectedProductTotal,
+  projectedSkuTotal,
+} from './onboarding-catalog-limits'
+import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
 import { isKnownSkuId } from './onboarding-sku-id'
+
+/**
+ * What the account already holds and the plan caps that are not passed positionally.
+ *
+ * The projected account total — account usage plus what this draft adds — is what a limit
+ * gates, so validation needs the account snapshot to be the second line of defence behind
+ * the disabled controls. Left empty, it degrades to counting the draft alone against the
+ * configured fallbacks, which is the historical behaviour for a first-time/demo flow.
+ */
+export type CatalogEnforcement = {
+  maxProducts?: number
+  maxSkus?: number
+  account?: { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+}
+
+const EMPTY_ACCOUNT = { categoryIds: [], productIds: [], skuIds: [] }
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 const INDIA_PHONE_PATTERN = /^[6-9]\d{9}$/
-const E164_PATTERN = /^\+[1-9]\d{7,14}$/
 
 export function isValidIndianMobile(value: string): boolean {
   return INDIA_PHONE_PATTERN.test(value.trim())
-}
-
-export function isValidE164(value: string): boolean {
-  return E164_PATTERN.test(value.trim())
 }
 
 export function isValidHex(value: string): boolean {
@@ -69,38 +87,75 @@ function nonNegative(value: number): boolean {
 }
 
 /**
- * The server's uniqueness key is (name, weight, vendor_product_id), so two SKUs of one
- * product may share a name as long as they differ in size. That matters on resume: the
- * account stores "Milk-1 L" and "Milk-500 ml", both of which strip back to "Milk".
+ * Two sizes of one product collide when they share a normalized quantity and unit. The
+ * hidden Size name is deliberately absent: it now follows the product (every size of a
+ * product carries the same name), so keying on it would let two identical sizes coexist and
+ * point the vendor at a control the compact card no longer renders. The visible quantity and
+ * unit are the only differentiators a vendor can act on. The backend write path keeps its own
+ * name-aware key (`onboarding-sync.ts`); this is the form-level guard.
  */
 function skuIdentity(sku: DraftSku): string {
-  return `${sku.name.trim().toLowerCase()}::${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
+  return `${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
 }
 
-export function validateDraftSku(sku: DraftSku, siblingSkus: DraftSku[]): ValidationIssue[] {
+/**
+ * A monetary value carries no more than two decimal places. Compared against the value's own
+ * two-decimal rounding rather than testing `value * 100` for integrality, so the check stays
+ * exact for larger prices where the scaled product loses precision.
+ */
+function withinTwoDecimals(value: number): boolean {
+  return Math.abs(value - Math.round(value * 100) / 100) < 1e-9
+}
+
+export function validateDraftSku(
+  sku: DraftSku,
+  siblingSkus: DraftSku[],
+  expectedMeasurement?: MeasurementType,
+): ValidationIssue[] {
   const prefix = `sku-${sku.id}`
   const issues: ValidationIssue[] = []
   // Local drafts and SKUs resumed from the account are both legitimate; anything else
   // came from neither producer and must not reach a write.
   if (!isKnownSkuId(sku.id)) issues.push(issue(6, prefix, 'This SKU has an unrecognised ID.'))
-  if (!sku.name.trim()) issues.push(issue(6, `${prefix}-name`, 'Add a name for this SKU.'))
-  if (sku.description.length > 240) issues.push(issue(6, `${prefix}-description`, 'Keep the SKU description under 240 characters.'))
+  // A size may only be measured the way its product is. Step 6 no longer offers a control
+  // to change it, but a stale draft, a restored draft, or a direct store write could still
+  // carry a size that drifted off. `expectedMeasurement` is omitted when no catalog has
+  // loaded to resolve the product's measurement, in which case the check is skipped rather
+  // than run against an unresolved answer.
+  if (expectedMeasurement && sku.measurementType !== expectedMeasurement) {
+    issues.push(issue(6, prefix, "This size must use its product's measurement."))
+  }
+  // The name, description and per-size fulfilment fields are no longer vendor controls (the
+  // name follows the product, the description is hidden, fulfilment is set once in Step 7), so
+  // their former rules are gone: an issue must point at a field the compact card still renders.
   const identity = skuIdentity(sku)
-  const duplicateName = siblingSkus.some(
+  const duplicateSize = siblingSkus.some(
     (candidate) => candidate.id !== sku.id && skuIdentity(candidate) === identity,
   )
-  if (sku.name.trim() && duplicateName) {
-    issues.push(issue(6, `${prefix}-name`, 'Each size of a product needs its own name.'))
+  if (duplicateSize) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Each size needs a unique quantity and unit.'))
   }
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
-  if (!positive(sku.quantity)) issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
-  if (!positive(sku.listPrice)) issues.push(issue(6, `${prefix}-list-price`, 'List price must be greater than zero.'))
-  if (!positive(sku.salePrice)) issues.push(issue(6, `${prefix}-sale-price`, 'Sale price must be greater than zero.'))
-  if (positive(sku.salePrice) && positive(sku.listPrice) && sku.salePrice > sku.listPrice) {
-    issues.push(issue(6, `${prefix}-sale-price`, 'Sale price cannot exceed list price.'))
+  if (!positive(sku.quantity)) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
+  } else if (sku.measurementType === 'COUNT' && !Number.isInteger(sku.quantity)) {
+    // A count is a tally of whole items; only the continuous measurements (weight, volume, …)
+    // are sold in fractions. The size carries its product's measurement (the guard above keeps
+    // that true), so keying off it here is safe.
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be a whole number for count items.'))
   }
-  if (!sku.homeDelivery && !sku.storePickup) {
-    issues.push(issue(6, `${prefix}-fulfillment`, 'Choose delivery, pickup, or both.'))
+  if (!positive(sku.listPrice)) {
+    issues.push(issue(6, `${prefix}-list-price`, 'MRP must be greater than zero.'))
+  } else if (!withinTwoDecimals(sku.listPrice)) {
+    issues.push(issue(6, `${prefix}-list-price`, 'MRP can have at most two decimal places.'))
+  }
+  if (!positive(sku.salePrice)) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price must be greater than zero.'))
+  } else if (!withinTwoDecimals(sku.salePrice)) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price can have at most two decimal places.'))
+  }
+  if (positive(sku.salePrice) && positive(sku.listPrice) && sku.salePrice > sku.listPrice) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Price cannot exceed MRP.'))
   }
   return issues
 }
@@ -193,20 +248,6 @@ export function validatePayments(
       issues.push(issue(8, 'upi-account-holder-name', 'Enter the UPI account holder name.'))
     }
   }
-  if (payments.some((payment) => payment.type === 'ONLINE' && payment.enabled)) {
-    if (!paymentDetails.bankAccountHolderName.trim()) {
-      issues.push(issue(8, 'bank-account-holder-name', 'Enter the bank account holder name.'))
-    }
-    if (!paymentDetails.bankAccountNumber.trim()) {
-      issues.push(issue(8, 'bank-account-number', 'Enter the account number.'))
-    }
-    if (!paymentDetails.bankIfscCode.trim()) {
-      issues.push(issue(8, 'bank-ifsc-code', 'Enter the IFSC code.'))
-    }
-    if (!paymentDetails.bankName.trim()) {
-      issues.push(issue(8, 'bank-name', 'Enter the bank name.'))
-    }
-  }
   return issues
 }
 
@@ -222,12 +263,39 @@ function validateInstagram(value: string): boolean {
   }
 }
 
+// The plan-limit checks are shared by the full per-step validation and the additive check a
+// submitted store uses, so the projected-total comparison and its message live in one place.
+// The projected total — account usage ∪ this draft — is what a limit gates, never the draft
+// count alone. See `CONTEXT.md` ("Plan limit").
+function categoryLimitIssue(accountCategoryIds: number[], draftCategoryIds: number[], maxCategories: number): ValidationIssue[] {
+  return projectedCategoryTotal(accountCategoryIds, draftCategoryIds) > maxCategories
+    ? [issue(4, 'categories', `Your plan allows ${maxCategories} categories in total, including those already saved to your store.`)]
+    : []
+}
+
+function productLimitIssue(accountProductIds: number[], draftProductIds: number[], maxProducts: number): ValidationIssue[] {
+  return projectedProductTotal(accountProductIds, draftProductIds) > maxProducts
+    ? [issue(5, 'products', `Your plan allows ${maxProducts} products in total, including those already saved to your store.`)]
+    : []
+}
+
+function skuLimitIssue(accountSkuIds: number[], draftSkus: DraftSku[], maxSkus: number): ValidationIssue[] {
+  return projectedSkuTotal(accountSkuIds, draftSkus) > maxSkus
+    ? [issue(6, 'skus', `Your plan allows ${maxSkus} sizes in total, including those already saved to your store.`)]
+    : []
+}
+
 export function validateStep(
   step: OnboardingStep,
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: MeasurementCatalog = [],
+  catalog: CatalogEnforcement = {},
 ): ValidationIssue[] {
+  const account = catalog.account ?? EMPTY_ACCOUNT
+  const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
+  const maxSkus = catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
       ? []
@@ -245,27 +313,27 @@ export function validateStep(
   }
   if (step === 4) {
     if (!draft.categories.length) return [issue(4, 'categories', 'Choose at least one category.')]
-    if (draft.categories.length > maxCategories) {
-      return [issue(4, 'categories', `Choose no more than ${maxCategories} categories.`)]
-    }
-    return []
+    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
   }
   if (step === 5) {
-    return draft.products.length
-      ? []
-      : [issue(5, 'products', 'Choose at least one product to continue.')]
+    if (!draft.products.length) return [issue(5, 'products', 'Choose at least one product to continue.')]
+    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
   }
   if (step === 6) {
-    const issues: ValidationIssue[] = []
+    // Projected post-save size count: account sizes plus new local ones, an edit net-zero.
+    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus)
     for (const product of draft.products) {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
+      // The measurement every size of this product must carry. Undefined when no catalog has
+      // loaded to resolve it, so the guard stays quiet rather than resolving to COUNT.
+      const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
       const validActiveSkus = productSkus.filter(
-        (sku) => sku.active && validateDraftSku(sku, productSkus).length === 0,
+        (sku) => sku.active && validateDraftSku(sku, productSkus, expectedMeasurement).length === 0,
       )
       if (!validActiveSkus.length) {
         issues.push(issue(6, `product-${product.id}`, `${product.name} needs at least one size with a price.`))
       }
-      for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus))
+      for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus, expectedMeasurement))
     }
     return issues
   }
@@ -280,8 +348,8 @@ export function validateStep(
     if (draft.storefront.tagline.length > 120) issues.push(issue(9, 'tagline', 'Keep the tagline under 120 characters.'))
     if (!draft.storefront.businessLocation.trim()) issues.push(issue(9, 'business-location', 'Enter a business location.'))
     if (draft.storefront.businessLocation.length > 100) issues.push(issue(9, 'business-location', 'Keep the business location under 100 characters.'))
-    if (!isValidE164(runtime.orderWhatsapp)) issues.push(issue(9, 'order-whatsapp', 'Enter the order WhatsApp number in E.164 format, such as +919876543210.'))
-    if (runtime.supportWhatsapp.trim() && !isValidE164(runtime.supportWhatsapp)) issues.push(issue(9, 'support-whatsapp', 'Enter the support WhatsApp number in E.164 format.'))
+    if (!isValidIndianMobile(runtime.orderWhatsapp)) issues.push(issue(9, 'order-whatsapp', 'Enter the 10-digit order WhatsApp number, such as 9876543210.'))
+    if (runtime.supportWhatsapp.trim() && !isValidIndianMobile(runtime.supportWhatsapp)) issues.push(issue(9, 'support-whatsapp', 'Enter the 10-digit support WhatsApp number.'))
     if (!validateInstagram(draft.storefront.instagram)) issues.push(issue(9, 'instagram', 'Enter an Instagram handle or an https://instagram.com URL.'))
     if (draft.storefront.instagram.length > 200) issues.push(issue(9, 'instagram', 'Keep the Instagram value under 200 characters.'))
     if (draft.storefront.welcomeMessage.length > 160) issues.push(issue(9, 'welcome-message', 'Keep the welcome message under 160 characters.'))
@@ -319,10 +387,40 @@ export function readinessIssues(
   draft: VendorOnboardingDraftV1,
   runtime: OnboardingRuntimeState,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  measurementCatalog: MeasurementCatalog = [],
+  catalog: CatalogEnforcement = {},
 ): ValidationIssue[] {
   return ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).flatMap((step) =>
-    validateStep(step, draft, runtime, maxCategories),
+    validateStep(step, draft, runtime, maxCategories, measurementCatalog, catalog),
   )
+}
+
+/**
+ * What a submitted store may still validate on Steps 4-5: only the additive delta.
+ *
+ * A submitted store is with an administrator, so the whole-store readiness checks in
+ * `validateStep` do not apply here — reporting "every product needs a size" on a store
+ * that is already submitted blocks the vendor on a problem they were never asked to fix
+ * and cannot (existing entries are read-only). This gates the one thing a submitted store
+ * can still do wrong: push its catalog past a plan limit. Sizes are excluded — Step 6 is
+ * read-only while under review, because the backend rejects a new size (417) until the
+ * store is approved. See `CONTEXT.md` ("Submitted", "Plan limit").
+ */
+export function additiveCatalogIssues(
+  step: OnboardingStep,
+  draft: VendorOnboardingDraftV1,
+  maxCategories: number = ONBOARDING_CONFIG.maxCategories,
+  catalog: CatalogEnforcement = {},
+): ValidationIssue[] {
+  const account = catalog.account ?? EMPTY_ACCOUNT
+  const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
+  if (step === 4) {
+    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
+  }
+  if (step === 5) {
+    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
+  }
+  return []
 }
 
 export function normalizeDraftSlug(value: string): string {

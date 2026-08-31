@@ -14,6 +14,7 @@ import {
   type VendorOnboardingPersistedEnvelopeV1,
 } from '../types/onboarding'
 import { clearOnboardingDraft, ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
+import { isPendingId } from './onboarding-pending-id'
 
 export { ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
 
@@ -30,7 +31,16 @@ export type DraftReadResult =
   | { kind: 'unavailable' }
 
 const STEPS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-const MEASUREMENTS = new Set(['WEIGHT', 'VOLUME', 'COUNT'])
+const MEASUREMENTS = new Set([
+  'WEIGHT',
+  'VOLUME',
+  'COUNT',
+  'AREA',
+  'SERVICE_UNIT',
+  'DURATION',
+  'PER_PERSON',
+  'SLOT',
+])
 const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
 const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
 const SCHEDULING_STRATEGIES = new Set([
@@ -40,7 +50,7 @@ const SCHEDULING_STRATEGIES = new Set([
   'INSTANT',
 ])
 const SHIPPING_STRATEGIES = new Set(['FLAT', 'ORDER_AMOUNT_THRESHOLD'])
-const PAYMENT_TYPES = new Set(['PRE_PAID', 'ONLINE', 'CASH_ON_DELIVERY'])
+const PAYMENT_TYPES = new Set(['PRE_PAID', 'CASH_ON_DELIVERY'])
 const WEEKDAYS = new Set([
   'MONDAY',
   'TUESDAY',
@@ -87,6 +97,11 @@ function isReferenceId(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value !== 0
 }
 
+/** The pending marker is either absent or the literal `true`. Never `false`. */
+function isPendingMarker(value: unknown): value is true | undefined {
+  return value === undefined || value === true
+}
+
 function isStep(value: unknown): value is OnboardingStep {
   return typeof value === 'number' && STEPS.has(value)
 }
@@ -115,13 +130,14 @@ function isCategoryReference(
   value: unknown,
 ): value is VendorOnboardingDraftV1['categories'][number] {
   return isRecord(value) &&
-    hasOnlyKeys(value, ['id', 'name', 'businessTypeId', 'description', 'imageUrl', 'displayOrder']) &&
+    hasOnlyKeys(value, ['id', 'name', 'businessTypeId', 'description', 'imageUrl', 'displayOrder', 'pending']) &&
     isReferenceId(value.id) &&
     isString(value.name) &&
     (value.businessTypeId === null || isReferenceId(value.businessTypeId)) &&
     isNullableString(value.description) &&
     isSafeAssetUrl(value.imageUrl) &&
-    (value.displayOrder === null || Number.isSafeInteger(value.displayOrder))
+    (value.displayOrder === null || Number.isSafeInteger(value.displayOrder)) &&
+    isPendingMarker(value.pending)
 }
 
 function isSelectedProduct(value: unknown): value is SelectedProduct {
@@ -134,6 +150,7 @@ function isSelectedProduct(value: unknown): value is SelectedProduct {
       'measurementId',
       'measurementName',
       'categoryId',
+      'pending',
     ]) &&
     isReferenceId(value.id) &&
     isString(value.name) &&
@@ -141,7 +158,8 @@ function isSelectedProduct(value: unknown): value is SelectedProduct {
     isSafeAssetUrl(value.imageUrl) &&
     (value.measurementId === null || Number.isSafeInteger(value.measurementId)) &&
     isNullableString(value.measurementName) &&
-    isReferenceId(value.categoryId)
+    isReferenceId(value.categoryId) &&
+    isPendingMarker(value.pending)
 }
 
 function isDraftSku(value: unknown): value is DraftSku {
@@ -289,7 +307,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     'version',
     'currentStep',
     'completedSteps',
-    'referenceMode',
+    'catalogSource',
     'mobileVerified',
     'business',
     'categories',
@@ -302,7 +320,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
   ])) return false
   if (value.version !== ONBOARDING_DRAFT_VERSION || !isStep(value.currentStep)) return false
   if (!Array.isArray(value.completedSteps) || !value.completedSteps.every(isStep)) return false
-  if (value.referenceMode !== 'live' && value.referenceMode !== 'sample') return false
+  if (value.catalogSource !== 'account' && value.catalogSource !== 'sample') return false
   if (!isBoolean(value.mobileVerified)) return false
   if (!isRecord(value.business) || !hasOnlyKeys(value.business, ['businessType', 'businessName', 'ownerName', 'contactPerson'])) return false
   if (value.business.businessType !== null && !isBusinessTypeReference(value.business.businessType)) return false
@@ -324,8 +342,16 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     ...categories.map((category) => category.id),
     ...products.map((product) => product.id),
   ].filter((id): id is number => typeof id === 'number')
-  if (value.referenceMode === 'sample' && selectedIds.some((id) => id > 0)) return false
-  if (value.referenceMode === 'live' && selectedIds.some((id) => id < 0)) return false
+  // Sample catalog: every selected id is a synthetic negative fixture. Unchanged.
+  if (value.catalogSource === 'sample' && selectedIds.some((id) => id > 0)) return false
+  // Account catalog: an id is either a real positive account id, or a pending-band id that
+  // carries `pending: true`. A business type is never authored, so it must be positive.
+  if (value.catalogSource === 'account') {
+    if (business.businessType && business.businessType.id <= 0) return false
+    const isAccountEntry = (id: number, pending?: true) => id > 0 || (isPendingId(id) && pending === true)
+    if (categories.some((category) => !isAccountEntry(category.id, category.pending))) return false
+    if (products.some((product) => !isAccountEntry(product.id, product.pending))) return false
+  }
   if (business.businessType && categories.some(
     (category) => category.businessTypeId !== business.businessType?.id,
   )) return false
@@ -378,7 +404,7 @@ export function toPersistedDraft(draft: VendorOnboardingDraftV1): PersistedOnboa
     version: ONBOARDING_DRAFT_VERSION,
     currentStep: draft.currentStep,
     completedSteps: [...draft.completedSteps],
-    referenceMode: draft.referenceMode,
+    catalogSource: draft.catalogSource,
     mobileVerified: draft.mobileVerified,
     business: {
       businessType: draft.business.businessType
@@ -444,7 +470,7 @@ export function reconcilePersistedDraft(
   }
 
   const needsPaymentDetails = draft.payments.some(
-    (payment) => payment.enabled && (payment.type === 'PRE_PAID' || payment.type === 'ONLINE'),
+    (payment) => payment.enabled && payment.type === 'PRE_PAID',
   )
   const reopenAt: OnboardingStep = needsPaymentDetails ? 8 : 9
   const requestedStep = Math.max(3, draft.currentStep) as OnboardingStep

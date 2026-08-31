@@ -228,7 +228,7 @@ export function CatalogError({
 }: {
   message: string
   onRetry: () => void
-  onUseSample: () => void
+  onUseSample?: () => void
 }) {
   return (
     <div className="rounded-xl border-l-2 border-l-amber-500 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100" role="alert">
@@ -243,9 +243,11 @@ export function CatalogError({
         <Button variant="outline" size="sm" onClick={onRetry}>
           <RefreshCwIcon /> Retry live catalog
         </Button>
-        <Button size="sm" onClick={onUseSample}>
-          <DatabaseIcon /> Use sample catalog
-        </Button>
+        {onUseSample ? (
+          <Button size="sm" onClick={onUseSample}>
+            <DatabaseIcon /> Use sample catalog
+          </Button>
+        ) : null}
       </div>
     </div>
   )

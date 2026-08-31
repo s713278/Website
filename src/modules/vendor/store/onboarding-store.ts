@@ -1,8 +1,19 @@
 import { create } from 'zustand'
+import type { BusinessTypeReference } from '@/shared/api'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
+import type { MeasurementCatalog } from '../lib/onboarding-measurement'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import { purgeLegacyOnboardingDrafts } from '../lib/onboarding-draft-keys'
+import { nextPendingId } from '../lib/onboarding-pending-id'
+import {
+  projectedCategoryTotal,
+  projectedProductTotal,
+  projectedSkuTotal,
+  retainAssignedCatalog,
+} from '../lib/onboarding-catalog-limits'
+import { applyCreatedEntry, type CreatedCatalogEntry } from '../lib/onboarding-sync'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
@@ -13,7 +24,10 @@ import {
 import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
-  type LivePublication,
+  type CatalogSource,
+  type DraftCategory,
+  type SelectedProduct,
+  type StoreSubmission,
   type LocalPreviewSnapshotV1,
   type OnboardingPersistenceStatus,
   type OnboardingRuntimeState,
@@ -23,6 +37,37 @@ import {
 } from '../types/onboarding'
 
 type ImageKind = 'logo' | 'banner'
+
+type AccountCatalog = { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+
+/**
+ * The account catalog and the questions asked of it, built together.
+ *
+ * The predicates close over the catalog instead of reading it back through `get()`
+ * because a step subscribes to one *by identity*. A `get()` closure would read fresh
+ * state but be the same reference for the store's lifetime, so a step already on screen
+ * would never re-render and would keep painting the catalog it first saw — which is what
+ * happens when the account read lands after the step mounts.
+ *
+ * The invariant that buys: every write of `accountCatalog` must go through here, so the
+ * predicates are rebuilt with it. A bare `set({ accountCatalog })` elsewhere leaves them
+ * answering for the previous catalog, and nothing would fail to compile.
+ */
+function accountCatalogSlice(catalog: AccountCatalog) {
+  return {
+    accountCatalog: catalog,
+    isCategoryAssigned: (categoryId: number) => catalog.categoryIds.includes(categoryId),
+    isProductAssigned: (productId: number) => catalog.productIds.includes(productId),
+  }
+}
+
+const EMPTY_ACCOUNT_CATALOG: AccountCatalog = { categoryIds: [], productIds: [], skuIds: [] }
+
+/** Adds what is new, and returns `current` untouched when nothing is. */
+function mergeIds(current: number[], added: number[] | undefined): number[] {
+  const missing = added?.filter((id) => !current.includes(id)) ?? []
+  return missing.length ? [...current, ...missing] : current
+}
 
 type OnboardingStore = {
   draft: VendorOnboardingDraftV1
@@ -53,19 +98,85 @@ type OnboardingStore = {
   /** Live plan limit from vendor context; falls back to the configured default. */
   categoryLimit: number
   setCategoryLimit: (limit: number | null) => void
-  /** Server-confirmed publication state; not persisted. */
-  livePublication: LivePublication | null
-  setLivePublication: (publication: LivePublication | null) => void
+  /** Live product cap from vendor context; falls back to the configured default. */
+  productLimit: number
+  setProductLimit: (limit: number | null) => void
+  /** Live size (SKU) cap from vendor context; falls back to the configured default. */
+  skuLimit: number
+  setSkuLimit: (limit: number | null) => void
   /**
-   * Platform IDs already assigned on the vendor's account.
+   * Platform measurement catalog for Step 6 units. Defaults to the sample catalog so demo
+   * mode and a failed live fetch still offer real units; the entry read replaces it.
+   */
+  measurementCatalog: MeasurementCatalog
+  setMeasurementCatalog: (catalog: MeasurementCatalog) => void
+  /** Authoritative catalog for Step 5 metadata; unlike Step 6, it never uses a live-read fallback. */
+  productMeasurementCatalog: MeasurementCatalog
+  setProductMeasurementCatalog: (catalog: MeasurementCatalog) => void
+  /** Account-confirmed store submission; not persisted. */
+  storeSubmission: StoreSubmission | null
+  setStoreSubmission: (submission: StoreSubmission | null) => void
+  /**
+   * Platform IDs already assigned on the vendor's account, and the account's own SKU ids.
    *
    * Category and product assignment is additive for a vendor — there is no un-assign
-   * they are allowed to call — so anything listed here cannot be taken back off the
-   * store, and the wizard must not offer to. Not persisted: it describes the account,
-   * not the draft.
+   * they are allowed to call — so those ids cannot be taken back off the store, and the
+   * wizard must not offer to. Sizes are different: they can be deleted, so `skuIds` is the
+   * authoritative current set rather than a growing one. All three are the account totals
+   * the cumulative catalog limits are checked against. Not persisted: it describes the
+   * account, not the draft.
    */
-  accountCatalog: { categoryIds: number[]; productIds: number[] }
-  setAccountCatalog: (catalog: { categoryIds: number[]; productIds: number[] }) => void
+  accountCatalog: AccountCatalog
+  setAccountCatalog: (catalog: {
+    categoryIds: number[]
+    productIds: number[]
+    skuIds?: number[]
+  }) => void
+  /** Whether the account already holds this platform category. */
+  isCategoryAssigned: (categoryId: number) => boolean
+  /** Whether the account already holds this platform product. */
+  isProductAssigned: (productId: number) => boolean
+  /**
+   * Record what a successful write left on the account, so the cumulative limits and the
+   * assignment predicates stay right for the rest of the visit without a re-read.
+   *
+   * Categories and products are additive, so their ids only grow. Sizes can be deleted, so
+   * a reported `skuIds` is the authoritative current set and replaces what was there. The
+   * account is still re-read on entry, and that read stays the reconciliation.
+   */
+  recordAssignment: (assignment: Partial<AccountCatalog>) => void
+  /**
+   * Author a category into the draft that does not exist in the platform catalog yet.
+   *
+   * It is minted into the reserved pending band so its negative id can carry draft-internal
+   * references until Continue creates it for real. Returns the minted id.
+   */
+  addPendingCategory: (input: {
+    name: string
+    businessTypeId: number
+    description?: string | null
+  }) => number
+  /** Author a product into the draft under a category, minted into the pending band. */
+  addPendingProduct: (input: {
+    name: string
+    categoryId: number
+    measurementId: number | null
+    measurementName?: string | null
+    description?: string | null
+  }) => number
+  /**
+   * Remove a still-pending category or product by id, cascading to its dependents. It never
+   * reached the platform, so this is a pure draft edit — nothing is left behind and no
+   * request is made. A non-pending id is ignored.
+   */
+  removePendingEntry: (id: number) => void
+  /**
+   * Record the platform id a create returned, replacing the pending id and dropping `pending`.
+   *
+   * Flushed to storage immediately so a reload after a create but before its assign cannot
+   * mint the entry a second time.
+   */
+  recordCreatedEntry: (entry: CreatedCatalogEntry) => void
   initializePersistence: (ownerId: string | null) => void
   flushPersistence: () => void
   loadNewerDraft: () => void
@@ -75,6 +186,14 @@ type OnboardingStore = {
     updater: (draft: VendorOnboardingDraftV1) => VendorOnboardingDraftV1,
     invalidateFrom?: OnboardingStep,
   ) => void
+  /**
+   * Switch the Step 3 business type, keeping only what the account already holds.
+   *
+   * The unsaved selections belong to the previous business type and are cleared; the
+   * assigned categories, products, and account sizes are one-way and stay, so the switch
+   * neither blanks the live preview nor strands a vendor whose account is at a plan limit.
+   */
+  changeBusinessType: (businessType: BusinessTypeReference) => void
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
   updatePhone: (phone: string) => void
   setImage: (kind: ImageKind, file: File | null, url: string | null) => void
@@ -101,7 +220,6 @@ type OnboardingStore = {
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
   revokeVerifiedSession: () => void
-  reset: () => void
 }
 
 let unsubscribeFromStorage: (() => void) | null = null
@@ -174,8 +292,8 @@ function emptyDraftState(
     persistenceUpdatedAt: null,
     recoveryMessage,
     pendingConflict: null,
-    livePublication: null,
-    accountCatalog: { categoryIds: [], productIds: [] },
+    storeSubmission: null,
+    ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
     hasLocalEdits: false,
   }
@@ -291,6 +409,154 @@ function flushPersistence(): void {
   flushPendingSave()
 }
 
+export type { CatalogSource }
+
+/** The catalog the vendor is choosing from. */
+export function selectCatalogSource(
+  state: { draft: Pick<VendorOnboardingDraftV1, 'catalogSource'> },
+): CatalogSource {
+  return state.draft.catalogSource
+}
+
+/** The category cap in effect for this vendor's subscription. */
+export function selectCategoryLimit(state: { categoryLimit: number }): number {
+  return state.categoryLimit
+}
+
+/** The product cap in effect for this vendor's subscription. */
+export function selectProductLimit(state: { productLimit: number }): number {
+  return state.productLimit
+}
+
+/** The size (SKU) cap in effect for this vendor's subscription. */
+export function selectSkuLimit(state: { skuLimit: number }): number {
+  return state.skuLimit
+}
+
+type CatalogLimitState = {
+  draft: Pick<VendorOnboardingDraftV1, 'categories' | 'products' | 'skus'>
+  accountCatalog: AccountCatalog
+  categoryLimit: number
+  productLimit: number
+  skuLimit: number
+}
+
+/**
+ * The projected account totals if this draft were saved — account usage plus what the
+ * draft newly adds, deduped. These, not the draft counts, are what the limits gate, so a
+ * draft-clearing path cannot reopen a fresh allowance on top of a full account.
+ */
+export function selectProjectedCategoryTotal(state: CatalogLimitState): number {
+  return projectedCategoryTotal(
+    state.accountCatalog.categoryIds,
+    state.draft.categories.map((category) => category.id),
+  )
+}
+
+export function selectProjectedProductTotal(state: CatalogLimitState): number {
+  return projectedProductTotal(
+    state.accountCatalog.productIds,
+    state.draft.products.map((product) => product.id),
+  )
+}
+
+export function selectProjectedSkuTotal(state: CatalogLimitState): number {
+  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus)
+}
+
+/** Whether the projected total is at or over the cap, so no further entry may be added. */
+export function selectCategoryLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedCategoryTotal(state) >= state.categoryLimit
+}
+
+export function selectProductLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedProductTotal(state) >= state.productLimit
+}
+
+export function selectSkuLimitReached(state: CatalogLimitState): boolean {
+  return selectProjectedSkuTotal(state) >= state.skuLimit
+}
+
+/** Which catalog source a switch would move to and back from. */
+export type CatalogPolicy = {
+  /** Whether the draft may move from its current catalog source to `target`. */
+  canSwitchTo: (target: CatalogSource) => boolean
+  /** Whether mounting a catalog-reference reader is allowed for the active transport. */
+  referenceReadsAllowed: boolean
+  /** Whether the catalog-source control that offers the sample catalog is rendered. */
+  sampleControlVisible: boolean
+  /** Whether the control that authors into the platform catalog is rendered. */
+  createControlVisible: boolean
+  /** Whether Continue is refused because the draft cannot reach an account from here. */
+  continueBlocked: boolean
+}
+
+/**
+ * The one answer to every question about which catalog controls appear and what they do.
+ *
+ * The transport is an explicit argument rather than read from `isLiveApi()` so the whole
+ * rule is a pure function of state — testable without rendering, and unable to drift from
+ * the catalog-source control the way six scattered `liveApi` reads in the wizard could.
+ *
+ * A live API has one catalog: the vendor's account. Sample data is synthetic, so it is
+ * offered only in demo mode, and only until the business type step fixes the catalog its
+ * IDs belong to. A draft that carried a sample source into a live deployment is refused at
+ * Continue, because nothing behind those IDs was ever written to an account.
+ */
+export function selectCatalogPolicy(
+  state: { draft: Pick<VendorOnboardingDraftV1, 'catalogSource' | 'completedSteps'> },
+  { liveApi }: { liveApi: boolean },
+): CatalogPolicy {
+  const current = selectCatalogSource(state)
+  const businessTypeStepComplete = state.draft.completedSteps.includes(3)
+  return {
+    canSwitchTo(target) {
+      if (liveApi) return false
+      if (target === current) return false
+      return target === 'account' || !businessTypeStepComplete
+    },
+    // Demo mode must not contact the account catalog. Its sample data remains an explicit
+    // choice rather than a silent fallback, so Step 3 waits until the vendor switches.
+    referenceReadsAllowed: liveApi || current === 'sample',
+    sampleControlVisible: !liveApi,
+    createControlVisible: current === 'account',
+    continueBlocked: liveApi && current === 'sample',
+  }
+}
+
+/**
+ * Enforce the catalog policy at the wizard's Continue boundary.
+ *
+ * Keeping the refusal here makes the branch observable without a DOM test runner while
+ * leaving presentation of the refusal to the component.
+ */
+export function continueWithCatalogPolicy<BlockedResult, AllowedResult>(
+  policy: Pick<CatalogPolicy, 'continueBlocked'>,
+  branches: {
+    blocked: () => BlockedResult
+    allowed: () => AllowedResult
+  },
+): BlockedResult | AllowedResult {
+  if (policy.continueBlocked) {
+    return branches.blocked()
+  }
+  return branches.allowed()
+}
+
+/**
+ * Whether the vendor has sent their store for review.
+ *
+ * Read from `storeSubmission`, which only the account read and the submit call ever
+ * fill — never from `draft.publication`, which lives in this browser and says
+ * `prototype-complete` after a demo-mode walk that reached no account at all.
+ *
+ * Submission is not approval. A store awaiting an administrator is still submitted, and
+ * still cannot be changed, so this stays true for both.
+ */
+export function selectStoreIsSubmitted(state: { storeSubmission: StoreSubmission | null }): boolean {
+  return state.storeSubmission !== null
+}
+
 export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draft: createEmptyOnboardingDraft(),
   runtime: createEmptyRuntimeState(),
@@ -304,8 +570,12 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   recoveryMessage: null,
   pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
-  livePublication: null,
-  accountCatalog: { categoryIds: [], productIds: [] },
+  productLimit: ONBOARDING_CONFIG.maxProducts,
+  skuLimit: ONBOARDING_CONFIG.maxSkus,
+  measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
+  productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
+  storeSubmission: null,
+  ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
   hasLocalEdits: false,
 
@@ -356,16 +626,119 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     discardDraft(null, SIGNED_OUT_MESSAGE)
   },
 
-  setLivePublication(publication) {
-    set({ livePublication: publication })
+  setStoreSubmission(submission) {
+    set({ storeSubmission: submission })
   },
 
   setAccountCatalog(catalog) {
-    set({ accountCatalog: catalog })
+    set(accountCatalogSlice({
+      categoryIds: catalog.categoryIds,
+      productIds: catalog.productIds,
+      skuIds: catalog.skuIds ?? [],
+    }))
+  },
+
+  recordAssignment(assignment) {
+    const { accountCatalog } = useOnboardingStore.getState()
+    const categoryIds = mergeIds(accountCatalog.categoryIds, assignment.categoryIds)
+    const productIds = mergeIds(accountCatalog.productIds, assignment.productIds)
+    // Sizes can be deleted, so a reported set is authoritative rather than additive.
+    const skuIds = assignment.skuIds ?? accountCatalog.skuIds
+    if (
+      categoryIds === accountCatalog.categoryIds &&
+      productIds === accountCatalog.productIds &&
+      skuIds === accountCatalog.skuIds
+    ) return
+    set(accountCatalogSlice({ categoryIds, productIds, skuIds }))
+  },
+
+  addPendingCategory(input) {
+    let mintedId = 0
+    useOnboardingStore.getState().updateDraft((current) => {
+      mintedId = nextPendingId(current)
+      const category: DraftCategory = {
+        id: mintedId,
+        name: input.name,
+        businessTypeId: input.businessTypeId,
+        description: input.description ?? null,
+        imageUrl: null,
+        displayOrder: null,
+        pending: true,
+      }
+      return { ...current, categories: [...current.categories, category] }
+    }, 4)
+    return mintedId
+  },
+
+  addPendingProduct(input) {
+    let mintedId = 0
+    useOnboardingStore.getState().updateDraft((current) => {
+      mintedId = nextPendingId(current)
+      const product: SelectedProduct = {
+        id: mintedId,
+        name: input.name,
+        description: input.description ?? null,
+        imageUrl: null,
+        measurementId: input.measurementId,
+        measurementName: input.measurementName ?? null,
+        categoryId: input.categoryId,
+        pending: true,
+      }
+      return { ...current, products: [...current.products, product] }
+    }, 5)
+    return mintedId
+  },
+
+  removePendingEntry(id) {
+    const { draft } = useOnboardingStore.getState()
+    const isPendingCategory = draft.categories.some((c) => c.id === id && c.pending === true)
+    const isPendingProduct = draft.products.some((p) => p.id === id && p.pending === true)
+    if (!isPendingCategory && !isPendingProduct) return
+    useOnboardingStore.getState().updateDraft((current) => {
+      if (isPendingCategory) {
+        const categories = current.categories.filter((c) => c.id !== id)
+        const products = current.products.filter((p) => p.categoryId !== id)
+        const productIds = new Set(products.map((p) => p.id))
+        return {
+          ...current,
+          categories,
+          products,
+          skus: current.skus.filter((sku) => productIds.has(sku.productId)),
+        }
+      }
+      return {
+        ...current,
+        products: current.products.filter((p) => p.id !== id),
+        skus: current.skus.filter((sku) => sku.productId !== id),
+      }
+    }, isPendingCategory ? 4 : 5)
+  },
+
+  recordCreatedEntry(entry) {
+    set((state) => ({ draft: applyCreatedEntry(state.draft, entry) }))
+    // Persist now — the id must survive a reload before the assign that follows.
+    flushScheduledDraftSave(persistCurrentDraft)
   },
 
   setCategoryLimit(limit) {
     set({ categoryLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxCategories })
+  },
+
+  setProductLimit(limit) {
+    set({ productLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxProducts })
+  },
+
+  setSkuLimit(limit) {
+    set({ skuLimit: limit && limit > 0 ? limit : ONBOARDING_CONFIG.maxSkus })
+  },
+
+  setMeasurementCatalog(catalog) {
+    // An empty fetch keeps the sample fallback rather than emptying every Step 6 dropdown.
+    set({ measurementCatalog: catalog.length ? catalog : SAMPLE_MEASUREMENT_CATALOG })
+  },
+
+  setProductMeasurementCatalog(catalog) {
+    set({ productMeasurementCatalog: catalog })
   },
 
   initializePersistence(ownerId) {
@@ -460,14 +833,38 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   updateDraft(updater, invalidateFrom) {
-    set((state) => ({
-      draft: invalidateDraft(updater(state.draft), invalidateFrom),
-      furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, invalidateFrom),
-      // Edited here and not yet written to the account, so this copy now outranks it.
-      hasLocalEdits: true,
-      recoveryMessage: null,
-    }))
+    set((state) => {
+      // A submitted store is past onboarding: its later steps are already saved to the
+      // account, so an additive category/product write must not tear that completion down.
+      // Invalidation exists to force a still-in-setup vendor to revisit the downstream
+      // steps a change reopens; a submitted store has none to revisit, and its adds are
+      // validated additively. So skip invalidation entirely when submitted — completedSteps,
+      // furthestVisitedStep, currentStep, and publication all stay intact, and the stepper
+      // does not re-lock on an add. See `CONTEXT.md` ("Submitted").
+      const from = state.storeSubmission ? undefined : invalidateFrom
+      return {
+        draft: invalidateDraft(updater(state.draft), from),
+        furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, from),
+        // Edited here and not yet written to the account, so this copy now outranks it.
+        hasLocalEdits: true,
+        recoveryMessage: null,
+      }
+    })
     queuePersistence()
+  },
+
+  changeBusinessType(businessType) {
+    const state = useOnboardingStore.getState()
+    if (state.draft.business.businessType?.id === businessType.id) return
+    const { accountCatalog } = state
+    state.updateDraft(
+      (current) => ({
+        ...current,
+        business: { ...current.business, businessType },
+        ...retainAssignedCatalog(current, accountCatalog),
+      }),
+      3,
+    )
   },
 
   updateRuntime(patch, invalidateFrom) {
@@ -614,11 +1011,6 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       }
     })
     flushScheduledDraftSave(persistCurrentDraft)
-  },
-
-  reset() {
-    // Starting over is a choice by the signed-in vendor, so the draft stays theirs.
-    discardDraft(useOnboardingStore.getState().draftOwnerId, null)
   },
 }))
 

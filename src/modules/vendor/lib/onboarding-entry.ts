@@ -1,19 +1,19 @@
-import { isVendorLive } from './onboarding-liveness'
+import { isStoreSubmitted } from './onboarding-account-status'
 import type { ServerOnboardingState } from './onboarding-resume'
 
 /**
  * What the vendor's account says the wizard should do for them.
  *
- * `complete` means the store has been submitted — `vendor_status: ACTIVE`, whether or
+ * `submitted` means the store has been sent for review — `vendor_status: ACTIVE`, whether or
  * not an admin has approved it yet. Approval is a separate, later transition, so it is
- * deliberately not part of this decision: a vendor waiting on approval has finished
+ * deliberately not part of this decision: a vendor waiting on approval needs no further
  * setup just as much as one already public, and neither should be handed a setup form.
  *
- * Completion is never read from `onboarding.status` or `onboarding.next_step`. Both are
- * derived server-side and move backwards — a live store still reports `IN_PROGRESS`.
+ * Submission is never read from `onboarding.status` or `onboarding.next_step`. Both are
+ * derived server-side and move backwards — a submitted store still reports `IN_PROGRESS`.
  * See docs/API_GAPS.md.
  */
-export type OnboardingEntry = { kind: 'complete' } | { kind: 'resume' }
+export type OnboardingEntry = { kind: 'submitted' } | { kind: 'resume' }
 
 /**
  * Deliberately carries no step. It used to expose an `openAt` derived from
@@ -23,5 +23,5 @@ export type OnboardingEntry = { kind: 'complete' } | { kind: 'resume' }
  * The wizard decides where to open; this decides only which route to land on.
  */
 export function resolveOnboardingEntry(state: ServerOnboardingState): OnboardingEntry {
-  return isVendorLive(state) ? { kind: 'complete' } : { kind: 'resume' }
+  return isStoreSubmitted(state) ? { kind: 'submitted' } : { kind: 'resume' }
 }

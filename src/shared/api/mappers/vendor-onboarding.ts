@@ -194,6 +194,19 @@ function optionalTrimmed(value: string): string | undefined {
   return value.trim() || undefined
 }
 
+/** India's country calling code. The wizard collects ten national digits; the backend
+ *  contract wants E.164, so the code is added here — once — just before the request goes out. */
+const INDIA_DIALING_CODE = '+91'
+
+function toIndianE164(nationalNumber: string): string {
+  return `${INDIA_DIALING_CODE}${nationalNumber.trim()}`
+}
+
+/** An omitted optional number stays omitted rather than becoming a bare `+91`. */
+function optionalIndianE164(value: string): string | undefined {
+  return value.trim() ? toIndianE164(value) : undefined
+}
+
 function normalizeInstagram(value: string): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
@@ -225,9 +238,9 @@ export function mapStorefrontConfigRequest(
     business_name: input.storeName.trim(),
     tagline: optionalTrimmed(input.tagline),
     business_location: optionalTrimmed(input.businessLocation),
-    order_whatsapp_number: input.orderWhatsapp.trim(),
+    order_whatsapp_number: toIndianE164(input.orderWhatsapp),
     instagram_url: normalizeInstagram(input.instagram),
-    support_whatsapp_number: optionalTrimmed(input.supportWhatsapp),
+    support_whatsapp_number: optionalIndianE164(input.supportWhatsapp),
     welcome_message: optionalTrimmed(input.welcomeMessage),
     announcement_bar: optionalTrimmed(input.announcementBar),
     hero_badges: input.heroBadges.map((badge) => badge.trim()).filter(Boolean),
@@ -470,13 +483,101 @@ export type VendorSkuRef = {
   unit: string
 }
 
-/** SKU price measurements the wizard supports, keyed by the catalog's measurement_id. */
-export type SkuMeasurementType = 'WEIGHT' | 'VOLUME' | 'COUNT'
+/** SKU price measurements, matching the backend's measurement_type enum. */
+export type SkuMeasurementType =
+  | 'WEIGHT'
+  | 'VOLUME'
+  | 'COUNT'
+  | 'AREA'
+  | 'SERVICE_UNIT'
+  | 'DURATION'
+  | 'PER_PERSON'
+  | 'SLOT'
 
-export const MEASUREMENT_TYPE_BY_ID: Readonly<Record<number, SkuMeasurementType>> = {
-  1: 'WEIGHT',
-  2: 'VOLUME',
-  3: 'COUNT',
+const MEASUREMENT_TYPES = new Set<SkuMeasurementType>([
+  'WEIGHT',
+  'VOLUME',
+  'COUNT',
+  'AREA',
+  'SERVICE_UNIT',
+  'DURATION',
+  'PER_PERSON',
+  'SLOT',
+])
+
+function measurementTypeOf(value: unknown): SkuMeasurementType | null {
+  return typeof value === 'string' && MEASUREMENT_TYPES.has(value as SkuMeasurementType)
+    ? (value as SkuMeasurementType)
+    : null
+}
+
+/** One platform measurement: its id, type, the units it is priced in, and quantity suggestions. */
+export type MeasurementCatalogEntry = {
+  id: number
+  type: SkuMeasurementType
+  units: string[]
+  unitOptions: number[]
+}
+
+export type MeasurementCatalog = MeasurementCatalogEntry[]
+
+function mapMeasurementRow(value: unknown): MeasurementCatalogEntry | null {
+  if (!isRecord(value)) return null
+  const id = optionalInteger(value.id)
+  const type = measurementTypeOf(value.measurement_type ?? value.type ?? value.name)
+  if (id == null || type == null) return null
+  const units =
+    typeof value.unit === 'string'
+      ? value.unit.split(',').map((unit) => unit.trim()).filter((unit) => unit.length > 0)
+      : []
+  const unitOptions = Array.isArray(value.unit_options)
+    ? value.unit_options.filter(
+        (option): option is number => typeof option === 'number' && Number.isFinite(option),
+      )
+    : []
+  return { id, type, units, unitOptions }
+}
+
+/**
+ * Maps `GET /v1/measurements/`. The operation is typed as a bare `APIResponseObject`, so this
+ * reads the shape verified live on 2026-08-28 defensively: `id`, a `measurement_type` enum, a
+ * comma-separated `unit`, and an optional numeric `unit_options`. Identifiers are not
+ * contiguous and are never assumed. An entry missing an id or a recognised type is dropped
+ * rather than guessed at — a measurement the frontend cannot place is worse than one it omits.
+ */
+export function mapMeasurementCatalog(payload: unknown): MeasurementCatalog {
+  if (!isRecord(payload)) return []
+  const data = payload.data
+  const rows = Array.isArray(data)
+    ? data
+    : isRecord(data) && Array.isArray(data.result)
+      ? data.result
+      : []
+  const catalog: MeasurementCatalog = []
+  for (const row of rows) {
+    const entry = mapMeasurementRow(row)
+    if (entry) catalog.push(entry)
+  }
+  return catalog
+}
+
+/**
+ * Enrich list rows with `GET /v1/measurements/{id}` payloads.
+ *
+ * The deployed list omits `unit_options` even though its OpenAPI description says it includes
+ * them. Detail reads are therefore required before Step 6 can offer quantity suggestions.
+ */
+export function mergeMeasurementCatalogDetails(
+  catalog: MeasurementCatalog,
+  detailPayloads: unknown[],
+): MeasurementCatalog {
+  const detailsById = new Map<number, MeasurementCatalogEntry>()
+  for (const payload of detailPayloads) {
+    if (!isRecord(payload)) continue
+    const detail = mapMeasurementRow(payload.data)
+    if (detail) detailsById.set(detail.id, detail)
+  }
+  return catalog.map((entry) => detailsById.get(entry.id) ?? entry)
 }
 
 /** Accepts `data: []` and `data: { result: [] }`; both occur on vendor resources. */
@@ -623,6 +724,82 @@ export function mapAssignProductsRequest(
     category_id: platformCategoryId,
     selected_products: platformProductIds.map((product_id) => ({ product_id })),
   }
+}
+
+export type CategoryCreateInput = {
+  businessTypeId: number
+  name: string
+  description?: string | null
+}
+
+export type ProductCreateInput = {
+  name: string
+  measurementUnitId: number
+  description?: string | null
+}
+
+/**
+ * POST /v1/categories/ — author a platform category.
+ *
+ * The published `CategoryDTO` names the business type as a string (`business_type`), but the
+ * deployed API keys a new category by `business_type_id` — which is what the draft carries.
+ * A name would force a reverse lookup the wizard does not have.
+ */
+export function mapCategoryCreateRequest(input: CategoryCreateInput): Record<string, unknown> {
+  const name = input.name.trim()
+  if (!name) throw new InvalidReferencePayloadError()
+  if (!Number.isSafeInteger(input.businessTypeId) || input.businessTypeId <= 0) {
+    throw new InvalidReferencePayloadError()
+  }
+  return {
+    business_type_id: input.businessTypeId,
+    name,
+    description: optionalTrimmed(input.description ?? ''),
+  }
+}
+
+/**
+ * POST /v1/categories/{category_id}/products/ — author a platform product.
+ *
+ * `measurement_unit_id` is required: a product with no unit cannot be priced at Step 6. The
+ * name must be at least three characters. `description` defaults to the name so the field is
+ * never sent empty. The category is the PLATFORM id and rides in the path, not this body — by
+ * the time a product is minted the pending category it belongs to already has a platform id.
+ */
+export function mapProductCreateRequest(input: ProductCreateInput): Record<string, unknown> {
+  const name = input.name.trim()
+  if (name.length < 3) throw new InvalidReferencePayloadError()
+  if (!Number.isSafeInteger(input.measurementUnitId) || input.measurementUnitId <= 0) {
+    throw new InvalidReferencePayloadError()
+  }
+  return {
+    name,
+    measurement_unit_id: input.measurementUnitId,
+    description: (input.description ?? '').trim() || name,
+  }
+}
+
+/**
+ * The positive platform id a create echoed back, read from the envelope's `data`.
+ *
+ * It is recorded into the draft before the assign that follows, so a create that lands then
+ * an assign that fails never mints a second, undeletable copy. A response with no usable id
+ * is a contract violation, not something to paper over — see `mithra-openapi-unreliable`.
+ */
+function createdId(payload: unknown): number {
+  if (!isRecord(payload)) throw new InvalidReferencePayloadError()
+  const data = payload.data
+  if (typeof data === 'number') return requiredPositiveInteger(data)
+  if (isRecord(data)) return requiredPositiveInteger(data.id)
+  throw new InvalidReferencePayloadError()
+}
+
+export function mapCreatedCategory(payload: unknown): number {
+  return createdId(payload)
+}
+
+export function mapCreatedProduct(payload: unknown): number {
+  return createdId(payload)
 }
 
 export type SkuCreateInput = {

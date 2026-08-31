@@ -30,7 +30,7 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     version: ONBOARDING_DRAFT_VERSION,
     currentStep: 1,
     completedSteps: [],
-    referenceMode: 'live',
+    catalogSource: 'account',
     maskedPhone: null,
     mobileVerified: false,
     business: {
@@ -67,7 +67,6 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     },
     payments: [
       { type: 'PRE_PAID', enabled: false, isDefault: false },
-      { type: 'ONLINE', enabled: false, isDefault: false },
       { type: 'CASH_ON_DELIVERY', enabled: false, isDefault: false },
     ],
     storefront: {

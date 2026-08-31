@@ -116,7 +116,7 @@ export function MarketingHero() {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/vendor/login">
+            <Link to="/onboarding">
               <Button size="lg" className="rounded-full px-6">
                 Start Your Store Free
               </Button>

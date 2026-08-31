@@ -10,10 +10,10 @@ import {
 /**
  * One read of the vendor's account, shared by everything that needs it.
  *
- * `loadServerOnboardingState` fans out seven requests. Sign-in needs the result to decide
- * where to send the vendor, and the wizard needs the same result to hydrate — without a
- * cache that is fourteen requests, and the wizard would paint an interactive Step 3 while
- * the second set was still in flight.
+ * `loadServerOnboardingState` reads one step-sized account snapshot. Sign-in needs the result
+ * to decide where to send the vendor, and the wizard needs the same result to hydrate —
+ * without the cache, that read set would fan out twice, and the wizard would paint an
+ * interactive Step 3 while the second set was still in flight.
  *
  * Only successful reads are retained. A failure is dropped so the next caller retries
  * rather than inheriting an error nobody can clear.
