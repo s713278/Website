@@ -263,7 +263,7 @@ alongside the production auth implementation.
 | `/cart` | Cart |
 | `/login`, `/register` | Customer authentication |
 | `/vendor/login` | Vendor WhatsApp OTP login |
-| `/onboarding` | Ten-step vendor onboarding; persists to the vendor account |
+| `/onboarding` | Ten-step vendor setup; persists in Live API mode or saves a local demo preview |
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |

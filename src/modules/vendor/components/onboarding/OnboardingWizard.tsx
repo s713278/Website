@@ -895,11 +895,14 @@ export function OnboardingWizard() {
                           className="min-w-0 border-0 p-0"
                         >
                         {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                        {currentStep === 3 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
-                          <StepNotice message="Demo mode does not load your account catalog. Choose Sample catalog above to continue." />
+                        {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
+                          <StepNotice message={currentStep === 3
+                            ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
+                            : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
+                          />
                         ) : null}
-                        {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                        {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
