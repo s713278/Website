@@ -9,6 +9,7 @@ import {
   ImageIcon,
   LayoutGridIcon,
   MessageSquareIcon,
+  PencilIcon,
   QrCodeIcon,
   PlusIcon,
   Trash2Icon,
@@ -23,6 +24,7 @@ import {
   ONBOARDING_THEME_PRESETS,
   storefrontPatchForPreset,
 } from '../../data/onboarding-theme-presets'
+import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { StepNotice } from './AccessNotice'
 import {
@@ -32,12 +34,14 @@ import {
   useOnboardingStore,
 } from '../../store/onboarding-store'
 import type {
+  OnboardingRuntimeState,
   StoreSubmission,
   OnboardingStep,
   StorefrontButtonShape,
   StorefrontCardStyle,
   StorefrontDraft,
   ValidationIssue,
+  VendorOnboardingDraftV1,
 } from '../../types/onboarding'
 import { FieldLabel, StepSection } from './StepPrimitives'
 
@@ -482,7 +486,110 @@ function SubmissionStatus({
   )
 }
 
-export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) => void }) {
+function BriefChips({ items, empty }: { items: string[]; empty: string }) {
+  if (!items.length) return <span className="font-normal text-[var(--ob-ink-soft)]">{empty}</span>
+  return (
+    <span className="flex flex-wrap justify-end gap-1">
+      {items.map((item) => (
+        <span key={item} className="rounded-md bg-[var(--ob-brand-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--md-green-800)] dark:text-emerald-200">
+          {item}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function BriefRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <dt className="shrink-0 text-[var(--ob-ink-soft)]">{label}</dt>
+      <dd className="min-w-0 text-right font-medium text-[var(--ob-ink)]">{children}</dd>
+    </div>
+  )
+}
+
+function BriefGroup({
+  title,
+  editStep,
+  onGoToStep,
+  children,
+}: {
+  title: string
+  editStep: OnboardingStep
+  onGoToStep: (step: OnboardingStep) => void
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="font-display text-sm font-semibold text-[var(--ob-ink)]">{title}</h3>
+        {/* Routes through the wizard's `navigateToStep`, so it lands on the first editable
+            step of this area and honours the same navigation floor as the stepper. */}
+        <Button variant="ghost" size="sm" aria-label={`Edit ${title.toLowerCase()}`} onClick={() => onGoToStep(editStep)}>
+          <PencilIcon /> Edit
+        </Button>
+      </div>
+      <dl className="space-y-2.5 text-sm">{children}</dl>
+    </section>
+  )
+}
+
+/**
+ * The compact account of the store the vendor has configured — catalog, orders, and store
+ * identity — each group carrying a way back to the step that owns it. Values come from the
+ * pure `buildReviewSummary`, which masks contacts and drops credentials, so this component
+ * only lays them out.
+ */
+function JourneyBrief({
+  draft,
+  runtime,
+  onGoToStep,
+}: {
+  draft: VendorOnboardingDraftV1
+  runtime: OnboardingRuntimeState
+  onGoToStep: (step: OnboardingStep) => void
+}) {
+  const { catalog, orders, store } = buildReviewSummary(draft, runtime)
+  const categoryChips = [
+    ...catalog.categoryNames,
+    ...(catalog.extraCategoryCount ? [`+${catalog.extraCategoryCount}`] : []),
+  ]
+  return (
+    <div className="space-y-3" aria-label="Store summary">
+      <BriefGroup title="Catalog" editStep={3} onGoToStep={onGoToStep}>
+        <BriefRow label="Business type">{catalog.businessType ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not selected</span>}</BriefRow>
+        <BriefRow label="Categories"><BriefChips items={categoryChips} empty="None chosen" /></BriefRow>
+        <BriefRow label="Products">{catalog.productCount}</BriefRow>
+        <BriefRow label="Sizes">{catalog.activeSizeCount} active · {catalog.inactiveSizeCount} inactive</BriefRow>
+      </BriefGroup>
+
+      <BriefGroup title="Orders" editStep={7} onGoToStep={onGoToStep}>
+        <BriefRow label="Fulfilment">{orders.fulfilment}</BriefRow>
+        <BriefRow label="Payments"><BriefChips items={orders.paymentMethods} empty="None selected" /></BriefRow>
+        <BriefRow label="Order WhatsApp">{orders.orderWhatsapp ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not added</span>}</BriefRow>
+        {orders.supportWhatsapp ? <BriefRow label="Support WhatsApp">{orders.supportWhatsapp}</BriefRow> : null}
+      </BriefGroup>
+
+      <BriefGroup title="Store" editStep={9} onGoToStep={onGoToStep}>
+        <BriefRow label="Store name">{store.storeName ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not named</span>}</BriefRow>
+        <BriefRow label="Location">{store.businessLocation ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not added</span>}</BriefRow>
+      </BriefGroup>
+    </div>
+  )
+}
+
+export function ReviewStep({
+  onGoToStep,
+  submitsToAccount,
+}: {
+  onGoToStep: (step: OnboardingStep) => void
+  /**
+   * Whether pressing the primary action will submit to the vendor account (live) rather than
+   * save a private in-browser preview (demo or sample). Owned by the wizard because only it
+   * knows the session and catalog source; it drives the consequence sentence's mode-accurate copy.
+   */
+  submitsToAccount: boolean
+}) {
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
   const storeSubmission = useOnboardingStore((state) => state.storeSubmission)
@@ -507,9 +614,11 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
     return (
       <div className="space-y-5">
         <div className={cn('rounded-xl p-4', issues.length ? 'bg-amber-50/80 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100' : 'bg-[var(--ob-brand-soft)] text-foreground')}>
-          <h3 className="font-display font-semibold">{issues.length ? `${issues.length} readiness item${issues.length === 1 ? '' : 's'} to resolve` : 'Ready to submit your store'}</h3>
-          <p className="mt-1 text-sm leading-6">{issues.length ? 'Each item links back to the step where it can be fixed.' : 'Submitting saves everything to your store and sends it for approval.'}</p>
+          <h3 className="font-display font-semibold">{issues.length ? `${issues.length} readiness item${issues.length === 1 ? '' : 's'} to resolve` : 'Your store is ready'}</h3>
+          <p className="mt-1 text-sm leading-6">{issues.length ? 'Each item links back to the step where it can be fixed. The summary below stays available while you resolve them.' : 'Check the summary below, then choose the action at the bottom.'}</p>
         </div>
+        {/* Readiness issues stay prominent and actionable, above the brief rather than hidden
+            by it: the brief is the recap, the list is the work still to do. */}
         {issues.length ? (
           <ul className="space-y-2" aria-label="Readiness issues">
             {issues.map((item, index) => (
@@ -520,16 +629,15 @@ export function ReviewStep({ onGoToStep }: { onGoToStep: (step: OnboardingStep) 
               </li>
             ))}
           </ul>
-        ) : (
-          <div className="grid gap-3 @min-[32rem]:grid-cols-2">
-            {[
-              ['Business type', draft.business.businessType?.name ?? 'Not selected'],
-              ['Catalog', `${draft.categories.length} categories · ${draft.products.length} products`],
-              ['Pricing', `${draft.skus.filter((sku) => sku.active).length} active SKUs`],
-              ['Storefront', draft.storefront.storeName],
-            ].map(([label, value]) => <div key={label} className="rounded-lg bg-[var(--ob-canvas)] p-3"><span className="block text-xs text-[var(--ob-ink-soft)]">{label}</span><strong className="mt-1 block text-sm">{value}</strong></div>)}
-          </div>
-        )}
+        ) : null}
+        {/* The journey brief is shown on every visit to Step 10, resolved or not. */}
+        <JourneyBrief draft={draft} runtime={runtime} onGoToStep={onGoToStep} />
+        {/* The consequence sentence sits immediately above the primary action in the footer. */}
+        <p className="text-sm leading-6 text-[var(--ob-ink-soft)]">
+          {submitsToAccount
+            ? 'Submitting sends your store to MithraDirect for review. While it is being reviewed your setup is read-only, apart from adding more categories and products.'
+            : 'This saves a private preview in this browser only — nothing is sent to a vendor account.'}
+        </p>
       </div>
     )
   }

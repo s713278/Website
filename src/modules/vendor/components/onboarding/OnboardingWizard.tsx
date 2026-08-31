@@ -513,6 +513,76 @@ export function OnboardingWizard() {
     return false
   }
 
+  /**
+   * The one-way live submission, run only after the Step 10 confirmation is accepted.
+   *
+   * Kept separate from the Continue handler so the confirmation's `onConfirm` performs the
+   * existing submission exactly once, and cancelling never touches the account.
+   */
+  const submitStoreForReview = async (slug: string) => {
+    // The live branch only opens the confirmation with a ready session, but re-checking
+    // keeps the vendorId narrowing local to this function.
+    if (access.state !== 'ready') return
+    const controller = beginRequest()
+    setStatusMessage('Submitting your store for review…')
+    try {
+      try {
+        await vendorOnboardingService.goLive(access.vendorId)
+      } catch (error) {
+        if (!requestIsCurrent(controller, 10)) return
+        setStatusMessage(null)
+        showIssues([
+          {
+            step: 10,
+            field: 'store-name',
+            message: getErrorMessage(error, 'Could not submit your store. Please try again.'),
+          },
+        ])
+        return
+      }
+
+      // The account just changed, even if local navigation stopped tracking this
+      // request while it was in flight. Never let a stale cache hide the submission.
+      invalidateVendorOnboardingState(access.vendorId)
+      // Do not let a late response attach the previous vendor's state to a new session.
+      if (useAuthStore.getState().user?.vendorId !== access.vendorId) return
+      // The successful account action is enough to establish submission. Details stay
+      // unknown until the read-back below, but a failed status read must not make the
+      // submitted store writable again.
+      setStoreSubmission({
+        storeIdentifier: null,
+        approvalStatus: null,
+        vendorStatus: null,
+      })
+
+      // Past this point the store is submitted. The read-back only refines what is
+      // shown, so its failure must never be reported as a failed submission — that
+      // wording sends the vendor back to press submit again on a store that is already
+      // submitted.
+      if (!requestIsCurrent(controller, 10)) return
+      try {
+        // Submission activates the vendor but approval is a separate admin step, so the
+        // real state is read back rather than assumed.
+        const context = await vendorOnboardingService.getVendorContext(access.vendorId)
+        if (!requestIsCurrent(controller, 10)) return
+        setStoreSubmission({
+          storeIdentifier: context.storeIdentifier,
+          approvalStatus: context.approvalStatus,
+          vendorStatus: context.vendorStatus,
+        })
+      } catch {
+        if (!requestIsCurrent(controller, 10)) return
+        setContextError(
+          'Your store was submitted. We could not load its latest status just now — reload to see it.',
+        )
+      }
+      setStatusMessage(null)
+      completePrototype(slug)
+    } finally {
+      finishRequest(controller)
+    }
+  }
+
   const handleCatalogContinue = async () => {
     const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } =
       useOnboardingStore.getState()
@@ -526,70 +596,23 @@ export function OnboardingWizard() {
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
       // synthetic and nothing behind them was ever written. Without this, activation would
-      // submit a real vendor account from a wizard the UI is presenting as sample data.
+      // submit a real vendor account from a wizard the UI is presenting as sample data. Demo
+      // mode lands here too: both take the private in-browser preview path, with no
+      // administrator review to confirm first.
       if (!writesReachAccount(draft.catalogSource) || access.state !== 'ready') {
         completePrototype(slug)
         return
       }
 
-      const controller = beginRequest()
-      setStatusMessage('Submitting your store…')
-      try {
-        try {
-          await vendorOnboardingService.goLive(access.vendorId)
-        } catch (error) {
-          if (!requestIsCurrent(controller, 10)) return
-          setStatusMessage(null)
-          showIssues([
-            {
-              step: 10,
-              field: 'store-name',
-              message: getErrorMessage(error, 'Could not submit your store. Please try again.'),
-            },
-          ])
-          return
-        }
-
-        // The account just changed, even if local navigation stopped tracking this
-        // request while it was in flight. Never let a stale cache hide the submission.
-        invalidateVendorOnboardingState(access.vendorId)
-        // Do not let a late response attach the previous vendor's state to a new session.
-        if (useAuthStore.getState().user?.vendorId !== access.vendorId) return
-        // The successful account action is enough to establish submission. Details stay
-        // unknown until the read-back below, but a failed status read must not make the
-        // submitted store writable again.
-        setStoreSubmission({
-          storeIdentifier: null,
-          approvalStatus: null,
-          vendorStatus: null,
-        })
-
-        // Past this point the store is submitted. The read-back only refines what is
-        // shown, so its failure must never be reported as a failed submission — that
-        // wording sends the vendor back to press Complete setup again on a store that
-        // is already submitted.
-        if (!requestIsCurrent(controller, 10)) return
-        try {
-          // Submission activates the vendor but approval is a separate admin step, so the
-          // real state is read back rather than assumed.
-          const context = await vendorOnboardingService.getVendorContext(access.vendorId)
-          if (!requestIsCurrent(controller, 10)) return
-          setStoreSubmission({
-            storeIdentifier: context.storeIdentifier,
-            approvalStatus: context.approvalStatus,
-            vendorStatus: context.vendorStatus,
-          })
-        } catch {
-          if (!requestIsCurrent(controller, 10)) return
-          setContextError(
-            'Your store was submitted. We could not load its latest status just now — reload to see it.',
-          )
-        }
-        setStatusMessage(null)
-        completePrototype(slug)
-      } finally {
-        finishRequest(controller)
-      }
+      // Live: submission is a one-way request for review that locks setup, so a deliberate
+      // confirmation stands between readiness passing and the account write.
+      requestConfirmation({
+        title: 'Submit your store for review?',
+        description:
+          'MithraDirect reviews your store before any decision is made. While it is under review your setup is read-only — you can still add more categories and products, but everything else stays locked until the review is done.',
+        confirmLabel: 'Submit for review',
+        onConfirm: () => void submitStoreForReview(slug),
+      })
       return
     }
     // A submitted store is read-only except for catalog growth: Steps 4-5 still take
@@ -717,6 +740,10 @@ export function OnboardingWizard() {
   // `storeSubmission` comes from the account, so "Complete setup" has nothing to do.
   const setupNeedsNoFurtherAction =
     storeIsSubmitted || (publicationState === 'prototype-complete' && completedSteps.includes(10))
+  // Whether the Step 10 action writes to the account (live submission) or saves a private
+  // in-browser preview (demo or sample). Mirrors the branch in `handleCatalogContinue`, so
+  // the button label, the confirmation, and the actual effect can never disagree.
+  const step10SubmitsToAccount = writesReachAccount(catalogSource) && access.state === 'ready'
   // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send code on WhatsApp'
     : currentStep === 2 ? 'Verify and continue'
@@ -724,7 +751,8 @@ export function OnboardingWizard() {
       // Continue is pure navigation, so the label must not promise a save.
       : storeIsSubmitted ? (isAdditiveCatalogStep(currentStep) ? 'Save and continue' : 'Continue')
         : currentStep === 9 ? 'Review readiness'
-          : currentStep === 10 ? 'Complete setup'
+          // Live submits for administrator review; demo/sample only saves a private preview.
+          : currentStep === 10 ? (step10SubmitsToAccount ? 'Submit for review' : 'Save private preview')
             : 'Continue'
   // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
   // rather than only on the ones with an open contract gap.
@@ -873,7 +901,7 @@ export function OnboardingWizard() {
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                         {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                        {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} /> : null}
+                        {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </fieldset>
                       </div>
                     </div>
