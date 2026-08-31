@@ -894,7 +894,10 @@ export function OnboardingWizard() {
                           disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 3 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
+                          <StepNotice message="Demo mode does not load your account catalog. Choose Sample catalog above to continue." />
+                        ) : null}
                         {currentStep === 4 && catalogUnlocked ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 5 && catalogUnlocked ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}

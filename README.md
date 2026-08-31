@@ -9,9 +9,10 @@ through an OpenAPI/Axios integration.
 > **Current status:** demo mode is the default. Live WhatsApp OTP is wired at `/login` (customer)
 > and `/vendor/login` (vendor); the email/password forms remain demo-only.
 > Vendor onboarding at `/onboarding` verifies the vendor's number through the shared OTP session and
-> persists every step to the vendor account. Step 10 submits the store for admin approval; the public
-> storefront and sharing unlock once approved. Remaining backend gaps are tracked in
-> [docs/API_GAPS.md](./docs/API_GAPS.md).
+> persists account-catalog setup steps in Live API mode. Demo mode uses the explicitly selected sample
+> catalog, keeps setup in the browser, and saves a private preview at Step 10. Live API Step 10 submits
+> the store for admin review; the public storefront and sharing unlock only once approved. Remaining
+> backend gaps are tracked in [docs/API_GAPS.md](./docs/API_GAPS.md).
 
 ## Product surfaces
 

@@ -481,6 +481,8 @@ export function selectSkuLimitReached(state: CatalogLimitState): boolean {
 export type CatalogPolicy = {
   /** Whether the draft may move from its current catalog source to `target`. */
   canSwitchTo: (target: CatalogSource) => boolean
+  /** Whether mounting a catalog-reference reader is allowed for the active transport. */
+  referenceReadsAllowed: boolean
   /** Whether the catalog-source control that offers the sample catalog is rendered. */
   sampleControlVisible: boolean
   /** Whether the control that authors into the platform catalog is rendered. */
@@ -513,6 +515,9 @@ export function selectCatalogPolicy(
       if (target === current) return false
       return target === 'account' || !businessTypeStepComplete
     },
+    // Demo mode must not contact the account catalog. Its sample data remains an explicit
+    // choice rather than a silent fallback, so Step 3 waits until the vendor switches.
+    referenceReadsAllowed: liveApi || current === 'sample',
     sampleControlVisible: !liveApi,
     createControlVisible: current === 'account',
     continueBlocked: liveApi && current === 'sample',

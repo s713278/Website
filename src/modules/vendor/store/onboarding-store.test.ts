@@ -287,6 +287,18 @@ describe('selectCatalogPolicy', () => {
   })
 
   describe('control visibility', () => {
+    it('reads account references only when the Live API is enabled', () => {
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).referenceReadsAllowed,
+      ).toBe(false)
+      expect(
+        selectCatalogPolicy(catalogState('sample', [1, 2]), { liveApi: false }).referenceReadsAllowed,
+      ).toBe(true)
+      expect(
+        selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: true }).referenceReadsAllowed,
+      ).toBe(true)
+    })
+
     it('shows the sample catalog control only in demo mode', () => {
       expect(
         selectCatalogPolicy(catalogState('account', [1, 2]), { liveApi: false }).sampleControlVisible,
