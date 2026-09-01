@@ -44,6 +44,24 @@ describe('landing store presentation', () => {
     })
   })
 
+  it('uses a valid id when vendor_id is present but unusable', () => {
+    expect(mapLandingStore({ vendor_id: ' ', id: 54, name: 'Tastebuds Adventures' })?.id).toBe(
+      '54',
+    )
+  })
+
+  it('does not relabel unrelated backend text as card metadata', () => {
+    expect(
+      mapLandingStore({
+        vendor_id: 91,
+        name: 'H2A2 Farms',
+        business_type: 'Sole proprietorship',
+        tagline: 'Made with care',
+        announcement_bar: 'Orders close Friday',
+      }),
+    ).toEqual({ id: '91', name: 'H2A2 Farms', artworkCandidates: [] })
+  })
+
   it('rejects rows without a usable identifier or store name', () => {
     expect(mapLandingStore({ name: 'No identifier' })).toBeNull()
     expect(mapLandingStore({ vendor_id: 12, name: '   ' })).toBeNull()

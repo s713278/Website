@@ -1,6 +1,7 @@
 import { Camera, Mail, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
+import { Button, ShadcnInput } from '@/shared/components'
 
 const footerGroups = [
   {
@@ -100,18 +101,18 @@ export function MarketingFooter() {
               <label className="sr-only" htmlFor="marketing-email">
                 Email address
               </label>
-              <input
+              <ShadcnInput
                 id="marketing-email"
                 type="email"
                 placeholder="Enter your email"
                 className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 outline-none placeholder:text-slate-500 focus:border-emerald-500"
               />
-              <button
+              <Button
                 type="button"
                 className="rounded-full bg-emerald-600 px-5 py-3 font-bold text-white transition hover:bg-emerald-500"
               >
                 Subscribe
-              </button>
+              </Button>
             </div>
             <nav aria-label="Legal" className="mt-6 flex flex-col gap-3 text-slate-400">
               <a

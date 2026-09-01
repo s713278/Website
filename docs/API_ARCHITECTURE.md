@@ -490,8 +490,10 @@ backend change and commit the diff.
 | `VITE_API_BASE_URL` | Backend base URL | `https://subscriptionapp-wgf8.onrender.com/api` — also hardcoded as the fallback in `getApiBaseUrl()`, so an unset var silently points at staging |
 | `VITE_USE_API` | `'true'`/`'1'` → live API; anything else → demo mode | **`false`** in both `.env` and `.env.example` — the app runs on fixtures unless you change this |
 | `VITE_APP_ENV` | General environment label | `development` |
-| `VITE_GOOGLE_MAPS_API_KEY` | Restricted public browser key for landing-only Places and reverse-geocoding | Unset; required only for landing discovery in Live API mode |
 | `OPENAPI_URL` | Overrides the Swagger URL `fetch-openapi.mjs` pulls | `https://subscriptionapp-wgf8.onrender.com/api/v3/api-docs` |
+
+Google browser-key setup and restrictions are documented in the environment section of
+[`README.md`](../README.md).
 
 `VITE_SAMPLE_VENDOR_ID` is referenced in `API_GAPS.md` as a workaround but is **not read by
 any code in this repo** — treat it as a proposal, not a supported knob.
@@ -503,7 +505,8 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `mithra_access_token` / `mithra_refresh_token` | `client/tokens.ts` | the tokens requests actually use |
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
-| `md-delivery-location` | `shared/lib/customer-location.ts` | the last validated delivery label, service area, latitude, and longitude |
+| `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
+| `md-delivery-location-google-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
 | `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 

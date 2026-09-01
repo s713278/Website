@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toCustomerLocation } from './landing-location'
+import { isConfirmedLandingLocation, toCustomerLocation } from './landing-location'
 
 const indianAddressComponents = [
   { longText: 'Banjara Hills', shortText: 'Banjara Hills', types: ['sublocality'] },
@@ -82,5 +82,23 @@ describe('landing location conversion', () => {
         ],
       }),
     ).toThrow('within India')
+  })
+
+  it('does not trust a legacy saved location without matching validation provenance', () => {
+    const saved = {
+      serviceArea: '500034',
+      latitude: 17.385044,
+      longitude: 78.486671,
+      label: 'Typed pincode with old coordinates',
+    }
+
+    expect(isConfirmedLandingLocation(saved, null)).toBe(false)
+    expect(
+      isConfirmedLandingLocation(saved, {
+        ...saved,
+        longitude: 78.4397584,
+      }),
+    ).toBe(false)
+    expect(isConfirmedLandingLocation(saved, saved)).toBe(true)
   })
 })

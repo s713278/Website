@@ -1,5 +1,9 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
-import type { CustomerLocation } from '@/shared/lib/customer-location'
+import {
+  getSavedLocation,
+  saveLocation,
+  type CustomerLocation,
+} from '@/shared/lib/customer-location'
 
 type AddressComponent = {
   longText?: string | null
@@ -28,9 +32,11 @@ export type LandingLocationSuggestion = {
 export type LandingLocationSearch = {
   suggestions(input: string): Promise<LandingLocationSuggestion[]>
   select(id: string): Promise<CustomerLocation>
+  reset(): void
 }
 
 const POSTAL_CODE = /^\d{6}$/
+const CONFIRMATION_STORAGE_KEY = 'md-delivery-location-google-confirmation'
 
 function componentValue(components: AddressComponent[], type: string, short = false) {
   const component = components.find((part) => part.types.includes(type))
@@ -74,16 +80,56 @@ export function toCustomerLocation(result: GoogleLocationBoundary): CustomerLoca
   return { serviceArea, latitude, longitude, label }
 }
 
-export function isConfirmedLandingLocation(
-  location: CustomerLocation | null,
-): location is CustomerLocation {
+function isValidLocationShape(location: CustomerLocation | null): location is CustomerLocation {
   return Boolean(
     location &&
-      POSTAL_CODE.test(location.serviceArea) &&
-      usableCoordinate(location.latitude) &&
-      usableCoordinate(location.longitude) &&
-      location.label.trim(),
+    POSTAL_CODE.test(location.serviceArea) &&
+    usableCoordinate(location.latitude) &&
+    usableCoordinate(location.longitude) &&
+    location.label.trim(),
   )
+}
+
+export function isConfirmedLandingLocation(
+  location: CustomerLocation | null,
+  confirmation: CustomerLocation | null,
+): location is CustomerLocation {
+  return Boolean(
+    isValidLocationShape(location) &&
+    isValidLocationShape(confirmation) &&
+    location.serviceArea === confirmation.serviceArea &&
+    location.latitude === confirmation.latitude &&
+    location.longitude === confirmation.longitude &&
+    location.label === confirmation.label,
+  )
+}
+
+function readConfirmation(): CustomerLocation | null {
+  try {
+    const raw = localStorage.getItem(CONFIRMATION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CustomerLocation
+    return isValidLocationShape(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function getConfirmedLandingLocation(): CustomerLocation | null {
+  const saved = getSavedLocation()
+  return isConfirmedLandingLocation(saved, readConfirmation()) ? saved : null
+}
+
+export function saveConfirmedLandingLocation(location: CustomerLocation) {
+  if (!isValidLocationShape(location)) {
+    throw new Error('Only a validated Google delivery location can be saved.')
+  }
+  saveLocation(location)
+  try {
+    localStorage.setItem(CONFIRMATION_STORAGE_KEY, JSON.stringify(location))
+  } catch {
+    /* The current page can still use the validated location for this session. */
+  }
 }
 
 let loaderConfigured = false
@@ -147,20 +193,29 @@ export async function createLandingLocationSearch(): Promise<LandingLocationSear
   const { AutocompleteSessionToken, AutocompleteSuggestion } = await placesLibrary()
   let sessionToken = new AutocompleteSessionToken()
   let predictions = new Map<string, google.maps.places.PlacePrediction>()
+  let sessionVersion = 0
+
+  function resetSession() {
+    sessionVersion += 1
+    sessionToken = new AutocompleteSessionToken()
+    predictions = new Map()
+  }
 
   return {
     async suggestions(input) {
       const query = input.trim()
       if (!query) {
-        predictions = new Map()
+        resetSession()
         return []
       }
 
+      const requestVersion = sessionVersion
       const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input: query,
         includedRegionCodes: ['in'],
         sessionToken,
       })
+      if (requestVersion !== sessionVersion) return []
       predictions = new Map()
       return response.suggestions.flatMap((suggestion) => {
         const prediction = suggestion.placePrediction
@@ -178,16 +233,22 @@ export async function createLandingLocationSearch(): Promise<LandingLocationSear
 
     async select(id) {
       const prediction = predictions.get(id)
-      if (!prediction) throw new Error('That location suggestion is no longer available. Search again.')
-      const place = prediction.toPlace()
-      await place.fetchFields({
-        fields: ['formattedAddress', 'location', 'addressComponents'],
-      })
-      const location = toCustomerLocation(selectedPlaceBoundary(place))
-      sessionToken = new AutocompleteSessionToken()
-      predictions = new Map()
-      return location
+      if (!prediction) {
+        resetSession()
+        throw new Error('That location suggestion is no longer available. Search again.')
+      }
+      try {
+        const place = prediction.toPlace()
+        await place.fetchFields({
+          fields: ['formattedAddress', 'location', 'addressComponents'],
+        })
+        return toCustomerLocation(selectedPlaceBoundary(place))
+      } finally {
+        resetSession()
+      }
     },
+
+    reset: resetSession,
   }
 }
 

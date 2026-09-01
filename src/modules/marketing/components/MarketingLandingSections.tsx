@@ -22,6 +22,7 @@ import {
   Wheat,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Button, ShadcnInput } from '@/shared/components'
 import {
   catalogService,
   getErrorMessage,
@@ -32,14 +33,14 @@ import {
 import {
   createLandingLocationSearch,
   detectLandingLocation,
-  isConfirmedLandingLocation,
+  getConfirmedLandingLocation,
+  saveConfirmedLandingLocation,
   type LandingLocationSearch,
   type LandingLocationSuggestion,
 } from '@/modules/marketing/lib/landing-location'
 import {
   FALLBACK_LOCATION,
   getSavedLocation,
-  saveLocation,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
 
@@ -400,9 +401,8 @@ function LandingStoreCard({ store }: { store: LandingStore }) {
 }
 
 function initialLandingLocation(liveApi: boolean) {
-  const saved = getSavedLocation()
-  if (liveApi) return isConfirmedLandingLocation(saved) ? saved : null
-  return saved ?? FALLBACK_LOCATION
+  if (liveApi) return getConfirmedLandingLocation()
+  return getSavedLocation() ?? FALLBACK_LOCATION
 }
 
 function isAbortError(error: unknown) {
@@ -430,7 +430,7 @@ export function ExploreStoresSection() {
   const locationRequest = useRef(0)
 
   function applyConfirmedLocation(next: CustomerLocation) {
-    saveLocation(next)
+    saveConfirmedLandingLocation(next)
     setLocation(next)
     setAreaInput(next.label)
     setSelectedLocation(null)
@@ -530,29 +530,38 @@ export function ExploreStoresSection() {
   }, [location, retryKey])
 
   async function chooseSuggestion(suggestion: LandingLocationSuggestion) {
-    locationRequest.current += 1
+    const requestId = ++locationRequest.current
     setLocating(false)
     setSuggestionStatus('Validating the selected Google location…')
     setLocationError('')
     try {
       searchRef.current ??= createLandingLocationSearch()
       const next = await (await searchRef.current).select(suggestion.id)
+      if (requestId !== locationRequest.current) return
       setSelectedLocation(next)
       setAreaInput(next.label)
       setSuggestions([])
       setActiveSuggestion(-1)
       setSuggestionStatus('Location selected. Choose Search Stores to confirm it.')
     } catch (error) {
+      if (requestId !== locationRequest.current) return
       setSelectedLocation(null)
       setLocationError(getErrorMessage(error, 'Choose another location suggestion.'))
       setSuggestionStatus('The selected location could not be validated.')
     }
   }
 
+  function dismissSuggestions() {
+    suggestionRequest.current += 1
+    setSuggestions([])
+    setActiveSuggestion(-1)
+    const search = searchRef.current
+    if (search) void search.then((adapter) => adapter.reset()).catch(() => undefined)
+  }
+
   function onLocationKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Escape') {
-      setSuggestions([])
-      setActiveSuggestion(-1)
+      dismissSuggestions()
       return
     }
     if (!suggestions.length) return
@@ -642,7 +651,7 @@ export function ExploreStoresSection() {
                     <label className="sr-only" htmlFor="explore-area">
                       Search for a delivery location
                     </label>
-                    <input
+                    <ShadcnInput
                       id="explore-area"
                       role="combobox"
                       aria-autocomplete="list"
@@ -657,13 +666,15 @@ export function ExploreStoresSection() {
                       autoComplete="off"
                       value={areaInput}
                       onChange={(event) => {
+                        locationRequest.current += 1
+                        setLocating(false)
                         setAreaInput(event.target.value)
                         setSelectedLocation(null)
                       }}
                       onKeyDown={onLocationKeyDown}
-                      onBlur={() => window.setTimeout(() => setSuggestions([]), 120)}
+                      onBlur={() => window.setTimeout(dismissSuggestions, 120)}
                       placeholder="Search area, address, or pincode"
-                      className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-slate-400"
+                      className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-3 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
                     />
                   </div>
                   {suggestions.length ? (
@@ -676,11 +687,13 @@ export function ExploreStoresSection() {
                             role="option"
                             aria-selected={index === activeSuggestion}
                           >
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="sm"
                               onMouseDown={(event) => event.preventDefault()}
                               onClick={() => void chooseSuggestion(suggestion)}
-                              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm ${
+                              className={`h-auto w-full justify-start whitespace-normal rounded-lg px-3 py-2.5 text-left text-sm ${
                                 index === activeSuggestion
                                   ? 'bg-emerald-50 text-emerald-950'
                                   : 'text-slate-800 hover:bg-slate-50'
@@ -692,7 +705,7 @@ export function ExploreStoresSection() {
                                   {suggestion.secondaryLabel}
                                 </span>
                               ) : null}
-                            </button>
+                            </Button>
                           </li>
                         ))}
                       </ul>
@@ -702,24 +715,26 @@ export function ExploreStoresSection() {
                     </div>
                   ) : null}
                 </div>
-                <button
+                <Button
                   type="submit"
                   disabled={!selectedLocation}
                   className="shrink-0 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Search Stores
-                </button>
+                </Button>
               </form>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => void onUseMyLocation()}
                   disabled={locating}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 disabled:opacity-60"
+                  className="h-auto justify-start px-0 text-sm font-semibold text-emerald-700 transition hover:bg-transparent hover:text-emerald-800 disabled:opacity-60"
                 >
                   <LocateFixed className="size-4" aria-hidden />
                   {locating ? 'Locating and resolving postal code…' : 'Use Current Location'}
-                </button>
+                </Button>
                 <p id="explore-area-status" role="status" aria-live="polite" className="text-xs text-slate-500">
                   {suggestionStatus}
                 </p>
@@ -760,13 +775,13 @@ export function ExploreStoresSection() {
           <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-8 text-center">
             <h4 className="font-display text-lg font-bold text-slate-950">Stores could not be loaded</h4>
             <p role="alert" className="mt-2 text-sm text-rose-700">{storesError}</p>
-            <button
+            <Button
               type="button"
               onClick={() => setRetryKey((key) => key + 1)}
               className="mt-4 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
             >
               Retry store search
-            </button>
+            </Button>
           </div>
         ) : null}
         {!storesLoading && !storesError && location && stores.length === 0 ? (

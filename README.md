@@ -108,9 +108,9 @@ The baseline verification for source changes is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers the pure vendor
-onboarding logic — account resume, step validation, login routing, and payload mapping. There is no
-DOM, component, or end-to-end runner, so UI behaviour is verified by running the app.
+Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers pure domain and
+presentation logic, including vendor-onboarding and landing-discovery seams. There is no DOM,
+component, or end-to-end runner, so UI behaviour is verified by running the app.
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:

@@ -40,8 +40,9 @@ function httpUrl(value: unknown): string | undefined {
 
 /** Untrusted public-home vendor row → truthful landing-card presentation. */
 export function mapLandingStore(raw: Record<string, unknown>): LandingStore | null {
-  const rawId = raw.vendor_id ?? raw.id
-  const id = rawId === null || rawId === undefined ? '' : String(rawId).trim()
+  const id = nonEmptyString(
+    raw.vendor_id === null || raw.vendor_id === undefined ? undefined : String(raw.vendor_id),
+  ) ?? nonEmptyString(raw.id === null || raw.id === undefined ? undefined : String(raw.id))
   const name = nonEmptyString(raw.business_name) ?? nonEmptyString(raw.name)
   if (!id || !name) return null
 
@@ -53,14 +54,10 @@ export function mapLandingStore(raw: Record<string, unknown>): LandingStore | nu
 
   const store: LandingStore = { id, name, artworkCandidates }
   const rating = finiteNumber(raw.rating)
-  const category =
-    nonEmptyString(raw.category) ??
-    nonEmptyString(raw.business_category) ??
-    nonEmptyString(raw.business_type) ??
-    nonEmptyString(raw.tagline)
+  const category = nonEmptyString(raw.category)
   const distanceKm = finiteNumber(raw.distance_km ?? raw.distanceKm)
   const etaMins = finiteNumber(raw.eta_mins ?? raw.etaMins)
-  const offer = nonEmptyString(raw.offer) ?? nonEmptyString(raw.announcement_bar)
+  const offer = nonEmptyString(raw.offer)
 
   if (rating !== undefined) store.rating = rating
   if (category) store.category = category
