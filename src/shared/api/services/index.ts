@@ -25,7 +25,7 @@ export {
   type RegisterInput,
 } from './auth.service'
 
-export { catalogService, getStore, listStores } from './catalog.service'
+export { catalogService, getStore, listLandingStores, listStores } from './catalog.service'
 export { cartService } from './cart.service'
 export {
   listMyOrders,

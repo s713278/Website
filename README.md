@@ -77,9 +77,16 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_USE_API` | `false` | `false` uses demo behavior; `true` enables the Spring Boot API |
 | `VITE_API_BASE_URL` | `https://subscriptionapp-wgf8.onrender.com/api` | API base before operation paths such as `/v1/auth/request-otp` |
 | `VITE_APP_ENV` | `development` | Reserved environment label; currently typed but not consumed by application logic |
+| `VITE_GOOGLE_MAPS_API_KEY` | _(unset)_ | Public browser key for landing-page location discovery in Live API mode |
 
 The client currently falls back to the development API base when `VITE_API_BASE_URL` is unset.
 Set the value explicitly for live development. Never commit `.env`, credentials, or test tokens.
+
+Live landing-page discovery requires Maps JavaScript API, Places API (New), and Geocoding API on the
+Google Cloud project used by `VITE_GOOGLE_MAPS_API_KEY`. Treat this as a public browser credential:
+restrict it to the exact local and production HTTP referrers and restrict API access to those three
+APIs. If a key is pasted into chat, logs, or source, rotate it before use. Demo mode does not load
+Google Maps or require this variable.
 
 ## Commands
 

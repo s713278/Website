@@ -1,6 +1,8 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
 import type { ApiEnvelope, RequestConfig } from '../client/types';
-import type { components } from '../schema';
+import type { components, operations } from '../schema';
+
+type HomeQuery = operations['getHomePageData']['parameters']['query'];
 
 /** Vendor profile + catalog assignment (tag 07) + public listing (tag 02) */
 export const vendorsService = {
@@ -95,6 +97,6 @@ export const vendorsService = {
     apiGet<ApiEnvelope>('/v1/vendors/search/keyword', { skipAuth: true, params }),
   categoriesByZip: (params?: Record<string, unknown>) =>
     apiGet<ApiEnvelope>('/v1/vendors/categories', { skipAuth: true, params }),
-  home: (params?: Record<string, unknown>) =>
-    apiGet<ApiEnvelope>('/v1/home', { skipAuth: true, params }),
+  home: (params: HomeQuery, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>('/v1/home', { ...config, skipAuth: true, params }),
 };

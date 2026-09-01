@@ -90,6 +90,13 @@ _Avoid_: offline mode, mock mode, test mode
 Live API and catalog source are independent: the real backend can be answering while the
 vendor browses the sample catalog. Do not use "live" for both.
 
+### Store discovery
+
+**Service area**:
+The postal code used to find stores serving a customer's chosen delivery location. It is
+sent together with that location's latitude and longitude.
+_Avoid_: location, address, search area
+
 ### Vendor setup
 
 **Setup**:
