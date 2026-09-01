@@ -6,6 +6,10 @@ import { ProductCard } from './ProductCard'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import {
+  STOREFRONT_MOBILE_ACTION_PAD,
+  StorefrontMobileActionBar,
+} from '@/modules/storefront/components/StorefrontMobileActionBar'
+import {
   cartTotals,
   findProductForCartLine,
   parseLineUnit,
@@ -18,6 +22,7 @@ import type { CartLine, Product, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, QuantityStepper } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 
 type StoreCartViewProps = {
   store: Store
@@ -74,7 +79,12 @@ export function StoreCartView({
         onBack={onBack}
       />
 
-      <main className="store-shell-inner flex-1 py-5 sm:py-6">
+      <main
+        className={cn(
+          'store-shell-inner flex-1 py-5 sm:py-6',
+          storeLines.length > 0 && STOREFRONT_MOBILE_ACTION_PAD,
+        )}
+      >
         {storeLines.length === 0 ? (
           <EmptyStoreCart storeId={store.id} />
         ) : (
@@ -164,7 +174,7 @@ export function StoreCartView({
               <Button
                 size="lg"
                 fullWidth
-                className="h-11 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-white hover:bg-[var(--store-theme,var(--md-green-900))]"
+                className="hidden h-11 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-white hover:bg-[var(--store-theme,var(--md-green-900))] lg:inline-flex"
                 onClick={handleCheckout}
               >
                 Proceed to Checkout
@@ -174,6 +184,24 @@ export function StoreCartView({
           </div>
         )}
       </main>
+
+      {storeLines.length > 0 ? (
+        <StorefrontMobileActionBar>
+          <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium text-slate-600">Total</span>
+            <span className="text-lg font-bold text-slate-900">{formatCurrency(totals.total)}</span>
+          </div>
+          <Button
+            size="lg"
+            fullWidth
+            className="h-11 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-white hover:bg-[var(--store-theme,var(--md-green-900))]"
+            onClick={handleCheckout}
+          >
+            Proceed to Checkout
+            <ArrowRight className="size-4" aria-hidden />
+          </Button>
+        </StorefrontMobileActionBar>
+      ) : null}
 
       <StorePageFooter store={store} />
     </>
@@ -222,7 +250,7 @@ function CartLineRow({
           <button
             type="button"
             onClick={() => onRemove(line.itemId)}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-red-600"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-red-600"
             aria-label={`Remove ${displayName}`}
           >
             <X className="size-4" strokeWidth={2} />

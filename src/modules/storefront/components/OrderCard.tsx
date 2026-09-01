@@ -32,7 +32,7 @@ export function OrderCard({ order }: OrderCardProps) {
           </span>
           <div className="min-w-0">
             <p className="font-semibold text-slate-900">{order.storeName}</p>
-            <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+            <p className="mt-0.5 break-all text-xs text-slate-500 sm:text-sm">
               {order.id} · {formatOrderDate(order.placedAt)}
             </p>
           </div>

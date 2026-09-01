@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MapPin } from 'lucide-react'
+import { ArrowRight, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const DEFAULT_HERO =
@@ -17,7 +17,7 @@ type OfferBannerProps = {
   className?: string
 }
 
-/** Dark hero — badges + title left; tagline right. Trust strip lives below in ServiceInfoBar. */
+/** Store hero — 16:9 banner image with content top, CTA bottom. */
 export function OfferBanner({
   badges,
   title,
@@ -34,13 +34,13 @@ export function OfferBanner({
     <section
       id="top"
       className={cn(
-        'store-offer-banner store-offer-banner--dark relative isolate min-h-[220px] overflow-hidden rounded-2xl ring-1 ring-black/10 sm:min-h-[250px] lg:min-h-[280px]',
+        'store-offer-banner store-offer-banner--dark relative isolate overflow-hidden rounded-2xl',
         className,
       )}
     >
       <div
         className={cn(
-          'absolute inset-0 bg-slate-900 transition-opacity duration-500',
+          'absolute inset-0 bg-slate-800 transition-opacity duration-500',
           imgLoaded ? 'opacity-0' : 'opacity-100',
         )}
         aria-hidden
@@ -49,30 +49,25 @@ export function OfferBanner({
       <img
         src={image}
         alt=""
+        width={1600}
+        height={900}
         onLoad={() => setImgLoaded(true)}
         className={cn(
-          'absolute inset-0 size-full object-cover object-[center_right] brightness-[0.82] transition-opacity duration-500 sm:object-[70%_center]',
+          'store-offer-banner__image absolute inset-0 size-full object-cover object-center transition-opacity duration-500',
           imgLoaded ? 'opacity-100' : 'opacity-0',
         )}
       />
 
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(105deg, rgba(8,10,12,0.94) 0%, rgba(8,10,12,0.78) 42%, rgba(8,10,12,0.35) 68%, rgba(8,10,12,0.18) 100%)',
-        }}
-        aria-hidden
-      />
+      <div className="store-offer-banner__scrim pointer-events-none absolute inset-0" aria-hidden />
 
-      <div className="relative grid min-h-[inherit] gap-6 px-5 py-7 sm:px-7 sm:py-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-8 lg:px-8 lg:py-9">
-        <div className="flex flex-col justify-center">
+      <div className="relative z-10 flex h-full min-h-0 flex-col justify-between px-5 py-5 sm:px-7 sm:py-6 lg:px-8 lg:py-7">
+        <div className="min-w-0 max-w-xl">
           {badges && badges.length > 0 ? (
-            <ul className="flex flex-wrap gap-2">
+            <ul className="flex flex-wrap gap-1.5 sm:gap-2">
               {badges.map((label) => (
                 <li
                   key={label}
-                  className="rounded-full border border-[var(--store-accent-muted,rgba(249,115,22,0.45))] bg-[var(--store-accent-soft,rgba(249,115,22,0.22))] px-3 py-1 text-[11px] font-medium text-white"
+                  className="rounded-full border border-white/25 bg-black/30 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm backdrop-blur-md sm:px-3 sm:text-[11px]"
                 >
                   {label}
                 </li>
@@ -80,35 +75,38 @@ export function OfferBanner({
             </ul>
           ) : null}
 
-          <h1 className="font-display mt-3.5 text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-white sm:text-[1.85rem] lg:text-[2rem]">
+          <h1 className="font-display mt-2.5 text-[1.35rem] font-extrabold leading-[1.1] tracking-tight text-white drop-shadow-sm sm:mt-3 sm:text-[1.85rem] lg:text-[2rem]">
             {title}
           </h1>
 
           {location ? (
-            <p className="mt-2.5 flex items-center gap-1.5 text-sm text-white/80">
-              <MapPin className="size-3.5 shrink-0 text-white/70" strokeWidth={2} aria-hidden />
-              <span>{location}</span>
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-white/85 sm:mt-2 sm:text-sm">
+              <MapPin className="size-3.5 shrink-0 text-white/75" strokeWidth={2} aria-hidden />
+              <span className="truncate">{location}</span>
             </p>
           ) : null}
 
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={onShopNow}
-              className="inline-flex h-10 items-center rounded-full border border-white/50 bg-black/25 px-7 text-sm font-semibold text-white backdrop-blur-md transition hover:border-white/70 hover:bg-black/35 active:scale-[0.98] sm:h-11"
-            >
-              Shop Now
-            </button>
-          </div>
-        </div>
-
-        {tagline ? (
-          <div className="flex flex-col items-start justify-center lg:items-end lg:text-right">
-            <p className="max-w-sm font-display text-base italic leading-snug text-white/95 sm:text-lg">
+          {tagline ? (
+            <p className="mt-2 line-clamp-2 font-display text-sm italic leading-snug text-white/90 sm:mt-2.5 sm:text-base">
               {tagline}
             </p>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
+
+        <div className="mt-4 shrink-0 sm:mt-5">
+          <button
+            type="button"
+            onClick={onShopNow}
+            className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/50 bg-white/20 px-5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 active:scale-[0.98] sm:h-11 sm:px-6"
+          >
+            Shop Now
+            <ArrowRight
+              className="size-4 transition group-hover:translate-x-0.5"
+              strokeWidth={2.25}
+              aria-hidden
+            />
+          </button>
+        </div>
       </div>
     </section>
   )

@@ -53,7 +53,7 @@ export function CardVariantPicker({
               onClick={() => onSelect(variant.id)}
               aria-pressed={active}
               className={cn(
-                'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition',
+                'min-h-9 rounded-full border px-3 py-2 text-[11px] font-semibold transition',
                 active
                   ? 'border-[var(--store-accent,#f97316)] bg-[var(--store-accent-soft,rgba(249,115,22,0.16))] text-[var(--store-accent,#ea580c)]'
                   : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
@@ -73,7 +73,7 @@ export function CardVariantPicker({
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            className="font-semibold text-[var(--store-accent,#ea580c)] hover:underline"
+            className="min-h-9 py-2 font-semibold text-[var(--store-accent,#ea580c)] hover:underline"
           >
             View all
           </button>

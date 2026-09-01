@@ -13,6 +13,10 @@ import { DeliveryAddressPicker } from '@/shared/components/DeliveryAddressPicker
 import { useDeliveryLocation } from '@/shared/hooks/useDeliveryLocation'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import {
+  STOREFRONT_MOBILE_ACTION_PAD,
+  StorefrontMobileActionBar,
+} from '@/modules/storefront/components/StorefrontMobileActionBar'
+import {
   cartTotals,
   findProductForCartLine,
 } from '@/modules/storefront/lib/cart-utils'
@@ -127,7 +131,7 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
         onBack={onBack}
       />
 
-      <main className="store-shell-inner flex-1 py-5 sm:py-6">
+      <main className={cn('store-shell-inner flex-1 py-5 sm:py-6', STOREFRONT_MOBILE_ACTION_PAD)}>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
           <div className="space-y-4">
             <CheckoutSection
@@ -241,13 +245,13 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
               </div>
             </div>
 
-            {error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
+            {error ? <p className="hidden text-sm text-[var(--md-danger)] lg:block">{error}</p> : null}
 
             <Button
               type="button"
               fullWidth
               size="lg"
-              className="h-12 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-base font-semibold text-white shadow-sm hover:opacity-90"
+              className="hidden h-12 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-base font-semibold text-white shadow-sm hover:opacity-90 lg:inline-flex"
               disabled={placing}
               onClick={() => void placeOrderOnWhatsApp()}
             >
@@ -257,13 +261,30 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
 
             <Link
               to={storeCartPath(store.id)}
-              className="block pt-1 text-center text-sm font-medium text-slate-500 hover:text-[var(--store-theme,var(--md-green-700))]"
+              className="hidden pt-1 text-center text-sm font-medium text-slate-500 hover:text-[var(--store-theme,var(--md-green-700))] lg:block"
             >
               Back to cart
             </Link>
           </aside>
         </div>
       </main>
+
+      <StorefrontMobileActionBar>
+        {error ? <p className="mb-2 text-sm text-[var(--md-danger)]">{error}</p> : null}
+        <Button
+          type="button"
+          fullWidth
+          size="lg"
+          className="h-12 rounded-[var(--store-button-radius,0.75rem)] bg-[var(--store-theme,var(--md-green-800))] text-base font-semibold text-white shadow-sm hover:opacity-90"
+          disabled={placing}
+          onClick={() => void placeOrderOnWhatsApp()}
+        >
+          <MessageCircle className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">
+            {placing ? 'Placing order…' : `Place order · ${formatCurrency(totals.total)}`}
+          </span>
+        </Button>
+      </StorefrontMobileActionBar>
 
       <DeliveryAddressPicker {...pickerProps} />
     </>

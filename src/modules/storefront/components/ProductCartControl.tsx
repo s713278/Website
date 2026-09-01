@@ -56,7 +56,7 @@ export function ProductCartControl({
         type="button"
         onClick={handleAdd}
         className={cn(
-          'inline-flex h-8 min-w-[4.5rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-200 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95',
+          'inline-flex h-9 min-h-9 min-w-[4.75rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-200 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95',
           className,
         )}
         aria-label={aria}
@@ -70,7 +70,7 @@ export function ProductCartControl({
   return (
     <div
       className={cn(
-        'inline-flex h-8 min-w-[5.5rem] items-stretch overflow-hidden rounded-full bg-[var(--store-theme,var(--md-green-600))] text-white shadow-sm',
+        'inline-flex h-9 min-h-9 min-w-[5.75rem] items-stretch overflow-hidden rounded-full bg-[var(--store-theme,var(--md-green-600))] text-white shadow-sm',
         className,
       )}
       role="group"
@@ -79,7 +79,7 @@ export function ProductCartControl({
       <button
         type="button"
         onClick={handleDecrease}
-        className="inline-flex w-8 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
+        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
         aria-label={`Decrease ${product.name} quantity`}
       >
         <Minus className="size-3.5" strokeWidth={2.5} aria-hidden />
@@ -94,7 +94,7 @@ export function ProductCartControl({
       <button
         type="button"
         onClick={handleIncrease}
-        className="inline-flex w-8 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
+        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
         aria-label={`Increase ${product.name} quantity`}
       >
         <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />

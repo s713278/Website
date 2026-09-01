@@ -19,7 +19,8 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
   const productHref = storeProductPath(storeId, product.id)
   const { variants, selected, selectedId, setSelectedId, multi } = useSelectedVariant(product)
 
-  return (    <article
+  return (
+    <article
       className={cn(
         'store-product-card group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white',
         className,
@@ -45,7 +46,8 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
           )}
         </Link>
 
-        <ProductCartControl          storeId={storeId}
+        <ProductCartControl
+          storeId={storeId}
           storeName={storeName}
           product={product}
           variant={selected}

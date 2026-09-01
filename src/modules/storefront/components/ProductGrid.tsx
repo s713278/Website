@@ -41,6 +41,7 @@ export function ProductGrid({
         <SectionHeader
           compact
           title={title}
+          titleClassName="min-w-0 truncate"
           actionLabel={!showSkeleton && onAction ? actionLabel : undefined}
           onAction={onAction}
         />

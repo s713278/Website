@@ -159,7 +159,7 @@ export function StorefrontHeader({
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-slate-700 transition hover:bg-slate-100 hover:text-[var(--store-theme,var(--md-green-700))]"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 hover:text-[var(--store-theme,var(--md-green-700))]"
             aria-label="Back to store home"
           >
             <ChevronLeft className="size-5" strokeWidth={2.25} aria-hidden />

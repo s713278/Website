@@ -130,7 +130,7 @@ export function CategoryScroller({
         title="Shop by Category"
         actionLabel={onViewAll ? actionLabel : undefined}
         onAction={onViewAll}
-        titleClassName="whitespace-nowrap"
+        titleClassName="min-w-0 truncate"
       />
 
       <div className="store-category-scroller flex gap-3 overflow-x-auto px-0.5 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3.5 lg:gap-4">

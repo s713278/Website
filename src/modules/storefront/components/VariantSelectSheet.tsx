@@ -18,7 +18,7 @@ type VariantSelectSheetProps = {
   title?: string
 }
 
-/** Right sidebar — full size list with search + confirm. */
+/** Size picker — bottom sheet on mobile, right drawer from `sm` up. */
 export function VariantSelectSheet({
   open,
   variants,
@@ -59,7 +59,7 @@ export function VariantSelectSheet({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-end">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-stretch sm:justify-end">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40"
@@ -70,7 +70,7 @@ export function VariantSelectSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 flex h-full w-full max-w-[22rem] flex-col bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.18)] sm:max-w-[24rem]"
+        className="relative z-10 flex w-full max-h-[min(88dvh,100%)] flex-col rounded-t-2xl bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.18)] sm:h-full sm:max-h-none sm:max-w-[24rem] sm:rounded-none sm:shadow-[-12px_0_40px_rgba(15,23,42,0.18)]"
       >
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <h2 className="text-lg font-bold text-slate-900">{title}</h2>
@@ -145,7 +145,7 @@ export function VariantSelectSheet({
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-4">
+        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Selected</p>
             <p className="truncate text-sm font-semibold text-slate-900">

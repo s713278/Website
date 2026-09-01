@@ -59,7 +59,7 @@ export function CategoryBrowseSection({
       {searchTooShort ? (
         <p className="text-sm text-slate-500">Type 2 or more characters to search</p>
       ) : !showSkeleton && count > 0 ? (
-        <p className="text-sm text-slate-600">
+        <p className="break-words text-sm text-slate-600">
           {searching ? (
             <>
               <span className="font-semibold text-slate-900">{count}</span>
@@ -67,7 +67,8 @@ export function CategoryBrowseSection({
               {q ? (
                 <>
                   {' '}
-                  for <span className="font-medium text-slate-800">“{q}”</span>
+                  for{' '}
+                  <span className="font-medium break-all text-slate-800">“{q}”</span>
                 </>
               ) : null}
             </>

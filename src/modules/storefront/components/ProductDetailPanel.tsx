@@ -142,12 +142,16 @@ export function ProductDetailPanel({
               />
             ) : null}
 
-            <QuantityStepper value={qty} onChange={setQty} className="mt-4 w-fit" />
+            <QuantityStepper
+              value={qty}
+              onChange={setQty}
+              className="mt-4 w-fit [&_button]:size-9 [&_span]:min-w-9"
+            />
 
             <div className="mt-5 flex flex-wrap gap-2.5">
               <Button
                 size="sm"
-                className="h-9 rounded-lg bg-[var(--store-theme,var(--md-green-800))] px-4 text-sm text-white hover:bg-[var(--store-theme,var(--md-green-900))]"
+                className="h-11 min-h-11 rounded-lg bg-[var(--store-theme,var(--md-green-800))] px-5 text-sm text-white hover:bg-[var(--store-theme,var(--md-green-900))] sm:h-9 sm:min-h-9 sm:px-4"
                 onClick={() => onAdd(selected, qty)}
                 disabled={!inStock}
               >
@@ -157,7 +161,7 @@ export function ProductDetailPanel({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-9 rounded-lg border-[var(--store-theme,var(--md-green-800))] px-4 text-sm text-[var(--store-theme,var(--md-green-800))]"
+                className="h-11 min-h-11 rounded-lg border-[var(--store-theme,var(--md-green-800))] px-5 text-sm text-[var(--store-theme,var(--md-green-800))] sm:h-9 sm:min-h-9 sm:px-4"
                 onClick={handleBuyNow}
                 disabled={!inStock}
               >
