@@ -50,6 +50,11 @@ describe('landing store presentation', () => {
     )
   })
 
+  it('rejects malformed identifiers instead of creating broken store links', () => {
+    expect(mapLandingStore({ vendor_id: {}, id: false, name: 'Broken identifier' })).toBeNull()
+    expect(mapLandingStore({ vendor_id: Number.NaN, name: 'Not a number' })).toBeNull()
+  })
+
   it('does not relabel unrelated backend text as card metadata', () => {
     expect(
       mapLandingStore({
@@ -58,6 +63,18 @@ describe('landing store presentation', () => {
         business_type: 'Sole proprietorship',
         tagline: 'Made with care',
         announcement_bar: 'Orders close Friday',
+      }),
+    ).toEqual({ id: '91', name: 'H2A2 Farms', artworkCandidates: [] })
+  })
+
+  it('omits empty or non-primitive numeric metadata instead of coercing it to zero', () => {
+    expect(
+      mapLandingStore({
+        vendor_id: 91,
+        name: 'H2A2 Farms',
+        rating: '   ',
+        distance_km: [],
+        eta_mins: {},
       }),
     ).toEqual({ id: '91', name: 'H2A2 Farms', artworkCandidates: [] })
   })

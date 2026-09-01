@@ -20,11 +20,15 @@ function nonEmptyString(value: unknown): string | undefined {
 }
 
 function finiteNumber(value: unknown): number | undefined {
-  if (value === '' || value === null || value === undefined || typeof value === 'boolean') {
-    return undefined
-  }
-  const number = typeof value === 'number' ? value : Number(value)
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined
+  if (typeof value === 'string' && !value.trim()) return undefined
+  const number = Number(value)
   return Number.isFinite(number) ? number : undefined
+}
+
+function usableId(value: unknown): string | undefined {
+  if (typeof value === 'string') return nonEmptyString(value)
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined
 }
 
 function httpUrl(value: unknown): string | undefined {
@@ -40,9 +44,7 @@ function httpUrl(value: unknown): string | undefined {
 
 /** Untrusted public-home vendor row → truthful landing-card presentation. */
 export function mapLandingStore(raw: Record<string, unknown>): LandingStore | null {
-  const id = nonEmptyString(
-    raw.vendor_id === null || raw.vendor_id === undefined ? undefined : String(raw.vendor_id),
-  ) ?? nonEmptyString(raw.id === null || raw.id === undefined ? undefined : String(raw.id))
+  const id = usableId(raw.vendor_id) ?? usableId(raw.id)
   const name = nonEmptyString(raw.business_name) ?? nonEmptyString(raw.name)
   if (!id || !name) return null
 
