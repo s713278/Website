@@ -9,6 +9,7 @@ import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { Button } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 type SuccessState = {
   storeName?: string
@@ -26,12 +27,13 @@ export function OrderSuccessPage() {
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-
+  const user = useAuthStore((s) => s.user)
+  
   useEffect(() => {
     if (!orderId) return
     let cancelled = false
     void ordersService
-      .listMyOrders()
+      .listMyOrders(user?.id)
       .then((orders) => {
         if (cancelled) return
         setOrder(orders.find((entry) => entry.id === orderId) ?? null)
@@ -42,7 +44,7 @@ export function OrderSuccessPage() {
     return () => {
       cancelled = true
     }
-  }, [orderId])
+  }, [orderId,user?.id])
 
   if (!orderId) return <Navigate to="/orders" replace />
 
@@ -94,7 +96,9 @@ export function OrderSuccessPage() {
               <div className="mx-auto mt-6 rounded-2xl border border-slate-100 bg-[var(--store-theme-soft,rgba(16,185,129,0.08))] px-5 py-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order ID</p>
                 <div className="mt-2 flex items-center justify-center gap-2">
-                  <p className="text-xl font-bold tracking-wide text-slate-900">{orderId}</p>
+                  <p className="min-w-0 break-all text-lg font-bold tracking-wide text-slate-900 sm:text-xl">
+                    {orderId}
+                  </p>
                   <button
                     type="button"
                     onClick={() => void copyOrderId()}
