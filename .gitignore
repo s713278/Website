@@ -20,3 +20,6 @@ website.zip
 CLAUDE.md
 docs/adr/
 docs/agents/
+
+# Vercel
+.vercel
