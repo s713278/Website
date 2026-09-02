@@ -81,6 +81,13 @@ The development server is available at [http://localhost:5173](http://localhost:
 The client currently falls back to the development API base when `VITE_API_BASE_URL` is unset.
 Set the value explicitly for live development. Never commit `.env`, credentials, or test tokens.
 
+Live landing-page discovery uses Photon's public OpenStreetMap geocoder and requires no browser API
+key. Search requests are debounced and limited, but the public Photon instance is a best-effort
+service that may throttle extensive usage. When an exact result has no postcode, the landing flow
+uses an agreeing six-digit Indian PIN from bounded nearby address results while retaining the exact
+selected coordinates. It does not guess across conflicting PIN boundaries or combine typed text
+with fallback coordinates.
+
 ## Commands
 
 | Command | Purpose |
@@ -101,9 +108,9 @@ The baseline verification for source changes is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers the pure vendor
-onboarding logic — account resume, step validation, login routing, and payload mapping. There is no
-DOM, component, or end-to-end runner, so UI behaviour is verified by running the app.
+Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers pure domain and
+presentation logic, including vendor-onboarding and landing-discovery seams. There is no DOM,
+component, or end-to-end runner, so UI behaviour is verified by running the app.
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:

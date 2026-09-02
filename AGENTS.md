@@ -78,10 +78,10 @@ For code changes, the baseline is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts` and covers the pure onboarding logic
-only — resume, validation, entry routing, and payload mapping. There is no DOM, component, or
-end-to-end runner: verify UI behaviour by running the app. `vitest.config.ts` merges `vite.config.ts`,
-so path aliases are defined once.
+Vitest runs in the node environment over `src/**/*.test.ts` and covers pure domain and presentation
+logic, including onboarding and landing discovery seams. There is no DOM, component, or end-to-end
+runner: verify UI behaviour by running the app. `vitest.config.ts` merges `vite.config.ts`, so path
+aliases are defined once.
 
 `npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
 

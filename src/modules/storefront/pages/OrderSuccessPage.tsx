@@ -28,7 +28,7 @@ export function OrderSuccessPage() {
   const [orderLoading, setOrderLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const user = useAuthStore((s) => s.user)
-  
+
   useEffect(() => {
     if (!orderId) return
     let cancelled = false

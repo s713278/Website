@@ -62,6 +62,8 @@ export {
   schedulingConfigNumber,
   schedulingConfigString,
 } from './mappers/vendor-onboarding'
+export { resolveLandingStoreArtwork } from './mappers/landing-store'
+export type { LandingStore, LandingStoreArtwork } from './mappers/landing-store'
 export type {
   BusinessTypeReference,
   BusinessTypeSaveInput,

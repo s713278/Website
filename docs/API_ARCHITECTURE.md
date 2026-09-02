@@ -6,9 +6,9 @@ wiring up the next page, or debugging why a call behaves oddly.
 The API-package baseline was verified against `integration` at commit `ff995c1`, after the
 `@mithra/api-client` merge (PR #16, `ac4aecb`).
 
-Updated on 2026-08-31 for the vendor-onboarding account service, resume-step-sized entry
-hydration, authenticated measurement details, explicit demo/sample isolation, and
-privacy-filtered local draft recovery.
+Updated on 2026-09-01 for landing-page location-based store discovery, as well as the
+vendor-onboarding account service, resume-step-sized entry hydration, authenticated measurement
+details, explicit demo/sample isolation, and privacy-filtered local draft recovery.
 
 Companion docs: [`API_GAPS.md`](./API_GAPS.md) (endpoints the backend doesn't have yet),
 [`SESSION.md`](./SESSION.md) (JWT lifecycle + the XSS posture of localStorage tokens).
@@ -212,7 +212,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | File | Exposes | Demo source | Live endpoint(s) |
 |---|---|---|---|
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
-| `catalog.service.ts` | `listStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | `GET /v1/vendors/`, `/v1/vendors/{id}`, `/v1/vendors/{id}/products` → `mapVendorToStore` |
+| `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
 | `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders`, `GET /v1/users/{userId}/orders/history` |
 | `vendor.service.ts` | `getVendorDashboard` | stats derived from `VENDOR_ORDERS`/`VENDOR_PRODUCTS`, plus a hardcoded store name and theme | `Promise.all` over `/v1/vendors/{id}` + `/orders/` + `/products`, aggregated client-side |
 | `vendor-orders.service.ts` | `listVendorOrders`, `updateVendorOrderStatus` | localStorage `md-vendor-orders`, seeded from `modules/vendor/data/demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/orders/*` |
@@ -262,6 +262,29 @@ are evicted, and successful setup writes, submission, and sign-out invalidate th
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
 *or* `distanceKm`, `price` *or* `selling_price`, `veg` *or* `is_veg`) and supplies defaults.
 That normalisation belongs here and nowhere else — don't re-do it inline in a page.
+
+**Landing discovery** — `listLandingStores(location, signal)` calls the public `GET /v1/home`
+operation with its generated required query type (`service_area`, `latitude`, and `longitude`) and
+passes request cancellation through the package wrapper. `mappers/landing-store.ts` accepts both
+documented vendor identifier spellings, drops unusable rows, and preserves absent card metadata as
+absent. It intentionally ignores the ambiguous `image_path`: landing artwork uses explicit
+`banner_image`, then `thumbnail_image`, then the store name. Demo mode returns the same presentation
+shape from `STORES` without calling Photon or the backend.
+
+The landing-only adapter at `modules/marketing/lib/landing-location.ts` uses Photon's public `/api/`
+and `/reverse` operations. It keeps the coordinates returned by the selected prediction. When that
+prediction lacks a postal code, it requests up to ten house, street, and locality results within one
+kilometre of those coordinates, accepts a six-digit Indian PIN only when the valid nearby candidates
+agree, and never replaces the selected coordinates with a nearby feature's point. Browser-location
+reverse results follow the same bounded rule and retain the browser coordinates. Conflicting or
+missing candidates remain unresolved rather than mixing a guessed service area with exact
+coordinates. The shared Photon behavior used by other routes is intentionally unchanged.
+
+A safe public request using the OpenAPI sample coordinates was checked on 2026-09-01. The deployed
+response was a successful envelope with `data.new_vendors`; sampled vendor rows used `business_name`,
+included both `id` and `vendor_id`, and optionally included explicit `banner_image` and
+`thumbnail_image`. Rows with neither image were present. The response's generic `image_path` occurred
+on `top_products`, not on the sampled vendor rows, so it is not treated as landing-store artwork.
 
 > **Cart is not backend-synced.** `useCartStore` (`src/modules/storefront/store/cart-store.ts`,
 > localStorage `md-cart`) is entirely local and never calls `cartService`. Both layers *have* a
@@ -488,6 +511,8 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `mithra_access_token` / `mithra_refresh_token` | `client/tokens.ts` | the tokens requests actually use |
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
+| `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
+| `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
 | `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 

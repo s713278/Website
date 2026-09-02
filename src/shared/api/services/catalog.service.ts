@@ -7,6 +7,7 @@ import {
   homeQuery,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
+import { mapLandingStore, type LandingStore } from '../mappers/landing-store'
 import { liveVendorId, mapVendorToStore } from '../mappers/vendor'
 import { mapStorefrontProductPage } from '../mappers/storefront-products'
 import { isLiveApi } from '../mode'
@@ -66,6 +67,33 @@ export async function listStores(query?: string, location?: CustomerLocation): P
     )
   }
   return stores
+}
+
+/** Truthful cards for the landing page's location-keyed public home feed. */
+export async function listLandingStores(
+  location: CustomerLocation,
+  signal?: AbortSignal,
+): Promise<LandingStore[]> {
+  if (!isLiveApi()) {
+    await delay()
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError')
+    return STORES.map((store) =>
+      mapLandingStore({
+        vendor_id: store.id,
+        name: store.name,
+        rating: store.rating,
+        category: store.category,
+        distance_km: store.distanceKm,
+        eta_mins: store.etaMins,
+        offer: store.offer,
+      }),
+    ).filter((store): store is LandingStore => store !== null)
+  }
+
+  const res = await vendorsService.home(homeQuery(location), { signal })
+  const data = asRecord(unwrapData(res))
+  const rows = asObjectList(data?.new_vendors)
+  return rows.map(mapLandingStore).filter((store): store is LandingStore => store !== null)
 }
 
 /** Demo fixture ids like `r1`, which have no live equivalent. */
@@ -182,6 +210,7 @@ export async function getStore(storeId: string): Promise<Store | null> {
 
 export const catalogService = {
   listStores,
+  listLandingStores,
   getStore,
   listStoreProducts,
 }
