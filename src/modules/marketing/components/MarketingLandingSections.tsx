@@ -127,6 +127,8 @@ const discoveryCategories = [
   { icon: Store, label: 'Services' },
 ]
 
+const MAX_LANDING_STORE_CARDS = 6
+
 const audiences = [
   ['🥛', 'Dairy Farms'],
   ['🌾', 'Organic Farmers'],
@@ -475,7 +477,7 @@ export function ExploreStoresSection() {
 
     const requestId = ++suggestionRequest.current
     const timer = window.setTimeout(() => {
-      setSuggestionStatus('Searching Google for locations…')
+      setSuggestionStatus('Searching for locations…')
       searchRef.current ??= createLandingLocationSearch()
       void searchRef.current
         .then((search) => search.suggestions(areaInput))
@@ -486,7 +488,7 @@ export function ExploreStoresSection() {
           setSuggestionStatus(
             next.length
               ? `${next.length} location suggestion${next.length === 1 ? '' : 's'} available.`
-              : 'No Google location suggestions found.',
+              : 'No location suggestions found.',
           )
         })
         .catch((error) => {
@@ -516,7 +518,7 @@ export function ExploreStoresSection() {
     void catalogService
       .listLandingStores(location, controller.signal)
       .then((next) => {
-        if (!controller.signal.aborted) setStores(next)
+        if (!controller.signal.aborted) setStores(next.slice(0, MAX_LANDING_STORE_CARDS))
       })
       .catch((error) => {
         if (!controller.signal.aborted && !isAbortError(error)) {
@@ -531,23 +533,36 @@ export function ExploreStoresSection() {
 
   async function chooseSuggestion(suggestion: LandingLocationSuggestion) {
     const requestId = ++locationRequest.current
+    const selectionId = ++suggestionRequest.current
     setLocating(false)
-    setSuggestionStatus('Validating the selected Google location…')
+    setSuggestionStatus('Validating the selected location…')
     setLocationError('')
     try {
       searchRef.current ??= createLandingLocationSearch()
       const next = await (await searchRef.current).select(suggestion.id)
-      if (requestId !== locationRequest.current) return
+      if (
+        requestId !== locationRequest.current ||
+        selectionId !== suggestionRequest.current
+      ) {
+        return
+      }
       setSelectedLocation(next)
       setAreaInput(next.label)
       setSuggestions([])
       setActiveSuggestion(-1)
       setSuggestionStatus('Location selected. Choose Search Stores to confirm it.')
     } catch (error) {
-      if (requestId !== locationRequest.current) return
+      if (
+        requestId !== locationRequest.current ||
+        selectionId !== suggestionRequest.current
+      ) {
+        return
+      }
       setSelectedLocation(null)
+      setSuggestions([])
+      setActiveSuggestion(-1)
       setLocationError(getErrorMessage(error, 'Choose another location suggestion.'))
-      setSuggestionStatus('The selected location could not be validated.')
+      setSuggestionStatus('Try a nearby address or search by pincode.')
     }
   }
 
@@ -627,30 +642,44 @@ export function ExploreStoresSection() {
           </p>
         </header>
 
-        <div className="mx-auto mt-10 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm sm:p-5">
-          <div className="flex items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-emerald-600 text-white ring-4 ring-emerald-100">
-              <MapPin className="size-4" aria-hidden />
+        <div className="mx-auto mt-10 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-3.5">
+            <span className="relative grid size-11 shrink-0 place-items-center rounded-full bg-emerald-600 text-white ring-4 ring-emerald-50">
+              <MapPin className="size-5" aria-hidden />
+              {location ? (
+                <span
+                  className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-white bg-orange-500"
+                  aria-hidden
+                />
+              ) : null}
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-emerald-700">
-                Delivering to
+                {location ? 'Delivering to' : 'Set your delivery point'}
               </p>
-              <p className="truncate font-display text-lg font-bold leading-tight text-slate-950 sm:text-xl">
-                {location?.label ?? (locating ? 'Finding your location…' : 'Choose a location')}
+              <p className="truncate font-display text-base font-bold text-slate-950 sm:text-lg">
+                {location?.label ??
+                  (locating
+                    ? 'Finding your location…'
+                    : 'Search an area or use your current location')}
               </p>
             </div>
+            {location ? (
+              <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold tabular-nums text-emerald-700">
+                {location.serviceArea}
+              </span>
+            ) : null}
           </div>
 
           {liveApi ? (
-            <div className="mt-5">
+            <div className="mt-4 border-t border-slate-100 pt-4">
               <form onSubmit={onSearchStores} className="flex flex-col gap-2 sm:flex-row">
                 <div className="relative min-w-0 flex-1">
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+                  <label className="sr-only" htmlFor="explore-area">
+                    {location ? 'Search for another area' : 'Search your delivery area'}
+                  </label>
+                  <div className="flex min-h-12 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 transition focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100">
                     <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
-                    <label className="sr-only" htmlFor="explore-area">
-                      Search for a delivery location
-                    </label>
                     <ShadcnInput
                       id="explore-area"
                       role="combobox"
@@ -663,23 +692,38 @@ export function ExploreStoresSection() {
                           : undefined
                       }
                       aria-describedby="explore-area-status"
+                      aria-busy={suggestionStatus === 'Searching for locations…'}
                       autoComplete="off"
                       value={areaInput}
+                      onFocus={(event) => {
+                        if (areaInput === location?.label) event.currentTarget.select()
+                      }}
                       onChange={(event) => {
                         locationRequest.current += 1
                         setLocating(false)
+                        setLocationError('')
                         setAreaInput(event.target.value)
                         setSelectedLocation(null)
                       }}
                       onKeyDown={onLocationKeyDown}
                       onBlur={() => window.setTimeout(dismissSuggestions, 120)}
-                      placeholder="Search area, address, or pincode"
-                      className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-3 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+                      placeholder="Search area, landmark, or pincode"
+                      className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-2.5 text-sm shadow-none placeholder:text-slate-400 focus-visible:border-0 focus-visible:ring-0"
                     />
+                    {selectedLocation ? (
+                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
+                        <Check className="size-3" aria-hidden />
+                      </span>
+                    ) : null}
                   </div>
+
                   {suggestions.length ? (
                     <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                      <ul id="explore-area-suggestions" role="listbox" className="max-h-64 overflow-y-auto p-1">
+                      <ul
+                        id="explore-area-suggestions"
+                        role="listbox"
+                        className="max-h-64 overflow-y-auto p-1"
+                      >
                         {suggestions.map((suggestion, index) => (
                           <li
                             id={`explore-area-suggestion-${index}`}
@@ -693,61 +737,96 @@ export function ExploreStoresSection() {
                               size="sm"
                               onMouseDown={(event) => event.preventDefault()}
                               onClick={() => void chooseSuggestion(suggestion)}
-                              className={`h-auto w-full justify-start whitespace-normal rounded-lg px-3 py-2.5 text-left text-sm ${
+                              className={`h-auto w-full justify-start gap-2.5 whitespace-normal rounded-lg px-3 py-2.5 text-left ${
                                 index === activeSuggestion
                                   ? 'bg-emerald-50 text-emerald-950'
                                   : 'text-slate-800 hover:bg-slate-50'
                               }`}
                             >
-                              <span className="block font-semibold">{suggestion.label}</span>
-                              {suggestion.secondaryLabel ? (
-                                <span className="mt-0.5 block text-xs text-slate-500">
-                                  {suggestion.secondaryLabel}
+                              <span
+                                className="grid size-7 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600"
+                              >
+                                <MapPin className="size-3.5" aria-hidden />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold leading-5">
+                                  {suggestion.label}
                                 </span>
-                              ) : null}
+                                {suggestion.secondaryLabel ? (
+                                  <span className="block text-xs font-normal leading-5 text-slate-500">
+                                    {suggestion.secondaryLabel}
+                                  </span>
+                                ) : null}
+                              </span>
                             </Button>
                           </li>
                         ))}
                       </ul>
-                      <p className="border-t border-slate-100 px-3 py-2 text-right text-xs font-medium text-slate-500">
-                        Powered by <span className="font-semibold text-[#4285f4]">Google</span>
+                      <p className="border-t border-slate-100 px-3 py-1.5 text-right text-[0.65rem] text-slate-400">
+                        Powered by{' '}
+                        <a
+                          href="https://photon.komoot.io/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-slate-500 hover:underline"
+                        >
+                          Photon
+                        </a>{' '}
+                        · ©{' '}
+                        <a
+                          href="https://www.openstreetmap.org/copyright"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-slate-500 hover:underline"
+                        >
+                          OpenStreetMap
+                        </a>
                       </p>
                     </div>
                   ) : null}
                 </div>
+
                 <Button
                   type="submit"
                   disabled={!selectedLocation}
-                  className="shrink-0 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="min-h-12 shrink-0 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 sm:min-w-32"
                 >
-                  Search Stores
+                  Find stores
                 </Button>
               </form>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+              <div className="mt-2.5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => void onUseMyLocation()}
                   disabled={locating}
-                  className="h-auto justify-start px-0 text-sm font-semibold text-emerald-700 transition hover:bg-transparent hover:text-emerald-800 disabled:opacity-60"
+                  className="h-8 justify-start px-1 text-xs font-semibold text-emerald-700 hover:bg-transparent hover:text-emerald-800 disabled:opacity-60"
                 >
-                  <LocateFixed className="size-4" aria-hidden />
-                  {locating ? 'Locating and resolving postal code…' : 'Use Current Location'}
+                  <LocateFixed className={`size-4 ${locating ? 'animate-pulse' : ''}`} aria-hidden />
+                  {locating ? 'Finding location…' : 'Use current location'}
                 </Button>
-                <p id="explore-area-status" role="status" aria-live="polite" className="text-xs text-slate-500">
+                <p
+                  id="explore-area-status"
+                  role="status"
+                  aria-live="polite"
+                  className="min-h-4 text-xs text-slate-500 sm:text-right"
+                >
                   {suggestionStatus}
                 </p>
               </div>
+
               {locationError ? (
-                <p role="alert" className="mt-3 text-sm font-medium text-rose-600">
+                <p role="alert" className="mt-2 text-xs font-medium text-rose-600">
                   {locationError}
                 </p>
               ) : null}
             </div>
           ) : (
-            <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Demo mode uses sample stores and does not require Google or backend access.
+            <p className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+              <span className="inline-block size-1.5 shrink-0 rounded-full bg-amber-400" aria-hidden />
+              Demo mode — showing a sample delivery area. Live search finds real neighbourhoods.
             </p>
           )}
         </div>

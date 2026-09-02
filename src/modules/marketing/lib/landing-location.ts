@@ -1,26 +1,42 @@
-import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import {
   getSavedLocation,
   saveLocation,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
 
-type AddressComponent = {
-  longText?: string | null
-  shortText?: string | null
-  types: string[]
-}
-
 type Coordinates = {
   latitude: number
   longitude: number
 }
 
-export type GoogleLocationBoundary = {
+type PhotonProperties = {
+  osm_type?: string
+  osm_id?: string | number
+  name?: string
+  street?: string
+  city?: string
+  locality?: string
+  district?: string
+  county?: string
+  state?: string
+  country?: string
+  postcode?: string
+  countrycode?: string
+}
+
+type PhotonFeature = {
+  properties?: PhotonProperties
+  geometry?: { coordinates?: unknown[] }
+}
+
+type PhotonPayload = {
+  features?: PhotonFeature[]
+}
+
+export type PhotonLocationBoundary = {
   source: 'selected-place' | 'reverse-geocode'
-  formattedAddress?: string | null
   coordinates?: Coordinates
-  addressComponents?: AddressComponent[]
+  properties?: PhotonProperties
 }
 
 export type LandingLocationSuggestion = {
@@ -35,46 +51,73 @@ export type LandingLocationSearch = {
   reset(): void
 }
 
+const PHOTON_BASE_URL = 'https://photon.komoot.io'
 const POSTAL_CODE = /^\d{6}$/
-const CONFIRMATION_STORAGE_KEY = 'md-delivery-location-google-confirmation'
+const REVERSE_RADIUS_KM = 1
+const REVERSE_LAYERS = ['house', 'street', 'locality']
+const CONFIRMATION_STORAGE_KEY = 'md-delivery-location-photon-confirmation'
 
-function componentValue(components: AddressComponent[], type: string, short = false) {
-  const component = components.find((part) => part.types.includes(type))
-  return (short ? component?.shortText : component?.longText)?.trim() ?? ''
+function nonEmpty(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
 }
 
 function usableCoordinate(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-/**
- * The landing page's one conversion boundary from Google-shaped place data to
- * the persisted delivery-location contract. It never supplies fallback data.
- */
-export function toCustomerLocation(result: GoogleLocationBoundary): CustomerLocation {
+function pincodeResolutionError(source: PhotonLocationBoundary['source']) {
+  const subject = source === 'reverse-geocode' ? 'your current location' : 'this place'
+  return new Error(
+    `We couldn't identify the pincode for ${subject}. Search by a nearby address or pincode.`,
+  )
+}
+
+function unique(values: Array<string | undefined>) {
+  return values.filter(
+    (value, index, list): value is string => Boolean(value) && list.indexOf(value) === index,
+  )
+}
+
+function locationParts(properties: PhotonProperties) {
+  const name = nonEmpty(properties.name) ?? nonEmpty(properties.street)
+  const locality =
+    nonEmpty(properties.city) ??
+    nonEmpty(properties.locality) ??
+    nonEmpty(properties.district) ??
+    nonEmpty(properties.county)
+  const state = nonEmpty(properties.state)
+  const postcode = nonEmpty(properties.postcode)
+  const region = [state, postcode].filter(Boolean).join(' ') || undefined
+  return unique([name, locality, region, nonEmpty(properties.country)])
+}
+
+function locationLabel(properties: PhotonProperties) {
+  return locationParts(properties).join(', ')
+}
+
+/** Photon boundary data → the persisted delivery-location contract, without fallbacks. */
+export function toCustomerLocation(result: PhotonLocationBoundary): CustomerLocation {
   const latitude = result.coordinates?.latitude
   const longitude = result.coordinates?.longitude
   if (!usableCoordinate(latitude) || !usableCoordinate(longitude)) {
     throw new Error('The selected location does not include usable coordinates. Choose another result.')
   }
 
-  const components = result.addressComponents ?? []
-  const country = componentValue(components, 'country', true).toUpperCase()
-  if (country && country !== 'IN') {
+  const properties = result.properties ?? {}
+  if (nonEmpty(properties.countrycode)?.toUpperCase() !== 'IN') {
     throw new Error('Choose a delivery location within India.')
   }
 
-  const serviceArea = componentValue(components, 'postal_code')
+  const serviceArea = nonEmpty(properties.postcode) ?? ''
   if (!POSTAL_CODE.test(serviceArea)) {
-    const subject = result.source === 'reverse-geocode' ? 'your current location' : 'that location'
-    throw new Error(
-      `Google could not find a six-digit postal code for ${subject}. Choose a more specific address.`,
-    )
+    throw pincodeResolutionError(result.source)
   }
 
-  const label = result.formattedAddress?.trim()
+  const label = locationLabel(properties)
   if (!label) {
-    throw new Error('Google did not return a readable address. Choose another result.')
+    throw new Error('We could not read that address. Search for another location.')
   }
 
   return { serviceArea, latitude, longitude, label }
@@ -122,7 +165,7 @@ export function getConfirmedLandingLocation(): CustomerLocation | null {
 
 export function saveConfirmedLandingLocation(location: CustomerLocation) {
   if (!isValidLocationShape(location)) {
-    throw new Error('Only a validated Google delivery location can be saved.')
+    throw new Error('Only a validated delivery location can be saved.')
   }
   saveLocation(location)
   try {
@@ -132,123 +175,198 @@ export function saveConfirmedLandingLocation(location: CustomerLocation) {
   }
 }
 
-let loaderConfigured = false
+function featureCoordinates(feature: PhotonFeature): Coordinates | undefined {
+  const [longitude, latitude] = feature.geometry?.coordinates ?? []
+  return usableCoordinate(latitude) && usableCoordinate(longitude)
+    ? { latitude, longitude }
+    : undefined
+}
 
-function configureGoogleMaps() {
-  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim()
-  if (!key) {
-    throw new Error(
-      'Google location search is not configured. Add a restricted VITE_GOOGLE_MAPS_API_KEY and reload the page.',
-    )
+function featureBoundary(
+  feature: PhotonFeature,
+  source: PhotonLocationBoundary['source'],
+  coordinates = featureCoordinates(feature),
+): PhotonLocationBoundary {
+  return { source, coordinates, properties: feature.properties }
+}
+
+async function photonFeatures(
+  path: '/api/' | '/reverse',
+  params: Record<string, string | string[]>,
+  signal?: AbortSignal,
+) {
+  const url = new URL(path, PHOTON_BASE_URL)
+  for (const [name, value] of Object.entries(params)) {
+    const values = Array.isArray(value) ? value : [value]
+    for (const item of values) url.searchParams.append(name, item)
   }
-  if (!loaderConfigured) {
-    setOptions({ key, v: 'weekly', region: 'IN', language: 'en', authReferrerPolicy: 'origin' })
-    loaderConfigured = true
-  }
+  const response = await fetch(url, { signal })
+  if (!response.ok) throw new Error('Location search is temporarily unavailable. Try again.')
+  const payload = (await response.json()) as PhotonPayload
+  return Array.isArray(payload.features) ? payload.features : []
 }
 
-async function placesLibrary() {
-  configureGoogleMaps()
-  return importLibrary('places')
+function distanceKm(from: Coordinates, to: Coordinates) {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180
+  const latitudeDelta = radians(to.latitude - from.latitude)
+  const longitudeDelta = radians(to.longitude - from.longitude)
+  const fromLatitude = radians(from.latitude)
+  const toLatitude = radians(to.latitude)
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.sin(longitudeDelta / 2) ** 2
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
 }
 
-async function geocodingLibrary() {
-  configureGoogleMaps()
-  return importLibrary('geocoding')
-}
-
-function selectedPlaceBoundary(place: google.maps.places.Place): GoogleLocationBoundary {
-  const location = place.location
-  return {
-    source: 'selected-place',
-    formattedAddress: place.formattedAddress,
-    coordinates: location
-      ? { latitude: location.lat(), longitude: location.lng() }
-      : undefined,
-    addressComponents: place.addressComponents?.map((part) => ({
-      longText: part.longText,
-      shortText: part.shortText,
-      types: part.types,
-    })),
-  }
-}
-
-function reverseGeocodeBoundary(
-  result: google.maps.GeocoderResult,
+async function reversePhoton(
   coordinates: Coordinates,
-): GoogleLocationBoundary {
-  return {
-    source: 'reverse-geocode',
-    formattedAddress: result.formatted_address,
-    coordinates,
-    addressComponents: result.address_components.map((part) => ({
-      longText: part.long_name,
-      shortText: part.short_name,
-      types: part.types,
-    })),
-  }
+  source: PhotonLocationBoundary['source'],
+  signal?: AbortSignal,
+) {
+  const features = await photonFeatures(
+    '/reverse',
+    {
+      lat: String(coordinates.latitude),
+      lon: String(coordinates.longitude),
+      limit: '10',
+      radius: String(REVERSE_RADIUS_KM),
+      layer: REVERSE_LAYERS,
+      lang: 'en',
+    },
+    signal,
+  )
+  const candidates = features
+    .flatMap((feature) => {
+      const candidateCoordinates = featureCoordinates(feature)
+      const properties = feature.properties ?? {}
+      const postcode = nonEmpty(properties.postcode) ?? ''
+      if (
+        !candidateCoordinates ||
+        nonEmpty(properties.countrycode)?.toUpperCase() !== 'IN' ||
+        !POSTAL_CODE.test(postcode)
+      ) {
+        return []
+      }
+      const distance = distanceKm(coordinates, candidateCoordinates)
+      return distance <= REVERSE_RADIUS_KM ? [{ feature, distance, postcode }] : []
+    })
+    .sort((left, right) => left.distance - right.distance)
+
+  const postcodes = new Set(candidates.map((candidate) => candidate.postcode))
+  if (postcodes.size !== 1) throw pincodeResolutionError(source)
+  return candidates[0].feature
+}
+
+function suggestionText(properties: PhotonProperties) {
+  const parts = locationParts(properties)
+  return { label: parts[0] ?? 'Location', secondaryLabel: parts.slice(1).join(', ') || undefined }
+}
+
+function suggestionId(feature: PhotonFeature, index: number) {
+  const properties = feature.properties ?? {}
+  const coordinates = feature.geometry?.coordinates ?? []
+  return `${properties.osm_type ?? 'feature'}:${properties.osm_id ?? index}:${coordinates.join(',')}`
 }
 
 export async function createLandingLocationSearch(): Promise<LandingLocationSearch> {
-  const { AutocompleteSessionToken, AutocompleteSuggestion } = await placesLibrary()
-  let sessionToken = new AutocompleteSessionToken()
-  let predictions = new Map<string, google.maps.places.PlacePrediction>()
-  let sessionVersion = 0
+  let latestPredictions = new Map<string, PhotonFeature>()
+  let selectablePredictions = new Map<string, PhotonFeature>()
+  let controller: AbortController | null = null
 
-  function resetSession() {
-    sessionVersion += 1
-    sessionToken = new AutocompleteSessionToken()
-    predictions = new Map()
+  function abortRequest() {
+    controller?.abort()
+    controller = null
+  }
+
+  function reset() {
+    abortRequest()
+    latestPredictions = new Map()
+    selectablePredictions = new Map()
   }
 
   return {
     async suggestions(input) {
       const query = input.trim()
+      abortRequest()
       if (!query) {
-        resetSession()
+        reset()
         return []
       }
 
-      const requestVersion = sessionVersion
-      const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input: query,
-        includedRegionCodes: ['in'],
-        sessionToken,
+      const searchController = new AbortController()
+      controller = searchController
+      let features: PhotonFeature[]
+      try {
+        features = await photonFeatures(
+          '/api/',
+          { q: `${query}, India`, limit: '5', lang: 'en' },
+          searchController.signal,
+        )
+      } finally {
+        if (controller === searchController) controller = null
+      }
+
+      const nextPredictions = new Map<string, PhotonFeature>()
+      const suggestions = features.flatMap((feature, index) => {
+        const properties = feature.properties ?? {}
+        if (
+          nonEmpty(properties.countrycode)?.toUpperCase() !== 'IN' ||
+          !featureCoordinates(feature)
+        ) {
+          return []
+        }
+        const id = suggestionId(feature, index)
+        nextPredictions.set(id, feature)
+        return [{ id, ...suggestionText(properties) }]
       })
-      if (requestVersion !== sessionVersion) return []
-      predictions = new Map()
-      return response.suggestions.flatMap((suggestion) => {
-        const prediction = suggestion.placePrediction
-        if (!prediction) return []
-        predictions.set(prediction.placeId, prediction)
-        return [
-          {
-            id: prediction.placeId,
-            label: prediction.mainText?.toString() || prediction.text.toString(),
-            secondaryLabel: prediction.secondaryText?.toString() || undefined,
-          },
-        ]
-      })
+      selectablePredictions = new Map([...latestPredictions, ...nextPredictions])
+      latestPredictions = nextPredictions
+      return suggestions
     },
 
     async select(id) {
-      const prediction = predictions.get(id)
-      if (!prediction) {
-        resetSession()
+      const feature = selectablePredictions.get(id)
+      if (!feature) {
+        reset()
         throw new Error('That location suggestion is no longer available. Search again.')
       }
+      const coordinates = featureCoordinates(feature)
+      if (!coordinates) {
+        reset()
+        throw new Error('The selected location does not include usable coordinates. Choose another result.')
+      }
+
+      abortRequest()
       try {
-        const place = prediction.toPlace()
-        await place.fetchFields({
-          fields: ['formattedAddress', 'location', 'addressComponents'],
+        const properties = feature.properties ?? {}
+        if (POSTAL_CODE.test(nonEmpty(properties.postcode) ?? '')) {
+          return toCustomerLocation(featureBoundary(feature, 'selected-place', coordinates))
+        }
+
+        controller = new AbortController()
+        const reverseFeature = await reversePhoton(
+          coordinates,
+          'selected-place',
+          controller.signal,
+        )
+        const reverseProperties = reverseFeature.properties ?? {}
+        return toCustomerLocation({
+          source: 'selected-place',
+          coordinates,
+          properties: {
+            ...reverseProperties,
+            ...properties,
+            postcode: reverseProperties.postcode,
+            country: properties.country ?? reverseProperties.country,
+            countrycode: properties.countrycode ?? reverseProperties.countrycode,
+          },
         })
-        return toCustomerLocation(selectedPlaceBoundary(place))
       } finally {
-        resetSession()
+        reset()
       }
     },
 
-    reset: resetSession,
+    reset,
   }
 }
 
@@ -278,19 +396,6 @@ function browserCoordinates(): Promise<Coordinates> {
 
 export async function detectLandingLocation(): Promise<CustomerLocation> {
   const coordinates = await browserCoordinates()
-  const { Geocoder } = await geocodingLibrary()
-  const { results } = await new Geocoder().geocode({
-    location: { lat: coordinates.latitude, lng: coordinates.longitude },
-  })
-  const result = results.find((candidate) =>
-    candidate.address_components.some(
-      (part) => part.types.includes('postal_code') && POSTAL_CODE.test(part.long_name),
-    ),
-  )
-  if (!result) {
-    throw new Error(
-      'Google could not find a six-digit postal code for your current location. Choose a more specific address.',
-    )
-  }
-  return toCustomerLocation(reverseGeocodeBoundary(result, coordinates))
+  const feature = await reversePhoton(coordinates, 'reverse-geocode')
+  return toCustomerLocation(featureBoundary(feature, 'reverse-geocode', coordinates))
 }

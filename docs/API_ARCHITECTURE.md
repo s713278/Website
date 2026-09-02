@@ -269,7 +269,16 @@ passes request cancellation through the package wrapper. `mappers/landing-store.
 documented vendor identifier spellings, drops unusable rows, and preserves absent card metadata as
 absent. It intentionally ignores the ambiguous `image_path`: landing artwork uses explicit
 `banner_image`, then `thumbnail_image`, then the store name. Demo mode returns the same presentation
-shape from `STORES` without calling Google or the backend.
+shape from `STORES` without calling Photon or the backend.
+
+The landing-only adapter at `modules/marketing/lib/landing-location.ts` uses Photon's public `/api/`
+and `/reverse` operations. It keeps the coordinates returned by the selected prediction. When that
+prediction lacks a postal code, it requests up to ten house, street, and locality results within one
+kilometre of those coordinates, accepts a six-digit Indian PIN only when the valid nearby candidates
+agree, and never replaces the selected coordinates with a nearby feature's point. Browser-location
+reverse results follow the same bounded rule and retain the browser coordinates. Conflicting or
+missing candidates remain unresolved rather than mixing a guessed service area with exact
+coordinates. The shared Photon behavior used by other routes is intentionally unchanged.
 
 A safe public request using the OpenAPI sample coordinates was checked on 2026-09-01. The deployed
 response was a successful envelope with `data.new_vendors`; sampled vendor rows used `business_name`,
@@ -492,9 +501,6 @@ backend change and commit the diff.
 | `VITE_APP_ENV` | General environment label | `development` |
 | `OPENAPI_URL` | Overrides the Swagger URL `fetch-openapi.mjs` pulls | `https://subscriptionapp-wgf8.onrender.com/api/v3/api-docs` |
 
-Google browser-key setup and restrictions are documented in the environment section of
-[`README.md`](../README.md).
-
 `VITE_SAMPLE_VENDOR_ID` is referenced in `API_GAPS.md` as a workaround but is **not read by
 any code in this repo** — treat it as a proposal, not a supported knob.
 
@@ -506,7 +512,7 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
-| `md-delivery-location-google-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
+| `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
 | `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 
