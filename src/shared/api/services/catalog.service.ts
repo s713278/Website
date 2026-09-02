@@ -1,14 +1,16 @@
 import { storefrontService, unwrapData, vendorsService } from '@mithra/api-client'
 import { getStoreById, STORES } from '@/modules/storefront/data/catalog'
-import type { Store } from '@/modules/storefront/types'
+import type { Product, ProductPage, Store } from '@/modules/storefront/types'
 import {
   FALLBACK_LOCATION,
   getSavedLocation,
   homeQuery,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
-import { liveVendorId, mapProducts, mapVendorToStore } from '../mappers/vendor'
+import { liveVendorId, mapVendorToStore } from '../mappers/vendor'
+import { mapStorefrontProductPage } from '../mappers/storefront-products'
 import { isLiveApi } from '../mode'
+import { ALL_CATEGORY, parseCategoryFilter, productMatchesCategory, type CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
 
 function delay(ms = 250) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -78,7 +80,86 @@ async function resolveLiveVendorId(storeId: string): Promise<string | null> {
   return stores[0]?.id ?? null
 }
 
-/** GET /v1/vendors/{vendor_id}/storefront (+ SKUs for prices). Demo ids like r1 resolve to the first live vendor. */
+export type ListStoreProductsParams = {
+  pageNumber?: number
+  pageSize?: number
+  categoryFilter?: CategoryFilter
+}
+
+/** Slice a filtered product list for demo mode and name-only category fallback. */
+function sliceProductPage(
+  products: Product[],
+  pageNumber: number,
+  pageSize: number,
+  categoryFilter?: CategoryFilter,
+): ProductPage {
+  const filtered = products.filter((product) => productMatchesCategory(product, categoryFilter))
+  const totalElements = filtered.length
+  const totalPages = Math.max(1, Math.ceil(totalElements / pageSize) || 1)
+  const start = Math.max(0, pageNumber) * pageSize
+  const items = filtered.slice(start, start + pageSize)
+  const lastPage = pageNumber >= totalPages - 1 || start + items.length >= totalElements
+  return {
+    items,
+    pageNumber,
+    pageSize,
+    totalElements,
+    totalPages,
+    lastPage,
+  }
+}
+
+/**
+ * GET /v1/vendors/{id}/storefront/products — paginated catalog for home + browse.
+ * Uses numeric `category_id` when known; otherwise filters client-side by category name.
+ */
+export async function listStoreProducts(
+  storeId: string,
+  params: ListStoreProductsParams = {},
+): Promise<ProductPage> {
+  const pageNumber = params.pageNumber ?? 0
+  const pageSize = params.pageSize ?? 10
+  const categoryFilter =
+    params.categoryFilter && params.categoryFilter !== ALL_CATEGORY
+      ? params.categoryFilter
+      : undefined
+  const { categoryId, categoryName } = parseCategoryFilter(categoryFilter)
+
+  if (!isLiveApi()) {
+    await delay()
+    const store = getStoreById(storeId) ?? STORES[0]
+    return sliceProductPage(store?.products ?? [], pageNumber, pageSize, categoryFilter)
+  }
+
+  const vendorId = await resolveLiveVendorId(storeId)
+  if (!vendorId) {
+    return {
+      items: [],
+      pageNumber,
+      pageSize,
+      totalElements: 0,
+      totalPages: 0,
+      lastPage: true,
+    }
+  }
+
+  const requestPageSize = categoryName ? Math.max(pageSize, 100) : pageSize
+  const requestPageNumber = categoryName ? 0 : pageNumber
+
+  const res = await storefrontService.listProducts(vendorId, {
+    page_number: requestPageNumber,
+    page_size: requestPageSize,
+    ...(categoryId != null ? { category_id: categoryId } : {}),
+  })
+
+  const page = mapStorefrontProductPage(unwrapData(res))
+  if (!categoryName) return page
+
+  const filtered = page.items.filter((product) => productMatchesCategory(product, categoryName))
+  return sliceProductPage(filtered, pageNumber, pageSize)
+}
+
+/** GET /v1/vendors/{vendor_id}/storefront — chrome only (products load via listStoreProducts). */
 export async function getStore(storeId: string): Promise<Store | null> {
   if (!isLiveApi()) {
     await delay()
@@ -88,21 +169,13 @@ export async function getStore(storeId: string): Promise<Store | null> {
   const vendorId = await resolveLiveVendorId(storeId)
   if (!vendorId) return null
 
-  const [storefrontRes, skusRes] = await Promise.all([
-    storefrontService.get(vendorId),
-    vendorsService.getProductSkus(vendorId).catch(() => null),
-  ])
-
+  const storefrontRes = await storefrontService.get(vendorId)
   const storefront = asRecord(unwrapData(storefrontRes)) || {}
-  const skuRows = asObjectList(unwrapData(skusRes))
-  const products = skuRows.length
-    ? mapProducts(skuRows, vendorId)
-    : mapProducts(storefront.products, vendorId)
 
   const store = mapVendorToStore({
     ...storefront,
     vendor_id: liveVendorId(storefront) || vendorId,
-    products,
+    products: [],
   })
   return store.id ? store : null
 }
@@ -110,4 +183,5 @@ export async function getStore(storeId: string): Promise<Store | null> {
 export const catalogService = {
   listStores,
   getStore,
+  listStoreProducts,
 }

@@ -213,6 +213,7 @@ function mapSessionUser(
     id: String(data.user_id ?? `u-${mobile}`),
     name: sessionDisplayName(input.role, data.name),
     email: `${mobile}@mithra.local`,
+    phone: mobile,
     role: input.role,
     roles,
     vendors,

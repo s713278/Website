@@ -374,6 +374,69 @@
   }
 }
 
+/*Storefront shell */
+.store-shell {
+  --store-shell-max: 76rem;
+  color: var(--store-ink, var(--md-ink));
+  background: var(--store-bg, #f8fafc);
+}
+
+.store-shell-inner {
+  width: 100%;
+  max-width: var(--store-shell-max);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .store-shell-inner {
+    padding-inline: 1.25rem;
+  }
+}
+
+.store-category-scroller {
+  scroll-snap-type: x mandatory;
+}
+
+.store-category-scroller > button {
+  scroll-snap-align: start;
+}
+
+.store-product-grid {
+  align-items: stretch;
+}
+
+.store-offer-banner {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(42vw, 28rem);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 8px 24px -6px rgba(15, 23, 42, 0.18),
+    0 20px 48px -12px rgba(15, 23, 42, 0.14);
+}
+
+.store-offer-banner__image {
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Top + bottom scrim keeps text and CTA readable; middle stays open for the photo. */
+.store-offer-banner__scrim {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.78) 0%,
+      rgba(15, 23, 42, 0.28) 34%,
+      rgba(15, 23, 42, 0.06) 52%,
+      rgba(15, 23, 42, 0.42) 100%
+    ),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.5) 0%, transparent 58%);
+}
+
+.store-offer-banner--dark {
+  color-scheme: dark;
+}
 @layer components {
   /* The step row scrolls when it outgrows the window. Without a container edge to
      clip against, a half-cut node at x=0 just looks broken, so the ends fade instead —

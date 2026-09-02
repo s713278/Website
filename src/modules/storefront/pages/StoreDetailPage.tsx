@@ -1,170 +1,321 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { catalogService, getErrorMessage } from '@/shared/api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import {
+  CategoryBrowseSection,
+  CategoryScroller,
+  OfferBanner,
+  ProductGrid,
+  ServiceInfoBar,
+  StoreAboutSection,
+  StorePageFooter,
+  StorePageStates,
+  StorefrontHeader,
+} from '@/modules/storefront/components'
+import { useStoreScrollNav } from '@/modules/storefront/hooks/useStoreScrollNav'
+import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { useStoreProducts } from '@/modules/storefront/hooks/useStoreProducts'
+import {
+  ALL_CATEGORY,
+  buildCategories,
+  categoryLabel,
+  filterProducts,
+  resolveCategoryFilter,
+  type CategoryFilter,
+} from '@/modules/storefront/lib/catalog-filters'
+import { listCachedStoreProducts } from '@/modules/storefront/lib/product-catalog-cache'
+import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
-import { applyStoreTheme, clearStoreTheme } from '@/shared/lib/theme'
-import { formatCurrency } from '@/shared/lib/utils'
+import { SearchField } from '@/shared/components'
+import { useSearchQueryParam } from '@/shared/hooks/useSearchQueryParam'
+
+const SEARCH_MIN_CHARS = 2
+const SEARCH_DEBOUNCE_MS = 250
 
 export function StoreDetailPage() {
-  const { storeId = '' } = useParams()
-  const navigate = useNavigate()
-  const addItem = useCartStore((s) => s.addItem)
-  const itemCount = useCartStore((s) => s.itemCount())
-  const [store, setStore] = useState<Store | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const wrapperRef = useRef<HTMLDivElement>(null)
+  const { storeId = 'r1' } = useParams()
+  const itemCount = useCartStore((s) => s.itemCount(storeId))
+  const { store, loading, error, wrapperRef } = useStorePage(storeId)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    void catalogService
-      .getStore(storeId)
-      .then((data) => {
-        if (cancelled) return
-        setStore(data)
-        if (data && data.id !== storeId) {
-          navigate(`/stores/${data.id}`, { replace: true })
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load store'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [storeId, navigate])
-
-  useEffect(() => {
-    const root = wrapperRef.current
-    if (!store || !root) return
-    applyStoreTheme(store.theme, root)
-    // Without this a vendor's canvas could outlive its page — very visible now that
-    // the theme paints a full-viewport background.
-    return () => clearStoreTheme(root)
-  }, [store])
-
-  // One themed wrapper hosts every state, so loading/error don't flash the default
-  // Mithra canvas before a themed store paints.
   return (
-    <div ref={wrapperRef}>
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{ background: 'var(--store-bg)' }}
-      />
-      {loading ? (
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <Spinner label="Loading products…" />
-        </div>
-      ) : error || !store ? (
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <EmptyState
-            title="Store not found"
-            description={error || 'This store may be offline.'}
-            action={
-              <Link to="/stores">
-                <Button variant="secondary">Back to stores</Button>
-              </Link>
-            }
-          />
-        </div>
-      ) : (
-        <StoreDetail store={store} addItem={addItem} itemCount={itemCount} />
-      )}
-    </div>
+    <StorePageStates
+      wrapperRef={wrapperRef}
+      loading={loading}
+      error={error}
+      ready={Boolean(store)}
+      loadingLabel="Loading store…"
+      loadingLayout="home"
+      emptyTitle="Store not found"
+      emptyDescription="This store may be offline."
+      backHref="/stores/r1"
+      backLabel="Open demo store"
+    >
+      {store ? <StoreHome store={store} itemCount={itemCount} /> : null}
+    </StorePageStates>
   )
 }
 
-type StoreDetailProps = {
+type StoreHomeProps = {
   store: Store
-  addItem: (storeId: string, storeName: string, item: Store['products'][number]) => void
   itemCount: number
 }
 
-function StoreDetail({ store, addItem, itemCount }: StoreDetailProps) {
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div
-        className="relative mb-6 overflow-hidden rounded-[var(--md-radius)] p-6 text-white shadow-[var(--md-shadow)]"
-        style={{ background: store.image }}
-      >
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 to-black/10" />
-        <div className="relative flex items-center gap-3">
-          {store.theme?.logoImage ? (
-            <img
-              src={store.theme.logoImage}
-              alt=""
-              className="h-12 w-12 shrink-0 rounded-full border border-white/40 object-cover"
-            />
-          ) : null}
-          <div>
-            <p className="text-sm text-white/85">{store.category}</p>
-            <h1 className="font-display mt-1 text-3xl font-bold">{store.name}</h1>
-          </div>
-        </div>
-        <div className="relative mt-3 flex flex-wrap gap-3 text-sm">
-          <Badge tone="success">★ {store.rating}</Badge>
-          <span>{store.etaMins} mins</span>
-          <span>{store.distanceKm} km</span>
-        </div>
-      </div>
+function StoreHome({ store, itemCount }: StoreHomeProps) {
+  const { query, setQuery } = useSearchQueryParam()
+  const [searchDraft, setSearchDraft] = useState(query)
+  const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()))
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(ALL_CATEGORY)
+  const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()))
+  const homeRef = useRef<HTMLDivElement>(null)
+  const productsRef = useRef<HTMLElement>(null)
+  const categoriesRef = useRef<HTMLDivElement>(null)
 
-      <PageHeader
-        title="Products"
-        subtitle="Add items to your cart"
-        actions={
-          itemCount > 0 ? (
-            <Link to="/cart">
-              <Button>View cart ({itemCount})</Button>
-            </Link>
-          ) : null
+  const homePageSize = 6
+  const browsePageSize = 10
+
+  const products = useStoreProducts(store.id, {
+    pageSize: browseOpen ? browsePageSize : homePageSize,
+    categoryFilter,
+  })
+
+  // Re-read on each render when products update — cache lives outside React state.
+  const cachedProducts = listCachedStoreProducts(store.id)
+  const categories = buildCategories(store, cachedProducts)
+
+  const draftTrimmed = searchDraft.trim()
+  const searchTooShort = draftTrimmed.length > 0 && draftTrimmed.length < SEARCH_MIN_CHARS
+  const searchNeedle = draftTrimmed.length >= SEARCH_MIN_CHARS ? draftTrimmed : ''
+  const searching = Boolean(searchNeedle)
+
+  /** Search filters the session cache only — never triggers a products API replace. */
+  const browseProducts = useMemo(() => {
+    if (!searching) return products.items
+    const pool = cachedProducts.length ? cachedProducts : products.items
+    return filterProducts(pool, ALL_CATEGORY, searchNeedle)
+  }, [searching, searchNeedle, cachedProducts, products.items])
+
+  useEffect(() => {
+    setSearchDraft(query)
+  }, [query])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (searchDraft.trim() === query) return
+      setQuery(searchDraft)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchDraft, query, setQuery])
+
+  useEffect(() => {
+    if (!query.trim()) return
+    setSearchOpen(true)
+    setBrowseOpen(true)
+  }, [query])
+
+  function selectCategory(next: CategoryFilter) {
+    setCategoryFilter(resolveCategoryFilter(categories, next))
+  }
+
+  useEffect(() => {
+    const resolved = resolveCategoryFilter(categories, categoryFilter)
+    if (resolved !== categoryFilter) setCategoryFilter(resolved)
+  }, [categories, categoryFilter])
+
+  const activeNav = useStoreScrollNav(
+    () => [
+      { id: 'home', el: homeRef.current },
+      { id: 'categories', el: categoriesRef.current },
+      { id: 'products', el: productsRef.current },
+      { id: 'contact', el: document.getElementById('store-contact') },
+    ],
+    [store.id, browseOpen],
+  )
+
+  useEffect(() => {
+    if (browseOpen) window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [browseOpen])
+
+  function exitBrowse(scrollHome = false) {
+    setBrowseOpen(false)
+    setSearchOpen(false)
+    setSearchDraft('')
+    setQuery('')
+    if (scrollHome) categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function scrollToProducts() {
+    productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function handleToggleSearch() {
+    if (searchOpen) {
+      if (!searchDraft.trim() && !query.trim()) setBrowseOpen(false)
+      setSearchOpen(false)
+      setSearchDraft('')
+      setQuery('')
+      return
+    }
+    setCategoryFilter(ALL_CATEGORY)
+    setBrowseOpen(true)
+    setSearchOpen(true)
+  }
+
+  function handleNav(id: string) {
+    if (browseOpen) {
+      exitBrowse()
+      return
+    }
+    if (id === 'home') window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (id === 'categories') categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (id === 'products') scrollToProducts()
+    if (id === 'contact') document.getElementById('store-contact')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  function openBrowse(next: CategoryFilter = ALL_CATEGORY) {
+    selectCategory(next)
+    setBrowseOpen(true)
+  }
+
+  const browseTitle = searching
+    ? 'Search results'
+    : searchOpen
+      ? 'Search'
+      : categoryLabel(categories, categoryFilter)
+
+  const showHomeViewAll =
+    !browseOpen &&
+    (!products.lastPage || products.totalElements > products.items.length)
+
+  return (
+    <>
+      <StorefrontHeader
+        storeName={store.name}
+        logoUrl={store.theme?.logoImage}
+        cartCount={itemCount}
+        cartHref={storeCartPath(store.id)}
+        activeNav={browseOpen ? 'categories' : activeNav}
+        searchOpen={searchOpen}
+        onToggleSearch={handleToggleSearch}
+        onNavClick={handleNav}
+        onOpenMenu={() =>
+          browseOpen ? exitBrowse(true) : categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
+        pageTitle={browseOpen ? browseTitle : undefined}
+        onBack={browseOpen ? () => exitBrowse(true) : undefined}
       />
 
-      {store.products.length === 0 ? (
-        <EmptyState title="No products yet" description="This store has not listed items." />
-      ) : (
-        <div className="space-y-3">
-          {store.products.map((item) => (
-            <Card key={item.id} className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  {/* Green/red veg marks are a regulatory label under India's FSS
-                      (Packaging and Labelling) Regulations — the colours carry legal
-                      meaning. Intentionally excluded from vendor theming; do not
-                      convert these to theme tokens. */}
-                  <span
-                    className={`inline-block h-3 w-3 rounded-sm border ${
-                      item.veg ? 'border-green-600' : 'border-red-600'
-                    }`}
-                    aria-hidden
-                  >
-                    <span
-                      className={`m-[2px] block h-1.5 w-1.5 rounded-full ${
-                        item.veg ? 'bg-green-600' : 'bg-red-600'
-                      }`}
-                    />
-                  </span>
-                  <h2 className="font-semibold">{item.name}</h2>
-                  {item.popular ? <Badge tone="warning">Popular</Badge> : null}
-                </div>
-                <p className="text-muted-foreground text-sm">{item.description}</p>
-                <p className="mt-2 font-semibold">{formatCurrency(item.price)}</p>
-              </div>
-              <Button size="sm" onClick={() => addItem(store.id, store.name, item)}>
-                Add
-              </Button>
-            </Card>
-          ))}
+      {searchOpen ? (
+        <div className="border-b border-slate-100 bg-white py-4">
+          <div className="store-shell-inner">
+            <SearchField
+              value={searchDraft}
+              onChange={setSearchDraft}
+              placeholder="Search pickles, combos, gifts…"
+              aria-label="Search products"
+              autoFocus
+            />
+          </div>
         </div>
-      )}
-    </div>
+      ) : null}
+
+      <main className="store-shell-inner flex flex-1 flex-col gap-5 py-5 sm:gap-6 sm:py-6">
+        {browseOpen ? (
+          products.error && products.items.length === 0 && !products.loading && !searching ? (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
+              <p className="font-medium">{products.error}</p>
+              <button
+                type="button"
+                onClick={() => products.reload()}
+                className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <CategoryBrowseSection
+              storeId={store.id}
+              storeName={store.name}
+              categories={categories}
+              products={browseProducts}
+              categoryFilter={categoryFilter}
+              query={searchDraft}
+              searching={searching}
+              searchTooShort={searchTooShort}
+              onCategoryChange={selectCategory}
+              totalElements={products.totalElements}
+              hasMore={!products.lastPage}
+              loading={products.loading && !searching}
+              loadingMore={products.loadingMore}
+              onLoadMore={products.loadMore}
+            />
+          )
+        ) : (
+          <>
+            <div ref={homeRef} data-nav-section="home" className="flex flex-col gap-5 sm:gap-6">
+              <OfferBanner
+                title={store.name}
+                tagline={store.tagline}
+                location={store.location}
+                heroImage={store.heroImage}
+                badges={store.heroBadges}
+                onShopNow={scrollToProducts}
+              />
+              <ServiceInfoBar
+                storeId={store.id}
+                trustStrip={store.trustStrip}
+                fulfillment={store.fulfillment}
+              />
+              {store.description ? (
+                <StoreAboutSection storeName={store.name} description={store.description} />
+              ) : null}
+            </div>
+
+            <div ref={categoriesRef} data-nav-section="categories">
+              <CategoryScroller
+                categories={categories}
+                activeFilter={categoryFilter}
+                showAllOption
+                onSelect={(filter) => {
+                  selectCategory(filter)
+                  scrollToProducts()
+                }}
+                onViewAll={() => openBrowse(ALL_CATEGORY)}
+                actionLabel="View all"
+              />
+            </div>
+
+            <section ref={productsRef} data-nav-section="products">
+              {products.error && products.items.length === 0 && !products.loading ? (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
+                  <p className="font-medium">{products.error}</p>
+                  <button
+                    type="button"
+                    onClick={() => products.reload()}
+                    className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <ProductGrid
+                  storeId={store.id}
+                  storeName={store.name}
+                  title={categoryLabel(categories, categoryFilter)}
+                  products={products.items}
+                  loading={products.loading}
+                  skeletonCount={homePageSize}
+                  actionLabel="View all"
+                  onAction={showHomeViewAll ? () => openBrowse(categoryFilter) : undefined}
+                  emptyTitle="No products match"
+                  emptyDescription="No items in this category yet."
+                />
+              )}
+            </section>
+          </>
+        )}
+      </main>
+
+      <StorePageFooter store={store} />
+    </>
   )
 }

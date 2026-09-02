@@ -56,7 +56,7 @@ export function homeQuery(location: CustomerLocation) {
   }
 }
 
-function readCoords(): Promise<{ latitude: number; longitude: number }> {
+export function requestBrowserCoords(): Promise<{ latitude: number; longitude: number }> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location is not supported in this browser.'))
@@ -90,7 +90,6 @@ function pinFrom(value: unknown) {
 export async function reverseGeocode(latitude: number, longitude: number): Promise<CustomerLocation> {
   const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
   const res = await fetch(url)
-  console.log('reversecode',res)
   if (!res.ok) throw new Error('Could not resolve your area.')
   const data = (await res.json()) as ReversePayload
   const postcode = pinFrom(data.postcode)
@@ -149,6 +148,6 @@ export async function lookupArea(query: string): Promise<CustomerLocation> {
 }
 
 export async function detectBrowserLocation(): Promise<CustomerLocation> {
-  const coords = await readCoords()
+  const coords = await requestBrowserCoords()
   return reverseGeocode(coords.latitude, coords.longitude)
 }
