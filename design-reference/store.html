@@ -115,7 +115,7 @@
                             <div class="address-row-main">
                                 <p class="address-label" id="home-address-label">Delivering to</p>
                                 <p class="address-value" id="home-address">Add your delivery address</p>
-                                <p class="address-hint" id="home-address-hint">Tell us where to send your order — then pick what you love.</p>
+                                <p class="address-hint" id="home-address-hint">Optional now — we’ll confirm it at checkout before WhatsApp.</p>
                             </div>
                             <button type="button" class="btn-outline is-compact" id="btn-change-address" data-cta="set_delivery_address">Add address</button>
                         </div>
@@ -180,7 +180,7 @@
                         </div>
                         <p class="coupon-msg hidden" id="coupon-msg"></p>
                         <div class="bill-lines" id="cart-summary"></div>
-                        <button type="button" class="btn-primary-store mt-block" id="btn-proceed-login">Proceed to Login</button>
+                        <button type="button" class="btn-primary-store mt-block" id="btn-proceed-checkout">Proceed to Checkout</button>
                     </div>
                 </section>
 
@@ -189,8 +189,9 @@
                         <div class="auth-icon" aria-hidden="true">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         </div>
-                        <h2 class="store-brand-font">Login / Signup</h2>
-                        <p class="auth-sub">We'll send a one-time password to your phone</p>
+                        <h2 class="store-brand-font" id="login-title">Sign in to add this</h2>
+                        <p class="auth-sub" id="login-sub">A quick OTP so this home kitchen can reach you on WhatsApp.</p>
+                        <p class="login-intent" id="login-intent" hidden></p>
                         <div id="login-phone-step">
                             <label class="field-label" for="login-phone">Mobile Number</label>
                             <div class="phone-row">
@@ -207,7 +208,7 @@
                             </p>
                             <div class="otp-row" id="login-otp-inputs" aria-labelledby="login-otp-label"></div>
                             <p id="login-otp-error" class="login-otp-error hidden" role="alert"></p>
-                            <button type="button" class="btn-primary-store" id="btn-verify-otp">Verify &amp; Continue</button>
+                            <button type="button" class="btn-primary-store" id="btn-verify-otp">Verify &amp; go to cart</button>
                             <button type="button" class="resend-btn" id="btn-resend-otp">Resend OTP</button>
                         </div>
                     </div>
@@ -222,7 +223,7 @@
                                 <h3>Delivering here</h3>
                                 <button type="button" class="link-btn" id="btn-edit-address" data-cta="edit_address">Edit</button>
                             </div>
-                            <p class="checkout-confirm-note">Confirmed before you shopped — no extra verify step.</p>
+                            <p class="checkout-confirm-note">Check address and items — then we’ll send this order to the shop on WhatsApp.</p>
                             <div class="address-card is-confirmed" id="checkout-addresses" data-api-field="delivery.address">
                                 <p class="tag" id="checkout-addr-label">Home</p>
                                 <p class="addr-line" id="checkout-addr-line">—</p>
@@ -289,15 +290,15 @@
                     <button type="button" class="cart-bar-cta" id="btn-go-cart">Go to Cart</button>
                 </div>
 
-                <!-- Delivery address gate (required before adding items) -->
+                <!-- Delivery address (optional while browsing; required at checkout) -->
                 <div class="addr-gate" id="addr-gate" hidden aria-hidden="true">
                     <div class="addr-gate-backdrop" id="addr-gate-backdrop"></div>
                     <div class="addr-gate-sheet" role="dialog" aria-modal="true" aria-labelledby="addr-gate-title">
                         <div class="addr-gate-handle" aria-hidden="true"></div>
-                        <p class="addr-gate-eyebrow" id="addr-gate-eyebrow">Almost there</p>
+                        <p class="addr-gate-eyebrow" id="addr-gate-eyebrow">Optional</p>
                         <h2 class="addr-gate-title store-brand-font" id="addr-gate-title">Where should we deliver?</h2>
                         <p class="addr-gate-lead" id="addr-gate-lead">
-                            Add your address once — homemade orders reach you without back-and-forth on WhatsApp.
+                            Save it now, or add it at checkout before your WhatsApp order.
                         </p>
                         <label class="field-label" for="addr-gate-input">Delivery address</label>
                         <textarea
@@ -314,12 +315,12 @@
                             <button type="button" class="addr-chip" id="addr-gate-near-me">Near me</button>
                         </div>
                         <button type="button" class="btn-primary-store addr-gate-save" id="addr-gate-save" data-cta="save_delivery_address">
-                            Save &amp; start ordering
+                            Save address
                         </button>
                         <button type="button" class="addr-gate-skip" id="addr-gate-skip">
                             Browse the menu first
                         </button>
-                        <p class="addr-gate-note">You’ll need an address before adding items — so checkout stays quick on WhatsApp.</p>
+                        <p class="addr-gate-note">We’ll use this at checkout when you send the order on WhatsApp.</p>
                     </div>
                 </div>
             </div>
