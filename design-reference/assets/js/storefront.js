@@ -28,6 +28,7 @@
     orderMessage: '',
     history: [],
     pendingAdd: null,
+    loginReturn: null,
     addressGateOpen: false
   };
 
@@ -158,17 +159,127 @@
     return String(state.address || '').trim().length >= 8;
   }
 
-  function requireDeliveryAddress(reason, pending) {
-    if (hasDeliveryAddress()) return true;
-    openAddressGate(reason || 'add', pending || null);
+  function isLoggedIn() {
+    return !!(state.customer && state.customer.loggedIn && state.customer.phone);
+  }
+
+  function pendingFromAdd(productId, skuId, qty) {
+    var product = findProduct(productId);
+    var variant = findVariant(product, skuId);
+    return {
+      productId: productId,
+      skuId: skuId,
+      qty: qty || 1,
+      name: (product && product.name) || 'Item',
+      label: (variant && variant.label) || ''
+    };
+  }
+
+  var storeOtpField = null;
+
+  function ensureStoreOtp() {
+    if (storeOtpField || !window.MithraOtp) return storeOtpField;
+    var row = document.getElementById('login-otp-inputs');
+    if (!row) return null;
+    storeOtpField = window.MithraOtp.mount(row, { idPrefix: 'store-otp' });
+    return storeOtpField;
+  }
+
+  function showLoginOtpError(message) {
+    var el = document.getElementById('login-otp-error');
+    if (!el) {
+      alert(message);
+      return;
+    }
+    el.textContent = message || '';
+    el.classList.remove('hidden');
+  }
+
+  function hideLoginOtpError() {
+    var el = document.getElementById('login-otp-error');
+    if (!el) return;
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+
+  function requireLogin(returnTo, pending) {
+    if (isLoggedIn()) return true;
+    state.loginReturn = returnTo || 'cart';
+    state.pendingAdd = pending || null;
+    openLogin();
     return false;
   }
 
-  function addToCart(productId, skuId, qty) {
-    if (!requireDeliveryAddress('add', { productId: productId, skuId: skuId, qty: qty || 1 })) {
+  function openLogin() {
+    showView('login');
+    document.getElementById('login-phone-step').classList.remove('hidden');
+    document.getElementById('login-otp-step').classList.add('hidden');
+    var phoneInput = document.getElementById('login-phone');
+    if (phoneInput) {
+      phoneInput.value = state.customer.phone || '';
+      phoneInput.focus();
+    }
+    ensureStoreOtp();
+    if (storeOtpField) storeOtpField.clear();
+    hideLoginOtpError();
+    syncLoginCopy();
+  }
+
+  function syncLoginCopy() {
+    var title = document.getElementById('login-title');
+    var sub = document.getElementById('login-sub');
+    var chip = document.getElementById('login-intent');
+    var verify = document.getElementById('btn-verify-otp');
+    var pending = state.pendingAdd;
+    var goingToCart = state.loginReturn !== 'checkout';
+
+    if (pending && pending.name) {
+      if (title) title.textContent = 'Sign in to add this';
+      if (sub)
+        sub.textContent = 'A quick OTP so this home kitchen can reach you on WhatsApp.';
+      if (chip) {
+        chip.hidden = false;
+        chip.textContent = pending.label
+          ? pending.name + ' · ' + pending.label
+          : pending.name;
+      }
+    } else {
+      if (title) title.textContent = 'Sign in to continue';
+      if (sub) sub.textContent = "We'll send a one-time password to your phone.";
+      if (chip) {
+        chip.hidden = true;
+        chip.textContent = '';
+      }
+    }
+    if (verify) {
+      verify.textContent = goingToCart ? 'Verify & go to cart' : 'Verify & continue';
+    }
+  }
+
+  function finishLogin() {
+    var pending = state.pendingAdd;
+    var dest = state.loginReturn || 'cart';
+    state.pendingAdd = null;
+    state.loginReturn = null;
+    if (pending && pending.productId && pending.skuId) {
+      addToCart(pending.productId, pending.skuId, pending.qty || 1, { trusted: true });
+    }
+    if (dest === 'checkout') {
+      showView('checkout', { replace: true });
+      renderCheckout();
+      if (!hasDeliveryAddress()) setAddressEditMode(true);
       return;
     }
+    showView('cart', { replace: true });
+    renderCart();
+  }
+
+  function addToCart(productId, skuId, qty, opts) {
+    opts = opts || {};
     qty = qty || 1;
+    if (!opts.trusted && !requireLogin('cart', pendingFromAdd(productId, skuId, qty))) {
+      return;
+    }
     var product = findProduct(productId);
     var variant = findVariant(product, skuId);
     if (!product || !variant || variant.active === false) return;
@@ -196,11 +307,11 @@
   }
 
   function setQty(skuId, qty) {
-    if (qty > 0 && !requireDeliveryAddress('add', null)) return;
     var line = state.cart.find(function (l) {
       return l.skuId === skuId;
     });
     if (!line) return;
+    if (qty > line.qty && !requireLogin('cart', null)) return;
     if (qty <= 0) {
       state.cart = state.cart.filter(function (l) {
         return l.skuId !== skuId;
@@ -214,6 +325,14 @@
     if (state.view === 'menu') renderMenuProducts();
     if (state.view === 'product') renderProductDetail(state.productId);
     if (state.view === 'checkout') renderCheckout();
+  }
+
+  function proceedToCheckout() {
+    if (!state.cart.length) return;
+    if (!requireLogin('checkout', null)) return;
+    showView('checkout');
+    renderCheckout();
+    if (!hasDeliveryAddress()) setAddressEditMode(true);
   }
 
   function lineQty(skuId) {
@@ -248,6 +367,10 @@
   }
 
   function goBack() {
+    if (state.view === 'login') {
+      state.pendingAdd = null;
+      state.loginReturn = null;
+    }
     var prev = state.history.pop();
     if (prev) showView(prev, { replace: true });
     else showView('home', { replace: true });
@@ -457,7 +580,7 @@
     if (label) label.textContent = ready ? 'Delivering to' : 'Where should we deliver?';
     if (hint) {
       hint.hidden = ready;
-      hint.textContent = 'Add once — then tap Add on any item. No address check after order.';
+      hint.textContent = 'Optional now — we’ll confirm it at checkout before WhatsApp.';
     }
     if (btn) btn.textContent = ready ? 'Change' : 'Add address';
   }
@@ -466,7 +589,6 @@
     var gate = document.getElementById('addr-gate');
     if (!gate) return;
     state.addressGateOpen = true;
-    state.pendingAdd = pending || null;
     gate.hidden = false;
     gate.setAttribute('aria-hidden', 'false');
     document.body.classList.add('addr-gate-open');
@@ -482,24 +604,24 @@
       if (title) title.textContent = 'Change delivery address';
       if (lead) lead.textContent = 'We’ll send your ' + storeName + ' order here.';
       if (saveBtn) saveBtn.textContent = 'Save address';
-    } else if (reason === 'add') {
-      if (eyebrow) eyebrow.textContent = 'One quick step';
+    } else if (reason === 'checkout') {
+      if (eyebrow) eyebrow.textContent = 'Last step before WhatsApp';
       if (title) title.textContent = 'Where should we deliver?';
       if (lead)
         lead.textContent =
-          'Instagram customers love this — set your address once, then add items freely. No re-check at checkout.';
-      if (saveBtn) saveBtn.textContent = 'Save & add to cart';
+          'Add your address so ' + storeName + ' can send this order without back-and-forth.';
+      if (saveBtn) saveBtn.textContent = 'Save & review order';
     } else {
-      if (eyebrow) eyebrow.textContent = 'Welcome';
+      if (eyebrow) eyebrow.textContent = 'Optional';
       if (title) title.textContent = 'Where should we deliver?';
       if (lead)
         lead.textContent =
-          'You’re ordering from a home business. Tell us your address first so your WhatsApp order is ready to go.';
-      if (saveBtn) saveBtn.textContent = 'Save & start ordering';
+          'Save it now, or add it at checkout before your WhatsApp order.';
+      if (saveBtn) saveBtn.textContent = 'Save address';
     }
 
     var skip = document.getElementById('addr-gate-skip');
-    if (skip) skip.hidden = reason === 'add';
+    if (skip) skip.hidden = reason === 'checkout';
 
     var input = document.getElementById('addr-gate-input');
     var err = document.getElementById('addr-gate-error');
@@ -544,17 +666,13 @@
       state.addressId = 'home';
     }
     saveSession();
+    persistRelease();
     syncHomeAddressUI();
     closeAddressGate();
-
-    var pending = state.pendingAdd;
-    state.pendingAdd = null;
-    if (pending && pending.productId && pending.skuId) {
-      addToCart(pending.productId, pending.skuId, pending.qty || 1);
-      if (state.view === 'menu') renderMenuProducts();
-      if (state.view === 'product') renderProductDetail(state.productId);
+    if (state.view === 'checkout') {
+      setAddressEditMode(false);
+      renderCheckout();
     }
-    if (state.view === 'checkout') renderCheckout();
     return true;
   }
 
@@ -743,7 +861,7 @@
 
   function renderCart() {
     var el = document.getElementById('cart-items');
-    var proceed = document.getElementById('btn-proceed-login');
+    var proceed = document.getElementById('btn-proceed-checkout');
     if (!state.cart.length) {
       el.innerHTML =
         '<div class="cart-empty">' +
@@ -877,6 +995,12 @@
         ? '+91 ' + state.customer.phone
         : '';
       phoneEl.hidden = !state.customer.phone;
+    }
+    var note = document.querySelector('#view-checkout .checkout-confirm-note');
+    if (note) {
+      note.textContent = hasDeliveryAddress()
+        ? 'Check address and items — then we’ll send this order to the shop on WhatsApp.'
+        : 'Add a delivery address, then send this order to the shop on WhatsApp.';
     }
     setAddressEditMode(false);
 
@@ -1102,8 +1226,12 @@
       showView('menu');
       return;
     }
+    if (!isLoggedIn()) {
+      requireLogin('checkout', null);
+      return;
+    }
     if (!hasDeliveryAddress()) {
-      openAddressGate('change', null);
+      openAddressGate('checkout');
       return;
     }
     state.orderId = generateOrderId();
@@ -1240,49 +1368,7 @@
       updateCartUI();
     });
 
-    var storeOtpField = null;
-
-  function ensureStoreOtp() {
-    if (storeOtpField || !window.MithraOtp) return storeOtpField;
-    var row = document.getElementById('login-otp-inputs');
-    if (!row) return null;
-    storeOtpField = window.MithraOtp.mount(row, { idPrefix: 'store-otp' });
-    return storeOtpField;
-  }
-
-  function showLoginOtpError(message) {
-    var el = document.getElementById('login-otp-error');
-    if (!el) {
-      alert(message);
-      return;
-    }
-    el.textContent = message || '';
-    el.classList.remove('hidden');
-  }
-
-  function hideLoginOtpError() {
-    var el = document.getElementById('login-otp-error');
-    if (!el) return;
-    el.textContent = '';
-    el.classList.add('hidden');
-  }
-
-  document.getElementById('btn-proceed-login').addEventListener('click', function () {
-      if (!state.cart.length) return;
-      if (!requireDeliveryAddress('change', null)) return;
-      // Always: mobile number → OTP → order creation / review
-      showView('login');
-      document.getElementById('login-phone-step').classList.remove('hidden');
-      document.getElementById('login-otp-step').classList.add('hidden');
-      var phoneInput = document.getElementById('login-phone');
-      if (phoneInput) {
-        phoneInput.value = state.customer.phone || '';
-        phoneInput.focus();
-      }
-      ensureStoreOtp();
-      if (storeOtpField) storeOtpField.clear();
-      hideLoginOtpError();
-    });
+    document.getElementById('btn-proceed-checkout').addEventListener('click', proceedToCheckout);
 
     document.getElementById('btn-send-otp').addEventListener('click', function () {
       var phone = (document.getElementById('login-phone').value || '').replace(/\D/g, '');
@@ -1319,8 +1405,7 @@
         'Swamy Kunta';
       ensureAddress();
       saveSession();
-      showView('checkout');
-      renderCheckout();
+      finishLogin();
     });
 
     document.getElementById('btn-resend-otp').addEventListener('click', function () {
@@ -1386,7 +1471,6 @@
     var gateSkip = document.getElementById('addr-gate-skip');
     if (gateSkip) {
       gateSkip.addEventListener('click', function () {
-        state.pendingAdd = null;
         closeAddressGate();
       });
     }
@@ -1486,13 +1570,6 @@
     renderHome();
     showView('home', { replace: true });
     updateCartUI();
-
-    if (!hasDeliveryAddress()) {
-      // Soft welcome gate for Instagram / first-time visitors
-      setTimeout(function () {
-        openAddressGate('start', null);
-      }, 450);
-    }
 
     var view = qs('view');
     if (view === 'menu') {

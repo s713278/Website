@@ -24,6 +24,10 @@ export const DEFAULT_PRIMARY_COLOR = '#10b981'
 export const DEFAULT_ACCENT_COLOR = '#f97316'
 export const DEFAULT_BG = '#f9fafb'
 export const DEFAULT_FONT = 'poppins'
+export const DEFAULT_TEXT_COLOR = '#111827'
+export const DEFAULT_RATING = 4.2
+export const DEFAULT_ETA_MINS = 30
+export const DEFAULT_DISTANCE_KM = 2
 
 export const PRIMARY_PRESETS: ThemePreset[] = [
   { id: 'emerald', label: 'Emerald', color: '#10b981' },
@@ -236,11 +240,66 @@ export function applyFont(fontFamily: string | undefined, root?: HTMLElement): F
   return preset
 }
 
+/** Body / ink colour from API `text_color`. */
+export function applyTextColor(color: string | undefined, root?: HTMLElement): string {
+  const hex = normalizeHex(color, DEFAULT_TEXT_COLOR)
+  const el = root ?? document.documentElement
+  el.style.setProperty('--store-ink', hex)
+  el.setAttribute('data-store-ink', hex)
+  return hex
+}
+
+/** API `button_shape` → corner radius token used by storefront CTAs. */
+export function applyButtonShape(
+  shape: StoreTheme['buttonShape'] | undefined,
+  root?: HTMLElement,
+): NonNullable<StoreTheme['buttonShape']> {
+  const value: NonNullable<StoreTheme['buttonShape']> =
+    shape === 'PILL' || shape === 'SQUARE' || shape === 'ROUNDED' ? shape : 'ROUNDED'
+  const radius = value === 'PILL' ? '999px' : value === 'SQUARE' ? '0.25rem' : '0.75rem'
+  const el = root ?? document.documentElement
+  el.style.setProperty('--store-button-radius', radius)
+  el.setAttribute('data-store-button', value)
+  return value
+}
+
+/** API `card_style` → product card shadow / border tokens. */
+export function applyCardStyle(
+  style: StoreTheme['cardStyle'] | undefined,
+  root?: HTMLElement,
+): NonNullable<StoreTheme['cardStyle']> {
+  const value: NonNullable<StoreTheme['cardStyle']> =
+    style === 'FLAT' || style === 'BORDER' || style === 'SHADOW' ? style : 'SHADOW'
+  const shadow = value === 'SHADOW' ? '0 2px 12px -4px rgba(15, 23, 42, 0.08)' : 'none'
+  const border = value === 'BORDER' ? '1px solid #e5e7eb' : '1px solid transparent'
+  const el = root ?? document.documentElement
+  el.style.setProperty('--store-card-shadow', shadow)
+  el.style.setProperty('--store-card-border', border)
+  el.setAttribute('data-store-card', value)
+  return value
+}
+
+/** API `theme_preset` — metadata attribute only (hex fields drive colours). */
+export function applyThemePreset(preset: string | undefined, root?: HTMLElement): string | undefined {
+  const el = root ?? document.documentElement
+  const value = preset?.trim()
+  if (!value) {
+    el.removeAttribute('data-store-preset')
+    return undefined
+  }
+  el.setAttribute('data-store-preset', value)
+  return value
+}
+
 export function applyStoreTheme(theme: StoreTheme | undefined, root?: HTMLElement): void {
   applyTheme(theme?.primaryColor, root)
   applyAccent(theme?.accentColor, root)
   applyBackground(theme?.backgroundColor, root)
   applyFont(theme?.fontFamily, root)
+  applyTextColor(theme?.textColor, root)
+  applyButtonShape(theme?.buttonShape, root)
+  applyCardStyle(theme?.cardStyle, root)
+  applyThemePreset(theme?.themePreset, root)
 }
 
 const THEME_PROPERTIES = [
@@ -254,6 +313,10 @@ const THEME_PROPERTIES = [
   '--store-accent-soft',
   '--store-accent-muted',
   '--store-bg',
+  '--store-ink',
+  '--store-button-radius',
+  '--store-card-shadow',
+  '--store-card-border',
   '--primary-foreground',
   '--font-display',
   '--font-body',
@@ -265,6 +328,10 @@ const THEME_ATTRIBUTES = [
   'data-store-bg',
   'data-store-mode',
   'data-store-font',
+  'data-store-ink',
+  'data-store-button',
+  'data-store-card',
+  'data-store-preset',
 ]
 
 /** Removes everything applyStoreTheme set, so a theme can't outlive its page. */

@@ -9,6 +9,13 @@ export {
   Spinner,
 } from './ui'
 
+export { SearchField } from './SearchField'
+export { SectionHeader } from './SectionHeader'
+export { QuantityStepper } from './QuantityStepper'
+export { DeliveryAddressCard } from './DeliveryAddressCard'
+export { DeliveryAddressPicker } from './DeliveryAddressPicker'
+export { LocationMap } from './LocationMap'
+
 export { Button as ShadcnButton, buttonVariants } from '@/components/ui/button'
 export { Badge as ShadcnBadge, badgeVariants } from '@/components/ui/badge'
 export {
