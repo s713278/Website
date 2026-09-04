@@ -25,6 +25,7 @@ export {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  isAccessTokenExpired,
   parseTokenResponse,
   setTokens,
   refreshAccessToken,
