@@ -20,6 +20,28 @@ function coverImage(raw: Record<string, unknown>): string {
   return FALLBACK_COVER
 }
 
+/**
+ * Rows from a vendor collection response, given the already-unwrapped `data`.
+ *
+ * Vendor endpoints answer in two shapes and callers must not assume either:
+ * `GET /v1/vendors/{id}/products` returns `data: []`, while
+ * `GET /v1/vendors/{id}/orders/` returns a paginated container,
+ * `data: { result: [], page_number, page_size, total_elements, total_pages, last_page }`.
+ * Both verified live. `mapVendorCategories` and friends already knew this; the dashboard
+ * did not, and testing `Array.isArray` on the container silently produced no orders at all.
+ *
+ * Unlike the onboarding mappers this never throws: a dashboard tile that cannot read its
+ * collection should be empty, not take the whole page down.
+ */
+export function vendorCollectionRows(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data.filter((row): row is Record<string, unknown> => Boolean(asRecord(row)))
+  const page = asRecord(data)
+  if (page && Array.isArray(page.result)) {
+    return page.result.filter((row): row is Record<string, unknown> => Boolean(asRecord(row)))
+  }
+  return []
+}
+
 export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undefined {
   const t = asRecord(raw.theme)
   const logoImage =

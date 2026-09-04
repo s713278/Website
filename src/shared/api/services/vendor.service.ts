@@ -1,7 +1,7 @@
 import { VENDOR_ORDERS, VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
 import type { StoreTheme } from '@/modules/storefront/types'
 import { apiGet, unwrapData } from '../client'
-import { mapVendorTheme } from '../mappers/vendor'
+import { mapVendorTheme, vendorCollectionRows } from '../mappers/vendor'
 import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
 
@@ -39,24 +39,22 @@ export async function getVendorDashboard(vendorId: string | number): Promise<Ven
   ])
 
   const vendor = unwrapData(vendorRes) || {}
-  const ordersRaw = ordersRes ? unwrapData(ordersRes) : []
-  const productsRaw = productsRes ? unwrapData(productsRes) : []
-  const orders = Array.isArray(ordersRaw) ? ordersRaw : []
-  const products = Array.isArray(productsRaw) ? productsRaw : []
+  // `/products` answers `data: []` but `/orders/` answers a paginated container, so the
+  // shape has to be normalized rather than assumed. These counts therefore describe the
+  // first page of orders only (20 rows); a vendor past that is undercounted until the
+  // dashboard reads a server-side aggregate.
+  const orders = vendorCollectionRows(ordersRes ? unwrapData(ordersRes) : [])
+  const products = vendorCollectionRows(productsRes ? unwrapData(productsRes) : [])
 
   return {
     openOrders: orders.filter((order) => {
-      const status = String((order as Record<string, unknown>).status ?? '')
+      const status = String(order.status ?? '')
       return status && status !== 'completed' && status !== 'CANCELLED'
     }).length,
     availableItems: products.filter((product) => {
-      const row = product as Record<string, unknown>
-      return row.available !== false && row.status !== 'INACTIVE'
+      return product.available !== false && product.status !== 'INACTIVE'
     }).length,
-    todayRevenue: orders.reduce(
-      (sum, order) => sum + Number((order as Record<string, unknown>).total ?? 0),
-      0,
-    ),
+    todayRevenue: orders.reduce((sum, order) => sum + Number(order.total ?? 0), 0),
     storeName: String(vendor.business_name ?? vendor.name ?? 'Your store'),
     online: String(vendor.vendor_status ?? 'ONLINE').toUpperCase() !== 'OFFLINE',
     theme: mapVendorTheme(vendor),
