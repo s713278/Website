@@ -108,9 +108,11 @@ The baseline verification for source changes is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers pure domain and
-presentation logic, including vendor-onboarding and landing-discovery seams. There is no DOM,
-component, or end-to-end runner, so UI behaviour is verified by running the app.
+Vitest runs both tiers under that one command: node-environment logic tests over
+`src/**/*.test.ts`, covering pure domain and presentation logic including vendor-onboarding and
+landing-discovery seams, and jsdom component tests over `src/**/*.test.tsx` for React effect
+lifecycle. There is no end-to-end runner, so full journeys are verified by running the app. See
+[docs/TESTING.md](./docs/TESTING.md).
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:
@@ -285,6 +287,7 @@ alongside the production auth implementation.
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
+| [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |
 | [design-reference/README.md](./design-reference/README.md) | Static reference purpose and inventory |
 
