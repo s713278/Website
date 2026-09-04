@@ -1,81 +1,56 @@
-import { VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
-import type { VendorProduct } from '@/modules/vendor/types'
-import { apiGet, apiPatch, unwrapData } from '../client'
+import type { VendorSize } from '@/modules/vendor/types/dashboard'
+import { apiGet, apiPut } from '../client'
+import { demoVendorSizes } from '../fixtures/vendor-dashboard'
+import { mapVendorSizes } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
-import type { ApiEnvelope } from '../types'
 
-const DEMO_KEY = 'md-vendor-products'
+const DEMO_LATENCY_MS = 150
 
-function readDemo(): VendorProduct[] {
-  try {
-    const raw = localStorage.getItem(DEMO_KEY)
-    if (raw) return JSON.parse(raw) as VendorProduct[]
-  } catch {
-    /* fall through */
-  }
-  return structuredClone(VENDOR_PRODUCTS)
+function demoDelay() {
+  return new Promise((resolve) => setTimeout(resolve, DEMO_LATENCY_MS))
 }
 
-function writeDemo(products: VendorProduct[]) {
-  localStorage.setItem(DEMO_KEY, JSON.stringify(products))
-}
-
-export async function listVendorProducts(vendorId: string | number): Promise<VendorProduct[]> {
+/**
+ * Every size the vendor sells, with the price record behind each.
+ *
+ * Reads `/products/skus`, not `/products`: the latter answers only
+ * `{id, name, category_id, measurement_id, ref_id}` — no price and no size — which is why
+ * the previous products page rendered every row at ₹0.
+ */
+export async function listVendorSizes(vendorId: string | number): Promise<VendorSize[]> {
   if (!isLiveApi()) {
-    await new Promise((r) => setTimeout(r, 200))
-    return readDemo()
+    await demoDelay()
+    return mapVendorSizes(demoVendorSizes())
   }
+  return mapVendorSizes(await apiGet(`/v1/vendors/${vendorId}/products/skus`))
+}
 
-  const res = await apiGet<ApiEnvelope<unknown>>(`/v1/vendors/${vendorId}/products`, {
-    skipAuth: true,
+/**
+ * Change what a size costs.
+ *
+ * Written against the **price record**, not the SKU: `PATCH /vendors/{id}/skus/{sku_id}`
+ * fails with a JDBC error on every body, and its request schema carries no price field
+ * anyway. `PUT /v1/sku/price/{price_id}` is vendor-callable and verified working.
+ *
+ * A size with no `priceId` therefore cannot be repriced at all; callers must not offer
+ * the control for one.
+ */
+export async function updateSizePrice(
+  priceId: string,
+  input: { skuId: string; listPrice: number; salePrice: number },
+): Promise<void> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    return
+  }
+  await apiPut(`/v1/sku/price/${priceId}`, {
+    sku_id: Number(input.skuId),
+    list_price: input.listPrice,
+    sale_price: input.salePrice,
   })
-  const data = unwrapData(res)
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { content?: unknown[] })?.content)
-      ? (data as { content: unknown[] }).content
-      : []
-
-  return list
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      name: String(item.name ?? 'Product'),
-      price: Number(item.price ?? item.selling_price ?? 0),
-      available: item.available !== false && item.status !== 'INACTIVE',
-      veg: Boolean(item.veg ?? item.is_veg ?? true),
-    }))
-}
-
-export async function setProductAvailability(
-  vendorId: string | number,
-  productId: string,
-  available: boolean,
-): Promise<VendorProduct | null> {
-  if (!isLiveApi()) {
-    const products = readDemo()
-    const next = products.map((product) =>
-      product.id === productId ? { ...product, available } : product,
-    )
-    writeDemo(next)
-    return next.find((product) => product.id === productId) ?? null
-  }
-
-  const res = await apiPatch<ApiEnvelope<Record<string, unknown>>>(
-    `/v1/vendors/${vendorId}/products/${productId}`,
-    { available, status: available ? 'ACTIVE' : 'INACTIVE' },
-  )
-  const data = unwrapData(res) || {}
-  return {
-    id: String(data.id ?? productId),
-    name: String(data.name ?? 'Product'),
-    price: Number(data.price ?? 0),
-    available,
-    veg: Boolean(data.veg ?? true),
-  }
 }
 
 export const vendorProductsService = {
-  list: listVendorProducts,
-  setAvailability: setProductAvailability,
+  listSizes: listVendorSizes,
+  updatePrice: updateSizePrice,
 }

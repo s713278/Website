@@ -20,7 +20,7 @@ through an OpenAPI/Axios integration.
 |---------|--------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/register` |
 
@@ -276,7 +276,7 @@ alongside the production auth implementation.
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
-| `/vendor/orders`, `/vendor/products` | Protected vendor tools |
+| `/vendor/orders`, `/vendor/orders/:orderId`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` | Protected vendor dashboard, in its own shell outside the customer chrome |
 
 ## Documentation
 

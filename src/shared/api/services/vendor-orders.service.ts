@@ -1,84 +1,118 @@
-import { VENDOR_ORDERS } from '@/modules/vendor/data/demo'
-import type { VendorOrder, VendorOrderStatus } from '@/modules/vendor/types'
-import { apiGet, apiPatch, unwrapData } from '../client'
+import type {
+  DeliveryStatus,
+  PaymentStatus,
+  VendorOrderDetail,
+  VendorOrderPage,
+} from '@/modules/vendor/types/dashboard'
+import { apiGet, apiPatch } from '../client'
+import { demoVendorOrderDetail, demoVendorOrdersPage } from '../fixtures/vendor-dashboard'
+import { mapVendorOrderDetail, mapVendorOrderPage } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
-import type { ApiEnvelope } from '../types'
 
-const DEMO_KEY = 'md-vendor-orders'
+const DEMO_LATENCY_MS = 150
+const PAGE_SIZE = 20
 
-function readDemo(): VendorOrder[] {
-  try {
-    const raw = localStorage.getItem(DEMO_KEY)
-    if (raw) return JSON.parse(raw) as VendorOrder[]
-  } catch {
-    /* fall through */
-  }
-  return structuredClone(VENDOR_ORDERS)
+function demoDelay() {
+  return new Promise((resolve) => setTimeout(resolve, DEMO_LATENCY_MS))
 }
 
-function writeDemo(orders: VendorOrder[]) {
-  localStorage.setItem(DEMO_KEY, JSON.stringify(orders))
+export type VendorOrderQuery = {
+  page?: number
+  status?: DeliveryStatus | null
+  startDate?: string | null
+  endDate?: string | null
 }
 
-export async function listVendorOrders(vendorId: string | number): Promise<VendorOrder[]> {
+/**
+ * One page of orders.
+ *
+ * Filtering and paging are the server's job: the endpoint takes `order_status`,
+ * `start_date`, `end_date`, `page` and `size`, so a filtered view costs one request
+ * rather than fetching everything and narrowing it in the browser.
+ */
+export async function listVendorOrders(
+  vendorId: string | number,
+  query: VendorOrderQuery = {},
+): Promise<VendorOrderPage> {
+  const page = query.page ?? 0
+
   if (!isLiveApi()) {
-    await new Promise((r) => setTimeout(r, 200))
-    return readDemo()
+    await demoDelay()
+    return mapVendorOrderPage(demoVendorOrdersPage(page, PAGE_SIZE, query.status ?? undefined))
   }
 
-  const res = await apiGet<ApiEnvelope<unknown>>(`/v1/vendors/${vendorId}/orders/`)
-  const data = unwrapData(res)
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { content?: unknown[] })?.content)
-      ? (data as { content: unknown[] }).content
-      : []
+  const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) })
+  if (query.status) params.set('order_status', query.status)
+  if (query.startDate) params.set('start_date', query.startDate)
+  if (query.endDate) params.set('end_date', query.endDate)
 
-  return list
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      customerName: String(item.customer_name ?? item.customerName ?? 'Customer'),
-      items: Array.isArray(item.items)
-        ? (item.items as Array<Record<string, unknown>>).map((line) => ({
-            name: String(line.name ?? line.product_name ?? 'Item'),
-            qty: Number(line.qty ?? line.quantity ?? 1),
-          }))
-        : [],
-      total: Number(item.total ?? 0),
-      status: String(item.status ?? 'new') as VendorOrderStatus,
-      placedAt: String(item.created_at ?? item.placedAt ?? new Date().toISOString()),
-    }))
+  return mapVendorOrderPage(await apiGet(`/v1/vendors/${vendorId}/orders/?${params}`))
 }
 
-export async function updateVendorOrderStatus(
+/**
+ * One order with its lines.
+ *
+ * The list read carries headers only, so line items need this second endpoint — which is
+ * why order detail is its own route rather than an inline expand.
+ */
+export async function getVendorOrder(
   vendorId: string | number,
   orderId: string,
-  status: VendorOrderStatus,
-): Promise<VendorOrder | null> {
+): Promise<VendorOrderDetail | null> {
   if (!isLiveApi()) {
-    const orders = readDemo()
-    const next = orders.map((order) => (order.id === orderId ? { ...order, status } : order))
-    writeDemo(next)
-    return next.find((order) => order.id === orderId) ?? null
+    await demoDelay()
+    const fixture = demoVendorOrderDetail(orderId)
+    return fixture ? mapVendorOrderDetail(fixture) : null
   }
+  return mapVendorOrderDetail(await apiGet(`/v1/vendors/${vendorId}/orders/${orderId}/items`))
+}
 
-  const res = await apiPatch<ApiEnvelope<Record<string, unknown>>>(
-    `/v1/vendors/${vendorId}/orders/${orderId}`,
-    { status },
-  )
-  const data = unwrapData(res) || {}
-  return {
-    id: String(data.id ?? orderId),
-    customerName: String(data.customer_name ?? 'Customer'),
-    items: [],
-    total: Number(data.total ?? 0),
-    status: String(data.status ?? status) as VendorOrderStatus,
-    placedAt: String(data.created_at ?? new Date().toISOString()),
+/**
+ * Move an order along, or mark it paid.
+ *
+ * The write takes `delivery_status` and `payment_status` — not the `status` key the
+ * previous implementation sent, which the backend simply ignored.
+ *
+ * `SHIPPED` is set here directly rather than through `POST /orders/{id}/tracking`, which
+ * would also set it but demands a `courier_partner_id` that no endpoint lists. That path
+ * is recorded as a gap; taking it now would mean asking for an id we cannot offer.
+ */
+export async function updateVendorOrder(
+  vendorId: string | number,
+  orderId: string,
+  update: { deliveryStatus?: DeliveryStatus; paymentStatus?: PaymentStatus },
+): Promise<void> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    return
   }
+  const body: Record<string, string> = {}
+  if (update.deliveryStatus) body.delivery_status = update.deliveryStatus
+  if (update.paymentStatus) body.payment_status = update.paymentStatus
+  await apiPatch(`/v1/vendors/${vendorId}/orders/${orderId}`, body)
+}
+
+/**
+ * Cancel an order.
+ *
+ * Its own endpoint, and note the body key: `cancelReason` in camelCase, where the update
+ * and bulk endpoints both use `cancel_reason`. The inconsistency is the backend's.
+ */
+export async function cancelVendorOrder(
+  vendorId: string | number,
+  orderId: string,
+  reason: string,
+): Promise<void> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    return
+  }
+  await apiPatch(`/v1/vendors/${vendorId}/orders/${orderId}/cancel`, { cancelReason: reason })
 }
 
 export const vendorOrdersService = {
   list: listVendorOrders,
-  updateStatus: updateVendorOrderStatus,
+  get: getVendorOrder,
+  update: updateVendorOrder,
+  cancel: cancelVendorOrder,
 }

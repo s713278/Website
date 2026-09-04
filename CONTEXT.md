@@ -43,7 +43,7 @@ record; anything on screen that disagrees with it is unsaved.
 _Avoid_: server catalog, saved catalog, remote catalog
 
 **Plan limit**:
-The most categories, products or sizes a vendor's subscription allows, counted against
+The most categories, products or sizes a vendor's plan allows, counted against
 everything already on the account rather than against one screen's worth. Reaching it
 stops further catalog growth until the plan changes.
 _Avoid_: account limit, max limit, quota, subscription cap
@@ -133,3 +133,32 @@ _Avoid_: active, published, public
 **Store activation**:
 The transition from draft to submitted. It is a request for review, not a going-live.
 _Avoid_: go live, publish, launch
+
+### Store operations
+
+**Store state**:
+The single condition of a vendor's store, derived rather than read from one place: setting
+up, under review, open, rejected, or suspended. Suspension outranks everything else. Being
+open means customers can reach the store; it does not mean the store is taking orders, a
+thing the platform does not currently express.
+_Avoid_: status, account status, vendor status, online, offline
+
+**Delivery status**:
+How far an order has progressed toward the customer: pending, scheduled, in process,
+shipped, delivered or cancelled.
+_Avoid_: order status (unqualified), ticket state, new, accepted, preparing, ready
+
+**Payment status**:
+Whether an order has been paid for. Independent of delivery status: an order can be
+delivered and still unpaid.
+_Avoid_: order status (unqualified), settled
+
+**Plan**:
+The tier a vendor's account is on, carrying the limits their catalog is measured against.
+Distinct from a customer's repeat-order subscription, which is a different thing entirely.
+_Avoid_: subscription, tier, package
+
+**Billing state**:
+Whether a vendor's plan is paid, trialling, or lapsed. Distinct from store state: an open
+store may be unbilled, and a paid-up store may still be awaiting approval.
+_Avoid_: subscription status, account status, plan status

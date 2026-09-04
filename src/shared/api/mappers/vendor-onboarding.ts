@@ -320,6 +320,17 @@ export type VendorContext = {
     tier: string | null
     planName: string | null
     status: string | null
+    currency: string | null
+    monthlyPrice: number | null
+    yearlyPrice: number | null
+    /**
+     * Absent from every deployed response measured so far — the deployed backend models
+     * no trial, returning `tier: FREE` with `trial_days: 0` and no end date. Mapped so a
+     * countdown appears the day the backend starts sending one; never substituted with a
+     * locally computed deadline.
+     */
+    trialEndsAt: string | null
+    trialDays: number | null
     limits: VendorSubscriptionLimits
     usage: VendorSubscriptionUsage
   }
@@ -385,6 +396,11 @@ export function mapVendorContext(payload: unknown): VendorContext {
       tier: lenientString(subscription.tier),
       planName: lenientString(subscription.plan_name),
       status: lenientString(subscription.status),
+      currency: lenientString(subscription.currency),
+      monthlyPrice: lenientNumber(subscription.monthly_price),
+      yearlyPrice: lenientNumber(subscription.yearly_price),
+      trialEndsAt: lenientString(subscription.trial_ends_at),
+      trialDays: lenientInteger(subscription.trial_days),
       limits: {
         maxCategories: lenientInteger(limits.max_categories),
         maxProducts: lenientInteger(limits.max_products),

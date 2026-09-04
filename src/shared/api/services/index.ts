@@ -41,18 +41,21 @@ export {
   type PlaceOrderInput,
 } from './orders.service'
 export {
-  getVendorDashboard,
+  getVendorInsights,
+  getVendorStoreProfile,
   vendorService,
-  type VendorDashboardStats,
 } from './vendor.service'
 export {
+  cancelVendorOrder,
+  getVendorOrder,
   listVendorOrders,
-  updateVendorOrderStatus,
+  updateVendorOrder,
   vendorOrdersService,
+  type VendorOrderQuery,
 } from './vendor-orders.service'
 export {
-  listVendorProducts,
-  setProductAvailability,
+  listVendorSizes,
+  updateSizePrice,
   vendorProductsService,
 } from './vendor-products.service'
 export { vendorOnboardingService } from './vendor-onboarding.service'

@@ -50,7 +50,7 @@ package.
 |---------|----------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Shared app code | `src/shared` | auth, API facade, components, hooks, utilities, types |
 | HTTP/OpenAPI package | `packages/api-client` | generated schema, Axios transport, auth infrastructure, backend services |
 

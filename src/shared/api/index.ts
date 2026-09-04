@@ -63,6 +63,16 @@ export {
   schedulingConfigNumber,
   schedulingConfigString,
 } from './mappers/vendor-onboarding'
+export {
+  mapVendorInsights,
+  mapVendorOrderDetail,
+  mapVendorOrderPage,
+  mapVendorPlan,
+  mapVendorSizes,
+  mapVendorStoreProfile,
+  toDeliveryStatus,
+  toPaymentStatus,
+} from './mappers/vendor-dashboard'
 export { resolveLandingStoreArtwork } from './mappers/landing-store'
 export type { LandingStore, LandingStoreArtwork } from './mappers/landing-store'
 export type {

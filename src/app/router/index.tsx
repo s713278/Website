@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { RootLayout, VendorLayout } from '@/app/layouts'
+import { RootLayout } from '@/app/layouts'
 import { ProtectedRoute } from '@/app/router/ProtectedRoute'
 import { MarketingLayout } from '@/modules/marketing/components/MarketingLayout'
 import { MarketingHomePage } from '@/modules/marketing/pages/MarketingHomePage'
@@ -14,14 +14,46 @@ import { OrdersPage } from '@/modules/storefront/pages/OrdersPage'
 import { ProductDetailPage } from '@/modules/storefront/pages/ProductDetailPage'
 import { StoreDetailPage } from '@/modules/storefront/pages/StoreDetailPage'
 import { StoreListPage } from '@/modules/storefront/pages/StoreListPage'
-import { VendorDashboardPage } from '@/modules/vendor/pages/VendorDashboardPage'
-import { VendorOrdersPage } from '@/modules/vendor/pages/VendorOrdersPage'
-import { VendorProductsPage } from '@/modules/vendor/pages/VendorProductsPage'
 import { LoginPage } from '@/shared/auth/pages/LoginPage'
 import { RegisterPage } from '@/shared/auth/pages/RegisterPage'
 import { VendorLoginPage } from '@/shared/auth/pages/VendorLoginPage'
 import { Spinner } from '@/shared/components/ui'
 
+const VendorShell = lazy(() =>
+  import('@/modules/vendor/components/VendorShell').then((module) => ({
+    default: module.VendorShell,
+  })),
+)
+const VendorOverviewPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorOverviewPage').then((module) => ({
+    default: module.VendorOverviewPage,
+  })),
+)
+const VendorOrdersPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorOrdersPage').then((module) => ({
+    default: module.VendorOrdersPage,
+  })),
+)
+const VendorOrderDetailPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorOrderDetailPage').then((module) => ({
+    default: module.VendorOrderDetailPage,
+  })),
+)
+const VendorProductsPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorProductsPage').then((module) => ({
+    default: module.VendorProductsPage,
+  })),
+)
+const VendorStorefrontPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorStorefrontPage').then((module) => ({
+    default: module.VendorStorefrontPage,
+  })),
+)
+const VendorSettingsPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorSettingsPage').then((module) => ({
+    default: module.VendorSettingsPage,
+  })),
+)
 const VendorOnboardingPage = lazy(() =>
   import('@/modules/vendor/pages/VendorOnboardingPage').then((module) => ({
     default: module.VendorOnboardingPage,
@@ -44,6 +76,25 @@ export function AppRouter() {
         {/* Local-only vendor onboarding prototype: outside auth guards, with its shared public header owned by the page. */}
         <Route path="onboarding" element={<Suspense fallback={<OnboardingRouteFallback />}><VendorOnboardingPage /></Suspense>} />
         <Route path="onboarding/preview/:draftSlug" element={<Suspense fallback={<OnboardingRouteFallback />}><VendorOnboardingPreviewPage /></Suspense>} />
+
+        {/* Vendor dashboard — its own chrome, outside the customer header and cart. */}
+        <Route element={<ProtectedRoute roles={['vendor']} />}>
+          <Route
+            path="vendor"
+            element={
+              <Suspense fallback={<OnboardingRouteFallback />}>
+                <VendorShell />
+              </Suspense>
+            }
+          >
+            <Route index element={<VendorOverviewPage />} />
+            <Route path="orders" element={<VendorOrdersPage />} />
+            <Route path="orders/:orderId" element={<VendorOrderDetailPage />} />
+            <Route path="products" element={<VendorProductsPage />} />
+            <Route path="storefront" element={<VendorStorefrontPage />} />
+            <Route path="settings" element={<VendorSettingsPage />} />
+          </Route>
+        </Route>
 
         {/* Marketing homepage — own chrome matching brand landing */}
         <Route element={<MarketingLayout />}>
@@ -71,14 +122,6 @@ export function AppRouter() {
           <Route element={<ProtectedRoute roles={['customer']} />}>
             <Route path="checkout" element={<CheckoutPage />} />
             <Route path="orders" element={<OrdersPage />} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={['vendor']} />}>
-            <Route path="vendor" element={<VendorLayout />}>
-              <Route index element={<VendorDashboardPage />} />
-              <Route path="orders" element={<VendorOrdersPage />} />
-              <Route path="products" element={<VendorProductsPage />} />
-            </Route>
           </Route>
 
           <Route path="home" element={<Navigate to="/" replace />} />
