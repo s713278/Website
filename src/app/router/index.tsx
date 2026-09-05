@@ -69,6 +69,10 @@ function OnboardingRouteFallback() {
   return <div className="min-h-screen bg-slate-50"><Spinner label="Loading onboarding…" /></div>
 }
 
+function VendorRouteFallback() {
+  return <div className="min-h-screen bg-slate-50"><Spinner label="Loading your dashboard…" /></div>
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
@@ -82,7 +86,7 @@ export function AppRouter() {
           <Route
             path="vendor"
             element={
-              <Suspense fallback={<OnboardingRouteFallback />}>
+              <Suspense fallback={<VendorRouteFallback />}>
                 <VendorShell />
               </Suspense>
             }

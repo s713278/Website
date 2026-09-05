@@ -149,7 +149,7 @@ export function VendorOverviewPage() {
           />
           <Tile
             label="Catalog"
-            value={products != null ? `${products}${productLimit ? ` / ${productLimit}` : ''}` : null}
+            value={products ? `${products}${productLimit ? ` / ${productLimit}` : ''}` : null}
             empty="Nothing listed yet"
             hint={
               sizes != null && sizeLimit != null

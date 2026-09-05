@@ -77,10 +77,11 @@ describe('loadVendorContext', () => {
     expect(read).toHaveBeenCalledTimes(2)
   })
 
-  it('re-reads when forced', async () => {
+  it('re-reads after invalidation, which is how the shell reloads', async () => {
     const read = vi.fn(async (id: string) => contextFor(id))
     await loadVendorContext('96', read)
-    await loadVendorContext('96', read, { force: true })
+    invalidateVendorContext('96')
+    await loadVendorContext('96', read)
     expect(read).toHaveBeenCalledTimes(2)
   })
 

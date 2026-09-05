@@ -26,17 +26,16 @@ export function peekVendorContext(vendorId: string): VendorContext | null {
 export function loadVendorContext(
   vendorId: string,
   read: (vendorId: string) => Promise<VendorContext>,
-  options: { force?: boolean } = {},
 ): Promise<VendorContext> {
   const existing = entries.get(vendorId)
-  if (existing && !options.force) return existing.promise
+  if (existing) return existing.promise
 
   const entry: Entry = { resolved: null, promise: read(vendorId) }
   entries.set(vendorId, entry)
 
   // Chained after the entry is stored so these callbacks can compare by identity: a
-  // sign-out or a forced reload replaces the entry, and a late resolution must never
-  // write back over whatever replaced it.
+  // sign-out or an invalidate-then-reload replaces the entry, and a late resolution must
+  // never write back over whatever replaced it.
   entry.promise = entry.promise
     .then((context) => {
       if (entries.get(vendorId) === entry) entry.resolved = context

@@ -23,29 +23,40 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
   const vendorId = useAuthStore((s) => s.user?.vendorId)
   const memberships = useAuthStore((s) => s.user?.vendors)
 
-  const [context, setContext] = useState<VendorContext | null>(
-    () =>
-      vendorId
-        ? (peekVendorContext(vendorId) ?? peekVendorOnboardingState(vendorId)?.context ?? null)
-        : null,
-  )
+  /**
+   * The context is held **with the id it was loaded for**, not on its own.
+   *
+   * `selectVendor()` can change `vendorId` without remounting this provider. Keeping the
+   * context alone made the freshness check "have I loaded anything?", so a second store
+   * would have been rendered with the first store's figures until something remounted.
+   * Pairing them makes the check "have I loaded *this* store?", and the key compared is
+   * the one used to fetch rather than a field the backend fills in.
+   */
+  const [loaded, setLoaded] = useState<{ vendorId: string; context: VendorContext } | null>(() => {
+    if (!vendorId) return null
+    const cached = peekVendorContext(vendorId) ?? peekVendorOnboardingState(vendorId)?.context
+    return cached ? { vendorId, context: cached } : null
+  })
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
 
   const reload = useCallback(() => {
     if (vendorId) invalidateVendorContext(vendorId)
-    setContext(null)
+    setLoaded(null)
     setError('')
     setReloadToken((token) => token + 1)
   }, [vendorId])
 
   useEffect(() => {
-    if (!vendorId || context) return
+    if (!vendorId || loaded?.vendorId === vendorId) return
     let cancelled = false
 
+    // A failure recorded against the previous store must not survive into this one.
+    setError('')
+
     void loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
-      .then((loaded) => {
-        if (!cancelled) setContext(loaded)
+      .then((context) => {
+        if (!cancelled) setLoaded({ vendorId, context })
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(getErrorMessage(err, 'Could not load your store'))
@@ -54,10 +65,11 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [vendorId, context, reloadToken])
+  }, [vendorId, loaded, reloadToken])
 
   const account = useMemo<VendorAccount | null>(() => {
-    if (!vendorId || !context) return null
+    if (!vendorId || !loaded || loaded.vendorId !== vendorId) return null
+    const { context } = loaded
     return {
       vendorId,
       context,
@@ -69,7 +81,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
       plan: mapVendorPlan(context),
       reload,
     }
-  }, [vendorId, context, reload])
+  }, [vendorId, loaded, reload])
 
   /**
    * A session that holds several stores resolves no `vendorId`, deliberately — picking
