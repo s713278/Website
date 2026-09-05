@@ -144,7 +144,7 @@ above and is **not** a frontend defect — the frontend cannot fix any of them a
 
 | What the vendor sees | Cause | What the backend must provide |
 |----------------------|-------|-------------------------------|
-| "I re-enter my business location every time I come back." | `business_location` lives only on the storefront payload, which `404`s until approval. It is not on the vendor record (verified: the profile returns `business_name`, `business_type`, `owner_name`, `contact_person`, `contact_number` and nothing else). | Either a vendor-readable storefront before approval, or `business_location` on `GET /v1/vendors/{id}`. |
+| "I re-enter my business location every time I come back." | `business_location` lives only on the storefront payload, which `404`s until approval. The vendor record carries a structured `business_address` (measured on vendor 96 — see the corrections section below), but not the storefront's free-text `business_location`, so the wizard's location field still has nothing to resume from. | Either a vendor-readable storefront before approval, or `business_location` on `GET /v1/vendors/{id}`. |
 | "My theme, tagline, welcome message and badges reset to defaults on every resume." | Same 404. `GET /{identifier}/storefront` is the only read carrying them, by `store_identifier` **and** by `vendor_id` — both verified `404` on a live `PENDING` vendor. | A read a vendor may call on their own unapproved store. |
 | "A SKU I set to pickup-only comes back as delivery + pickup." | The SKU read omits `home_delivery` and `store_pickup` entirely (verified: the row returns `vendor_product_id, sku_id, sku_name, image_path, sku_size, sku_type, is_active, valid_days, price_id, list_price, sale_price, effective_date, eligible_subscription_details, discount, on_sale, description`). Both are writable but unreadable, so resume defaults them to `true`. | Return the two flags on the SKU read. |
 | "I can't remove a category or product I picked by mistake." | 403 / no endpoint, above. | A vendor-callable un-assign for both. |
@@ -196,8 +196,11 @@ the frontend works around it with an inline comment at the call site.
   UPI/bank `details`), `order_acceptance_policy`, `delivery_slots`, `customer_consent_title` and
   `customer_consent_text`. Anyone reading the document would conclude payments cannot be read back
   and rebuild them from scratch; they round-trip fine. Verified on a configured vendor.
-- **`GET /v1/vendors/{id}` is the only read for `business_type`**, plus `owner_name`,
-  `contact_person` and `contact_number` — while typed as a bare `APIResponseObject` with no example.
+- **`GET /v1/vendors/{id}` is the only read for `business_type`** — while typed as a bare
+  `APIResponseObject` with no example. It also returns `owner_name`, `contact_person`,
+  `contact_number`, `description`, `communication_email`, `business_address`, `banner_image`,
+  `user_id`, `vendor_status` and `approval_status`; an earlier entry here claimed the record
+  held the first few "and nothing else", which direct measurement disproved (see corrections).
   A never-configured vendor reports `business_type: "Others"`, which is indistinguishable from a
   vendor who genuinely chose Others; the frontend treats it as unset and re-asks.
 - **A vendor can only remove SKUs. Categories and products are additive for this role,

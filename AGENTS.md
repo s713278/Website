@@ -79,11 +79,9 @@ For code changes, the baseline is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs both tiers under one `npm run test`: node-environment logic tests over
-`src/**/*.test.ts`, and jsdom component tests over `src/**/*.test.tsx` that opt in per file with a
-`// @vitest-environment jsdom` docblock. There is no end-to-end runner: verify full journeys by
-running the app. `vitest.config.ts` merges `vite.config.ts`, so path aliases are defined once. Read
-[docs/TESTING.md](./docs/TESTING.md) before adding a component test.
+One `npm run test` runs every tier. `vitest.config.ts` merges `vite.config.ts`, so path aliases
+are defined once. [docs/TESTING.md](./docs/TESTING.md) owns the tiers, how to choose between them,
+and the rules for writing in each — read it before adding a test.
 
 `npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
 

@@ -108,11 +108,9 @@ The baseline verification for source changes is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs both tiers under that one command: node-environment logic tests over
-`src/**/*.test.ts`, covering pure domain and presentation logic including vendor-onboarding and
-landing-discovery seams, and jsdom component tests over `src/**/*.test.tsx` for React effect
-lifecycle. There is no end-to-end runner, so full journeys are verified by running the app. See
-[docs/TESTING.md](./docs/TESTING.md).
+That one command runs every Vitest tier. There is no end-to-end runner, so full journeys are
+verified by running the app. [docs/TESTING.md](./docs/TESTING.md) owns the tiers and the rules for
+writing in each.
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:

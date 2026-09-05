@@ -103,8 +103,9 @@ export const useAuthStore = create<AuthState>()(
         try {
           if (!get().user) return
 
-          // An access token that is merely expired is still present here; the
-          // interceptor refreshes it on the first 401. Only act when it is gone.
+          // An access token that is merely expired is still present here, and the
+          // request interceptor refreshes it before the first protected call goes out.
+          // Only act when it is gone altogether.
           if (!getAccessToken() && getRefreshToken()) {
             try {
               const token = await authService.refreshToken()
