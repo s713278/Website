@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="MithraDirect vendor dashboard demo — overview, orders, products, and store link.">
+    <title>Vendor Dashboard — MithraDirect</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <script src="assets/js/assets-config.js"></script>
+</head>
+<body class="dash-page">
+    <div class="dash-shell" id="dash-shell">
+        <aside class="dash-sidebar" id="dash-sidebar" aria-label="Vendor navigation">
+            <div class="dash-brand">
+                <a href="index.html" aria-label="MithraDirect home">
+                    <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="dash-logo">
+                </a>
+                <p class="dash-brand-sub">Vendor Dashboard</p>
+            </div>
+
+            <nav class="dash-nav" id="dash-nav">
+                <button type="button" class="dash-nav-item is-active" data-view="overview" aria-current="page">
+                    <span class="dash-nav-icon" aria-hidden="true">⌂</span>
+                    <span>Overview</span>
+                </button>
+                <button type="button" class="dash-nav-item" data-view="orders">
+                    <span class="dash-nav-icon" aria-hidden="true">☰</span>
+                    <span>Orders</span>
+                    <span class="dash-nav-count" id="nav-orders-count">0</span>
+                </button>
+                <button type="button" class="dash-nav-item" data-view="products">
+                    <span class="dash-nav-icon" aria-hidden="true">▦</span>
+                    <span>Products</span>
+                </button>
+                <button type="button" class="dash-nav-item" data-view="store">
+                    <span class="dash-nav-icon" aria-hidden="true">↗</span>
+                    <span>Store &amp; Share</span>
+                </button>
+                <button type="button" class="dash-nav-item" data-view="settings">
+                    <span class="dash-nav-icon" aria-hidden="true">⚙</span>
+                    <span>Settings</span>
+                </button>
+            </nav>
+
+            <div class="dash-sidebar-foot">
+                <div class="dash-plan-chip" id="dash-plan-chip">
+                    <span class="dash-plan-dot" aria-hidden="true"></span>
+                    <span id="dash-plan-label">Free plan</span>
+                </div>
+                <a href="store.html" id="dash-view-storefront" class="btn btn-secondary btn-sm btn-block" data-cta="view_storefront">View storefront</a>
+            </div>
+        </aside>
+
+        <div class="dash-main">
+            <header class="dash-topbar">
+                <button type="button" class="dash-menu-btn" id="dash-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="dash-sidebar">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <div class="dash-topbar-text">
+                    <h1 class="dash-page-title" id="dash-page-title">Overview</h1>
+                    <p class="dash-page-sub" id="dash-store-name">Your store</p>
+                </div>
+                <div class="dash-topbar-actions">
+                    <a href="onboarding.html" class="dash-text-link">Setup</a>
+                    <a href="index.html#pricing" class="btn btn-primary btn-sm" data-cta="upgrade">Upgrade</a>
+                </div>
+            </header>
+
+            <div class="dash-banner" id="dash-plan-banner" role="status">
+                <div>
+                    <strong id="dash-banner-title">Free plan active</strong>
+                    <span id="dash-banner-text"> — share your shop link to get your first WhatsApp orders.</span>
+                </div>
+                <button type="button" class="dash-banner-cta" data-view-jump="store">Share store link</button>
+            </div>
+
+            <main class="dash-content" id="dash-content">
+                <!-- Overview -->
+                <section class="dash-view is-active" id="view-overview" data-view-panel="overview" aria-labelledby="overview-heading">
+                    <h2 id="overview-heading" class="sr-only">Overview</h2>
+                    <div class="dash-metrics" id="dash-metrics">
+                        <article class="dash-metric">
+                            <p class="dash-metric-label">Orders today</p>
+                            <p class="dash-metric-value" id="metric-orders-today">0</p>
+                        </article>
+                        <article class="dash-metric">
+                            <p class="dash-metric-label">Sales (demo)</p>
+                            <p class="dash-metric-value" id="metric-sales">₹0</p>
+                        </article>
+                        <article class="dash-metric">
+                            <p class="dash-metric-label">Products</p>
+                            <p class="dash-metric-value" id="metric-products">0</p>
+                        </article>
+                        <article class="dash-metric">
+                            <p class="dash-metric-label">Pending</p>
+                            <p class="dash-metric-value" id="metric-pending">0</p>
+                        </article>
+                    </div>
+
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>Recent orders</h3>
+                            <button type="button" class="dash-text-link" data-view-jump="orders">See all</button>
+                        </div>
+                        <div class="dash-table-wrap">
+                            <table class="dash-table" id="overview-orders-table">
+                                <thead>
+                                    <tr>
+                                        <th>Order</th>
+                                        <th>Customer</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overview-orders-body"></tbody>
+                            </table>
+                        </div>
+                        <p class="dash-empty" id="overview-orders-empty" hidden>No orders yet. Share your store link to get started.</p>
+                    </div>
+
+                    <div class="dash-quick">
+                        <h3 class="dash-quick-title">Quick actions</h3>
+                        <div class="dash-quick-grid">
+                            <button type="button" class="dash-quick-card" data-view-jump="store">
+                                <strong>Share shop link</strong>
+                                <span>WhatsApp &amp; Instagram</span>
+                            </button>
+                            <button type="button" class="dash-quick-card" data-view-jump="products">
+                                <strong>Manage products</strong>
+                                <span>Prices &amp; SKUs</span>
+                            </button>
+                            <a class="dash-quick-card" id="quick-view-store" href="store.html">
+                                <strong>Open storefront</strong>
+                                <span>Customer view</span>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Orders -->
+                <section class="dash-view" id="view-orders" data-view-panel="orders" hidden>
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>All orders</h3>
+                            <p class="dash-muted" id="orders-demo-note">Demo sample data</p>
+                        </div>
+                        <div class="dash-filters" role="tablist" aria-label="Order status filter">
+                            <button type="button" class="dash-chip is-active" data-order-filter="all">All</button>
+                            <button type="button" class="dash-chip" data-order-filter="new">New</button>
+                            <button type="button" class="dash-chip" data-order-filter="confirmed">Confirmed</button>
+                            <button type="button" class="dash-chip" data-order-filter="delivered">Delivered</button>
+                        </div>
+                        <div class="dash-table-wrap">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Order</th>
+                                        <th>Customer</th>
+                                        <th>Items</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-body"></tbody>
+                            </table>
+                        </div>
+                        <p class="dash-empty" id="orders-empty" hidden>No orders in this filter.</p>
+                    </div>
+                </section>
+
+                <!-- Products -->
+                <section class="dash-view" id="view-products" data-view-panel="products" hidden>
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>Your catalog</h3>
+                            <a href="onboarding.html" class="btn btn-secondary btn-sm">Edit in setup</a>
+                        </div>
+                        <ul class="dash-product-list" id="products-list"></ul>
+                        <p class="dash-empty" id="products-empty" hidden>
+                            No products yet. <a href="onboarding.html">Finish store setup</a> to add items.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Store & Share -->
+                <section class="dash-view" id="view-store" data-view-panel="store" hidden>
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>Your shop link</h3>
+                        </div>
+                        <p class="dash-lead">Customers open this link to browse and order on WhatsApp. Share it on WhatsApp and put it in your Instagram bio.</p>
+                        <div class="dash-link-box">
+                            <span class="dash-link-url" id="dash-store-url">mithradirect.com/store/…</span>
+                            <button type="button" class="btn btn-primary btn-sm" id="dash-copy-url" data-cta="copy_store_link">Copy</button>
+                        </div>
+                        <p class="dash-copy-hint" id="dash-copy-hint" hidden>Copied — paste in WhatsApp or Instagram bio.</p>
+                        <div class="dash-share-actions">
+                            <a href="#" id="dash-share-wa" class="btn btn-primary" target="_blank" rel="noopener" data-cta="share_whatsapp">Share on WhatsApp</a>
+                            <a href="store.html" id="dash-open-store" class="btn btn-secondary" data-cta="view_storefront">Open storefront</a>
+                        </div>
+                    </div>
+
+                    <div class="dash-panel dash-qr-panel md-panel--accent" id="dash-qr-panel">
+                        <div class="dash-qr-layout">
+                            <div class="dash-qr-frame">
+                                <img id="dash-qr-img" class="dash-qr-img" alt="Shop QR code" width="200" height="200" hidden>
+                                <div class="dash-qr-placeholder" id="dash-qr-placeholder">QR</div>
+                            </div>
+                            <div class="dash-qr-copy">
+                                <p class="dash-qr-eyebrow">Scan &amp; order</p>
+                                <h3 class="dash-qr-title">Put this on your counter</h3>
+                                <p class="dash-qr-text">
+                                    Print or save this QR. Customers scan with their phone camera and land on your shop — no typing, no app needed.
+                                </p>
+                                <ul class="dash-qr-tips">
+                                    <li>Stick on packaging or your shop table</li>
+                                    <li>Show it in WhatsApp status / Stories</li>
+                                    <li>Keep next to UPI / cash counter</li>
+                                </ul>
+                                <div class="dash-qr-actions">
+                                    <button type="button" class="btn btn-primary btn-sm" id="dash-qr-download" data-cta="download_store_qr">Save QR image</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="dash-qr-share" data-cta="share_store_qr" hidden>Share QR</button>
+                                </div>
+                                <p class="dash-muted" id="dash-qr-hint" hidden></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings -->
+                <section class="dash-view" id="view-settings" data-view-panel="settings" hidden>
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>Store settings</h3>
+                            <a href="onboarding.html" class="btn btn-secondary btn-sm">Edit setup</a>
+                        </div>
+                        <dl class="dash-settings" id="settings-list">
+                            <div><dt>Store name</dt><dd id="set-name">—</dd></div>
+                            <div><dt>WhatsApp</dt><dd id="set-whatsapp">—</dd></div>
+                            <div><dt>Location</dt><dd id="set-location">—</dd></div>
+                            <div><dt>Instagram</dt><dd id="set-instagram">—</dd></div>
+                            <div><dt>Plan</dt><dd id="set-plan">Free</dd></div>
+                            <div><dt>Primary</dt><dd><span class="dash-theme-swatch" id="set-theme-swatch" hidden></span><span id="set-theme">—</span></dd></div>
+                            <div><dt>Accent</dt><dd><span class="dash-theme-swatch dash-theme-swatch--accent" id="set-accent-swatch" hidden></span><span id="set-accent">—</span></dd></div>
+                            <div><dt>Background</dt><dd><span class="dash-theme-swatch dash-theme-swatch--bg" id="set-bg-swatch" hidden></span><span id="set-bg">—</span></dd></div>
+                            <div><dt>Font</dt><dd id="set-font">—</dd></div>
+                        </dl>
+                        <p class="dash-muted dash-settings-note">
+                            This is a demo dashboard shell. Live edits will connect to vendor APIs later.
+                        </p>
+                    </div>
+
+                    <div class="dash-panel dash-account-panel" id="dash-account-panel">
+                        <div class="dash-panel-head">
+                            <h3>Account</h3>
+                            <span class="dash-role-badge" id="dash-role-badge">Vendor</span>
+                        </div>
+                        <dl class="dash-settings">
+                            <div><dt>Signed in</dt><dd id="dash-account-phone">—</dd></div>
+                            <div><dt>Role</dt><dd id="dash-account-role">Vendor</dd></div>
+                        </dl>
+                        <p class="dash-muted dash-settings-note">
+                            Log out ends your vendor or admin session on this device. Your store catalog stays saved.
+                        </p>
+                        <button type="button" class="btn btn-secondary dash-logout-btn" id="btn-dash-logout" data-cta="vendor_logout">
+                            Log out
+                        </button>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <div class="dash-backdrop" id="dash-backdrop" hidden></div>
+
+    <nav class="dash-bottom-nav" aria-label="Mobile navigation">
+        <button type="button" class="dash-bottom-item is-active" data-view="overview">Overview</button>
+        <button type="button" class="dash-bottom-item" data-view="orders">Orders</button>
+        <button type="button" class="dash-bottom-item" data-view="products">Products</button>
+        <button type="button" class="dash-bottom-item" data-view="store">Share</button>
+    </nav>
+
+    <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/store-api.js"></script>
+    <script src="assets/js/dashboard.js"></script>
+</body>
+</html>

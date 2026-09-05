@@ -1,0 +1,197 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import {
+  authService,
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  sessionDisplayName,
+  setTokens,
+  type AuthSession,
+  type LoginInput,
+  type RegisterInput,
+} from '@/shared/api'
+import type { User, UserRole } from '@/shared/types'
+
+/** Backend refused an action the UI believed was allowed. Not an authentication failure. */
+export type SessionProblem = 'forbidden' | null
+
+const signOutHandlers = new Set<() => void>()
+
+/**
+ * Run cleanup when the user deliberately signs out.
+ *
+ * Deliberately not wired to `clearSession()`: an expired token or a failed refresh is
+ * not a decision to discard local work. Features register here to drop browser-local
+ * state that belongs to the identity that just left. Returns an unsubscribe function.
+ */
+export function onExplicitSignOut(handler: () => void): () => void {
+  signOutHandlers.add(handler)
+  return () => {
+    signOutHandlers.delete(handler)
+  }
+}
+
+type AuthState = {
+  user: User | null
+  token: string | null
+  isHydrated: boolean
+  sessionProblem: SessionProblem
+  /** Apply OTP / login / register session — syncs Zustand + api-client token store */
+  applySession: (session: AuthSession) => void
+  /** Local clear only (no server call) — used after failed refresh */
+  clearSession: () => void
+  login: (input: LoginInput) => Promise<void>
+  register: (input: RegisterInput) => Promise<void>
+  /** OTP verify helper — stores session for customer or vendor */
+  completeOtpLogin: (session: AuthSession) => void
+  /** Choose the active vendor for a multi-membership identity. Ignores unknown IDs. */
+  selectVendor: (vendorId: string) => void
+  logout: () => Promise<void>
+  /** One-shot startup restoration. Route guards must wait for this to finish. */
+  restoreSession: () => Promise<void>
+  setSessionProblem: (problem: SessionProblem) => void
+  setHydrated: (value: boolean) => void
+  hasRole: (role: UserRole) => boolean
+}
+
+/**
+ * Sessions persisted before verified roles and memberships existed carry neither field.
+ * Rebuild both from the active role so an older md-auth entry cannot crash a selector, and
+ * keep `vendorId` only when it matches a known membership.
+ */
+function normalizePersistedUser(user: User): User {
+  const roles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role]
+  const vendors = Array.isArray(user.vendors) && user.vendors.length
+    ? user.vendors
+    : user.vendorId
+      ? [{ vendorId: user.vendorId }]
+      : []
+  const vendorId = vendors.some((entry) => entry.vendorId === user.vendorId)
+    ? user.vendorId
+    : vendors.length === 1
+      ? vendors[0].vendorId
+      : undefined
+
+  return { ...user, name: sessionDisplayName(user.role, user.name), roles, vendors, vendorId }
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      token: null,
+      isHydrated: false,
+      sessionProblem: null,
+
+      applySession(session) {
+        setTokens(session.token, session.refreshToken ?? null)
+        set({ user: session.user, token: session.token, sessionProblem: null })
+      },
+
+      clearSession() {
+        clearTokens()
+        set({ user: null, token: null, sessionProblem: null })
+      },
+
+      setSessionProblem(problem) {
+        set({ sessionProblem: problem })
+      },
+
+      async restoreSession() {
+        if (get().isHydrated) return
+        try {
+          if (!get().user) return
+
+          // An access token that is merely expired is still present here; the
+          // interceptor refreshes it on the first 401. Only act when it is gone.
+          if (!getAccessToken() && getRefreshToken()) {
+            try {
+              const token = await authService.refreshToken()
+              if (token) set({ token })
+            } catch {
+              // Transient failure. Keep the persisted session and let the first
+              // protected request retry rather than signing the user out.
+            }
+          }
+
+          if (!getAccessToken() && !getRefreshToken()) get().clearSession()
+        } finally {
+          set({ isHydrated: true })
+        }
+      },
+
+      completeOtpLogin(session) {
+        get().applySession(session)
+      },
+
+      selectVendor(vendorId) {
+        set((state) => {
+          if (!state.user?.vendors.some((entry) => entry.vendorId === vendorId)) return {}
+          return { user: { ...state.user, vendorId } }
+        })
+      },
+
+      async login(input) {
+        const session = await authService.login(input)
+        get().applySession(session)
+      },
+
+      async register(input) {
+        const session = await authService.register(input)
+        get().applySession(session)
+      },
+
+      async logout() {
+        try {
+          // Only hit server when we still have an access token
+          if (getAccessToken()) {
+            await authService.signOut()
+          }
+        } catch {
+          /* network/signout failures must not block local clear */
+        } finally {
+          get().clearSession()
+          for (const handler of signOutHandlers) {
+            try {
+              handler()
+            } catch {
+              /* one failed cleanup must not strand the rest of sign-out */
+            }
+          }
+        }
+      },
+
+      setHydrated(value) {
+        set({ isHydrated: value })
+      },
+
+      hasRole(role) {
+        return get().user?.roles?.includes(role) ?? false
+      },
+    }),
+    {
+      name: 'md-auth',
+      // Persist user + access token for UI restore. Refresh token stays in api-client
+      // localStorage key only (see docs/SESSION.md) — never wipe it on rehydrate.
+      partialize: (state) => ({ user: state.user, token: state.token }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+
+        const access = state.token || getAccessToken()
+        if (access) {
+          // Important: do NOT pass refresh=null — that cleared refresh on every reload.
+          setTokens(access)
+        }
+
+        if (state.user) {
+          state.user = normalizePersistedUser(state.user)
+        }
+
+        // Hydration is completed by restoreSession() so route guards never see a
+        // half-restored session. The previous microtask cleared the session whenever
+        // the access token was absent, ignoring a still-valid refresh token.
+      },
+    },
+  ),
+)

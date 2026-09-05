@@ -1,0 +1,12 @@
+---
+description: Load MithraDirect's canonical repository instructions
+alwaysApply: true
+---
+
+# Repository instructions
+
+Read root `AGENTS.md` before making repository changes. It is the canonical tracked guidance.
+Use `README.md` for human setup and `docs/API_ARCHITECTURE.md` for detailed API behavior.
+
+Do not duplicate repository-wide instructions in this rule. If source, OpenAPI, and documentation
+disagree, follow the precedence and gap-reporting rules in `AGENTS.md`.

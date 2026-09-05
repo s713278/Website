@@ -1,0 +1,16 @@
+---
+description: Static HTML/CSS conventions for design-reference only
+globs: design-reference/**/*.{html,css}
+alwaysApply: false
+---
+
+# design-reference HTML / CSS
+
+Read root `AGENTS.md` and `design-reference/README.md` first. This folder is frozen visual
+reference, not Vite product source; implement shipping UI under `src/`.
+
+- Tokens: `design-reference/assets/css/global.css` (`:root`). Page CSS for layout/feature chrome only.
+- Prefer modern CSS: `clamp()`, `min()`, `color-mix()`, `aspect-ratio`, `dvh`, safe-area insets.
+- Mobile-first breakpoints ~640 / 768 / 1024 when matching existing static pages.
+- Touch targets ≥ 44px; no fixed desktop-only widths without fluid fallback.
+- Do not invent a parallel token system here. Shipping product tokens belong in `src/styles/global.css`.

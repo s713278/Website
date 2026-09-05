@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.env
+.env.*.local
+*.log
+.turbo
+coverage
+.vite
+*.tsbuildinfo
+website.zip
+
+# Local agent tooling and scratch material
+.agents/
+.angents/
+.claude/
+.scratch/
+CLAUDE.md
+docs/adr/
+docs/agents/
