@@ -7,6 +7,7 @@ import {
   ProductGrid,
   ServiceInfoBar,
   StoreAboutSection,
+  StoreCartBar,
   StorePageFooter,
   StorePageStates,
   StorefrontHeader,
@@ -66,6 +67,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()))
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(ALL_CATEGORY)
   const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()))
+  const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const homeRef = useRef<HTMLDivElement>(null)
   const productsRef = useRef<HTMLElement>(null)
   const categoriesRef = useRef<HTMLDivElement>(null)
@@ -218,7 +220,11 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
         </div>
       ) : null}
 
-      <main className="store-shell-inner flex flex-1 flex-col gap-5 py-5 sm:gap-6 sm:py-6">
+      <main
+        className={`store-shell-inner flex flex-1 flex-col gap-5 py-5 sm:gap-6 sm:py-6${
+          itemCount > 0 ? ' pb-24' : ''
+        }`}
+      >
         {browseOpen ? (
           products.error && products.items.length === 0 && !products.loading && !searching ? (
             <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
@@ -316,6 +322,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
       </main>
 
       <StorePageFooter store={store} />
+      <StoreCartBar storeId={store.id} itemCount={itemCount} subtotal={cartSubtotal} />
     </>
   )
 }

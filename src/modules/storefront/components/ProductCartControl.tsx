@@ -1,9 +1,13 @@
 import { type MouseEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { requestAddToCart } from '@/modules/storefront/lib/request-add-to-cart'
+import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { variantCartId } from '@/modules/storefront/lib/product-variants'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, ProductVariant } from '@/modules/storefront/types'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 type ProductCartControlProps = {
   storeId: string
@@ -21,9 +25,10 @@ export function ProductCartControl({
   variant,
   className,
 }: ProductCartControlProps) {
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
   const lineId = variantCartId(product.id, variant.id)
   const qty = useCartStore((s) => s.lines.find((line) => line.itemId === lineId)?.qty ?? 0)
-  const addItem = useCartStore((s) => s.addItem)
   const setQty = useCartStore((s) => s.setQty)
 
   function stopNav(event: MouseEvent) {
@@ -33,12 +38,30 @@ export function ProductCartControl({
 
   function handleAdd(event: MouseEvent) {
     stopNav(event)
-    addItem(storeId, storeName, product, variant)
+    requestAddToCart({
+      user,
+      navigate,
+      storeId,
+      storeName,
+      product,
+      variant,
+      qty: 1,
+      returnTo: storeCartPath(storeId),
+    })
   }
 
   function handleIncrease(event: MouseEvent) {
     stopNav(event)
-    addItem(storeId, storeName, product, variant)
+    requestAddToCart({
+      user,
+      navigate,
+      storeId,
+      storeName,
+      product,
+      variant,
+      qty: 1,
+      returnTo: storeCartPath(storeId),
+    })
   }
 
   function handleDecrease(event: MouseEvent) {

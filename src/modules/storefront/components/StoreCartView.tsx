@@ -74,7 +74,7 @@ export function StoreCartView({
         cartCount={cartCount}
         cartHref={storeCartPath(store.id)}
         searchOpen={false}
-        onToggleSearch={() => navigate(`${storePath(store.id)}?q=`)}
+        onToggleSearch={() => navigate(storePath(store.id))}
         pageTitle="Cart"
         onBack={onBack}
       />
@@ -150,14 +150,6 @@ export function StoreCartView({
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-600">Subtotal ({itemCount} items)</dt>
                     <dd className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-slate-600">Delivery Fee</dt>
-                    <dd className="font-semibold text-slate-900">{formatCurrency(totals.delivery)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-slate-600">Packaging Fee</dt>
-                    <dd className="font-semibold text-slate-900">{formatCurrency(totals.packaging)}</dd>
                   </div>
                   <div className="flex justify-between gap-3 border-t border-dashed border-slate-200 pt-3">
                     <dt className="text-base font-bold text-slate-900">Total</dt>

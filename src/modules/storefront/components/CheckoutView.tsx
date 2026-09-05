@@ -221,8 +221,6 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
 
               <dl className="space-y-2.5 border-t border-slate-100 px-5 py-4 text-sm">
                 <SummaryRow label="Subtotal" value={formatCurrency(totals.subtotal)} />
-                <SummaryRow label="Delivery Fee" value={formatCurrency(totals.delivery)} />
-                <SummaryRow label="Packaging Fee" value={formatCurrency(totals.packaging)} />
               </dl>
 
               <div className="border-t border-slate-100 px-5 py-4">

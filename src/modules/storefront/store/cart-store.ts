@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { cartLineProductId } from '@/modules/storefront/lib/cart-utils'
+import type { PendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
 import {
   buildCartLineSnapshot,
   findVariantForCartLine,
   resolveVariant,
+  variantCartId,
   variantLineName,
 } from '@/modules/storefront/lib/product-variants'
 import type { CartLine, Product, ProductVariant } from '../types'
@@ -12,12 +14,37 @@ import type { CartLine, Product, ProductVariant } from '../types'
 type CartState = {
   lines: CartLine[]
   addItem: (storeId: string, storeName: string, item: Product, variant?: ProductVariant, qty?: number) => void
+  addPendingLine: (pending: PendingCartAdd) => void
   removeItem: (itemId: string) => void
   setQty: (itemId: string, qty: number) => void
   syncLinePrices: (products: Product[]) => void
   clear: () => void
   itemCount: (storeId?: string) => number
   subtotal: (storeId?: string) => number
+}
+
+function upsertLine(
+  current: CartLine[],
+  next: Omit<CartLine, 'qty'> & { qty: number },
+): CartLine[] | null {
+  if (current.length && current[0].storeId !== next.storeId) {
+    const replace = window.confirm(
+      'Your cart has items from another store. Clear cart and add this item?',
+    )
+    if (!replace) return null
+    return [{ ...next }]
+  }
+
+  const existing = current.find((line) => line.itemId === next.itemId)
+  if (existing) {
+    return current.map((line) =>
+      line.itemId === next.itemId
+        ? { ...line, qty: line.qty + next.qty, name: next.name, price: next.price }
+        : line,
+    )
+  }
+
+  return [...current, { ...next }]
 }
 
 export const useCartStore = create<CartState>()(
@@ -27,35 +54,27 @@ export const useCartStore = create<CartState>()(
       addItem(storeId, storeName, item, variant, qty = 1) {
         const resolved = resolveVariant(item, variant)
         const { itemId, name, price } = buildCartLineSnapshot(item, resolved)
-        const current = get().lines
-        const amount = Math.max(1, qty)
-
-        if (current.length && current[0].storeId !== storeId) {
-          const replace = window.confirm(
-            'Your cart has items from another store. Clear cart and add this item?',
-          )
-          if (!replace) return
-          set({
-            lines: [{ itemId, storeId, storeName, name, price, qty: amount }],
-          })
-          return
-        }
-
-        const existing = current.find((line) => line.itemId === itemId)
-        if (existing) {
-          set({
-            lines: current.map((line) =>
-              line.itemId === itemId
-                ? { ...line, qty: line.qty + amount, name, price }
-                : line,
-            ),
-          })
-          return
-        }
-
-        set({
-          lines: [...current, { itemId, storeId, storeName, name, price, qty: amount }],
+        const next = upsertLine(get().lines, {
+          itemId,
+          storeId,
+          storeName,
+          name,
+          price,
+          qty: Math.max(1, qty),
         })
+        if (next) set({ lines: next })
+      },
+
+      addPendingLine(pending) {
+        const next = upsertLine(get().lines, {
+          itemId: variantCartId(pending.productId, pending.skuId),
+          storeId: pending.vendorId,
+          storeName: pending.storeName,
+          name: variantLineName(pending.name, pending.label),
+          price: pending.price,
+          qty: Math.max(1, pending.qty),
+        })
+        if (next) set({ lines: next })
       },
       removeItem(itemId) {
         set({ lines: get().lines.filter((line) => line.itemId !== itemId) })
