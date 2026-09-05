@@ -3,12 +3,7 @@ import { apiGet, apiPut } from '../client'
 import { demoVendorSizes } from '../fixtures/vendor-dashboard'
 import { mapVendorSizes } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
-
-const DEMO_LATENCY_MS = 150
-
-function demoDelay() {
-  return new Promise((resolve) => setTimeout(resolve, DEMO_LATENCY_MS))
-}
+import { demoDelay } from './demo-delay'
 
 /**
  * Every size the vendor sells, with the price record behind each.

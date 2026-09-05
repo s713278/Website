@@ -8,13 +8,10 @@ import { apiGet, apiPatch } from '../client'
 import { demoVendorOrderDetail, demoVendorOrdersPage } from '../fixtures/vendor-dashboard'
 import { mapVendorOrderDetail, mapVendorOrderPage } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
+import { demoDelay } from './demo-delay'
 
-const DEMO_LATENCY_MS = 150
+/** The page size `GET /v1/vendors/{id}/orders/` serves; the list pages through it. */
 const PAGE_SIZE = 20
-
-function demoDelay() {
-  return new Promise((resolve) => setTimeout(resolve, DEMO_LATENCY_MS))
-}
 
 export type VendorOrderQuery = {
   page?: number

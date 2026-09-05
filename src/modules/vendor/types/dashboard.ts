@@ -83,7 +83,8 @@ export type VendorInsights = {
 
 /** The tier a vendor's account is on, with its limits and what they have used. */
 export type VendorPlan = {
-  tier: string | null
+  /** The plan's backend identifier, e.g. `BASIC`. `name` is what a vendor should read. */
+  code: string | null
   name: string | null
   /** Raw backend billing state. `null` until the backend models one. */
   status: string | null

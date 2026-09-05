@@ -10,6 +10,7 @@ import type {
   VendorSize,
   VendorStoreProfile,
 } from '@/modules/vendor/types/dashboard'
+import { vendorCollectionRows } from './vendor'
 import type { VendorContext } from './vendor-onboarding'
 
 type UnknownRecord = Record<string, unknown>
@@ -54,21 +55,19 @@ export function toPaymentStatus(value: unknown): PaymentStatus | null {
 }
 
 /**
- * Rows out of a paginated container.
+ * The record inside a success envelope, or the payload itself when it is already unwrapped.
  *
- * The backend is inconsistent about this: `/orders/` and `/products/skus` answer
- * `{result: []}`, `/products` answers a bare array, and other reads use Spring's
- * `content`. All three are accepted rather than assumed.
+ * Every dashboard read is wrapped in `{timestamp, success, status, data}`, but the mappers
+ * are also called directly on fixtures and in tests, so both are accepted.
  */
-function rows(data: unknown): UnknownRecord[] {
-  const list = Array.isArray(data)
-    ? data
-    : isRecord(data) && Array.isArray(data.result)
-      ? data.result
-      : isRecord(data) && Array.isArray(data.content)
-        ? data.content
-        : []
-  return list.filter(isRecord)
+function envelopeRecord(payload: unknown): UnknownRecord {
+  if (isRecord(payload) && isRecord(payload.data)) return payload.data
+  return isRecord(payload) ? payload : {}
+}
+
+/** As above, but for reads whose `data` is a collection rather than a record. */
+function envelopeData(payload: unknown): unknown {
+  return isRecord(payload) && 'data' in payload ? payload.data : payload
 }
 
 /**
@@ -79,7 +78,7 @@ function rows(data: unknown): UnknownRecord[] {
  * through here rather than reached for directly.
  */
 export function mapVendorInsights(payload: unknown): VendorInsights {
-  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : {}
+  const data = envelopeRecord(payload)
   const statusCounts = isRecord(data.order_status_count) ? data.order_status_count : {}
   const dues = isRecord(data.payment_dues) ? data.payment_dues : {}
 
@@ -118,10 +117,10 @@ function mapOrderSummary(row: UnknownRecord): VendorOrderSummary {
 }
 
 export function mapVendorOrderPage(payload: unknown): VendorOrderPage {
-  const data = isRecord(payload) && 'data' in payload ? payload.data : payload
+  const data = envelopeData(payload)
   const container = isRecord(data) ? data : {}
   return {
-    orders: rows(data).map(mapOrderSummary),
+    orders: vendorCollectionRows(data).map(mapOrderSummary),
     page: num(container.page_number) ?? 0,
     totalPages: num(container.total_pages) ?? 0,
     totalElements: num(container.total_elements) ?? 0,
@@ -139,8 +138,12 @@ function mapOrderLine(row: UnknownRecord): VendorOrderLine {
   }
 }
 
-/** Flattens the delivery address, whose shape is a free-form map inside a wrapper. */
-function mapDeliveryAddress(value: unknown): string | null {
+/**
+ * Flattens an address to one line. Used for both the order's `delivery_address` and the
+ * vendor record's `business_address` — the backend gives them the same free-form shape,
+ * optionally nested under `address`.
+ */
+function mapAddress(value: unknown): string | null {
   if (!isRecord(value)) return null
   const address = isRecord(value.address) ? value.address : value
   const parts = ['address1', 'address2', 'city', 'district', 'state', 'zipCode']
@@ -150,12 +153,12 @@ function mapDeliveryAddress(value: unknown): string | null {
 }
 
 export function mapVendorOrderDetail(payload: unknown): VendorOrderDetail {
-  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : {}
+  const data = envelopeRecord(payload)
   return {
     ...mapOrderSummary(data),
     customerMobile: str(data.customer_mobile),
-    deliveryAddress: mapDeliveryAddress(data.delivery_address),
-    lines: rows(data.order_items).map(mapOrderLine),
+    deliveryAddress: mapAddress(data.delivery_address),
+    lines: vendorCollectionRows(data.order_items).map(mapOrderLine),
   }
 }
 
@@ -181,15 +184,14 @@ function mapSize(row: UnknownRecord): VendorSize {
 }
 
 export function mapVendorSizes(payload: unknown): VendorSize[] {
-  const data = isRecord(payload) && 'data' in payload ? payload.data : payload
-  return rows(data).map(mapSize).filter((size) => size.skuId !== '')
+  return vendorCollectionRows(envelopeData(payload)).map(mapSize).filter((size) => size.skuId !== '')
 }
 
 /** The vendor's plan, lifted out of the context read the shell already performs. */
 export function mapVendorPlan(context: VendorContext): VendorPlan {
   const subscription = context.subscription
   return {
-    tier: subscription.tier,
+    code: subscription.tier,
     name: subscription.planName,
     status: subscription.status,
     currency: subscription.currency,
@@ -221,7 +223,7 @@ export function mapVendorPlan(context: VendorContext): VendorPlan {
  * placeholder `"string"`, which unconfigured dev records really do contain.
  */
 export function mapVendorStoreProfile(payload: unknown): VendorStoreProfile {
-  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : {}
+  const data = envelopeRecord(payload)
   const email = str(data.communication_email)
   return {
     vendorId: str(data.vendor_id) ?? '',
@@ -232,7 +234,7 @@ export function mapVendorStoreProfile(payload: unknown): VendorStoreProfile {
     contactPerson: str(data.contact_person),
     contactNumber: str(data.contact_number),
     email: email === 'string' ? null : email,
-    address: mapDeliveryAddress(data.business_address),
+    address: mapAddress(data.business_address),
     bannerImage: str(data.banner_image),
     storeIdentifier: str(data.store_identifier),
   }

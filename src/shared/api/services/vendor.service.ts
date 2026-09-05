@@ -1,15 +1,9 @@
 import type { VendorInsights, VendorStoreProfile } from '@/modules/vendor/types/dashboard'
 import { apiGet } from '../client'
-import { demoVendorInsights } from '../fixtures/vendor-dashboard'
+import { demoVendorInsights, demoVendorStoreProfile } from '../fixtures/vendor-dashboard'
 import { mapVendorInsights, mapVendorStoreProfile } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
-
-/** Demo mode answers instantly in tests but keeps a beat in the browser. */
-const DEMO_LATENCY_MS = 150
-
-function demoDelay() {
-  return new Promise((resolve) => setTimeout(resolve, DEMO_LATENCY_MS))
-}
+import { demoDelay } from './demo-delay'
 
 /**
  * Vendor-level insights.
@@ -40,26 +34,7 @@ export async function getVendorStoreProfile(
 ): Promise<VendorStoreProfile> {
   if (!isLiveApi()) {
     await demoDelay()
-    return mapVendorStoreProfile({
-      data: {
-        vendor_id: String(vendorId),
-        business_name: 'Green Bowl Grocers',
-        description: 'Daily fruit, vegetables and staples from around Mirdoddi.',
-        business_type: 'Grocery & Staples',
-        owner_name: 'Demo Owner',
-        contact_person: 'Demo Owner',
-        contact_number: '9000000000',
-        communication_email: 'owner@example.com',
-        business_address: {
-          address1: '12 Market Road',
-          city: 'Mirdoddi',
-          district: 'Siddipet',
-          state: 'Telangana',
-          zipCode: '502108',
-        },
-        store_identifier: 'green-bowl-grocers',
-      },
-    })
+    return mapVendorStoreProfile(demoVendorStoreProfile(vendorId))
   }
   return mapVendorStoreProfile(await apiGet(`/v1/vendors/${vendorId}`))
 }

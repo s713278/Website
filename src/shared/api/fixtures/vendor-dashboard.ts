@@ -9,7 +9,7 @@
  * Shapes are copied from responses measured against the deployed dev API (the paginated
  * `result` container, `price_id` beside the prices, insight groups that omit rather than
  * zero). The content is invented: no real vendor, customer, or contact detail belongs
- * here. See `docs/adr/0001-wire-shaped-demo-fixtures.md`.
+ * here.
  */
 
 function envelope<T>(data: T) {
@@ -206,5 +206,33 @@ export function demoVendorSizes() {
     total_elements: 4,
     total_pages: 1,
     last_page: true,
+  })
+}
+
+/**
+ * The vendor record Settings reads, in the shape `GET /v1/vendors/{id}` answers with.
+ *
+ * `business_address` is a structured object, not a string — measured on the deployed API,
+ * and the reason `mapAddress` flattens rather than reads a field. Kept here rather than
+ * inline in the service so it passes through the same mapper guard as every other fixture.
+ */
+export function demoVendorStoreProfile(vendorId: string | number) {
+  return envelope({
+    vendor_id: String(vendorId),
+    business_name: 'Green Bowl Grocers',
+    description: 'Daily fruit, vegetables and staples from around Mirdoddi.',
+    business_type: 'Grocery & Staples',
+    owner_name: 'Demo Owner',
+    contact_person: 'Demo Owner',
+    contact_number: '9000000000',
+    communication_email: 'owner@example.com',
+    business_address: {
+      address1: '12 Market Road',
+      city: 'Mirdoddi',
+      district: 'Siddipet',
+      state: 'Telangana',
+      zipCode: '502108',
+    },
+    store_identifier: 'green-bowl-grocers',
   })
 }

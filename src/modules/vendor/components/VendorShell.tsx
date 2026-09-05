@@ -38,7 +38,7 @@ function PlanSummary() {
 
   return (
     <div className="rounded-lg border border-[var(--md-border)] bg-white p-3">
-      <p className="text-xs font-semibold text-slate-700">{plan.name ?? plan.tier ?? 'Your plan'}</p>
+      <p className="text-xs font-semibold text-slate-700">{plan.name ?? plan.code ?? 'Your plan'}</p>
       {products != null && limit != null ? (
         <p className="mt-1 text-xs text-[var(--md-muted)]">
           {products} of {limit} products used

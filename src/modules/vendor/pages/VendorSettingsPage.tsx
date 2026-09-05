@@ -80,7 +80,7 @@ export function VendorSettingsPage() {
       <Card className="mb-4">
         <h2 className="font-display mb-3 font-semibold">Your plan</h2>
         <dl>
-          <Row label="Plan" value={plan.name ?? plan.tier} />
+          <Row label="Plan" value={plan.name ?? plan.code} />
           <Row
             label="Monthly price"
             value={plan.monthlyPrice != null ? formatCurrency(plan.monthlyPrice) : null}

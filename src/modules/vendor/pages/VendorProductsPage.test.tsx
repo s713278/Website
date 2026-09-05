@@ -49,7 +49,7 @@ function accountFor(vendorId: string): VendorAccount {
     },
     storeState: 'OPEN',
     plan: {
-      tier: 'FREE',
+      code: 'FREE',
       name: 'Free',
       status: 'ACTIVE',
       currency: 'INR',

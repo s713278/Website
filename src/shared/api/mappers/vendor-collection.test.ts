@@ -10,6 +10,9 @@ import { vendorCollectionRows } from './vendor'
  * Testing `Array.isArray` on the container is always false, so every order silently
  * vanished and the dashboard reported zero open orders and zero revenue however many
  * orders existed. Both shapes verified live on 2026-09-04.
+ *
+ * `mappers/vendor-dashboard.ts` calls this same function, so these cases guard the live
+ * dashboard read rather than an unused sibling.
  */
 describe('vendorCollectionRows', () => {
   it('reads a bare array, the shape /products returns', () => {
@@ -26,6 +29,10 @@ describe('vendorCollectionRows', () => {
       last_page: true,
     }
     expect(vendorCollectionRows(page)).toEqual([{ id: 1, status: 'PENDING' }])
+  })
+
+  it("reads Spring's `content` container", () => {
+    expect(vendorCollectionRows({ content: [{ id: 3 }], totalPages: 1 })).toEqual([{ id: 3 }])
   })
 
   it('returns nothing for an empty page rather than the container itself', () => {
