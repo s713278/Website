@@ -2,6 +2,16 @@
 
 **Prepared: 6 September 2026. Status: proposed implementation plan; not a completion report.**
 
+> **Partly superseded, 6 September 2026.** A design review after this plan was written settled
+> several open choices differently, and a re-probe changed the facts under three work packages.
+> Where this document and the ticket set disagree, **the tickets win**. Specifically: Milestone B
+> (Customers, read-only Subscriptions, the six-surface navigation) is in scope for the first
+> demonstration rather than deferred; the delivery-window total lives on Orders as a subtotal of the
+> applied date filter, not as an Overview metric (§3H); Subscriptions demonstrate against live data
+> rather than the synthetic data §3G proposes; demo-mode writes persist in shared state; and the
+> Customers screen is blocked on a published row schema, not merely on population semantics.
+> The [claim audit](./VENDOR_CONSOLE_CLAIM_AUDIT.md) carries the corrected facts.
+
 We can build a useful vendor console before the remaining backend dependencies are resolved.
 The first team demonstration should show vendors finding delivery work, inspecting complete
 orders, maintaining prices and store settings, and understanding their store's setup state.
@@ -124,8 +134,11 @@ do not display “No orders” as if the request succeeded.
   dashboard editing rather than forcing vendors through the setup wizard again.
 - Preserve the distinction between platform products, assigned vendor products and vendor SKUs.
   Do not add general product/category deletion or stock-quantity controls without a contract.
-- Prepare rename and availability controls. Any temporary SKU update must preserve current
-  features; do not blindly send `features: {}` against a real SKU containing feature data.
+- Prepare rename and availability controls. A SKU update **must** carry a `features` key — omitting
+  it is a hard 417 — and `features: {}` or `features: null` will **destroy** an existing feature map.
+  The only safe form is read-modify-write: `GET /v1/vendors/{v}/skus/{id}`, then send
+  `features: sku.features ?? null`. Neither the list read nor `fetchSkuDetails` carries SKU
+  `features`, so the extra read is unavoidable. Wrap it in the service so no page can get it wrong.
 
 **Acceptance:** verified mutations survive rereads; retries do not create duplicate sizes; price
 changes target the correct record; unsupported approval states receive useful feedback. Availability

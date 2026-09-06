@@ -9,6 +9,12 @@ limits. The [discussion brief](./VENDOR_CONSOLE_BACKEND_BRIEF.md) explains what 
 [API_GAPS.md](./API_GAPS.md) remains the broader contract tracker; some older entries there predate
 this audit and must not be used as independent confirmation of these claims.
 
+**Re-probed the same day, before implementation.** The four load-bearing capabilities were re-run on
+**both** approval states rather than only the never-submitted store. Items below marked
+**[re-probed]** carry the corrected result. In short: the SKU and profile writes work more widely
+than claimed but each has a precondition the audit missed, the customer list has no declared row
+schema on either account, and the order transition graph is now measured rather than inferred.
+
 This document owns the **asks and target console**, not a claim that all proposed behavior is
 implemented. Original item numbers remain stable, including withdrawn blockers. The current
 development contract contains 118 paths; the checked-in snapshot contains 117.
@@ -78,40 +84,64 @@ alike. This supports a deserialization defect; it does not prove every backend p
 status action uses `POST /v1/vendors/{v}/orders/bulk-status-update`; it is not yet wired into the
 app-facing service. Document transitions and per-order failures. Do not claim dues can only grow.
 
-### 1.3 SKU partial updates fail when `features` is omitted
+### 1.3 SKU partial updates fail when `features` is omitted **[re-probed]**
 
 **Need.** Reliable updates to an existing size's name, description and active flag.
 
-**Evidence.** A bare name update and same-value active-flag update reproduce HTTP 417 with a
-JDBC/features error. Supplying `features: {}` on an isolated test SKU allowed disabling, re-enabling
-and renaming it with HTTP 200. Each value persisted after reread. The test used an unsubmitted
-store and the disposable size was removed. The claim that availability editing is impossible is
-therefore withdrawn; customer purchasing enforcement and other approval states remain unverified.
+**Evidence.** A bare name update and a same-value active-flag update both reproduce HTTP 417 with
+`could not determine data type of parameter $5`. With a `features` key present, disable, re-enable
+and rename all return 200 and persist after reread. The re-probe ran this on the **gone-live** store
+as well as the unsubmitted one: results are identical, so the approval gate does not affect this
+endpoint. It does still block SKU *creation* on the gone-live store (417, "not yet approved").
 
-**Ask.** Make the documented partial-update behavior work: omitted fields must remain unchanged.
-Any client workaround must preserve existing feature data. A reversible active flag is a smaller
-requirement than full inventory management; no stock-on-hand model or inventory-adjustment API was
-found. Verify purchasing enforcement before describing an availability control as complete.
+**Correction to the earlier advice.** `features: {}` and `features: null` both write and **destroy**
+any existing feature map. The safe recipe is read-modify-write — `GET /v1/vendors/{v}/skus/{id}`,
+then send `features: sku.features ?? null` — because that read exposes `features` once it holds a
+value. Neither the paginated list read nor `fetchSkuDetails` carries SKU `features`, so the extra
+read is unavoidable.
 
-### 1.4 Profile-wide blocker withdrawn
+**Ask.** Make the documented partial-update behavior work: an omitted optional field must leave the
+column unchanged, rather than failing the whole statement. Until then every client must round-trip
+`features`, which is easy to get wrong and silently lossy when it is. A reversible active flag is a
+much smaller requirement than inventory management; no stock-on-hand model or inventory-adjustment
+API exists. Purchasing enforcement against an inactive SKU is still unverified — confirm it before
+anyone describes the availability control as complete.
 
-**Evidence.** Valid `PUT /v1/vendors/{id}` bodies with existing category assignments return 200 on
-both probe accounts. A changed business name persisted on the unsubmitted account and was restored
-successfully. The earlier “dead for every body” claim is false today.
+### 1.4 Profile-wide blocker withdrawn **[re-probed]**
 
-**Next step.** Integrate the intended editor and verify address/contact changes and relevant approval
-states. Those were not exhaustively exercised. A separate storefront-configuration write also
-exists. Read-only frontend Settings is not proof that profile writes are unavailable.
+**Evidence.** `PUT /v1/vendors/{id}` returns 200 on both probe accounts, and the re-probe extends
+this to the **gone-live** store and to `contact_person`, `communication_email` and the structured
+`business_address` map — each persisted and reread, then restored. The earlier “dead for every body”
+claim is false.
 
-### 1.5 Customer-list blocker not established
+**Two behaviors the editor must be built around.** `assign_categories` is declared `required` in
+`VendorProfileRequest` but is **not enforced**: omitting it returns 200 and leaves assignments
+intact. And the write is a **partial merge that silently ignores explicit `null`**, so a field that
+holds a value **cannot be cleared** — `""` and `{}` set an empty value rather than removing one.
+The success message is also double-nested at `data.data`; a client reading `data` renders an object.
 
-**Evidence.** The current probe has nine orders, all placed by the owner, dashboard customer count
-one and zero customer-list rows. `GET /v1/vendors/{id}/customers` explicitly selects active
-vendor–customer relationships; it does not promise all distinct purchasers.
+**Ask.** Support clearing an optional field, either by honouring `null` or by documenting the
+intended mechanism. Correct the `required` marking on `assign_categories` so clients are not forced
+to echo data they are not changing. Until then the frontend will build the editor with clearing
+disabled and say so in the UI. A separate storefront-configuration write also exists.
 
-**Ask.** Define which actions establish a customer relationship, whether owner self-orders belong
-in counts, and whether directory/count populations should agree. Verify with a distinct customer
-known to have an active relationship. The current probe does not prove an eligible customer is missing.
+### 1.5 Customer list has no data and no declared row schema **[re-probed]**
+
+**Evidence.** The probe has nine orders, all placed by the owner, dashboard customer count one and
+zero customer-list rows. `GET /v1/vendors/{id}/customers` explicitly selects active vendor–customer
+relationships; it does not promise all distinct purchasers. The re-probe adds two facts: **both**
+approval states return `total_elements: 0` with zero rows under every parameter combination, and the
+200 response is typed as the generic `APIResponseObject`, so **the contract declares no row schema
+at all**.
+
+**Blocked.** The Customers screen — not for want of data, but for want of a shape. A mapper written
+today would be guessing field names, which is exactly the failure this audit exists to prevent.
+
+**Ask.** Publish a row schema for this response, and define which actions establish a customer
+relationship, whether owner self-orders belong in counts, and whether directory and count
+populations should agree. Then supply or identify one vendor with a real active relationship so the
+mapping can be verified against a row. Inviting a customer sends real messages, so no relationship
+was created during this work.
 
 ### 1.6 Order-detail blocker withdrawn
 
@@ -135,7 +165,7 @@ need not equal the final amount before delivery charges and other documented adj
 | **2.6** | Optional delivery fields vary across current order rows | Document required and optional order-read fields. Earlier `grass_amount`/`-null` observations were not reproduced on the sampled current vendor list; retain them as historical evidence needing a specific response reproduction |
 | **2.7** | Price read and write expose different fields | Current narrow client body works. Clear writable-field documentation is sufficient; accepting and ignoring read-only fields is optional, not a dashboard prerequisite |
 | **2.8** | Complete vendor transition graph is missing | Document legal next states and useful errors. Current bad-field input returns 400, not the earlier reported 500; bulk HTTP 200 can still mean every order failed |
-| **2.9** | Approval-dependent catalog actions need a state matrix | ACTIVE/PENDING means submitted but unapproved. The two historical states do not establish an inverted gate. Current setup blocks size editing after submission; the dashboard has no add-size control yet |
+| **2.9** **[re-probed]** | Approval-dependent catalog actions need a state matrix | ACTIVE/PENDING means submitted but unapproved, so two states do not establish an inverted gate. But the asymmetry is real and was re-confirmed: **SKU creation is refused on the gone-live store (417, "not yet approved") and permitted on the never-submitted one**, while SKU *editing* works on both. A vendor who has submitted therefore cannot add a size until an administrator acts. Confirm this is intended and publish the state matrix; it decides whether the dashboard can offer an add-size control at all |
 
 ### Price identifiers and writable fields
 
@@ -147,13 +177,25 @@ the narrow same-price write returns 200. Separate read and write DTOs are valid 
 ### Status-write contract
 
 Use the declared vendor-scoped bulk route with `{order_ids, new_status}`. No unscoped bulk route is
-declared. Sending `order_status` instead of `new_status` now returns 400. A nonexistent order with
-the correct body returns HTTP 200, `success_count: 0` and `failed_orders`; the client must inspect
-the result. Successful real transitions were not repeated in this audit.
+declared. Sending `order_status` instead of `new_status` returns 400, as does an unknown status and
+an empty `order_ids`.
 
-Earlier probes recorded `PENDING → SCHEDULED → IN_PROCESS → SHIPPED → DELIVERED`. Confirm the full
-vendor graph before implementing it. Some individual customer/tracking transitions are documented;
-the claim that all transition behavior is undocumented was too broad. Dedicated cancellation is separate.
+**[re-probed] The graph is now measured, not inferred.** Walking one throwaway order:
+`PENDING → SCHEDULED → IN_PROCESS → SHIPPED` are each accepted one hop at a time. **Every skip,
+repeat and backward move is rejected — including `PENDING → IN_PROCESS`, which the shipped frontend
+sends today.** `SHIPPED → DELIVERED` was left untested only because it would have made the throwaway
+order uncancellable; please confirm it.
+
+**`CANCELLED` is in the declared `new_status` enum but unusable through this route** — it returns
+417 with "transaction silently rolled back". Cancellation works only through
+`PATCH /v1/vendors/{v}/orders/{id}/cancel` with camelCase `cancelReason`, which succeeded from every
+state tested including `SHIPPED`. Either make the enum value work or remove it from the enum.
+
+**A rejected transition is not an error response.** It is HTTP 200 with `success_count: 0` and a
+`failed_orders` entry whose `reason` is the same generic sentence for every illegal edge, so a client
+cannot distinguish "wrong next status" from "not your order" from "already there". A nonexistent id
+is the one distinguishable case. Please return distinct, actionable reasons — and note that any
+client not inspecting `failed_orders` will render a silent no-op as success.
 
 ## Tier 3 — Domain follow-up
 
@@ -161,8 +203,11 @@ the claim that all transition behavior is undocumented was too broad. Dedicated 
   membership/context role. Current frontend sessions retain verified `roles[]` and `vendors[]`,
   and route guards use verified roles. Multiple roles are supported. Granular staff permissions
   remain a valid question for the intended owner-operated console.
-- **Customer paging claim withdrawn.** Use `page_number` and `page_size`. Live `page_size=5`
-  returns 5; `size=5` is not a declared parameter and leaves the default 10.
+- **Customer paging claim withdrawn, but not replaced by a verified one. [re-probed]** The declared
+  parameters are `mobile`, `page_number` and `page_size`; `size` is undeclared and correctly ignored,
+  so the original probe was malformed. However `page_size=5` only changes the **echoed** `page_size`
+  field — both probe vendors return zero rows — so paging remains undemonstrated. Do not present it
+  as working.
 - **Subscription-related SKU reference validation** is parked with the black-box model. Earlier
   unknown-plan observations are not a freshly confirmed vendor-dashboard blocker.
 
@@ -202,8 +247,8 @@ These are source-confirmed integration issues, not independent proof of a backen
 | `src/shared/api/mappers/vendor-dashboard.ts:110` | Reads customer_name; sampled list rows carry mobile. Add separate contact-identity support rather than treating a phone number as a name |
 | `src/shared/api/mappers/vendor-dashboard.ts:111` | Ignores flat amount. Existing fallbacks are order_amount.amount, total_amount and total; sampled live list totals therefore map to null |
 | `src/shared/api/mappers/vendor-dashboard.ts:114` | Placed-at is null on sampled rows. The schema declares order_date, but sampled reads omit it; pages do not currently display placedAt |
-| `src/shared/api/services/vendor-orders.service.ts:89` | Advance and mark-paid still call the failing PATCH; bulk is not integrated |
-| `src/modules/vendor/lib/order-actions.ts:13` | PENDING maps directly to IN_PROCESS, skipping the historically observed SCHEDULED step; align with the confirmed graph |
+| `src/shared/api/services/vendor-orders.service.ts:89` | Advance and mark-paid still call the failing PATCH; bulk is not integrated. When it is, the service must treat HTTP 200 with `success_count: 0` as a failure — otherwise every rejected transition renders as success |
+| `src/modules/vendor/lib/order-actions.ts:13` | **Confirmed live defect.** PENDING maps directly to IN_PROCESS, an edge the backend rejects. Because rejection is an HTTP 200, pressing advance on a PENDING order is a silent no-op today. Must become `PENDING → SCHEDULED` |
 | `src/modules/vendor/pages/VendorOverviewPage.tsx` | Still shows dues/customer tiles; the proposed hidden metrics and work queue are not implemented |
 | `src/modules/vendor/pages/VendorSettingsPage.tsx` | Has no profile or checkout editor; do not claim checkout editing already ships here |
 

@@ -8,24 +8,37 @@ The verified case is narrower and more credible than the original report: **orde
 dues include cancelled orders, and booking-period reporting lacks reliable date and payment
 foundations.** SKU partial updates have a reproducible omission bug, but a tested payload can
 update availability and names. Protected cross-account reads also require a separate security
-review. Profile editing, correct customer pagination and complete order detail should not be
-presented as unavailable capabilities.
+review. Profile editing and complete order detail should not be presented as unavailable
+capabilities.
+
+**Re-probed the same day, before implementation.** Four things changed and you should present the
+corrected versions, not the ones above them: the SKU workaround `features: {}` **destroys** existing
+data and must be read-modify-write; profile `PUT` works more widely than claimed but **cannot clear
+a field**; customer pagination is **not** demonstrated working — both accounts return zero rows and
+the contract declares no row schema; and `PENDING → IN_PROCESS`, which our own code sends today, is
+**rejected** by the backend. Two asks also got stronger evidence: dues rose 840 → 900 after one
+create-and-cancel, and sparse status counts were watched appearing and disappearing in one session.
 
 ## Open the meeting with this
 
-> “We have checked the dashboard asks against the current API and frontend. Some original blocker
-> claims were too broad, so we have corrected them. Store-name updates work, customer pagination
-> works with the documented parameters, and full order detail is already integrated.
+> “We checked the dashboard asks against the current API and our own frontend, then re-checked the
+> four that mattered most on both approval states. Some original blocker claims were too broad and
+> we have corrected them: profile edits work, including on a store that has gone live, and full
+> order detail is already integrated. Two of our own corrections were also wrong, and we have
+> corrected those too.
 >
-> The remaining issues affect the vendor's ability to operate reliably. Current order-update
-> requests fail. The dues figure includes cancelled orders. The available date filtering answers
-> when orders will be delivered, without providing a reliable basis for orders placed this week.
-> SKU updates also fail when an optional features field is omitted, although supplying it allows
-> the tested availability change.
+> The remaining issues affect whether a vendor can operate reliably. Per-order updates fail
+> outright. Status changes work only through the bulk route, one step at a time, and when it
+> refuses it returns a success code — so today a vendor can press advance and believe an order
+> moved when nothing happened. The dues figure counts cancelled orders: we created an order,
+> cancelled it, and watched the amount owed go up by exactly that order and stay there. Date
+> filtering answers when orders will be delivered; there is no creation timestamp anywhere, so
+> nothing answers what was ordered this week. And the customer list returns no rows on either test
+> account and declares no row schema at all, so there is nothing for us to build against.
 >
-> We need supported contracts and clear business definitions for those workflows. Frontend will
-> implement its missing controls and fix its own mapping and demo-data defects in parallel. I’d
-> like us to agree on the required release capabilities, owners and acceptance scenarios.”
+> We need supported contracts and clear business definitions for those workflows. Frontend is
+> implementing its missing controls and fixing its own mapping and demo-data defects in parallel.
+> I'd like us to agree the required release capabilities, owners and acceptance scenarios.”
 
 ## Explain why the remaining asks matter
 
@@ -33,11 +46,11 @@ These vendor examples are illustrations, not reported customer incidents.
 
 | Vendor's question | Verified issue | Why it matters for the dashboard | Request |
 |---|---|---|---|
-| “Can I advance this order or mark it paid?” | Current per-order PATCH returns 417 with an OrderUpdateRequest error. The frontend uses that route for both actions | These are daily operational controls. A screen that displays orders but fails to persist its actions cannot complete that workflow | Repair PATCH or explicitly support alternatives. Agree the full transition graph and a working payment-state write. **1.2, 2.8** |
-| “What amount should I collect?” | On the complete probe dataset, dues are 840, including 160 from cancelled/DUE orders | The amount labelled due could prompt the vendor to request money that is not owed under the intended cancellation rules | Agree cancellation and collection semantics; fix the aggregate and verify it against order/payment records. Frontend must hide the unreliable metric meanwhile. **2.3** |
+| “Can I advance this order or mark it paid?” | Per-order PATCH returns 417 with an OrderUpdateRequest error, and the frontend uses it for both actions. Bulk status update works, but only one hop at a time — and it returns **HTTP 200 with `success_count: 0`** when it refuses | Advancing is a daily operational control. Worse than failing loudly, a refused transition currently looks like success, so a vendor can press the button and believe the order moved | Repair PATCH or confirm bulk as the supported route. Return distinct, actionable rejection reasons instead of one generic sentence. Supply a working payment-state write. **1.2, 2.8** |
+| “What amount should I collect?” | Dues were 840 including 160 from cancelled orders — and creating one order then **cancelling** it moved the figure to 900, where it stayed | The amount labelled due would prompt the vendor to ask a customer for money that was never owed, for an order the customer already cancelled | Agree cancellation and collection semantics; fix the aggregate and verify it against order and payment records. Frontend hides the metric meanwhile. **2.3** |
 | “How much did I sell this week?” | Sampled vendor rows lack placed-at data; the date filter selects delivery dates. No dedicated period vendor sales aggregate is documented | Delivery workload and order-booking activity are different. Mislabelled totals would give the vendor a misleading business picture | Supply reliably populated placed-at data, explicit date filtering and agreed period aggregates. **1.1, 2.2** |
-| “Can I temporarily stop selling this size?” | Active-flag/name updates without features fail. A controlled test with features supplied successfully disabled, re-enabled and renamed a size | The intended simple availability action should not depend on an unrelated optional field. The dashboard also needs its own control | Fix omitted-field handling. If a workaround is accepted, preserve existing features and verify purchasing respects inactivity. **1.3** |
-| “Which customers does this screen represent?” | The directory selects active vendor–customer relationships; the dashboard count and self-order history do not establish the same population | Implementing a directory against an assumed relationship definition could produce confusing counts and missing expected entries | Define the relationship, owner exclusion/inclusion and count scope. Verify with a known distinct active customer. This is a domain question, not a proven empty-list defect. **1.5, 2.5** |
+| “Can I temporarily stop selling this size?” | Updates omitting `features` fail on both approval states; with `features` echoed back, disable, re-enable and rename all succeed. Sending `features: {}` succeeds too — and **wipes the vendor's feature data** | A simple availability toggle should not depend on an unrelated optional field, and the obvious workaround is silently destructive. Every client has to know a rule the contract does not state | Fix omitted-field handling so an absent field leaves the column unchanged. Confirm that customer purchasing actually respects an inactive SKU — that is still unverified. **1.3** |
+| “Which customers does this screen represent?” | The directory selects active vendor–customer relationships. Both probe accounts return zero rows, and the 200 response is typed generically, so **no row schema is declared anywhere** | We cannot write a mapper against field names we are guessing at. This blocks the screen more firmly than missing data would — data arrives eventually, a shape has to be decided | Publish the row schema. Define the relationship, owner inclusion and count scope, then point us at one vendor with a real active relationship so the mapping can be verified. **1.5, 2.5** |
 
 ## Explain the money distinction with one example
 
@@ -59,8 +72,9 @@ just the visible page, and must not be labelled sales booked that week or money 
 |---|---|
 | “The profile endpoint is dead.” | A changed store name saved and persisted in the current test, then was restored. Verify remaining fields and states while building the editor. **1.4** |
 | “Order detail is missing purchased items.” | The header endpoint is not the full-detail API. `/items` returned both tested lines and is already integrated. Clarify ambiguous legacy header fields separately. **1.6** |
-| “Customers pagination is broken.” | The documented `page_size` parameter works. The original probe used undeclared `size`. **Tier 3** |
-| “The vendor cannot change availability at all.” | Omitting features fails; a features-aware request successfully changed the tested active flag. Purchasing enforcement and the frontend control remain to be verified. **1.3** |
+| “Customers pagination is broken.” | The original probe used undeclared `size`, so it proved nothing. **But do not replace it with "pagination works"** — `page_size` only changes an echoed field, and both accounts return zero rows. Say pagination is untested. **Tier 3** |
+| “The vendor cannot change availability at all.” | It works on both approval states when `features` is echoed back. Do **not** repeat the `features: {}` suggestion from the first draft — it destroys existing data. Purchasing enforcement is still unverified. **1.3** |
+| “Store profile can be edited, so Settings is unblocked.” | Editing works, including on the gone-live store — but the write ignores `null`, so no field can be **cleared**. Present it as a working editor with one missing capability, not a solved problem. **1.4** |
 | “The customer directory must be broken because there are orders.” | All orders in the current probe were owner self-orders. That does not prove a distinct active customer relationship exists. **1.5** |
 | “The approval gate is inverted.” | The tested submitted vendor is still awaiting approval. Confirm a matrix of setup/approval states before alleging inversion. **2.9** |
 | “Bad bulk-status fields return 500.” | The current wrong-field request returns 400. Valid bulk requests can return 200 with zero successes, so inspect failed_orders. **2.8** |
