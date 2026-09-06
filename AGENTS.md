@@ -33,6 +33,10 @@ consumes a separately maintained Spring Boot API through the repository's OpenAP
 | [CONTEXT.md](./CONTEXT.md) | Product domain glossary and distinctions between platform, vendor, draft, and storefront concepts |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
+| [docs/VENDOR_CONSOLE_BACKEND_ASKS.md](./docs/VENDOR_CONSOLE_BACKEND_ASKS.md) | Prescriptive backend asks blocking the vendor console, ranked by consequence, with the target console they serve |
+| [docs/VENDOR_CONSOLE_CLAIM_AUDIT.md](./docs/VENDOR_CONSOLE_CLAIM_AUDIT.md) | Verification evidence behind each console claim, and the limits of that evidence |
+| [docs/VENDOR_CONSOLE_BACKEND_BRIEF.md](./docs/VENDOR_CONSOLE_BACKEND_BRIEF.md) | What to present to the backend team, and which earlier claims to correct first |
+| [docs/VENDOR_CONSOLE_FRONTEND_DELIVERY_PLAN.md](./docs/VENDOR_CONSOLE_FRONTEND_DELIVERY_PLAN.md) | Frontend work sequence, demonstration scope, and per-package acceptance evidence |
 | [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers, component-test rules, and what has no runner |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API package commands, exports, and package-specific usage |
