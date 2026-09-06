@@ -1,19 +1,48 @@
-import { LayoutDashboard, ClipboardList, Package, Settings, Store } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import {
+  ChevronDown,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Settings,
+  Store,
+  Users,
+} from 'lucide-react'
+import { NavLink, Link, Outlet } from 'react-router-dom'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { presentStoreState } from '@/modules/vendor/lib/store-state'
 import { demoService } from '@/shared/api'
-import { Badge } from '@/shared/components'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
+import {
+  Badge,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
+/** The six surfaces of the console, in the order a vendor works through them. */
 const NAV = [
   { to: '/vendor', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/vendor/orders', label: 'Orders', icon: ClipboardList, end: false },
   { to: '/vendor/products', label: 'Products', icon: Package, end: false },
+  { to: '/vendor/customers', label: 'Customers', icon: Users, end: false },
   { to: '/vendor/storefront', label: 'Storefront', icon: Store, end: false },
   { to: '/vendor/settings', label: 'Settings', icon: Settings, end: false },
 ]
+
+/**
+ * Five on the phone, six on the desktop.
+ *
+ * Six tabs on a bottom bar leaves each one too narrow to hit. Settings is the entry a vendor
+ * touches least and the one that already has a home in the account menu, so it is the one
+ * that comes out — not Customers, which the target console needs visible.
+ */
+const MOBILE_NAV = NAV.filter((item) => item.to !== '/vendor/settings')
 
 function sidebarLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -31,45 +60,46 @@ function bottomLinkClass({ isActive }: { isActive: boolean }) {
   )
 }
 
-/** The plan a vendor is on, with what they have used against what it allows. */
-function PlanSummary() {
-  const { plan } = useVendorAccount()
-  const products = plan.usage.products
-  const limit = plan.limits.products
-
-  return (
-    <div className="rounded-lg border border-[var(--md-border)] bg-white p-3">
-      <p className="text-xs font-semibold text-slate-700">{plan.name ?? plan.code ?? 'Your plan'}</p>
-      {products != null && limit != null ? (
-        <p className="mt-1 text-xs text-[var(--md-muted)]">
-          {products} of {limit} products used
-        </p>
-      ) : null}
-      {/*
-        A trial countdown appears here only when the backend sends an end date. No
-        deployed response carries one yet, so nothing is shown rather than a deadline
-        computed from a hardcoded trial length.
-      */}
-      {plan.trialEndsAt ? (
-        <p className="mt-1 text-xs text-[var(--md-muted)]">
-          Trial ends {new Date(plan.trialEndsAt).toLocaleDateString()}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function StoreHeading() {
+/**
+ * The store name, doubling as the account menu.
+ *
+ * Settings left the mobile bar to make room for six surfaces, so it needs somewhere else to
+ * live at every width — and log out belongs beside it rather than buried at the foot of the
+ * Settings page, where a vendor had to load a screen they did not want in order to leave.
+ *
+ * Keyboard reachability, outside-click and Escape dismissal come from the Radix primitive;
+ * a hand-rolled menu is where those three get forgotten.
+ */
+function AccountMenu() {
   const { context, storeState } = useVendorAccount()
+  const logout = useAuthStore((s) => s.logout)
   const presentation = presentStoreState(storeState)
+  const storeName = context.businessName ?? 'Your store'
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <h1 className="font-display text-lg font-bold text-[var(--md-green-800)]">
-        {context.businessName ?? 'Your store'}
-      </h1>
-      <Badge tone={presentation.tone}>{presentation.label}</Badge>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1 text-left transition outline-none hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-ring/50">
+        <span className="font-display text-lg font-bold text-[var(--md-green-800)]">
+          {storeName}
+        </span>
+        <Badge tone={presentation.tone}>{presentation.label}</Badge>
+        <ChevronDown className="size-4 text-slate-500" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>{storeName}</DropdownMenuLabel>
+        <DropdownMenuItem asChild>
+          <Link to="/vendor/settings">
+            <Settings aria-hidden />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => void logout()}>
+          <LogOut aria-hidden />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -91,13 +121,17 @@ const DEMO_STATE_LABELS: Record<string, string> = {
  *
  * It writes the three fields `deriveStoreState` reads, so it cannot show a combination the
  * backend could not produce.
+ *
+ * It sits in the main column rather than the sidebar because the sidebar is hidden below
+ * `md`, and a walkthrough given on a phone needs the switcher as much as one given on a
+ * laptop.
  */
 function DemoStateSwitcher() {
   const { demo } = useVendorAccount()
   if (!demo) return null
 
   return (
-    <div className="rounded-lg border border-dashed border-[var(--md-border)] bg-white p-3">
+    <div className="mt-8 rounded-lg border border-dashed border-[var(--md-border)] bg-white p-3">
       <p className="text-xs font-semibold text-slate-700">Demo: store state</p>
       <p className="mt-1 text-[11px] text-[var(--md-muted)]">Not shown on a live account.</p>
       <div className="mt-2 flex flex-wrap gap-1">
@@ -137,21 +171,20 @@ function VendorChrome() {
               </NavLink>
             ))}
           </nav>
-          <PlanSummary />
-          <DemoStateSwitcher />
         </aside>
 
         <main className="min-w-0 flex-1 pb-20 md:pb-0">
           <header className="mb-5 border-b border-[var(--md-border)] pb-4">
-            <StoreHeading />
+            <AccountMenu />
           </header>
           <Outlet />
+          <DemoStateSwitcher />
         </main>
       </div>
 
       {/* Bottom bar on small screens: a vendor working the counter is on a phone. */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-[var(--md-border)] bg-white/95 backdrop-blur md:hidden">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+        {MOBILE_NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={bottomLinkClass}>
             <Icon className="size-5" aria-hidden />
             {label}

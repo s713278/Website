@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { deriveStoreState, presentStoreState, setupProgress } from './store-state'
+import type { StoreState } from '@/modules/vendor/types/dashboard'
+import {
+  deriveStoreState,
+  presentStoreState,
+  setupProgress,
+  storeStateAction,
+} from './store-state'
+
+const ALL_STATES: StoreState[] = ['SETTING_UP', 'UNDER_REVIEW', 'OPEN', 'REJECTED', 'SUSPENDED']
+
+/** The four states that share the parameterised non-open screen. */
+const NON_OPEN_STATES = ALL_STATES.filter((state) => state !== 'OPEN')
 
 describe('deriveStoreState', () => {
   it('reads the live dev vendor as still setting up', () => {
@@ -95,10 +106,64 @@ describe('presentStoreState', () => {
   })
 
   it('gives every state a label and a description', () => {
-    for (const state of ['SETTING_UP', 'UNDER_REVIEW', 'OPEN', 'REJECTED', 'SUSPENDED'] as const) {
+    for (const state of ALL_STATES) {
       const presentation = presentStoreState(state)
       expect(presentation.label).toBeTruthy()
       expect(presentation.description).toBeTruthy()
     }
+  })
+
+  it('never lets a non-open state read as though submission were approval', () => {
+    // The four non-open states share one screen. Each has to say plainly that the store is
+    // not reachable by customers yet; "submitted" must never be dressed up as "live".
+    for (const state of NON_OPEN_STATES) {
+      const { label, description } = presentStoreState(state)
+      const copy = `${label} ${description}`.toLowerCase()
+      expect(copy).not.toContain('your store is live')
+      expect(copy).not.toContain('customers can find')
+    }
+  })
+
+  it('tones each state by how bad it is for the vendor', () => {
+    expect(presentStoreState('OPEN').tone).toBe('success')
+    expect(presentStoreState('SETTING_UP').tone).toBe('warning')
+    expect(presentStoreState('UNDER_REVIEW').tone).toBe('warning')
+    expect(presentStoreState('REJECTED').tone).toBe('danger')
+    expect(presentStoreState('SUSPENDED').tone).toBe('danger')
+  })
+})
+
+describe('storeStateAction', () => {
+  it('offers at most one action per state', () => {
+    // The shared screen renders whatever this returns. Returning a list would let a state
+    // grow a row of buttons, which is what the old dashboard did.
+    for (const state of ALL_STATES) {
+      const action = storeStateAction(state)
+      if (action) {
+        expect(action.label).toBeTruthy()
+        expect(action.to.startsWith('/')).toBe(true)
+      }
+    }
+  })
+
+  it('sends an unfinished store back to setup', () => {
+    expect(storeStateAction('SETTING_UP')).toEqual({ label: 'Continue setup', to: '/onboarding' })
+  })
+
+  it('offers nothing to a store waiting on an administrator', () => {
+    // Neither waiting nor suspension is the vendor's to resolve, and no route in the
+    // contract lets this console resolve it for them.
+    expect(storeStateAction('UNDER_REVIEW')).toBeNull()
+    expect(storeStateAction('SUSPENDED')).toBeNull()
+  })
+
+  it('does not offer a rejected store a resubmit it cannot perform', () => {
+    const action = storeStateAction('REJECTED')
+    expect(action?.label.toLowerCase()).not.toContain('resubmit')
+    expect(action?.label.toLowerCase()).not.toContain('submit again')
+  })
+
+  it('offers nothing for an open store, which gets the work queue instead', () => {
+    expect(storeStateAction('OPEN')).toBeNull()
   })
 })

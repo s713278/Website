@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
@@ -16,15 +16,31 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
 const FILTERS: Array<{ label: string; value: DeliveryStatus | null }> = [
   { label: 'All', value: null },
   { label: 'New', value: 'PENDING' },
+  // `SCHEDULED` was missing, and an auto-accepting vendor receives most of their orders in
+  // exactly that state — so the one filter they need most had no chip.
+  { label: 'Scheduled', value: 'SCHEDULED' },
   { label: 'Being prepared', value: 'IN_PROCESS' },
   { label: 'On the way', value: 'SHIPPED' },
   { label: 'Delivered', value: 'DELIVERED' },
   { label: 'Cancelled', value: 'CANCELLED' },
 ]
 
+/**
+ * The filter carried in `?status=`, or none.
+ *
+ * Read from the URL rather than held in state alone, because Overview's status counts link
+ * straight in here with the filter already chosen. An unknown value falls back to "All"
+ * instead of being sent to the server as an `order_status` the enum does not contain.
+ */
+function parseStatusFilter(raw: string | null): DeliveryStatus | null {
+  const match = FILTERS.find((option) => option.value != null && option.value === raw)
+  return match?.value ?? null
+}
+
 export function VendorOrdersPage() {
   const { vendorId } = useVendorAccount()
-  const [filter, setFilter] = useState<DeliveryStatus | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = parseStatusFilter(searchParams.get('status'))
   const [page, setPage] = useState(0)
   const [result, setResult] = useState<VendorOrderPage | null>(null)
   const [loading, setLoading] = useState(true)
@@ -96,7 +112,7 @@ export function VendorOrdersPage() {
             key={label}
             type="button"
             onClick={() => {
-              setFilter(value)
+              setSearchParams(value ? { status: value } : {}, { replace: true })
               setPage(0)
             }}
             className={cn(

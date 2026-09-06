@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorStoreProfile } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorService } from '@/shared/api'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Card, PageHeader, Spinner } from '@/shared/components'
+import { Card, PageHeader, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
 function Row({ label, value }: { label: string; value: string | null }) {
@@ -26,10 +25,12 @@ function Row({ label, value }: { label: string; value: string | null }) {
  * When it does, two measured behaviors constrain it: the write is a partial merge that
  * silently ignores `null`, so no field can be cleared, and `assign_categories` need not be
  * echoed despite being declared required.
+ *
+ * Log out is **not** here. It lives in the account menu on the shell header, reachable from
+ * every surface — leaving required loading a settings screen the vendor did not want.
  */
 export function VendorSettingsPage() {
   const { vendorId, plan } = useVendorAccount()
-  const logout = useAuthStore((s) => s.logout)
   const [profile, setProfile] = useState<VendorStoreProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -117,13 +118,6 @@ export function VendorSettingsPage() {
             }
           />
         </dl>
-      </Card>
-
-      <Card>
-        <h2 className="font-display mb-3 font-semibold">Account</h2>
-        <Button variant="secondary" onClick={() => void logout()}>
-          Log out
-        </Button>
       </Card>
     </div>
   )

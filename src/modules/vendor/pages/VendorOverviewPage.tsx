@@ -1,87 +1,169 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
+import { StoreStatusScreen } from '@/modules/vendor/components/StoreStatusScreen'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { presentStoreState, setupProgress } from '@/modules/vendor/lib/store-state'
-import type { VendorInsights } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, vendorService } from '@/shared/api'
+import { presentDeliveryStatus } from '@/modules/vendor/lib/order-actions'
+import {
+  dueDescription,
+  isOverdue,
+  isoDay,
+  selectWorkQueue,
+  workQueueStatusCounts,
+  workQueueWindow,
+} from '@/modules/vendor/lib/work-queue'
+import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
+import { getErrorMessage, vendorOrdersService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Card, PageHeader, Spinner } from '@/shared/components'
+import { Badge, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
+import { cn } from '@/shared/lib/utils'
 
-/** A figure with an honest empty phrasing, because zero is the normal state for a new store. */
-function Tile({
-  label,
-  value,
-  empty,
-  hint,
-}: {
-  label: string
-  value: string | null
-  empty: string
-  hint?: string
-}) {
+/**
+ * What still needs doing, soonest first.
+ *
+ * One request over `delivery_date`, because `order_status` is a single-value server filter
+ * and a queue spanning three statuses cannot be one status-filtered call. The window reaches
+ * a week back so an order that went past its delivery date while unfinished still surfaces —
+ * see `lib/work-queue.ts`.
+ *
+ * No amount is rendered here. The console's one money figure lives on Orders beside the range
+ * it describes; a total on this screen would describe a window the vendor did not choose.
+ */
+function WorkQueue({ vendorId }: { vendorId: string }) {
+  const queueWindow = useMemo(() => workQueueWindow(new Date()), [])
+  const todayIso = useMemo(() => isoDay(new Date()), [])
+  const [result, setResult] = useState<VendorOrderPage | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+
+    void vendorOrdersService
+      .list(vendorId, { startDate: queueWindow.startDate, endDate: queueWindow.endDate })
+      .then((data) => {
+        if (!cancelled) setResult(data)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load what needs doing'))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, queueWindow])
+
+  const queue = result ? selectWorkQueue(result.orders) : []
+
   return (
-    <Card>
-      <p className="text-sm text-[var(--md-muted)]">{label}</p>
-      {value ? (
-        <p className="font-display mt-2 text-3xl font-bold">{value}</p>
-      ) : (
-        <p className="mt-2 text-sm text-slate-500">{empty}</p>
-      )}
-      {hint ? <p className="mt-2 text-xs text-[var(--md-muted)]">{hint}</p> : null}
-    </Card>
-  )
-}
+    <section className="mb-8">
+      <div className="mb-3">
+        <h2 className="font-display text-lg font-semibold">What needs doing</h2>
+        <p className="text-sm text-[var(--md-muted)]">
+          Deliveries due between {queueWindow.startDate} and {queueWindow.endDate}, still open.
+        </p>
+      </div>
 
-/** What the store's state means, and the one action that follows from it. */
-function StoreStateCard() {
-  const { storeState, context } = useVendorAccount()
-  const presentation = presentStoreState(storeState)
-  const progress = setupProgress(context.onboarding.nextStep)
+      {loading ? <Spinner label="Loading what needs doing…" /> : null}
 
-  return (
-    <Card className="mb-6">
-      <h2 className="font-display font-semibold">{presentation.label}</h2>
-      <p className="mt-1 text-sm text-[var(--md-muted)]">{presentation.description}</p>
+      {/*
+        A failed request and an empty queue are different facts. Telling a vendor there is
+        nothing to do because a request failed is the worse of the two mistakes.
+      */}
+      {!loading && error ? (
+        <Card className="border-[var(--md-danger)]">
+          <p className="text-sm text-[var(--md-danger)]">{error}</p>
+          <p className="mt-1 text-sm text-[var(--md-muted)]">
+            This is a failed request, not an empty queue.
+          </p>
+        </Card>
+      ) : null}
 
-      {storeState === 'SETTING_UP' ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Link to="/onboarding">
-            <Button size="sm">Continue setup</Button>
-          </Link>
-          {progress ? (
-            <span className="text-sm text-[var(--md-muted)]">
-              Step {progress.step} of {progress.total}
-            </span>
+      {!loading && !error && !queue.length ? (
+        <EmptyState
+          title="Nothing waiting"
+          description="No open orders are due in this window. New orders appear here as they arrive."
+        />
+      ) : null}
+
+      {!loading && !error && queue.length ? (
+        <div className="space-y-3">
+          {queue.map((order) => {
+            const delivery = presentDeliveryStatus(order.deliveryStatus)
+            const late = isOverdue(order.deliveryDate, todayIso)
+
+            return (
+              <Card
+                key={order.id}
+                className={cn(
+                  'border-l-4',
+                  late ? 'border-l-[var(--md-danger)]' : 'border-l-[var(--md-green-600)]',
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link to={`/vendor/orders/${order.id}`} className="font-semibold hover:underline">
+                    Order #{order.id}
+                  </Link>
+                  <Badge tone={delivery.tone}>{delivery.label}</Badge>
+                  {late ? <Badge tone="danger">Overdue</Badge> : null}
+                </div>
+                <p
+                  className={cn(
+                    'mt-1 text-sm',
+                    late ? 'font-medium text-[var(--md-danger)]' : 'text-[var(--md-muted)]',
+                  )}
+                >
+                  {dueDescription(order.deliveryDate, todayIso)}
+                </p>
+                <CustomerContact
+                  className="mt-2"
+                  name={order.customerName}
+                  mobile={order.customerMobile}
+                />
+              </Card>
+            )
+          })}
+
+          {/*
+            One request, one page. Saying so is better than silently showing part of the
+            window as if it were all of it.
+          */}
+          {result && !result.lastPage ? (
+            <p className="text-sm text-[var(--md-muted)]">
+              Only the first page of this window is shown.{' '}
+              <Link to="/vendor/orders" className="font-medium hover:underline">
+                Open Orders
+              </Link>{' '}
+              to see the rest.
+            </p>
           ) : null}
         </div>
       ) : null}
-
-      {storeState === 'OPEN' ? (
-        <div className="mt-4">
-          <Link to="/vendor/storefront">
-            <Button size="sm" variant="secondary">
-              View your storefront
-            </Button>
-          </Link>
-        </div>
-      ) : null}
-    </Card>
+    </section>
   )
 }
 
-export function VendorOverviewPage() {
-  // Insights are keyed on the user id, not the vendor id: the path is
-  // `/v1/users/{user_id}/dashboard`, and a vendor id returns 403.
-  const userId = useAuthStore((s) => s.user?.id)
-  const { plan } = useVendorAccount()
+/**
+ * How much of each kind of work there is, each count a way into Orders.
+ *
+ * Every status renders separately and always renders a number. The backend omits
+ * zero-valued keys entirely, so `workQueueStatusCounts` supplies the `0` — a blank where
+ * "none" belongs reads as missing data, not as nothing to do.
+ */
+function StatusCounts({ userId }: { userId: string }) {
   const [insights, setInsights] = useState<VendorInsights | null>(null)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!userId) return
     let cancelled = false
     setLoading(true)
+    setError('')
 
     void vendorService
       .getInsights(userId)
@@ -89,7 +171,7 @@ export function VendorOverviewPage() {
         if (!cancelled) setInsights(data)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load your figures'))
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load your order counts'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -100,61 +182,118 @@ export function VendorOverviewPage() {
     }
   }, [userId])
 
-  const openOrders =
-    (insights?.ordersByStatus.PENDING ?? 0) +
-    (insights?.ordersByStatus.SCHEDULED ?? 0) +
-    (insights?.ordersByStatus.IN_PROCESS ?? 0)
-  const delivered = insights?.ordersByStatus.DELIVERED ?? 0
+  return (
+    <section className="mb-8">
+      <h2 className="font-display mb-3 text-lg font-semibold">Where your orders stand</h2>
 
-  const products = plan.usage.products
-  const productLimit = plan.limits.products
-  const sizes = plan.usage.skus
-  const sizeLimit = plan.limits.skus
+      {loading ? <Spinner label="Loading your order counts…" /> : null}
+      {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
+
+      {!loading && !error && insights ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
+            <Link
+              key={status}
+              to={`/vendor/orders?status=${status}`}
+              className="rounded-lg border border-[var(--md-border)] bg-white p-4 transition hover:border-[var(--md-green-600)] hover:bg-[var(--md-green-50)]"
+            >
+              {/* The space is load-bearing: without it the link's accessible name is "2New". */}
+              <span className="font-display block text-3xl font-bold">{count}</span>{' '}
+              <span className="mt-1 block text-sm text-[var(--md-muted)]">{label}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * The plan, with what it allows against what has been used.
+ *
+ * Same source and labels as the sidebar summary this replaces. Nothing is computed: no trial
+ * deadline is derived from an assumed trial length, and no billing figure appears that the
+ * backend did not send.
+ */
+function PlanUsage() {
+  const { plan } = useVendorAccount()
+
+  return (
+    <section>
+      <h2 className="font-display mb-3 text-lg font-semibold">Your plan</h2>
+      <Card>
+        <p className="font-semibold">{plan.name ?? plan.code ?? 'Your plan'}</p>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt className="text-sm text-[var(--md-muted)]">Products</dt>
+            <dd className="mt-1 font-medium">
+              {plan.usage.products != null && plan.limits.products != null
+                ? `${plan.usage.products} of ${plan.limits.products} used`
+                : 'Not available'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-[var(--md-muted)]">Sizes</dt>
+            <dd className="mt-1 font-medium">
+              {plan.usage.skus != null && plan.limits.skus != null
+                ? `${plan.usage.skus} of ${plan.limits.skus} used`
+                : 'Not available'}
+            </dd>
+          </div>
+        </dl>
+        {/*
+          A trial countdown appears only when the backend sends an end date. No deployed
+          response carries one yet, so nothing is shown rather than a deadline computed from
+          a hardcoded trial length.
+        */}
+        {plan.trialEndsAt ? (
+          <p className="mt-3 text-sm text-[var(--md-muted)]">
+            Trial ends {new Date(plan.trialEndsAt).toLocaleDateString()}
+          </p>
+        ) : null}
+      </Card>
+    </section>
+  )
+}
+
+/**
+ * Overview for an open store, in the order a vendor needs it: what needs doing, how much of
+ * it there is, then the plan it all runs on.
+ *
+ * Insights are keyed on the **user** id, not the vendor id: the path is
+ * `/v1/users/{user_id}/dashboard`, and a vendor id returns 403.
+ */
+function OpenStoreOverview({ vendorId }: { vendorId: string }) {
+  const userId = useAuthStore((s) => s.user?.id)
 
   return (
     <div>
-      <PageHeader title="Overview" subtitle="How your store is doing right now" />
-      <StoreStateCard />
+      <WorkQueue vendorId={vendorId} />
+      {userId ? <StatusCounts userId={userId} /> : null}
+      <PlanUsage />
+    </div>
+  )
+}
 
-      {error ? <p className="mb-4 text-sm text-[var(--md-danger)]">{error}</p> : null}
-      {loading ? <Spinner label="Loading your figures…" /> : null}
+export function VendorOverviewPage() {
+  const { vendorId, storeState } = useVendorAccount()
 
-      {!loading && insights ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Tile
-            label="Orders to handle"
-            value={openOrders > 0 ? String(openOrders) : null}
-            empty="Nothing waiting"
-            hint={delivered > 0 ? `${delivered} delivered so far` : undefined}
-          />
-          {/*
-            Two tiles were removed here rather than fixed.
-
-            **Payments due** displayed `payment_dues.due_amount`, which counts cancelled
-            orders and only ever grows — creating one order and cancelling it raised the
-            figure by that order's amount and it never came back down. A vendor reading it
-            would chase a customer for an order that customer cancelled. It is not mapped
-            at all now, so no screen can reach it.
-
-            **Customers** displayed `total_customers`, which counted 1 while the customer
-            directory returned zero rows. Until the backend defines which population each
-            answers, neither number means anything a vendor can act on.
-
-            Do not replace either with a locally-computed substitute: summing amounts here
-            would invent a figure the backend never agreed to.
-          */}
-          <Tile
-            label="Catalog"
-            value={products ? `${products}${productLimit ? ` / ${productLimit}` : ''}` : null}
-            empty="Nothing listed yet"
-            hint={
-              sizes != null && sizeLimit != null
-                ? `${sizes} of ${sizeLimit} sizes used on your plan`
-                : undefined
-            }
-          />
-        </div>
-      ) : null}
+  return (
+    <div>
+      <PageHeader
+        title="Overview"
+        subtitle={storeState === 'OPEN' ? 'What needs doing right now' : 'Where your store stands'}
+      />
+      {/*
+        The four non-open states share one screen and show nothing else. A vendor who cannot
+        receive orders has no queue and no counts, and rendering empty ones would read as
+        "no orders yet" rather than "your store is not open".
+      */}
+      {storeState === 'OPEN' ? (
+        <OpenStoreOverview vendorId={vendorId} />
+      ) : (
+        <StoreStatusScreen state={storeState} />
+      )}
     </div>
   )
 }

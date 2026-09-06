@@ -93,3 +93,31 @@ export function presentStoreState(state: StoreState): StoreStatePresentation {
       }
   }
 }
+
+export type StoreStateAction = { label: string; to: string }
+
+/**
+ * The one action a store in a given state can take, or none.
+ *
+ * At most one, deliberately. A store that is waiting on an administrator has nothing to do,
+ * and a screen that offers three buttons anyway implies the vendor is holding things up.
+ * `null` is the honest answer for waiting and for suspension: neither is theirs to resolve
+ * from this console, and no route in the contract lets them.
+ *
+ * `OPEN` has none because an open store does not get this screen at all — it gets the work
+ * queue.
+ */
+export function storeStateAction(state: StoreState): StoreStateAction | null {
+  switch (state) {
+    case 'SETTING_UP':
+      return { label: 'Continue setup', to: '/onboarding' }
+    case 'REJECTED':
+      // Not "resubmit": nothing in the contract re-opens a rejected application from here.
+      // Reading back what was submitted is the one thing this console can honestly offer.
+      return { label: 'Check your store details', to: '/vendor/settings' }
+    case 'UNDER_REVIEW':
+    case 'SUSPENDED':
+    case 'OPEN':
+      return null
+  }
+}

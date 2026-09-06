@@ -44,6 +44,11 @@ const VendorProductsPage = lazy(() =>
     default: module.VendorProductsPage,
   })),
 )
+const VendorCustomersPage = lazy(() =>
+  import('@/modules/vendor/pages/VendorCustomersPage').then((module) => ({
+    default: module.VendorCustomersPage,
+  })),
+)
 const VendorStorefrontPage = lazy(() =>
   import('@/modules/vendor/pages/VendorStorefrontPage').then((module) => ({
     default: module.VendorStorefrontPage,
@@ -95,6 +100,7 @@ export function AppRouter() {
             <Route path="orders" element={<VendorOrdersPage />} />
             <Route path="orders/:orderId" element={<VendorOrderDetailPage />} />
             <Route path="products" element={<VendorProductsPage />} />
+            <Route path="customers" element={<VendorCustomersPage />} />
             <Route path="storefront" element={<VendorStorefrontPage />} />
             <Route path="settings" element={<VendorSettingsPage />} />
           </Route>
