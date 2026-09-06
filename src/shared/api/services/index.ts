@@ -58,5 +58,6 @@ export {
   updateSizePrice,
   vendorProductsService,
 } from './vendor-products.service'
+export { demoService, type DemoStoreStateKey } from './demo.service'
 export { vendorOnboardingService } from './vendor-onboarding.service'
 export type { ReferenceRequestConfig } from './vendor-onboarding.service'

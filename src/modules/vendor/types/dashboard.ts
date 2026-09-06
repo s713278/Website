@@ -25,14 +25,25 @@ export type PaymentStatus = 'DUE' | 'PAID'
  */
 export type StoreState = 'SETTING_UP' | 'UNDER_REVIEW' | 'OPEN' | 'REJECTED' | 'SUSPENDED'
 
-/** One row of the orders list. The list read carries no line items — see `VendorOrderDetail`. */
+/**
+ * One row of the orders list. The list read carries no line items — see `VendorOrderDetail`.
+ *
+ * There is deliberately **no placed-at field**. No order read in the contract carries a
+ * creation timestamp: the list row has 15 keys and the items read has 18, and neither
+ * includes one. A nullable property here would only invite a screen to display it, and
+ * `deliveryDate` would eventually be relabelled to fill the gap. See
+ * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.1 for the ask.
+ */
 export type VendorOrderSummary = {
   id: string
+  /** Absent from every list row; the items read carries it. Never fall back to the mobile. */
   customerName: string | null
+  /** The one identity the list read supplies. Drives the call and WhatsApp affordances. */
+  customerMobile: string | null
+  /** `null` means unknown, `0` means a genuinely free order. The two must not collapse. */
   total: number | null
   deliveryStatus: DeliveryStatus
   paymentStatus: PaymentStatus | null
-  placedAt: string | null
   deliveryDate: string | null
 }
 
@@ -46,7 +57,6 @@ export type VendorOrderLine = {
 
 /** One order with its lines, from the items read. */
 export type VendorOrderDetail = VendorOrderSummary & {
-  customerMobile: string | null
   deliveryAddress: string | null
   lines: VendorOrderLine[]
 }
@@ -74,11 +84,23 @@ export type VendorSize = {
   imagePath: string | null
 }
 
+/**
+ * Vendor-level counts.
+ *
+ * `payment_dues` is **deliberately not mapped**. The backend figure counts cancelled orders
+ * and only ever grows: creating one order and then cancelling it raised it by exactly that
+ * order's amount, and it never came back down. No route can set `payment_status` away from
+ * `DUE`, so nothing reduces it either. Leaving it off the view model is what stops a screen
+ * from labelling it "money owed" — a vendor acting on it would chase a customer for an order
+ * that customer cancelled. See `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §2.3.
+ *
+ * `ordersByStatus` is `Partial` for a measured reason: zero-valued statuses are omitted from
+ * the response entirely, and were watched appearing and disappearing within one session.
+ * Read every status through `?? 0`.
+ */
 export type VendorInsights = {
   totalCustomers: number | null
   ordersByStatus: Partial<Record<DeliveryStatus, number>>
-  dueAmount: number | null
-  paidAmount: number | null
 }
 
 /** The tier a vendor's account is on, with its limits and what they have used. */

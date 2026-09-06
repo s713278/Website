@@ -5,6 +5,7 @@ import type {
   VendorOrderPage,
 } from '@/modules/vendor/types/dashboard'
 import { apiGet, apiPatch } from '../client'
+import { updateDemoOrder } from '../fixtures/demo-state'
 import { demoVendorOrderDetail, demoVendorOrdersPage } from '../fixtures/vendor-dashboard'
 import { mapVendorOrderDetail, mapVendorOrderPage } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
@@ -35,7 +36,13 @@ export async function listVendorOrders(
 
   if (!isLiveApi()) {
     await demoDelay()
-    return mapVendorOrderPage(demoVendorOrdersPage(page, PAGE_SIZE, query.status ?? undefined))
+    return mapVendorOrderPage(
+      demoVendorOrdersPage(page, PAGE_SIZE, {
+        status: query.status ?? undefined,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      }),
+    )
   }
 
   const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) })
@@ -81,6 +88,12 @@ export async function updateVendorOrder(
 ): Promise<void> {
   if (!isLiveApi()) {
     await demoDelay()
+    // Demo writes persist. A no-op here would tell the same lie a failed live write tells:
+    // a success toast over an unchanged record.
+    const patch: Record<string, unknown> = {}
+    if (update.deliveryStatus) patch.order_status = update.deliveryStatus
+    if (update.paymentStatus) patch.payment_status = update.paymentStatus
+    if (!updateDemoOrder(orderId, patch)) throw new Error('No such order.')
     return
   }
   const body: Record<string, string> = {}
@@ -102,6 +115,7 @@ export async function cancelVendorOrder(
 ): Promise<void> {
   if (!isLiveApi()) {
     await demoDelay()
+    if (!updateDemoOrder(orderId, { order_status: 'CANCELLED' })) throw new Error('No such order.')
     return
   }
   await apiPatch(`/v1/vendors/${vendorId}/orders/${orderId}/cancel`, { cancelReason: reason })

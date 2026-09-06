@@ -61,6 +61,8 @@ function accountFor(vendorId: string): VendorAccount {
       usage: { categories: 1, products: 1, skus: 1, images: 0 },
     },
     reload: () => {},
+    // Live-mode shape: the demo switcher is absent unless the API is off.
+    demo: null,
   }
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   forwardActionLabel,
@@ -152,13 +153,21 @@ export function VendorOrdersPage() {
                       </Badge>
                     ) : null}
                   </div>
-                  <p className="text-sm text-[var(--md-muted)]">
-                    {order.customerName ?? 'Customer'}
-                    {order.deliveryDate ? ` · for ${order.deliveryDate}` : ''}
-                  </p>
+                  <CustomerContact name={order.customerName} mobile={order.customerMobile} />
+                  {order.deliveryDate ? (
+                    <p className="mt-1 text-sm text-[var(--md-muted)]">
+                      Delivery date {order.deliveryDate}
+                    </p>
+                  ) : null}
+                  {/*
+                    `null` is unknown, `0` is a genuinely free order. Rendering both as
+                    nothing, or both as ₹0, would merge two different facts.
+                  */}
                   {order.total != null ? (
                     <p className="mt-2 font-semibold">{formatCurrency(order.total)}</p>
-                  ) : null}
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">Amount not available</p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

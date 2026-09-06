@@ -6,7 +6,6 @@ import type { VendorInsights } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Card, PageHeader, Spinner } from '@/shared/components'
-import { formatCurrency } from '@/shared/lib/utils'
 
 /** A figure with an honest empty phrasing, because zero is the normal state for a new store. */
 function Tile({
@@ -128,25 +127,22 @@ export function VendorOverviewPage() {
             empty="Nothing waiting"
             hint={delivered > 0 ? `${delivered} delivered so far` : undefined}
           />
-          <Tile
-            label="Customers"
-            value={insights.totalCustomers ? String(insights.totalCustomers) : null}
-            empty="No customers yet"
-          />
           {/*
-            Cumulative, not a period figure: no date-scoped revenue aggregate exists in the
-            contract, so this must never be labelled "today".
+            Two tiles were removed here rather than fixed.
+
+            **Payments due** displayed `payment_dues.due_amount`, which counts cancelled
+            orders and only ever grows — creating one order and cancelling it raised the
+            figure by that order's amount and it never came back down. A vendor reading it
+            would chase a customer for an order that customer cancelled. It is not mapped
+            at all now, so no screen can reach it.
+
+            **Customers** displayed `total_customers`, which counted 1 while the customer
+            directory returned zero rows. Until the backend defines which population each
+            answers, neither number means anything a vendor can act on.
+
+            Do not replace either with a locally-computed substitute: summing amounts here
+            would invent a figure the backend never agreed to.
           */}
-          <Tile
-            label="Payments due"
-            value={insights.dueAmount ? formatCurrency(insights.dueAmount) : null}
-            empty="Nothing outstanding"
-            hint={
-              insights.paidAmount
-                ? `${formatCurrency(insights.paidAmount)} collected in total`
-                : undefined
-            }
-          />
           <Tile
             label="Catalog"
             value={products ? `${products}${productLimit ? ` / ${productLimit}` : ''}` : null}

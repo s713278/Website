@@ -23,8 +23,6 @@ describe('mapVendorInsights', () => {
 
     expect(insights.totalCustomers).toBe(0)
     expect(insights.ordersByStatus).toEqual({})
-    expect(insights.dueAmount).toBeNull()
-    expect(insights.paidAmount).toBeNull()
   })
 
   it('reads the counts that are present without inventing the ones that are not', () => {
@@ -38,7 +36,18 @@ describe('mapVendorInsights', () => {
 
     expect(insights.ordersByStatus).toEqual({ DELIVERED: 4, SCHEDULED: 8 })
     expect(insights.ordersByStatus.PENDING).toBeUndefined()
-    expect(insights.dueAmount).toBe(1466)
+  })
+
+  it('drops payment dues even when the backend sends them', () => {
+    // `due_amount` counts cancelled orders and cannot decrease — creating one order and
+    // cancelling it raised the live figure and it never came back down. Leaving it off the
+    // view model is what stops a screen labelling it "money owed".
+    const insights = mapVendorInsights({
+      data: { payment_dues: { due_amount: 1466, paid_amount: 231 } },
+    })
+
+    expect(insights).not.toHaveProperty('dueAmount')
+    expect(insights).not.toHaveProperty('paidAmount')
   })
 
   it('does not fall over on a response with no data at all', () => {
@@ -105,6 +114,50 @@ describe('mapVendorOrderPage', () => {
   it('accepts a bare array, since sibling endpoints answer that way', () => {
     const page = mapVendorOrderPage({ data: [{ order_id: 1, order_status: 'PENDING' }] })
     expect(page.orders).toHaveLength(1)
+  })
+
+  it('reads the flat amount a live list row actually carries', () => {
+    // The measured 15-key row has `amount`, not a nested `order_amount`. Reading the nested
+    // shape first mapped every live row's total to null while demo looked correct.
+    const page = mapVendorOrderPage({
+      data: { result: [{ order_id: 8001, amount: 220, order_status: 'SCHEDULED' }] },
+    })
+
+    expect(page.orders[0].total).toBe(220)
+  })
+
+  it('keeps a real zero apart from a missing amount', () => {
+    const page = mapVendorOrderPage({
+      data: {
+        result: [
+          { order_id: 1, amount: 0, order_status: 'SCHEDULED' },
+          { order_id: 2, order_status: 'SCHEDULED' },
+        ],
+      },
+    })
+
+    // A free order and an unknown total must not render the same way.
+    expect(page.orders[0].total).toBe(0)
+    expect(page.orders[1].total).toBeNull()
+  })
+
+  it('takes the mobile as contact identity without pretending it is a name', () => {
+    // A live list row has `mobile` and no `customer_name`. Collapsing them would print a
+    // phone number where the vendor expects a person.
+    const page = mapVendorOrderPage({
+      data: { result: [{ order_id: 9001, mobile: '9000000001', order_status: 'PENDING' }] },
+    })
+
+    expect(page.orders[0].customerMobile).toBe('9000000001')
+    expect(page.orders[0].customerName).toBeNull()
+  })
+
+  it('exposes no placed-at field, because no order read carries one', () => {
+    const page = mapVendorOrderPage({
+      data: { result: [{ order_id: 3, order_status: 'PENDING', created_date: '2026-09-04' }] },
+    })
+
+    expect(page.orders[0]).not.toHaveProperty('placedAt')
   })
 })
 

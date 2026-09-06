@@ -1,5 +1,6 @@
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
 import { apiGet, apiPut } from '../client'
+import { updateDemoSizeByPriceId } from '../fixtures/demo-state'
 import { demoVendorSizes } from '../fixtures/vendor-dashboard'
 import { mapVendorSizes } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
@@ -36,6 +37,10 @@ export async function updateSizePrice(
 ): Promise<void> {
   if (!isLiveApi()) {
     await demoDelay()
+    // Demo writes persist, so a price edit is visible on the next demo read.
+    if (!updateDemoSizeByPriceId(priceId, { list_price: input.listPrice, sale_price: input.salePrice })) {
+      throw new Error('No such price record.')
+    }
     return
   }
   await apiPut(`/v1/sku/price/${priceId}`, {

@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { presentStoreState } from '@/modules/vendor/lib/store-state'
+import { demoService } from '@/shared/api'
 import { Badge } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
@@ -72,6 +73,54 @@ function StoreHeading() {
   )
 }
 
+const DEMO_STATE_LABELS: Record<string, string> = {
+  SETTING_UP: 'Setting up',
+  UNDER_REVIEW: 'Under review',
+  OPEN: 'Open',
+  REJECTED: 'Rejected',
+  SUSPENDED: 'Suspended',
+}
+
+/**
+ * Demo-only store-state switcher.
+ *
+ * Two of the five states — rejected and suspended — cannot be reached on a test account
+ * without an administrator acting against a real store, so without this the screens for
+ * them could be built and never seen. Absent entirely under a live API: it changes nothing
+ * there, and a dead control on a real dashboard invites a support question.
+ *
+ * It writes the three fields `deriveStoreState` reads, so it cannot show a combination the
+ * backend could not produce.
+ */
+function DemoStateSwitcher() {
+  const { demo } = useVendorAccount()
+  if (!demo) return null
+
+  return (
+    <div className="rounded-lg border border-dashed border-[var(--md-border)] bg-white p-3">
+      <p className="text-xs font-semibold text-slate-700">Demo: store state</p>
+      <p className="mt-1 text-[11px] text-[var(--md-muted)]">Not shown on a live account.</p>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {demoService.storeStateKeys.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => demo.select(key)}
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-[11px] transition',
+              demo.storeState === key
+                ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] text-[var(--md-green-800)]'
+                : 'border-[var(--md-border)] text-slate-600 hover:bg-slate-100',
+            )}
+          >
+            {DEMO_STATE_LABELS[key] ?? key}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function VendorChrome() {
   return (
     <div className="min-h-screen bg-slate-50">
@@ -89,6 +138,7 @@ function VendorChrome() {
             ))}
           </nav>
           <PlanSummary />
+          <DemoStateSwitcher />
         </aside>
 
         <main className="min-w-0 flex-1 pb-20 md:pb-0">

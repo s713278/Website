@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   canCancel,
@@ -116,13 +117,17 @@ export function VendorOrderDetailPage() {
           ) : null}
         </div>
 
+        {/*
+          This read carries a real `customer_name`, unlike a list row — so the detail screen
+          shows a person, with the number as an action beside it rather than in its place.
+        */}
+        <CustomerContact
+          name={order.customerName}
+          mobile={order.customerMobile}
+          className="mt-4"
+        />
+
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          {order.customerMobile ? (
-            <div>
-              <dt className="text-[var(--md-muted)]">Customer phone</dt>
-              <dd className="font-medium">{order.customerMobile}</dd>
-            </div>
-          ) : null}
           {order.deliveryDate ? (
             <div>
               <dt className="text-[var(--md-muted)]">Delivery date</dt>

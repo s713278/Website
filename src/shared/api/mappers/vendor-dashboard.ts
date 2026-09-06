@@ -80,7 +80,6 @@ function envelopeData(payload: unknown): unknown {
 export function mapVendorInsights(payload: unknown): VendorInsights {
   const data = envelopeRecord(payload)
   const statusCounts = isRecord(data.order_status_count) ? data.order_status_count : {}
-  const dues = isRecord(data.payment_dues) ? data.payment_dues : {}
 
   const ordersByStatus: Partial<Record<DeliveryStatus, number>> = {}
   for (const status of DELIVERY_STATUSES) {
@@ -88,30 +87,42 @@ export function mapVendorInsights(payload: unknown): VendorInsights {
     if (count != null) ordersByStatus[status] = count
   }
 
+  // `payment_dues` is read and dropped on purpose. See the note on `VendorInsights`:
+  // the figure counts cancelled orders and cannot decrease, so it is not money owed.
   return {
     totalCustomers: num(data.total_customers),
     ordersByStatus,
-    dueAmount: num(dues.due_amount),
-    paidAmount: num(dues.paid_amount),
   }
 }
 
 /**
- * One row of the orders list.
+ * One row of the orders list, and the header of the items read.
  *
- * No deployed vendor has orders yet, so the exact spellings here are taken from the
- * operation description rather than a measured response, and alternates are accepted.
- * Recorded in `docs/API_GAPS.md` — do not treat this mapping as verified.
+ * The list row was measured on the deployed API and carries exactly these 15 keys:
+ * `order_id, vendor_id, user_id, delivery_date, items_count, amount, order_status,
+ * payment_status, delivery_method, mobile, gross_amount, discount, delivery_charges,
+ * payment_method, order_timing_type`.
+ *
+ * Three consequences, each of which was a live bug before it was measured:
+ *
+ * - The total is a **flat `amount`**. `order_amount` is a nested object that appears only
+ *   on the items read, so reading it first mapped every list row to `null`.
+ * - There is **no customer name** on a list row, only `mobile`. The two are kept apart:
+ *   a phone number rendered where a name belongs reads as a mistake to the vendor.
+ * - There is **no creation timestamp on either read**, so none is mapped.
+ *
+ * `num()` returns `null` for absent values and `0` for a real zero, and that distinction is
+ * carried through — an unknown total must not render as a free order.
  */
 function mapOrderSummary(row: UnknownRecord): VendorOrderSummary {
   const amount = isRecord(row.order_amount) ? row.order_amount : null
   return {
     id: str(row.order_id) ?? str(row.id) ?? '',
     customerName: str(row.customer_name),
-    total: num(amount?.amount) ?? num(row.total_amount) ?? num(row.total),
+    customerMobile: str(row.mobile) ?? str(row.customer_mobile),
+    total: num(row.amount) ?? num(amount?.amount) ?? num(row.total_amount) ?? num(row.total),
     deliveryStatus: toDeliveryStatus(row.order_status ?? row.delivery_status ?? row.status),
     paymentStatus: toPaymentStatus(row.payment_status),
-    placedAt: str(row.created_date) ?? str(row.created_at) ?? str(row.order_date),
     deliveryDate: str(row.delivery_date),
   }
 }
@@ -152,11 +163,15 @@ function mapAddress(value: unknown): string | null {
   return parts.length ? parts.join(', ') : null
 }
 
+/**
+ * The full order. This read carries `customer_name` and `customer_mobile`, which the list
+ * read does not — both are picked up by `mapOrderSummary`, so a detail screen shows a real
+ * name where the list can only show a number.
+ */
 export function mapVendorOrderDetail(payload: unknown): VendorOrderDetail {
   const data = envelopeRecord(payload)
   return {
     ...mapOrderSummary(data),
-    customerMobile: str(data.customer_mobile),
     deliveryAddress: mapAddress(data.delivery_address),
     lines: vendorCollectionRows(data.order_items).map(mapOrderLine),
   }
