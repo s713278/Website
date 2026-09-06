@@ -18,10 +18,14 @@ function Row({ label, value }: { label: string; value: string | null }) {
 /**
  * Store details and account controls.
  *
- * Read-only, and not by choice: `PUT /v1/vendors/{id}` is the only write covering these
- * fields and it fails with a JPA transaction error for every body shape — including one
- * that echoes the record back unchanged. Recorded in `docs/API_GAPS.md`. Business type
- * and branding do have working writes, through their setup steps.
+ * Read-only because the editor is not built yet, **not** because the backend refuses.
+ * `PUT /v1/vendors/{id}` was verified working on both a gone-live and a never-submitted
+ * store, for the business name, contact fields and the structured address. See
+ * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.4.
+ *
+ * When it does, two measured behaviors constrain it: the write is a partial merge that
+ * silently ignores `null`, so no field can be cleared, and `assign_categories` need not be
+ * echoed despite being declared required.
  */
 export function VendorSettingsPage() {
   const { vendorId, plan } = useVendorAccount()
@@ -70,9 +74,12 @@ export function VendorSettingsPage() {
             <Row label="Email" value={profile.email} />
             <Row label="Address" value={profile.address} />
           </dl>
+          {/*
+            The previous copy told vendors the backend had no working update and to contact
+            support. It does have one. Say only what is true: editing is not built here yet.
+          */}
           <p className="mt-3 text-xs text-[var(--md-muted)]">
-            These details cannot be changed from here yet — the backend has no working update for
-            them. Contact support if something is wrong.
+            Editing these details from here is coming soon.
           </p>
         </Card>
       ) : null}

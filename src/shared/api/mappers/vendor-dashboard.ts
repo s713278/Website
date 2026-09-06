@@ -181,8 +181,12 @@ export function mapVendorOrderDetail(payload: unknown): VendorOrderDetail {
  * One purchasable size.
  *
  * `price_id` matters: it identifies the price record, and it is the only handle a price
- * edit can be written against. The SKU update endpoint is broken (417, JDBC error), so
- * name, size and active-state are read-only here.
+ * edit can be written against — the price read is keyed by SKU id, the write by price id.
+ *
+ * Name and active-state are read-only here because no control writes them yet, not because
+ * the endpoint refuses. `PATCH /vendors/{v}/skus/{id}` works when `features` is echoed back
+ * from a fresh per-SKU read; it 417s only when `features` is omitted, and sending `{}` or
+ * `null` destroys whatever the vendor had there.
  */
 function mapSize(row: UnknownRecord): VendorSize {
   return {
@@ -232,10 +236,14 @@ export function mapVendorPlan(context: VendorContext): VendorPlan {
 /**
  * The vendor's own store details.
  *
- * The record carries more than `docs/API_GAPS.md` once claimed: `business_address`,
- * `communication_email`, `description` and `user_id` are all present, measured against
- * the deployed API. `communication_email` is skipped when it holds the literal
- * placeholder `"string"`, which unconfigured dev records really do contain.
+ * The record can carry `business_address`, `communication_email`, `description` and
+ * `user_id` — but **only once the vendor has set them**. The read omits null columns
+ * entirely rather than sending them as null, so a fresh vendor's response simply has no
+ * such keys. An earlier note here said they "are all present", which held only for the one
+ * account it was measured on.
+ *
+ * `communication_email` is skipped when it holds the literal placeholder `"string"`, which
+ * unconfigured dev records really do contain.
  */
 export function mapVendorStoreProfile(payload: unknown): VendorStoreProfile {
   const data = envelopeRecord(payload)

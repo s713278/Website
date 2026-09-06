@@ -126,8 +126,9 @@ export type VendorPlan = {
 /**
  * The vendor's own store details, as Settings displays them.
  *
- * Read-only: `PUT /v1/vendors/{id}` is the only write for these fields and it fails with
- * a JPA transaction error for every body shape tried. See `docs/API_GAPS.md`.
+ * Read-only in the UI only because the editor is not built yet: `PUT /v1/vendors/{id}`
+ * works on both approval states. It is a partial merge that ignores explicit `null`, so
+ * the editor must not offer to clear a field.
  *
  * Distinct from the narrower `VendorProfile` in the onboarding mappers, which carries
  * only the five fields setup needs.

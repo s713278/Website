@@ -24,12 +24,21 @@ export async function listVendorSizes(vendorId: string | number): Promise<Vendor
 /**
  * Change what a size costs.
  *
- * Written against the **price record**, not the SKU: `PATCH /vendors/{id}/skus/{sku_id}`
- * fails with a JDBC error on every body, and its request schema carries no price field
- * anyway. `PUT /v1/sku/price/{price_id}` is vendor-callable and verified working.
+ * Written against the **price record**, not the SKU: the SKU endpoint carries no price
+ * field, and `PUT /v1/sku/price/{price_id}` is vendor-callable and verified working. Note
+ * the identifiers differ — the price *read* is keyed by SKU id, the write by price id.
  *
- * A size with no `priceId` therefore cannot be repriced at all; callers must not offer
- * the control for one.
+ * The body must be exactly `{sku_id, list_price, sale_price}`. Adding `shipping_price` or
+ * `effective_date` — both of which the read returns — is rejected with 400, so the read
+ * model cannot be round-tripped.
+ *
+ * A size with no `priceId` cannot be repriced at all; callers must not offer the control
+ * for one.
+ *
+ * Separately: `PATCH /vendors/{id}/skus/{sku_id}` is **not** broken for every body, as an
+ * earlier note here claimed. It fails only when `features` is omitted, and works on both
+ * approval states when `features` is echoed back from a fresh read. That is the basis for
+ * the rename and availability controls, which are not built here yet.
  */
 export async function updateSizePrice(
   priceId: string,

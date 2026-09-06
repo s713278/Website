@@ -74,12 +74,18 @@ export async function getVendorOrder(
 /**
  * Move an order along, or mark it paid.
  *
- * The write takes `delivery_status` and `payment_status` — not the `status` key the
- * previous implementation sent, which the backend simply ignored.
+ * **This live path does not work and is being replaced.** `PATCH /v1/vendors/{v}/orders/{id}`
+ * returns 417 for every body, including `{}` — Jackson cannot instantiate its request DTO,
+ * so it fails before the order id is even looked up. Both the advance and mark-paid controls
+ * currently call it.
  *
- * `SHIPPED` is set here directly rather than through `POST /orders/{id}/tracking`, which
- * would also set it but demands a `courier_partner_id` that no endpoint lists. That path
- * is recorded as a gap; taking it now would mean asking for an id we cannot offer.
+ * The replacement for advancing is `POST /v1/vendors/{v}/orders/bulk-status-update` with a
+ * single id, which works but only one hop at a time. Note when wiring it: a refused
+ * transition arrives as **HTTP 200 with `success_count: 0`**, so a caller that checks only
+ * the status code reports a silent no-op as success. There is no replacement for marking an
+ * order paid — no route can set `payment_status`.
+ *
+ * See `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.2.
  */
 export async function updateVendorOrder(
   vendorId: string | number,

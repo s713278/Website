@@ -26,8 +26,14 @@ export async function getVendorInsights(userId: string | number): Promise<Vendor
 /**
  * The vendor's own store details, for Settings.
  *
- * Read-only by necessity: `PUT /v1/vendors/{id}` fails with a JPA transaction error for
- * every body shape tried, including one that echoes the record back unchanged.
+ * Read-only here only because the editor is not built yet. `PUT /v1/vendors/{id}` works —
+ * verified on both a gone-live store and a never-submitted one, for the business name,
+ * contact fields and the structured address. The earlier claim that it failed for every
+ * body shape was measured against a malformed request.
+ *
+ * Two behaviors the editor has to be written around: the write is a **partial merge that
+ * silently ignores explicit `null`**, so no field can be cleared, and `assign_categories`
+ * is declared required but is not enforced. The success message sits at `data.data`.
  */
 export async function getVendorStoreProfile(
   vendorId: string | number,
