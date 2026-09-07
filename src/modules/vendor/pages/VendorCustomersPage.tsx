@@ -25,19 +25,21 @@ export function VendorCustomersPage() {
     <div>
       <PageHeader title="Customers" subtitle="Who has ordered from your store" />
 
-      <Card>
+      {/* Capped to a readable measure: at the console's full width this explanation runs to
+          well over a hundred characters a line, and the eye loses the return. */}
+      <Card className="max-w-[68ch] p-5">
         <h2 className="font-display text-lg font-semibold">Not available yet</h2>
         <p className="mt-2 text-sm text-[var(--md-muted)]">
           This is not an empty list — it is a screen we have not built, because the customer
-          directory cannot yet be read reliably. A real order placed by a new customer did not
-          add them to it, and the response has no published row format, so anything shown here
-          would be a guess.
+          directory cannot yet be read reliably. A real order placed by a new customer did not add
+          them to it, and the response has no published row format, so anything shown here would be
+          a guess.
         </p>
-        <p className="mt-2 text-sm text-[var(--md-muted)]">
+        <p className="mt-3 text-sm text-[var(--md-muted)]">
           Until that changes, every order carries its customer&rsquo;s phone number, and you can
           call or message them from the order itself.
         </p>
-        <div className="mt-4">
+        <div className="mt-5">
           <Link to="/vendor/orders">
             <Button size="sm">Go to Orders</Button>
           </Link>

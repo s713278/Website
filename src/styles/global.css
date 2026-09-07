@@ -374,6 +374,64 @@
   }
 }
 
+/* ── Vendor console ─────────────────────────────────────────────────────
+   Scoped to `.vendor-console`, not app-wide. A vendor working the counter is on a work
+   surface, not a marketing page, so the console drops the body's emerald radial wash for
+   a flat canvas — the white panels on it are then the only thing raised.
+
+   Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own
+   outer boundary, `--vc-rule` a division between rows inside one. A row rule as dark as
+   a panel edge reads as "next panel" rather than "next row". */
+.vendor-console {
+  --vc-canvas: #eef1f5;
+  --vc-panel: #ffffff;
+  --vc-edge: #dde3ea;
+  --vc-rule: #e9edf2;
+
+  /* The rail, and the one horizontal its head shares with the top bar. */
+  --vc-rail: 15.5rem;
+  --vc-bar: 4rem;
+  --vc-gutter: 1.5rem;
+
+  background: var(--vc-canvas);
+  color: var(--md-ink);
+}
+
+@media (min-width: 1280px) {
+  .vendor-console {
+    --vc-rail: 17rem;
+    --vc-gutter: 2rem;
+  }
+}
+
+@layer components {
+  /* Money, counts and order numbers. This list is read by scanning a column of amounts,
+     and proportional figures put every rupee total at a different width. */
+  .vc-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* One panel, ruled rows inside it. Declared here rather than as a `divide-y` utility
+     so the rule token stays with the two it is defined against. */
+  .vc-rows > * + * {
+    border-top: 1px solid var(--vc-rule);
+  }
+}
+
+/* Every panel in the console, restyled for the tinted canvas rather than the app's white
+   one. A drop shadow raises a card off a white page; on a tinted ground the panel already
+   reads as raised and the shadow only muddies its edge, so it goes and a single line takes
+   over. Scoped exactly like the storefront and onboarding subtrees above — no card outside
+   the console is touched.
+
+   Padding is deliberately not set here: `EmptyState` earns its generous px-6 py-16 through
+   a utility, and a padding declaration at this specificity would silently outrank it. */
+.vendor-console [data-slot='card'] {
+  border: 1px solid var(--vc-edge);
+  box-shadow: none;
+}
+
 /*Storefront shell */
 .store-shell {
   --store-shell-max: 76rem;

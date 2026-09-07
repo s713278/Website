@@ -37,11 +37,11 @@ export function VendorStorefrontPage() {
             </Link>
           }
         />
-        <Card>
+        <Card className="max-w-[68ch] p-5">
           <p className="text-sm text-[var(--md-muted)]">
             Your store is live and reachable by customers.
           </p>
-          <p className="mt-2 text-sm">
+          <p className="mt-3 text-sm">
             Share this link: <span className="font-medium">/stores/{identifier}</span>
           </p>
         </Card>
@@ -53,15 +53,15 @@ export function VendorStorefrontPage() {
     <div>
       <PageHeader title="Your storefront" subtitle="Not visible to customers yet" />
 
-      <Card className="mb-4">
+      <Card className="mb-6 max-w-[68ch] p-5">
         <h2 className="font-display font-semibold">Your store is not public yet</h2>
-        <p className="mt-1 text-sm text-[var(--md-muted)]">
+        <p className="mt-2 text-sm text-[var(--md-muted)]">
           {storeState === 'SETTING_UP'
             ? 'Finish setup and send your store for review. Once an administrator approves it, customers can find it.'
             : 'An administrator still has to approve your store before customers can find it.'}
         </p>
         {storeState === 'SETTING_UP' ? (
-          <div className="mt-3">
+          <div className="mt-5">
             <Link to="/onboarding">
               <Button size="sm">Continue setup</Button>
             </Link>
@@ -71,7 +71,7 @@ export function VendorStorefrontPage() {
 
       {draftBelongsHere ? (
         <>
-          <p className="mb-3 text-sm text-[var(--md-muted)]">
+          <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-muted)]">
             Below is the draft saved in <strong>this browser</strong>. It is not your published
             store, and it will not appear on another device.
           </p>

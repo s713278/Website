@@ -5,11 +5,19 @@ import { getErrorMessage, vendorService } from '@/shared/api'
 import { Card, PageHeader, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
+/**
+ * One detail, as label and value.
+ *
+ * A fixed label column rather than `justify-between`: spread across the full width of the
+ * console, "Store name" and "My Store" end up a canyon apart and the eye has to travel the
+ * whole line to pair them. The pair reads at a glance when the value starts where every
+ * other value starts.
+ */
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--md-border)] py-2 first:border-0">
-      <dt className="text-sm text-[var(--md-muted)]">{label}</dt>
-      <dd className="text-sm font-medium">{value ?? 'Not set'}</dd>
+    <div className="flex flex-wrap gap-x-6 gap-y-0.5 border-t border-[var(--vc-rule)] py-2.5 first:border-0 first:pt-0">
+      <dt className="w-40 shrink-0 text-sm text-[var(--md-muted)]">{label}</dt>
+      <dd className="vc-num min-w-0 text-sm font-medium">{value ?? 'Not set'}</dd>
     </div>
   )
 }
@@ -59,12 +67,12 @@ export function VendorSettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" subtitle="Your store details and account" />
-      {error ? <p className="mb-4 text-sm text-[var(--md-danger)]">{error}</p> : null}
+      {error ? <p className="mb-6 max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p> : null}
       {loading ? <Spinner label="Loading your details…" /> : null}
 
       {!loading && profile ? (
-        <Card className="mb-4">
-          <h2 className="font-display mb-3 font-semibold">Store details</h2>
+        <Card className="mb-6 max-w-2xl p-5">
+          <h2 className="font-display mb-4 font-semibold">Store details</h2>
           <dl>
             <Row label="Store name" value={profile.businessName} />
             <Row label="What you sell" value={profile.businessType} />
@@ -79,14 +87,14 @@ export function VendorSettingsPage() {
             The previous copy told vendors the backend had no working update and to contact
             support. It does have one. Say only what is true: editing is not built here yet.
           */}
-          <p className="mt-3 text-xs text-[var(--md-muted)]">
+          <p className="mt-4 text-xs text-[var(--md-muted)]">
             Editing these details from here is coming soon.
           </p>
         </Card>
       ) : null}
 
-      <Card className="mb-4">
-        <h2 className="font-display mb-3 font-semibold">Your plan</h2>
+      <Card className="max-w-2xl p-5">
+        <h2 className="font-display mb-4 font-semibold">Your plan</h2>
         <dl>
           <Row label="Plan" value={plan.name ?? plan.code} />
           <Row

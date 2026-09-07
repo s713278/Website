@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react'
 import { NavLink, Link, Outlet } from 'react-router-dom'
+import logoDarkMd from '@/assets/logo_dark_md.png'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { presentStoreState } from '@/modules/vendor/lib/store-state'
@@ -44,12 +45,20 @@ const NAV = [
  */
 const MOBILE_NAV = NAV.filter((item) => item.to !== '/vendor/settings')
 
+/**
+ * The rail's active marker is a rule, not a wash.
+ *
+ * Emerald in this console means "the next thing to do". Filling the active entry with it
+ * would spend the action colour on a label that says where you already are, so the fill is
+ * neutral and a single emerald rule marks the position.
+ */
 function sidebarLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
+    'relative flex items-center gap-3 rounded-md py-2 pr-2 pl-3 text-sm transition',
+    'before:absolute before:top-1/2 before:left-0 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-full',
     isActive
-      ? 'bg-[var(--md-green-50)] text-[var(--md-green-800)]'
-      : 'text-slate-600 hover:bg-slate-100',
+      ? 'bg-slate-100 font-semibold text-[var(--md-ink)] before:bg-[var(--md-green-600)]'
+      : 'font-medium text-slate-600 before:bg-transparent hover:bg-slate-50 hover:text-[var(--md-ink)]',
   )
 }
 
@@ -57,6 +66,29 @@ function bottomLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
     'flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition',
     isActive ? 'text-[var(--md-green-700)]' : 'text-slate-500',
+  )
+}
+
+/**
+ * The brand mark, at the head of the rail.
+ *
+ * The real lockup, the same asset the marketing header uses — the console previously set the
+ * name as Poppins text, which is a different mark from the one on every other surface.
+ *
+ * Desktop only, deliberately. It is a wide horizontal lockup carrying a tagline, and beside
+ * the store name on a 390px bar it has neither the room to be legible nor the room to leave
+ * the store name legible. There is no square mark to fall back to: `favicon.svg` is a
+ * placeholder, and substituting it would put a mark on screen that is not the brand's.
+ */
+function BrandMark() {
+  return (
+    <Link to="/" aria-label="Mithra Direct home">
+      <img
+        src={logoDarkMd}
+        alt="Mithra Direct — Shop Local, Support Local, Grow Together"
+        className="h-9 w-auto"
+      />
+    </Link>
   )
 }
 
@@ -78,12 +110,16 @@ function AccountMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1 text-left transition outline-none hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-ring/50">
-        <span className="font-display text-lg font-bold text-[var(--md-green-800)]">
+      {/*
+        The negative margin cancels the trigger's own padding, so the store name sits on the
+        same left edge as the page title below it rather than 8px inside it.
+      */}
+      <DropdownMenuTrigger className="-ml-2 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition outline-none hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-ring/50">
+        <span className="font-display truncate text-base font-semibold text-[var(--md-ink)]">
           {storeName}
         </span>
         <Badge tone={presentation.tone}>{presentation.label}</Badge>
-        <ChevronDown className="size-4 text-slate-500" aria-hidden />
+        <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <DropdownMenuLabel>{storeName}</DropdownMenuLabel>
@@ -122,29 +158,28 @@ const DEMO_STATE_LABELS: Record<string, string> = {
  * It writes the three fields `deriveStoreState` reads, so it cannot show a combination the
  * backend could not produce.
  *
- * It sits in the main column rather than the sidebar because the sidebar is hidden below
- * `md`, and a walkthrough given on a phone needs the switcher as much as one given on a
- * laptop.
+ * It sits in the main column rather than the rail because the rail is hidden below `md`,
+ * and a walkthrough given on a phone needs the switcher as much as one given on a laptop.
  */
 function DemoStateSwitcher() {
   const { demo } = useVendorAccount()
   if (!demo) return null
 
   return (
-    <div className="mt-8 rounded-lg border border-dashed border-[var(--md-border)] bg-white p-3">
-      <p className="text-xs font-semibold text-slate-700">Demo: store state</p>
-      <p className="mt-1 text-[11px] text-[var(--md-muted)]">Not shown on a live account.</p>
-      <div className="mt-2 flex flex-wrap gap-1">
+    <div className="mt-8 rounded-xl border border-dashed border-[var(--vc-edge)] bg-[var(--vc-panel)] p-4">
+      <p className="text-sm font-semibold text-slate-700">Demo: store state</p>
+      <p className="mt-0.5 text-xs text-[var(--md-muted)]">Not shown on a live account.</p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
         {demoService.storeStateKeys.map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => demo.select(key)}
             className={cn(
-              'rounded-full border px-2 py-0.5 text-[11px] transition',
+              'rounded-full border px-2.5 py-1 text-xs transition',
               demo.storeState === key
-                ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] text-[var(--md-green-800)]'
-                : 'border-[var(--md-border)] text-slate-600 hover:bg-slate-100',
+                ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] font-medium text-[var(--md-green-800)]'
+                : 'border-[var(--vc-edge)] text-slate-600 hover:bg-slate-50',
             )}
           >
             {DEMO_STATE_LABELS[key] ?? key}
@@ -155,35 +190,57 @@ function DemoStateSwitcher() {
   )
 }
 
+/**
+ * The console frame.
+ *
+ * Full-bleed rather than a centred column: a console occupies the window, and it is the
+ * content inside that carries a measure. The rail head and the top bar share `--vc-bar`
+ * and one border, so the brand, the store name and every page title below resolve to the
+ * same horizontal across all six surfaces.
+ */
 function VendorChrome() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 py-4">
-        <aside className="hidden w-56 shrink-0 flex-col gap-4 md:flex">
-          <NavLink to="/" className="font-display text-lg font-bold text-[var(--md-green-700)]">
-            MithraDirect
-          </NavLink>
-          <nav className="flex flex-col gap-1">
+    <div className="vendor-console flex min-h-screen">
+      {/*
+        The rail is the stretched flex child and the sticky column lives inside it, not the
+        other way round. A sticky `h-screen` aside is only ever one viewport tall, so on
+        Orders — the one screen that always scrolls — the white ran out part-way down and
+        the canvas showed through beneath the nav.
+
+        The head's `px-5` and the nav's `px-2 pl-3` both land on 20px, so the logo and the
+        six icons share one left edge and the active marker sits in the gutter left of it.
+      */}
+      <aside className="hidden w-[var(--vc-rail)] shrink-0 border-r border-[var(--vc-edge)] bg-[var(--vc-panel)] md:block">
+        <div className="sticky top-0 flex h-screen flex-col">
+          <div className="flex h-[var(--vc-bar)] shrink-0 items-center border-b border-[var(--vc-edge)] px-5">
+            <BrandMark />
+          </div>
+          <nav className="flex flex-col gap-0.5 px-2 py-3">
             {NAV.map(({ to, label, icon: Icon, end }) => (
               <NavLink key={to} to={to} end={end} className={sidebarLinkClass}>
-                <Icon className="size-4" aria-hidden />
+                <Icon className="size-4 shrink-0" aria-hidden />
                 {label}
               </NavLink>
             ))}
           </nav>
-        </aside>
+        </div>
+      </aside>
 
-        <main className="min-w-0 flex-1 pb-20 md:pb-0">
-          <header className="mb-5 border-b border-[var(--md-border)] pb-4">
-            <AccountMenu />
-          </header>
-          <Outlet />
-          <DemoStateSwitcher />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-10 flex h-[var(--vc-bar)] shrink-0 items-center border-b border-[var(--vc-edge)] bg-[var(--vc-panel)] px-[var(--vc-gutter)]">
+          <AccountMenu />
+        </header>
+
+        <main className="flex-1 px-[var(--vc-gutter)] pt-8 pb-24 md:pb-12">
+          <div className="max-w-[72rem]">
+            <Outlet />
+            <DemoStateSwitcher />
+          </div>
         </main>
       </div>
 
       {/* Bottom bar on small screens: a vendor working the counter is on a phone. */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-[var(--md-border)] bg-white/95 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-[var(--vc-edge)] bg-white/95 backdrop-blur md:hidden">
         {MOBILE_NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={bottomLinkClass}>
             <Icon className="size-5" aria-hidden />

@@ -17,13 +17,7 @@ function groupByProduct(sizes: VendorSize[]) {
   return [...groups.entries()].map(([id, group]) => ({ id, ...group }))
 }
 
-function PriceEditor({
-  size,
-  onSaved,
-}: {
-  size: VendorSize
-  onSaved: () => void
-}) {
+function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void }) {
   const [open, setOpen] = useState(false)
   const [listPrice, setListPrice] = useState(String(size.listPrice ?? ''))
   const [salePrice, setSalePrice] = useState(String(size.salePrice ?? ''))
@@ -70,8 +64,8 @@ function PriceEditor({
   }
 
   return (
-    <div className="w-full rounded-lg border border-[var(--md-border)] p-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="w-full rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">
+      <div className="grid gap-3 sm:max-w-md sm:grid-cols-2">
         <Input
           label="MRP"
           inputMode="decimal"
@@ -86,7 +80,7 @@ function PriceEditor({
         />
       </div>
       {invalid ? (
-        <p className="mt-2 text-xs text-[var(--md-danger)]">
+        <p className="mt-2 max-w-[68ch] text-xs text-[var(--md-danger)]">
           Both prices must be above zero, and the selling price cannot exceed the MRP.
         </p>
       ) : null}
@@ -140,7 +134,7 @@ export function VendorProductsPage() {
   return (
     <div>
       <PageHeader title="Products" subtitle="What you sell, and what each size costs" />
-      {error ? <p className="mb-4 text-sm text-[var(--md-danger)]">{error}</p> : null}
+      {error ? <p className="mb-6 max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p> : null}
 
       {!groups.length ? (
         <EmptyState
@@ -148,28 +142,35 @@ export function VendorProductsPage() {
           description="Products and their sizes are added during store setup."
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {groups.map((group) => (
-            <Card key={group.id}>
-              <h2 className="font-display font-semibold">{group.name}</h2>
-              <ul className="mt-3 space-y-3">
+            <Card key={group.id} className="max-w-3xl p-0">
+              <h2 className="font-display border-b border-[var(--vc-rule)] px-5 py-3.5 font-semibold">
+                {group.name}
+              </h2>
+              {/*
+                Size, then price, then the control — three columns rather than a left-stacked
+                block, because a vendor checking their prices is comparing one size against
+                the next and a ragged price column defeats that.
+              */}
+              <ul className="vc-rows">
                 {group.sizes.map((size) => (
                   <li
                     key={size.skuId}
-                    className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--md-border)] pt-3 first:border-0 first:pt-0"
+                    className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5"
                   >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{size.size ?? 'Standard'}</span>
-                        {!size.active ? <Badge tone="neutral">Hidden</Badge> : null}
-                      </div>
-                      <p className="mt-1 text-sm text-[var(--md-muted)]">
-                        {size.salePrice != null ? formatCurrency(size.salePrice) : '—'}
-                        {size.listPrice != null && size.listPrice !== size.salePrice ? (
-                          <span className="ml-2 line-through">{formatCurrency(size.listPrice)}</span>
-                        ) : null}
-                      </p>
+                    <div className="flex flex-wrap items-center gap-2 sm:w-40">
+                      <span className="text-sm font-medium">{size.size ?? 'Standard'}</span>
+                      {!size.active ? <Badge tone="neutral">Hidden</Badge> : null}
                     </div>
+                    <p className="vc-num flex-1 text-sm">
+                      {size.salePrice != null ? formatCurrency(size.salePrice) : '—'}
+                      {size.listPrice != null && size.listPrice !== size.salePrice ? (
+                        <span className="ml-2 text-[var(--md-muted)] line-through">
+                          {formatCurrency(size.listPrice)}
+                        </span>
+                      ) : null}
+                    </p>
                     <PriceEditor size={size} onSaved={reload} />
                   </li>
                 ))}

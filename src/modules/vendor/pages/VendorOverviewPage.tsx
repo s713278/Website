@@ -42,7 +42,10 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
     setError('')
 
     void vendorOrdersService
-      .list(vendorId, { startDate: queueWindow.startDate, endDate: queueWindow.endDate })
+      .list(vendorId, {
+        startDate: queueWindow.startDate,
+        endDate: queueWindow.endDate,
+      })
       .then((data) => {
         if (!cancelled) setResult(data)
       })
@@ -61,10 +64,10 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
   const queue = result ? selectWorkQueue(result.orders) : []
 
   return (
-    <section className="mb-8">
-      <div className="mb-3">
+    <section className="mb-10">
+      <div className="mb-4">
         <h2 className="font-display text-lg font-semibold">What needs doing</h2>
-        <p className="text-sm text-[var(--md-muted)]">
+        <p className="vc-num mt-0.5 max-w-[68ch] text-sm text-[var(--md-muted)]">
           Deliveries due between {queueWindow.startDate} and {queueWindow.endDate}, still open.
         </p>
       </div>
@@ -76,8 +79,8 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
         nothing to do because a request failed is the worse of the two mistakes.
       */}
       {!loading && error ? (
-        <Card className="border-[var(--md-danger)]">
-          <p className="text-sm text-[var(--md-danger)]">{error}</p>
+        <Card className="border-[var(--md-danger)] p-5">
+          <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
             This is a failed request, not an empty queue.
           </p>
@@ -92,49 +95,62 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
       ) : null}
 
       {!loading && !error && queue.length ? (
-        <div className="space-y-3">
-          {queue.map((order) => {
-            const delivery = presentDeliveryStatus(order.deliveryStatus)
-            const late = isOverdue(order.deliveryDate, todayIso)
+        <div>
+          {/*
+            One panel, one row per job — the same ledger the Orders screen uses, so a vendor
+            moving between the two is reading the same shape twice rather than learning it
+            again. Lateness keeps its left rule: it is the one thing here that must survive
+            a glance that takes in nothing else.
+          */}
+          <Card className="vc-rows p-0">
+            {queue.map((order) => {
+              const delivery = presentDeliveryStatus(order.deliveryStatus)
+              const late = isOverdue(order.deliveryDate, todayIso)
 
-            return (
-              <Card
-                key={order.id}
-                className={cn(
-                  'border-l-4',
-                  late ? 'border-l-[var(--md-danger)]' : 'border-l-[var(--md-green-600)]',
-                )}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link to={`/vendor/orders/${order.id}`} className="font-semibold hover:underline">
-                    Order #{order.id}
-                  </Link>
-                  <Badge tone={delivery.tone}>{delivery.label}</Badge>
-                  {late ? <Badge tone="danger">Overdue</Badge> : null}
-                </div>
-                <p
+              return (
+                <div
+                  key={order.id}
                   className={cn(
-                    'mt-1 text-sm',
-                    late ? 'font-medium text-[var(--md-danger)]' : 'text-[var(--md-muted)]',
+                    'grid gap-x-6 gap-y-2 border-l-[3px] px-4 py-4 transition-colors hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-start sm:px-5',
+                    late ? 'border-l-[var(--md-danger)]' : 'border-l-transparent',
                   )}
                 >
-                  {dueDescription(order.deliveryDate, todayIso)}
-                </p>
-                <CustomerContact
-                  className="mt-2"
-                  name={order.customerName}
-                  mobile={order.customerMobile}
-                />
-              </Card>
-            )
-          })}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/vendor/orders/${order.id}`}
+                        className="vc-num font-semibold hover:underline"
+                      >
+                        Order #{order.id}
+                      </Link>
+                      <Badge tone={delivery.tone}>{delivery.label}</Badge>
+                      {late ? <Badge tone="danger">Overdue</Badge> : null}
+                    </div>
+                    <CustomerContact
+                      className="mt-1.5"
+                      name={order.customerName}
+                      mobile={order.customerMobile}
+                    />
+                  </div>
+                  <p
+                    className={cn(
+                      'vc-num text-sm sm:text-right sm:whitespace-nowrap',
+                      late ? 'font-medium text-[var(--md-danger)]' : 'text-[var(--md-muted)]',
+                    )}
+                  >
+                    {dueDescription(order.deliveryDate, todayIso)}
+                  </p>
+                </div>
+              )
+            })}
+          </Card>
 
           {/*
             One request, one page. Saying so is better than silently showing part of the
             window as if it were all of it.
           */}
           {result && !result.lastPage ? (
-            <p className="text-sm text-[var(--md-muted)]">
+            <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
               Only the first page of this window is shown.{' '}
               <Link to="/vendor/orders" className="font-medium hover:underline">
                 Open Orders
@@ -183,22 +199,22 @@ function StatusCounts({ userId }: { userId: string }) {
   }, [userId])
 
   return (
-    <section className="mb-8">
-      <h2 className="font-display mb-3 text-lg font-semibold">Where your orders stand</h2>
+    <section className="mb-10">
+      <h2 className="font-display mb-4 text-lg font-semibold">Where your orders stand</h2>
 
       {loading ? <Spinner label="Loading your order counts…" /> : null}
       {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
 
       {!loading && !error && insights ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
             <Link
               key={status}
               to={`/vendor/orders?status=${status}`}
-              className="rounded-lg border border-[var(--md-border)] bg-white p-4 transition hover:border-[var(--md-green-600)] hover:bg-[var(--md-green-50)]"
+              className="rounded-xl border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-5 py-4 transition hover:border-slate-300 hover:bg-slate-50"
             >
               {/* The space is load-bearing: without it the link's accessible name is "2New". */}
-              <span className="font-display block text-3xl font-bold">{count}</span>{' '}
+              <span className="font-display vc-num block text-3xl font-bold">{count}</span>{' '}
               <span className="mt-1 block text-sm text-[var(--md-muted)]">{label}</span>
             </Link>
           ))}
@@ -220,13 +236,13 @@ function PlanUsage() {
 
   return (
     <section>
-      <h2 className="font-display mb-3 text-lg font-semibold">Your plan</h2>
-      <Card>
+      <h2 className="font-display mb-4 text-lg font-semibold">Your plan</h2>
+      <Card className="max-w-2xl p-5">
         <p className="font-semibold">{plan.name ?? plan.code ?? 'Your plan'}</p>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+        <dl className="mt-4 grid gap-4 sm:max-w-lg sm:grid-cols-2">
           <div>
             <dt className="text-sm text-[var(--md-muted)]">Products</dt>
-            <dd className="mt-1 font-medium">
+            <dd className="vc-num mt-1 font-medium">
               {plan.usage.products != null && plan.limits.products != null
                 ? `${plan.usage.products} of ${plan.limits.products} used`
                 : 'Not available'}
@@ -234,7 +250,7 @@ function PlanUsage() {
           </div>
           <div>
             <dt className="text-sm text-[var(--md-muted)]">Sizes</dt>
-            <dd className="mt-1 font-medium">
+            <dd className="vc-num mt-1 font-medium">
               {plan.usage.skus != null && plan.limits.skus != null
                 ? `${plan.usage.skus} of ${plan.limits.skus} used`
                 : 'Not available'}
@@ -247,7 +263,7 @@ function PlanUsage() {
           a hardcoded trial length.
         */}
         {plan.trialEndsAt ? (
-          <p className="mt-3 text-sm text-[var(--md-muted)]">
+          <p className="vc-num mt-4 text-sm text-[var(--md-muted)]">
             Trial ends {new Date(plan.trialEndsAt).toLocaleDateString()}
           </p>
         ) : null}

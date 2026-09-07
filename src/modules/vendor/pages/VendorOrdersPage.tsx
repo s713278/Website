@@ -42,12 +42,19 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  * counts link straight into a filtered view.
  */
 
+/**
+ * A filter chip.
+ *
+ * The selected chip says where the vendor already is, not what to do next, so it takes a
+ * neutral ink fill rather than the emerald reserved for the advance actions further down
+ * the same screen. Two emerald meanings on one screen is one too many.
+ */
 function chipClass(active: boolean) {
   return cn(
-    'rounded-full border px-3 py-1 text-sm transition',
+    'rounded-full border px-3 py-1.5 text-sm transition',
     active
-      ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] text-[var(--md-green-800)]'
-      : 'border-[var(--md-border)] text-slate-600 hover:bg-slate-100',
+      ? 'border-transparent bg-[var(--md-ink)] font-medium text-white'
+      : 'border-[var(--vc-edge)] bg-white text-slate-600 hover:border-slate-300 hover:text-[var(--md-ink)]',
   )
 }
 
@@ -64,34 +71,28 @@ type SubtotalState = { kind: 'loading' } | SubtotalOutcome
  * It is a second pass over the same filter rather than a sum of the visible rows, and it is
  * withheld outright rather than shown partial. See `lib/order-subtotal.ts`.
  */
-function DeliveryWindowSubtotal({
-  heading,
-  state,
-}: {
-  heading: string
-  state: SubtotalState
-}) {
+function DeliveryWindowSubtotal({ heading, state }: { heading: string; state: SubtotalState }) {
   return (
-    <Card className="mb-4">
+    <Card className="mb-6 p-5">
       <p className="text-sm text-[var(--md-muted)]">{heading}</p>
       {state.kind === 'loading' ? (
         <p className="mt-1 text-sm text-[var(--md-muted)]">Adding it up…</p>
       ) : null}
       {state.kind === 'total' ? (
-        <p className="font-display mt-1 text-2xl font-bold">
+        <p className="font-display vc-num mt-1 text-3xl font-bold">
           {formatCurrency(state.amount)}{' '}
-          <span className="text-sm font-normal text-[var(--md-muted)]">
+          <span className="font-sans text-sm font-normal text-[var(--md-muted)]">
             across {state.orders} {state.orders === 1 ? 'order' : 'orders'}
           </span>
         </p>
       ) : null}
       {state.kind === 'too-large' ? (
-        <p className="mt-1 text-sm font-medium">
+        <p className="mt-1 max-w-[68ch] text-sm font-medium">
           Range too large to total. Narrow the delivery dates and it will add up again.
         </p>
       ) : null}
       {state.kind === 'withheld' ? (
-        <p className="mt-1 text-sm font-medium">
+        <p className="mt-1 max-w-[68ch] text-sm font-medium">
           {state.reason === 'failed'
             ? `No total: part of this range did not load. A partial total would look complete. ${getErrorMessage(state.error, 'The request failed.')}`
             : 'No total: some of these orders have no amount, so any figure would be short.'}
@@ -227,9 +228,9 @@ export function VendorOrdersPage() {
     <div>
       <PageHeader title="Orders" subtitle="Filter by delivery date, then work down the list" />
 
-      <div className="mb-4 space-y-3">
+      <Card className="mb-6 space-y-5 p-5">
         <div role="group" aria-label="Order status">
-          <p className="mb-1 text-sm font-medium">Order status</p>
+          <p className="mb-2 text-sm font-medium">Order status</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -258,7 +259,7 @@ export function VendorOrdersPage() {
           answer a different question than the one it was asked.
         */}
         <div role="group" aria-label="Delivery date">
-          <p className="mb-1 text-sm font-medium">Delivery date</p>
+          <p className="mb-2 text-sm font-medium">Delivery date</p>
           <div className="flex flex-wrap gap-2">
             {RANGE_PRESETS.map(({ key, label }) => (
               <button
@@ -285,14 +286,19 @@ export function VendorOrdersPage() {
             ) : null}
           </div>
 
-          <div className="mt-2 grid gap-3 sm:max-w-md sm:grid-cols-2">
+          <div className="mt-3 grid gap-3 sm:max-w-md sm:grid-cols-2">
             <Input
               type="date"
               name="delivery-date-from"
               label="Delivery date from"
               value={startDate ?? ''}
               onChange={(event) =>
-                applyFilters({ range: { ...query.range, startDate: event.target.value || null } })
+                applyFilters({
+                  range: {
+                    ...query.range,
+                    startDate: event.target.value || null,
+                  },
+                })
               }
             />
             <Input
@@ -301,20 +307,27 @@ export function VendorOrdersPage() {
               label="Delivery date to"
               value={endDate ?? ''}
               onChange={(event) =>
-                applyFilters({ range: { ...query.range, endDate: event.target.value || null } })
+                applyFilters({
+                  range: {
+                    ...query.range,
+                    endDate: event.target.value || null,
+                  },
+                })
               }
             />
           </div>
         </div>
-      </div>
+      </Card>
 
-      {rangeIssue ? <p className="mb-4 text-sm text-[var(--md-danger)]">{rangeIssue}</p> : null}
+      {rangeIssue ? <p className="mb-6 text-sm text-[var(--md-danger)]">{rangeIssue}</p> : null}
 
       {heading && !rangeIssue ? (
         <DeliveryWindowSubtotal heading={heading} state={subtotal} />
       ) : null}
 
-      {actionError ? <p className="mb-4 text-sm text-[var(--md-danger)]">{actionError}</p> : null}
+      {actionError ? (
+        <p className="mb-6 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
+      ) : null}
       {loading ? <Spinner label="Loading orders…" /> : null}
 
       {/*
@@ -322,8 +335,8 @@ export function VendorOrdersPage() {
         wrong one to guess at: a vendor who reads it stops looking.
       */}
       {!loading && loadError ? (
-        <Card className="border-[var(--md-danger)]">
-          <p className="text-sm text-[var(--md-danger)]">{loadError}</p>
+        <Card className="border-[var(--md-danger)] p-5">
+          <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
             This is a failed request, not an empty list.
           </p>
@@ -350,78 +363,102 @@ export function VendorOrdersPage() {
       ) : null}
 
       {!loading && !loadError && orders.length ? (
-        <div className="space-y-3">
-          {orders.map((order) => {
-            const delivery = presentDeliveryStatus(order.deliveryStatus)
-            const next = nextDeliveryStatus(order.deliveryStatus)
-            const busy = busyId === order.id
+        <div>
+          {/*
+            One panel with ruled rows, not a card per order. Thirteen separately shadowed
+            cards make thirteen things to look at; a vendor working down a delivery day is
+            comparing rows, and the columns below only line up if they share a panel.
+          */}
+          <Card className="vc-rows p-0">
+            {orders.map((order) => {
+              const delivery = presentDeliveryStatus(order.deliveryStatus)
+              const next = nextDeliveryStatus(order.deliveryStatus)
+              const busy = busyId === order.id
 
-            return (
-              <Card key={order.id} className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    {/*
+              return (
+                <div
+                  key={order.id}
+                  className="grid gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1fr)_13rem_16rem] sm:items-start sm:px-5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/*
                       The filters ride along in history state so that the detail screen's
                       own "Back to orders" returns to this exact view. Browser back already
                       would; a vendor who uses the button on screen should not be punished
                       for it by losing the range they just typed.
                     */}
-                    <Link
-                      to={`/vendor/orders/${order.id}`}
-                      state={{ from: `/vendor/orders${search}` }}
-                      className="font-semibold hover:underline"
-                    >
-                      Order #{order.id}
-                    </Link>
-                    <Badge tone={delivery.tone}>{delivery.label}</Badge>
-                    {/*
-                      Payment is its own axis: an order can be delivered and still unpaid,
-                      which the previous single-status list could not show at all.
-                    */}
-                    {order.paymentStatus ? (
-                      <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
-                        {presentPaymentStatus(order.paymentStatus).label}
-                      </Badge>
-                    ) : null}
+                      <Link
+                        to={`/vendor/orders/${order.id}`}
+                        state={{ from: `/vendor/orders${search}` }}
+                        className="vc-num font-semibold hover:underline"
+                      >
+                        Order #{order.id}
+                      </Link>
+                      <Badge tone={delivery.tone}>{delivery.label}</Badge>
+                      {/*
+                        Payment is its own axis: an order can be delivered and still unpaid,
+                        which the previous single-status list could not show at all.
+                      */}
+                      {order.paymentStatus ? (
+                        <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
+                          {presentPaymentStatus(order.paymentStatus).label}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <CustomerContact
+                      className="mt-1.5"
+                      name={order.customerName}
+                      mobile={order.customerMobile}
+                    />
                   </div>
-                  <CustomerContact name={order.customerName} mobile={order.customerMobile} />
-                  {order.deliveryDate ? (
-                    <p className="mt-1 text-sm text-[var(--md-muted)]">
-                      Delivery date {order.deliveryDate}
-                    </p>
-                  ) : null}
-                  {/*
-                    `null` is unknown, `0` is a genuinely free order. Rendering both as
-                    nothing, or both as ₹0, would merge two different facts.
-                  */}
-                  {order.total != null ? (
-                    <p className="mt-2 font-semibold">{formatCurrency(order.total)}</p>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-500">Amount not available</p>
-                  )}
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
                   {/*
+                    Date over amount, right-aligned in a fixed column so the rupee figures
+                    stack into one edge. `null` is unknown, `0` is a genuinely free order:
+                    rendering both as nothing, or both as ₹0, would merge two facts.
+                  */}
+                  <div className="sm:text-right">
+                    {order.deliveryDate ? (
+                      <p className="vc-num text-sm text-[var(--md-muted)] sm:whitespace-nowrap">
+                        Delivery date {order.deliveryDate}
+                      </p>
+                    ) : null}
+                    {order.total != null ? (
+                      <p className="vc-num mt-0.5 text-lg font-semibold">
+                        {formatCurrency(order.total)}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-sm text-slate-500">Amount not available</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    {/*
                     Shown for anything not already paid, including a row whose
                     `payment_status` the backend omitted. Keying this on `DUE` alone would
                     make the control disappear on exactly the rows where the gap is least
                     visible, which is the opposite of why it is kept.
                   */}
-                  {order.paymentStatus !== 'PAID' ? (
-                    <Button size="sm" variant="secondary" disabled>
-                      Mark paid
-                    </Button>
-                  ) : null}
-                  {next ? (
-                    <Button size="sm" disabled={busy} onClick={() => void advance(order.id, next)}>
-                      {busy ? 'Working…' : forwardActionLabel(next)}
-                    </Button>
-                  ) : null}
+                    {order.paymentStatus !== 'PAID' ? (
+                      <Button size="sm" variant="secondary" disabled>
+                        Mark paid
+                      </Button>
+                    ) : null}
+                    {next ? (
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void advance(order.id, next)}
+                      >
+                        {busy ? 'Working…' : forwardActionLabel(next)}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              </Card>
-            )
-          })}
+              )
+            })}
+          </Card>
 
           {/*
             Said once rather than per row. The control stays on screen because removing it
@@ -429,16 +466,16 @@ export function VendorOrdersPage() {
             meeting exists partly to ask for one.
           */}
           {anyUnpaid ? (
-            <p className="text-sm text-[var(--md-muted)]">
-              Mark paid is disabled because no part of the backend can record a payment yet.
-              It is left visible so the gap is not hidden.
+            <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
+              Mark paid is disabled because no part of the backend can record a payment yet. It is
+              left visible so the gap is not hidden.
             </p>
           ) : null}
         </div>
       ) : null}
 
       {result && result.totalPages > 1 ? (
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-6 flex items-center justify-between border-t border-[var(--vc-edge)] pt-5">
           <Button
             size="sm"
             variant="secondary"
@@ -447,7 +484,7 @@ export function VendorOrdersPage() {
           >
             Previous
           </Button>
-          <span className="text-sm text-[var(--md-muted)]">
+          <span className="vc-num text-sm text-[var(--md-muted)]">
             Page {result.page + 1} of {result.totalPages}
           </span>
           <Button

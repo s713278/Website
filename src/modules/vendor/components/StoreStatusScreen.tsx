@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { presentStoreState, setupProgress, storeStateAction } from '@/modules/vendor/lib/store-state'
+import {
+  presentStoreState,
+  setupProgress,
+  storeStateAction,
+} from '@/modules/vendor/lib/store-state'
 import type { StoreState } from '@/modules/vendor/types/dashboard'
 import { Button, Card } from '@/shared/components'
 
@@ -22,12 +26,12 @@ export function StoreStatusScreen({ state }: { state: Exclude<StoreState, 'OPEN'
   const progress = setupProgress(context.onboarding.nextStep)
 
   return (
-    <Card>
+    <Card className="max-w-[68ch] p-5">
       <h2 className="font-display text-lg font-semibold">{presentation.label}</h2>
-      <p className="mt-2 text-sm text-[var(--md-muted)]">{presentation.description}</p>
+      <p className="mt-2 max-w-[68ch] text-sm text-[var(--md-muted)]">{presentation.description}</p>
 
       {action ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <Link to={action.to}>
             <Button size="sm">{action.label}</Button>
           </Link>
@@ -37,7 +41,7 @@ export function StoreStatusScreen({ state }: { state: Exclude<StoreState, 'OPEN'
             from a guess about how long approval takes.
           */}
           {state === 'SETTING_UP' && progress ? (
-            <span className="text-sm text-[var(--md-muted)]">
+            <span className="vc-num text-sm text-[var(--md-muted)]">
               Step {progress.step} of {progress.total}
             </span>
           ) : null}
