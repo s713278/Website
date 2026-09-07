@@ -64,6 +64,7 @@ export {
   schedulingConfigString,
 } from './mappers/vendor-onboarding'
 export {
+  mapBulkStatusResult,
   mapVendorInsights,
   mapVendorOrderDetail,
   mapVendorOrderPage,
@@ -73,6 +74,7 @@ export {
   toDeliveryStatus,
   toPaymentStatus,
 } from './mappers/vendor-dashboard'
+export type { BulkStatusFailure, BulkStatusResult } from './mappers/vendor-dashboard'
 export { resolveLandingStoreArtwork } from './mappers/landing-store'
 export type { LandingStore, LandingStoreArtwork } from './mappers/landing-store'
 export type {

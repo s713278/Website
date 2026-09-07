@@ -46,10 +46,12 @@ export {
   vendorService,
 } from './vendor.service'
 export {
+  advanceVendorOrder,
   cancelVendorOrder,
   getVendorOrder,
+  isOrderTransitionRefused,
   listVendorOrders,
-  updateVendorOrder,
+  OrderTransitionRefusedError,
   vendorOrdersService,
   type VendorOrderQuery,
 } from './vendor-orders.service'

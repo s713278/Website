@@ -52,7 +52,8 @@ export function isoDay(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function shiftDays(date: Date, days: number): Date {
+/** Exported because the Orders date presets need the same calendar arithmetic. */
+export function shiftDays(date: Date, days: number): Date {
   const shifted = new Date(date)
   shifted.setDate(shifted.getDate() + days)
   return shifted

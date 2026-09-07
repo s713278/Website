@@ -2,6 +2,7 @@ import type {
   DeliveryStatus,
   PaymentStatus,
   VendorInsights,
+  VendorOrderCharges,
   VendorOrderDetail,
   VendorOrderLine,
   VendorOrderPage,
@@ -145,6 +146,7 @@ function mapOrderLine(row: UnknownRecord): VendorOrderLine {
     name: str(row.sku_name) ?? 'Item',
     size: str(row.size),
     quantity: num(row.quantity) ?? 1,
+    unitPrice: num(row.unit_price) ?? num(row.sale_price),
     amount: num(row.line_total) ?? num(row.unit_price) ?? num(row.sale_price),
   }
 }
@@ -164,16 +166,73 @@ function mapAddress(value: unknown): string | null {
 }
 
 /**
+ * The charge breakdown, from the `order_amount` object the items read nests it under.
+ *
+ * Read field by field and never derived. The tempting move — inferring a delivery charge
+ * from `amount - gross_amount + discount` — invents a figure the backend never sent, and
+ * the vendor would be the one asked to justify it. A charge the response omits stays `null`
+ * and simply does not appear.
+ */
+function mapOrderCharges(value: unknown): VendorOrderCharges {
+  const charges = isRecord(value) ? value : {}
+  return {
+    gross: num(charges.gross_amount),
+    discount: num(charges.discount),
+    deliveryCharges: num(charges.delivery_charges),
+    serviceCharge: num(charges.service_charge),
+    tax: num(charges.tax_amount),
+  }
+}
+
+/**
  * The full order. This read carries `customer_name` and `customer_mobile`, which the list
  * read does not — both are picked up by `mapOrderSummary`, so a detail screen shows a real
  * name where the list can only show a number.
+ *
+ * The charge breakdown is read from `order_amount`, which only this read carries. A list row
+ * has flat copies of some of those keys, but nothing maps a list row through here, and a
+ * branch with no caller is a branch nothing keeps honest.
  */
 export function mapVendorOrderDetail(payload: unknown): VendorOrderDetail {
   const data = envelopeRecord(payload)
   return {
     ...mapOrderSummary(data),
     deliveryAddress: mapAddress(data.delivery_address),
+    charges: mapOrderCharges(data.order_amount),
     lines: vendorCollectionRows(data.order_items).map(mapOrderLine),
+  }
+}
+
+/** One order the bulk status write refused, and the reason it gave. */
+export type BulkStatusFailure = { orderId: string | null; reason: string | null }
+
+export type BulkStatusResult = {
+  successCount: number
+  failed: BulkStatusFailure[]
+}
+
+/**
+ * What `POST /v1/vendors/{v}/orders/bulk-status-update` actually reports.
+ *
+ * **A refused transition is not an error.** It is `HTTP 200`, `success: true`, and
+ * `data.success_count: 0` with the order listed under `failed_orders`. A caller that reads
+ * only the status code reports a silent no-op as a success — which is exactly what the
+ * advance button did before this existed.
+ *
+ * `successCount` defaults to `0`, not to the number of ids sent: an unreadable response must
+ * fail closed. `reason` is mapped so it can be logged, and is **not** for display — the
+ * backend sends the same generic sentence for a wrong next status, an order that is not
+ * yours, and an order that is already there.
+ */
+export function mapBulkStatusResult(payload: unknown): BulkStatusResult {
+  const data = envelopeRecord(payload)
+  const failed = Array.isArray(data.failed_orders) ? data.failed_orders : []
+  return {
+    successCount: num(data.success_count) ?? 0,
+    failed: failed.filter(isRecord).map((row) => ({
+      orderId: str(row.order_id),
+      reason: str(row.reason),
+    })),
   }
 }
 

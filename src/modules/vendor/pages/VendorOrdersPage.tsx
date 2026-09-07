@@ -1,69 +1,170 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   forwardActionLabel,
+  forwardRefusalMessage,
   nextDeliveryStatus,
   presentDeliveryStatus,
   presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
+import {
+  hasDeliveryRange,
+  matchingPreset,
+  NO_RANGE,
+  ORDER_STATUS_FILTERS,
+  presetRange,
+  RANGE_PRESETS,
+  rangeError,
+  readOrdersQuery,
+  subtotalHeading,
+  writeOrdersQuery,
+  type DeliveryRange,
+} from '@/modules/vendor/lib/order-filters'
+import {
+  SUBTOTAL_PAGE_SIZE,
+  sumDeliveryWindow,
+  type SubtotalOutcome,
+} from '@/modules/vendor/lib/order-subtotal'
 import type { DeliveryStatus, VendorOrderPage } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, vendorOrdersService } from '@/shared/api'
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
+import { getErrorMessage, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
 import { cn, formatCurrency } from '@/shared/lib/utils'
 
-const FILTERS: Array<{ label: string; value: DeliveryStatus | null }> = [
-  { label: 'All', value: null },
-  { label: 'New', value: 'PENDING' },
-  // `SCHEDULED` was missing, and an auto-accepting vendor receives most of their orders in
-  // exactly that state — so the one filter they need most had no chip.
-  { label: 'Scheduled', value: 'SCHEDULED' },
-  { label: 'Being prepared', value: 'IN_PROCESS' },
-  { label: 'On the way', value: 'SHIPPED' },
-  { label: 'Delivered', value: 'DELIVERED' },
-  { label: 'Cancelled', value: 'CANCELLED' },
-]
+/**
+ * The screen a vendor works from: filter by delivery date, page through, open an order,
+ * move it one step.
+ *
+ * The whole filter state — status, both dates and the page — lives in the URL. That is what
+ * makes it survive opening an order and coming back: history restores the URL, where
+ * component state would have unmounted on the way out. It is also how Overview's status
+ * counts link straight into a filtered view.
+ */
+
+function chipClass(active: boolean) {
+  return cn(
+    'rounded-full border px-3 py-1 text-sm transition',
+    active
+      ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] text-[var(--md-green-800)]'
+      : 'border-[var(--md-border)] text-slate-600 hover:bg-slate-100',
+  )
+}
+
+type SubtotalState = { kind: 'loading' } | SubtotalOutcome
 
 /**
- * The filter carried in `?status=`, or none.
+ * The console's one money figure, and the only screen allowed to show one.
  *
- * Read from the URL rather than held in state alone, because Overview's status counts link
- * straight in here with the filter already chosen. An unknown value falls back to "All"
- * instead of being sent to the server as an `order_status` the enum does not contain.
+ * It is labelled with the exact filter it totals, because a number beside a date range is
+ * read as that range's takings — and this console cannot report takings at all: no order
+ * read carries a creation date, so there is no "sold in September", only "delivering in
+ * September".
+ *
+ * It is a second pass over the same filter rather than a sum of the visible rows, and it is
+ * withheld outright rather than shown partial. See `lib/order-subtotal.ts`.
  */
-function parseStatusFilter(raw: string | null): DeliveryStatus | null {
-  const match = FILTERS.find((option) => option.value != null && option.value === raw)
-  return match?.value ?? null
+function DeliveryWindowSubtotal({
+  heading,
+  state,
+}: {
+  heading: string
+  state: SubtotalState
+}) {
+  return (
+    <Card className="mb-4">
+      <p className="text-sm text-[var(--md-muted)]">{heading}</p>
+      {state.kind === 'loading' ? (
+        <p className="mt-1 text-sm text-[var(--md-muted)]">Adding it up…</p>
+      ) : null}
+      {state.kind === 'total' ? (
+        <p className="font-display mt-1 text-2xl font-bold">
+          {formatCurrency(state.amount)}{' '}
+          <span className="text-sm font-normal text-[var(--md-muted)]">
+            across {state.orders} {state.orders === 1 ? 'order' : 'orders'}
+          </span>
+        </p>
+      ) : null}
+      {state.kind === 'too-large' ? (
+        <p className="mt-1 text-sm font-medium">
+          Range too large to total. Narrow the delivery dates and it will add up again.
+        </p>
+      ) : null}
+      {state.kind === 'withheld' ? (
+        <p className="mt-1 text-sm font-medium">
+          {state.reason === 'failed'
+            ? `No total: part of this range did not load. A partial total would look complete. ${getErrorMessage(state.error, 'The request failed.')}`
+            : 'No total: some of these orders have no amount, so any figure would be short.'}
+        </p>
+      ) : null}
+    </Card>
+  )
 }
 
 export function VendorOrdersPage() {
   const { vendorId } = useVendorAccount()
   const [searchParams, setSearchParams] = useSearchParams()
-  const filter = parseStatusFilter(searchParams.get('status'))
-  const [page, setPage] = useState(0)
+  const { search } = useLocation()
+
+  const query = useMemo(() => readOrdersQuery(searchParams), [searchParams])
+  const { status, page } = query
+  const { startDate, endDate } = query.range
+  // Fixed for the life of the screen: the preset chips must not shift under the vendor if
+  // midnight passes while they are looking at them.
+  const today = useMemo(() => new Date(), [])
+  const rangeIssue = rangeError(query.range)
+  const heading = subtotalHeading(query.range, status)
+  const activePreset = matchingPreset(query.range, today)
+
   const [result, setResult] = useState<VendorOrderPage | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [subtotal, setSubtotal] = useState<SubtotalState>({ kind: 'loading' })
   const [reloadToken, setReloadToken] = useState(0)
 
-  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+  function applyFilters(next: { status?: DeliveryStatus | null; range?: DeliveryRange }) {
+    // Any filter change returns to the first page. Page 3 of the old filter is not page 3
+    // of the new one, and an out-of-range page answers with nothing at all.
+    setSearchParams(
+      writeOrdersQuery({
+        status: next.status !== undefined ? next.status : status,
+        range: next.range ?? query.range,
+        page: 0,
+      }),
+      { replace: true },
+    )
+  }
+
+  function goToPage(nextPage: number) {
+    setSearchParams(writeOrdersQuery({ ...query, page: Math.max(0, nextPage) }), { replace: true })
+  }
 
   useEffect(() => {
+    if (rangeIssue) {
+      setResult(null)
+      setLoading(false)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
-    setError('')
+    setLoadError('')
 
     // Filtering and paging happen on the server: one request per view, rather than
     // fetching everything and narrowing it here.
     void vendorOrdersService
-      .list(vendorId, { page, status: filter })
+      .list(vendorId, { page, status, startDate, endDate })
       .then((data) => {
         if (!cancelled) setResult(data)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load orders'))
+        if (cancelled) return
+        // A failed request is not an empty result. Clearing the rows keeps the previous
+        // filter's orders from sitting under a heading that now describes a different one.
+        setResult(null)
+        setLoadError(getErrorMessage(err, 'Could not load orders'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -72,76 +173,183 @@ export function VendorOrdersPage() {
     return () => {
       cancelled = true
     }
-  }, [vendorId, page, filter, reloadToken])
+  }, [vendorId, page, status, startDate, endDate, rangeIssue, reloadToken])
+
+  useEffect(() => {
+    if (!startDate && !endDate) return
+    if (rangeIssue) return
+
+    let cancelled = false
+    setSubtotal({ kind: 'loading' })
+
+    // Deliberately not keyed on `page`: this totals the whole filtered set, which is the
+    // only thing the heading beside it can honestly claim.
+    void sumDeliveryWindow((walkPage) =>
+      vendorOrdersService.list(vendorId, {
+        page: walkPage,
+        size: SUBTOTAL_PAGE_SIZE,
+        status,
+        startDate,
+        endDate,
+      }),
+    ).then((outcome) => {
+      if (!cancelled) setSubtotal(outcome)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, status, startDate, endDate, rangeIssue, reloadToken])
 
   async function advance(orderId: string, next: DeliveryStatus) {
     setBusyId(orderId)
-    setError('')
+    setActionError('')
     try {
-      await vendorOrdersService.update(vendorId, orderId, { deliveryStatus: next })
-      reload()
+      await vendorOrdersService.advance(vendorId, orderId, next)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not update the order'))
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function markPaid(orderId: string) {
-    setBusyId(orderId)
-    setError('')
-    try {
-      await vendorOrdersService.update(vendorId, orderId, { paymentStatus: 'PAID' })
-      reload()
-    } catch (err) {
-      setError(getErrorMessage(err, 'Could not update the payment'))
+      // A refusal arrives as HTTP 200 and its reason is the same generic sentence for every
+      // illegal edge, so the vendor is told what failed rather than what the backend said.
+      setActionError(
+        isOrderTransitionRefused(err)
+          ? forwardRefusalMessage(next)
+          : getErrorMessage(err, 'Could not update the order'),
+      )
     } finally {
       setBusyId(null)
     }
   }
 
   const orders = result?.orders ?? []
+  const anyUnpaid = orders.some((order) => order.paymentStatus !== 'PAID')
 
   return (
     <div>
-      <PageHeader title="Orders" subtitle="Everything customers have ordered from you" />
+      <PageHeader title="Orders" subtitle="Filter by delivery date, then work down the list" />
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {FILTERS.map(({ label, value }) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => {
-              setSearchParams(value ? { status: value } : {}, { replace: true })
-              setPage(0)
-            }}
-            className={cn(
-              'rounded-full border px-3 py-1 text-sm transition',
-              filter === value
-                ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] text-[var(--md-green-800)]'
-                : 'border-[var(--md-border)] text-slate-600 hover:bg-slate-100',
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-4 space-y-3">
+        <div role="group" aria-label="Order status">
+          <p className="mb-1 text-sm font-medium">Order status</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => applyFilters({ status: null })}
+              className={chipClass(status === null)}
+            >
+              All
+            </button>
+            {ORDER_STATUS_FILTERS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyFilters({ status: value })}
+                className={chipClass(status === value)}
+              >
+                {presentDeliveryStatus(value).label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/*
+          Every control in this group says "delivery date", and that is not decoration. It
+          is the only date the contract carries — there is no creation timestamp on any order
+          read — so a control labelled "date" would be read as an order date and quietly
+          answer a different question than the one it was asked.
+        */}
+        <div role="group" aria-label="Delivery date">
+          <p className="mb-1 text-sm font-medium">Delivery date</p>
+          <div className="flex flex-wrap gap-2">
+            {RANGE_PRESETS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() =>
+                  applyFilters({
+                    range: activePreset === key ? NO_RANGE : presetRange(key, today),
+                  })
+                }
+                className={chipClass(activePreset === key)}
+              >
+                {label}
+              </button>
+            ))}
+            {hasDeliveryRange(query.range) ? (
+              <button
+                type="button"
+                onClick={() => applyFilters({ range: NO_RANGE })}
+                className={chipClass(false)}
+              >
+                Clear dates
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-2 grid gap-3 sm:max-w-md sm:grid-cols-2">
+            <Input
+              type="date"
+              name="delivery-date-from"
+              label="Delivery date from"
+              value={startDate ?? ''}
+              onChange={(event) =>
+                applyFilters({ range: { ...query.range, startDate: event.target.value || null } })
+              }
+            />
+            <Input
+              type="date"
+              name="delivery-date-to"
+              label="Delivery date to"
+              value={endDate ?? ''}
+              onChange={(event) =>
+                applyFilters({ range: { ...query.range, endDate: event.target.value || null } })
+              }
+            />
+          </div>
+        </div>
       </div>
 
-      {error ? <p className="mb-4 text-sm text-[var(--md-danger)]">{error}</p> : null}
+      {rangeIssue ? <p className="mb-4 text-sm text-[var(--md-danger)]">{rangeIssue}</p> : null}
+
+      {heading && !rangeIssue ? (
+        <DeliveryWindowSubtotal heading={heading} state={subtotal} />
+      ) : null}
+
+      {actionError ? <p className="mb-4 text-sm text-[var(--md-danger)]">{actionError}</p> : null}
       {loading ? <Spinner label="Loading orders…" /> : null}
 
-      {!loading && !orders.length ? (
+      {/*
+        A failed request and an empty list are different facts, and "No orders here" is the
+        wrong one to guess at: a vendor who reads it stops looking.
+      */}
+      {!loading && loadError ? (
+        <Card className="border-[var(--md-danger)]">
+          <p className="text-sm text-[var(--md-danger)]">{loadError}</p>
+          <p className="mt-1 text-sm text-[var(--md-muted)]">
+            This is a failed request, not an empty list.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => setReloadToken((token) => token + 1)}
+          >
+            Try again
+          </Button>
+        </Card>
+      ) : null}
+
+      {!loading && !loadError && !rangeIssue && !orders.length ? (
         <EmptyState
           title="No orders here"
           description={
-            filter
-              ? 'Nothing matches this filter yet.'
+            status || hasDeliveryRange(query.range)
+              ? 'Nothing matches these filters. Widen the delivery dates or clear the status.'
               : 'When a customer orders from your store, it will show up here.'
           }
         />
       ) : null}
 
-      {!loading && orders.length ? (
+      {!loading && !loadError && orders.length ? (
         <div className="space-y-3">
           {orders.map((order) => {
             const delivery = presentDeliveryStatus(order.deliveryStatus)
@@ -152,8 +360,15 @@ export function VendorOrdersPage() {
               <Card key={order.id} className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
+                    {/*
+                      The filters ride along in history state so that the detail screen's
+                      own "Back to orders" returns to this exact view. Browser back already
+                      would; a vendor who uses the button on screen should not be punished
+                      for it by losing the range they just typed.
+                    */}
                     <Link
                       to={`/vendor/orders/${order.id}`}
+                      state={{ from: `/vendor/orders${search}` }}
                       className="font-semibold hover:underline"
                     >
                       Order #{order.id}
@@ -187,25 +402,38 @@ export function VendorOrdersPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {order.paymentStatus === 'DUE' ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => void markPaid(order.id)}
-                    >
+                  {/*
+                    Shown for anything not already paid, including a row whose
+                    `payment_status` the backend omitted. Keying this on `DUE` alone would
+                    make the control disappear on exactly the rows where the gap is least
+                    visible, which is the opposite of why it is kept.
+                  */}
+                  {order.paymentStatus !== 'PAID' ? (
+                    <Button size="sm" variant="secondary" disabled>
                       Mark paid
                     </Button>
                   ) : null}
                   {next ? (
                     <Button size="sm" disabled={busy} onClick={() => void advance(order.id, next)}>
-                      {forwardActionLabel(next)}
+                      {busy ? 'Working…' : forwardActionLabel(next)}
                     </Button>
                   ) : null}
                 </div>
               </Card>
             )
           })}
+
+          {/*
+            Said once rather than per row. The control stays on screen because removing it
+            would hide the gap: no route in the contract can set `payment_status`, and this
+            meeting exists partly to ask for one.
+          */}
+          {anyUnpaid ? (
+            <p className="text-sm text-[var(--md-muted)]">
+              Mark paid is disabled because no part of the backend can record a payment yet.
+              It is left visible so the gap is not hidden.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -215,7 +443,7 @@ export function VendorOrdersPage() {
             size="sm"
             variant="secondary"
             disabled={page === 0 || loading}
-            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            onClick={() => goToPage(page - 1)}
           >
             Previous
           </Button>
@@ -226,7 +454,7 @@ export function VendorOrdersPage() {
             size="sm"
             variant="secondary"
             disabled={result.lastPage || loading}
-            onClick={() => setPage((current) => current + 1)}
+            onClick={() => goToPage(page + 1)}
           >
             Next
           </Button>

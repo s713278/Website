@@ -52,12 +52,31 @@ export type VendorOrderLine = {
   name: string
   size: string | null
   quantity: number
+  /** What one unit was charged at, as recorded. Never derived from the line total. */
+  unitPrice: number | null
   amount: number | null
+}
+
+/**
+ * The charge breakdown the items read returns, under `order_amount`.
+ *
+ * Every field is `null` when the response omitted it, and an omitted charge stays omitted:
+ * nothing here may be derived from the others to make the arithmetic close. The backend
+ * sends what it sends, and a charge invented to reconcile a bill is a charge the vendor
+ * would then have to explain to a customer.
+ */
+export type VendorOrderCharges = {
+  gross: number | null
+  discount: number | null
+  deliveryCharges: number | null
+  serviceCharge: number | null
+  tax: number | null
 }
 
 /** One order with its lines, from the items read. */
 export type VendorOrderDetail = VendorOrderSummary & {
   deliveryAddress: string | null
+  charges: VendorOrderCharges
   lines: VendorOrderLine[]
 }
 

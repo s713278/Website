@@ -1,16 +1,21 @@
 import type { DeliveryStatus, PaymentStatus } from '@/modules/vendor/types/dashboard'
 
 /**
- * The one sensible forward step from each state.
+ * The one forward step the backend accepts from each state.
  *
- * A guided single action rather than a free status picker: the states are ordered, and
- * offering every jump invites a vendor to mark an order delivered before it ships.
+ * This is not a UI preference — it is the measured transition graph. `bulk-status-update`
+ * accepts exactly one hop along `PENDING → SCHEDULED → IN_PROCESS → SHIPPED → DELIVERED`
+ * and rejects every skip, every reversal and every same-state write.
  *
- * `SCHEDULED` rejoins the line at `IN_PROCESS`. `DELIVERED` and `CANCELLED` are ends —
- * cancelling has its own endpoint and is not reachable by stepping forward.
+ * `PENDING: 'IN_PROCESS'` stood here and was a live defect: the backend refuses it, and it
+ * refuses it as **HTTP 200**, so the button did nothing and said nothing. See
+ * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.2.
+ *
+ * `DELIVERED` and `CANCELLED` are ends — cancelling has its own endpoint and is not
+ * reachable by stepping forward.
  */
 const FORWARD: Partial<Record<DeliveryStatus, DeliveryStatus>> = {
-  PENDING: 'IN_PROCESS',
+  PENDING: 'SCHEDULED',
   SCHEDULED: 'IN_PROCESS',
   IN_PROCESS: 'SHIPPED',
   SHIPPED: 'DELIVERED',
@@ -54,6 +59,8 @@ export function presentDeliveryStatus(status: DeliveryStatus): StatusPresentatio
 /** The label on the button that moves an order forward. */
 export function forwardActionLabel(next: DeliveryStatus): string {
   switch (next) {
+    case 'SCHEDULED':
+      return 'Accept order'
     case 'IN_PROCESS':
       return 'Start preparing'
     case 'SHIPPED':
@@ -63,6 +70,20 @@ export function forwardActionLabel(next: DeliveryStatus): string {
     default:
       return `Mark ${presentDeliveryStatus(next).label.toLowerCase()}`
   }
+}
+
+/**
+ * What a vendor is told when the store refuses a step.
+ *
+ * The backend's own reason is the same generic sentence — "Please check the input request
+ * and try again" — for a wrong next status, an order that is not yours, and an order that
+ * is already there. Passing it through would tell a vendor to check an input they never
+ * typed. So this names the step that failed, admits no reason was given, and points at the
+ * one thing that helps: reloading to see where the order actually stands.
+ */
+export function forwardRefusalMessage(next: DeliveryStatus): string {
+  const label = presentDeliveryStatus(next).label
+  return `Could not move this order to "${label}". The store refused the change without giving a reason — the order may have already moved on. Reload to see where it stands.`
 }
 
 export function presentPaymentStatus(status: PaymentStatus): StatusPresentation {

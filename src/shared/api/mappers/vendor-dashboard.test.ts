@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  mapBulkStatusResult,
   mapVendorInsights,
   mapVendorOrderDetail,
   mapVendorOrderPage,
@@ -182,6 +183,78 @@ describe('mapVendorOrderDetail', () => {
     expect(detail.deliveryAddress).toBe('Survey No#190, Mirdoddi, Telangana, 502108')
     expect(detail.lines).toHaveLength(1)
     expect(detail.lines[0]).toMatchObject({ name: 'Jagruthi Weekly', quantity: 2, amount: 1700 })
+  })
+})
+
+describe('mapVendorOrderDetail charges', () => {
+  it('reads each charge the response carried, and none it did not', () => {
+    const detail = mapVendorOrderDetail({
+      data: {
+        order_id: 7,
+        order_amount: {
+          items_count: 3,
+          gross_amount: 320,
+          discount: 30,
+          delivery_charges: 30,
+          amount: 320,
+        },
+      },
+    })
+
+    expect(detail.charges).toEqual({
+      gross: 320,
+      discount: 30,
+      deliveryCharges: 30,
+      // Absent from the response. Deriving it from `amount - gross + discount` would put a
+      // number on the vendor's screen that the backend never sent.
+      serviceCharge: null,
+      tax: null,
+    })
+  })
+
+  it('keeps a zero charge distinct from an absent one', () => {
+    const detail = mapVendorOrderDetail({
+      data: { order_id: 8, order_amount: { discount: 0, amount: 100 } },
+    })
+
+    expect(detail.charges.discount).toBe(0)
+    expect(detail.charges.deliveryCharges).toBeNull()
+  })
+})
+
+describe('mapBulkStatusResult', () => {
+  it('reads a refused transition out of the HTTP 200 that reports it', () => {
+    // This is the whole reason the mapper exists. The envelope says success: true.
+    const result = mapBulkStatusResult({
+      timestamp: '2026-09-06T10:00:00Z',
+      success: true,
+      status: 200,
+      data: {
+        success_count: 0,
+        failed_orders: [
+          { order_id: 1931, reason: 'Please check the input request and try again.' },
+        ],
+      },
+    })
+
+    expect(result.successCount).toBe(0)
+    expect(result.failed).toEqual([
+      { orderId: '1931', reason: 'Please check the input request and try again.' },
+    ])
+  })
+
+  it('reads an accepted transition', () => {
+    const result = mapBulkStatusResult({ data: { success_count: 1, failed_orders: [] } })
+
+    expect(result.successCount).toBe(1)
+    expect(result.failed).toEqual([])
+  })
+
+  it('fails closed on a response it cannot read', () => {
+    // Not "assume the ids we sent all succeeded". An unreadable answer is not a success.
+    expect(mapBulkStatusResult({ data: {} }).successCount).toBe(0)
+    expect(mapBulkStatusResult(null).successCount).toBe(0)
+    expect(mapBulkStatusResult({ data: { failed_orders: 'nope' } }).failed).toEqual([])
   })
 })
 

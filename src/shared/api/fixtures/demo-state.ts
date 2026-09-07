@@ -120,6 +120,11 @@ export function armDemoFailure() {
   state.failNextRead = true
 }
 
+/** One demo order in wire shape, or `null`. Services read it to enforce the same rules live does. */
+export function findDemoOrder(orderId: string): Row | null {
+  return state.orders.find((order) => String(order.order_id) === orderId) ?? null
+}
+
 /** Applies a partial update to one order, matched on `order_id`. Returns false if absent. */
 export function updateDemoOrder(orderId: string, patch: Row): boolean {
   const row = state.orders.find((order) => String(order.order_id) === orderId)
