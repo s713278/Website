@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
+import { OrdersSectionTabs } from '@/modules/vendor/components/OrdersSectionTabs'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   forwardActionLabel,
@@ -27,10 +28,11 @@ import {
   sumDeliveryWindow,
   type SubtotalOutcome,
 } from '@/modules/vendor/lib/order-subtotal'
+import { vendorFilterChipClass } from '@/modules/vendor/lib/filter-chip'
 import type { DeliveryStatus, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
-import { cn, formatCurrency } from '@/shared/lib/utils'
+import { formatCurrency } from '@/shared/lib/utils'
 
 /**
  * The screen a vendor works from: filter by delivery date, page through, open an order,
@@ -41,22 +43,6 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  * component state would have unmounted on the way out. It is also how Overview's status
  * counts link straight into a filtered view.
  */
-
-/**
- * A filter chip.
- *
- * The selected chip says where the vendor already is, not what to do next, so it takes a
- * neutral ink fill rather than the emerald reserved for the advance actions further down
- * the same screen. Two emerald meanings on one screen is one too many.
- */
-function chipClass(active: boolean) {
-  return cn(
-    'rounded-full border px-3 py-1.5 text-sm transition',
-    active
-      ? 'border-transparent bg-[var(--md-ink)] font-medium text-white'
-      : 'border-[var(--vc-edge)] bg-white text-slate-600 hover:border-slate-300 hover:text-[var(--md-ink)]',
-  )
-}
 
 type SubtotalState = { kind: 'loading' } | SubtotalOutcome
 
@@ -226,6 +212,7 @@ export function VendorOrdersPage() {
   return (
     <div>
       <PageHeader title="Orders" subtitle="Filter by delivery date, then work down the list" />
+      <OrdersSectionTabs />
 
       <Card className="mb-6 space-y-5 p-5">
         <div role="group" aria-label="Order status">
@@ -234,7 +221,7 @@ export function VendorOrdersPage() {
             <button
               type="button"
               onClick={() => applyFilters({ status: null })}
-              className={chipClass(status === null)}
+              className={vendorFilterChipClass(status === null)}
             >
               All
             </button>
@@ -243,7 +230,7 @@ export function VendorOrdersPage() {
                 key={value}
                 type="button"
                 onClick={() => applyFilters({ status: value })}
-                className={chipClass(status === value)}
+                className={vendorFilterChipClass(status === value)}
               >
                 {presentDeliveryStatus(value).label}
               </button>
@@ -269,7 +256,7 @@ export function VendorOrdersPage() {
                     range: activePreset === key ? NO_RANGE : presetRange(key, today),
                   })
                 }
-                className={chipClass(activePreset === key)}
+                className={vendorFilterChipClass(activePreset === key)}
               >
                 {label}
               </button>
@@ -278,7 +265,7 @@ export function VendorOrdersPage() {
               <button
                 type="button"
                 onClick={() => applyFilters({ range: NO_RANGE })}
-                className={chipClass(false)}
+                className={vendorFilterChipClass(false)}
               >
                 Clear dates
               </button>

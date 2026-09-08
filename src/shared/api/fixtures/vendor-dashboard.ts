@@ -17,6 +17,7 @@ import {
   demoOrders,
   demoProfile,
   demoSizes,
+  demoSubscriptions,
 } from './demo-state'
 import { DEMO_ORDER_ITEMS } from './vendor-dashboard-seed'
 
@@ -61,6 +62,31 @@ export function demoVendorOrdersPage(page = 0, size = 20, query: DemoOrderQuery 
     total_elements: sorted.length,
     total_pages: Math.max(1, Math.ceil(sorted.length / size)),
     last_page: start + size >= sorted.length,
+  })
+}
+
+export type DemoSubscriptionQuery = { status?: string }
+
+/** One page of subscription rows, narrowed by the same status parameter as live. */
+export function demoVendorSubscriptionsPage(
+  page = 0,
+  size = 10,
+  query: DemoSubscriptionQuery = {},
+) {
+  consumeDemoFailure()
+
+  const filtered = demoSubscriptions().filter(
+    (subscription) => !query.status || subscription.status === query.status,
+  )
+  const start = page * size
+
+  return envelope({
+    result: filtered.slice(start, start + size),
+    page_number: page,
+    page_size: size,
+    total_elements: filtered.length,
+    total_pages: Math.max(1, Math.ceil(filtered.length / size)),
+    last_page: start + size >= filtered.length,
   })
 }
 

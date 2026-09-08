@@ -191,6 +191,67 @@ export const DEMO_VENDOR_ORDERS: Record<string, unknown>[] = [
   },
 ]
 
+/**
+ * The complete eleven-field row returned by the vendor subscriptions list.
+ *
+ * The four rows cover every status this v1 screen offers as a filter. No view-model
+ * aliases belong here: live and demo both have to survive the same mapper.
+ */
+export const DEMO_VENDOR_SUBSCRIPTIONS: Record<string, unknown>[] = [
+  {
+    sub_id: 5101,
+    mobile: '9000000011',
+    customer_id: 17101,
+    sku_name: 'Fresh Tomatoes — 1 kg',
+    quantity: 2,
+    frequency: 'WEEKLY',
+    delivery_mode: 'HOME_DELIVERY',
+    payment_type: 'CASH',
+    start_date: '2026-09-01',
+    next_delivery: '2026-09-15',
+    status: 'PENDING',
+  },
+  {
+    sub_id: 5102,
+    mobile: '9000000012',
+    customer_id: 17102,
+    sku_name: 'Organic Rice — 5 kg',
+    quantity: 1,
+    frequency: 'MONTHLY',
+    delivery_mode: 'SELF_PICKUP',
+    payment_type: 'UPI',
+    start_date: '2026-08-15',
+    next_delivery: '2026-09-15',
+    status: 'ACTIVE',
+  },
+  {
+    sub_id: 5103,
+    mobile: '9000000013',
+    customer_id: 17103,
+    sku_name: 'Cold-pressed Groundnut Oil — 1 L',
+    quantity: 1,
+    frequency: 'FORTNIGHTLY',
+    delivery_mode: 'HOME_DELIVERY',
+    payment_type: 'CASH',
+    start_date: '2026-07-10',
+    next_delivery: '2026-09-10',
+    status: 'DELETED',
+  },
+  {
+    sub_id: 5104,
+    mobile: '9000000014',
+    customer_id: 17104,
+    sku_name: 'Fresh Tomatoes — 500 g',
+    quantity: 3,
+    frequency: 'DAILY',
+    delivery_mode: 'HOME_DELIVERY',
+    payment_type: 'UPI',
+    start_date: '2026-06-01',
+    next_delivery: '2026-08-31',
+    status: 'EXPIRED',
+  },
+]
+
 /** Line items for the detail read, keyed by order id. Orders without an entry get one line. */
 export const DEMO_ORDER_ITEMS: Record<string, Record<string, unknown>[]> = {
   '4021': [

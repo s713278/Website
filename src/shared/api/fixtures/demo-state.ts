@@ -20,6 +20,7 @@
 
 import {
   DEMO_VENDOR_ORDERS,
+  DEMO_VENDOR_SUBSCRIPTIONS,
   DEMO_VENDOR_SIZES,
   DEMO_VENDOR_PROFILE,
 } from './vendor-dashboard-seed'
@@ -56,6 +57,7 @@ export function storeStateFieldsFor(key: DemoStoreStateKey): DemoStoreStateOverr
 
 type DemoState = {
   orders: Row[]
+  subscriptions: Row[]
   sizes: Row[]
   profile: Row
   storeState: DemoStoreStateKey
@@ -66,6 +68,7 @@ type DemoState = {
 function seed(): DemoState {
   return {
     orders: DEMO_VENDOR_ORDERS.map((row) => ({ ...row })),
+    subscriptions: DEMO_VENDOR_SUBSCRIPTIONS.map((row) => ({ ...row })),
     sizes: DEMO_VENDOR_SIZES.map((row) => ({ ...row })),
     profile: { ...DEMO_VENDOR_PROFILE },
     storeState: 'OPEN',
@@ -81,6 +84,10 @@ export function resetDemoState() {
 
 export function demoOrders(): Row[] {
   return state.orders
+}
+
+export function demoSubscriptions(): Row[] {
+  return state.subscriptions
 }
 
 export function demoSizes(): Row[] {

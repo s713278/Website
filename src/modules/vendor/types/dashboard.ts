@@ -88,6 +88,43 @@ export type VendorOrderPage = {
   lastPage: boolean
 }
 
+/** State of a customer's standing repeat-order commitment. */
+export type SubscriptionStatus =
+  | 'PENDING'
+  | 'ACTIVE'
+  | 'PAUSED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'DELETED'
+
+/**
+ * One complete row from the vendor subscriptions read.
+ *
+ * The read has no smaller header/detail split: all fields a vendor can use are already
+ * here, so this model deliberately has no corresponding detail type.
+ */
+export type VendorSubscription = {
+  id: string
+  mobile: string | null
+  customerId: string | null
+  skuName: string | null
+  quantity: number | null
+  frequency: string | null
+  deliveryMode: string | null
+  paymentType: string | null
+  startDate: string | null
+  nextDelivery: string | null
+  status: SubscriptionStatus | null
+}
+
+export type VendorSubscriptionPage = {
+  subscriptions: VendorSubscription[]
+  page: number
+  totalPages: number
+  totalElements: number
+  lastPage: boolean
+}
+
 /** One purchasable size of a vendor product, with the price record backing it. */
 export type VendorSize = {
   skuId: string

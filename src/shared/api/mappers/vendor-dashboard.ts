@@ -1,6 +1,7 @@
 import type {
   DeliveryStatus,
   PaymentStatus,
+  SubscriptionStatus,
   VendorInsights,
   VendorOrderCharges,
   VendorOrderDetail,
@@ -10,6 +11,8 @@ import type {
   VendorPlan,
   VendorSize,
   VendorStoreProfile,
+  VendorSubscription,
+  VendorSubscriptionPage,
 } from '@/modules/vendor/types/dashboard'
 import { vendorCollectionRows } from './vendor'
 import type { VendorContext } from './vendor-onboarding'
@@ -137,6 +140,55 @@ export function mapVendorOrderPage(payload: unknown): VendorOrderPage {
     totalPages: num(container.total_pages) ?? 0,
     totalElements: num(container.total_elements) ?? 0,
     lastPage: container.last_page !== false,
+  }
+}
+
+const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
+  'PENDING',
+  'ACTIVE',
+  'PAUSED',
+  'CANCELLED',
+  'EXPIRED',
+  'DELETED',
+]
+
+function toSubscriptionStatus(value: unknown): SubscriptionStatus | null {
+  const raw = str(value)?.toUpperCase()
+  return SUBSCRIPTION_STATUSES.find((status) => status === raw) ?? null
+}
+
+function mapSubscription(row: UnknownRecord): VendorSubscription {
+  return {
+    id: str(row.sub_id) ?? '',
+    mobile: str(row.mobile),
+    customerId: str(row.customer_id),
+    skuName: str(row.sku_name),
+    quantity: num(row.quantity),
+    frequency: str(row.frequency),
+    deliveryMode: str(row.delivery_mode),
+    paymentType: str(row.payment_type),
+    startDate: str(row.start_date),
+    nextDelivery: str(row.next_delivery),
+    status: toSubscriptionStatus(row.status),
+  }
+}
+
+/**
+ * The vendor subscriptions read is paginated under `data.result`.
+ *
+ * Unlike the legacy orders mapper, an omitted `last_page` is not treated as proof that
+ * this is the last page. The live envelope supplies the flag; an unreadable envelope
+ * fails closed instead of quietly hiding a possible next page.
+ */
+export function mapVendorSubscriptionPage(payload: unknown): VendorSubscriptionPage {
+  const data = envelopeData(payload)
+  const container = isRecord(data) ? data : {}
+  return {
+    subscriptions: vendorCollectionRows(data).map(mapSubscription),
+    page: num(container.page_number) ?? 0,
+    totalPages: num(container.total_pages) ?? 0,
+    totalElements: num(container.total_elements) ?? 0,
+    lastPage: container.last_page === true,
   }
 }
 

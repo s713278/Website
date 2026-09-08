@@ -68,6 +68,7 @@ export {
   mapVendorInsights,
   mapVendorOrderDetail,
   mapVendorOrderPage,
+  mapVendorSubscriptionPage,
   mapVendorPlan,
   mapVendorSizes,
   mapVendorStoreProfile,

@@ -3,6 +3,7 @@ import {
   mapVendorInsights,
   mapVendorOrderDetail,
   mapVendorOrderPage,
+  mapVendorSubscriptionPage,
   mapVendorSizes,
   mapVendorStoreProfile,
 } from '../mappers/vendor-dashboard'
@@ -17,10 +18,11 @@ import {
   demoVendorInsights,
   demoVendorOrderDetail,
   demoVendorOrdersPage,
+  demoVendorSubscriptionsPage,
   demoVendorSizes,
   demoVendorStoreProfile,
 } from './vendor-dashboard'
-import { DEMO_VENDOR_ORDERS } from './vendor-dashboard-seed'
+import { DEMO_VENDOR_ORDERS, DEMO_VENDOR_SUBSCRIPTIONS } from './vendor-dashboard-seed'
 
 /**
  * The guarantee behind the wire-shaped fixtures: demo mode and live mode share one mapper,
@@ -125,6 +127,36 @@ describe('demo fixtures survive the real mappers', () => {
     expect(first.lastPage).toBe(false)
     expect(second.page).toBe(1)
     expect(second.orders[0].id).not.toBe(first.orders[0].id)
+  })
+
+  it('maps wire-shaped subscription rows covering every v1 filter status', () => {
+    const page = mapVendorSubscriptionPage(demoVendorSubscriptionsPage())
+
+    expect(page.subscriptions).toHaveLength(DEMO_VENDOR_SUBSCRIPTIONS.length)
+    expect(new Set(page.subscriptions.map((subscription) => subscription.status))).toEqual(
+      new Set(['PENDING', 'ACTIVE', 'DELETED', 'EXPIRED']),
+    )
+  })
+
+  it('keeps subscription fixtures to the eleven fields the v1 row owns', () => {
+    const allowed = new Set([
+      'sub_id',
+      'mobile',
+      'customer_id',
+      'sku_name',
+      'quantity',
+      'frequency',
+      'delivery_mode',
+      'payment_type',
+      'start_date',
+      'next_delivery',
+      'status',
+    ])
+
+    for (const row of DEMO_VENDOR_SUBSCRIPTIONS) {
+      expect(Object.keys(row)).toHaveLength(11)
+      for (const key of Object.keys(row)) expect(allowed).toContain(key)
+    }
   })
 
   it('can be made to fail, so error handling is demonstrable in demo mode', () => {

@@ -4,6 +4,7 @@ import {
   mapVendorInsights,
   mapVendorOrderDetail,
   mapVendorOrderPage,
+  mapVendorSubscriptionPage,
   mapVendorSizes,
   toDeliveryStatus,
 } from './vendor-dashboard'
@@ -159,6 +160,73 @@ describe('mapVendorOrderPage', () => {
     })
 
     expect(page.orders[0]).not.toHaveProperty('placedAt')
+  })
+})
+
+describe('mapVendorSubscriptionPage', () => {
+  it('maps the paginated envelope and every field the vendor list read carries', () => {
+    const page = mapVendorSubscriptionPage({
+      timestamp: '2026-09-08T12:00:00Z',
+      success: true,
+      status: 200,
+      data: {
+        result: [
+          {
+            sub_id: 1102,
+            mobile: '9000000001',
+            customer_id: 17001,
+            sku_name: 'Fresh Tomatoes — 1 kg',
+            quantity: 2,
+            frequency: 'WEEKLY',
+            delivery_mode: 'HOME_DELIVERY',
+            payment_type: 'CASH',
+            start_date: '2026-09-01',
+            next_delivery: '2026-09-15',
+            status: 'ACTIVE',
+          },
+        ],
+        page_number: 2,
+        page_size: 10,
+        total_elements: 24,
+        total_pages: 3,
+        last_page: true,
+      },
+    })
+
+    expect(page).toEqual({
+      subscriptions: [
+        {
+          id: '1102',
+          mobile: '9000000001',
+          customerId: '17001',
+          skuName: 'Fresh Tomatoes — 1 kg',
+          quantity: 2,
+          frequency: 'WEEKLY',
+          deliveryMode: 'HOME_DELIVERY',
+          paymentType: 'CASH',
+          startDate: '2026-09-01',
+          nextDelivery: '2026-09-15',
+          status: 'ACTIVE',
+        },
+      ],
+      page: 2,
+      totalPages: 3,
+      totalElements: 24,
+      lastPage: true,
+    })
+  })
+
+  it('keeps missing values unknown and preserves statuses now present in live data', () => {
+    const page = mapVendorSubscriptionPage({
+      data: {
+        result: [{ sub_id: 1103, quantity: null, status: 'CANCELLED' }],
+        total_elements: 1,
+      },
+    })
+
+    expect(page.subscriptions[0].quantity).toBeNull()
+    expect(page.subscriptions[0].status).toBe('CANCELLED')
+    expect(page.lastPage).toBe(false)
   })
 })
 

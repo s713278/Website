@@ -56,6 +56,11 @@ export {
   type VendorOrderQuery,
 } from './vendor-orders.service'
 export {
+  listVendorSubscriptions,
+  vendorSubscriptionsService,
+  type VendorSubscriptionQuery,
+} from './vendor-subscriptions.service'
+export {
   listVendorSizes,
   updateSizePrice,
   vendorProductsService,

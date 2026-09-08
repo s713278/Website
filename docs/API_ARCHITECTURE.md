@@ -219,6 +219,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders`, `GET /v1/users/{userId}/orders/history` |
 | `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
+| `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
 | `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
@@ -297,16 +298,21 @@ on `top_products`, not on the sampled vendor rows, so it is not treated as landi
 
 #### Vendor dashboard reads
 
-The five dashboard surfaces share one shape. `src/shared/api/mappers/vendor-dashboard.ts` owns
-every wire-to-view-model conversion behind them, because the backend is inconsistent in ways a
-page must never learn:
+The vendor dashboard surfaces share one mapping module. `src/shared/api/mappers/vendor-dashboard.ts`
+owns every wire-to-view-model conversion behind them, because the backend is inconsistent in ways
+a page must never learn:
 
 - **Collections arrive in three shapes.** `/orders/` answers a paginated container
   (`data: { result, page_number, page_size, total_elements, total_pages, last_page }`),
-  `/products` answers a bare array, and other reads use Spring's `content`. All three go
+  `/subs` uses that same measured paging envelope, `/products` answers a bare array, and other reads
+  use Spring's `content`. All three go
   through `vendorCollectionRows` in `mappers/vendor.ts`, which never throws — a tile that
   cannot read its collection should be empty, not take the page down. The strict onboarding
   sibling still throws, deliberately; setup cannot proceed on a shape it does not recognise.
+- **Subscription paging does not inherit the orders fallback.** `mapVendorSubscriptionPage` treats
+  only an explicit `last_page: true` as the last page, so an omitted key cannot stop the walk early.
+  It preserves nullable row values, including a zero quantity, and the page renders every field from
+  the read-only subscription row rather than inventing a detail surface.
 - **Insight groups are omitted rather than zeroed.** A vendor with no orders gets
   `order_status_count: {}`, so `mapVendorInsights` reads every field through the mapper
   instead of reaching for a nested count.
