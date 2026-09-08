@@ -131,12 +131,13 @@ describe('VendorOrderDetailPage states', () => {
 })
 
 describe('VendorOrderDetailPage charges', () => {
-  it('shows the charges the store recorded and no others', async () => {
+  it('shows the payment status and charges the store recorded', async () => {
     vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
 
     renderDetail()
     await settle()
 
+    expect(screen.getByText('Payment due')).toBeTruthy()
     expect(screen.getByText('Items before discount')).toBeTruthy()
     expect(screen.getByText('Discount')).toBeTruthy()
     expect(screen.getByText('Delivery')).toBeTruthy()
@@ -159,12 +160,13 @@ describe('VendorOrderDetailPage charges', () => {
     expect(screen.queryByText('Delivery')).toBeNull()
   })
 
-  it('stays quiet when the charges do add up', async () => {
-    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+  it('shows a paid status and stays quiet when the charges add up', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ paymentStatus: 'PAID' }))
 
     renderDetail()
     await settle()
 
+    expect(screen.getByText('Paid')).toBeTruthy()
     expect(screen.queryByText(/nothing has been added to close the difference/i)).toBeNull()
   })
 })

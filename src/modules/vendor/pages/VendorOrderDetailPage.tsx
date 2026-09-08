@@ -227,16 +227,6 @@ export function VendorOrderDetailPage() {
           </dl>
 
           <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
-            {/*
-              Anything not already paid, including an order whose `payment_status` the backend
-              omitted — keying on `DUE` would hide the control on the rows where the missing
-              capability is hardest to notice.
-            */}
-            {order.paymentStatus !== 'PAID' ? (
-              <Button size="sm" variant="secondary" disabled>
-                Mark paid
-              </Button>
-            ) : null}
             {next ? (
               <Button size="sm" disabled={busy} onClick={() => void advance(next)}>
                 {busy ? 'Working…' : forwardActionLabel(next)}
@@ -248,18 +238,6 @@ export function VendorOrderDetailPage() {
               </Button>
             ) : null}
           </div>
-
-          {/*
-            Kept on screen rather than removed. No route in the contract can set
-            `payment_status`, and a control that quietly disappears takes the missing
-            capability with it — this is one of the gaps the backend conversation is about.
-          */}
-          {order.paymentStatus !== 'PAID' ? (
-            <p className="mt-4 max-w-[68ch] text-sm text-[var(--md-muted)]">
-              Marking an order paid is not possible yet: nothing in the backend records a payment.
-              The button stays visible so the gap is not hidden.
-            </p>
-          ) : null}
 
           {cancelling ? (
             <div className="mt-5 rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">

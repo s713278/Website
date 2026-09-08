@@ -202,11 +202,16 @@ describe('VendorOrdersPage filters', () => {
 })
 
 describe('VendorOrdersPage filter round-trip', () => {
-  it('hands the current filters to the order it opens, so coming back restores them', async () => {
-    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+  it('renders payment status and hands the current filters to the order it opens', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([order('4021'), { ...order('4022'), paymentStatus: 'PAID' }]),
+    )
 
     renderAt('/vendor/orders?status=PENDING&start=2026-09-08&page=1')
     await settle()
+
+    expect(screen.getByText('Payment due')).toBeTruthy()
+    expect(screen.getByText('Paid')).toBeTruthy()
 
     // The detail screen reads this and points its own "Back to orders" at it. Browser back
     // already restores the URL; a vendor using the button on screen should not lose the
@@ -214,19 +219,6 @@ describe('VendorOrdersPage filter round-trip', () => {
     const link = screen.getByRole('link', { name: 'Order #4021' })
     fireEvent.click(link)
     expect(link.getAttribute('href')).toBe('/vendor/orders/4021')
-  })
-
-  it('keeps mark paid visible on a row whose payment status the backend omitted', async () => {
-    // `null` is what the mapper yields when `payment_status` is absent. Keying the control
-    // on `DUE` would hide the gap on exactly those rows.
-    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
-      pageOf([{ ...order('4021'), paymentStatus: null }]),
-    )
-
-    renderAt()
-    await settle()
-
-    expect(screen.getByRole('button', { name: 'Mark paid' }).hasAttribute('disabled')).toBe(true)
   })
 })
 
@@ -318,18 +310,5 @@ describe('VendorOrdersPage actions', () => {
 
     expect(screen.getByText(/Could not move this order to "Scheduled"/)).toBeTruthy()
     expect(screen.queryByText(/Please check the input request/)).toBeNull()
-  })
-
-  it('keeps mark paid on screen and disabled, rather than hiding the gap', async () => {
-    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
-
-    renderAt()
-    await settle()
-
-    const markPaid = screen.getByRole('button', { name: 'Mark paid' })
-    expect(markPaid.hasAttribute('disabled')).toBe(true)
-    expect(
-      screen.getByText(/no part of the backend can record a payment yet/i),
-    ).toBeTruthy()
   })
 })

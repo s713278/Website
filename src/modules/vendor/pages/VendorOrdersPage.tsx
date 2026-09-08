@@ -222,7 +222,6 @@ export function VendorOrdersPage() {
   }
 
   const orders = result?.orders ?? []
-  const anyUnpaid = orders.some((order) => order.paymentStatus !== 'PAID')
 
   return (
     <div>
@@ -434,17 +433,6 @@ export function VendorOrdersPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    {/*
-                    Shown for anything not already paid, including a row whose
-                    `payment_status` the backend omitted. Keying this on `DUE` alone would
-                    make the control disappear on exactly the rows where the gap is least
-                    visible, which is the opposite of why it is kept.
-                  */}
-                    {order.paymentStatus !== 'PAID' ? (
-                      <Button size="sm" variant="secondary" disabled>
-                        Mark paid
-                      </Button>
-                    ) : null}
                     {next ? (
                       <Button
                         size="sm"
@@ -459,18 +447,6 @@ export function VendorOrdersPage() {
               )
             })}
           </Card>
-
-          {/*
-            Said once rather than per row. The control stays on screen because removing it
-            would hide the gap: no route in the contract can set `payment_status`, and this
-            meeting exists partly to ask for one.
-          */}
-          {anyUnpaid ? (
-            <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
-              Mark paid is disabled because no part of the backend can record a payment yet. It is
-              left visible so the gap is not hidden.
-            </p>
-          ) : null}
         </div>
       ) : null}
 
