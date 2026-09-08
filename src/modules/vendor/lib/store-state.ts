@@ -3,44 +3,68 @@ import type { StoreState } from '@/modules/vendor/types/dashboard'
 /** `onboarding.next_step` reports this once all ten setup steps are done. */
 const SETUP_COMPLETE_STEP = 11
 
+// delete the flag once the backend returns `approval_status: APPROVED` on completed onboarding.
+const TREAT_PENDING_AS_APPROVED = true
+// Module memory makes the reminder once per application session, including shell remounts.
+let warnedAboutPendingApprovalFlag = false
+
+// Console-only: the wizard's independent approval gate must keep refusing pending size creation.
+function isVendorApproved(approvalStatus: string | null, coercePendingApproval: boolean): boolean {
+  return (
+    approvalStatus === 'APPROVED'
+    || (TREAT_PENDING_AS_APPROVED && coercePendingApproval && approvalStatus === 'PENDING')
+  )
+}
+
 /** The subset of the vendor context this derivation reads. */
 export type StoreStateInput = {
   vendorStatus: string | null
   approvalStatus: string | null
-  nextStep: number | null
 }
 
 /**
- * The single condition of a store, derived from three fields that each answer only part
- * of the question.
+ * The single condition of a store, derived from submission and approval alone.
  *
  * Ranking matters, because more than one can be true at once:
  *
  * 1. **Suspended** outranks everything — it is the only state where the platform has
  *    acted against the store, and it must not be hidden behind a setup prompt.
- * 2. **Rejected** outranks the rest for the same reason: an administrator decided
+ * 2. **Rejected** outranks the rest for the same reason: verification decided
  *    something the vendor has to see.
- * 3. **Setting up** covers anyone who has not submitted. `next_step` is authoritative
- *    (see `onboarding-resume.ts`), but `vendor_status` is checked too: go-live is what
- *    sets `ACTIVE`, so anything else means nothing was ever submitted, and that holds
- *    even if `next_step` is missing from the response.
+ * 3. **Setting up** covers anyone who has not submitted. Go-live sets `ACTIVE`, so
+ *    anything else means nothing was ever submitted. `next_step` only labels where
+ *    setup resumes: it is resource-derived and can move backwards after submission.
  * 4. Past that, approval decides between **open** and **under review**.
  *
  * Note that open is not "accepting orders". Nothing in the backend contract expresses
  * order acceptance, so nothing here may imply it.
+ *
+ * Demo callers opt out of the live-backend compensation with `coercePendingApproval: false`.
  */
-export function deriveStoreState(input: StoreStateInput): StoreState {
+export function deriveStoreState(
+  input: StoreStateInput,
+  { coercePendingApproval = true }: { coercePendingApproval?: boolean } = {},
+): StoreState {
   const vendorStatus = input.vendorStatus?.toUpperCase() ?? null
   const approvalStatus = input.approvalStatus?.toUpperCase() ?? null
+
+  if (
+    import.meta.env.DEV && TREAT_PENDING_AS_APPROVED && coercePendingApproval
+    && approvalStatus === 'APPROVED' && !warnedAboutPendingApprovalFlag
+  ) {
+    warnedAboutPendingApprovalFlag = true
+    console.warn(
+      'Live context returned approval_status: APPROVED. Delete TREAT_PENDING_AS_APPROVED in store-state.ts once the backend returns this on completed onboarding.',
+    )
+  }
 
   if (vendorStatus === 'SUSPENDED') return 'SUSPENDED'
   if (approvalStatus === 'REJECTED') return 'REJECTED'
 
-  const setupIncomplete = input.nextStep != null && input.nextStep < SETUP_COMPLETE_STEP
-  const neverSubmitted = vendorStatus != null && vendorStatus !== 'ACTIVE'
-  if (setupIncomplete || neverSubmitted) return 'SETTING_UP'
+  const isStoreSubmitted = vendorStatus === 'ACTIVE'
+  if (!isStoreSubmitted) return 'SETTING_UP'
 
-  return approvalStatus === 'APPROVED' ? 'OPEN' : 'UNDER_REVIEW'
+  return isVendorApproved(approvalStatus, coercePendingApproval) ? 'OPEN' : 'UNDER_REVIEW'
 }
 
 /** Whether the vendor still has setup steps left, and which one they resume on. */
@@ -99,7 +123,7 @@ export type StoreStateAction = { label: string; to: string }
 /**
  * The one action a store in a given state can take, or none.
  *
- * At most one, deliberately. A store that is waiting on an administrator has nothing to do,
+ * At most one, deliberately. A store that is waiting on verification has nothing to do,
  * and a screen that offers three buttons anyway implies the vendor is holding things up.
  * `null` is the honest answer for waiting and for suspension: neither is theirs to resolve
  * from this console, and no route in the contract lets them.

@@ -26,31 +26,30 @@ import {
 
 type Row = Record<string, unknown>
 
-/** The five states `deriveStoreState` can produce, as the three fields it derives them from. */
+/** The five states `deriveStoreState` can produce, as the two fields it derives them from. */
 export type DemoStoreStateKey = 'SETTING_UP' | 'UNDER_REVIEW' | 'OPEN' | 'REJECTED' | 'SUSPENDED'
 
 export type DemoStoreStateOverride = {
   vendorStatus: string
   approvalStatus: string
-  nextStep: number
 }
 
 /**
- * The switcher writes these three fields and lets `deriveStoreState` run, rather than
+ * The switcher writes these two fields and lets `deriveStoreState` run, rather than
  * setting a `StoreState` directly. Setting the outcome would make the switcher a second
  * source of truth, free to display a combination the real derivation could never produce.
  */
 const STORE_STATES: Record<DemoStoreStateKey, DemoStoreStateOverride> = {
-  SETTING_UP: { vendorStatus: 'INACTIVE', approvalStatus: 'PENDING', nextStep: 4 },
-  UNDER_REVIEW: { vendorStatus: 'ACTIVE', approvalStatus: 'PENDING', nextStep: 11 },
-  OPEN: { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED', nextStep: 11 },
-  REJECTED: { vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED', nextStep: 11 },
-  SUSPENDED: { vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED', nextStep: 11 },
+  SETTING_UP: { vendorStatus: 'INACTIVE', approvalStatus: 'PENDING' },
+  UNDER_REVIEW: { vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' },
+  OPEN: { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
+  REJECTED: { vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED' },
+  SUSPENDED: { vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED' },
 }
 
 export const DEMO_STORE_STATE_KEYS = Object.keys(STORE_STATES) as DemoStoreStateKey[]
 
-/** The three fields a given key derives from. Pure, so the switcher can be tested directly. */
+/** The two fields a given key derives from. Pure, so the switcher can be tested directly. */
 export function storeStateFieldsFor(key: DemoStoreStateKey): DemoStoreStateOverride {
   return STORE_STATES[key]
 }

@@ -26,6 +26,7 @@ import {
 } from './onboarding-resume'
 import { readinessIssues } from './onboarding-validation'
 import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
+import { deriveStoreState } from './store-state'
 
 const BUSINESS_TYPE: BusinessTypeReference = {
   id: 7,
@@ -161,6 +162,15 @@ describe('submission and approval', () => {
     expect(isVendorApproved(fullState({ context: SUBMITTED_CONTEXT }))).toBe(false)
     expect(isVendorApproved(fullState({ context: context({ approvalStatus: 'APPROVED' }) }))).toBe(true)
     expect(isStoreSubmitted(fullState())).toBe(false)
+  })
+
+  it('keeps pending size creation unapproved even when the console opens the same submitted store', () => {
+    // These readings must disagree: the backend still refuses size creation with HTTP 417
+    // while pending. Sharing the console's temporary coercion would reopen a failing control.
+    const state = fullState({ context: SUBMITTED_CONTEXT })
+
+    expect(deriveStoreState(state.context)).toBe('OPEN')
+    expect(isVendorApproved(state)).toBe(false)
   })
 })
 

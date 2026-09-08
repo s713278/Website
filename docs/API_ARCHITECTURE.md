@@ -314,8 +314,10 @@ page must never learn:
   (`PENDING`/`SCHEDULED`/`IN_PROCESS`/`SHIPPED`/`DELIVERED`/`CANCELLED`) and `payment_status`
   (`DUE`/`PAID`) is separate, so a delivered-but-unpaid order can be expressed. Anything
   outside the enum becomes `PENDING` — never an invented state.
-- **Store state is derived from three fields together** — `vendor_status`, `approval_status`
-  and `next_step` — in `src/modules/vendor/lib/store-state.ts`, including `REJECTED`.
+- **Store state derives from submission and approval alone** in
+  `src/modules/vendor/lib/store-state.ts`. The console's temporary approval reading is scoped
+  there; [ADR 0002](./adr/0002-console-assumes-verification-approved-the-vendor.md) owns its
+  removal condition and separation from the wizard's approval gate.
 
 `src/shared/api/fixtures/vendor-dashboard.ts` holds the demo payloads **in backend wire shape**,
 not as view models, so demo mode hands them to the same mappers live mode uses and `isLiveApi()`

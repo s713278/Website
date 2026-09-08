@@ -77,7 +77,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
   /**
    * The demo store state, held in React so a switch re-renders.
    *
-   * The service owns the mapping from a state to the three context fields it derives from;
+   * The service owns the mapping from a state to the two context fields it derives from;
    * this only holds which one is selected.
    */
   const [demoStoreState, setDemoStoreState] = useState(() => demoService.storeStateKey())
@@ -92,20 +92,19 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
     const { context } = loaded
     const isDemo = demoService.isDemo()
 
-    // Demo substitutes the three fields the derivation reads, never the derived state — so
+    // Demo substitutes the two fields the derivation reads, never the derived state — so
     // a demo screen is only ever shown a combination the backend could actually produce.
     const stateInput = isDemo
       ? demoService.storeStateFields(demoStoreState)
       : {
           vendorStatus: context.vendorStatus,
           approvalStatus: context.approvalStatus,
-          nextStep: context.onboarding.nextStep,
         }
 
     return {
       vendorId,
       context,
-      storeState: deriveStoreState(stateInput),
+      storeState: deriveStoreState(stateInput, { coercePendingApproval: !isDemo }),
       plan: mapVendorPlan(context),
       reload,
       demo: isDemo ? { storeState: demoStoreState, select: selectDemoStoreState } : null,

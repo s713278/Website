@@ -32,7 +32,7 @@ export const demoService = {
   storeStateKey: (): DemoStoreStateKey => demoStoreStateKey(),
 
   /**
-   * The three context fields a state derives from.
+   * The two context fields a state derives from.
    *
    * The switcher writes these and lets `deriveStoreState` run, rather than setting a
    * `StoreState` outright. Setting the outcome would let the switcher display a combination

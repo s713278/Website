@@ -155,7 +155,7 @@ const DEMO_STATE_LABELS: Record<string, string> = {
  * them could be built and never seen. Absent entirely under a live API: it changes nothing
  * there, and a dead control on a real dashboard invites a support question.
  *
- * It writes the three fields `deriveStoreState` reads, so it cannot show a combination the
+ * It writes the two fields `deriveStoreState` reads, so it cannot show a combination the
  * backend could not produce.
  *
  * It sits in the main column rather than the rail because the rail is hidden below `md`,

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { StoreState } from '@/modules/vendor/types/dashboard'
 import {
   deriveStoreState,
   presentStoreState,
   setupProgress,
   storeStateAction,
+  type StoreStateInput,
 } from './store-state'
 
 const ALL_STATES: StoreState[] = ['SETTING_UP', 'UNDER_REVIEW', 'OPEN', 'REJECTED', 'SUSPENDED']
@@ -13,75 +14,93 @@ const ALL_STATES: StoreState[] = ['SETTING_UP', 'UNDER_REVIEW', 'OPEN', 'REJECTE
 const NON_OPEN_STATES = ALL_STATES.filter((state) => state !== 'OPEN')
 
 describe('deriveStoreState', () => {
-  it('reads the live dev vendor as still setting up', () => {
-    // Vendor 96 as the deployed API returns it: nothing submitted, step 1 of 10.
+  beforeEach(() => vi.stubEnv('DEV', false))
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('accepts only submission and approval as inputs', () => {
+    expectTypeOf<keyof StoreStateInput>().toEqualTypeOf<'vendorStatus' | 'approvalStatus'>()
+  })
+
+  it('keeps an unsubmitted store in setup', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'PENDING', nextStep: 1 }),
+      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'PENDING' }),
     ).toBe('SETTING_UP')
   })
 
-  it('treats a submitted store awaiting an administrator as under review', () => {
+  it('keeps TREAT_PENDING_AS_APPROVED compensating for completed onboarding returning PENDING', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'PENDING', nextStep: 11 }),
-    ).toBe('UNDER_REVIEW')
+      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' }),
+    ).toBe('OPEN')
+  })
+
+  it('leaves demo approval uncoerced so UNDER_REVIEW remains reachable', () => {
+    expect(deriveStoreState(
+      { vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' },
+      { coercePendingApproval: false },
+    )).toBe('UNDER_REVIEW')
+  })
+
+  it.each([null, 'UNKNOWN'])('does not coerce missing or unknown approval: %s', (approvalStatus) => {
+    expect(deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus })).toBe('UNDER_REVIEW')
   })
 
   it('treats an approved store as open', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED', nextStep: 11 }),
+      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' }),
     ).toBe('OPEN')
   })
 
   it('reports rejection, which nothing in the app handled before', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED', nextStep: 11 }),
+      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED' }),
     ).toBe('REJECTED')
   })
 
   it('lets suspension outrank approval, because the platform acted against the store', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED', nextStep: 11 }),
+      deriveStoreState({ vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED' }),
     ).toBe('SUSPENDED')
   })
 
   it('lets suspension outrank rejection too', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'SUSPENDED', approvalStatus: 'REJECTED', nextStep: 4 }),
+      deriveStoreState({ vendorStatus: 'SUSPENDED', approvalStatus: 'REJECTED' }),
     ).toBe('SUSPENDED')
   })
 
   it('lets rejection outrank unfinished setup', () => {
-    // An administrator's decision must be visible even if the account looks unfinished.
+    // Verification's decision must be visible even if the account looks unfinished.
     expect(
-      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED', nextStep: 6 }),
+      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'REJECTED' }),
     ).toBe('REJECTED')
   })
 
-  it('falls back to vendor status when next_step is missing', () => {
-    // `next_step` is authoritative but optional; go-live is what sets ACTIVE, so
-    // anything else means nothing was ever submitted.
+  it('keeps an unknown vendor status in setup', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'PENDING', nextStep: null }),
+      deriveStoreState({ vendorStatus: 'UNKNOWN', approvalStatus: 'PENDING' }),
     ).toBe('SETTING_UP')
   })
 
   it('does not call an unsubmitted store open just because approval says APPROVED', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'APPROVED', nextStep: 3 }),
+      deriveStoreState({ vendorStatus: 'INACTIVE', approvalStatus: 'APPROVED' }),
     ).toBe('SETTING_UP')
   })
 
   it('is case-insensitive, since the contract types these as bare strings', () => {
     expect(
-      deriveStoreState({ vendorStatus: 'active', approvalStatus: 'approved', nextStep: 11 }),
+      deriveStoreState({ vendorStatus: 'active', approvalStatus: 'approved' }),
     ).toBe('OPEN')
   })
 
-  it('assumes under review rather than open when both fields are missing', () => {
-    // Claiming a store is live is the more damaging error of the two.
+  it('keeps a store in setup when submission is unknown', () => {
     expect(
-      deriveStoreState({ vendorStatus: null, approvalStatus: null, nextStep: null }),
-    ).toBe('UNDER_REVIEW')
+      deriveStoreState({ vendorStatus: null, approvalStatus: null }),
+    ).toBe('SETTING_UP')
+  })
+
+  it.each([null, '', 'UNKNOWN', 'INACTIVE'])('requires submission even with approval: %s', (vendorStatus) => {
+    expect(deriveStoreState({ vendorStatus, approvalStatus: 'APPROVED' })).toBe('SETTING_UP')
   })
 })
 
@@ -94,6 +113,61 @@ describe('setupProgress', () => {
   it('reports nothing once setup is complete', () => {
     expect(setupProgress(11)).toBeNull()
     expect(setupProgress(null)).toBeNull()
+  })
+})
+
+describe('pending-approval flag removal warning', () => {
+  beforeEach(() => {
+    // A fresh module represents a new application session; no reset hook leaks into production.
+    vi.resetModules()
+    vi.stubEnv('DEV', true)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  it('warns once per session when a live context finally reports APPROVED', async () => {
+    const { deriveStoreState } = await import('./store-state')
+    const input = { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' }
+
+    deriveStoreState(input, { coercePendingApproval: true })
+    deriveStoreState(input, { coercePendingApproval: true })
+
+    expect(console.warn).toHaveBeenCalledTimes(1)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('TREAT_PENDING_AS_APPROVED'))
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('approval_status: APPROVED'))
+  })
+
+  it('stays silent while live contexts still return PENDING', async () => {
+    const { deriveStoreState } = await import('./store-state')
+
+    expect(deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' })).toBe('OPEN')
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('does not warn for demo approval or consume the later live warning', async () => {
+    const { deriveStoreState } = await import('./store-state')
+    const input = { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' }
+
+    expect(deriveStoreState(input, { coercePendingApproval: false })).toBe('OPEN')
+    expect(console.warn).not.toHaveBeenCalled()
+
+    deriveStoreState(input, { coercePendingApproval: true })
+    expect(console.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays silent in production even when the live backend returns APPROVED', async () => {
+    vi.stubEnv('DEV', false)
+    const { deriveStoreState } = await import('./store-state')
+
+    expect(deriveStoreState(
+      { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
+      { coercePendingApproval: true },
+    )).toBe('OPEN')
+    expect(console.warn).not.toHaveBeenCalled()
   })
 })
 
@@ -150,7 +224,7 @@ describe('storeStateAction', () => {
     expect(storeStateAction('SETTING_UP')).toEqual({ label: 'Continue setup', to: '/onboarding' })
   })
 
-  it('offers nothing to a store waiting on an administrator', () => {
+  it('offers nothing to a store waiting on verification', () => {
     // Neither waiting nor suspension is the vendor's to resolve, and no route in the
     // contract lets this console resolve it for them.
     expect(storeStateAction('UNDER_REVIEW')).toBeNull()

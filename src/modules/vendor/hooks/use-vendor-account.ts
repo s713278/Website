@@ -21,7 +21,7 @@ export type VendorAccount = {
    *
    * No probe account exists in `REJECTED` or `SUSPENDED`, and creating one would mean an
    * administrator acting against a real store. Without this, two of the five state screens
-   * could be built but never seen. It writes the three context fields and lets
+   * could be built but never seen. It writes the two context fields and lets
    * `deriveStoreState` derive the rest, so it can only produce states the backend could.
    */
   demo: {
