@@ -1,5 +1,10 @@
 # Vendor dashboard: backend discussion brief
 
+> **Closed as refused, 8 September 2026.** This brief was presented and the backend team declined
+> the work. It is kept as the record of what was raised, not as a live agenda. The console's v1
+> scope, built only on data that already exists, is
+> [VENDOR_CONSOLE_V1_SCOPE.md](./VENDOR_CONSOLE_V1_SCOPE.md).
+
 Revised after claim verification on 6 September 2026. Use the
 [corrected backend asks](./VENDOR_CONSOLE_BACKEND_ASKS.md) as the technical agenda and the
 [claim audit](./VENDOR_CONSOLE_CLAIM_AUDIT.md) as the evidence appendix.

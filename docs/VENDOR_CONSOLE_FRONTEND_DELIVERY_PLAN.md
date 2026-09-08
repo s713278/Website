@@ -1,5 +1,11 @@
 # Vendor console — frontend delivery plan while backend fixes are pending
 
+> **Superseded, 8 September 2026, by [VENDOR_CONSOLE_V1_SCOPE.md](./VENDOR_CONSOLE_V1_SCOPE.md).**
+> The backend team declined all work on the console's asks, which retires this plan's premise that
+> fixes were pending. Read the v1 scope document instead; this one is kept as the record of what was
+> planned. Its §3B ("do not invent trial deadlines or billing data") is still correct and is
+> **upheld** by the v1 scope — see that document for what compliance cost.
+
 **Prepared: 6 September 2026. Status: proposed implementation plan; not a completion report.**
 
 > **Partly superseded, 6 September 2026.** A design review after this plan was written settled

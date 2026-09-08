@@ -121,12 +121,17 @@ still grow their catalog within plan limits, assigning or authoring more categor
 products, and those additions reach the account without reopening setup. Sizes are the
 boundary of that exception: a new size cannot be created while under review (the backend
 rejects it), so Step 6 is read-only until the store is **approved**, and a product added
-in the meantime stays sizeless until then. Everything else stays read-only until an
-administrator decides.
+in the meantime stays sizeless until then. Everything else stays read-only until
+**verification** decides.
 _Avoid_: live, complete, published, finished
 
+**Verification**:
+The automated check that decides whether a submitted store may open. It replaces approval
+by an administrator; no person is in the loop.
+_Avoid_: review (for the checker itself), admin, approval system, moderation
+
 **Approved**:
-An administrator has accepted a submitted store, which is what makes it reachable by
+Verification has accepted a submitted store, which is what makes it reachable by
 customers. Submission alone does not.
 _Avoid_: active, published, public
 
@@ -152,6 +157,11 @@ _Avoid_: order status (unqualified), ticket state, new, accepted, preparing, rea
 Whether an order has been paid for. Independent of delivery status: an order can be
 delivered and still unpaid.
 _Avoid_: order status (unqualified), settled
+
+**Subscription**:
+A customer's standing commitment to receive one of a vendor's sizes on a repeating
+delivery plan. Distinct from the vendor's plan, which is a billing tier.
+_Avoid_: plan, subscription plan, recurring order, standing order, membership
 
 **Plan**:
 The tier a vendor's account is on, carrying the limits their catalog is measured against.

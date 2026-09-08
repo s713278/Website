@@ -1,5 +1,11 @@
 # Vendor console — backend asks
 
+> **Closed as refused, 8 September 2026.** The backend team declined all work in this document and
+> asked for a minimal first version of the console instead. Nothing here is pending. It is kept as
+> the record of what was asked for, and its measured findings remain accurate — in particular the
+> re-probed 417 on SKU creation against an unapproved store, which the console still designs around.
+> What shipped instead is [VENDOR_CONSOLE_V1_SCOPE.md](./VENDOR_CONSOLE_V1_SCOPE.md).
+
 What the target vendor console needs from the backend, ranked by product consequence.
 
 **Cross-checked 6 September 2026.** This revision corrects the original 5 September probe report
