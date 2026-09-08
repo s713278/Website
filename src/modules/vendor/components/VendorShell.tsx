@@ -1,12 +1,12 @@
 import {
   ChevronDown,
   ClipboardList,
+  Gauge,
   LayoutDashboard,
   LogOut,
   Package,
   Settings,
   Store,
-  Users,
 } from 'lucide-react'
 import { NavLink, Link, Outlet } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
@@ -31,7 +31,7 @@ const NAV = [
   { to: '/vendor', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/vendor/orders', label: 'Orders', icon: ClipboardList, end: false },
   { to: '/vendor/products', label: 'Products', icon: Package, end: false },
-  { to: '/vendor/customers', label: 'Customers', icon: Users, end: false },
+  { to: '/vendor/plan', label: 'Plan', icon: Gauge, end: false },
   { to: '/vendor/storefront', label: 'Storefront', icon: Store, end: false },
   { to: '/vendor/settings', label: 'Settings', icon: Settings, end: false },
 ]
@@ -41,7 +41,7 @@ const NAV = [
  *
  * Six tabs on a bottom bar leaves each one too narrow to hit. Settings is the entry a vendor
  * touches least and the one that already has a home in the account menu, so it is the one
- * that comes out — not Customers, which the target console needs visible.
+ * that comes out.
  */
 const MOBILE_NAV = NAV.filter((item) => item.to !== '/vendor/settings')
 

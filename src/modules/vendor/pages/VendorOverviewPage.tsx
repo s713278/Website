@@ -225,56 +225,8 @@ function StatusCounts({ userId }: { userId: string }) {
 }
 
 /**
- * The plan, with what it allows against what has been used.
- *
- * Same source and labels as the sidebar summary this replaces. Nothing is computed: no trial
- * deadline is derived from an assumed trial length, and no billing figure appears that the
- * backend did not send.
- */
-function PlanUsage() {
-  const { plan } = useVendorAccount()
-
-  return (
-    <section>
-      <h2 className="font-display mb-4 text-lg font-semibold">Your plan</h2>
-      <Card className="max-w-2xl p-5">
-        <p className="font-semibold">{plan.name ?? plan.code ?? 'Your plan'}</p>
-        <dl className="mt-4 grid gap-4 sm:max-w-lg sm:grid-cols-2">
-          <div>
-            <dt className="text-sm text-[var(--md-muted)]">Products</dt>
-            <dd className="vc-num mt-1 font-medium">
-              {plan.usage.products != null && plan.limits.products != null
-                ? `${plan.usage.products} of ${plan.limits.products} used`
-                : 'Not available'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-[var(--md-muted)]">Sizes</dt>
-            <dd className="vc-num mt-1 font-medium">
-              {plan.usage.skus != null && plan.limits.skus != null
-                ? `${plan.usage.skus} of ${plan.limits.skus} used`
-                : 'Not available'}
-            </dd>
-          </div>
-        </dl>
-        {/*
-          A trial countdown appears only when the backend sends an end date. No deployed
-          response carries one yet, so nothing is shown rather than a deadline computed from
-          a hardcoded trial length.
-        */}
-        {plan.trialEndsAt ? (
-          <p className="vc-num mt-4 text-sm text-[var(--md-muted)]">
-            Trial ends {new Date(plan.trialEndsAt).toLocaleDateString()}
-          </p>
-        ) : null}
-      </Card>
-    </section>
-  )
-}
-
-/**
- * Overview for an open store, in the order a vendor needs it: what needs doing, how much of
- * it there is, then the plan it all runs on.
+ * Overview for an open store, in the order a vendor needs it: what needs doing, then how
+ * much of it there is.
  *
  * Insights are keyed on the **user** id, not the vendor id: the path is
  * `/v1/users/{user_id}/dashboard`, and a vendor id returns 403.
@@ -286,7 +238,6 @@ function OpenStoreOverview({ vendorId }: { vendorId: string }) {
     <div>
       <WorkQueue vendorId={vendorId} />
       {userId ? <StatusCounts userId={userId} /> : null}
-      <PlanUsage />
     </div>
   )
 }
