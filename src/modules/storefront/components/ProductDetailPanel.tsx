@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Leaf, ShieldCheck, ShoppingCart, Sparkles, Star } from 'lucide-react'
-import { loginPathForRole } from '@/app/router/role-home'
 import { ProductGallery } from './ProductGallery'
+import { StoreCartBar } from './StoreCartBar'
 import { StorePageFooter } from './StorePageFooter'
 import { StorefrontHeader } from './StorefrontHeader'
 import { VariantPicker } from './VariantPicker'
@@ -13,8 +13,8 @@ import {
   hasMultipleVariants,
 } from '@/modules/storefront/lib/product-variants'
 import { storeCartPath, storeCheckoutPath } from '@/modules/storefront/lib/store-paths'
+import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, ProductVariant, Store } from '@/modules/storefront/types'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, QuantityStepper } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
@@ -28,7 +28,11 @@ type ProductDetailPanelProps = {
   store: Store
   product: Product
   cartCount: number
-  onAdd: (variant: ProductVariant, qty: number) => void
+  onAdd: (
+    variant: ProductVariant,
+    qty: number,
+    options?: { returnTo?: string },
+  ) => boolean
   onBack: () => void
   onSearch: () => void
 }
@@ -42,7 +46,7 @@ export function ProductDetailPanel({
   onSearch,
 }: ProductDetailPanelProps) {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
+  const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const images = useMemo(() => getProductImages(product), [product])
   const { variants, selected, selectedId, setSelectedId } = useSelectedVariant(product)
   const [qty, setQty] = useState(1)
@@ -57,13 +61,10 @@ export function ProductDetailPanel({
   const reviewCount = product.reviewCount ?? (product.rating ? 120 : 0)
 
   function handleBuyNow() {
-    onAdd(selected, qty)
     const checkoutPath = storeCheckoutPath(store.id)
-    if (user?.role === 'customer') {
-      navigate(checkoutPath)
-      return
-    }
-    navigate(loginPathForRole('customer'), { state: { from: checkoutPath } })
+    const added = onAdd(selected, qty, { returnTo: checkoutPath })
+    if (!added) return
+    navigate(checkoutPath)
   }
 
   return (
@@ -79,7 +80,11 @@ export function ProductDetailPanel({
         onBack={onBack}
       />
 
-      <main className="store-shell-inner flex-1 overflow-visible py-4 sm:py-5">
+      <main
+        className={`store-shell-inner flex-1 overflow-visible py-4 sm:py-5${
+          cartCount > 0 ? ' pb-24' : ''
+        }`}
+      >
         <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:items-start lg:gap-8">
           <ProductGallery images={images} alt={product.name} />
 
@@ -182,6 +187,7 @@ export function ProductDetailPanel({
       </main>
 
       <StorePageFooter store={store} />
+      <StoreCartBar storeId={store.id} itemCount={cartCount} subtotal={cartSubtotal} />
     </>
   )
 }

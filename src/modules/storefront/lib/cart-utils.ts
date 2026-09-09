@@ -3,9 +3,6 @@ import {
 } from '@/modules/storefront/lib/product-variants'
 import type { CartLine, Product } from '@/modules/storefront/types'
 
-export const STORE_DELIVERY_FEE = 30
-export const STORE_PACKAGING_FEE = 20
-
 export function cartLineProductId(itemId: string) {
   return itemId.includes(':') ? itemId.split(':')[0]! : itemId
 }
@@ -42,8 +39,8 @@ export function cartTotals(subtotal: number, hasItems: boolean) {
   }
   return {
     subtotal,
-    delivery: STORE_DELIVERY_FEE,
-    packaging: STORE_PACKAGING_FEE,
-    total: subtotal + STORE_DELIVERY_FEE + STORE_PACKAGING_FEE,
+    delivery: 0,
+    packaging: 0,
+    total: subtotal,
   }
 }

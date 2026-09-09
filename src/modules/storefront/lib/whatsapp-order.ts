@@ -38,8 +38,6 @@ export function buildWhatsAppOrderMessage(input: WhatsAppOrderInput) {
     items,
     '',
     `Subtotal: ${formatCurrency(input.subtotal)}`,
-    `Delivery: ${formatCurrency(input.deliveryFee)}`,
-    `Packaging: ${formatCurrency(input.packagingFee)}`,
     `*Total: ${formatCurrency(input.total)}*`,
   ].join('\n')
 }
