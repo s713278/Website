@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VendorContext } from '@/shared/api'
+import { invalidateVendorOnboardingState } from './onboarding-state-cache'
 import {
   invalidateVendorContext,
   loadVendorContext,
@@ -83,6 +84,31 @@ describe('loadVendorContext', () => {
     invalidateVendorContext('96')
     await loadVendorContext('96', read)
     expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates only the changed store after an onboarding write, and all stores on sign-out', async () => {
+    const read = vi.fn(async (id: string) => contextFor(id))
+    await loadVendorContext('96', read)
+    await loadVendorContext('97', read)
+
+    invalidateVendorOnboardingState('96')
+    expect(peekVendorContext('96')).toBeNull()
+    expect(peekVendorContext('97')).not.toBeNull()
+
+    invalidateVendorOnboardingState()
+    expect(peekVendorContext('97')).toBeNull()
+  })
+
+  it('does not restore pre-write context when an older request finishes after invalidation', async () => {
+    let resolveOld!: (value: VendorContext) => void
+    const oldRead = loadVendorContext('96', () => new Promise((resolve) => { resolveOld = resolve }))
+    invalidateVendorOnboardingState('96')
+    const current = { ...contextFor('96'), vendorStatus: 'ACTIVE' }
+    await loadVendorContext('96', async () => current)
+
+    resolveOld(contextFor('96'))
+    await oldRead
+    expect(peekVendorContext('96')).toBe(current)
   })
 
   it('forgets one vendor on invalidation, and everyone on sign-out', async () => {

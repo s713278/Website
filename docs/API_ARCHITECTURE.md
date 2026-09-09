@@ -263,6 +263,9 @@ snapshot fields when unavailable.
 `loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor.
 Sign-in and the wizard therefore share the same fan-out rather than issuing it twice. Failed loads
 are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
+The same invalidation also drops the dashboard's narrower context cache, so returning from setup
+cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
+response belonging to an entry that has already been invalidated.
 
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
@@ -315,6 +318,13 @@ a page must never learn:
   only an explicit `last_page: true` as the last page, so an omitted key cannot stop the walk early.
   It preserves nullable row values, including a zero quantity, and the page renders every field from
   the read-only subscription row rather than inventing a detail surface.
+- **Products loads every SKU page.** `mapVendorSizePage` preserves the paging evidence from
+  `/products/skus`; `listVendorSizes` follows `page_number` with `page_size=50` until `last_page`.
+  The service deduplicates by SKU id and rejects incomplete or non-advancing responses instead of
+  presenting a partial catalog as complete. Leaving Products aborts the read and stops further pages.
+- **Overview reads one page of its delivery window.** When more pages remain, its pagination notice
+  and Orders link remain visible even if every loaded order was filtered out as finished. Only a
+  complete result with no open orders is labelled "Nothing waiting."
 - **Insight groups are omitted rather than zeroed.** A vendor with no orders gets
   `order_status_count: {}`, so `mapVendorInsights` reads every field through the mapper
   instead of reaching for a nested count.
@@ -395,13 +405,13 @@ See [`SESSION.md`](./SESSION.md) for the full lifecycle and the security posture
 3. **Store** — `setTokens(access, refresh)` writes localStorage `mithra_access_token` /
    `mithra_refresh_token`. These are what the request interceptor reads.
 4. **UI state** — `useAuthStore` (zustand + `persist`, key `md-auth`) separately holds
-   `{ user, token }` for rendering. Entry points: `applySession(session)` (the one place that
-   writes both stores), `completeOtpLogin`, `clearSession` (local wipe, no server call),
+   the user and an in-memory token mirror, but persists only `{ user }`. Entry points:
+   `applySession(session)` (writes identity and API credentials), `completeOtpLogin`,
+   `clearSession` (local wipe, no server call),
    `logout` (server sign-out then `clearSession`), `hasRole`.
-5. **Reload** — `onRehydrateStorage` re-syncs the persisted access token into the token store
-   with `setTokens(access)` — deliberately **without** a second argument, because passing
-   `null` there used to wipe the refresh token on every page load. A microtask then clears the
-   session if a persisted user has no access token left.
+5. **Reload** — rehydrates identity and reads credentials from the API token store. It never
+   copies a legacy `md-auth` token back into that store. `restoreSession()` completes hydration;
+   [`SESSION.md`](./SESSION.md#lifecycle) owns the restoration and credential-failure behavior.
 6. **Expiry** — detected client-side *before* sending, then again on the wire. The request
    interceptor calls `isAccessTokenExpired()` (reads `exp`, 30-second skew) and refreshes up
    front; the response interceptor's 401 path (§4 step 6) remains the backstop for revocation
@@ -424,10 +434,9 @@ See [`SESSION.md`](./SESSION.md) for the full lifecycle and the security posture
 > **demo-only** path — `auth.service.ts` throws in live mode telling you to use OTP. Check
 > which one a page actually uses before changing either.
 
-> **Tokens live in two places** — `mithra_*` (what requests read) and `md-auth` (what the UI
-> reads), kept in sync by hand in `applySession` / `clearSession` / `onRehydrateStorage`. Any
-> new code path that changes the session must go through `applySession` or `clearSession`, not
-> `setTokens` alone, or the two will drift.
+> **Persisted credentials have one owner:** the API token store. `md-auth` stores identity only.
+> Session changes still go through `applySession` or `clearSession` so identity and credentials
+> belong to the same session. See [`SESSION.md`](./SESSION.md) for the lifecycle.
 
 ---
 
@@ -559,7 +568,7 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | Key | Owner | Holds |
 |---|---|---|
 | `mithra_access_token` / `mithra_refresh_token` | `client/tokens.ts` | the tokens requests actually use |
-| `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
+| `md-auth` | `useAuthStore` | persisted `{ user }` for UI restore; legacy tokens are ignored |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
 | `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
@@ -592,7 +601,6 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
   fail to trigger logout.
 - **`sync:api` needs pnpm** despite this being an npm repo — see §8.
 - **Cart isn't backend-synced** and **`useAuthStore.login`/`register` are demo-only** — §3.3, §5.
-- **Token storage is duplicated** across `mithra_*` and `md-auth` — §5.
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
   session compromise. `SESSION.md` covers the intended migration to httpOnly cookies.
 - **The richer `/storefront` payload isn't wired into the customer storefront.**

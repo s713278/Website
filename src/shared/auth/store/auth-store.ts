@@ -173,17 +173,15 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'md-auth',
-      // Persist user + access token for UI restore. Refresh token stays in api-client
-      // localStorage key only (see docs/SESSION.md) — never wipe it on rehydrate.
-      partialize: (state) => ({ user: state.user, token: state.token }),
+      // Credentials belong to the api-client store. Persisting a second access token
+      // here let reload overwrite a refreshed credential with the original login token.
+      partialize: (state) => ({ user: state.user }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
 
-        const access = state.token || getAccessToken()
-        if (access) {
-          // Important: do NOT pass refresh=null — that cleared refresh on every reload.
-          setTokens(access)
-        }
+        // Ignore legacy md-auth.token too, including when credentials have been cleared.
+        // This in-memory mirror must never write back into the authoritative token store.
+        state.token = getAccessToken()
 
         if (state.user) {
           state.user = normalizePersistedUser(state.user)

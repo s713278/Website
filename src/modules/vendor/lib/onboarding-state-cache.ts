@@ -1,4 +1,5 @@
 import type { ServerOnboardingState } from './onboarding-resume'
+import { invalidateVendorContext } from './vendor-context-cache'
 
 /**
  * The cache itself, with no runtime dependency on what fills it.
@@ -38,7 +39,7 @@ export function peekVendorOnboardingState(vendorId: string): ServerOnboardingSta
 }
 
 /**
- * Drop cached state so the next read hits the account.
+ * Drop both account snapshots so the next wizard or dashboard read hits the account.
  *
  * Call after any write that changes what a resume would produce — every persisted step
  * and go-live — and on sign-out, where one vendor's store details must not outlive their
@@ -47,4 +48,5 @@ export function peekVendorOnboardingState(vendorId: string): ServerOnboardingSta
 export function invalidateVendorOnboardingState(vendorId?: string): void {
   if (vendorId) entries.delete(vendorId)
   else entries.clear()
+  invalidateVendorContext(vendorId)
 }

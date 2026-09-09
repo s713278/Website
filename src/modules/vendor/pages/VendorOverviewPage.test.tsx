@@ -141,6 +141,32 @@ function stubInsights(ordersByStatus: VendorInsights['ordersByStatus']) {
 }
 
 describe('VendorOverviewPage work queue', () => {
+  it('does not declare the queue empty when later pages remain', async () => {
+    stubQueue([
+      order('4010', 'DELIVERED', '2026-09-02'),
+      order('4009', 'CANCELLED', '2026-08-31'),
+    ], false)
+    stubInsights({})
+
+    renderFor()
+    await settle()
+
+    expect(screen.queryByText('Nothing waiting')).toBeNull()
+    expect(screen.getByText(/Only the first page of this window is shown/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open Orders' }).getAttribute('href')).toBe('/vendor/orders')
+  })
+
+  it('declares the queue empty when the complete window has no open orders', async () => {
+    stubQueue([order('4010', 'DELIVERED', '2026-09-02')])
+    stubInsights({})
+
+    renderFor()
+    await settle()
+
+    expect(screen.getByText('Nothing waiting')).toBeTruthy()
+    expect(screen.queryByText(/Only the first page/)).toBeNull()
+  })
+
   it('asks for a window that reaches a week back and two days forward', async () => {
     // The lookback is the whole reason the queue is date-ranged. Narrowing it to today
     // hides an order that went past its delivery date while still unfinished, which is

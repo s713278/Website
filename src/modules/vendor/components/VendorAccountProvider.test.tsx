@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
   demoService,
@@ -76,6 +77,19 @@ function renderContext(vendorStatus: string, approvalStatus: string, nextStep: n
 }
 
 describe('VendorAccountProvider store state', () => {
+  it('reads the submitted store when returning from setup after an account write', async () => {
+    const firstVisit = renderContext('INACTIVE', 'PENDING', 4)
+    expect(await screen.findByRole('heading', { name: 'Setup incomplete' })).toBeTruthy()
+    firstVisit.unmount()
+
+    // This is the invalidation used by the wizard after persistStep and goLive.
+    invalidateVendorOnboardingState('test-vendor')
+    renderContext('ACTIVE', 'PENDING', 11)
+
+    expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Setup incomplete' })).toBeNull()
+  })
+
   it('opens the work queue for a submitted live PENDING store still reporting next_step 10', async () => {
     renderContext('ACTIVE', 'PENDING', 10)
 

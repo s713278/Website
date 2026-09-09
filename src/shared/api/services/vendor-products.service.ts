@@ -2,9 +2,11 @@ import type { VendorSize } from '@/modules/vendor/types/dashboard'
 import { apiGet, apiPut } from '../client'
 import { updateDemoSizeByPriceId } from '../fixtures/demo-state'
 import { demoVendorSizes } from '../fixtures/vendor-dashboard'
-import { mapVendorSizes } from '../mappers/vendor-dashboard'
+import { mapVendorSizePage, mapVendorSizes } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
 import { demoDelay } from './demo-delay'
+
+const PAGE_SIZE = 50
 
 /**
  * Every size the vendor sells, with the price record behind each.
@@ -13,12 +15,37 @@ import { demoDelay } from './demo-delay'
  * `{id, name, category_id, measurement_id, ref_id}` — no price and no size — which is why
  * the previous products page rendered every row at ₹0.
  */
-export async function listVendorSizes(vendorId: string | number): Promise<VendorSize[]> {
+export async function listVendorSizes(
+  vendorId: string | number,
+  signal?: AbortSignal,
+): Promise<VendorSize[]> {
+  signal?.throwIfAborted()
   if (!isLiveApi()) {
     await demoDelay()
+    signal?.throwIfAborted()
     return mapVendorSizes(demoVendorSizes())
   }
-  return mapVendorSizes(await apiGet(`/v1/vendors/${vendorId}/products/skus`))
+
+  const sizes = new Map<string, VendorSize>()
+  for (let page = 0; ; page++) {
+    signal?.throwIfAborted()
+    const params = new URLSearchParams({ page_number: String(page), page_size: String(PAGE_SIZE) })
+    const result = mapVendorSizePage(
+      await apiGet(`/v1/vendors/${vendorId}/products/skus?${params}`, { signal }),
+    )
+    signal?.throwIfAborted()
+
+    // Do not return a partial catalog or loop forever if the server ignores paging.
+    if (result.page !== page || result.lastPage == null) {
+      throw new Error('Could not load all your products. Please try again.')
+    }
+    const previousCount = sizes.size
+    for (const size of result.sizes) sizes.set(size.skuId, size)
+    if (result.lastPage) return [...sizes.values()]
+    if (sizes.size === previousCount) {
+      throw new Error('Could not load all your products. Please try again.')
+    }
+  }
 }
 
 /**

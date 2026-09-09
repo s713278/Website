@@ -89,8 +89,10 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
 
       {!loading && !error && !queue.length ? (
         <EmptyState
-          title="Nothing waiting"
-          description="No open orders are due in this window. New orders appear here as they arrive."
+          title={result?.lastPage ? 'Nothing waiting' : 'More orders to check'}
+          description={result?.lastPage
+            ? 'No open orders are due in this window. New orders appear here as they arrive.'
+            : 'No open orders appear on this page. Check the remaining orders before finishing for the day.'}
         />
       ) : null}
 
@@ -145,20 +147,18 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
             })}
           </Card>
 
-          {/*
-            One request, one page. Saying so is better than silently showing part of the
-            window as if it were all of it.
-          */}
-          {result && !result.lastPage ? (
-            <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
-              Only the first page of this window is shown.{' '}
-              <Link to="/vendor/orders" className="font-medium hover:underline">
-                Open Orders
-              </Link>{' '}
-              to see the rest.
-            </p>
-          ) : null}
         </div>
+      ) : null}
+
+      {/* A locally empty page says nothing about unfinished orders on later pages. */}
+      {!loading && !error && result && !result.lastPage ? (
+        <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
+          Only the first page of this window is shown.{' '}
+          <Link to="/vendor/orders" className="font-medium hover:underline">
+            Open Orders
+          </Link>{' '}
+          to see the rest.
+        </p>
       ) : null}
     </section>
   )

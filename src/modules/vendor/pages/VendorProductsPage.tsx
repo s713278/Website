@@ -108,10 +108,12 @@ export function VendorProductsPage() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setLoading(true)
+    setError('')
 
     void vendorProductsService
-      .listSizes(vendorId)
+      .listSizes(vendorId, controller.signal)
       .then((data) => {
         if (!cancelled) setSizes(data)
       })
@@ -124,6 +126,7 @@ export function VendorProductsPage() {
 
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [vendorId, reloadToken])
 

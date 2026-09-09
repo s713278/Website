@@ -317,6 +317,22 @@ export function mapVendorSizes(payload: unknown): VendorSize[] {
   return vendorCollectionRows(envelopeData(payload)).map(mapSize).filter((size) => size.skuId !== '')
 }
 
+/** Preserve paging evidence so a partial catalog cannot be mistaken for every size. */
+export function mapVendorSizePage(payload: unknown): {
+  sizes: VendorSize[]
+  page: number | null
+  lastPage: boolean | null
+} {
+  const data = envelopeData(payload)
+  const container = isRecord(data) ? data : {}
+  return {
+    sizes: mapVendorSizes(payload),
+    page: Array.isArray(data) ? 0 : num(container.page_number),
+    lastPage: Array.isArray(data) ? true
+      : typeof container.last_page === 'boolean' ? container.last_page : null,
+  }
+}
+
 /** The vendor's plan, lifted out of the context read the shell already performs. */
 export function mapVendorPlan(context: VendorContext): VendorPlan {
   const subscription = context.subscription

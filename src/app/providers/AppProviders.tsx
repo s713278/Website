@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
-import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { configureApiClient, onCredentialsRefused, setApiErrorLogger } from '@/shared/api'
 import { onExplicitSignOut, useAuthStore } from '@/shared/auth/store/auth-store'
 
@@ -15,11 +14,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // Cached account reads are one vendor's store details and must not outlive their
   // session — the next sign-in on this browser may be someone else.
   useEffect(() => onExplicitSignOut(() => invalidateVendorOnboardingState()), [])
-  useEffect(() => onExplicitSignOut(() => invalidateVendorContext()), [])
 
-  // A verification the app refused must not survive in `md-auth`, whose persisted token
-  // is pushed back into the api-client store on the next load. Wired here so the cleanup
-  // does not depend on an OTP screen still being mounted.
+  // A verification the app refused must clear the persisted identity as well as its
+  // credentials. Cleanup must not depend on an OTP screen still being mounted.
   useEffect(() => onCredentialsRefused(() => useAuthStore.getState().clearSession()), [])
 
   useEffect(() => {

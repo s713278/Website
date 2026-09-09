@@ -112,11 +112,9 @@ const credentialRefusalHandlers = new Set<() => void>()
 /**
  * Run cleanup when a verification is refused *after* the backend accepted the request.
  *
- * `verifyOtp` clears the api-client token store on those paths, but the app session lives
- * in Zustand and persists its own copy of the access token under `md-auth`. Leaving that
- * behind is not cosmetic: `onRehydrateStorage` pushes `state.token` back into the token
- * store on the next load, so the refused session comes back if the old access token is
- * still inside its ten-minute life.
+ * `verifyOtp` clears the api-client token store on those paths, but the app's identity
+ * remains in Zustand and under `md-auth` until clearSession runs. Clear both so the UI
+ * cannot keep presenting an identity whose verification was refused.
  *
  * Registered here rather than in the OTP screens because those callers return early when
  * their request is stale or the component unmounted, and cleanup must not depend on a
