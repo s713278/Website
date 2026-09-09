@@ -89,7 +89,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
 
   const account = useMemo<VendorAccount | null>(() => {
     if (!vendorId || !loaded || loaded.vendorId !== vendorId) return null
-    const { context } = loaded
+    const sourceContext = loaded.context
     const isDemo = demoService.isDemo()
 
     // Demo substitutes the two fields the derivation reads, never the derived state — so
@@ -97,8 +97,18 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
     const stateInput = isDemo
       ? demoService.storeStateFields(demoStoreState)
       : {
-          vendorStatus: context.vendorStatus,
-          approvalStatus: context.approvalStatus,
+          vendorStatus: sourceContext.vendorStatus,
+          approvalStatus: sourceContext.approvalStatus,
+        }
+
+    const demoResumeStep = isDemo
+      ? demoService.storeStateResumeStep(demoStoreState)
+      : null
+    const context = demoResumeStep == null
+      ? sourceContext
+      : {
+          ...sourceContext,
+          onboarding: { ...sourceContext.onboarding, nextStep: demoResumeStep },
         }
 
     return {

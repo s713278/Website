@@ -222,13 +222,15 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
-| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
+| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Wire-shaped vendor-context fixture mounts the console; setup references still come only from the explicitly selected sample catalog | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
 In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
-reads and writes. Demo mode never mounts those account-catalog readers: the wizard waits for the
-vendor to explicitly select the reserved-negative-ID sample catalog, then answers from module-local
-sample data. It never silently converts a live failure into sample data. A persisted sample draft
-carried into Live API mode is blocked at Continue because its synthetic IDs cannot reach an account.
+reads and writes. In Demo mode, `getVendorContext` returns a wire-shaped completed-account fixture
+through `mapVendorContext`, which lets the vendor console mount without a backend request. The setup
+wizard still never mounts the other account-catalog readers: it waits for the vendor to explicitly
+select the reserved-negative-ID sample catalog, then answers from module-local sample data. It never
+silently converts a live failure into sample data. A persisted sample draft carried into Live API
+mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
 #### Vendor setup account hydration
 

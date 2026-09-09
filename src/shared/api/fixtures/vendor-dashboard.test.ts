@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { mapVendorContext } from '../mappers/vendor-onboarding'
 import {
   mapVendorInsights,
   mapVendorOrderDetail,
@@ -15,6 +16,7 @@ import {
   updateDemoSizeByPriceId,
 } from './demo-state'
 import {
+  demoVendorContext,
   demoVendorInsights,
   demoVendorOrderDetail,
   demoVendorOrdersPage,
@@ -22,7 +24,11 @@ import {
   demoVendorSizes,
   demoVendorStoreProfile,
 } from './vendor-dashboard'
-import { DEMO_VENDOR_ORDERS, DEMO_VENDOR_SUBSCRIPTIONS } from './vendor-dashboard-seed'
+import {
+  DEMO_VENDOR_CONTEXT,
+  DEMO_VENDOR_ORDERS,
+  DEMO_VENDOR_SUBSCRIPTIONS,
+} from './vendor-dashboard-seed'
 
 /**
  * The guarantee behind the wire-shaped fixtures: demo mode and live mode share one mapper,
@@ -32,6 +38,38 @@ import { DEMO_VENDOR_ORDERS, DEMO_VENDOR_SUBSCRIPTIONS } from './vendor-dashboar
  */
 describe('demo fixtures survive the real mappers', () => {
   beforeEach(resetDemoState)
+
+  it('maps the completed vendor context with the measured Free plan', () => {
+    const context = mapVendorContext(demoVendorContext('r1'))
+
+    expect(context).toEqual({
+      vendorId: 'r1',
+      businessName: 'Green Bowl Grocers',
+      storeIdentifier: 'green-bowl-grocers',
+      vendorStatus: 'ACTIVE',
+      approvalStatus: 'APPROVED',
+      membershipRole: 'OWNER',
+      onboarding: {
+        status: 'COMPLETED',
+        description: 'Your store setup is complete.',
+        nextStep: 11,
+      },
+      subscription: {
+        tier: 'FREE',
+        planName: 'Free',
+        status: 'ACTIVE',
+        currency: 'INR',
+        monthlyPrice: 0,
+        yearlyPrice: 0,
+        trialEndsAt: null,
+        trialDays: 0,
+        limits: { maxCategories: 3, maxProducts: 10, maxSkus: 25, maxImages: 10 },
+        usage: { categories: 1, products: 1, skus: 2, images: 0 },
+      },
+      eligibleFeatures: ['DASHBOARD', 'VIEW', 'CATALOG'],
+    })
+    expect(DEMO_VENDOR_CONTEXT.subscription).not.toHaveProperty('trial_ends_at')
+  })
 
   it('maps the orders page the same way a live response is mapped', () => {
     const page = mapVendorOrderPage(demoVendorOrdersPage())

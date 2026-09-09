@@ -342,6 +342,49 @@ export const DEMO_VENDOR_SIZES: Record<string, unknown>[] = [
 ]
 
 /**
+ * The vendor context that mounts the console in demo mode.
+ *
+ * This is the deployed wire shape, including the measured Free-plan block. The store-state
+ * switcher replaces `vendor_status` and `approval_status` only at the derivation boundary;
+ * this seed stays a coherent, completed account like the live context read.
+ */
+export const DEMO_VENDOR_CONTEXT = {
+  vendor_id: 'r1',
+  business_name: 'Green Bowl Grocers',
+  store_identifier: 'green-bowl-grocers',
+  vendor_status: 'ACTIVE',
+  approval_status: 'APPROVED',
+  role: 'OWNER',
+  onboarding: {
+    status: 'COMPLETED',
+    description: 'Your store setup is complete.',
+    next_step: 11,
+  },
+  subscription: {
+    tier: 'FREE',
+    plan_name: 'Free',
+    status: 'ACTIVE',
+    monthly_price: 0,
+    yearly_price: 0,
+    currency: 'INR',
+    limits: {
+      max_categories: 3,
+      max_products: 10,
+      max_skus: 25,
+      max_images: 10,
+    },
+    usage: {
+      categories: 1,
+      products: 1,
+      skus: 2,
+      images: 0,
+    },
+    trial_days: 0,
+  },
+  eligible_features: ['DASHBOARD', 'VIEW', 'CATALOG'],
+}
+
+/**
  * The vendor record Settings reads.
  *
  * `business_address` is a structured object, not a string. The read also **omits null

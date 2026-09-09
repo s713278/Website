@@ -5,6 +5,7 @@ import {
   resetDemoState,
   setDemoStoreState,
   storeStateFieldsFor,
+  storeStateResumeStepFor,
   type DemoStoreStateKey,
   type DemoStoreStateOverride,
 } from '../fixtures/demo-state'
@@ -40,6 +41,9 @@ export const demoService = {
    * against something the backend cannot send.
    */
   storeStateFields: (key: DemoStoreStateKey): DemoStoreStateOverride => storeStateFieldsFor(key),
+
+  /** A presentation-only resume step for the synthetic setting-up scenario. */
+  storeStateResumeStep: (key: DemoStoreStateKey): number | null => storeStateResumeStepFor(key),
 
   select: (key: DemoStoreStateKey) => {
     if (isLiveApi()) return

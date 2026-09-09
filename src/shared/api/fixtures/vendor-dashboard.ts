@@ -19,7 +19,7 @@ import {
   demoSizes,
   demoSubscriptions,
 } from './demo-state'
-import { DEMO_ORDER_ITEMS } from './vendor-dashboard-seed'
+import { DEMO_ORDER_ITEMS, DEMO_VENDOR_CONTEXT } from './vendor-dashboard-seed'
 
 function envelope<T>(data: T) {
   return { timestamp: new Date().toISOString(), success: true, status: 200, data }
@@ -66,6 +66,12 @@ export function demoVendorOrdersPage(page = 0, size = 20, query: DemoOrderQuery 
 }
 
 export type DemoSubscriptionQuery = { status?: string }
+
+/** The completed vendor context, in the same envelope and field names as the live read. */
+export function demoVendorContext(vendorId: string | number) {
+  consumeDemoFailure()
+  return envelope({ ...DEMO_VENDOR_CONTEXT, vendor_id: String(vendorId) })
+}
 
 /** One page of subscription rows, narrowed by the same status parameter as live. */
 export function demoVendorSubscriptionsPage(

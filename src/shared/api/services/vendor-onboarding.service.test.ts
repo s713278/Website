@@ -1,5 +1,39 @@
-import { describe, expect, it } from 'vitest'
-import { settleMeasurementDetails } from './vendor-onboarding.service'
+import { vendorsService as apiVendorsService } from '@mithra/api-client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { settleMeasurementDetails, vendorOnboardingService } from './vendor-onboarding.service'
+
+let live = true
+
+vi.mock('../mode', () => ({ isLiveApi: () => live }))
+
+beforeEach(() => {
+  live = true
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('getVendorContext', () => {
+  it('returns the mapped demo context without issuing a request', async () => {
+    live = false
+    const request = vi.spyOn(apiVendorsService, 'getContext').mockRejectedValue(
+      new Error('Demo mode must not reach the backend.'),
+    )
+
+    await expect(vendorOnboardingService.getVendorContext('r1')).resolves.toMatchObject({
+      vendorId: 'r1',
+      vendorStatus: 'ACTIVE',
+      approvalStatus: 'APPROVED',
+      onboarding: { status: 'COMPLETED', nextStep: 11 },
+      subscription: {
+        tier: 'FREE',
+        trialEndsAt: null,
+      },
+    })
+    expect(request).not.toHaveBeenCalled()
+  })
+})
 
 describe('measurement detail requests', () => {
   it('keeps fulfilled detail payloads when another detail request fails', async () => {

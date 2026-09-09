@@ -55,6 +55,17 @@ export function storeStateFieldsFor(key: DemoStoreStateKey): DemoStoreStateOverr
   return STORE_STATES[key]
 }
 
+/**
+ * Resume step shown by the switcher's synthetic setting-up scenario.
+ *
+ * The context seed remains a truthful completed account (`next_step: 11`). Only the
+ * setting-up walkthrough needs a visible resume point, and Step 10 is the last real setup
+ * screen. This value labels that screen; it is never read by `deriveStoreState`.
+ */
+export function storeStateResumeStepFor(key: DemoStoreStateKey): number | null {
+  return key === 'SETTING_UP' ? 10 : null
+}
+
 type DemoState = {
   orders: Row[]
   subscriptions: Row[]
