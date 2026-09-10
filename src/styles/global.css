@@ -375,32 +375,78 @@
 }
 
 /* ── Vendor console ─────────────────────────────────────────────────────
-   Scoped to `.vendor-console`, not app-wide. A vendor working the counter is on a work
-   surface, not a marketing page, so the console drops the body's emerald radial wash for
-   a flat canvas — the white panels on it are then the only thing raised.
+   Scoped to `.vendor-console`, not app-wide. Ported from
+   `design-reference/dashboard.html` + `assets/css/dashboard.css`, which is the source of
+   the vendor-dashboard screenshots the team shared.
 
-   Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own
-   outer boundary, `--vc-rule` a division between rows inside one. A row rule as dark as
-   a panel edge reads as "next panel" rather than "next row". */
+   The reference puts the console on the same emerald-washed canvas as marketing and the
+   storefront, and lets the panels carry a hairline shadow. An earlier pass here used a flat
+   grey ground with no shadow; the shared design supersedes it, so the wash and the shadow
+   come back and the panels take the reference's 1.25rem corner.
+
+   Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own outer
+   boundary, `--vc-rule` a division between rows inside one. A row rule as dark as a panel
+   edge reads as "next panel" rather than "next row". */
 .vendor-console {
-  --vc-canvas: #eef1f5;
   --vc-panel: #ffffff;
-  --vc-edge: #dde3ea;
-  --vc-rule: #e9edf2;
+  --vc-edge: color-mix(in srgb, var(--md-green-500) 12%, var(--md-border));
+  --vc-rule: #f3f4f6;
 
-  /* The rail, and the one horizontal its head shares with the top bar. */
+  /* The emerald the console tints with, and the ink that stays readable on it.
+
+     The reference writes that ink as `color-mix(--md-green 90%, #000)`, which lands near
+     #0ea674 — about 3:1 on the tint, under AA for the 0.7–0.9rem type it is used on. The
+     700 is the same colour family a shade down and clears 4.5:1, so nav labels, plan chips
+     and prices keep the reference's look and stay legible. */
+  --vc-tint: rgba(16, 185, 129, 0.14);
+  --vc-tint-line: color-mix(in srgb, var(--md-green-500) 45%, #fff);
+  --vc-tint-ink: var(--md-green-700);
+
+  /* Uppercase micro-type: table heads, metric labels, settings terms. The reference's
+     #9ca3af is 2.5:1 on white; slate-500 reads the same at a glance and passes. */
+  --vc-label: #6b7280;
+
+  /* The three tinted surfaces the reference builds out of that emerald: the rail, the
+     translucent top bar, and the plan banner under it. Declared as tokens rather than
+     inline utilities because each is a `color-mix` or a gradient — the shapes Tailwind's
+     arbitrary-value syntax reads worst. */
+  /* Mixed from the opaque emerald-50, not from `--vc-tint`: `color-mix` carries the
+     tint's alpha through, and below `lg` this is a drawer laid over the page, where a
+     93%-opaque rail lets the content read straight through the nav. */
+  --vc-rail-bg: color-mix(in srgb, var(--md-green-50) 45%, #fff);
+  --vc-bar-bg: rgba(255, 255, 255, 0.92);
+  --vc-banner: linear-gradient(135deg, var(--vc-tint), #fffaf5);
+  /* One panel is allowed to lift off the others — the QR on Store & Share. */
+  --vc-spotlight: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--md-green-50) 75%, #fff) 0%,
+    #fff 58%
+  );
+
+  /* The rail, the gutter the main column keeps, and the panel shape. */
   --vc-rail: 15.5rem;
-  --vc-bar: 4rem;
-  --vc-gutter: 1.5rem;
+  --vc-gutter: 0.9rem;
+  --vc-radius: 1.25rem;
+  --vc-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
+  --vc-shadow-lift: 0 8px 24px rgba(17, 24, 39, 0.08);
 
-  background: var(--vc-canvas);
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
+    radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
+    #f8fafc;
   color: var(--md-ink);
+}
+
+@media (min-width: 640px) {
+  .vendor-console {
+    --vc-gutter: 1.25rem;
+  }
 }
 
 @media (min-width: 1280px) {
   .vendor-console {
     --vc-rail: 17rem;
-    --vc-gutter: 2rem;
+    --vc-gutter: 1.75rem;
   }
 }
 
@@ -417,19 +463,33 @@
   .vc-rows > * + * {
     border-top: 1px solid var(--vc-rule);
   }
+
+  /* The console's third type role, after Poppins display and Inter body: the tracked-out
+     micro-label over a table column, a metric, or a settings term. One declaration so the
+     six surfaces cannot drift into six sizes of it.
+
+     The second selector reaches the `<label>` the shared `Input` renders for itself, so a
+     field can wear this voice without the page hand-rolling the field markup to get it. */
+  .vc-label,
+  .vc-labelled-fields label {
+    font-size: 0.7rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--vc-label);
+  }
 }
 
-/* Every panel in the console, restyled for the tinted canvas rather than the app's white
-   one. A drop shadow raises a card off a white page; on a tinted ground the panel already
-   reads as raised and the shadow only muddies its edge, so it goes and a single line takes
-   over. Scoped exactly like the storefront and onboarding subtrees above — no card outside
-   the console is touched.
+/* Every panel in the console. The reference's shape: a 1.25rem corner, a green-tinted
+   hairline edge, and the faintest lift off the washed canvas.
 
    Padding is deliberately not set here: `EmptyState` earns its generous px-6 py-16 through
    a utility, and a padding declaration at this specificity would silently outrank it. */
 .vendor-console [data-slot='card'] {
   border: 1px solid var(--vc-edge);
-  box-shadow: none;
+  border-radius: var(--vc-radius);
+  box-shadow: var(--vc-shadow);
 }
 
 /*Storefront shell */

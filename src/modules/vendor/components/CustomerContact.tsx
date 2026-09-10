@@ -31,7 +31,8 @@ export function CustomerContact({
 
   return (
     <div className={className}>
-      <p className="text-sm text-[var(--md-muted)]">
+      {/* A phone number broken across two lines is a phone number nobody can read back. */}
+      <p className="text-sm whitespace-nowrap text-[var(--md-muted)]">
         {name ?? (readable ? readable : 'No contact details')}
       </p>
 
@@ -39,7 +40,7 @@ export function CustomerContact({
         <div className="mt-1 flex flex-wrap items-center gap-3">
           {/* Shown under the name when both exist, so the number is still reachable. */}
           {name && readable ? (
-            <span className="text-sm text-[var(--md-muted)]">{readable}</span>
+            <span className="text-sm whitespace-nowrap text-[var(--md-muted)]">{readable}</span>
           ) : null}
           {call ? (
             <a

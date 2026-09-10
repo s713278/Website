@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { OrderFilterBar } from '@/modules/vendor/components/OrderFilterBar'
+import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
 import { OrdersSectionTabs } from '@/modules/vendor/components/OrdersSectionTabs'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
@@ -8,16 +10,9 @@ import {
   forwardActionLabel,
   forwardRefusalMessage,
   nextVendorDeliveryStatus,
-  presentDeliveryStatus,
-  presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
 import {
   hasDeliveryRange,
-  matchingPreset,
-  NO_RANGE,
-  ORDER_STATUS_FILTERS,
-  presetRange,
-  RANGE_PRESETS,
   rangeError,
   readOrdersQuery,
   subtotalHeading,
@@ -29,15 +24,18 @@ import {
   sumDeliveryWindow,
   type SubtotalOutcome,
 } from '@/modules/vendor/lib/order-subtotal'
-import { vendorFilterChipClass } from '@/modules/vendor/lib/filter-chip'
+import { isoDay } from '@/modules/vendor/lib/work-queue'
 import type { DeliveryStatus, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
+import { Button, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
 /**
  * The screen a vendor works from: filter by delivery date, page through, open an order,
  * move it one step.
+ *
+ * One panel, following `design-reference/dashboard.html`: the filters and the rows they
+ * narrow share a frame, so it is never ambiguous which list a chip is acting on.
  *
  * The whole filter state — status, both dates and the page — lives in the URL. That is what
  * makes it survive opening an order and coming back: history restores the URL, where
@@ -57,16 +55,19 @@ type SubtotalState = { kind: 'loading' } | SubtotalOutcome
  *
  * It is a second pass over the same filter rather than a sum of the visible rows, and it is
  * withheld outright rather than shown partial. See `lib/order-subtotal.ts`.
+ *
+ * Rendered as the tinted strip the shared design uses for the one fact on a panel that
+ * outranks the rest of it — the same treatment Store & Share gives the shop link.
  */
 function DeliveryWindowSubtotal({ heading, state }: { heading: string; state: SubtotalState }) {
   return (
-    <Card className="mb-6 p-5">
-      <p className="text-sm text-[var(--md-muted)]">{heading}</p>
+    <div className="mb-4 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-4 py-3">
+      <p className="text-xs font-semibold text-[var(--vc-tint-ink)]">{heading}</p>
       {state.kind === 'loading' ? (
         <p className="mt-1 text-sm text-[var(--md-muted)]">Adding it up…</p>
       ) : null}
       {state.kind === 'total' ? (
-        <p className="font-display vc-num mt-1 text-3xl font-bold">
+        <p className="font-display vc-num mt-0.5 text-2xl font-bold">
           {formatCurrency(state.amount)}{' '}
           <span className="font-sans text-sm font-normal text-[var(--md-muted)]">
             across {state.orders} {state.orders === 1 ? 'order' : 'orders'}
@@ -85,7 +86,7 @@ function DeliveryWindowSubtotal({ heading, state }: { heading: string; state: Su
             : 'No total: some of these orders have no amount, so any figure would be short.'}
         </p>
       ) : null}
-    </Card>
+    </div>
   )
 }
 
@@ -100,9 +101,9 @@ export function VendorOrdersPage() {
   // Fixed for the life of the screen: the preset chips must not shift under the vendor if
   // midnight passes while they are looking at them.
   const today = useMemo(() => new Date(), [])
+  const todayIso = useMemo(() => isoDay(today), [today])
   const rangeIssue = rangeError(query.range)
   const heading = subtotalHeading(query.range, status)
-  const activePreset = matchingPreset(query.range, today)
 
   const [result, setResult] = useState<VendorOrderPage | null>(null)
   const [loading, setLoading] = useState(true)
@@ -235,270 +236,133 @@ export function VendorOrdersPage() {
   const orders = result?.orders ?? []
 
   return (
-    <div>
-      <PageHeader title="Orders" subtitle="Filter by delivery date, then work down the list" />
+    <div className="grid gap-4">
       <OrdersSectionTabs />
 
-      <Card className="mb-6 space-y-5 p-5">
-        <div role="group" aria-label="Order status">
-          <p className="mb-2 text-sm font-medium">Order status</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => applyFilters({ status: null })}
-              className={vendorFilterChipClass(status === null)}
-            >
-              All
-            </button>
-            {ORDER_STATUS_FILTERS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => applyFilters({ status: value })}
-                className={vendorFilterChipClass(status === value)}
-              >
-                {presentDeliveryStatus(value).label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <DashboardPanel title="All orders">
+        <OrderFilterBar
+          status={status}
+          range={query.range}
+          today={today}
+          onApply={applyFilters}
+        />
+
+        {rangeIssue ? (
+          <p className="mb-4 text-sm text-[var(--md-danger)]">{rangeIssue}</p>
+        ) : null}
+
+        {heading && !rangeIssue ? (
+          <DeliveryWindowSubtotal heading={heading} state={subtotal} />
+        ) : null}
+
+        {actionError ? (
+          <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
+        ) : null}
+        {loading ? <Spinner label="Loading orders…" /> : null}
 
         {/*
-          Every control in this group says "delivery date", and that is not decoration. It
-          is the only date the contract carries — there is no creation timestamp on any order
-          read — so a control labelled "date" would be read as an order date and quietly
-          answer a different question than the one it was asked.
+          A failed request and an empty list are different facts, and "No orders here" is the
+          wrong one to guess at: a vendor who reads it stops looking.
         */}
-        <div role="group" aria-label="Delivery date">
-          <p className="mb-2 text-sm font-medium">Delivery date</p>
-          <div className="flex flex-wrap gap-2">
-            {RANGE_PRESETS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() =>
-                  applyFilters({
-                    range: activePreset === key ? NO_RANGE : presetRange(key, today),
-                  })
-                }
-                className={vendorFilterChipClass(activePreset === key)}
-              >
-                {label}
-              </button>
-            ))}
-            {hasDeliveryRange(query.range) ? (
-              <button
-                type="button"
-                onClick={() => applyFilters({ range: NO_RANGE })}
-                className={vendorFilterChipClass(false)}
-              >
-                Clear dates
-              </button>
-            ) : null}
+        {!loading && loadError ? (
+          <div className="rounded-lg border border-[var(--md-danger)] p-4">
+            <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
+            <p className="mt-1 text-sm text-[var(--md-muted)]">
+              This is a failed request, not an empty list.
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-3"
+              onClick={() => setReloadToken((token) => token + 1)}
+            >
+              Try again
+            </Button>
           </div>
+        ) : null}
 
-          <div className="mt-3 grid gap-3 sm:max-w-md sm:grid-cols-2">
-            <Input
-              type="date"
-              name="delivery-date-from"
-              label="Delivery date from"
-              value={startDate ?? ''}
-              onChange={(event) =>
-                applyFilters({
-                  range: {
-                    ...query.range,
-                    startDate: event.target.value || null,
-                  },
-                })
-              }
-            />
-            <Input
-              type="date"
-              name="delivery-date-to"
-              label="Delivery date to"
-              value={endDate ?? ''}
-              onChange={(event) =>
-                applyFilters({
-                  range: {
-                    ...query.range,
-                    endDate: event.target.value || null,
-                  },
-                })
-              }
-            />
-          </div>
-        </div>
-      </Card>
-
-      {rangeIssue ? <p className="mb-6 text-sm text-[var(--md-danger)]">{rangeIssue}</p> : null}
-
-      {heading && !rangeIssue ? (
-        <DeliveryWindowSubtotal heading={heading} state={subtotal} />
-      ) : null}
-
-      {actionError ? (
-        <p className="mb-6 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
-      ) : null}
-      {loading ? <Spinner label="Loading orders…" /> : null}
-
-      {/*
-        A failed request and an empty list are different facts, and "No orders here" is the
-        wrong one to guess at: a vendor who reads it stops looking.
-      */}
-      {!loading && loadError ? (
-        <Card className="border-[var(--md-danger)] p-5">
-          <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
-          <p className="mt-1 text-sm text-[var(--md-muted)]">
-            This is a failed request, not an empty list.
-          </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="mt-3"
-            onClick={() => setReloadToken((token) => token + 1)}
-          >
-            Try again
-          </Button>
-        </Card>
-      ) : null}
-
-      {!loading && !loadError && !rangeIssue && !orders.length ? (
-        <EmptyState
-          title="No orders here"
-          description={
-            status || hasDeliveryRange(query.range)
+        {!loading && !loadError && !rangeIssue && !orders.length ? (
+          <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+            <span className="mb-1 block font-semibold text-[var(--md-ink)]">No orders here</span>
+            {status || hasDeliveryRange(query.range)
               ? 'Nothing matches these filters. Widen the delivery dates or clear the status.'
-              : 'When a customer orders from your store, it will show up here.'
-          }
-        />
-      ) : null}
+              : 'When a customer orders from your store, it will show up here.'}
+          </p>
+        ) : null}
 
-      {!loading && !loadError && orders.length ? (
-        <div>
-          {/*
-            One panel with ruled rows, not a card per order. Thirteen separately shadowed
-            cards make thirteen things to look at; a vendor working down a delivery day is
-            comparing rows, and the columns below only line up if they share a panel.
-          */}
-          <Card className="vc-rows p-0">
-            {orders.map((order) => {
-              const delivery = presentDeliveryStatus(order.deliveryStatus)
-              const next = nextVendorDeliveryStatus(order.deliveryStatus)
-              const busy = busyId === order.id
-              // Reversal is deliberately detail-only: on a list a vendor is scrolling, and
-              // a paid flag flipped by accident is a flag nothing else can correct.
-              const offerMarkPaid =
-                canRecordPayment(order.deliveryStatus) && order.paymentStatus !== 'PAID'
+        {!loading && !loadError && orders.length ? (
+          <OrderLedger
+            orders={orders}
+            todayIso={todayIso}
+            caption="Orders matching the current filters"
+            showAmount
+            /*
+              The filters ride along in history state so that the detail screen's own "Back to
+              orders" returns to this exact view. Browser back already would; a vendor who uses
+              the button on screen should not be punished for it by losing the range they typed.
+            */
+            linkState={{ from: `/vendor/orders${search}` }}
+            renderPaymentAction={(order) => {
+              // Reversal is deliberately detail-only: on a list a vendor is scrolling, and a
+              // paid flag flipped by accident is a flag nothing else can correct.
+              if (!canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID') {
+                return null
+              }
 
               return (
-                <div
-                  key={order.id}
-                  className="grid gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1fr)_13rem_16rem] sm:items-start sm:px-5"
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  disabled={payingId !== null}
+                  onClick={() => void recordPayment(order.id)}
                 >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/*
-                      The filters ride along in history state so that the detail screen's
-                      own "Back to orders" returns to this exact view. Browser back already
-                      would; a vendor who uses the button on screen should not be punished
-                      for it by losing the range they just typed.
-                    */}
-                      <Link
-                        to={`/vendor/orders/${order.id}`}
-                        state={{ from: `/vendor/orders${search}` }}
-                        className="vc-num font-semibold hover:underline"
-                      >
-                        Order #{order.id}
-                      </Link>
-                      <Badge tone={delivery.tone}>{delivery.label}</Badge>
-                      {/*
-                        Payment is its own axis: an order can be delivered and still unpaid,
-                        which the previous single-status list could not show at all.
-                      */}
-                      {order.paymentStatus ? (
-                        <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
-                          {presentPaymentStatus(order.paymentStatus).label}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <CustomerContact
-                      className="mt-1.5"
-                      name={order.customerName}
-                      mobile={order.customerMobile}
-                    />
-                  </div>
-
-                  {/*
-                    Date over amount, right-aligned in a fixed column so the rupee figures
-                    stack into one edge. `null` is unknown, `0` is a genuinely free order:
-                    rendering both as nothing, or both as ₹0, would merge two facts.
-                  */}
-                  <div className="sm:text-right">
-                    {order.deliveryDate ? (
-                      <p className="vc-num text-sm text-[var(--md-muted)] sm:whitespace-nowrap">
-                        Delivery date {order.deliveryDate}
-                      </p>
-                    ) : null}
-                    {order.total != null ? (
-                      <p className="vc-num mt-0.5 text-lg font-semibold">
-                        {formatCurrency(order.total)}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-sm text-slate-500">Amount not available</p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    {offerMarkPaid ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={payingId !== null}
-                        onClick={() => void recordPayment(order.id)}
-                      >
-                        {payingId === order.id ? 'Saving…' : 'Mark paid'}
-                      </Button>
-                    ) : null}
-                    {next ? (
-                      <Button
-                        size="sm"
-                        disabled={busyId !== null}
-                        onClick={() => void advance(order.id, order.deliveryStatus, next)}
-                      >
-                        {busy ? 'Working…' : forwardActionLabel(next)}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
+                  {payingId === order.id ? 'Saving…' : 'Mark paid'}
+                </Button>
               )
-            })}
-          </Card>
-        </div>
-      ) : null}
+            }}
+            renderNextStep={(order) => {
+              const next = nextVendorDeliveryStatus(order.deliveryStatus)
+              if (!next) return null
 
-      {result && result.totalPages > 1 ? (
-        <div className="mt-6 flex items-center justify-between border-t border-[var(--vc-edge)] pt-5">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page === 0 || loading}
-            onClick={() => goToPage(page - 1)}
-          >
-            Previous
-          </Button>
-          <span className="vc-num text-sm text-[var(--md-muted)]">
-            Page {result.page + 1} of {result.totalPages}
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={result.lastPage || loading}
-            onClick={() => goToPage(page + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      ) : null}
+              return (
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  disabled={busyId !== null}
+                  onClick={() => void advance(order.id, order.deliveryStatus, next)}
+                >
+                  {busyId === order.id ? 'Working…' : forwardActionLabel(next)}
+                </Button>
+              )
+            }}
+          />
+        ) : null}
+
+        {result && result.totalPages > 1 ? (
+          <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={page === 0 || loading}
+              onClick={() => goToPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="vc-num text-sm text-[var(--md-muted)]">
+              Page {result.page + 1} of {result.totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={result.lastPage || loading}
+              onClick={() => goToPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
+      </DashboardPanel>
     </div>
   )
 }

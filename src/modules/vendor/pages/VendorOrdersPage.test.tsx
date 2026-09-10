@@ -187,8 +187,8 @@ describe('VendorOrdersPage filters', () => {
       await Promise.resolve()
     })
 
-    expect(screen.getByText('Order #4020')).toBeTruthy()
-    expect(screen.queryByText('Order #4099')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Order #4020' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Order #4099' })).toBeNull()
   })
 
   it('names every date control a delivery date, because that is the only date there is', async () => {

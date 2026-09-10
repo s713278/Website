@@ -205,9 +205,9 @@ describe('VendorOverviewPage work queue', () => {
     renderFor()
     await settle()
 
-    expect(screen.getByText('Order #4021')).toBeTruthy()
-    expect(screen.queryByText('Order #4010')).toBeNull()
-    expect(screen.queryByText('Order #4009')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Order #4021' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Order #4010' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Order #4009' })).toBeNull()
   })
 
   it('marks an overdue order so it cannot read like one due tomorrow', async () => {
@@ -217,9 +217,13 @@ describe('VendorOverviewPage work queue', () => {
     renderFor()
     await settle()
 
+    // The late row leads with the word, keeps its date underneath, and is the only one that
+    // does; the row due tomorrow is named, not dated.
     expect(screen.getByText('Overdue')).toBeTruthy()
-    expect(screen.getByText('Overdue — delivery date 2026-09-04')).toBeTruthy()
-    expect(screen.getByText('Delivery date 2026-09-07')).toBeTruthy()
+    expect(screen.getByText('Fri 4 Sep')).toBeTruthy()
+    expect(screen.getByText('Tomorrow')).toBeTruthy()
+    // Every one of those readings sits under a column that says which date it is.
+    expect(screen.getAllByText('Delivery date').length).toBeGreaterThan(0)
   })
 
   it('shows no money figure anywhere on the screen', async () => {
@@ -256,9 +260,9 @@ describe('VendorOverviewPage status counts', () => {
     renderFor()
     await settle()
 
-    expect(screen.getByRole('link', { name: '2 New' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '0 Confirmed' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '0 Out for delivery' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'New 2' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Confirmed 0' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Out for delivery 0' })).toBeTruthy()
   })
 
   it('links each count into Orders with that filter already applied', async () => {
@@ -268,7 +272,7 @@ describe('VendorOverviewPage status counts', () => {
     renderFor()
     await settle()
 
-    expect(screen.getByRole('link', { name: '5 New' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'New 5' }).getAttribute('href')).toBe(
       '/vendor/orders?status=SCHEDULED',
     )
   })
@@ -280,7 +284,7 @@ describe('VendorOverviewPage status counts', () => {
     renderFor()
     await settle()
 
-    expect(screen.queryByRole('link', { name: '0 New' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'New 0' })).toBeNull()
     expect(screen.getByText('Loading your order counts…')).toBeTruthy()
   })
 })

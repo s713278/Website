@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils'
 import { isLiveApi } from '@/shared/api'
 import { Button, Input } from '@/shared/components/ui'
+import { storefrontUrl } from '@/shared/lib/store-link'
 import { ACCENT_PRESETS, FONT_PRESETS, PRIMARY_PRESETS } from '@/shared/lib/theme'
 import {
   ONBOARDING_THEME_PRESETS,
@@ -387,17 +388,11 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
 }
 
 
-/** Public store URL. Only meaningful once the backend has approved the vendor. */
-function storeUrl(storeIdentifier: string): string {
-  const origin = typeof window === 'undefined' ? '' : window.location.origin
-  return `${origin}/stores/${storeIdentifier}`
-}
-
 function ShareStore({ submission }: { submission: StoreSubmission }) {
   const [copied, setCopied] = useState(false)
   const approved = submission.approvalStatus?.toUpperCase() === 'APPROVED'
   const identifier = submission.storeIdentifier
-  const url = identifier ? storeUrl(identifier) : null
+  const url = identifier ? storefrontUrl(identifier) : null
   const shareable = approved && Boolean(url)
 
   const copy = async () => {

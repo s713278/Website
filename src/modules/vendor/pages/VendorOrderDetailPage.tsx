@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
+import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   canCancel,
@@ -13,13 +14,14 @@ import {
   presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
 import { chargeLines, chargesReconcile } from '@/modules/vendor/lib/order-charges'
+import { deliveryStatusPillClass } from '@/modules/vendor/lib/status-pill'
 import type {
   DeliveryStatus,
   PaymentStatus,
   VendorOrderDetail,
 } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
+import { Badge, Button, Card, EmptyState, Input, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
 /**
@@ -124,9 +126,10 @@ export function VendorOrderDetailPage() {
   }
 
   /*
-   * Above the title, not opposite it. As a `PageHeader` action the link is pushed to the far
-   * edge of the console, a screen's width from the order it returns from; a vendor reads it
-   * as unrelated chrome. Where you came from belongs before where you are.
+   * The first thing on the screen, under the top bar that names the order. Pushed to the
+   * far right as a header action it sits a screen's width from the order it returns from,
+   * and a vendor reads it as unrelated chrome. Where you came from belongs before where
+   * you are.
    */
   const backLink = (
     <Link
@@ -138,7 +141,7 @@ export function VendorOrderDetailPage() {
     </Link>
   )
 
-  /* The not-found screen has no header to sit under, so there the link is the action. */
+  /* The not-found screen has nothing to go back above, so there the link is the action. */
   const backButton = (
     <Link to={backTo}>
       <Button size="sm" variant="secondary">
@@ -153,7 +156,6 @@ export function VendorOrderDetailPage() {
     return (
       <div>
         {backLink}
-        <PageHeader title="Order" />
         <Card className="max-w-[68ch] border-[var(--md-danger)] p-5">
           <p className="text-sm text-[var(--md-danger)]">{loadError}</p>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
@@ -191,10 +193,9 @@ export function VendorOrderDetailPage() {
   return (
     <div>
       {backLink}
-      <PageHeader title={`Order #${order.id}`} subtitle={order.customerName ?? 'Customer'} />
 
       {actionError ? (
-        <p className="mb-6 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
+        <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
       ) : null}
 
       {/*
@@ -202,10 +203,10 @@ export function VendorOrderDetailPage() {
         do I do with this, and what does it come to — and stacking them put the second one
         below the fold on every order with more than a couple of lines.
       */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <Card className="p-5">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <DashboardPanel>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={delivery.tone}>{delivery.label}</Badge>
+            <span className={deliveryStatusPillClass(order.deliveryStatus)}>{delivery.label}</span>
             {order.paymentStatus ? (
               <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
                 {presentPaymentStatus(order.paymentStatus).label}
@@ -240,7 +241,12 @@ export function VendorOrderDetailPage() {
 
           <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
             {next ? (
-              <Button size="sm" disabled={busy} onClick={() => void advance(next)}>
+              <Button
+                size="sm"
+                className="rounded-full"
+                disabled={busy}
+                onClick={() => void advance(next)}
+              >
                 {busy ? 'Working…' : forwardActionLabel(next)}
               </Button>
             ) : null}
@@ -340,7 +346,7 @@ export function VendorOrderDetailPage() {
               </div>
             </div>
           ) : null}
-        </Card>
+        </DashboardPanel>
 
         {/*
           The bill. Every figure on it — line amounts, charges and the total — is right-aligned
@@ -348,7 +354,7 @@ export function VendorOrderDetailPage() {
           check the arithmetic the way they would on paper.
         */}
         <Card className="p-0">
-          <h2 className="font-display border-b border-[var(--vc-rule)] px-5 py-3.5 font-semibold">
+          <h2 className="font-display border-b border-[var(--vc-edge)] px-5 py-3.5 text-base font-semibold">
             Items
           </h2>
           {!order.lines.length ? (

@@ -1,19 +1,25 @@
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/shared/lib/utils'
 
+/**
+ * The two list surfaces owned by Orders; neither is a seventh rail destination.
+ *
+ * Chips rather than an underlined tab strip, so the console has one vocabulary for "pick
+ * one of these" — the same shape the filters inside each list use. The difference is
+ * position: these sit above the panel and switch which panel you are looking at.
+ */
 function tabClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'border-b-2 px-1 pb-2 text-sm font-medium transition',
+    'rounded-full px-3.5 py-1.5 text-sm font-semibold transition',
     isActive
-      ? 'border-[var(--md-green-600)] text-[var(--md-green-800)]'
-      : 'border-transparent text-slate-500 hover:text-[var(--md-ink)]',
+      ? 'bg-[var(--vc-tint)] text-[var(--vc-tint-ink)] shadow-[inset_0_0_0_1px_var(--vc-tint-line)]'
+      : 'text-slate-500 hover:bg-white hover:text-[var(--md-ink)]',
   )
 }
 
-/** The two list surfaces owned by Orders; neither is a seventh rail destination. */
 export function OrdersSectionTabs() {
   return (
-    <nav aria-label="Orders sections" className="mb-6 flex gap-6 border-b border-[var(--vc-edge)]">
+    <nav aria-label="Orders sections" className="flex gap-1">
       <NavLink to="/vendor/orders" end className={tabClass}>
         Orders
       </NavLink>

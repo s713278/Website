@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { vendorProductsService } from '@/shared/api'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
@@ -66,11 +67,14 @@ function accountFor(vendorId: string): VendorAccount {
   }
 }
 
+/** The panel's "Edit in setup" is a router link, so the page needs a router around it. */
 function renderFor(vendorId: string) {
   return render(
-    <VendorAccountContext.Provider value={accountFor(vendorId)}>
-      <VendorProductsPage />
-    </VendorAccountContext.Provider>,
+    <MemoryRouter>
+      <VendorAccountContext.Provider value={accountFor(vendorId)}>
+        <VendorProductsPage />
+      </VendorAccountContext.Provider>
+    </MemoryRouter>,
   )
 }
 
@@ -110,9 +114,11 @@ describe('VendorProductsPage', () => {
 
     const view = renderFor('vendor-1')
     view.rerender(
-      <VendorAccountContext.Provider value={accountFor('vendor-2')}>
-        <VendorProductsPage />
-      </VendorAccountContext.Provider>,
+      <MemoryRouter>
+        <VendorAccountContext.Provider value={accountFor('vendor-2')}>
+          <VendorProductsPage />
+        </VendorAccountContext.Provider>
+      </MemoryRouter>,
     )
 
     await act(async () => {

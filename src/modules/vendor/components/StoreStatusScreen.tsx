@@ -6,7 +6,8 @@ import {
   storeStateAction,
 } from '@/modules/vendor/lib/store-state'
 import type { StoreState } from '@/modules/vendor/types/dashboard'
-import { Button, Card } from '@/shared/components'
+import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { Button } from '@/shared/components'
 
 /**
  * Overview for a store that is not open.
@@ -26,14 +27,17 @@ export function StoreStatusScreen({ state }: { state: Exclude<StoreState, 'OPEN'
   const progress = setupProgress(context.onboarding.nextStep)
 
   return (
-    <Card className="max-w-[68ch] p-5">
-      <h2 className="font-display text-lg font-semibold">{presentation.label}</h2>
-      <p className="mt-2 max-w-[68ch] text-sm text-[var(--md-muted)]">{presentation.description}</p>
+    <DashboardPanel title={presentation.label} className="max-w-[68ch]">
+      <p className="-mt-1 max-w-[68ch] text-sm text-[var(--md-muted)]">
+        {presentation.description}
+      </p>
 
       {action ? (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <Link to={action.to}>
-            <Button size="sm">{action.label}</Button>
+            <Button size="sm" className="rounded-full">
+              {action.label}
+            </Button>
           </Link>
           {/*
             Shown beside the setup action only. `next_step` is what the vendor resumes on,
@@ -47,6 +51,6 @@ export function StoreStatusScreen({ state }: { state: Exclude<StoreState, 'OPEN'
           ) : null}
         </div>
       ) : null}
-    </Card>
+    </DashboardPanel>
   )
 }

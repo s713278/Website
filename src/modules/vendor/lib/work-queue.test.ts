@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { VendorOrderSummary } from '@/modules/vendor/types/dashboard'
 import {
-  dueDescription,
+  DELIVERY_DATE_LABEL,
+  deliveryDayLabel,
   isOverdue,
   isoDay,
   selectWorkQueue,
@@ -110,26 +111,43 @@ describe('isOverdue', () => {
   })
 })
 
-describe('dueDescription', () => {
-  it('always names the date as a delivery date, never a booking date', () => {
-    // No order read in the contract carries a creation timestamp, so nothing may imply one.
-    const wordings = [
-      dueDescription('2026-09-04', '2026-09-06'),
-      dueDescription('2026-09-06', '2026-09-06'),
-      dueDescription('2026-09-08', '2026-09-06'),
-    ]
-    for (const wording of wordings) {
-      expect(wording.toLowerCase()).toContain('delivery date')
-    }
+describe('deliveryDayLabel', () => {
+  it('leads with the word "Overdue" and keeps the date underneath', () => {
+    // A date two days past reads as ordinary until something says it is late.
+    const late = deliveryDayLabel('2026-09-04', '2026-09-06')
+    expect(late.headline).toBe('Overdue')
+    expect(late.detail).toBe('Fri 4 Sep')
+    expect(late.overdue).toBe(true)
   })
 
-  it('reads differently for an overdue order than for a future one', () => {
-    expect(dueDescription('2026-09-04', '2026-09-06')).toContain('Overdue')
-    expect(dueDescription('2026-09-08', '2026-09-06')).not.toContain('Overdue')
+  it('names the near days rather than dating them', () => {
+    expect(deliveryDayLabel('2026-09-06', '2026-09-06').headline).toBe('Today')
+    expect(deliveryDayLabel('2026-09-07', '2026-09-06').headline).toBe('Tomorrow')
+  })
+
+  it('crosses a month end when it counts to tomorrow', () => {
+    expect(deliveryDayLabel('2026-10-01', '2026-09-30').headline).toBe('Tomorrow')
+  })
+
+  it('writes a further-off day as a weekday and date, with nothing beneath it', () => {
+    const later = deliveryDayLabel('2026-09-12', '2026-09-06')
+    expect(later.headline).toBe('Sat 12 Sep')
+    expect(later.detail).toBeNull()
+    expect(later.overdue).toBe(false)
   })
 
   it('says so when there is no delivery date at all', () => {
-    expect(dueDescription(null, '2026-09-06')).toBe('No delivery date')
+    expect(deliveryDayLabel(null, '2026-09-06')).toEqual({
+      headline: 'Not set',
+      detail: null,
+      overdue: false,
+    })
+  })
+
+  it('labels the column it is read under, because no order read carries a booking date', () => {
+    // The cell text is deliberately short — "Today" alone would be read as when the order
+    // came in. This constant is what every screen must head the column with.
+    expect(DELIVERY_DATE_LABEL).toBe('Delivery date')
   })
 })
 

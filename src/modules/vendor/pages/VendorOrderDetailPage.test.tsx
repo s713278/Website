@@ -126,7 +126,10 @@ describe('VendorOrderDetailPage states', () => {
     await settle()
 
     expect(get).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Order #4021')).toBeTruthy()
+    // The order number is the console top bar's page title, which this render does not
+    // mount; the bill appearing is what says the retried read landed.
+    expect(screen.getByRole('heading', { name: 'Items' })).toBeTruthy()
+    expect(screen.queryByText(/could not be loaded/)).toBeNull()
   })
 })
 

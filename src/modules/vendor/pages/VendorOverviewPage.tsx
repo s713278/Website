@@ -1,22 +1,103 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
+import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
 import { StoreStatusScreen } from '@/modules/vendor/components/StoreStatusScreen'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { presentDeliveryStatus } from '@/modules/vendor/lib/order-actions'
 import {
-  dueDescription,
-  isOverdue,
   isoDay,
   selectWorkQueue,
   workQueueStatusCounts,
   workQueueWindow,
 } from '@/modules/vendor/lib/work-queue'
-import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
+import type { VendorInsights, VendorOrderPage, VendorPlan } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorOrdersService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Badge, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
-import { cn } from '@/shared/lib/utils'
+import { Spinner } from '@/shared/components'
+
+/**
+ * One figure and what it counts, as the shared design draws it: the label small and
+ * tracked out above, the number large below.
+ *
+ * The space between them is load-bearing. Both spans are inline, so without it the tile's
+ * accessible name runs the two together as "New2".
+ */
+function MetricTile({ to, label, value }: { to: string; label: string; value: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="rounded-[var(--vc-radius)] border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-4 py-3.5 shadow-[var(--vc-shadow)] transition hover:border-[var(--vc-tint-line)]"
+    >
+      <span className="vc-label block">{label}</span>{' '}
+      <span className="font-display vc-num mt-1.5 block text-2xl font-bold">{value}</span>
+    </Link>
+  )
+}
+
+/**
+ * How much of each kind of work there is, and how much of the catalog is built.
+ *
+ * The reference's fourth tile is the day's takings. There is none to show: no order read in
+ * the contract carries a creation date, so "today" cannot be asked for, and the console's
+ * one money figure lives on Orders beside the delivery range it describes. The catalog size
+ * takes the slot — it is real, it comes from the context the shell has already read, and it
+ * is the number that explains a refused product add.
+ *
+ * Every status renders separately and always renders a number. The backend omits
+ * zero-valued keys entirely, so `workQueueStatusCounts` supplies the `0` — a blank where
+ * "none" belongs reads as missing data, not as nothing to do.
+ */
+function Metrics({ userId, plan }: { userId: string; plan: VendorPlan }) {
+  const [insights, setInsights] = useState<VendorInsights | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+
+    void vendorService
+      .getInsights(userId)
+      .then((data) => {
+        if (!cancelled) setInsights(data)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load your order counts'))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  if (loading) return <Spinner label="Loading your order counts…" />
+  if (error) return <p className="text-sm text-[var(--md-danger)]">{error}</p>
+  if (!insights) return null
+
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* New counts PENDING + SCHEDULED but links to SCHEDULED: the single-status filter
+          omits legacy PENDING rows, so its list can be shorter than the tile count. */}
+      {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
+        <MetricTile
+          key={status}
+          to={`/vendor/orders?status=${status}`}
+          label={label}
+          value={count}
+        />
+      ))}
+      <MetricTile
+        to="/vendor/products"
+        label="Products"
+        value={plan.usage.products ?? '—'}
+      />
+    </div>
+  )
+}
 
 /**
  * What still needs doing, soonest first.
@@ -25,6 +106,10 @@ import { cn } from '@/shared/lib/utils'
  * and a queue spanning three statuses cannot be one status-filtered call. The window reaches
  * a week back so an order that went past its delivery date while unfinished still surfaces —
  * see `lib/work-queue.ts`.
+ *
+ * The reference calls this panel "Recent orders". It is not recency: with no creation date
+ * anywhere in the contract there is no such ordering to offer, and what a vendor opens the
+ * console for is the list of orders still owed to somebody.
  *
  * No amount is rendered here. The console's one money figure lives on Orders beside the range
  * it describes; a total on this screen would describe a window the vendor did not choose.
@@ -64,13 +149,20 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
   const queue = result ? selectWorkQueue(result.orders) : []
 
   return (
-    <section className="mb-10">
-      <div className="mb-4">
-        <h2 className="font-display text-lg font-semibold">What needs doing</h2>
-        <p className="vc-num mt-0.5 max-w-[68ch] text-sm text-[var(--md-muted)]">
-          Deliveries due between {queueWindow.startDate} and {queueWindow.endDate}, still open.
-        </p>
-      </div>
+    <DashboardPanel
+      title="What needs doing"
+      action={
+        <Link
+          to="/vendor/orders"
+          className="text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)]"
+        >
+          See all
+        </Link>
+      }
+    >
+      <p className="vc-num -mt-2 mb-3 max-w-[68ch] text-xs text-[var(--md-muted)]">
+        Deliveries due between {queueWindow.startDate} and {queueWindow.endDate}, still open.
+      </p>
 
       {loading ? <Spinner label="Loading what needs doing…" /> : null}
 
@@ -79,75 +171,36 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
         nothing to do because a request failed is the worse of the two mistakes.
       */}
       {!loading && error ? (
-        <Card className="border-[var(--md-danger)] p-5">
+        <div className="rounded-lg border border-[var(--md-danger)] p-4">
           <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
             This is a failed request, not an empty queue.
           </p>
-        </Card>
+        </div>
       ) : null}
 
+      {/*
+        The reference's own empty state: one centred line inside the panel, not a dashed
+        `EmptyState` box. A panel that already has a title and a frame does not need a
+        second frame drawn inside it to say it is empty.
+      */}
       {!loading && !error && !queue.length ? (
-        <EmptyState
-          title={result?.lastPage ? 'Nothing waiting' : 'More orders to check'}
-          description={result?.lastPage
+        <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+          <span className="mb-1 block font-semibold text-[var(--md-ink)]">
+            {result?.lastPage ? 'Nothing waiting' : 'More orders to check'}
+          </span>
+          {result?.lastPage
             ? 'No open orders are due in this window. New orders appear here as they arrive.'
             : 'No open orders appear on this page. Check the remaining orders before finishing for the day.'}
-        />
+        </p>
       ) : null}
 
       {!loading && !error && queue.length ? (
-        <div>
-          {/*
-            One panel, one row per job — the same ledger the Orders screen uses, so a vendor
-            moving between the two is reading the same shape twice rather than learning it
-            again. Lateness keeps its left rule: it is the one thing here that must survive
-            a glance that takes in nothing else.
-          */}
-          <Card className="vc-rows p-0">
-            {queue.map((order) => {
-              const delivery = presentDeliveryStatus(order.deliveryStatus)
-              const late = isOverdue(order.deliveryDate, todayIso)
-
-              return (
-                <div
-                  key={order.id}
-                  className={cn(
-                    'grid gap-x-6 gap-y-2 border-l-[3px] px-4 py-4 transition-colors hover:bg-slate-50/70 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-start sm:px-5',
-                    late ? 'border-l-[var(--md-danger)]' : 'border-l-transparent',
-                  )}
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`/vendor/orders/${order.id}`}
-                        className="vc-num font-semibold hover:underline"
-                      >
-                        Order #{order.id}
-                      </Link>
-                      <Badge tone={delivery.tone}>{delivery.label}</Badge>
-                      {late ? <Badge tone="danger">Overdue</Badge> : null}
-                    </div>
-                    <CustomerContact
-                      className="mt-1.5"
-                      name={order.customerName}
-                      mobile={order.customerMobile}
-                    />
-                  </div>
-                  <p
-                    className={cn(
-                      'vc-num text-sm sm:text-right sm:whitespace-nowrap',
-                      late ? 'font-medium text-[var(--md-danger)]' : 'text-[var(--md-muted)]',
-                    )}
-                  >
-                    {dueDescription(order.deliveryDate, todayIso)}
-                  </p>
-                </div>
-              )
-            })}
-          </Card>
-
-        </div>
+        <OrderLedger
+          orders={queue}
+          todayIso={todayIso}
+          caption="Open orders due in this window, soonest first"
+        />
       ) : null}
 
       {/* A locally empty page says nothing about unfinished orders on later pages. */}
@@ -160,86 +213,62 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
           to see the rest.
         </p>
       ) : null}
-    </section>
+    </DashboardPanel>
   )
 }
 
 /**
- * How much of each kind of work there is, each count a way into Orders.
+ * The three jobs a vendor comes back to the console for, one tap from the first screen.
  *
- * Every status renders separately and always renders a number. The backend omits
- * zero-valued keys entirely, so `workQueueStatusCounts` supplies the `0` — a blank where
- * "none" belongs reads as missing data, not as nothing to do.
+ * Each says what it opens rather than selling it, and the storefront card is withheld until
+ * there is a storefront to open — a card that lands on a 404 is worse than three cards.
  */
-function StatusCounts({ userId }: { userId: string }) {
-  const [insights, setInsights] = useState<VendorInsights | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-
-    void vendorService
-      .getInsights(userId)
-      .then((data) => {
-        if (!cancelled) setInsights(data)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load your order counts'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [userId])
+function QuickActions({ storeIdentifier }: { storeIdentifier: string | null }) {
+  const actions = [
+    { to: '/vendor/storefront', title: 'Share shop link', detail: 'WhatsApp & Instagram' },
+    { to: '/vendor/products', title: 'Manage products', detail: 'Prices & sizes' },
+    ...(storeIdentifier
+      ? [{ to: `/stores/${storeIdentifier}`, title: 'Open storefront', detail: 'Customer view' }]
+      : []),
+  ]
 
   return (
-    <section className="mb-10">
-      <h2 className="font-display mb-4 text-lg font-semibold">Where your orders stand</h2>
-
-      {loading ? <Spinner label="Loading your order counts…" /> : null}
-      {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
-
-      {!loading && !error && insights ? (
-        <div className="grid gap-4 sm:grid-cols-3">
-          {/* New counts PENDING + SCHEDULED but links to SCHEDULED: the single-status filter
-              omits legacy PENDING rows, so its list can be shorter than the tile count. */}
-          {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
-            <Link
-              key={status}
-              to={`/vendor/orders?status=${status}`}
-              className="rounded-xl border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-5 py-4 transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              {/* The space is load-bearing: without it the link's accessible name is "2New". */}
-              <span className="font-display vc-num block text-3xl font-bold">{count}</span>{' '}
-              <span className="mt-1 block text-sm text-[var(--md-muted)]">{label}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
+    <section aria-labelledby="quick-actions-heading">
+      <h2 id="quick-actions-heading" className="font-display mb-2.5 text-base font-semibold">
+        Quick actions
+      </h2>
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {actions.map(({ to, title, detail }) => (
+          <Link
+            key={to}
+            to={to}
+            className="grid gap-0.5 rounded-[var(--vc-radius)] border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-4 py-3.5 shadow-[var(--vc-shadow)] transition hover:border-[var(--vc-tint-line)] hover:bg-[var(--md-green-50)]/40"
+          >
+            <strong className="text-sm font-semibold">{title}</strong>
+            <span className="text-xs text-[var(--md-muted)]">{detail}</span>
+          </Link>
+        ))}
+      </div>
     </section>
   )
 }
 
 /**
- * Overview for an open store, in the order a vendor needs it: what needs doing, then how
- * much of it there is.
+ * Overview for an open store, in the order a vendor needs it: how much of each kind of work
+ * there is, then what to do next, then the ways out to the three jobs beyond this screen.
  *
  * Insights are keyed on the **user** id, not the vendor id: the path is
  * `/v1/users/{user_id}/dashboard`, and a vendor id returns 403.
  */
 function OpenStoreOverview({ vendorId }: { vendorId: string }) {
   const userId = useAuthStore((s) => s.user?.id)
+  const { context, plan } = useVendorAccount()
 
   return (
-    <div>
+    <div className="grid gap-4">
+      {userId ? <Metrics userId={userId} plan={plan} /> : null}
       <WorkQueue vendorId={vendorId} />
-      {userId ? <StatusCounts userId={userId} /> : null}
+      <QuickActions storeIdentifier={context.storeIdentifier} />
     </div>
   )
 }
@@ -247,22 +276,14 @@ function OpenStoreOverview({ vendorId }: { vendorId: string }) {
 export function VendorOverviewPage() {
   const { vendorId, storeState } = useVendorAccount()
 
-  return (
-    <div>
-      <PageHeader
-        title="Overview"
-        subtitle={storeState === 'OPEN' ? 'What needs doing right now' : 'Where your store stands'}
-      />
-      {/*
-        The four non-open states share one screen and show nothing else. A vendor who cannot
-        receive orders has no queue and no counts, and rendering empty ones would read as
-        "no orders yet" rather than "your store is not open".
-      */}
-      {storeState === 'OPEN' ? (
-        <OpenStoreOverview vendorId={vendorId} />
-      ) : (
-        <StoreStatusScreen state={storeState} />
-      )}
-    </div>
+  /*
+    The four non-open states share one screen and show nothing else. A vendor who cannot
+    receive orders has no queue and no counts, and rendering empty ones would read as
+    "no orders yet" rather than "your store is not open".
+  */
+  return storeState === 'OPEN' ? (
+    <OpenStoreOverview vendorId={vendorId} />
+  ) : (
+    <StoreStatusScreen state={storeState} />
   )
 }

@@ -77,6 +77,11 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_USE_API` | `false` | `false` uses demo behavior; `true` enables the Spring Boot API |
 | `VITE_API_BASE_URL` | `https://subscriptionapp-wgf8.onrender.com/api` | API base before operation paths such as `/v1/auth/request-otp` |
 | `VITE_APP_ENV` | `development` | Reserved environment label; currently typed but not consumed by application logic |
+| `VITE_PUBLIC_SITE_URL` | `https://mithradirect.com` | Origin customers open. Vendor shop links, the shareable QR, and the WhatsApp share are built from it |
+
+`VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
+must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment
+link, and the QR they print encodes the same wrong host.
 
 The client currently falls back to the development API base when `VITE_API_BASE_URL` is unset.
 Set the value explicitly for live development. Never commit `.env`, credentials, or test tokens.

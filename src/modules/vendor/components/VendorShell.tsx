@@ -1,141 +1,185 @@
+import { useEffect, useState } from 'react'
 import {
-  ChevronDown,
   ClipboardList,
   Gauge,
   LayoutDashboard,
-  LogOut,
+  Menu,
   Package,
   Settings,
-  Store,
+  Share2,
+  X,
 } from 'lucide-react'
-import { NavLink, Link, Outlet } from 'react-router-dom'
+import { NavLink, Link, Outlet, useLocation } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { presentStoreState } from '@/modules/vendor/lib/store-state'
 import { demoService } from '@/shared/api'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
-import {
-  Badge,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/components'
+import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
-/** The six surfaces of the console, in the order a vendor works through them. */
+/**
+ * The six surfaces of the console, in the order a vendor works through them.
+ *
+ * The first four and their labels are the shared design's, from
+ * `design-reference/dashboard.html` — including "Store & Share", which says what that
+ * screen is for where "Storefront" only said what it showed. Plan is the sixth: the
+ * reference predates it, and `docs/VENDOR_CONSOLE_V1_SCOPE.md` names it one of the three
+ * surfaces v1 must carry.
+ *
+ * `short` is the bottom bar's label. A tab strip four across on a 390px screen has room
+ * for one word.
+ */
 const NAV = [
-  { to: '/vendor', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/vendor/orders', label: 'Orders', icon: ClipboardList, end: false },
-  { to: '/vendor/products', label: 'Products', icon: Package, end: false },
-  { to: '/vendor/plan', label: 'Plan', icon: Gauge, end: false },
-  { to: '/vendor/storefront', label: 'Storefront', icon: Store, end: false },
-  { to: '/vendor/settings', label: 'Settings', icon: Settings, end: false },
+  { to: '/vendor', label: 'Overview', short: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/vendor/orders', label: 'Orders', short: 'Orders', icon: ClipboardList, end: false },
+  { to: '/vendor/products', label: 'Products', short: 'Products', icon: Package, end: false },
+  { to: '/vendor/storefront', label: 'Store & Share', short: 'Share', icon: Share2, end: false },
+  { to: '/vendor/plan', label: 'Plan', short: 'Plan', icon: Gauge, end: false },
+  { to: '/vendor/settings', label: 'Settings', short: 'Settings', icon: Settings, end: false },
 ]
 
 /**
- * Five on the phone, six on the desktop.
+ * Four on the phone, six in the rail.
  *
- * Six tabs on a bottom bar leaves each one too narrow to hit. Settings is the entry a vendor
- * touches least and the one that already has a home in the account menu, so it is the one
- * that comes out.
+ * Six tabs on a bottom bar leaves each one too narrow to hit. The two that come out are the
+ * two a vendor working the counter reaches for least, and neither is stranded: the rail is
+ * a tap away behind the menu button at every width.
  */
-const MOBILE_NAV = NAV.filter((item) => item.to !== '/vendor/settings')
+const MOBILE_NAV = NAV.slice(0, 4)
 
 /**
- * The rail's active marker is a rule, not a wash.
+ * What the top bar calls the screen below it.
  *
- * Emerald in this console means "the next thing to do". Filling the active entry with it
- * would spend the action colour on a label that says where you already are, so the fill is
- * neutral and a single emerald rule marks the position.
+ * Read off the path rather than announced by each page, so the title cannot arrive a frame
+ * after the surface it names, and no page has to remember to declare one.
+ *
+ * The order id is matched here rather than taken from `useParams`, which in a parent route
+ * element returns only that route's own params — `:orderId` belongs to a child and never
+ * reaches this component. The static subscriptions path is tested first, exactly as the
+ * router orders those two routes.
+ */
+function pageTitle(pathname: string): string {
+  if (pathname === '/vendor' || pathname === '/vendor/') return 'Overview'
+  if (pathname.startsWith('/vendor/orders/subscriptions')) return 'Subscriptions'
+  const order = /^\/vendor\/orders\/([^/]+)\/?$/.exec(pathname)
+  if (order) return `Order #${order[1]}`
+  if (pathname.startsWith('/vendor/orders')) return 'Orders'
+  if (pathname.startsWith('/vendor/products')) return 'Products'
+  if (pathname.startsWith('/vendor/storefront')) return 'Store & Share'
+  if (pathname.startsWith('/vendor/plan')) return 'Plan'
+  if (pathname.startsWith('/vendor/settings')) return 'Settings'
+  return 'Overview'
+}
+
+/**
+ * The rail's active marker: an emerald wash and a rule down its left edge.
+ *
+ * The wash is the shared design's, and it replaces the neutral fill an earlier pass used.
+ * The ink on it is `--vc-tint-ink` rather than the reference's own darkened brand green —
+ * see the token's note in `global.css` for why that shade moved.
  */
 function sidebarLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'relative flex items-center gap-3 rounded-md py-2 pr-2 pl-3 text-sm transition',
-    'before:absolute before:top-1/2 before:left-0 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-full',
+    'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold transition',
     isActive
-      ? 'bg-slate-100 font-semibold text-[var(--md-ink)] before:bg-[var(--md-green-600)]'
-      : 'font-medium text-slate-600 before:bg-transparent hover:bg-slate-50 hover:text-[var(--md-ink)]',
+      ? 'bg-[var(--vc-tint)] text-[var(--vc-tint-ink)] shadow-[inset_3px_0_0_var(--md-green-500)]'
+      : 'text-slate-600 hover:bg-[var(--vc-tint)] hover:text-[var(--vc-tint-ink)]',
   )
 }
 
 function bottomLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition',
-    isActive ? 'text-[var(--md-green-700)]' : 'text-slate-500',
+    'flex flex-1 flex-col items-center gap-1 rounded-lg py-2 text-[0.7rem] font-bold transition',
+    isActive ? 'bg-[var(--vc-tint)] text-[var(--vc-tint-ink)]' : 'text-slate-500',
   )
 }
 
 /**
- * The brand mark, at the head of the rail.
- *
- * The real lockup, the same asset the marketing header uses — the console previously set the
- * name as Poppins text, which is a different mark from the one on every other surface.
- *
- * Desktop only, deliberately. It is a wide horizontal lockup carrying a tagline, and beside
- * the store name on a 390px bar it has neither the room to be legible nor the room to leave
- * the store name legible. There is no square mark to fall back to: `favicon.svg` is a
- * placeholder, and substituting it would put a mark on screen that is not the brand's.
+ * The rail head: the real lockup, the same asset the marketing header uses, and one line
+ * saying which of MithraDirect's consoles this is.
  */
 function BrandMark() {
   return (
-    <Link to="/" aria-label="Mithra Direct home">
-      <img
-        src={logoDarkMd}
-        alt="Mithra Direct — Shop Local, Support Local, Grow Together"
-        className="h-9 w-auto"
-      />
-    </Link>
+    <div className="px-2 pt-1 pb-2">
+      <Link to="/" aria-label="Mithra Direct home">
+        <img
+          src={logoDarkMd}
+          alt="Mithra Direct — Shop Local, Support Local, Grow Together"
+          className="h-8 w-auto"
+        />
+      </Link>
+      <p className="mt-1.5 text-xs font-semibold tracking-wide text-[var(--md-muted)]">
+        Vendor dashboard
+      </p>
+    </div>
   )
 }
 
 /**
- * The store name, doubling as the account menu.
+ * The rail's foot: which plan the store is on, and the way out to the customer view.
  *
- * Settings left the mobile bar to make room for six surfaces, so it needs somewhere else to
- * live at every width — and log out belongs beside it rather than buried at the foot of the
- * Settings page, where a vendor had to load a screen they did not want in order to leave.
- *
- * Keyboard reachability, outside-click and Escape dismissal come from the Radix primitive;
- * a hand-rolled menu is where those three get forgotten.
+ * The chip is withheld rather than guessed at when the context carries no subscription —
+ * a chip reading "Free plan" on a store whose plan never loaded is the one mistake this
+ * corner can make.
  */
-function AccountMenu() {
-  const { context, storeState } = useVendorAccount()
-  const logout = useAuthStore((s) => s.logout)
-  const presentation = presentStoreState(storeState)
-  const storeName = context.businessName ?? 'Your store'
+function RailFoot() {
+  const { context, plan, storeState } = useVendorAccount()
+  const identifier = context.storeIdentifier
+  const isOpen = storeState === 'OPEN'
 
   return (
-    <DropdownMenu>
-      {/*
-        The negative margin cancels the trigger's own padding, so the store name sits on the
-        same left edge as the page title below it rather than 8px inside it.
-      */}
-      <DropdownMenuTrigger className="-ml-2 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition outline-none hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-ring/50">
-        <span className="font-display truncate text-base font-semibold text-[var(--md-ink)]">
-          {storeName}
+    <div className="mt-auto grid gap-2.5 border-t border-[var(--vc-edge)] px-2 pt-3">
+      {plan.name ? (
+        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
+          <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
+          {plan.name} plan
         </span>
-        <Badge tone={presentation.tone}>{presentation.label}</Badge>
-        <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuLabel>{storeName}</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <Link to="/vendor/settings">
-            <Settings aria-hidden />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => void logout()}>
-          <LogOut aria-hidden />
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      ) : null}
+
+      {isOpen && identifier ? (
+        <Link to={`/stores/${identifier}`}>
+          <Button variant="outline" size="sm" fullWidth className="rounded-full">
+            View storefront
+          </Button>
+        </Link>
+      ) : (
+        <Link to="/onboarding">
+          <Button variant="outline" size="sm" fullWidth className="rounded-full">
+            Finish setup
+          </Button>
+        </Link>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The plan banner, under the top bar on every surface.
+ *
+ * Shown only to an open store on the free plan, because that is the only vendor both
+ * halves of it are true for: a store that is not open has no shop link to share, and a
+ * store on a paid plan is not being told what the free one includes.
+ */
+function PlanBanner() {
+  const { plan, storeState } = useVendorAccount()
+  if (storeState !== 'OPEN' || plan.code !== 'FREE' || !plan.name) return null
+
+  return (
+    <div
+      role="status"
+      className="mx-[var(--vc-gutter)] mt-4 flex flex-wrap items-center justify-between gap-2.5 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[image:var(--vc-banner)] px-4 py-3 text-sm text-slate-700"
+    >
+      <p>
+        <strong className="font-semibold">{plan.name} plan active</strong> — share your shop link
+        to get your first WhatsApp orders.
+      </p>
+      <Link
+        to="/vendor/storefront"
+        className="rounded-full border border-[var(--vc-tint-line)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--vc-tint-ink)] transition hover:bg-[var(--vc-tint)]"
+      >
+        Share store link
+      </Link>
+    </div>
   )
 }
 
@@ -158,7 +202,7 @@ const DEMO_STATE_LABELS: Record<string, string> = {
  * It writes the two fields `deriveStoreState` reads, so it cannot show a combination the
  * backend could not produce.
  *
- * It sits in the main column rather than the rail because the rail is hidden below `md`,
+ * It sits in the main column rather than the rail because the rail is hidden below `lg`,
  * and a walkthrough given on a phone needs the switcher as much as one given on a laptop.
  */
 function DemoStateSwitcher() {
@@ -166,7 +210,7 @@ function DemoStateSwitcher() {
   if (!demo) return null
 
   return (
-    <div className="mt-8 rounded-xl border border-dashed border-[var(--vc-edge)] bg-[var(--vc-panel)] p-4">
+    <div className="mt-8 rounded-[var(--vc-radius)] border border-dashed border-[var(--vc-edge)] bg-[var(--vc-panel)] p-4">
       <p className="text-sm font-semibold text-slate-700">Demo: store state</p>
       <p className="mt-0.5 text-xs text-[var(--md-muted)]">Not shown on a live account.</p>
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -178,7 +222,7 @@ function DemoStateSwitcher() {
             className={cn(
               'rounded-full border px-2.5 py-1 text-xs transition',
               demo.storeState === key
-                ? 'border-[var(--md-green-600)] bg-[var(--md-green-50)] font-medium text-[var(--md-green-800)]'
+                ? 'border-[var(--vc-tint-line)] bg-[var(--vc-tint)] font-medium text-[var(--vc-tint-ink)]'
                 : 'border-[var(--vc-edge)] text-slate-600 hover:bg-slate-50',
             )}
           >
@@ -194,57 +238,146 @@ function DemoStateSwitcher() {
  * The console frame.
  *
  * Full-bleed rather than a centred column: a console occupies the window, and it is the
- * content inside that carries a measure. The rail head and the top bar share `--vc-bar`
- * and one border, so the brand, the store name and every page title below resolve to the
- * same horizontal across all six surfaces.
+ * content inside that carries a measure. One 3px emerald rule runs across the head of both
+ * columns, and both are sticky, so it stays on screen as the brand's signature on the
+ * surface a vendor spends their working day in.
+ *
+ * The rail becomes an off-canvas drawer below `lg` rather than `md`: at 1024px a
+ * 15.5rem rail leaves the orders table under 730px and every cell in it wraps.
  */
 function VendorChrome() {
-  return (
-    <div className="vendor-console flex min-h-screen">
-      {/*
-        The rail is the stretched flex child and the sticky column lives inside it, not the
-        other way round. A sticky `h-screen` aside is only ever one viewport tall, so on
-        Orders — the one screen that always scrolls — the white ran out part-way down and
-        the canvas showed through beneath the nav.
+  const { context } = useVendorAccount()
+  const { pathname } = useLocation()
+  const [navOpen, setNavOpen] = useState(false)
+  const title = pageTitle(pathname)
 
-        The head's `px-5` and the nav's `px-2 pl-3` both land on 20px, so the logo and the
-        six icons share one left edge and the active marker sits in the gutter left of it.
-      */}
-      <aside className="hidden w-[var(--vc-rail)] shrink-0 border-r border-[var(--vc-edge)] bg-[var(--vc-panel)] md:block">
-        <div className="sticky top-0 flex h-screen flex-col">
-          <div className="flex h-[var(--vc-bar)] shrink-0 items-center border-b border-[var(--vc-edge)] px-5">
-            <BrandMark />
-          </div>
-          <nav className="flex flex-col gap-0.5 px-2 py-3">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
-              <NavLink key={to} to={to} end={end} className={sidebarLinkClass}>
-                <Icon className="size-4 shrink-0" aria-hidden />
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+  // Arriving somewhere is what closing the drawer means, so the route is what closes it —
+  // not each link having to remember to.
+  useEffect(() => setNavOpen(false), [pathname])
+
+  useEffect(() => {
+    if (!navOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navOpen])
+
+  return (
+    <div className="vendor-console min-h-screen lg:grid lg:grid-cols-[var(--vc-rail)_1fr]">
+      <aside
+        id="vendor-rail"
+        aria-label="Vendor navigation"
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex w-[min(17rem,86vw)] flex-col gap-3 border-t-[3px] border-r border-t-[var(--md-green-500)] border-r-[var(--vc-edge)] bg-[var(--vc-rail-bg)] px-3 py-4 shadow-[0_24px_48px_rgba(6,78,59,0.14)] transition-transform duration-200 motion-reduce:transition-none',
+          navOpen ? 'translate-x-0' : '-translate-x-[105%]',
+          'lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0 lg:shadow-none',
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <BrandMark />
+          <button
+            type="button"
+            onClick={() => setNavOpen(false)}
+            aria-label="Close menu"
+            className="mt-1 rounded-lg p-1.5 text-slate-500 transition hover:bg-white hover:text-[var(--md-ink)] lg:hidden"
+          >
+            <X className="size-5" aria-hidden />
+          </button>
         </div>
+
+        <nav className="grid gap-1">
+          {NAV.map(({ to, label, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} className={sidebarLinkClass}>
+              <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <RailFoot />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-[var(--vc-bar)] shrink-0 items-center border-b border-[var(--vc-edge)] bg-[var(--vc-panel)] px-[var(--vc-gutter)]">
-          <AccountMenu />
+      {/* Only ever hit-testable while the drawer is open; the rail at `lg` has no overlay. */}
+      {navOpen ? (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-900/35 lg:hidden"
+        />
+      ) : null}
+
+      <div className="flex min-w-0 flex-col pb-24 lg:pb-8">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-t-[3px] border-b border-t-[var(--md-green-500)] border-b-[var(--vc-edge)] bg-[var(--vc-bar-bg)] px-[var(--vc-gutter)] py-3 backdrop-blur">
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={navOpen}
+            aria-controls="vendor-rail"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--vc-edge)] bg-white text-[var(--md-ink)] transition hover:bg-slate-50 lg:hidden"
+          >
+            <Menu className="size-5" aria-hidden />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            {/*
+              The one `h1` on every console screen. A page that set its own would compete
+              with this for the document outline, so the surfaces below carry `h2`s.
+            */}
+            <h1 className="font-display truncate text-xl font-bold">{title}</h1>
+            <p className="truncate text-xs text-[var(--md-muted)]">
+              {context.businessName ?? 'Your store'}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <Link
+              to="/onboarding"
+              className="hidden text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)] sm:block"
+            >
+              Setup
+            </Link>
+            {/*
+              The reference's top-right pill points at marketing pricing and says "Upgrade".
+              Neither is available here: `GET /v1/api/subscription-plans` answers 403 on a
+              vendor token and pricing is undecided, so every tier but the current one would
+              be invented. The pill keeps its place and says where it actually goes.
+            */}
+            <Link to="/vendor/plan">
+              <Button size="sm" className="rounded-full">
+                Your plan
+              </Button>
+            </Link>
+          </div>
         </header>
 
-        <main className="flex-1 px-[var(--vc-gutter)] pt-8 pb-24 md:pb-12">
-          <div className="max-w-[72rem]">
-            <Outlet />
-            <DemoStateSwitcher />
-          </div>
+        <PlanBanner />
+
+        <main className="flex-1 px-[var(--vc-gutter)] pt-4 pb-6">
+          <Outlet />
+          <DemoStateSwitcher />
         </main>
       </div>
 
       {/* Bottom bar on small screens: a vendor working the counter is on a phone. */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-[var(--vc-edge)] bg-white/95 backdrop-blur md:hidden">
-        {MOBILE_NAV.map(({ to, label, icon: Icon, end }) => (
+      {/*
+        Below the backdrop, not beside it. At the same stacking level the later element in
+        the DOM wins, which left this bar bright and tappable over a dimmed page whenever
+        the drawer was open.
+
+        The bottom inset keeps the four labels clear of a home indicator.
+      */}
+      <nav
+        aria-label="Vendor sections"
+        className="fixed inset-x-0 bottom-0 z-20 flex gap-1 border-t border-[var(--vc-edge)] bg-white/95 px-2 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
+      >
+        {MOBILE_NAV.map(({ to, short, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={bottomLinkClass}>
             <Icon className="size-5" aria-hidden />
-            {label}
+            {short}
           </NavLink>
         ))}
       </nav>

@@ -11,6 +11,10 @@ import type { DeliveryStatus, VendorOrderSummary } from '@/modules/vendor/types/
  *
  * The date is `delivery_date` because it is the only date the contract has — no order read
  * carries a creation timestamp. Nothing built on this may label it a booking or sales date.
+ *
+ * That last rule is why this module also owns how a delivery date is *written* — see
+ * `deliveryDayLabel`. Overview and Orders render the same ledger, and one presenter is what
+ * stops the two screens from wording the same date two ways.
  */
 
 /**
@@ -89,17 +93,65 @@ export function isOverdue(deliveryDate: string | null, todayIso: string): boolea
   return deliveryDate != null && deliveryDate < todayIso
 }
 
+/** The one word both screens use for this date, on the column head and on the stacked label. */
+export const DELIVERY_DATE_LABEL = 'Delivery date'
+
+export type DeliveryDay = {
+  /** What the cell leads with: "Today", "Tomorrow", "Overdue", a date, or "Not set". */
+  headline: string
+  /** The date itself, when the headline replaced it. `null` when the headline is the date. */
+  detail: string | null
+  overdue: boolean
+}
+
 /**
- * What the row says about its delivery date.
+ * `Fri 4 Sep`, spelled out here rather than by `Intl`.
  *
- * Always names the date as a delivery date. An order two days late must not read the same as
- * one due tomorrow, so lateness is stated in words as well as marked in colour.
+ * `en-IN` writes September as "Sept" and punctuates the weekday, and CLDR has changed both
+ * inside a release before now. A three-letter month in a column sized for three letters is
+ * not something to leave to an ICU update.
  */
-export function dueDescription(deliveryDate: string | null, todayIso: string): string {
-  if (!deliveryDate) return 'No delivery date'
-  if (deliveryDate < todayIso) return `Overdue — delivery date ${deliveryDate}`
-  if (deliveryDate === todayIso) return 'Delivery date today'
-  return `Delivery date ${deliveryDate}`
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function writeDay(day: Date): string {
+  return `${WEEKDAYS[day.getDay()]} ${day.getDate()} ${MONTHS[day.getMonth()]}`
+}
+
+function readIsoDay(iso: string): Date | null {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!parts) return null
+  return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+}
+
+/**
+ * What the ledger's delivery-date cell says.
+ *
+ * Short, because the column is headed `DELIVERY_DATE_LABEL` and a cell that repeats its own
+ * header is a cell a vendor stops reading. The header is what keeps the date honest: it is the
+ * only date the contract has, and an unlabelled "Today" would be read as when the order came
+ * in. Nothing may render these words without that label beside them.
+ *
+ * An overdue order leads with the word, not the date, and keeps the date underneath — a date
+ * two days past reads as ordinary until something says it is late.
+ */
+export function deliveryDayLabel(deliveryDate: string | null, todayIso: string): DeliveryDay {
+  if (!deliveryDate) return { headline: 'Not set', detail: null, overdue: false }
+
+  const day = readIsoDay(deliveryDate)
+  const written = day ? writeDay(day) : deliveryDate
+
+  if (isOverdue(deliveryDate, todayIso)) {
+    return { headline: 'Overdue', detail: written, overdue: true }
+  }
+  if (deliveryDate === todayIso) return { headline: 'Today', detail: null, overdue: false }
+
+  const today = readIsoDay(todayIso)
+  if (today && deliveryDate === isoDay(shiftDays(today, 1))) {
+    return { headline: 'Tomorrow', detail: null, overdue: false }
+  }
+
+  return { headline: written, detail: null, overdue: false }
 }
 
 export type StatusCount = {

@@ -14,7 +14,8 @@ import type {
   VendorSubscriptionPage,
 } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorSubscriptionsService } from '@/shared/api'
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner } from '@/shared/components'
+import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { Badge, Button, Spinner } from '@/shared/components'
 
 function titleCaseToken(value: string | null): string {
   if (!value) return 'Not available'
@@ -90,42 +91,44 @@ export function VendorSubscriptionsPage() {
   const subscriptions = result?.subscriptions ?? []
 
   return (
-    <div>
-      <PageHeader
-        title="Subscriptions"
-        subtitle="Standing customer deliveries, shown read-only"
-      />
+    <div className="grid gap-4">
       <OrdersSectionTabs />
 
-      <Card className="mb-6 p-5">
-        <div role="group" aria-label="Subscription status">
-          <p className="mb-2 text-sm font-medium">Subscription status</p>
-          <div className="flex flex-wrap gap-2">
+      <DashboardPanel
+        title="All subscriptions"
+        action={
+          <p className="text-xs text-[var(--md-muted)]">Read-only</p>
+        }
+      >
+        <div
+          role="group"
+          aria-label="Subscription status"
+          className="mb-4 flex flex-wrap items-center gap-1.5"
+        >
+          <span className="vc-label mr-1">Status</span>
+          <button
+            type="button"
+            onClick={() => filterBy(null)}
+            className={vendorFilterChipClass(status === null)}
+          >
+            All
+          </button>
+          {SUBSCRIPTION_STATUS_FILTERS.map((value) => (
             <button
+              key={value}
               type="button"
-              onClick={() => filterBy(null)}
-              className={vendorFilterChipClass(status === null)}
+              onClick={() => filterBy(value)}
+              className={vendorFilterChipClass(status === value)}
             >
-              All
+              {titleCaseToken(value)}
             </button>
-            {SUBSCRIPTION_STATUS_FILTERS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => filterBy(value)}
-                className={vendorFilterChipClass(status === value)}
-              >
-                {titleCaseToken(value)}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
-      </Card>
 
       {loading ? <Spinner label="Loading subscriptions…" /> : null}
 
       {!loading && loadError ? (
-        <Card className="border-[var(--md-danger)] p-5">
+        <div className="rounded-lg border border-[var(--md-danger)] p-4">
           <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
             This is a failed request, not an empty list.
@@ -138,28 +141,28 @@ export function VendorSubscriptionsPage() {
           >
             Try again
           </Button>
-        </Card>
+        </div>
       ) : null}
 
       {!loading && !loadError && !subscriptions.length ? (
-        <EmptyState
-          title="No subscriptions yet"
-          description={
-            status
-              ? 'Nothing matches this status. Clear the filter to see every subscription.'
-              : 'Customer subscriptions will show up here when they are created.'
-          }
-        />
+        <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+          <span className="mb-1 block font-semibold text-[var(--md-ink)]">
+            No subscriptions yet
+          </span>
+          {status
+            ? 'Nothing matches this status. Clear the filter to see every subscription.'
+            : 'Customer subscriptions will show up here when they are created.'}
+        </p>
       ) : null}
 
       {!loading && !loadError && subscriptions.length ? (
-        <Card className="vc-rows p-0">
+        <div className="vc-rows">
           {subscriptions.map((subscription) => {
             const presentation = statusPresentation(subscription.status)
             return (
               <article
                 key={subscription.id}
-                className="grid gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-[minmax(0,1.35fr)_minmax(12rem,1fr)_minmax(12rem,1fr)] sm:px-5"
+                className="grid gap-x-8 gap-y-4 px-2 py-4 sm:grid-cols-[minmax(0,1.35fr)_minmax(12rem,1fr)_minmax(12rem,1fr)]"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -209,32 +212,33 @@ export function VendorSubscriptionsPage() {
               </article>
             )
           })}
-        </Card>
+        </div>
       ) : null}
 
       {result && result.totalPages > 1 ? (
-        <div className="mt-6 flex items-center justify-between border-t border-[var(--vc-edge)] pt-5">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page === 0 || loading}
-            onClick={() => goToPage(page - 1)}
-          >
-            Previous
-          </Button>
-          <span className="vc-num text-sm text-[var(--md-muted)]">
-            Page {result.page + 1} of {result.totalPages}
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={result.lastPage || loading}
-            onClick={() => goToPage(page + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      ) : null}
+          <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={page === 0 || loading}
+              onClick={() => goToPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="vc-num text-sm text-[var(--md-muted)]">
+              Page {result.page + 1} of {result.totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={result.lastPage || loading}
+              onClick={() => goToPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
+      </DashboardPanel>
     </div>
   )
 }
