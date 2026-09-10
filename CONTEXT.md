@@ -149,14 +149,20 @@ thing the platform does not currently express.
 _Avoid_: status, account status, vendor status, online, offline
 
 **Delivery status**:
-How far an order has progressed toward the customer: pending, scheduled, in process,
-shipped, delivered or cancelled.
-_Avoid_: order status (unqualified), ticket state, new, accepted, preparing, ready
+How far an order has progressed toward the customer: new, confirmed, out for delivery,
+delivered or cancelled. Placing an order commits it, so there is no acceptance step.
+_Avoid_: order status (unqualified), ticket state, accepted, pending, scheduled, in
+process, shipped, preparing, ready
 
 **Payment status**:
-Whether an order has been paid for. Independent of delivery status: an order can be
-delivered and still unpaid.
-_Avoid_: order status (unqualified), settled
+The vendor's own record that an order has been paid for. The platform never handles the
+money, so it cannot observe a payment; only the vendor can say one happened.
+_Avoid_: order status (unqualified), settled, collected, verified
+
+**Payment method**:
+The way a customer said they would pay when they placed the order. It is an intention,
+not an outcome: a vendor may be paid by some other means entirely.
+_Avoid_: payment type, payment status
 
 **Subscription**:
 A customer's standing commitment to receive one of a vendor's sizes on a repeating
