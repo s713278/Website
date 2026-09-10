@@ -53,7 +53,6 @@ function state(
     }],
     checkout: {
       fulfillmentType: 'HOME_DELIVERY',
-      orderAcceptancePolicy: 'AUTO_ACCEPT',
       schedulingStrategy: 'FIXED_WINDOW',
       schedulingConfig: {},
       shippingConfig: { deliveryCharge: 25, freeDeliveryThreshold: 0 },

@@ -44,7 +44,6 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     skus: [],
     delivery: {
       fulfillmentType: 'HOME_DELIVERY',
-      orderAcceptancePolicy: 'AUTO_ACCEPT',
       schedulingStrategy: 'FIXED_WINDOW',
       fixedWindow: { minDeliveryDays: 1, maxDeliveryDays: 3 },
       customerSelectDate: {

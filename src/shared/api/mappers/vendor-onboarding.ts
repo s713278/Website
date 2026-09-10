@@ -870,7 +870,6 @@ export function mapSkuCreateRequest(
 
 export type CheckoutDeliveryInput = {
   fulfillmentType: 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
-  orderAcceptancePolicy: 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
   schedulingStrategy: 'FIXED_WINDOW' | 'CUSTOMER_SELECT_DATE' | 'PREDEFINED_DAYS' | 'INSTANT'
   fixedWindow: { minDeliveryDays: number; maxDeliveryDays: number }
   customerSelectDate: {
@@ -1001,7 +1000,10 @@ export function mapCheckoutOptionsRequest(
   const enabled = payments.options.filter((option) => option.enabled)
   return {
     fulfillment_type: delivery.fulfillmentType,
-    order_acceptance_policy: delivery.orderAcceptancePolicy,
+    // Not a caller's choice: the console has no accept step, so a stored MANUAL_APPROVAL
+    // would leave a vendor with orders nothing on screen can move forward. See
+    // docs/adr/0004-new-means-scheduled.md.
+    order_acceptance_policy: 'AUTO_ACCEPT',
     scheduling_strategy: delivery.schedulingStrategy,
     scheduling_config: asJsonNode(schedulingConfig(delivery)),
     shipping_strategy_type: 'ORDER_AMOUNT_THRESHOLD',
@@ -1033,6 +1035,10 @@ export function mapCheckoutOptionsRequest(
  * show: `payment_options` (with UPI/bank `details`), `order_acceptance_policy`,
  * `delivery_slots` and both consent fields all come back. Verified live against a
  * configured vendor. This is the inverse of `mapCheckoutOptionsRequest`.
+ *
+ * `order_acceptance_policy` is read and dropped. The console has one policy and always
+ * writes it, so a vendor still recorded as MANUAL_APPROVAL resumes normally and is
+ * corrected by their next save.
  * ---------------------------------------------------------------------- */
 
 export type CheckoutPaymentSnapshot = {
@@ -1043,7 +1049,6 @@ export type CheckoutPaymentSnapshot = {
 
 export type CheckoutOptionsSnapshot = {
   fulfillmentType: CheckoutDeliveryInput['fulfillmentType'] | null
-  orderAcceptancePolicy: CheckoutDeliveryInput['orderAcceptancePolicy'] | null
   schedulingStrategy: CheckoutDeliveryInput['schedulingStrategy'] | null
   schedulingConfig: UnknownRecord
   shippingConfig: { deliveryCharge: number | null; freeDeliveryThreshold: number | null }
@@ -1054,7 +1059,6 @@ export type CheckoutOptionsSnapshot = {
 }
 
 const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
-const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
 const SCHEDULING_STRATEGIES = new Set([
   'FIXED_WINDOW',
   'CUSTOMER_SELECT_DATE',
@@ -1097,7 +1101,6 @@ export function mapCheckoutOptionsResponse(payload: unknown): CheckoutOptionsSna
 
   return {
     fulfillmentType: oneOf(data.fulfillment_type, FULFILLMENT_TYPES),
-    orderAcceptancePolicy: oneOf(data.order_acceptance_policy, ACCEPTANCE_POLICIES),
     schedulingStrategy: oneOf(delivery.scheduling_strategy, SCHEDULING_STRATEGIES),
     // Kept raw: the keys differ per strategy, and the response casing does not always
     // match what we write (`min_prep_time_minutes` out, `minPrepTimeMinutes` back).

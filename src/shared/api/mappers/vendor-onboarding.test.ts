@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   InvalidReferencePayloadError,
   mapCategoryCreateRequest,
+  mapCheckoutOptionsRequest,
+  mapCheckoutOptionsResponse,
   mapCreatedCategory,
   mapCreatedProduct,
   mapMeasurementCatalog,
@@ -11,6 +13,8 @@ import {
   mapVendorContext,
   mapVendorProfile,
   mapVendorSkus,
+  type CheckoutDeliveryInput,
+  type CheckoutPaymentInput,
   type StorefrontConfigInput,
 } from './vendor-onboarding'
 
@@ -246,5 +250,91 @@ describe('mapStorefrontConfigRequest — national WhatsApp numbers reach the bac
   it('leaves an absent support number absent rather than sending a prefix-only value', () => {
     const request = mapStorefrontConfigRequest(storefrontInput({ supportWhatsapp: '   ' }))
     expect(request.support_whatsapp_number).toBeUndefined()
+  })
+})
+
+/**
+ * The console has no accept step (docs/adr/0004-new-means-scheduled.md), so a vendor who
+ * could still choose manual approval might end up with orders no control can move forward.
+ * The choice is gone from setup, and the wire value is a constant here rather than
+ * something a caller passes — a save cannot express any other policy.
+ */
+describe('checkout options — order acceptance is not a vendor choice', () => {
+  function deliveryInput(overrides: Partial<CheckoutDeliveryInput> = {}): CheckoutDeliveryInput {
+    return {
+      fulfillmentType: 'HOME_DELIVERY',
+      schedulingStrategy: 'FIXED_WINDOW',
+      fixedWindow: { minDeliveryDays: 1, maxDeliveryDays: 4 },
+      customerSelectDate: { minAdvanceBookingDays: 0, maxAdvanceBookingDays: 7, cutoffTime: '18:00' },
+      predefinedDays: { days: ['MONDAY'], maxOrdersPerDay: 10 },
+      instant: {
+        minPrepTimeMinutes: 30,
+        maxPrepTimeMinutes: 60,
+        operatingUntil: '21:00',
+        orderCutoffTime: '20:00',
+      },
+      shippingStrategy: 'FLAT',
+      shipping: { charge: 25, freeDeliveryThreshold: 0 },
+      slots: [],
+      consentTitle: '',
+      consentText: '',
+      ...overrides,
+    }
+  }
+
+  const payments: CheckoutPaymentInput = {
+    options: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
+    details: {
+      upiId: '',
+      upiAccountHolderName: '',
+      bankAccountHolderName: '',
+      bankAccountNumber: '',
+      bankIfscCode: '',
+      bankName: '',
+    },
+  }
+
+  it('sends AUTO_ACCEPT on every save, whatever else the delivery config says', () => {
+    expect(mapCheckoutOptionsRequest(deliveryInput(), payments).order_acceptance_policy)
+      .toBe('AUTO_ACCEPT')
+    expect(mapCheckoutOptionsRequest(
+      deliveryInput({ fulfillmentType: 'STORE_PICKUP', schedulingStrategy: 'INSTANT' }),
+      payments,
+    ).order_acceptance_policy).toBe('AUTO_ACCEPT')
+  })
+
+  it('cannot carry a server-recorded MANUAL_APPROVAL back into the next save', () => {
+    // The probe could not flip the one dev vendor that has a checkout config, so a live
+    // MANUAL_APPROVAL record is still possible. The read drops it — there is nowhere for it
+    // to land — so the config a resumed wizard rebuilds has no policy to hand back.
+    const snapshot = mapCheckoutOptionsResponse({
+      data: {
+        fulfillment_type: 'HOME_DELIVERY',
+        order_acceptance_policy: 'MANUAL_APPROVAL',
+        delivery_options: {
+          scheduling_strategy: 'FIXED_WINDOW',
+          scheduling_config: { min_delivery_days: 1, max_delivery_days: 4 },
+          shipping_config: { delivery_charge: 25, free_delivery_threshold: 500 },
+        },
+        delivery_slots: ['09:00 - 12:00'],
+        payment_options: [{ type: 'CASH_ON_DELIVERY', default: true }],
+      },
+    })
+    if (!snapshot) throw new Error('the checkout read returned nothing to resume from')
+
+    // Everything the wizard restores from that record, sent again by the next save. The
+    // wizard rewrites the whole checkout config, which is what corrects the stored policy.
+    const resaved = mapCheckoutOptionsRequest(
+      deliveryInput({
+        fulfillmentType: snapshot.fulfillmentType ?? 'BOTH',
+        schedulingStrategy: snapshot.schedulingStrategy ?? 'INSTANT',
+        slots: snapshot.slots,
+      }),
+      payments,
+    )
+
+    expect(resaved.fulfillment_type).toBe('HOME_DELIVERY')
+    expect(resaved.delivery_slots).toEqual(['09:00 - 12:00'])
+    expect(resaved.order_acceptance_policy).toBe('AUTO_ACCEPT')
   })
 })

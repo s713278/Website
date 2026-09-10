@@ -95,7 +95,6 @@ const SKUS: VendorSkuRef[] = [
 
 const CHECKOUT: CheckoutOptionsSnapshot = {
   fulfillmentType: 'HOME_DELIVERY',
-  orderAcceptancePolicy: 'AUTO_ACCEPT',
   schedulingStrategy: 'FIXED_WINDOW',
   schedulingConfig: { min_delivery_days: 1, max_delivery_days: 4 },
   shippingConfig: { deliveryCharge: 25, freeDeliveryThreshold: 500 },
