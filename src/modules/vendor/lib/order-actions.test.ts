@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DeliveryStatus } from '@/modules/vendor/types/dashboard'
 import {
   canCancel,
+  canRecordPayment,
   forwardActionLabel,
   forwardRefusalMessage,
   nextDeliveryStatus,
@@ -66,6 +67,20 @@ describe('canCancel', () => {
   it('refuses to cancel a delivered or already-cancelled order', () => {
     expect(canCancel('DELIVERED')).toBe(false)
     expect(canCancel('CANCELLED')).toBe(false)
+  })
+})
+
+describe('canRecordPayment', () => {
+  it('offers the record at every stage, including before delivery', () => {
+    // Prepayment is normal: a customer may pay by UPI the moment they order, and a
+    // delivered order can still be unpaid.
+    expect(ALL.filter(canRecordPayment)).toEqual([
+      'PENDING', 'SCHEDULED', 'IN_PROCESS', 'SHIPPED', 'DELIVERED',
+    ])
+  })
+
+  it('withholds it on a cancelled order, which would raise a refund question', () => {
+    expect(canRecordPayment('CANCELLED')).toBe(false)
   })
 })
 

@@ -5,6 +5,7 @@ import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   canCancel,
+  canRecordPayment,
   forwardActionLabel,
   forwardRefusalMessage,
   nextVendorDeliveryStatus,
@@ -12,7 +13,11 @@ import {
   presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
 import { chargeLines, chargesReconcile } from '@/modules/vendor/lib/order-charges'
-import type { DeliveryStatus, VendorOrderDetail } from '@/modules/vendor/types/dashboard'
+import type {
+  DeliveryStatus,
+  PaymentStatus,
+  VendorOrderDetail,
+} from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -174,6 +179,12 @@ export function VendorOrderDetailPage() {
 
   const delivery = presentDeliveryStatus(order.deliveryStatus)
   const next = nextVendorDeliveryStatus(order.deliveryStatus)
+  // Both directions live here and nowhere else. Reversal off the list keeps it off the
+  // fast path, where a paid flag flipped by accident is a flag nothing else can correct.
+  // Read from what is on screen, not from where the value came from: the screen cannot
+  // tell a device record from a backend `PAID`, and it is the service's job to keep it
+  // that way. Nothing can produce a backend `PAID` today.
+  const paymentTarget: PaymentStatus = order.paymentStatus === 'PAID' ? 'DUE' : 'PAID'
   const lines = chargeLines(order.charges)
   const reconciles = chargesReconcile(order.charges, order.total)
 
@@ -239,6 +250,51 @@ export function VendorOrderDetailPage() {
               </Button>
             ) : null}
           </div>
+
+          {/*
+            The vendor's own record that they were paid, kept on this device.
+
+            The platform never handles the money — a customer pays their vendor in cash at
+            the door or by UPI — so payment status is not a fact the system can observe, and
+            no backend route stores one. See
+            `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+
+            The control is withheld on a cancelled order, because marking one paid raises a
+            refund question v1 has no answer for. **The sentence is not**: an order marked
+            paid and then cancelled still shows a Paid badge, and a badge with no word about
+            where it came from is exactly what that sentence exists to prevent.
+          */}
+          {canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID' ? (
+            <div className="mt-5 border-t border-[var(--vc-rule)] pt-5">
+              {canRecordPayment(order.deliveryStatus) ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(
+                      () => vendorOrdersService.setPaymentStatus(vendorId, order.id, paymentTarget),
+                      'Could not save the payment record',
+                    )
+                  }
+                >
+                  {paymentTarget === 'PAID' ? 'Mark paid' : 'Mark unpaid'}
+                </Button>
+              ) : null}
+              {/*
+                One quiet sentence, not a banner and not a per-row footnote. It is the only
+                thing standing between a vendor and believing their accounts synced.
+              */}
+              <p
+                className={`max-w-[68ch] text-sm text-[var(--md-muted)] ${
+                  canRecordPayment(order.deliveryStatus) ? 'mt-3' : ''
+                }`}
+              >
+                This payment record is saved on this device only — it will not appear on
+                another phone or computer.
+              </p>
+            </div>
+          ) : null}
 
           {cancelling ? (
             <div className="mt-5 rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">

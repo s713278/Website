@@ -1,8 +1,10 @@
 import { nextDeliveryStatus } from '@/modules/vendor/lib/order-actions'
 import type {
   DeliveryStatus,
+  PaymentStatus,
   VendorOrderDetail,
   VendorOrderPage,
+  VendorOrderSummary,
 } from '@/modules/vendor/types/dashboard'
 import { apiGet, apiPatch, apiPost } from '../client'
 import { isApiError } from '../errors'
@@ -16,6 +18,7 @@ import {
 } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
 import { demoDelay } from './demo-delay'
+import { forgetPaidOrders, readPaidOrders, recordPaidOrder } from './paid-orders-store'
 
 /** The page size `GET /v1/vendors/{id}/orders/` serves; the list pages through it. */
 const PAGE_SIZE = 20
@@ -27,6 +30,42 @@ export type VendorOrderQuery = {
   endDate?: string | null
   /** Overridden only by the delivery-window subtotal, which walks bigger pages. */
   size?: number
+}
+
+/**
+ * Layer this vendor's own payment record over what the store reported.
+ *
+ * Here in the service rather than in the mapper or on the screen: the mapper's job is the
+ * wire shape, and a page that reached for the record itself would have to know where it is
+ * kept — which is the one thing the seam exists to hide. See
+ * `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+ *
+ * Two rules, and the second is the one that matters:
+ *
+ * - A backend `PAID` **wins, and clears the note** for that order. Nothing can produce one
+ *   today, so this is future-proofing — but it makes the store self-emptying if a real
+ *   payment route ever ships, rather than leaving two records to disagree.
+ * - `DUE` or an absent `payment_status` leaves the note in charge. `null` is not `DUE`: the
+ *   store omitted the field, and an unknown status must not quietly become a stated one.
+ */
+function withPaymentRecord<T extends VendorOrderSummary>(
+  vendorId: string | number,
+  orders: readonly T[],
+): T[] {
+  const key = String(vendorId)
+  const recorded = readPaidOrders(key)
+  if (!recorded.size) return [...orders]
+
+  const confirmed = orders
+    .filter((order) => order.paymentStatus === 'PAID' && recorded.has(order.id))
+    .map((order) => order.id)
+  if (confirmed.length) forgetPaidOrders(key, confirmed)
+
+  return orders.map((order) =>
+    order.paymentStatus !== 'PAID' && recorded.has(order.id)
+      ? { ...order, paymentStatus: 'PAID' as const }
+      : order,
+  )
 }
 
 /**
@@ -62,7 +101,8 @@ export async function listVendorOrders(
   if (query.startDate) params.set('start_date', query.startDate)
   if (query.endDate) params.set('end_date', query.endDate)
 
-  return mapVendorOrderPage(await apiGet(`/v1/vendors/${vendorId}/orders/?${params}`))
+  const result = mapVendorOrderPage(await apiGet(`/v1/vendors/${vendorId}/orders/?${params}`))
+  return { ...result, orders: withPaymentRecord(vendorId, result.orders) }
 }
 
 /**
@@ -86,7 +126,10 @@ export async function getVendorOrder(
   }
 
   try {
-    return mapVendorOrderDetail(await apiGet(`/v1/vendors/${vendorId}/orders/${orderId}/items`))
+    const detail = mapVendorOrderDetail(
+      await apiGet(`/v1/vendors/${vendorId}/orders/${orderId}/items`),
+    )
+    return withPaymentRecord(vendorId, [detail])[0]
   } catch (error) {
     if (isApiError(error) && error.status === 404) return null
     throw error
@@ -188,8 +231,8 @@ export async function advanceVendorOrder(
  * alone reports a silent no-op as a success — which is what the previous advance button did.
  * So the response is inspected, and anything short of a counted success throws.
  *
- * There is no equivalent for marking an order paid: no route can set `payment_status`. See
- * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.2 and §2.3.
+ * Marking an order paid has no equivalent here at all: no route can set `payment_status`,
+ * so `setVendorOrderPaymentStatus` writes to the device instead of the wire.
  */
 async function advanceOneHop(
   vendorId: string | number,
@@ -225,6 +268,33 @@ async function advanceOneHop(
 }
 
 /**
+ * Record that this order was paid, or take that record back.
+ *
+ * **No request goes out.** Both `PATCH` routes carrying `payment_status` return 417 for
+ * every body including `{}`, and `PATCH /v1/users/{u}/orders/{o}` answers a payment write
+ * with a false `200 "Order updated successfully."` while changing nothing — a client that
+ * trusted it would show a vendor a success over an unpaid order. All 117 paths were
+ * enumerated: no payment endpoint of any kind exists.
+ *
+ * So this is the seam. Live writes the device record; demo writes the in-memory demo order,
+ * which keeps demo's reset-on-reload contract and keeps demo flags out of a real vendor's
+ * browser storage. The day a route exists, only this function changes.
+ */
+export async function setVendorOrderPaymentStatus(
+  vendorId: string | number,
+  orderId: string,
+  status: PaymentStatus,
+): Promise<void> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    if (!updateDemoOrder(orderId, { payment_status: status })) throw new Error('No such order.')
+    return
+  }
+
+  recordPaidOrder(String(vendorId), orderId, status === 'PAID')
+}
+
+/**
  * Cancel an order.
  *
  * Its own endpoint, and note the body key: `cancelReason` in camelCase, where the update
@@ -252,4 +322,5 @@ export const vendorOrdersService = {
   get: getVendorOrder,
   advance: advanceVendorOrder,
   cancel: cancelVendorOrder,
+  setPaymentStatus: setVendorOrderPaymentStatus,
 }

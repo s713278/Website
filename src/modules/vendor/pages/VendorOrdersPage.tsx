@@ -4,6 +4,7 @@ import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
 import { OrdersSectionTabs } from '@/modules/vendor/components/OrdersSectionTabs'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
+  canRecordPayment,
   forwardActionLabel,
   forwardRefusalMessage,
   nextVendorDeliveryStatus,
@@ -108,6 +109,7 @@ export function VendorOrdersPage() {
   const [loadError, setLoadError] = useState('')
   const [actionError, setActionError] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [payingId, setPayingId] = useState<string | null>(null)
   const [subtotal, setSubtotal] = useState<SubtotalState>({ kind: 'loading' })
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -204,6 +206,29 @@ export function VendorOrdersPage() {
       )
     } finally {
       setBusyId(null)
+    }
+  }
+
+  /**
+   * Record that this order was paid.
+   *
+   * Its own busy marker rather than sharing `busyId`. The two are independent actions on
+   * independent axes, so neither reports the other's progress and neither blocks it.
+   * Where the record is kept is the service's business — see
+   * `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+   */
+  async function recordPayment(orderId: string) {
+    setPayingId(orderId)
+    setActionError('')
+    try {
+      await vendorOrdersService.setPaymentStatus(vendorId, orderId, 'PAID')
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      // This record is the only copy that exists anywhere: no backend route stores one. A
+      // write that did not land must not pass as one that did.
+      setActionError(getErrorMessage(err, 'Could not save the payment record'))
+    } finally {
+      setPayingId(null)
     }
   }
 
@@ -360,6 +385,10 @@ export function VendorOrdersPage() {
               const delivery = presentDeliveryStatus(order.deliveryStatus)
               const next = nextVendorDeliveryStatus(order.deliveryStatus)
               const busy = busyId === order.id
+              // Reversal is deliberately detail-only: on a list a vendor is scrolling, and
+              // a paid flag flipped by accident is a flag nothing else can correct.
+              const offerMarkPaid =
+                canRecordPayment(order.deliveryStatus) && order.paymentStatus !== 'PAID'
 
               return (
                 <div
@@ -420,6 +449,16 @@ export function VendorOrdersPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    {offerMarkPaid ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={payingId !== null}
+                        onClick={() => void recordPayment(order.id)}
+                      >
+                        {payingId === order.id ? 'Saving…' : 'Mark paid'}
+                      </Button>
+                    ) : null}
                     {next ? (
                       <Button
                         size="sm"

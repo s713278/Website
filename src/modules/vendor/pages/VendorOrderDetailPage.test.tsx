@@ -270,3 +270,118 @@ describe('VendorOrderDetailPage actions', () => {
     expect((screen.getByLabelText('Reason') as HTMLInputElement).value).toBe('Out of stock')
   })
 })
+
+/**
+ * The payment record, which lives on this device and nowhere else.
+ *
+ * Detail carries both directions and the one line of copy that stops a vendor believing
+ * their accounts synced. See
+ * `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+ */
+describe('VendorOrderDetailPage payment record', () => {
+  it('records a payment and reads the order back', async () => {
+    const get = vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    const setPaymentStatus = vi
+      .spyOn(vendorOrdersService, 'setPaymentStatus')
+      .mockResolvedValue(undefined)
+
+    renderDetail()
+    await settle()
+
+    get.mockResolvedValue(detail({ paymentStatus: 'PAID' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
+    await settle()
+
+    expect(setPaymentStatus).toHaveBeenCalledWith('vendor-1', '4021', 'PAID')
+    expect(screen.getByText('Paid')).toBeTruthy()
+  })
+
+  it('takes the record back, which no other screen offers', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ paymentStatus: 'PAID' }))
+    const setPaymentStatus = vi
+      .spyOn(vendorOrdersService, 'setPaymentStatus')
+      .mockResolvedValue(undefined)
+
+    renderDetail()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unpaid' }))
+    await settle()
+
+    expect(setPaymentStatus).toHaveBeenCalledWith('vendor-1', '4021', 'DUE')
+  })
+
+  it('states in one line that the record is kept on this device', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+
+    renderDetail()
+    await settle()
+
+    expect(screen.getByText(/saved on this device/i)).toBeTruthy()
+  })
+
+  it('offers the control before delivery, because prepayment is normal', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ deliveryStatus: 'SCHEDULED' }))
+
+    renderDetail()
+    await settle()
+
+    expect(screen.getByRole('button', { name: 'Mark paid' })).toBeTruthy()
+  })
+
+  it('offers neither direction on a cancelled order', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(
+      detail({ deliveryStatus: 'CANCELLED', paymentStatus: 'PAID' }),
+    )
+
+    renderDetail()
+    await settle()
+
+    // Marking a cancelled order paid raises a refund question v1 has no answer for, and
+    // reversal follows it off the screen — so a record made before the cancellation is
+    // stuck. It is at least labelled: the badge stays, and so does the sentence.
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark unpaid' })).toBeNull()
+    expect(screen.getByText('Paid')).toBeTruthy()
+    expect(screen.getByText(/saved on this device/i)).toBeTruthy()
+  })
+
+  it('says nothing about a device at all on a cancelled order with no record', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(
+      detail({ deliveryStatus: 'CANCELLED' }),
+    )
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByText(/saved on this device/i)).toBeNull()
+  })
+
+  it('says so when the browser refused to keep the record', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    vi.spyOn(vendorOrdersService, 'setPaymentStatus').mockRejectedValue(
+      new Error('This browser cannot save the payment record.'),
+    )
+
+    renderDetail()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
+    await settle()
+
+    expect(screen.getByText('This browser cannot save the payment record.')).toBeTruthy()
+  })
+
+  it('shows no dues figure and no payment method', async () => {
+    // `payment_dues` sums every order regardless of status and only ever grows;
+    // `payment_method` reads CASH_ON_DELIVERY on every order measured while the vendor may
+    // be paid by UPI. Neither is mapped, and a payment control must not tempt either back.
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByText(/dues/i)).toBeNull()
+    expect(screen.queryByText(/cash on delivery/i)).toBeNull()
+  })
+})

@@ -34,8 +34,15 @@ const apiPatch = vi.fn()
 const apiPost = vi.fn()
 
 const { ApiError } = await import('@mithra/api-client')
-const { advanceVendorOrder, cancelVendorOrder, getVendorOrder, isOrderTransitionRefused } =
-  await import('./vendor-orders.service')
+const {
+  advanceVendorOrder,
+  cancelVendorOrder,
+  getVendorOrder,
+  isOrderTransitionRefused,
+  listVendorOrders,
+  setVendorOrderPaymentStatus,
+} = await import('./vendor-orders.service')
+const { readPaidOrders, recordPaidOrder } = await import('./paid-orders-store')
 
 /** The exact envelope the deployed API returns for a refused transition. */
 function refusal(orderId: number) {
@@ -50,9 +57,28 @@ function refusal(orderId: number) {
   }
 }
 
+/**
+ * A Map-backed `localStorage`, because the payment record is a browser store and these
+ * suites run in the node environment. Rebuilt per test so no record leaks between them.
+ */
+function stubStorage() {
+  const entries = new Map<string, string>()
+  const localStorage = {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => void entries.set(key, value),
+    removeItem: (key: string) => void entries.delete(key),
+  }
+  vi.stubGlobal('localStorage', localStorage)
+  vi.stubGlobal('window', { localStorage })
+  return entries
+}
+
+let browserStorage: Map<string, string>
+
 beforeEach(() => {
   vi.mocked(isLiveApi).mockReturnValue(true)
   resetDemoState()
+  browserStorage = stubStorage()
   apiGet.mockReset()
   apiPatch.mockReset()
   apiPost.mockReset()
@@ -60,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -249,5 +276,144 @@ describe('getVendorOrder', () => {
     apiGet.mockRejectedValue(new ApiError('Server error', 500, {}, '/items', 'server'))
 
     await expect(getVendorOrder(262, '1931')).rejects.toBeInstanceOf(ApiError)
+  })
+})
+
+/**
+ * The vendor's own payment record.
+ *
+ * No backend route can store one — both `PATCH` routes carrying `payment_status` return
+ * 417 for every body, and `PATCH /v1/users/{u}/orders/{o}` answers a payment write with a
+ * false `200` and changes nothing. So the record lives on the device, layered over the
+ * backend's read here in the service, and the screens never learn where it is kept. See
+ * `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+ */
+
+/** One list row in the 15-key shape the deployed endpoint returns. */
+function row(orderId: string, paymentStatus: string | null, orderStatus = 'DELIVERED') {
+  return {
+    order_id: orderId,
+    order_status: orderStatus,
+    payment_status: paymentStatus,
+    amount: 320,
+    mobile: '9000000001',
+    delivery_date: '2026-09-09',
+  }
+}
+
+function listPage(rows: ReturnType<typeof row>[]) {
+  return { data: { result: rows, page_number: 0, total_pages: 1, total_elements: rows.length } }
+}
+
+describe('the payment record on a live read', () => {
+  it('shows an order this vendor marked paid, though the store still calls it due', async () => {
+    recordPaidOrder('262', '1931', true)
+    apiGet.mockResolvedValue(listPage([row('1931', 'DUE')]))
+
+    const page = await listVendorOrders(262, {})
+
+    expect(page.orders[0].paymentStatus).toBe('PAID')
+  })
+
+  it('carries the same record onto order detail', async () => {
+    recordPaidOrder('262', '1931', true)
+    apiGet.mockResolvedValue({ data: row('1931', 'DUE') })
+
+    expect((await getVendorOrder(262, '1931'))?.paymentStatus).toBe('PAID')
+  })
+
+  it('keeps one vendor account on a shared device out of another one', async () => {
+    recordPaidOrder('262', '1931', true)
+    apiGet.mockResolvedValue(listPage([row('1931', 'DUE')]))
+
+    const page = await listVendorOrders(999, {})
+
+    expect(page.orders[0].paymentStatus).toBe('DUE')
+  })
+
+  it('leaves an unknown payment status unknown, rather than calling it due', async () => {
+    // `null` is what the mapper yields when the backend omitted the field. Collapsing it
+    // into DUE would state something the store never said.
+    apiGet.mockResolvedValue(listPage([row('1931', null)]))
+
+    expect((await listVendorOrders(262, {})).orders[0].paymentStatus).toBeNull()
+  })
+
+  it('applies the record to an order whose payment status the store omitted', async () => {
+    recordPaidOrder('262', '1931', true)
+    apiGet.mockResolvedValue(listPage([row('1931', null)]))
+
+    expect((await listVendorOrders(262, {})).orders[0].paymentStatus).toBe('PAID')
+  })
+
+  it('lets a backend PAID win, and drops the note it makes redundant', async () => {
+    // Nothing can produce a backend PAID today. This is what makes the store self-emptying
+    // if that ever changes, rather than two records fighting.
+    recordPaidOrder('262', '1931', true)
+    apiGet.mockResolvedValue(listPage([row('1931', 'PAID')]))
+
+    const page = await listVendorOrders(262, {})
+
+    expect(page.orders[0].paymentStatus).toBe('PAID')
+    expect([...readPaidOrders('262')]).toEqual([])
+  })
+
+  it('stops applying a record the vendor reversed', async () => {
+    recordPaidOrder('262', '1931', true)
+    recordPaidOrder('262', '1931', false)
+    apiGet.mockResolvedValue(listPage([row('1931', 'DUE')]))
+
+    expect((await listVendorOrders(262, {})).orders[0].paymentStatus).toBe('DUE')
+  })
+})
+
+describe('setVendorOrderPaymentStatus', () => {
+  it('records a payment without asking the backend to, because nothing there can', async () => {
+    await setVendorOrderPaymentStatus(262, '1931', 'PAID')
+
+    expect([...readPaidOrders('262')]).toEqual(['1931'])
+    // `PATCH /v1/users/{u}/orders/{o}` answers a payment write with a false 200 and a
+    // success message. A client that trusted it would toast over an unpaid order.
+    expect(apiPatch).not.toHaveBeenCalled()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('reverses one', async () => {
+    await setVendorOrderPaymentStatus(262, '1931', 'PAID')
+    await setVendorOrderPaymentStatus(262, '1931', 'DUE')
+
+    expect([...readPaidOrders('262')]).toEqual([])
+  })
+})
+
+describe('setVendorOrderPaymentStatus in demo mode', () => {
+  beforeEach(() => {
+    vi.mocked(isLiveApi).mockReturnValue(false)
+    vi.useFakeTimers()
+  })
+
+  it('writes the demo order and leaves the browser alone, so a reload resets it', async () => {
+    const marking = setVendorOrderPaymentStatus(262, '4009', 'PAID')
+    await vi.runAllTimersAsync()
+    await marking
+
+    const marked = getVendorOrder(262, '4009')
+    await vi.runAllTimersAsync()
+    expect((await marked)?.paymentStatus).toBe('PAID')
+    // Demo flags must never land in a real vendor's storage, and demo's reset-on-reload
+    // contract is what makes a walkthrough repeatable.
+    expect(browserStorage.size).toBe(0)
+
+    resetDemoState()
+    const afterReload = getVendorOrder(262, '4009')
+    await vi.runAllTimersAsync()
+    expect((await afterReload)?.paymentStatus).toBe('DUE')
+  })
+
+  it('says so when there is no such demo order', async () => {
+    const rejected = expect(setVendorOrderPaymentStatus(262, '9999', 'PAID')).rejects.toThrow()
+    await vi.runAllTimersAsync()
+    await rejected
   })
 })

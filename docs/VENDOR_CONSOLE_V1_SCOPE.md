@@ -25,7 +25,7 @@ with Settings in the account menu.
 | Surface | Contains |
 |---|---|
 | Overview | The day's work queue and order counts. **Nothing plan-related.** |
-| Orders | Delivery-date filtering, paging, order detail, status advance, cancel |
+| Orders | Delivery-date filtering, paging, order detail, status advance, cancel, and the vendor's own device-local payment record |
 | Orders → Subscriptions | Read-only list at `/vendor/orders/subscriptions`, reached by a tab strip on Orders, which stays highlighted in the rail |
 | Products | Grouped sizes and price editing |
 | Plan | Usage against limits, then plan name, then status |
@@ -55,8 +55,25 @@ against a backend count is worse than a row labelled deleted.
 | A trial countdown | The backend models no trial: `trial_days: 0` and no `trial_ends_at` key in any deployed response. |
 | `eligible_features` in the UI | It returns opaque tokens (`DASHBOARD`, `VIEW`, `CATALOG`) whose meaning is unexplored. Rendering them tells a vendor nothing; labelling them would be invented copy. The mapper still carries the field. |
 | The Customers screen | `GET /v1/vendors/{id}/customers` returns an empty result with no declared row schema, on every account tested. |
-| Mark paid | No part of the backend can record a payment. Cancel stays — it works. |
+| ~~Mark paid~~ — **reversed 10 September 2026** | Cut on 8 Sep because no part of the backend can record a payment. That fact is unchanged and was re-verified on 10 Sep: both `PATCH` routes carrying `payment_status` return 417 for every body, `PATCH /v1/users/{u}/orders/{o}` returns a false `200`, and none of the 117 paths is a payment endpoint. **The product decision changed, not the contract.** MithraDirect never handles the money, so payment status was never a fact the backend could observe — it is the vendor's own note that they were paid, and it now lives on the device, scoped to the vendor and layered over the backend's read behind one service function. See `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`. Cancel stays — it works. |
 | Resubmission after rejection | Nothing in the contract reopens a submitted store. This is the first thing to build once verification ships. |
+
+### What the Mark paid reversal did not bring back
+
+The record is a badge and two controls, and nothing else. Each of these was considered again on
+10 September and stays cut, because the orders endpoint has **no `payment_status` parameter** — its
+filters are `mobile_no`, `start_date`, `end_date`, `order_status`, `page`, `size`:
+
+- **No payment filter and no unpaid count.** Either could only narrow or count the page already
+  fetched, and would read as though it had narrowed or counted the business.
+- **No paid/unpaid split in the delivery-window subtotal**, for the same reason.
+- **No dues figure.** `payment_dues` sums *all* orders regardless of status — the probe confirmed
+  cancelled orders are counted and that it only ever grows. It stays unmapped.
+- **`payment_method` stays unmapped.** It reads `CASH_ON_DELIVERY` on every order measured, and the
+  vendor may be paid by UPI regardless.
+
+The record is also **never offered on a cancelled order**: marking one paid raises a refund question
+v1 has no answer for, and `REFUNDED` is not in the backend's enum.
 
 ### §3B of the delivery plan is upheld, not reversed
 

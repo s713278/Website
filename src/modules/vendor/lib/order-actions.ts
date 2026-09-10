@@ -35,6 +35,19 @@ export function canCancel(status: DeliveryStatus): boolean {
   return status !== 'DELIVERED' && status !== 'CANCELLED'
 }
 
+/**
+ * Whether a vendor may record a payment against this order.
+ *
+ * Everywhere except a cancelled one. Marking a cancelled order paid raises a refund
+ * question v1 has no answer for, and `REFUNDED` is not in the backend's enum. A delivered
+ * order stays open to it — an order can be delivered and still unpaid — and so does an
+ * order that has not shipped, because prepayment is normal: a customer may pay by UPI the
+ * moment they order.
+ */
+export function canRecordPayment(status: DeliveryStatus): boolean {
+  return status !== 'CANCELLED'
+}
+
 export type StatusPresentation = {
   label: string
   tone: 'neutral' | 'success' | 'warning' | 'danger'

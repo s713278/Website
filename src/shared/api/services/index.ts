@@ -54,6 +54,7 @@ export {
   listVendorOrders,
   OrderTransitionRefusedError,
   OrderAdvancePartialError,
+  setVendorOrderPaymentStatus,
   vendorOrdersService,
   type VendorOrderQuery,
 } from './vendor-orders.service'

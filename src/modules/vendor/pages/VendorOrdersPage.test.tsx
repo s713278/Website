@@ -359,3 +359,100 @@ describe('VendorOrdersPage actions', () => {
     expect(screen.getByRole('button', { name: 'Confirm order' })).toBeTruthy()
   })
 })
+
+/**
+ * Marking an order paid from the list.
+ *
+ * On the list because the moment a vendor marks something paid is the moment cash is being
+ * handed over, phone in one hand. The reverse is not here — it lives on order detail, so
+ * nobody flips it by accident while scrolling.
+ */
+describe('VendorOrdersPage payment record', () => {
+  it('records a payment against the row and reads the list back', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+    const setPaymentStatus = vi
+      .spyOn(vendorOrdersService, 'setPaymentStatus')
+      .mockResolvedValue(undefined)
+
+    renderAt()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
+    await settle()
+
+    expect(setPaymentStatus).toHaveBeenCalledWith('vendor-1', '4021', 'PAID')
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers the control on a row whose payment status the store omitted', async () => {
+    // `null` is what the mapper yields when `payment_status` is absent. Keying the control
+    // on `DUE` would hide it on exactly the rows where the state is least clear.
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([{ ...order('4021'), paymentStatus: null }]),
+    )
+
+    renderAt()
+    await settle()
+
+    expect(screen.getByRole('button', { name: 'Mark paid' })).toBeTruthy()
+    expect(screen.queryByText('Payment due')).toBeNull()
+    expect(screen.queryByText('Paid')).toBeNull()
+  })
+
+  it('offers nothing to press on an order that is already paid', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([{ ...order('4021'), paymentStatus: 'PAID' }]),
+    )
+
+    renderAt()
+    await settle()
+
+    // The reverse is deliberately detail-only.
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark unpaid' })).toBeNull()
+  })
+
+  it('offers nothing on a cancelled order, which would raise a refund question', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([{ ...order('4021'), deliveryStatus: 'CANCELLED' }]),
+    )
+
+    renderAt()
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+  })
+
+  it('says so when the browser refused to keep the record', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+    vi.spyOn(vendorOrdersService, 'setPaymentStatus').mockRejectedValue(
+      new Error('This browser cannot save the payment record.'),
+    )
+
+    renderAt()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
+    await settle()
+
+    // The record is the only copy that exists anywhere. A failure to keep it cannot pass
+    // as a success.
+    expect(screen.getByText('This browser cannot save the payment record.')).toBeTruthy()
+  })
+
+  it('shows no payment filter, and no count of what is unpaid', async () => {
+    // The orders endpoint has no `payment_status` parameter. A client-side filter or count
+    // would narrow the current page and read as though it had narrowed the business.
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+
+    renderAt()
+    await settle()
+
+    expect(within(screen.getByRole('group', { name: 'Order status' })).getAllByRole('button')
+      .map((button) => button.textContent)).toEqual([
+      'All', 'New', 'Confirmed', 'Out for delivery', 'Delivered', 'Cancelled',
+    ])
+    expect(screen.queryByRole('group', { name: /payment/i })).toBeNull()
+    expect(screen.queryByText(/unpaid/i)).toBeNull()
+  })
+})
