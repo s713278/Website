@@ -122,8 +122,59 @@ export function isOrderTransitionRefused(error: unknown): error is OrderTransiti
   return error instanceof OrderTransitionRefusedError
 }
 
+/** At least one hop succeeded before a later refusal or transport failure. */
+export class OrderAdvancePartialError extends Error {
+  readonly reachedStatus: DeliveryStatus
+  readonly requestedStatus: DeliveryStatus
+
+  constructor(reachedStatus: DeliveryStatus, requestedStatus: DeliveryStatus, cause: unknown) {
+    super('The order moved partway.', { cause })
+    this.name = 'OrderAdvancePartialError'
+    this.reachedStatus = reachedStatus
+    this.requestedStatus = requestedStatus
+  }
+}
+
+export function isOrderAdvancePartial(error: unknown): error is OrderAdvancePartialError {
+  return error instanceof OrderAdvancePartialError
+}
+
 /**
- * Move an order one step along the delivery chain.
+ * Reach the requested destination through individually checked, sequential wire hops.
+ * A legacy PENDING order needs two hops to visibly reach Confirmed. Partial failures carry
+ * the last confirmed wire state, including when the next request failed in transport.
+ */
+export async function advanceVendorOrder(
+  vendorId: string | number,
+  orderId: string,
+  current: DeliveryStatus,
+  target: DeliveryStatus,
+): Promise<void> {
+  const hops: DeliveryStatus[] = []
+  let next = nextDeliveryStatus(current)
+  while (next) {
+    hops.push(next)
+    if (next === target) break
+    next = nextDeliveryStatus(next)
+  }
+  // Reject reversals, same-state writes and terminal destinations outside the chain before
+  // moving anything. Cancellation continues to use its dedicated endpoint.
+  if (next !== target) throw new OrderTransitionRefusedError(orderId, target, null)
+
+  let reached = current
+  for (const hop of hops) {
+    try {
+      await advanceOneHop(vendorId, orderId, hop)
+      reached = hop
+    } catch (error) {
+      if (reached !== current) throw new OrderAdvancePartialError(reached, target, error)
+      throw error
+    }
+  }
+}
+
+/**
+ * Move an order exactly one step along the delivery chain.
  *
  * Two measured facts shape this whole function.
  *
@@ -140,7 +191,7 @@ export function isOrderTransitionRefused(error: unknown): error is OrderTransiti
  * There is no equivalent for marking an order paid: no route can set `payment_status`. See
  * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.2 and §2.3.
  */
-export async function advanceVendorOrder(
+async function advanceOneHop(
   vendorId: string | number,
   orderId: string,
   next: DeliveryStatus,

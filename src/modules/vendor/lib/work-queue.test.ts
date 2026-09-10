@@ -139,24 +139,24 @@ describe('workQueueStatusCounts', () => {
     // where "none" belongs tells the vendor nothing.
     const counts = workQueueStatusCounts({ PENDING: 2 })
     expect(counts.map(({ status, count }) => [status, count])).toEqual([
-      ['PENDING', 2],
-      ['SCHEDULED', 0],
+      ['SCHEDULED', 2],
       ['IN_PROCESS', 0],
       ['SHIPPED', 0],
     ])
   })
 
-  it('reports the four statuses separately rather than as one open total', () => {
+  it('sums both new wire states and keeps confirmed and out for delivery separate', () => {
     const counts = workQueueStatusCounts({ PENDING: 1, SCHEDULED: 2, IN_PROCESS: 3, SHIPPED: 4 })
-    expect(counts.map((entry) => entry.count)).toEqual([1, 2, 3, 4])
+    expect(counts.map((entry) => entry.count)).toEqual([3, 3, 4])
+    expect(workQueueStatusCounts({ SCHEDULED: 5 }).map((entry) => entry.count)).toEqual([5, 0, 0])
+    expect(workQueueStatusCounts({}).map((entry) => entry.count)).toEqual([0, 0, 0])
   })
 
   it('takes its labels from the shared status vocabulary', () => {
     expect(workQueueStatusCounts({}).map((entry) => entry.label)).toEqual([
       'New',
-      'Scheduled',
-      'Being prepared',
-      'On the way',
+      'Confirmed',
+      'Out for delivery',
     ])
   })
 

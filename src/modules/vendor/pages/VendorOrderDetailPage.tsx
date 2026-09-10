@@ -7,13 +7,13 @@ import {
   canCancel,
   forwardActionLabel,
   forwardRefusalMessage,
-  nextDeliveryStatus,
+  nextVendorDeliveryStatus,
   presentDeliveryStatus,
   presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
 import { chargeLines, chargesReconcile } from '@/modules/vendor/lib/order-charges'
 import type { DeliveryStatus, VendorOrderDetail } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
+import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
@@ -78,7 +78,7 @@ export function VendorOrderDetailPage() {
   }, [vendorId, orderId, reloadToken])
 
   /**
-   * One step along the delivery chain.
+   * One visible step along the delivery chain, including both wire hops for legacy New.
    *
    * Separate from `run` because a refusal is not an error message to pass through: it
    * arrives as HTTP 200, and every refusal carries the same generic reason, so the vendor
@@ -86,15 +86,16 @@ export function VendorOrderDetailPage() {
    * typed.
    */
   async function advance(next: DeliveryStatus) {
+    if (!order) return
     setBusy(true)
     setActionError('')
     try {
-      await vendorOrdersService.advance(vendorId, orderId, next)
+      await vendorOrdersService.advance(vendorId, orderId, order.deliveryStatus, next)
       reload()
     } catch (err) {
       setActionError(
-        isOrderTransitionRefused(err)
-          ? forwardRefusalMessage(next)
+        isOrderAdvancePartial(err) || isOrderTransitionRefused(err)
+          ? forwardRefusalMessage(next, isOrderAdvancePartial(err))
           : getErrorMessage(err, 'Could not update the order'),
       )
     } finally {
@@ -172,7 +173,7 @@ export function VendorOrderDetailPage() {
   }
 
   const delivery = presentDeliveryStatus(order.deliveryStatus)
-  const next = nextDeliveryStatus(order.deliveryStatus)
+  const next = nextVendorDeliveryStatus(order.deliveryStatus)
   const lines = chargeLines(order.charges)
   const reconciles = chargesReconcile(order.charges, order.total)
 

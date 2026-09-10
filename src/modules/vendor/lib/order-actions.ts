@@ -25,6 +25,11 @@ export function nextDeliveryStatus(status: DeliveryStatus): DeliveryStatus | nul
   return FORWARD[status] ?? null
 }
 
+/** The visible destination; legacy New orders need two wire hops to reach Confirmed. */
+export function nextVendorDeliveryStatus(status: DeliveryStatus): DeliveryStatus | null {
+  return status === 'PENDING' ? 'IN_PROCESS' : nextDeliveryStatus(status)
+}
+
 /** Whether an order can still be cancelled. A finished order cannot. */
 export function canCancel(status: DeliveryStatus): boolean {
   return status !== 'DELIVERED' && status !== 'CANCELLED'
@@ -37,18 +42,17 @@ export type StatusPresentation = {
 
 /**
  * Display only — these words never become state. The backend enum in
- * `types/dashboard.ts` is the vocabulary; this is how it reads on screen.
+ * `types/dashboard.ts` stays the wire vocabulary; this owns the vendor-facing vocabulary.
  */
 export function presentDeliveryStatus(status: DeliveryStatus): StatusPresentation {
   switch (status) {
     case 'PENDING':
-      return { label: 'New', tone: 'danger' }
     case 'SCHEDULED':
-      return { label: 'Scheduled', tone: 'warning' }
+      return { label: 'New', tone: 'danger' }
     case 'IN_PROCESS':
-      return { label: 'Being prepared', tone: 'warning' }
+      return { label: 'Confirmed', tone: 'warning' }
     case 'SHIPPED':
-      return { label: 'On the way', tone: 'success' }
+      return { label: 'Out for delivery', tone: 'success' }
     case 'DELIVERED':
       return { label: 'Delivered', tone: 'neutral' }
     case 'CANCELLED':
@@ -59,12 +63,10 @@ export function presentDeliveryStatus(status: DeliveryStatus): StatusPresentatio
 /** The label on the button that moves an order forward. */
 export function forwardActionLabel(next: DeliveryStatus): string {
   switch (next) {
-    case 'SCHEDULED':
-      return 'Accept order'
     case 'IN_PROCESS':
-      return 'Start preparing'
+      return 'Confirm order'
     case 'SHIPPED':
-      return 'Mark on the way'
+      return 'Mark out for delivery'
     case 'DELIVERED':
       return 'Mark delivered'
     default:
@@ -81,8 +83,11 @@ export function forwardActionLabel(next: DeliveryStatus): string {
  * typed. So this names the step that failed, admits no reason was given, and points at the
  * one thing that helps: reloading to see where the order actually stands.
  */
-export function forwardRefusalMessage(next: DeliveryStatus): string {
+export function forwardRefusalMessage(next: DeliveryStatus, partialProgress = false): string {
   const label = presentDeliveryStatus(next).label
+  if (partialProgress) {
+    return `This order moved partway, but the move to "${label}" could not be completed. Reload to see where it stands before trying again.`
+  }
   return `Could not move this order to "${label}". The store refused the change without giving a reason — the order may have already moved on. Reload to see where it stands.`
 }
 

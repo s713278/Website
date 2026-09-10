@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DeliveryStatus } from '@/modules/vendor/types/dashboard'
+import { resetDemoState } from '../fixtures/demo-state'
+import { isLiveApi } from '../mode'
 
 /**
  * The refusal path, which is the point of this service.
@@ -14,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * hit the shared dev backend for real.
  */
 
-vi.mock('../mode', () => ({ isLiveApi: () => true }))
+vi.mock('../mode', () => ({ isLiveApi: vi.fn(() => true) }))
 
 vi.mock('@mithra/api-client', async () => {
   const actual = await vi.importActual<typeof import('@mithra/api-client')>('@mithra/api-client')
@@ -48,12 +51,15 @@ function refusal(orderId: number) {
 }
 
 beforeEach(() => {
+  vi.mocked(isLiveApi).mockReturnValue(true)
+  resetDemoState()
   apiGet.mockReset()
   apiPatch.mockReset()
   apiPost.mockReset()
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -61,7 +67,7 @@ describe('advanceVendorOrder', () => {
   it('rejects an HTTP 200 that moved nothing', async () => {
     apiPost.mockResolvedValue(refusal(1931))
 
-    await expect(advanceVendorOrder(262, '1931', 'IN_PROCESS')).rejects.toSatisfy(
+    await expect(advanceVendorOrder(262, '1931', 'SCHEDULED', 'IN_PROCESS')).rejects.toSatisfy(
       isOrderTransitionRefused,
     )
   })
@@ -69,7 +75,7 @@ describe('advanceVendorOrder', () => {
   it('does not repeat the backend reason, which is the same sentence for every refusal', async () => {
     apiPost.mockResolvedValue(refusal(1931))
 
-    const error = await advanceVendorOrder(262, '1931', 'IN_PROCESS').catch(
+    const error = await advanceVendorOrder(262, '1931', 'SCHEDULED', 'IN_PROCESS').catch(
       (thrown: unknown) => thrown,
     )
 
@@ -84,7 +90,7 @@ describe('advanceVendorOrder', () => {
   it('rejects a response it cannot read rather than assuming the write landed', async () => {
     apiPost.mockResolvedValue({ data: {} })
 
-    await expect(advanceVendorOrder(262, '1931', 'SHIPPED')).rejects.toSatisfy(
+    await expect(advanceVendorOrder(262, '1931', 'IN_PROCESS', 'SHIPPED')).rejects.toSatisfy(
       isOrderTransitionRefused,
     )
   })
@@ -92,13 +98,17 @@ describe('advanceVendorOrder', () => {
   it('resolves when the store reports the order actually moved', async () => {
     apiPost.mockResolvedValue({ data: { success_count: 1, failed_orders: [] } })
 
-    await expect(advanceVendorOrder(262, '1931', 'SCHEDULED')).resolves.toBeUndefined()
+    await expect(advanceVendorOrder(262, '1931', 'SCHEDULED', 'IN_PROCESS')).resolves.toBeUndefined()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    expect(apiPost).toHaveBeenCalledWith('/v1/vendors/262/orders/bulk-status-update', {
+      order_ids: [1931], new_status: 'IN_PROCESS',
+    })
   })
 
   it('posts one id in the shape the endpoint accepts', async () => {
     apiPost.mockResolvedValue({ data: { success_count: 1 } })
 
-    await advanceVendorOrder(262, '1931', 'SCHEDULED')
+    await advanceVendorOrder(262, '1931', 'PENDING', 'SCHEDULED')
 
     // `order_status` instead of `new_status` is a 400, and the ids are numbers.
     expect(apiPost).toHaveBeenCalledWith('/v1/vendors/262/orders/bulk-status-update', {
@@ -107,6 +117,108 @@ describe('advanceVendorOrder', () => {
     })
   })
 
+  it('waits for each hop before confirming a legacy new order', async () => {
+    let finishFirst!: (value: unknown) => void
+    apiPost.mockReturnValueOnce(new Promise((resolve) => { finishFirst = resolve }))
+      .mockResolvedValueOnce({ data: { success_count: 1 } })
+
+    const advancing = advanceVendorOrder(262, '1931', 'PENDING', 'IN_PROCESS')
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    expect(apiPost.mock.calls[0][1]).toEqual({ order_ids: [1931], new_status: 'SCHEDULED' })
+    finishFirst({ data: { success_count: 1 } })
+    await advancing
+    expect(apiPost).toHaveBeenCalledTimes(2)
+    expect(apiPost.mock.calls[1][1]).toEqual({ order_ids: [1931], new_status: 'IN_PROCESS' })
+  })
+
+  it('stops after a refusal on the first hop', async () => {
+    apiPost.mockResolvedValue(refusal(1931))
+    await expect(advanceVendorOrder(262, '1931', 'PENDING', 'IN_PROCESS')).rejects.toSatisfy(
+      isOrderTransitionRefused,
+    )
+    expect(apiPost).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['refusal', 'transport'])('carries partial progress after a second-hop %s failure', async (failure) => {
+    apiPost.mockResolvedValueOnce({ data: { success_count: 1 } })
+    if (failure === 'refusal') apiPost.mockResolvedValueOnce(refusal(1931))
+    else apiPost.mockRejectedValueOnce(new Error('Network down'))
+
+    await expect(advanceVendorOrder(262, '1931', 'PENDING', 'IN_PROCESS')).rejects.toMatchObject({
+      reachedStatus: 'SCHEDULED',
+      requestedStatus: 'IN_PROCESS',
+    })
+    expect(apiPost).toHaveBeenCalledTimes(2)
+  })
+
+})
+
+describe('advanceVendorOrder in demo mode', () => {
+  beforeEach(() => {
+    vi.mocked(isLiveApi).mockReturnValue(false)
+    vi.useFakeTimers()
+  })
+
+  it('visits the intermediate state and remains pending until both hops finish', async () => {
+    let finished = false
+    const advancing = advanceVendorOrder(262, '4021', 'PENDING', 'IN_PROCESS').then(() => {
+      finished = true
+    })
+    const intermediate = getVendorOrder(262, '4021')
+    await vi.advanceTimersByTimeAsync(150)
+    expect((await intermediate)?.deliveryStatus).toBe('SCHEDULED')
+    expect(finished).toBe(false)
+    await vi.advanceTimersByTimeAsync(150)
+    await advancing
+    const final = getVendorOrder(262, '4021')
+    await vi.runAllTimersAsync()
+    expect((await final)?.deliveryStatus).toBe('IN_PROCESS')
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('confirms an ordinary new order in one hop', async () => {
+    const advancing = advanceVendorOrder(262, '4020', 'SCHEDULED', 'IN_PROCESS')
+    await vi.advanceTimersByTimeAsync(150)
+    await advancing
+    const final = getVendorOrder(262, '4020')
+    await vi.runAllTimersAsync()
+    expect((await final)?.deliveryStatus).toBe('IN_PROCESS')
+  })
+})
+
+describe.each([true, false])('advanceVendorOrder with live mode %s', (live) => {
+  beforeEach(() => {
+    vi.mocked(isLiveApi).mockReturnValue(live)
+    vi.useFakeTimers()
+  })
+
+  it('refuses a hop that skips the actual order state, even when the caller is stale', async () => {
+    apiPost.mockResolvedValue(refusal(4021))
+    // This fixture is PENDING. A caller claiming IN_PROCESS must not bypass the actual
+    // order's one-hop rule, which the live endpoint enforces against its own stored state.
+    const rejected = expect(
+      advanceVendorOrder(262, '4021', 'IN_PROCESS', 'SHIPPED'),
+    ).rejects.toSatisfy(isOrderTransitionRefused)
+    await vi.runAllTimersAsync()
+    await rejected
+    if (live) expect(apiPost).toHaveBeenCalledTimes(1)
+    else {
+      const unchanged = getVendorOrder(262, '4021')
+      await vi.runAllTimersAsync()
+      expect((await unchanged)?.deliveryStatus).toBe('PENDING')
+      expect(apiPost).not.toHaveBeenCalled()
+    }
+  })
+
+  it.each<DeliveryStatus>(['PENDING', 'CANCELLED'])('refuses destination %s before any write', async (target) => {
+    const rejected = expect(
+      advanceVendorOrder(262, '4021', 'PENDING', target),
+    ).rejects.toSatisfy(isOrderTransitionRefused)
+    await vi.runAllTimersAsync()
+    await rejected
+    expect(apiPost).not.toHaveBeenCalled()
+  })
 })
 
 describe('cancelVendorOrder', () => {

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorOrderPage, VendorOrderSummary } from '@/modules/vendor/types/dashboard'
-import { OrderTransitionRefusedError, vendorOrdersService, type VendorOrderQuery } from '@/shared/api'
+import { OrderAdvancePartialError, OrderTransitionRefusedError, vendorOrdersService, type VendorOrderQuery } from '@/shared/api'
 import { VendorOrdersPage } from './VendorOrdersPage'
 
 /**
@@ -126,6 +126,10 @@ describe('VendorOrdersPage filters', () => {
       startDate: null,
       endDate: null,
     })
+    expect(within(screen.getByRole('group', { name: 'Order status' })).getAllByRole('button')
+      .map((button) => button.textContent)).toEqual([
+      'All', 'New', 'Confirmed', 'Out for delivery', 'Delivered', 'Cancelled',
+    ])
   })
 
   it('reads the status filter Overview linked in with', async () => {
@@ -142,11 +146,11 @@ describe('VendorOrdersPage filters', () => {
     // empty — which would read as "no such orders".
     const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([], 2, 5))
 
-    renderAt('/vendor/orders?status=PENDING&page=2')
+    renderAt('/vendor/orders?status=IN_PROCESS&page=2')
     await settle()
-    expect(list.mock.calls[0][1]).toMatchObject({ page: 2, status: 'PENDING' })
+    expect(list.mock.calls[0][1]).toMatchObject({ page: 2, status: 'IN_PROCESS' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scheduled' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New' }))
     await settle()
 
     expect(list.mock.calls.at(-1)?.[1]).toMatchObject({ page: 0, status: 'SCHEDULED' })
@@ -174,8 +178,8 @@ describe('VendorOrdersPage filters', () => {
       .mockReturnValueOnce(stale.promise)
       .mockReturnValueOnce(fresh.promise)
 
-    renderAt('/vendor/orders?status=PENDING')
-    fireEvent.click(screen.getByRole('button', { name: 'Scheduled' }))
+    renderAt('/vendor/orders?status=IN_PROCESS')
+    fireEvent.click(screen.getByRole('button', { name: 'New' }))
 
     await act(async () => {
       fresh.resolve(pageOf([order('4020')]))
@@ -207,7 +211,7 @@ describe('VendorOrdersPage filter round-trip', () => {
       pageOf([order('4021'), { ...order('4022'), paymentStatus: 'PAID' }]),
     )
 
-    renderAt('/vendor/orders?status=PENDING&start=2026-09-08&page=1')
+    renderAt('/vendor/orders?status=SCHEDULED&start=2026-09-08&page=1')
     await settle()
 
     expect(screen.getByText('Payment due')).toBeTruthy()
@@ -282,18 +286,43 @@ describe('VendorOrdersPage delivery-window subtotal', () => {
 })
 
 describe('VendorOrdersPage actions', () => {
-  it('sends the one hop the backend accepts from a pending order', async () => {
-    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
-    const advance = vi.spyOn(vendorOrdersService, 'advance').mockResolvedValue(undefined)
+  it('keeps the active row busy when another confirmation is attempted', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021'), order('4022')]))
+    const completion = deferred<void>()
+    const advance = vi.spyOn(vendorOrdersService, 'advance').mockReturnValue(completion.promise)
+    renderAt()
+    await settle()
+    const buttons = screen.getAllByRole('button', { name: 'Confirm order' })
+    fireEvent.click(buttons[0])
+    fireEvent.click(buttons[1])
+    await settle()
+    expect(advance).toHaveBeenCalledTimes(1)
+    expect(buttons.every((button) => button.hasAttribute('disabled'))).toBe(true)
+    expect(buttons[0].textContent).toBe('Working…')
+    await act(async () => { completion.resolve() })
+    await settle()
+  })
+
+  it('keeps a legacy confirmation busy until the service finishes and reloads Confirmed', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+    const completion = deferred<void>()
+    const advance = vi.spyOn(vendorOrdersService, 'advance').mockReturnValue(completion.promise)
 
     renderAt()
     await settle()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
     await settle()
 
-    // `PENDING → IN_PROCESS` is rejected, and rejected as HTTP 200.
-    expect(advance).toHaveBeenCalledWith('vendor-1', '4021', 'SCHEDULED')
+    expect(advance).toHaveBeenCalledWith('vendor-1', '4021', 'PENDING', 'IN_PROCESS')
+    expect(screen.getByRole('button', { name: 'Working…' }).hasAttribute('disabled')).toBe(true)
+    expect(list).toHaveBeenCalledTimes(1)
+
+    list.mockResolvedValue(pageOf([{ ...order('4021'), deliveryStatus: 'IN_PROCESS' }]))
+    await act(async () => { completion.resolve() })
+    await settle()
+    expect(screen.getByRole('button', { name: 'Mark out for delivery' })).toBeTruthy()
+    expect(list).toHaveBeenCalledTimes(2)
   })
 
   it('reports a refusal that arrived as a success', async () => {
@@ -305,10 +334,28 @@ describe('VendorOrdersPage actions', () => {
     renderAt()
     await settle()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
     await settle()
 
-    expect(screen.getByText(/Could not move this order to "Scheduled"/)).toBeTruthy()
+    expect(screen.getByText(/Could not move this order to "Confirmed"/)).toBeTruthy()
     expect(screen.queryByText(/Please check the input request/)).toBeNull()
+  })
+
+  it('explains partial progress and reloads before another confirmation', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+    vi.spyOn(vendorOrdersService, 'advance').mockRejectedValue(
+      new OrderAdvancePartialError('SCHEDULED', 'IN_PROCESS', new Error('Network down')),
+    )
+    const view = renderAt()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
+    await settle()
+    expect(screen.getByText(/moved partway.*Reload to see where it stands/)).toBeTruthy()
+    list.mockResolvedValue(pageOf([{ ...order('4021'), deliveryStatus: 'SCHEDULED' }]))
+    view.unmount()
+    renderAt()
+    await settle()
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Confirm order' })).toBeTruthy()
   })
 })

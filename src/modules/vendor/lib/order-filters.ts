@@ -25,9 +25,11 @@ export type OrdersQuery = {
 
 export const NO_RANGE: DeliveryRange = { startDate: null, endDate: null }
 
-/** The statuses the chips offer, in the order work moves through them. */
+/**
+ * The statuses the chips offer, in the order work moves through them. New sends SCHEDULED:
+ * the server accepts one status, so legacy PENDING rows appear under All and have no chip.
+ */
 export const ORDER_STATUS_FILTERS: DeliveryStatus[] = [
-  'PENDING',
   'SCHEDULED',
   'IN_PROCESS',
   'SHIPPED',

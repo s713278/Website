@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorOrderDetail } from '@/modules/vendor/types/dashboard'
-import { vendorOrdersService } from '@/shared/api'
+import { OrderAdvancePartialError, vendorOrdersService } from '@/shared/api'
 import { VendorOrderDetailPage } from './VendorOrderDetailPage'
 
 /**
@@ -177,12 +177,12 @@ describe('VendorOrderDetailPage back link', () => {
 
     renderDetail({
       pathname: '/vendor/orders/4021',
-      state: { from: '/vendor/orders?status=PENDING&start=2026-09-08&page=1' },
+      state: { from: '/vendor/orders?status=SCHEDULED&start=2026-09-08&page=1' },
     })
     await settle()
 
     expect(screen.getByRole('link', { name: 'Back to orders' }).getAttribute('href')).toBe(
-      '/vendor/orders?status=PENDING&start=2026-09-08&page=1',
+      '/vendor/orders?status=SCHEDULED&start=2026-09-08&page=1',
     )
   })
 
@@ -210,7 +210,47 @@ describe('VendorOrderDetailPage actions', () => {
     await settle()
 
     // The one untested edge in the transition graph. It now fails visibly if it fails.
-    expect(advance).toHaveBeenCalledWith('vendor-1', '4021', 'DELIVERED')
+    expect(advance).toHaveBeenCalledWith('vendor-1', '4021', 'SHIPPED', 'DELIVERED')
+  })
+
+  it('keeps a legacy confirmation busy until completion, then reads the confirmed order', async () => {
+    const get = vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    let finish!: () => void
+    const advance = vi.spyOn(vendorOrdersService, 'advance').mockReturnValue(
+      new Promise<void>((resolve) => { finish = resolve }),
+    )
+    renderDetail()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
+    await settle()
+    expect(advance).toHaveBeenCalledWith('vendor-1', '4021', 'PENDING', 'IN_PROCESS')
+    expect(screen.getByRole('button', { name: 'Working…' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Cancel order' }).hasAttribute('disabled')).toBe(true)
+    expect(get).toHaveBeenCalledTimes(1)
+
+    get.mockResolvedValue(detail({ deliveryStatus: 'IN_PROCESS' }))
+    await act(async () => { finish() })
+    await settle()
+    expect(screen.getByText('Confirmed')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mark out for delivery' })).toBeTruthy()
+  })
+
+  it('reports partial progress and reloads the intermediate state', async () => {
+    const get = vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    vi.spyOn(vendorOrdersService, 'advance').mockRejectedValue(
+      new OrderAdvancePartialError('SCHEDULED', 'IN_PROCESS', new Error('Network down')),
+    )
+    const view = renderDetail()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
+    await settle()
+    expect(screen.getByText(/moved partway.*Reload to see where it stands/)).toBeTruthy()
+    get.mockResolvedValue(detail({ deliveryStatus: 'SCHEDULED' }))
+    view.unmount()
+    renderDetail()
+    await settle()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('New')).toBeTruthy()
   })
 
   it('keeps a typed cancellation reason after the cancel fails', async () => {

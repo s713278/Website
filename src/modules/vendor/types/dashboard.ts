@@ -1,9 +1,8 @@
 /**
  * View-model types for the vendor dashboard.
  *
- * The vocabulary here is the backend's, deliberately: see `CONTEXT.md` under "Store
- * operations". The older `new/accepted/preparing/ready/completed` vocabulary in
- * `./index.ts` belonged to the mock restaurant fixtures and exists nowhere in the API.
+ * DeliveryStatus keeps the backend's wire vocabulary. `lib/order-actions.ts` owns the
+ * vendor-facing vocabulary defined in `CONTEXT.md` under "Store operations".
  */
 
 /** How far an order has progressed toward the customer. */

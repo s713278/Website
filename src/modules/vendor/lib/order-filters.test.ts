@@ -145,6 +145,13 @@ describe('rangeError', () => {
 })
 
 describe('parseStatusFilter', () => {
+  it('offers five chips and keeps legacy pending orders under All only', () => {
+    expect(ORDER_STATUS_FILTERS).toEqual([
+      'SCHEDULED', 'IN_PROCESS', 'SHIPPED', 'DELIVERED', 'CANCELLED',
+    ])
+    expect(parseStatusFilter('PENDING')).toBeNull()
+  })
+
   it('accepts every status the chips offer', () => {
     for (const status of ORDER_STATUS_FILTERS) {
       expect(parseStatusFilter(status)).toBe(status)

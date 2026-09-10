@@ -6,7 +6,7 @@ import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   forwardActionLabel,
   forwardRefusalMessage,
-  nextDeliveryStatus,
+  nextVendorDeliveryStatus,
   presentDeliveryStatus,
   presentPaymentStatus,
 } from '@/modules/vendor/lib/order-actions'
@@ -30,7 +30,7 @@ import {
 } from '@/modules/vendor/lib/order-subtotal'
 import { vendorFilterChipClass } from '@/modules/vendor/lib/filter-chip'
 import type { DeliveryStatus, VendorOrderPage } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
+import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
@@ -188,18 +188,18 @@ export function VendorOrdersPage() {
     }
   }, [vendorId, status, startDate, endDate, rangeIssue, reloadToken])
 
-  async function advance(orderId: string, next: DeliveryStatus) {
+  async function advance(orderId: string, current: DeliveryStatus, next: DeliveryStatus) {
     setBusyId(orderId)
     setActionError('')
     try {
-      await vendorOrdersService.advance(vendorId, orderId, next)
+      await vendorOrdersService.advance(vendorId, orderId, current, next)
       setReloadToken((token) => token + 1)
     } catch (err) {
       // A refusal arrives as HTTP 200 and its reason is the same generic sentence for every
       // illegal edge, so the vendor is told what failed rather than what the backend said.
       setActionError(
-        isOrderTransitionRefused(err)
-          ? forwardRefusalMessage(next)
+        isOrderAdvancePartial(err) || isOrderTransitionRefused(err)
+          ? forwardRefusalMessage(next, isOrderAdvancePartial(err))
           : getErrorMessage(err, 'Could not update the order'),
       )
     } finally {
@@ -358,7 +358,7 @@ export function VendorOrdersPage() {
           <Card className="vc-rows p-0">
             {orders.map((order) => {
               const delivery = presentDeliveryStatus(order.deliveryStatus)
-              const next = nextDeliveryStatus(order.deliveryStatus)
+              const next = nextVendorDeliveryStatus(order.deliveryStatus)
               const busy = busyId === order.id
 
               return (
@@ -423,8 +423,8 @@ export function VendorOrdersPage() {
                     {next ? (
                       <Button
                         size="sm"
-                        disabled={busy}
-                        onClick={() => void advance(order.id, next)}
+                        disabled={busyId !== null}
+                        onClick={() => void advance(order.id, order.deliveryStatus, next)}
                       >
                         {busy ? 'Working…' : forwardActionLabel(next)}
                       </Button>

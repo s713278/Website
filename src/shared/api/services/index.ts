@@ -49,9 +49,11 @@ export {
   advanceVendorOrder,
   cancelVendorOrder,
   getVendorOrder,
+  isOrderAdvancePartial,
   isOrderTransitionRefused,
   listVendorOrders,
   OrderTransitionRefusedError,
+  OrderAdvancePartialError,
   vendorOrdersService,
   type VendorOrderQuery,
 } from './vendor-orders.service'

@@ -248,7 +248,7 @@ describe('VendorOverviewPage work queue', () => {
 
 describe('VendorOverviewPage status counts', () => {
   it('renders an explicit 0 for a status the backend omitted', async () => {
-    // Zero-valued keys are omitted from the response entirely, so three of these four have
+    // Zero-valued keys are omitted from the response entirely, so the other buckets have
     // no key at all. Rendering them blank would read as missing data, not as "none".
     stubQueue([])
     stubInsights({ PENDING: 2 })
@@ -257,19 +257,18 @@ describe('VendorOverviewPage status counts', () => {
     await settle()
 
     expect(screen.getByRole('link', { name: '2 New' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '0 Scheduled' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '0 Being prepared' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '0 On the way' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '0 Confirmed' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '0 Out for delivery' })).toBeTruthy()
   })
 
   it('links each count into Orders with that filter already applied', async () => {
     stubQueue([])
-    stubInsights({ SCHEDULED: 3 })
+    stubInsights({ PENDING: 2, SCHEDULED: 3 })
 
     renderFor()
     await settle()
 
-    expect(screen.getByRole('link', { name: '3 Scheduled' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: '5 New' }).getAttribute('href')).toBe(
       '/vendor/orders?status=SCHEDULED',
     )
   })
@@ -281,7 +280,7 @@ describe('VendorOverviewPage status counts', () => {
     renderFor()
     await settle()
 
-    expect(screen.queryByRole('link', { name: '0 Scheduled' })).toBeNull()
+    expect(screen.queryByRole('link', { name: '0 New' })).toBeNull()
     expect(screen.getByText('Loading your order counts…')).toBeTruthy()
   })
 })

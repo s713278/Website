@@ -5,6 +5,7 @@ import {
   forwardActionLabel,
   forwardRefusalMessage,
   nextDeliveryStatus,
+  nextVendorDeliveryStatus,
   presentDeliveryStatus,
 } from './order-actions'
 
@@ -70,16 +71,25 @@ describe('canCancel', () => {
 
 describe('presentDeliveryStatus', () => {
   it('labels every state in the contract enum', () => {
-    for (const status of ALL) {
-      expect(presentDeliveryStatus(status).label).toBeTruthy()
-    }
+    expect(ALL.map((status) => presentDeliveryStatus(status).label)).toEqual([
+      'New', 'New', 'Confirmed', 'Out for delivery', 'Delivered', 'Cancelled',
+    ])
+    expect(presentDeliveryStatus('SCHEDULED').tone).toBe('danger')
+  })
+})
+
+describe('nextVendorDeliveryStatus', () => {
+  it('confirms both kinds of new order, then follows the delivery progression', () => {
+    expect(ALL.map(nextVendorDeliveryStatus)).toEqual([
+      'IN_PROCESS', 'IN_PROCESS', 'SHIPPED', 'DELIVERED', null, null,
+    ])
   })
 })
 
 describe('forwardActionLabel', () => {
   it('names the step in words a vendor would use', () => {
-    expect(forwardActionLabel('SCHEDULED')).toBe('Accept order')
-    expect(forwardActionLabel('IN_PROCESS')).toBe('Start preparing')
+    expect(forwardActionLabel('IN_PROCESS')).toBe('Confirm order')
+    expect(forwardActionLabel('SHIPPED')).toBe('Mark out for delivery')
     expect(forwardActionLabel('DELIVERED')).toBe('Mark delivered')
   })
 
@@ -92,12 +102,19 @@ describe('forwardActionLabel', () => {
 
 describe('forwardRefusalMessage', () => {
   it('names the step that failed rather than the backend generic', () => {
-    const message = forwardRefusalMessage('SCHEDULED')
+    const message = forwardRefusalMessage('IN_PROCESS')
 
-    expect(message).toContain('Scheduled')
+    expect(message).toContain('Confirmed')
     // The backend says this for a wrong next status, an order that is not yours, and an
     // order that is already there. It must never reach a vendor.
     expect(message).not.toContain('Please check the input request')
+  })
+
+  it('reports a completed hop even when the final state was not reached', () => {
+    const message = forwardRefusalMessage('IN_PROCESS', true)
+    expect(message).toContain('moved partway')
+    expect(message).toContain('Reload to see where it stands')
+    expect(message).toContain('Confirmed')
   })
 
   it('says the change was refused for every step, without inventing a cause', () => {

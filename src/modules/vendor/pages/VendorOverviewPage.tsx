@@ -206,7 +206,9 @@ function StatusCounts({ userId }: { userId: string }) {
       {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
 
       {!loading && !error && insights ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* New counts PENDING + SCHEDULED but links to SCHEDULED: the single-status filter
+              omits legacy PENDING rows, so its list can be shorter than the tile count. */}
           {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
             <Link
               key={status}

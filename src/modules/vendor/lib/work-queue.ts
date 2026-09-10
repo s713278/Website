@@ -28,9 +28,8 @@ export const WORK_QUEUE_LOOKAHEAD_DAYS = 2
 /** Finished orders. They have no place in a queue of what still needs doing. */
 const TERMINAL_STATUSES: DeliveryStatus[] = ['DELIVERED', 'CANCELLED']
 
-/** The four statuses the count row reports, in the order work moves through them. */
+/** The three visible buckets, keyed by the wire status their Orders links can filter. */
 export const WORK_QUEUE_STATUSES: DeliveryStatus[] = [
-  'PENDING',
   'SCHEDULED',
   'IN_PROCESS',
   'SHIPPED',
@@ -110,7 +109,7 @@ export type StatusCount = {
 }
 
 /**
- * The four status counts, each one always present.
+ * The three status counts, each one always present. New includes legacy PENDING orders.
  *
  * `?? 0` is not defensive padding: the backend **omits zero-valued keys entirely**, in both
  * directions, and the omission was watched appearing and disappearing within one session.
@@ -123,6 +122,6 @@ export function workQueueStatusCounts(
   return WORK_QUEUE_STATUSES.map((status) => ({
     status,
     label: presentDeliveryStatus(status).label,
-    count: ordersByStatus[status] ?? 0,
+    count: (ordersByStatus[status] ?? 0) + (status === 'SCHEDULED' ? (ordersByStatus.PENDING ?? 0) : 0),
   }))
 }
