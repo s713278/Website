@@ -11,15 +11,3 @@ coverage
 .vite
 *.tsbuildinfo
 website.zip
-
-# Local agent tooling and scratch material
-.agents/
-.angents/
-.claude/
-.scratch/
-CLAUDE.md
-docs/adr/
-docs/agents/
-docs/VENDOR_CONSOLE_V1_SCOPE.md
-docs/VENDOR_CONSOLE_CLAIM_AUDIT.md
-docs/VENDOR_CONSOLE_BACKEND_ASKS.md
