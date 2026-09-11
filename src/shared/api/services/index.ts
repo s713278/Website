@@ -31,6 +31,7 @@ export {
   listLandingStores,
   listStoreProducts,
   listStores,
+  getProductSkuDetail
 } from './catalog.service'
 export { cartService } from './cart.service'
 export {

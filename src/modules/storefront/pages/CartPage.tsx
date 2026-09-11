@@ -1,17 +1,47 @@
-import { useEffect } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag } from 'lucide-react'
+import { loginPathForRole } from '@/app/router/role-home'
 import { StoreCartView } from '@/modules/storefront/components/StoreCartView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import {
+  cartActionErrorMessage,
+  hydrateVendorCart,
+} from '@/modules/storefront/lib/cart-actions'
+import {
+  canShopAsCustomer,
+  redirectCartUnauthorized,
+  requestSetCartQty,
+} from '@/modules/storefront/lib/request-add-to-cart'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
+import { Spinner } from '@/shared/components/ui'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /** Store cart at `/stores/:storeId/cart`. `/cart` redirects here when the cart has items. */
 export function CartPage() {
   const { storeId } = useParams()
+  const location = useLocation()
+  const user = useAuthStore((s) => s.user)
+  const isHydrated = useAuthStore((s) => s.isHydrated)
   const lines = useCartStore((s) => s.lines)
+
+  // Live cart is server-owned — Meesho-style: guest must login before seeing cart.
+  if (isLiveApi()) {
+    if (!isHydrated) return <Spinner label="Checking session…" />
+    if (!canShopAsCustomer(user)) {
+      return (
+        <Navigate
+          to={loginPathForRole('customer')}
+          replace
+          state={{ from: `${location.pathname}${location.search}` }}
+        />
+      )
+    }
+  }
 
   if (!storeId) {
     const cartStoreId = lines[0]?.storeId
@@ -24,21 +54,60 @@ export function CartPage() {
 
 function CartForStore({ storeId }: { storeId: string }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const user = useAuthStore((s) => s.user)
   const { store, loading, error, wrapperRef } = useStorePage(storeId)
   const lines = useCartStore((s) => s.lines)
-  const setQty = useCartStore((s) => s.setQty)
-  const removeItem = useCartStore((s) => s.removeItem)
-  const syncLinePrices = useCartStore((s) => s.syncLinePrices)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
+  const hasLocalLines = lines.some((line) => line.storeId === storeId)
+  const hydratedRef = useRef(false)
+  const [pendingQtyIds, setPendingQtyIds] = useState(() => new Set<string>())
+  const [removingIds, setRemovingIds] = useState(() => new Set<string>())
+  const fromPath = `${location.pathname}${location.search}`
 
+  function markSet(setter: typeof setPendingQtyIds, itemId: string, pending: boolean) {
+    setter((prev) => {
+      const next = new Set(prev)
+      if (pending) next.add(itemId)
+      else next.delete(itemId)
+      return next
+    })
+  }
+
+  async function runQtyAction(itemId: string, action: () => Promise<boolean>) {
+    markSet(setPendingQtyIds, itemId, true)
+    try {
+      await action()
+    } finally {
+      markSet(setPendingQtyIds, itemId, false)
+    }
+  }
+
+  async function runRemoveAction(itemId: string, action: () => Promise<boolean>) {
+    markSet(setRemovingIds, itemId, true)
+    try {
+      await action()
+    } finally {
+      markSet(setRemovingIds, itemId, false)
+    }
+  }
+
+  // Cold-start hydrate once. Do not re-run when the user clears the last item.
   useEffect(() => {
-    if (store) syncLinePrices(store.products)
-  }, [store, syncLinePrices])
+    if (!store || user?.role !== 'customer') return
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+    if (hasLocalLines) return
+    void hydrateVendorCart(store.id, store.name, store.products).catch((error) => {
+      if (redirectCartUnauthorized(error, navigate, fromPath)) return
+      window.alert(cartActionErrorMessage(error))
+    })
+  }, [store, user?.role, hasLocalLines, navigate, fromPath])
 
   return (
     <StorePageStates
       wrapperRef={wrapperRef}
-      loading={loading}
+      loading={loading && !store}
       error={error}
       ready={Boolean(store)}
       loadingLabel="Loading cart…"
@@ -51,8 +120,38 @@ function CartForStore({ storeId }: { storeId: string }) {
           store={store}
           lines={lines}
           cartCount={itemCount}
-          onSetQty={setQty}
-          onRemove={removeItem}
+          pendingQtyIds={pendingQtyIds}
+          removingIds={removingIds}
+          onSetQty={(itemId, qty) => {
+            void runQtyAction(itemId, () =>
+              requestSetCartQty({
+                user,
+                navigate,
+                storeId: store.id,
+                storeName: store.name,
+                itemId,
+                qty,
+                products: store.products,
+                returnTo: fromPath,
+                onError: (message) => window.alert(message),
+              }),
+            )
+          }}
+          onRemove={(itemId) => {
+            void runRemoveAction(itemId, () =>
+              requestSetCartQty({
+                user,
+                navigate,
+                storeId: store.id,
+                storeName: store.name,
+                itemId,
+                qty: 0,
+                products: store.products,
+                returnTo: fromPath,
+                onError: (message) => window.alert(message),
+              }),
+            )
+          }}
           onBack={() => navigate(storePath(store.id))}
         />
       ) : null}

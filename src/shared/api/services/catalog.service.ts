@@ -9,7 +9,7 @@ import {
 } from '@/shared/lib/customer-location'
 import { mapLandingStore, type LandingStore } from '../mappers/landing-store'
 import { liveVendorId, mapVendorToStore } from '../mappers/vendor'
-import { mapStorefrontProductPage } from '../mappers/storefront-products'
+import { mapPdpSkuDetail, mapStorefrontProductPage } from '../mappers/storefront-products'
 import { isLiveApi } from '../mode'
 import { ALL_CATEGORY, parseCategoryFilter, productMatchesCategory, type CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
 
@@ -208,9 +208,37 @@ export async function getStore(storeId: string): Promise<Store | null> {
   return store.id ? store : null
 }
 
+/** GET /v1/vendors/products/{product_id}/skus/{sku_id} — PDP (mithrauserapp fetchSkuDetails). */
+export async function getProductSkuDetail(
+  productId: string | number,
+  skuId: string | number,
+): Promise<Product | null> {
+  if (!isLiveApi()) {
+    await delay()
+    for (const store of STORES) {
+      const product = store.products.find((p) => p.id === String(productId))
+      if (!product) continue
+      const variant =
+        product.variants?.find((v) => v.id === String(skuId)) ?? product.variants?.[0]
+      if (!variant) return product
+      return {
+        ...product,
+        price: variant.price,
+        defaultVariantId: variant.id,
+        variants: [variant],
+        variantsCount: 1,
+      }
+    }
+    return null
+  }
+  const res = await vendorsService.getSkuDetails(productId, skuId)
+  return mapPdpSkuDetail(unwrapData(res))
+}
+
 export const catalogService = {
   listStores,
   listLandingStores,
   getStore,
   listStoreProducts,
+  getProductSkuDetail,
 }

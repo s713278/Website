@@ -110,7 +110,7 @@ function messageFromBody(body: unknown): string {
   if (typeof body === 'string' && body.trim()) return body.trim();
   if (typeof body === 'object') {
     const record = body as Record<string, unknown>;
-    // Mithra backend often uses user_message / failure_reason (not only `message`)
+    // Prefer user_message for UI — failure_reason is often technical/internal.
     const candidates = [
       record.user_message,
       record.failure_reason,
@@ -136,12 +136,27 @@ function messageFromBody(body: unknown): string {
   return '';
 }
 
+/** Backend failure_reason / user_message — show to users; only block HTML / stacks. */
+function isUiSafeBackendReason(message: string): boolean {
+  if (!message) return false;
+  if (/<html|<!doctype/i.test(message)) return false;
+  // Stack frames (not the word "exception" alone — 417 copy often says Expectation/Exception Failed)
+  if (/\bat\s+[\w.$]+\(/.test(message)) return false;
+  return true;
+}
+
 /** Prefer short backend copy; block stacks, HTML, and Axios generic status text. */
 function isUiSafeMessage(message: string): boolean {
   if (!message || message.length > 180) return false;
-  if (/stack|exception|at\s+\w+\s*\(|<html|<!doctype/i.test(message)) return false;
+  if (/stack|at\s+\w+\s*\(|<html|<!doctype/i.test(message)) return false;
   if (/^request failed with status code \d+/i.test(message)) return false;
   return true;
+}
+
+function sanitizeBackendReason(message: string): string {
+  const firstLine = message.split(/\r?\n/)[0]?.trim() ?? message.trim();
+  if (firstLine.length <= 220) return firstLine;
+  return `${firstLine.slice(0, 217)}…`;
 }
 
 function kindFromStatus(status: number): ApiErrorKind {
@@ -149,6 +164,7 @@ function kindFromStatus(status: number): ApiErrorKind {
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
   if (status === 422 || status === 400) return 'validation';
+  if (status === 417) return 'validation';
   if (status === 429) return 'rate_limit';
   if (status >= 500) return 'server';
   if (status >= 400) return 'client';
@@ -182,7 +198,8 @@ function fallbackForKind(kind: ApiErrorKind, status: number): string {
 
 function resolveUserMessage(kind: ApiErrorKind, status: number, body: unknown, raw?: string): string {
   const fromBody = messageFromBody(body);
-  if (fromBody && isUiSafeMessage(fromBody)) return fromBody;
+  // Always surface Mithra user_message (then failure_reason) when present.
+  if (fromBody && isUiSafeBackendReason(fromBody)) return sanitizeBackendReason(fromBody);
   // Never surface Axios "Request failed with status code 401" — use mapped copy instead.
   if (
     raw &&
@@ -299,12 +316,18 @@ export function assertApiSuccess<T>(data: T, path?: string): T {
     (data as { success?: boolean }).success === false
   ) {
     const record = data as Record<string, unknown>;
+    const numericStatus =
+      typeof record.status === 'number' && Number.isFinite(record.status)
+        ? record.status
+        : null;
     const label = String(record.status ?? record.reason_code ?? '');
-    let status = 400;
-    if (/unauthorized/i.test(label)) status = 401;
-    else if (/forbidden/i.test(label)) status = 403;
-    else if (/not[_ ]?found/i.test(label)) status = 404;
-    else if (/valid/i.test(label)) status = 422;
+    let status = numericStatus ?? 400;
+    if (numericStatus == null) {
+      if (/unauthorized/i.test(label)) status = 401;
+      else if (/forbidden/i.test(label)) status = 403;
+      else if (/not[_ ]?found/i.test(label)) status = 404;
+      else if (/valid/i.test(label)) status = 422;
+    }
     throw apiErrorFromResponse(status, data, path);
   }
   return data;

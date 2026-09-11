@@ -1,6 +1,6 @@
 import type { CartLine } from '@/modules/storefront/types'
 import { getStoreById } from '@/modules/storefront/data/catalog'
-import { findProductForCartLine } from '@/modules/storefront/lib/cart-utils'
+import { cartLineProductId, findProductForCartLine } from '@/modules/storefront/lib/cart-utils'
 import { apiGet, apiPost, unwrapData } from '../client'
 import { isLiveApi } from '../mode'
 import type { ApiEnvelope } from '../types'
@@ -38,7 +38,7 @@ const ORDERS_KEY = 'md-customer-orders'
 function mapOrderItems(lines: CartLine[], storeId: string): CustomerOrderItem[] {
   const store = getStoreById(storeId)
   return lines.map((line) => {
-    const product = store ? findProductForCartLine(store.products, line.itemId) : undefined
+    const product = store ? findProductForCartLine(store.products, line) : undefined
     return {
       name: line.name,
       qty: line.qty,
@@ -76,18 +76,18 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     return order
   }
 
-  const res = await apiPost<ApiEnvelope<Record<string, unknown>>>('/v1/orders', {
+    const res = await apiPost<ApiEnvelope<Record<string, unknown>>>('/v1/orders', {
     vendor_id: input.storeId,
     delivery_address: input.address,
     phone: input.phone,
     note: input.note,
     items: input.lines.map((line) => ({
-      product_id: line.itemId,
+      product_id: line.productId ?? cartLineProductId(line.itemId),
+      sku_id: line.skuId,
       quantity: line.qty,
       unit_price: line.price,
     })),
   })
-
   const data = unwrapData(res) || {}
   return {
     id: String(data.id ?? data.order_id ?? `ORD-${Date.now()}`),

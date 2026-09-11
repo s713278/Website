@@ -1,8 +1,8 @@
-import { type MouseEvent } from 'react'
+import { type MouseEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Minus, Plus } from 'lucide-react'
+import { Loader2, Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { requestAddToCart } from '@/modules/storefront/lib/request-add-to-cart'
+import { requestAddToCart, requestSetCartQty } from '@/modules/storefront/lib/request-add-to-cart'
 import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { variantCartId } from '@/modules/storefront/lib/product-variants'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
@@ -17,7 +17,6 @@ type ProductCartControlProps = {
   className?: string
 }
 
-/** Blinkit-style ADD pill that expands into a compact − qty + stepper on the card. */
 export function ProductCartControl({
   storeId,
   storeName,
@@ -27,46 +26,87 @@ export function ProductCartControl({
 }: ProductCartControlProps) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const [pending, setPending] = useState(false)
   const lineId = variantCartId(product.id, variant.id)
-  const qty = useCartStore((s) => s.lines.find((line) => line.itemId === lineId)?.qty ?? 0)
-  const setQty = useCartStore((s) => s.setQty)
+  const cartPath = storeCartPath(storeId)
+
+  const qty = useCartStore((s) => {
+    const line = s.lines.find(
+      (entry) =>
+        entry.storeId === storeId &&
+        (entry.skuId === variant.id ||
+          entry.itemId === lineId ||
+          entry.itemId === variant.id),
+    )
+    return line?.qty ?? 0
+  })
 
   function stopNav(event: MouseEvent) {
     event.preventDefault()
     event.stopPropagation()
   }
 
+  async function run(action: () => Promise<boolean>) {
+    if (pending) return
+    setPending(true)
+    try {
+      await action()
+    } finally {
+      setPending(false)
+    }
+  }
+
   function handleAdd(event: MouseEvent) {
     stopNav(event)
-    requestAddToCart({
-      user,
-      navigate,
-      storeId,
-      storeName,
-      product,
-      variant,
-      qty: 1,
-      returnTo: storeCartPath(storeId),
-    })
+    void run(() =>
+      requestAddToCart({
+        user,
+        navigate,
+        storeId,
+        storeName,
+        product,
+        variant,
+        qty: 1,
+        returnTo: cartPath,
+        onError: (message) => window.alert(message),
+      }),
+    )
   }
 
   function handleIncrease(event: MouseEvent) {
     stopNav(event)
-    requestAddToCart({
-      user,
-      navigate,
-      storeId,
-      storeName,
-      product,
-      variant,
-      qty: 1,
-      returnTo: storeCartPath(storeId),
-    })
+    void run(() =>
+      requestAddToCart({
+        user,
+        navigate,
+        storeId,
+        storeName,
+        product,
+        variant,
+        qty: 1,
+        returnTo: cartPath,
+        onError: (message) => window.alert(message),
+      }),
+    )
   }
 
   function handleDecrease(event: MouseEvent) {
     stopNav(event)
-    setQty(lineId, qty - 1)
+    const line = useCartStore.getState().findLine(storeId, lineId)
+    const current = line?.qty ?? qty
+    void run(() =>
+      requestSetCartQty({
+        user,
+        navigate,
+        storeId,
+        storeName,
+        itemId: lineId,
+        qty: current - 1,
+        products: [product],
+        returnTo: cartPath,
+        onError: (message) => window.alert(message),
+      }),
+    )
   }
 
   const aria = variant.unit
@@ -77,15 +117,26 @@ export function ProductCartControl({
     return (
       <button
         type="button"
+        disabled={pending}
         onClick={handleAdd}
         className={cn(
-          'inline-flex h-9 min-h-9 min-w-[4.75rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-200 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95',
+          'inline-flex h-9 min-h-9 min-w-[4.75rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-150 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95 disabled:pointer-events-none',
           className,
         )}
         aria-label={aria}
+        aria-busy={pending}
       >
-        <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />
-        <span>Add</span>
+        {pending ? (
+          <Loader2
+            className="size-3.5 animate-spin text-[var(--store-theme,var(--md-green-700))]"
+            aria-hidden
+          />
+        ) : (
+          <>
+            <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />
+            <span>Add</span>
+          </>
+        )}
       </button>
     )
   }
@@ -98,11 +149,13 @@ export function ProductCartControl({
       )}
       role="group"
       aria-label={`${product.name} quantity`}
+      aria-busy={pending}
     >
       <button
         type="button"
+        disabled={pending}
         onClick={handleDecrease}
-        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
+        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15 active:scale-95 disabled:pointer-events-none"
         aria-label={`Decrease ${product.name} quantity`}
       >
         <Minus className="size-3.5" strokeWidth={2.5} aria-hidden />
@@ -112,12 +165,13 @@ export function ProductCartControl({
         aria-live="polite"
         aria-atomic="true"
       >
-        {qty}
+        {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : qty}
       </span>
       <button
         type="button"
+        disabled={pending}
         onClick={handleIncrease}
-        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15"
+        className="inline-flex w-9 shrink-0 items-center justify-center transition hover:bg-black/10 active:bg-black/15 active:scale-95 disabled:pointer-events-none"
         aria-label={`Increase ${product.name} quantity`}
       >
         <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />

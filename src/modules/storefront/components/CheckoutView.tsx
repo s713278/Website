@@ -17,8 +17,9 @@ import {
   StorefrontMobileActionBar,
 } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import {
-  cartTotals,
   findProductForCartLine,
+  lineAmount,
+  priceDetailsFromSummary,
 } from '@/modules/storefront/lib/cart-utils'
 import {
   DELIVERY_SLOTS,
@@ -33,7 +34,7 @@ import {
   storeOrderSuccessPath,
 } from '@/modules/storefront/lib/store-paths'
 import { buildWhatsAppOrderMessage } from '@/modules/storefront/lib/whatsapp-order'
-import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
@@ -49,15 +50,16 @@ type CheckoutViewProps = {
 
 export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewProps) {
   const navigate = useNavigate()
-  const subtotal = useMemo(
-    () => lines.reduce((sum, line) => sum + line.price * line.qty, 0),
-    [lines],
+  const storedSummary = useCartStore((s) => s.summaries?.[store.id])
+  const summary = useMemo(
+    () => storedSummary ?? summaryFromLines(lines),
+    [storedSummary, lines],
   )
+  const totals = priceDetailsFromSummary(summary)
   const clear = useCartStore((s) => s.clear)
   const user = useAuthStore((s) => s.user)
   const phone = user?.phone ?? ''
   const { selected, pickerProps, openChange, openMap } = useDeliveryLocation(store.id)
-  const totals = cartTotals(subtotal, lines.length > 0)
 
   const [deliverySlot, setDeliverySlot] = useState<DeliverySlotId>('6-9pm')
   const [payment, setPayment] = useState<PaymentOptionId>('cod')
@@ -197,7 +199,7 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
 
               <div className="divide-y divide-slate-100 px-5">
                 {lines.map((line) => {
-                  const product = findProductForCartLine(store.products, line.itemId)
+                  const product = findProductForCartLine(store.products, line)
                   return (
                     <div key={line.itemId} className="flex gap-3 py-4">
                       <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">
@@ -212,7 +214,7 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
                         <p className="mt-0.5 text-xs text-slate-500">Qty: {line.qty}</p>
                       </div>
                       <p className="shrink-0 text-sm font-bold text-slate-900">
-                        {formatCurrency(line.price * line.qty)}
+                        {formatCurrency(lineAmount(line))}
                       </p>
                     </div>
                   )
@@ -221,6 +223,15 @@ export function CheckoutView({ store, lines, cartCount, onBack }: CheckoutViewPr
 
               <dl className="space-y-2.5 border-t border-slate-100 px-5 py-4 text-sm">
                 <SummaryRow label="Subtotal" value={formatCurrency(totals.subtotal)} />
+                {totals.delivery > 0 ? (
+                  <SummaryRow label="Delivery" value={formatCurrency(totals.delivery)} />
+                ) : null}
+                {totals.discount > 0 ? (
+                  <SummaryRow label="Discount" value={`−${formatCurrency(totals.discount)}`} />
+                ) : null}
+                {totals.service > 0 ? (
+                  <SummaryRow label="Service charge" value={formatCurrency(totals.service)} />
+                ) : null}
               </dl>
 
               <div className="border-t border-slate-100 px-5 py-4">

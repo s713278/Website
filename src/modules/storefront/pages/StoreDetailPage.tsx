@@ -29,6 +29,8 @@ import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { SearchField } from '@/shared/components'
 import { useSearchQueryParam } from '@/shared/hooks/useSearchQueryParam'
+import { hydrateVendorCart } from '../lib/cart-actions'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 const SEARCH_MIN_CHARS = 2
 const SEARCH_DEBOUNCE_MS = 250
@@ -113,6 +115,19 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
     setSearchOpen(true)
     setBrowseOpen(true)
   }, [query])
+
+  const user = useAuthStore((s) => s.user)
+  const hasLocalLines = useCartStore((s) => s.lines.some((line) => line.storeId === store.id))
+  const hydratedRef = useRef(false)
+
+  // Cold start once — never re-hydrate just because the user cleared the last item.
+  useEffect(() => {
+    if (user?.role !== 'customer') return
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+    if (hasLocalLines) return
+    void hydrateVendorCart(store.id, store.name, store.products).catch(() => {})
+  }, [store.id, store.name, store.products, user?.id, user?.role, hasLocalLines])
 
   function selectCategory(next: CategoryFilter) {
     setCategoryFilter(resolveCategoryFilter(categories, next))

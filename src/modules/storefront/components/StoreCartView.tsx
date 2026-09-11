@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, ChevronRight, Package, ShoppingBag, X } from 'lucide-react'
+import { ArrowRight, ChevronRight, Loader2, Package, ShoppingBag, X } from 'lucide-react'
 import { loginPathForRole } from '@/app/router/role-home'
 import { ProductCard } from './ProductCard'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
@@ -10,14 +10,15 @@ import {
   StorefrontMobileActionBar,
 } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import {
-  cartTotals,
   findProductForCartLine,
+  lineAmount,
+  lineUnitPrice,
   parseLineUnit,
-  resolveLinePrice,
+  priceDetailsFromSummary,
   storeCartLines,
-  storeCartSubtotal,
 } from '@/modules/storefront/lib/cart-utils'
 import { storeCartPath, storeCheckoutPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Product, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, QuantityStepper } from '@/shared/components'
@@ -31,6 +32,10 @@ type StoreCartViewProps = {
   onSetQty: (itemId: string, qty: number) => void
   onRemove: (itemId: string) => void
   onBack: () => void
+  /** Lines waiting on qty +/- API. */
+  pendingQtyIds?: ReadonlySet<string>
+  /** Lines waiting on remove (X) API. */
+  removingIds?: ReadonlySet<string>
 }
 
 export function StoreCartView({
@@ -40,16 +45,20 @@ export function StoreCartView({
   onSetQty,
   onRemove,
   onBack,
+  pendingQtyIds,
+  removingIds,
 }: StoreCartViewProps) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  // Read stored summary only — do not create objects inside the selector.
+  const storedSummary = useCartStore((s) => s.summaries?.[store.id])
   const storeLines = useMemo(() => storeCartLines(lines, store.id), [lines, store.id])
-  const itemCount = storeLines.reduce((sum, line) => sum + line.qty, 0)
-  const subtotal = useMemo(
-    () => storeCartSubtotal(lines, store.products, store.id),
-    [lines, store.products, store.id],
+  const summary = useMemo(
+    () => storedSummary ?? summaryFromLines(storeLines),
+    [storedSummary, storeLines],
   )
-  const totals = cartTotals(subtotal, storeLines.length > 0)
+  const totals = priceDetailsFromSummary(summary)
+  const itemCount = totals.itemCount
 
   const suggestions = useMemo(() => {
     const popular = store.products.filter((product) => product.popular)
@@ -102,13 +111,14 @@ export function StoreCartView({
 
                 <ul className="divide-y divide-slate-100 px-4 sm:px-5">
                   {storeLines.map((line) => {
-                    const product = findProductForCartLine(store.products, line.itemId)
+                    const product = findProductForCartLine(store.products, line)
                     return (
                       <CartLineRow
                         key={line.itemId}
                         line={line}
                         product={product}
-                        unitPrice={resolveLinePrice(product, line)}
+                        qtyPending={pendingQtyIds?.has(line.itemId) ?? false}
+                        removing={removingIds?.has(line.itemId) ?? false}
                         onSetQty={onSetQty}
                         onRemove={onRemove}
                       />
@@ -151,6 +161,26 @@ export function StoreCartView({
                     <dt className="text-slate-600">Subtotal ({itemCount} items)</dt>
                     <dd className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</dd>
                   </div>
+                  {totals.delivery > 0 ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-600">Delivery</dt>
+                      <dd className="font-semibold text-slate-900">{formatCurrency(totals.delivery)}</dd>
+                    </div>
+                  ) : null}
+                  {totals.discount > 0 ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-600">Discount</dt>
+                      <dd className="font-semibold text-emerald-700">
+                        −{formatCurrency(totals.discount)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {totals.service > 0 ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-600">Service charge</dt>
+                      <dd className="font-semibold text-slate-900">{formatCurrency(totals.service)}</dd>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between gap-3 border-t border-dashed border-slate-200 pt-3">
                     <dt className="text-base font-bold text-slate-900">Total</dt>
                     <dd>
@@ -203,20 +233,24 @@ export function StoreCartView({
 function CartLineRow({
   line,
   product,
-  unitPrice,
+  qtyPending,
+  removing,
   onSetQty,
   onRemove,
 }: {
   line: CartLine
   product?: Product
-  unitPrice: number
+  qtyPending: boolean
+  removing: boolean
   onSetQty: (itemId: string, qty: number) => void
   onRemove: (itemId: string) => void
 }) {
   const displayName = product?.name ?? line.name.replace(/\s*\([^)]*\)\s*$/, '')
   const unit = parseLineUnit(line.name)
   const meta = [unit, product?.spiceLevel].filter(Boolean).join(' · ')
-  const lineTotal = unitPrice * line.qty
+  const unitPrice = lineUnitPrice(line)
+  const total = lineAmount(line)
+  const busy = qtyPending || removing
 
   return (
     <li className="flex gap-3 py-4">
@@ -241,11 +275,17 @@ function CartLineRow({
           </div>
           <button
             type="button"
+            disabled={busy}
             onClick={() => onRemove(line.itemId)}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-red-600"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-red-600 disabled:pointer-events-none"
             aria-label={`Remove ${displayName}`}
+            aria-busy={removing}
           >
-            <X className="size-4" strokeWidth={2} />
+            {removing ? (
+              <Loader2 className="size-4 animate-spin text-slate-400" aria-hidden />
+            ) : (
+              <X className="size-4" strokeWidth={2} />
+            )}
           </button>
         </div>
 
@@ -253,10 +293,13 @@ function CartLineRow({
           <QuantityStepper
             value={line.qty}
             onChange={(qty) => onSetQty(line.itemId, qty)}
+            pending={qtyPending}
+            disabled={removing}
+            min={0}
             label=""
             className="w-fit [&_button]:size-9 [&_span]:min-w-9"
           />
-          <p className="text-sm font-bold text-slate-900">{formatCurrency(lineTotal)}</p>
+          <p className="text-sm font-bold text-slate-900">{formatCurrency(total)}</p>
         </div>
       </div>
     </li>
