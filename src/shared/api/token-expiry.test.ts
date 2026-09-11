@@ -35,7 +35,7 @@ describe('isAccessTokenExpired', () => {
 
   it('leaves a non-JWT token to the 401 path rather than forcing a refresh', () => {
     // The refresh token is an opaque UUID; nothing guarantees the access token is a JWT.
-    expect(isAccessTokenExpired('75042188-bdbe-4c85-bbc8-50598c7c64fc', NOW)).toBe(false)
+    expect(isAccessTokenExpired('00000000-0000-4000-8000-000000000000', NOW)).toBe(false)
   })
 
   it('treats a malformed payload as usable rather than refreshing on every request', () => {
