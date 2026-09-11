@@ -8,7 +8,9 @@ export function StorefrontLayout() {
 
   useEffect(() => {
     if (user?.role !== 'customer') return
-    applyPendingCartAdd()
+    void applyPendingCartAdd().catch(() => {
+      // pending restored inside apply on failure
+    })
   }, [user?.id, user?.role])
 
   return (

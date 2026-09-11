@@ -2,8 +2,15 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { clearPendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
+import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { configureApiClient, onCredentialsRefused, setApiErrorLogger } from '@/shared/api'
 import { onExplicitSignOut, useAuthStore } from '@/shared/auth/store/auth-store'
+
+function clearStorefrontCartState() {
+  useCartStore.getState().clear()
+  clearPendingCartAdd()
+}
 
 export function AppProviders({ children }: { children: ReactNode }) {
   // Signing out must not leave the previous vendor's onboarding draft in this browser,
@@ -14,6 +21,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // Cached account reads are one vendor's store details and must not outlive their
   // session — the next sign-in on this browser may be someone else.
   useEffect(() => onExplicitSignOut(() => invalidateVendorOnboardingState()), [])
+
+  // Server cart belongs to the signed-in customer — drop local mirror on logout.
+  useEffect(() => onExplicitSignOut(clearStorefrontCartState), [])
 
   // A verification the app refused must not survive in `md-auth`, whose persisted token
   // is pushed back into the api-client store on the next load. Wired here so the cleanup
@@ -26,9 +36,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     })
 
     configureApiClient({
-      // Failed refresh → clear local session only (no server signout / no logout loop)
+      // Failed refresh → clear local session + cart mirror (no server signout / no logout loop)
       onUnauthorized: () => {
         useAuthStore.getState().clearSession()
+        clearStorefrontCartState()
       },
       // 403 → authenticated but not permitted for this resource. The session is still
       // valid, so keep it and let the feature decide what to show; signing out here

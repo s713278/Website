@@ -1,5 +1,6 @@
-import { Leaf, Lock, MapPin, ShieldCheck, Store, Truck } from 'lucide-react'
+import { MapPin, Store, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { resolveTrustIcon } from '@/modules/storefront/lib/trust-icons'
 import { DeliveryAddressPicker } from '@/shared/components/DeliveryAddressPicker'
 import { useDeliveryLocation } from '@/shared/hooks/useDeliveryLocation'
 import type { StoreFulfillment, StoreTrustItem } from '@/modules/storefront/types'
@@ -9,17 +10,6 @@ type ServiceInfoBarProps = {
   trustStrip?: StoreTrustItem[]
   fulfillment?: StoreFulfillment
   className?: string
-}
-
-const TRUST_ICONS = {
-  shield: ShieldCheck,
-  leaf: Leaf,
-  truck: Truck,
-  lock: Lock,
-} as const
-
-function trustIcon(name: string) {
-  return TRUST_ICONS[name as keyof typeof TRUST_ICONS] ?? ShieldCheck
 }
 
 /** Labels from API booleans — no delivery_message string. */
@@ -59,7 +49,7 @@ export function ServiceInfoBar({
       onClick: openChange,
     },
     ...(trustStrip ?? []).map((item) => ({
-      icon: trustIcon(item.icon),
+      icon: resolveTrustIcon(item.icon),
       title: item.title,
       value: item.subtitle,
     })),
