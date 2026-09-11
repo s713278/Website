@@ -30,8 +30,7 @@ export type StoreState = 'SETTING_UP' | 'UNDER_REVIEW' | 'OPEN' | 'REJECTED' | '
  * There is deliberately **no placed-at field**. No order read in the contract carries a
  * creation timestamp: the list row has 15 keys and the items read has 18, and neither
  * includes one. A nullable property here would only invite a screen to display it, and
- * `deliveryDate` would eventually be relabelled to fill the gap. See
- * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.1 for the ask.
+ * `deliveryDate` would eventually be relabelled to fill the gap.
  */
 export type VendorOrderSummary = {
   id: string
@@ -147,7 +146,7 @@ export type VendorSize = {
  * order's amount, and it never came back down. No route can set `payment_status` away from
  * `DUE`, so nothing reduces it either. Leaving it off the view model is what stops a screen
  * from labelling it "money owed" — a vendor acting on it would chase a customer for an order
- * that customer cancelled. See `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §2.3.
+ * that customer cancelled.
  *
  * `ordersByStatus` is `Partial` for a measured reason: zero-valued statuses are omitted from
  * the response entirely, and were watched appearing and disappearing within one session.

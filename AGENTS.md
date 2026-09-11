@@ -33,11 +33,6 @@ consumes a separately maintained Spring Boot API through the repository's OpenAP
 | [CONTEXT.md](./CONTEXT.md) | Product domain glossary and distinctions between platform, vendor, draft, and storefront concepts |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
-| [docs/VENDOR_CONSOLE_BACKEND_ASKS.md](./docs/VENDOR_CONSOLE_BACKEND_ASKS.md) | Closed as refused 8 Sep 2026. The record of what was asked of the backend, and the measured findings behind it |
-| [docs/VENDOR_CONSOLE_CLAIM_AUDIT.md](./docs/VENDOR_CONSOLE_CLAIM_AUDIT.md) | Probe evidence behind each console claim, and the limits of that evidence |
-| [docs/VENDOR_CONSOLE_BACKEND_BRIEF.md](./docs/VENDOR_CONSOLE_BACKEND_BRIEF.md) | Closed as refused 8 Sep 2026. The record of what was presented to the backend team |
-| [docs/VENDOR_CONSOLE_V1_SCOPE.md](./docs/VENDOR_CONSOLE_V1_SCOPE.md) | What the vendor console contains in v1, what it deliberately excludes and why, and the approval stance it is built on |
-| [docs/VENDOR_CONSOLE_FRONTEND_DELIVERY_PLAN.md](./docs/VENDOR_CONSOLE_FRONTEND_DELIVERY_PLAN.md) | Superseded 8 Sep 2026 by the v1 scope. Kept as the record of the plan made while backend fixes were expected |
 | [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers, component-test rules, and what has no runner |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API package commands, exports, and package-specific usage |

@@ -31,8 +31,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
  *
  * Read-only because the editor is not built yet, **not** because the backend refuses.
  * `PUT /v1/vendors/{id}` was verified working on both a gone-live and a never-submitted
- * store, for the business name, contact fields and the structured address. See
- * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.4.
+ * store, for the business name, contact fields and the structured address.
  *
  * When it does get built, two measured behaviors constrain it: the write is a partial merge
  * that silently ignores `null`, so no field can be cleared, and `assign_categories` need

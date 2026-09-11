@@ -20,7 +20,7 @@ const USAGE_ITEMS: Array<{
  * is the answer to why a catalog add was refused. The plan's own name and status follow,
  * and nothing else does — there is no tier list, no price and no trial here, and that is
  * deliberate. `GET /v1/api/subscription-plans` answers 403 on a vendor token, pricing is
- * undecided, and the backend models no trial. See `docs/VENDOR_CONSOLE_V1_SCOPE.md`.
+ * undecided, and the backend models no trial.
  */
 export function VendorPlanPage() {
   const { plan } = useVendorAccount()

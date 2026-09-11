@@ -23,8 +23,7 @@ import { cn } from '@/shared/lib/utils'
  * The first four and their labels are the shared design's, from
  * `design-reference/dashboard.html` — including "Store & Share", which says what that
  * screen is for where "Storefront" only said what it showed. Plan is the sixth: the
- * reference predates it, and `docs/VENDOR_CONSOLE_V1_SCOPE.md` names it one of the three
- * surfaces v1 must carry.
+ * reference predates it, and it is one of the three surfaces v1 must carry.
  *
  * `short` is the bottom bar's label. A tab strip four across on a 390px screen has room
  * for one word.

@@ -24,7 +24,7 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  *
  * - **How long ago the order came in.** No order read in the contract carries a creation
  *   timestamp, so the ledger is organised around the delivery date instead — the only date
- *   there is. See `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.1.
+ *   there is.
  * - **What is in the order.** The list row carries `items_count` but no line items, so
  *   "Mango Pickle × 1" would need the per-order items call, one request per row.
  * - **The customer's name.** The list row carries `mobile` and nothing else identifying;

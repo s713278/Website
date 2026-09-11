@@ -8,8 +8,7 @@ import type { DeliveryStatus, PaymentStatus } from '@/modules/vendor/types/dashb
  * and rejects every skip, every reversal and every same-state write.
  *
  * `PENDING: 'IN_PROCESS'` stood here and was a live defect: the backend refuses it, and it
- * refuses it as **HTTP 200**, so the button did nothing and said nothing. See
- * `docs/VENDOR_CONSOLE_BACKEND_ASKS.md` §1.2.
+ * refuses it as **HTTP 200**, so the button did nothing and said nothing.
  *
  * `DELIVERED` and `CANCELLED` are ends — cancelling has its own endpoint and is not
  * reachable by stepping forward.
