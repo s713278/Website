@@ -26,7 +26,7 @@ export function CategoryIcon({ imagePath, label, className }: CategoryIconProps)
         )}
         aria-hidden
       >
-        <span className="select-none text-[13px] font-semibold tracking-wide text-slate-800 sm:text-sm">
+        <span className="select-none text-[12px] font-medium tracking-wide text-slate-700 sm:text-[13px]">
           {categoryInitials(label)}
         </span>
       </span>
