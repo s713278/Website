@@ -29,16 +29,16 @@ function CategoryCircle({
   return (
     <span
       className={cn(
-        'flex size-[3.75rem] items-center justify-center rounded-full sm:size-16',
-        active && 'bg-[var(--store-theme-soft,rgba(16,185,129,0.18))]',
+        'flex size-[3.75rem] shrink-0 items-center justify-center rounded-full p-0.5 sm:size-16',
+        active && 'bg-[var(--store-accent-soft,rgba(249,115,22,0.2))]',
       )}
     >
       <span
         className={cn(
-          'flex size-14 items-center justify-center overflow-hidden rounded-full bg-[var(--store-theme-soft,rgba(16,185,129,0.16))] transition-all duration-200 sm:size-[3.75rem]',
+          'flex size-full items-center justify-center overflow-hidden rounded-full transition-all duration-200',
           active
-            ? 'ring-1 ring-inset ring-[var(--store-theme,var(--md-green-600))]'
-            : 'ring-1 ring-inset ring-slate-200/90',
+            ? 'bg-[var(--store-accent-soft,rgba(249,115,22,0.16))] ring-2 ring-inset ring-[var(--store-accent,#f97316)]'
+            : 'bg-[#efe7df] ring-1 ring-inset ring-black/5',
         )}
       >
         {children}
@@ -49,8 +49,8 @@ function CategoryCircle({
 
 function tileLabelClass(active: boolean) {
   return cn(
-    'block w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-medium leading-none text-slate-600',
-    active && 'font-semibold text-[var(--store-theme,var(--md-green-700))]',
+    'mt-2.5 block w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-medium leading-tight text-slate-700 sm:text-xs',
+    active && 'font-semibold text-[var(--store-accent,#ea580c)]',
   )
 }
 
@@ -70,12 +70,19 @@ function AllCategoryTile({
       aria-pressed={active}
       title="All products"
       className={cn(
-        'group flex w-[4.5rem] shrink-0 flex-col items-center gap-2 text-center sm:w-[4.75rem]',
+        'group flex w-[5rem] shrink-0 flex-col items-center text-center sm:w-[5.25rem]',
         className,
       )}
     >
       <CategoryCircle active={active}>
-        <LayoutGrid className="size-5 text-slate-800" strokeWidth={1.75} aria-hidden />
+        <LayoutGrid
+          className={cn(
+            'size-5 transition-colors',
+            active ? 'text-[var(--store-accent,#ea580c)]' : 'text-slate-700',
+          )}
+          strokeWidth={1.75}
+          aria-hidden
+        />
       </CategoryCircle>
       <span className={tileLabelClass(active)}>All</span>
     </button>
@@ -90,7 +97,7 @@ function CategoryTile({ category, active, onSelect, className }: CategoryTilePro
       aria-pressed={active}
       title={category.label}
       className={cn(
-        'group flex w-[4.5rem] shrink-0 flex-col items-center gap-2 text-center sm:w-[4.75rem]',
+        'group flex w-[5rem] shrink-0 flex-col items-center text-center sm:w-[5.25rem]',
         className,
       )}
     >
@@ -133,23 +140,25 @@ export function CategoryScroller({
         titleClassName="min-w-0 truncate"
       />
 
-      <div className="store-category-scroller flex gap-3 overflow-x-auto px-0.5 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3.5 lg:gap-4">
-        {showAllOption ? (
-          <AllCategoryTile
-            active={allActive}
-            onSelect={() => onSelect(ALL_CATEGORY)}
-            className="snap-start"
-          />
-        ) : null}
-        {categories.map((category) => (
-          <CategoryTile
-            key={category.label}
-            category={category}
-            active={isCategoryActive(activeFilter, category)}
-            onSelect={() => onSelect(categoryFilterValue(category))}
-            className="snap-start"
-          />
-        ))}
+      <div className="rounded-2xl bg-[#f4f4f5] px-4 py-4 sm:rounded-[1.25rem] sm:px-5 sm:py-5">
+        <div className="store-category-scroller flex gap-5 overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-6 lg:gap-7">
+          {showAllOption ? (
+            <AllCategoryTile
+              active={allActive}
+              onSelect={() => onSelect(ALL_CATEGORY)}
+              className="snap-start"
+            />
+          ) : null}
+          {categories.map((category) => (
+            <CategoryTile
+              key={category.label}
+              category={category}
+              active={isCategoryActive(activeFilter, category)}
+              onSelect={() => onSelect(categoryFilterValue(category))}
+              className="snap-start"
+            />
+          ))}
+        </div>
       </div>
     </section>
   )

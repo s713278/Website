@@ -3,13 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ProductDetailPanel } from '@/modules/storefront/components/ProductDetailPanel'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
-import { storePath } from '@/modules/storefront/lib/store-paths'
+import { requestAddToCart } from '@/modules/storefront/lib/request-add-to-cart'
+import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 export function ProductDetailPage() {
   const { storeId = 'r1', productId = '' } = useParams()
   const navigate = useNavigate()
-  const addItem = useCartStore((s) => s.addItem)
+  const user = useAuthStore((s) => s.user)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
   const { store, loading, error, wrapperRef } = useStorePage(storeId)
 
@@ -36,9 +38,20 @@ export function ProductDetailPage() {
           store={store}
           product={product}
           cartCount={itemCount}
-          onAdd={(variant, qty) => addItem(store.id, store.name, product, variant, qty)}
+          onAdd={(variant, qty, options) =>
+            requestAddToCart({
+              user,
+              navigate,
+              storeId: store.id,
+              storeName: store.name,
+              product,
+              variant,
+              qty,
+              returnTo: options?.returnTo ?? storeCartPath(store.id),
+            })
+          }
           onBack={() => navigate(storePath(store.id))}
-          onSearch={() => navigate(`${storePath(store.id)}?q=`)}
+          onSearch={() => navigate(storePath(store.id))}
         />
       ) : null}
     </StorePageStates>
