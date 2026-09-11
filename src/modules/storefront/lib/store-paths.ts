@@ -2,8 +2,10 @@ export function storePath(storeId: string) {
   return `/stores/${storeId}`
 }
 
-export function storeProductPath(storeId: string, productId: string) {
-  return `${storePath(storeId)}/products/${productId}`
+export function storeProductPath(storeId: string, productId: string, skuId?: string) {
+  const base = `${storePath(storeId)}/products/${productId}`
+  if (!skuId) return base
+  return `${base}?${new URLSearchParams({ sku: skuId })}`
 }
 
 export function storeCartPath(storeId: string) {
@@ -28,3 +30,4 @@ export function locationMapPath(
 export function storeOrderSuccessPath(storeId: string, orderId: string) {
   return `${storePath(storeId)}/orders/${orderId}/success`
 }
+

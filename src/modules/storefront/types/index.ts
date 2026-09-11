@@ -100,6 +100,15 @@ export type Store = {
   categories?: StoreCategory[]
   products: Product[]
 }
+export type CartSummary = {
+  itemsTotal: number
+  deliveryCharges: number
+  discount: number
+  serviceCharge: number
+  grandTotal: number
+  itemsCount: number
+  totalQuantity: number
+}
 
 export type CartLine = {
   itemId: string
@@ -108,4 +117,10 @@ export type CartLine = {
   name: string
   price: number
   qty: number
+  lineTotal?: number
+  listPrice?: number
+  discount?: number
+  cartItemId?: string
+  skuId?: string
+  productId?: string
 }

@@ -16,11 +16,11 @@ export function ProductGallery({ images, alt, className }: ProductGalleryProps) 
     return (
       <div
         className={cn(
-          'mx-auto flex aspect-[4/3] w-full max-w-[280px] items-center justify-center rounded-xl bg-slate-100 text-4xl sm:max-w-[300px]',
+          'mx-auto flex aspect-[4/3] w-full max-w-[280px] items-center justify-center rounded-xl bg-slate-100 text-sm font-medium text-slate-400 sm:max-w-[300px]',
           className,
         )}
       >
-        🥒
+        No image
       </div>
     )
   }

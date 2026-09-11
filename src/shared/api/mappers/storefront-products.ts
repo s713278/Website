@@ -23,7 +23,7 @@ function asSkuType(value: unknown): SkuType {
 }
 
 function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVariant | null {
-  if (raw.active === false) return null
+  if (raw.active === false || raw.is_active === false) return null
   const id = raw.sku_id ?? raw.id
   if (id == null) return null
   const price = asNumber(raw.sale_price) ?? asNumber(raw.list_price) ?? 0
@@ -35,7 +35,7 @@ function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVaria
     onSale: raw.on_sale === true,
     skuType: asSkuType(raw.sku_type),
     discount: asNumber(raw.discount),
-    active: raw.active !== false,
+    active: raw.active !== false && raw.is_active !== false,
   }
 }
 
@@ -52,7 +52,7 @@ function pickDefaultVariant(
 }
 
 function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
-  if (raw.active === false) return null
+  if (raw.active === false || raw.is_active === false) return null
   const id = raw.vendor_product_id ?? raw.id
   if (id == null) return null
 
@@ -83,6 +83,7 @@ function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
     minPrice,
     maxPrice,
     startingAt,
+    inStock: raw.active !== false && raw.is_active !== false,
     defaultVariantId:
       raw.default_sku_id != null ? String(raw.default_sku_id) : defaultVariant?.id,
     variantsCount: asNumber(raw.variants_count) ?? variants.length,
@@ -121,5 +122,36 @@ export function mapStorefrontProductPage(payload: unknown): ProductPage {
     totalElements,
     totalPages,
     lastPage,
+  }
+}
+
+
+/**
+ * GET /v1/vendors/products/{product_id}/skus/{sku_id} → Product.
+ * Inactive SKUs still map so PDP can show "Out of stock" (list APIs keep filtering them out).
+ */
+export function mapPdpSkuDetail(data: unknown): Product | null {
+  const raw = asRecord(data)
+  if (!raw) return null
+
+  const inStock = raw.is_active !== false && raw.active !== false
+
+  // Bypass list-style "skip inactive" so the page can render an unavailable SKU.
+  const mapped = mapStorefrontProduct({
+    vendor_product_id: raw.vendor_product_id,
+    product_name: raw.product_name ?? raw.sku_name,
+    product_description: raw.description,
+    image_path: raw.image_path,
+    default_sku_id: raw.sku_id,
+    is_active: true,
+    active: true,
+    variants: [{ ...raw, is_active: true, active: true }],
+  })
+  if (!mapped) return null
+
+  return {
+    ...mapped,
+    inStock,
+    variants: mapped.variants?.map((variant) => ({ ...variant, active: inStock })),
   }
 }

@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
+import { cartNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { formatCurrency } from '@/shared/lib/utils'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { cn } from '@/lib/utils'
 
 type StoreCartBarProps = {
@@ -14,10 +15,12 @@ type StoreCartBarProps = {
 
 /**
  * Sticky catalog CTA — count + total + Go to Cart.
- * Shown only when this store already has lines; never creates cart lines.
+ * Logged-out live users are sent to login first.
  */
 export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreCartBarProps) {
-  if (itemCount <= 0) return null
+  const user = useAuthStore((s) => s.user)
+  const count = visibleCartCount(user, itemCount)
+  if (count <= 0) return null
 
   return (
     <div
@@ -33,12 +36,12 @@ export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreC
       >
         <div className="min-w-0">
           <p className="text-[11px] font-medium text-white/90">
-            {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+            {count} {count === 1 ? 'Item' : 'Items'}
           </p>
           <p className="text-sm font-bold tabular-nums">{formatCurrency(subtotal)}</p>
         </div>
         <Link
-          to={storeCartPath(storeId)}
+          to={cartNavTarget(user, storeId)}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-[var(--store-theme,var(--md-green-800))] transition hover:bg-white/95 active:scale-[0.98]"
         >
           Go to Cart

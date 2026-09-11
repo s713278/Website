@@ -1,4 +1,5 @@
 import type { CartLine } from '@/modules/storefront/types'
+import { lineAmount } from '@/modules/storefront/lib/cart-utils'
 import { formatCurrency } from '@/shared/lib/utils'
 
 type WhatsAppOrderInput = {
@@ -22,7 +23,7 @@ export function whatsappHref(phone: string, message: string) {
 
 export function buildWhatsAppOrderMessage(input: WhatsAppOrderInput) {
   const items = input.lines
-    .map((line, index) => `${index + 1}. ${line.name} × ${line.qty} — ${formatCurrency(line.price * line.qty)}`)
+    .map((line, index) => `${index + 1}. ${line.name} × ${line.qty} — ${formatCurrency(lineAmount(line))}`)
     .join('\n')
 
   return [
