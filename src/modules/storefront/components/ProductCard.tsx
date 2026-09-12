@@ -16,8 +16,11 @@ type ProductCardProps = {
 }
 
 export function ProductCard({ storeId, storeName, product, className }: ProductCardProps) {
-  const productHref = storeProductPath(storeId, product.id)
-  const { variants, selected, selectedId, setSelectedId, multi } = useSelectedVariant(product)
+  const { variants, selected, selectedId, setSelectedId, multi } = useSelectedVariant(
+    product,
+    storeId,
+  )
+  const productHref = storeProductPath(storeId, product.id, selected.id)
 
   return (
     <article

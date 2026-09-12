@@ -2,6 +2,10 @@ import { Link, useLocation } from 'react-router-dom'
 import { ChevronLeft, Menu, Search, ShoppingCart, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loginPathForRole } from '@/app/router/role-home'
+import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
+import { visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { isLiveApi } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
 const NAV = [
@@ -84,6 +88,15 @@ function HeaderActions({
   showAccount?: boolean
 }) {
   const location = useLocation()
+  const user = useAuthStore((s) => s.user)
+  const badge = visibleCartCount(user, cartCount)
+  // Live guest → force login; after OTP resume the cart they opened.
+  const cartTo = canShopAsCustomer(user)
+    ? cartHref
+    : isLiveApi()
+      ? { pathname: loginPathForRole('customer'), state: { from: cartHref } }
+      : cartHref
+
   const loginHref = {
     pathname: loginPathForRole('customer'),
     state: { from: location.pathname + location.search },
@@ -115,14 +128,14 @@ function HeaderActions({
       ) : null}
 
       <Link
-        to={cartHref}
+        to={cartTo}
         className="relative inline-flex size-10 shrink-0 items-center justify-center overflow-visible rounded-full text-slate-700 transition hover:bg-slate-100"
-        aria-label={`Cart${cartCount ? `, ${cartCount} items` : ''}`}
+        aria-label={`Cart${badge ? `, ${badge} items` : ''}`}
       >
         <ShoppingCart className="size-[1.125rem]" strokeWidth={1.75} />
-        {cartCount > 0 ? (
+        {badge > 0 ? (
           <span className="absolute right-1.5 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--store-theme,var(--md-green-600))] px-0.5 text-[9px] font-bold leading-none text-white">
-            {cartCount > 9 ? '9+' : cartCount}
+            {badge > 9 ? '9+' : badge}
           </span>
         ) : null}
       </Link>

@@ -34,6 +34,7 @@ consumes a separately maintained Spring Boot API through the repository's OpenAP
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
 | [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |
+| [docs/TESTING.md](./docs/TESTING.md) | Test tiers, component-test rules, and what has no runner |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API package commands, exports, and package-specific usage |
 | [design-reference/README.md](./design-reference/README.md) | Static-reference purpose and inventory |
 
@@ -49,7 +50,7 @@ package.
 |---------|----------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Shared app code | `src/shared` | auth, API facade, components, hooks, utilities, types |
 | HTTP/OpenAPI package | `packages/api-client` | generated schema, Axios transport, auth infrastructure, backend services |
 
@@ -78,10 +79,9 @@ For code changes, the baseline is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts` and covers pure domain and presentation
-logic, including onboarding and landing discovery seams. There is no DOM, component, or end-to-end
-runner: verify UI behaviour by running the app. `vitest.config.ts` merges `vite.config.ts`, so path
-aliases are defined once.
+One `npm run test` runs every tier. `vitest.config.ts` merges `vite.config.ts`, so path aliases
+are defined once. [docs/TESTING.md](./docs/TESTING.md) owns the tiers, how to choose between them,
+and the rules for writing in each — read it before adding a test.
 
 `npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
 

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/shared/components'
+import { publicSiteOrigin } from '@/shared/lib/store-link'
 
 const trustItems = [
   {
@@ -168,7 +169,7 @@ export function MarketingHero() {
                 type="button"
                 className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-left text-slate-600 hover:bg-slate-100"
                 onClick={() => {
-                  void navigator.clipboard?.writeText(`${window.location.origin}/stores`)
+                  void navigator.clipboard?.writeText(`${publicSiteOrigin()}/stores`)
                 }}
               >
                 Copy store link

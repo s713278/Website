@@ -7,7 +7,7 @@ import axios, {
 import { getClientConfig } from './config';
 import { ApiError, assertApiSuccess, toApiError } from './errors';
 import { refreshAccessToken } from './refresh';
-import { getAccessToken } from './tokens';
+import { getAccessToken, getRefreshToken, isAccessTokenExpired } from './tokens';
 import type { ApiEnvelope, RequestConfig } from './types';
 
 type RetryConfig = InternalAxiosRequestConfig & {
@@ -29,7 +29,7 @@ function createHttp(): AxiosInstance {
     },
   });
 
-  instance.interceptors.request.use((config: RetryConfig) => {
+  instance.interceptors.request.use(async (config: RetryConfig) => {
     if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
       const headers = AxiosHeaders.from(config.headers ?? {});
       headers.delete('Content-Type');
@@ -37,7 +37,23 @@ function createHttp(): AxiosInstance {
     }
 
     if (!config.skipAuth) {
-      const token = getAccessToken();
+      let token = getAccessToken();
+
+      // Access tokens live 600s, so a returning vendor usually holds an expired one.
+      // Letting the 401 handler discover that costs a doomed request first — three
+      // serial round trips to first paint instead of two. Refresh up front instead.
+      // Single-flight means parallel requests still share one refresh, and the 401
+      // handler below stays the backstop for revocation and for tokens this cannot read.
+      if (!config.skipRefresh && isAccessTokenExpired(token) && getRefreshToken()) {
+        try {
+          token = await refreshAccessToken();
+        } catch {
+          // Transient refresh failure must not block the request. Send what we have and
+          // let the 401 path try again rather than failing before reaching the server.
+          token = getAccessToken();
+        }
+      }
+
       if (token) {
         config.headers = AxiosHeaders.from(config.headers ?? {});
         config.headers.set('Authorization', `Bearer ${token}`);

@@ -20,7 +20,7 @@ through an OpenAPI/Axios integration.
 |---------|--------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products` |
+| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/register` |
 
@@ -77,6 +77,11 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_USE_API` | `false` | `false` uses demo behavior; `true` enables the Spring Boot API |
 | `VITE_API_BASE_URL` | `https://subscriptionapp-wgf8.onrender.com/api` | API base before operation paths such as `/v1/auth/request-otp` |
 | `VITE_APP_ENV` | `development` | Reserved environment label; currently typed but not consumed by application logic |
+| `VITE_PUBLIC_SITE_URL` | `https://mithradirect.com` | Origin customers open. Vendor shop links, the shareable QR, and the WhatsApp share are built from it |
+
+`VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
+must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment
+link, and the QR they print encodes the same wrong host.
 
 The client currently falls back to the development API base when `VITE_API_BASE_URL` is unset.
 Set the value explicitly for live development. Never commit `.env`, credentials, or test tokens.
@@ -108,9 +113,9 @@ The baseline verification for source changes is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-Vitest runs in the node environment over `src/**/*.test.ts`. The suite covers pure domain and
-presentation logic, including vendor-onboarding and landing-discovery seams. There is no DOM,
-component, or end-to-end runner, so UI behaviour is verified by running the app.
+That one command runs every Vitest tier. There is no end-to-end runner, so full journeys are
+verified by running the app. [docs/TESTING.md](./docs/TESTING.md) owns the tiers and the rules for
+writing in each.
 
 `npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
 changes:
@@ -274,7 +279,7 @@ alongside the production auth implementation.
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
-| `/vendor/orders`, `/vendor/products` | Protected vendor tools |
+| `/vendor/orders`, `/vendor/orders/subscriptions`, `/vendor/orders/:orderId`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` | Protected vendor dashboard, in its own shell outside the customer chrome |
 
 ## Documentation
 
@@ -285,6 +290,7 @@ alongside the production auth implementation.
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
+| [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |
 | [design-reference/README.md](./design-reference/README.md) | Static reference purpose and inventory |
 

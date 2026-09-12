@@ -43,7 +43,7 @@ record; anything on screen that disagrees with it is unsaved.
 _Avoid_: server catalog, saved catalog, remote catalog
 
 **Plan limit**:
-The most categories, products or sizes a vendor's subscription allows, counted against
+The most categories, products or sizes a vendor's plan allows, counted against
 everything already on the account rather than against one screen's worth. Reaching it
 stops further catalog growth until the plan changes.
 _Avoid_: account limit, max limit, quota, subscription cap
@@ -121,15 +121,60 @@ still grow their catalog within plan limits, assigning or authoring more categor
 products, and those additions reach the account without reopening setup. Sizes are the
 boundary of that exception: a new size cannot be created while under review (the backend
 rejects it), so Step 6 is read-only until the store is **approved**, and a product added
-in the meantime stays sizeless until then. Everything else stays read-only until an
-administrator decides.
+in the meantime stays sizeless until then. Everything else stays read-only until
+**verification** decides.
 _Avoid_: live, complete, published, finished
 
+**Verification**:
+The automated check that decides whether a submitted store may open. It replaces approval
+by an administrator; no person is in the loop.
+_Avoid_: review (for the checker itself), admin, approval system, moderation
+
 **Approved**:
-An administrator has accepted a submitted store, which is what makes it reachable by
+Verification has accepted a submitted store, which is what makes it reachable by
 customers. Submission alone does not.
 _Avoid_: active, published, public
 
 **Store activation**:
 The transition from draft to submitted. It is a request for review, not a going-live.
 _Avoid_: go live, publish, launch
+
+### Store operations
+
+**Store state**:
+The single condition of a vendor's store, derived rather than read from one place: setting
+up, under review, open, rejected, or suspended. Suspension outranks everything else. Being
+open means customers can reach the store; it does not mean the store is taking orders, a
+thing the platform does not currently express.
+_Avoid_: status, account status, vendor status, online, offline
+
+**Delivery status**:
+How far an order has progressed toward the customer: new, confirmed, out for delivery,
+delivered or cancelled. Placing an order commits it, so there is no acceptance step.
+_Avoid_: order status (unqualified), ticket state, accepted, pending, scheduled, in
+process, shipped, preparing, ready
+
+**Payment status**:
+The vendor's own record that an order has been paid for. The platform never handles the
+money, so it cannot observe a payment; only the vendor can say one happened.
+_Avoid_: order status (unqualified), settled, collected, verified
+
+**Payment method**:
+The way a customer said they would pay when they placed the order. It is an intention,
+not an outcome: a vendor may be paid by some other means entirely.
+_Avoid_: payment type, payment status
+
+**Subscription**:
+A customer's standing commitment to receive one of a vendor's sizes on a repeating
+delivery plan. Distinct from the vendor's plan, which is a billing tier.
+_Avoid_: plan, subscription plan, recurring order, standing order, membership
+
+**Plan**:
+The tier a vendor's account is on, carrying the limits their catalog is measured against.
+Distinct from a customer's repeat-order subscription, which is a different thing entirely.
+_Avoid_: subscription, tier, package
+
+**Billing state**:
+Whether a vendor's plan is paid, trialling, or lapsed. Distinct from store state: an open
+store may be unbilled, and a paid-up store may still be awaiting approval.
+_Avoid_: subscription status, account status, plan status

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { homePathForUser, loginPathForRole } from '@/app/router/role-home'
+import { cartNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
@@ -23,7 +24,8 @@ function linkClass({ isActive }: { isActive: boolean }) {
 export function RootLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-  const cartCount = useCartStore((s) => s.itemCount())
+  const cartCount = visibleCartCount(user, useCartStore((s) => s.itemCount()))
+  const cartTo = cartNavTarget(user)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -43,7 +45,7 @@ export function RootLayout() {
           </div>
           <div className="flex items-center gap-2">
             {(user?.role === 'customer' || !user) && (
-              <NavLink to="/cart" className={linkClass}>
+              <NavLink to={cartTo} className={linkClass}>
                 Cart{cartCount ? ` (${cartCount})` : ''}
               </NavLink>
             )}
@@ -52,7 +54,7 @@ export function RootLayout() {
                 <span className="hidden text-sm text-slate-500 sm:inline">Welcome, {user.name}</span>
                 <Button size="sm" variant="secondary" onClick={() => void logout()}>Log out</Button>
                 {user.role === 'vendor' ? (
-                  <NavLink to="/vendor">
+                  <NavLink to="/onboarding">
                     <Button size="sm" variant="ghost">Store setup</Button>
                   </NavLink>
                 ) : (
@@ -74,19 +76,6 @@ export function RootLayout() {
       <footer className="border-t border-[var(--md-border)] bg-white py-8 text-center text-sm text-[var(--md-muted)]">
         © {new Date().getFullYear()} MithraDirect · Local commerce, delivered
       </footer>
-    </div>
-  )
-}
-
-export function VendorLayout() {
-  return (
-    <div className="mx-auto max-w-5xl px-4">
-      <nav className="flex flex-wrap gap-2 border-b border-[var(--md-border)] py-4">
-        <NavLink to="/vendor" end className={linkClass}>Dashboard</NavLink>
-        <NavLink to="/vendor/orders" className={linkClass}>Orders</NavLink>
-        <NavLink to="/vendor/products" className={linkClass}>Products</NavLink>
-      </nav>
-      <Outlet />
     </div>
   )
 }

@@ -39,7 +39,6 @@ export type MeasurementType =
   | 'PER_PERSON'
   | 'SLOT'
 export type FulfillmentType = 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
-export type OrderAcceptancePolicy = 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
 export type SchedulingStrategy =
   | 'FIXED_WINDOW'
   | 'CUSTOMER_SELECT_DATE'
@@ -102,7 +101,6 @@ export type DeliverySlot = {
 
 export type DeliveryDraft = {
   fulfillmentType: FulfillmentType
-  orderAcceptancePolicy: OrderAcceptancePolicy
   schedulingStrategy: SchedulingStrategy
   fixedWindow: {
     minDeliveryDays: number

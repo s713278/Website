@@ -9,10 +9,10 @@ still needs are recorded under "Outstanding: the approved target session model" 
 | Piece | Location | Role |
 |--------|----------|------|
 | Token store | `@mithra/api-client` `tokens.ts` | `mithra_access_token` + `mithra_refresh_token` in `localStorage` |
-| Request interceptor | `http.ts` | Attaches `Authorization: Bearer <access>` unless `skipAuth` |
+| Request interceptor | `http.ts` | Unless `skipAuth`: refreshes first when the access token is present but already expired, then attaches `Authorization: Bearer <access>` |
 | Response interceptor | `http.ts` | `401` → single-flight refresh → retry once; else `onUnauthorized`. `403` → `onForbidden`, session kept |
 | Session mapping | `src/shared/api/services/auth.service.ts` | Builds the session from the backend's verified identity |
-| Auth UI state | `src/shared/auth/store/auth-store.ts` | Zustand user + access token; syncs into token store |
+| Auth UI state | `src/shared/auth/store/auth-store.ts` | Persists the user only; session actions write API credentials |
 | Startup restoration | `AppProviders` → `restoreSession()` | One shot; owns `isHydrated` |
 | Route gates | `ProtectedRoute` | `customer` → checkout/orders; `vendor` → `/vendor/*` |
 
@@ -45,11 +45,26 @@ into a session by `applySession()`.
 
 1. **Login (OTP or demo)** → `applySession` / `completeOtpLogin` → writes access (+ refresh when present) and user
 2. **Reload** → Zustand rehydrates the user, then `restoreSession()` completes hydration:
-   - an expired-but-present access token is left alone (the interceptor refreshes on the first 401);
+   - credentials come only from `mithra_access_token` / `mithra_refresh_token`; a legacy
+     `md-auth.token` is ignored, so reload cannot overwrite a refreshed token or revive cleared
+     credentials. The store's in-memory token mirror is populated from the API token store;
+   - an expired-but-present access token is left alone **here**; the request interceptor
+     refreshes it before the first protected call leaves the browser;
    - if only the refresh token remains, refresh once before deciding;
    - a transient refresh failure keeps the session rather than signing the user out;
    - the session is cleared only when **both** credentials are gone.
-3. **Expired access** → interceptor refreshes with the refresh token, retries once.
+3. **Expired access** → detected in two places, in this order:
+   - **Request interceptor, before sending.** `isAccessTokenExpired()` reads the token's own
+     `exp` (30-second skew allowance) and refreshes up front when it has passed. This removes
+     the doomed request that the 401 path would otherwise spend to learn what the token
+     already said. It is an optimization, never an authority: an opaque token, a malformed
+     payload or a missing `exp` is reported *usable*, and a transient refresh failure sends
+     the stale token rather than failing before reaching the server.
+   - **Response interceptor, on a 401.** Refreshes with the refresh token and retries once.
+     This stays the backstop for revocation and for every token the check above cannot read.
+
+   Both share the same single-flight refresh, so parallel requests still cost one refresh.
+   Refresh writes the API token store, and the next reload preserves that updated credential.
    Access tokens live **600 seconds**, so this path runs constantly during a long form;
    it is a main path, not an edge case.
 4. **Refresh fails (400/401/403)** → `clearSession()`; protected routes redirect to the role's login

@@ -475,13 +475,7 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
           <RadioCard name="fulfillment" value="STORE_PICKUP" checked={delivery.fulfillmentType === 'STORE_PICKUP'} title="Store pickup" description="Customers collect from your store." onChange={() => setFulfillment('STORE_PICKUP')} />
           <RadioCard name="fulfillment" value="BOTH" checked={delivery.fulfillmentType === 'BOTH'} title="Both" description="Let customers choose at checkout." onChange={() => setFulfillment('BOTH')} />
         </div>
-      </StepSection>
-
-      <StepSection id="order-acceptance" title="Order acceptance" description="Whether a new order needs your say-so before it moves.">
-        <div className="grid gap-3 @min-[32rem]:grid-cols-2">
-          <RadioCard name="acceptance" value="AUTO_ACCEPT" checked={delivery.orderAcceptancePolicy === 'AUTO_ACCEPT'} title="Automatic" description="Orders move ahead without manual review." onChange={() => updateDelivery((current) => ({ ...current, orderAcceptancePolicy: 'AUTO_ACCEPT' }))} />
-          <RadioCard name="acceptance" value="MANUAL_APPROVAL" checked={delivery.orderAcceptancePolicy === 'MANUAL_APPROVAL'} title="Manual approval" description="Review each order before accepting it." onChange={() => updateDelivery((current) => ({ ...current, orderAcceptancePolicy: 'MANUAL_APPROVAL' }))} />
-        </div>
+        <Hint className="mt-3">Every order is accepted automatically. A new order arrives in your Orders list ready to move — there is no approval step to work through first.</Hint>
       </StepSection>
 
       {hasHomeDelivery ? (

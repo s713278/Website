@@ -30,6 +30,15 @@ export {
 export { Input as ShadcnInput } from '@/components/ui/input'
 export { Label } from '@/components/ui/label'
 export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+export {
   Select,
   SelectContent,
   SelectGroup,

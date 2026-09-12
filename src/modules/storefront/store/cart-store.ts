@@ -1,122 +1,264 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { cartLineProductId } from '@/modules/storefront/lib/cart-utils'
 import type { PendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
 import {
   buildCartLineSnapshot,
-  findVariantForCartLine,
   resolveVariant,
   variantCartId,
   variantLineName,
 } from '@/modules/storefront/lib/product-variants'
-import type { CartLine, Product, ProductVariant } from '../types'
+import type { CartLine, CartSummary, Product, ProductVariant } from '../types'
+
+/** Demo / interim bill when API `cart_summary` is not stored yet. */
+export function summaryFromLines(lines: CartLine[]): CartSummary {
+  const itemsTotal = lines.reduce(
+    (sum, line) => sum + (line.lineTotal ?? line.price * line.qty),
+    0,
+  )
+  const totalQuantity = lines.reduce((sum, line) => sum + line.qty, 0)
+  return {
+    itemsTotal,
+    deliveryCharges: 0,
+    discount: 0,
+    serviceCharge: 0,
+    grandTotal: itemsTotal,
+    itemsCount: lines.length,
+    totalQuantity,
+  }
+}
 
 type CartState = {
   lines: CartLine[]
-  addItem: (storeId: string, storeName: string, item: Product, variant?: ProductVariant, qty?: number) => void
+  /** Per-vendor totals from API `cart_summary` (or interim from lines). */
+  summaries: Record<string, CartSummary>
+  replaceVendorCart: (vendorId: string, lines: CartLine[], summary?: CartSummary) => void
+  findLine: (vendorId: string, itemId: string) => CartLine | undefined
+  clearVendor: (vendorId: string) => void
+  addItem: (
+    storeId: string,
+    storeName: string,
+    item: Product,
+    variant?: ProductVariant,
+    qty?: number,
+  ) => void
   addPendingLine: (pending: PendingCartAdd) => void
   removeItem: (itemId: string) => void
   setQty: (itemId: string, qty: number) => void
-  syncLinePrices: (products: Product[]) => void
   clear: () => void
   itemCount: (storeId?: string) => number
   subtotal: (storeId?: string) => number
 }
 
+function sameSku(a: CartLine, b: { storeId: string; itemId: string; skuId?: string }) {
+  if (a.storeId !== b.storeId) return false
+  return (
+    a.itemId === b.itemId ||
+    (Boolean(b.skuId) && (a.skuId === b.skuId || a.itemId === b.skuId)) ||
+    (Boolean(a.skuId) && a.skuId === b.itemId)
+  )
+}
+
 function upsertLine(
   current: CartLine[],
   next: Omit<CartLine, 'qty'> & { qty: number },
-): CartLine[] | null {
-  if (current.length && current[0].storeId !== next.storeId) {
-    const replace = window.confirm(
-      'Your cart has items from another store. Clear cart and add this item?',
-    )
-    if (!replace) return null
-    return [{ ...next }]
+): CartLine[] {
+  const existing = current.find((line) => sameSku(line, next))
+  if (!existing) {
+    return [...current, { ...next, lineTotal: next.lineTotal ?? next.price * next.qty }]
   }
 
-  const existing = current.find((line) => line.itemId === next.itemId)
-  if (existing) {
-    return current.map((line) =>
-      line.itemId === next.itemId
-        ? { ...line, qty: line.qty + next.qty, name: next.name, price: next.price }
-        : line,
-    )
-  }
+  return current.map((line) => {
+    if (line !== existing) return line
+    const qty = line.qty + next.qty
+    const price = next.price || line.price
+    return {
+      ...line,
+      ...next,
+      qty,
+      price,
+      lineTotal: price * qty,
+      cartItemId: line.cartItemId ?? next.cartItemId,
+      productId: next.productId ?? line.productId,
+      skuId: next.skuId ?? line.skuId,
+    }
+  })
+}
 
-  return [...current, { ...next }]
+function putSummary(
+  lines: CartLine[],
+  summaries: Record<string, CartSummary>,
+  vendorId: string,
+  summary?: CartSummary,
+): Record<string, CartSummary> {
+  const vendorLines = lines.filter((line) => line.storeId === vendorId)
+  if (vendorLines.length === 0) {
+    const next = { ...summaries }
+    delete next[vendorId]
+    return next
+  }
+  return {
+    ...summaries,
+    [vendorId]: summary ?? summaryFromLines(vendorLines),
+  }
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       lines: [],
+      summaries: {},
+
+      replaceVendorCart(vendorId, lines, summary) {
+        const nextLines = [
+          ...get().lines.filter((line) => line.storeId !== vendorId),
+          ...lines,
+        ]
+        set({
+          lines: nextLines,
+          summaries: putSummary(nextLines, get().summaries ?? {}, vendorId, summary),
+        })
+      },
+
+      findLine(vendorId, itemId) {
+        return get().lines.find(
+          (line) =>
+            line.storeId === vendorId &&
+            (line.itemId === itemId || line.skuId === itemId || line.cartItemId === itemId),
+        )
+      },
+
+      clearVendor(vendorId) {
+        const { [vendorId]: _, ...rest } = get().summaries ?? {}
+        set({
+          lines: get().lines.filter((line) => line.storeId !== vendorId),
+          summaries: rest,
+        })
+      },
+
       addItem(storeId, storeName, item, variant, qty = 1) {
         const resolved = resolveVariant(item, variant)
         const { itemId, name, price } = buildCartLineSnapshot(item, resolved)
+        const nextQty = Math.max(1, qty)
         const next = upsertLine(get().lines, {
           itemId,
           storeId,
           storeName,
           name,
           price,
-          qty: Math.max(1, qty),
+          qty: nextQty,
+          lineTotal: price * nextQty,
+          productId: item.id,
+          skuId: resolved.id === 'default' ? undefined : resolved.id,
         })
-        if (next) set({ lines: next })
+        set({
+          lines: next,
+          summaries: putSummary(next, get().summaries ?? {}, storeId),
+        })
       },
 
       addPendingLine(pending) {
+        const nextQty = Math.max(1, pending.qty)
         const next = upsertLine(get().lines, {
           itemId: variantCartId(pending.productId, pending.skuId),
           storeId: pending.vendorId,
           storeName: pending.storeName,
           name: variantLineName(pending.name, pending.label),
           price: pending.price,
-          qty: Math.max(1, pending.qty),
+          qty: nextQty,
+          lineTotal: pending.price * nextQty,
+          productId: pending.productId,
+          skuId: pending.skuId,
         })
-        if (next) set({ lines: next })
+        set({
+          lines: next,
+          summaries: putSummary(next, get().summaries ?? {}, pending.vendorId),
+        })
       },
+
       removeItem(itemId) {
-        set({ lines: get().lines.filter((line) => line.itemId !== itemId) })
+        const target = get().lines.find(
+          (line) =>
+            line.itemId === itemId || line.skuId === itemId || line.cartItemId === itemId,
+        )
+        const next = get().lines.filter(
+          (line) =>
+            line.itemId !== itemId && line.skuId !== itemId && line.cartItemId !== itemId,
+        )
+        set({
+          lines: next,
+          summaries: target
+            ? putSummary(next, get().summaries ?? {}, target.storeId)
+            : (get().summaries ?? {}),
+        })
       },
+
       setQty(itemId, qty) {
+        const line = get().lines.find(
+          (entry) =>
+            entry.itemId === itemId || entry.skuId === itemId || entry.cartItemId === itemId,
+        )
+        if (!line) return
         if (qty <= 0) {
-          get().removeItem(itemId)
+          get().removeItem(line.itemId)
           return
         }
+        const next = get().lines.map((entry) =>
+          entry.itemId === line.itemId && entry.storeId === line.storeId
+            ? { ...entry, qty, lineTotal: entry.price * qty }
+            : entry,
+        )
         set({
-          lines: get().lines.map((line) => (line.itemId === itemId ? { ...line, qty } : line)),
+          lines: next,
+          summaries: putSummary(next, get().summaries ?? {}, line.storeId),
         })
       },
-      syncLinePrices(products) {
-        set({
-          lines: get().lines.map((line) => {
-            const product = products.find((entry) => entry.id === cartLineProductId(line.itemId))
-            if (!product) return line
-            const variant = findVariantForCartLine(product, line.itemId)
-            if (!variant) return line
-            return {
-              ...line,
-              price: variant.price,
-              name: variantLineName(product.name, variant.unit),
-            }
-          }),
-        })
-      },
+
       clear() {
-        set({ lines: [] })
+        set({ lines: [], summaries: {} })
       },
+
       itemCount(storeId) {
-        const lines = get().lines
-        const scoped = storeId ? lines.filter((line) => line.storeId === storeId) : lines
-        return scoped.reduce((sum, line) => sum + line.qty, 0)
+        if (storeId) {
+          const summary = get().summaries?.[storeId]
+          if (summary) return summary.totalQuantity
+          return get()
+            .lines.filter((line) => line.storeId === storeId)
+            .reduce((sum, line) => sum + line.qty, 0)
+        }
+        const summaries = Object.values(get().summaries ?? {})
+        if (summaries.length > 0) {
+          return summaries.reduce((sum, entry) => sum + entry.totalQuantity, 0)
+        }
+        return get().lines.reduce((sum, line) => sum + line.qty, 0)
       },
+
       subtotal(storeId) {
-        const lines = get().lines
-        const scoped = storeId ? lines.filter((line) => line.storeId === storeId) : lines
-        return scoped.reduce((sum, line) => sum + line.price * line.qty, 0)
+        if (storeId) {
+          const summary = get().summaries?.[storeId]
+          if (summary) return summary.grandTotal
+          return summaryFromLines(
+            get().lines.filter((line) => line.storeId === storeId),
+          ).grandTotal
+        }
+        const summaries = Object.values(get().summaries ?? {})
+        if (summaries.length > 0) {
+          return summaries.reduce((sum, entry) => sum + entry.grandTotal, 0)
+        }
+        return summaryFromLines(get().lines).grandTotal
       },
     }),
-    { name: 'md-cart' },
+    {
+      name: 'md-cart',
+      merge: (persisted, current) => {
+        const raw = (persisted ?? {}) as Partial<CartState>
+        return {
+          ...current,
+          ...raw,
+          lines: Array.isArray(raw.lines) ? raw.lines : current.lines,
+          summaries:
+            raw.summaries && typeof raw.summaries === 'object' ? raw.summaries : {},
+        }
+      },
+    },
   ),
 )

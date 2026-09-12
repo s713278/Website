@@ -144,6 +144,16 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
     const orphanSku = accountDraft({ skus: [{ ...sku, productId: 888 }] })
     expect(parsePersistedEnvelope(envelope(orphanSku))).toBeNull()
   })
+
+  it('loads a draft saved while setup still offered an acceptance policy', () => {
+    // Setup no longer asks and nothing reads the value, but a draft written by an earlier
+    // build still carries the key. The validator rejects any key it does not know, so
+    // dropping this one from the allowed set would discard a vendor's whole draft.
+    const legacy = envelope(accountDraft())
+    legacy.draft.delivery.orderAcceptancePolicy = 'MANUAL_APPROVAL'
+
+    expect(parsePersistedEnvelope(legacy)).not.toBeNull()
+  })
 })
 
 describe('the sample rule is unchanged', () => {
