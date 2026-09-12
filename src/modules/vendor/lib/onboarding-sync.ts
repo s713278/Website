@@ -112,7 +112,6 @@ function toDeliveryInput(draft: VendorOnboardingDraftV1): CheckoutDeliveryInput 
   const d = draft.delivery
   return {
     fulfillmentType: d.fulfillmentType,
-    orderAcceptancePolicy: d.orderAcceptancePolicy,
     schedulingStrategy: d.schedulingStrategy,
     fixedWindow: d.fixedWindow,
     customerSelectDate: d.customerSelectDate,

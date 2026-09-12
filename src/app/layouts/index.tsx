@@ -54,7 +54,7 @@ export function RootLayout() {
                 <span className="hidden text-sm text-slate-500 sm:inline">Welcome, {user.name}</span>
                 <Button size="sm" variant="secondary" onClick={() => void logout()}>Log out</Button>
                 {user.role === 'vendor' ? (
-                  <NavLink to="/vendor">
+                  <NavLink to="/onboarding">
                     <Button size="sm" variant="ghost">Store setup</Button>
                   </NavLink>
                 ) : (
@@ -76,19 +76,6 @@ export function RootLayout() {
       <footer className="border-t border-[var(--md-border)] bg-white py-8 text-center text-sm text-[var(--md-muted)]">
         © {new Date().getFullYear()} MithraDirect · Local commerce, delivered
       </footer>
-    </div>
-  )
-}
-
-export function VendorLayout() {
-  return (
-    <div className="mx-auto max-w-5xl px-4">
-      <nav className="flex flex-wrap gap-2 border-b border-[var(--md-border)] py-4">
-        <NavLink to="/vendor" end className={linkClass}>Dashboard</NavLink>
-        <NavLink to="/vendor/orders" className={linkClass}>Orders</NavLink>
-        <NavLink to="/vendor/products" className={linkClass}>Products</NavLink>
-      </nav>
-      <Outlet />
     </div>
   )
 }

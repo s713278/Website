@@ -1,81 +1,92 @@
-import { VENDOR_PRODUCTS } from '@/modules/vendor/data/demo'
-import type { VendorProduct } from '@/modules/vendor/types'
-import { apiGet, apiPatch, unwrapData } from '../client'
+import type { VendorSize } from '@/modules/vendor/types/dashboard'
+import { apiGet, apiPut } from '../client'
+import { updateDemoSizeByPriceId } from '../fixtures/demo-state'
+import { demoVendorSizes } from '../fixtures/vendor-dashboard'
+import { mapVendorSizePage, mapVendorSizes } from '../mappers/vendor-dashboard'
 import { isLiveApi } from '../mode'
-import type { ApiEnvelope } from '../types'
+import { demoDelay } from './demo-delay'
 
-const DEMO_KEY = 'md-vendor-products'
+const PAGE_SIZE = 50
 
-function readDemo(): VendorProduct[] {
-  try {
-    const raw = localStorage.getItem(DEMO_KEY)
-    if (raw) return JSON.parse(raw) as VendorProduct[]
-  } catch {
-    /* fall through */
-  }
-  return structuredClone(VENDOR_PRODUCTS)
-}
-
-function writeDemo(products: VendorProduct[]) {
-  localStorage.setItem(DEMO_KEY, JSON.stringify(products))
-}
-
-export async function listVendorProducts(vendorId: string | number): Promise<VendorProduct[]> {
-  if (!isLiveApi()) {
-    await new Promise((r) => setTimeout(r, 200))
-    return readDemo()
-  }
-
-  const res = await apiGet<ApiEnvelope<unknown>>(`/v1/vendors/${vendorId}/products`, {
-    skipAuth: true,
-  })
-  const data = unwrapData(res)
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { content?: unknown[] })?.content)
-      ? (data as { content: unknown[] }).content
-      : []
-
-  return list
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      name: String(item.name ?? 'Product'),
-      price: Number(item.price ?? item.selling_price ?? 0),
-      available: item.available !== false && item.status !== 'INACTIVE',
-      veg: Boolean(item.veg ?? item.is_veg ?? true),
-    }))
-}
-
-export async function setProductAvailability(
+/**
+ * Every size the vendor sells, with the price record behind each.
+ *
+ * Reads `/products/skus`, not `/products`: the latter answers only
+ * `{id, name, category_id, measurement_id, ref_id}` — no price and no size — which is why
+ * the previous products page rendered every row at ₹0.
+ */
+export async function listVendorSizes(
   vendorId: string | number,
-  productId: string,
-  available: boolean,
-): Promise<VendorProduct | null> {
+  signal?: AbortSignal,
+): Promise<VendorSize[]> {
+  signal?.throwIfAborted()
   if (!isLiveApi()) {
-    const products = readDemo()
-    const next = products.map((product) =>
-      product.id === productId ? { ...product, available } : product,
-    )
-    writeDemo(next)
-    return next.find((product) => product.id === productId) ?? null
+    await demoDelay()
+    signal?.throwIfAborted()
+    return mapVendorSizes(demoVendorSizes())
   }
 
-  const res = await apiPatch<ApiEnvelope<Record<string, unknown>>>(
-    `/v1/vendors/${vendorId}/products/${productId}`,
-    { available, status: available ? 'ACTIVE' : 'INACTIVE' },
-  )
-  const data = unwrapData(res) || {}
-  return {
-    id: String(data.id ?? productId),
-    name: String(data.name ?? 'Product'),
-    price: Number(data.price ?? 0),
-    available,
-    veg: Boolean(data.veg ?? true),
+  const sizes = new Map<string, VendorSize>()
+  for (let page = 0; ; page++) {
+    signal?.throwIfAborted()
+    const params = new URLSearchParams({ page_number: String(page), page_size: String(PAGE_SIZE) })
+    const result = mapVendorSizePage(
+      await apiGet(`/v1/vendors/${vendorId}/products/skus?${params}`, { signal }),
+    )
+    signal?.throwIfAborted()
+
+    // Do not return a partial catalog or loop forever if the server ignores paging.
+    if (result.page !== page || result.lastPage == null) {
+      throw new Error('Could not load all your products. Please try again.')
+    }
+    const previousCount = sizes.size
+    for (const size of result.sizes) sizes.set(size.skuId, size)
+    if (result.lastPage) return [...sizes.values()]
+    if (sizes.size === previousCount) {
+      throw new Error('Could not load all your products. Please try again.')
+    }
   }
+}
+
+/**
+ * Change what a size costs.
+ *
+ * Written against the **price record**, not the SKU: the SKU endpoint carries no price
+ * field, and `PUT /v1/sku/price/{price_id}` is vendor-callable and verified working. Note
+ * the identifiers differ — the price *read* is keyed by SKU id, the write by price id.
+ *
+ * The body must be exactly `{sku_id, list_price, sale_price}`. Adding `shipping_price` or
+ * `effective_date` — both of which the read returns — is rejected with 400, so the read
+ * model cannot be round-tripped.
+ *
+ * A size with no `priceId` cannot be repriced at all; callers must not offer the control
+ * for one.
+ *
+ * Separately: `PATCH /vendors/{id}/skus/{sku_id}` is **not** broken for every body, as an
+ * earlier note here claimed. It fails only when `features` is omitted, and works on both
+ * approval states when `features` is echoed back from a fresh read. That is the basis for
+ * the rename and availability controls, which are not built here yet.
+ */
+export async function updateSizePrice(
+  priceId: string,
+  input: { skuId: string; listPrice: number; salePrice: number },
+): Promise<void> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    // Demo writes persist, so a price edit is visible on the next demo read.
+    if (!updateDemoSizeByPriceId(priceId, { list_price: input.listPrice, sale_price: input.salePrice })) {
+      throw new Error('No such price record.')
+    }
+    return
+  }
+  await apiPut(`/v1/sku/price/${priceId}`, {
+    sku_id: Number(input.skuId),
+    list_price: input.listPrice,
+    sale_price: input.salePrice,
+  })
 }
 
 export const vendorProductsService = {
-  list: listVendorProducts,
-  setAvailability: setProductAvailability,
+  listSizes: listVendorSizes,
+  updatePrice: updateSizePrice,
 }

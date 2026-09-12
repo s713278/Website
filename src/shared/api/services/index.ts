@@ -42,19 +42,33 @@ export {
   type PlaceOrderInput,
 } from './orders.service'
 export {
-  getVendorDashboard,
+  getVendorInsights,
+  getVendorStoreProfile,
   vendorService,
-  type VendorDashboardStats,
 } from './vendor.service'
 export {
+  advanceVendorOrder,
+  cancelVendorOrder,
+  getVendorOrder,
+  isOrderAdvancePartial,
+  isOrderTransitionRefused,
   listVendorOrders,
-  updateVendorOrderStatus,
+  OrderTransitionRefusedError,
+  OrderAdvancePartialError,
+  setVendorOrderPaymentStatus,
   vendorOrdersService,
+  type VendorOrderQuery,
 } from './vendor-orders.service'
 export {
-  listVendorProducts,
-  setProductAvailability,
+  listVendorSubscriptions,
+  vendorSubscriptionsService,
+  type VendorSubscriptionQuery,
+} from './vendor-subscriptions.service'
+export {
+  listVendorSizes,
+  updateSizePrice,
   vendorProductsService,
 } from './vendor-products.service'
+export { demoService, type DemoStoreStateKey } from './demo.service'
 export { vendorOnboardingService } from './vendor-onboarding.service'
 export type { ReferenceRequestConfig } from './vendor-onboarding.service'

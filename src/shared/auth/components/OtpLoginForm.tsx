@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
+import logoDarkMd from '@/assets/logo_dark_md.png'
 import {
   authService,
   getErrorMessage,
@@ -109,13 +110,14 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
       />
 
       <header className="relative z-10 mx-auto flex max-w-md items-center justify-between px-4 py-6">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="inline-flex size-8 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
-            M
-          </span>
-          <span className="font-display text-base font-bold text-slate-800">
-            mithra <span className="font-semibold text-slate-600">direct</span>
-          </span>
+        {/* The real lockup, as on the marketing header — this was a hand-set approximation
+            of it: a circled "M" and the name in Poppins, neither of which is the mark. */}
+        <Link to="/" aria-label="Mithra Direct home">
+          <img
+            src={logoDarkMd}
+            alt="Mithra Direct — Shop Local, Support Local, Grow Together"
+            className="h-9 w-auto"
+          />
         </Link>
         <Link to="/" className="text-sm font-medium text-slate-500 hover:text-emerald-700">
           Back to home

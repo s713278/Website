@@ -25,9 +25,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // Server cart belongs to the signed-in customer — drop local mirror on logout.
   useEffect(() => onExplicitSignOut(clearStorefrontCartState), [])
 
-  // A verification the app refused must not survive in `md-auth`, whose persisted token
-  // is pushed back into the api-client store on the next load. Wired here so the cleanup
-  // does not depend on an OTP screen still being mounted.
+  // A verification the app refused must clear the persisted identity as well as its
+  // credentials. Cleanup must not depend on an OTP screen still being mounted.
   useEffect(() => onCredentialsRefused(() => useAuthStore.getState().clearSession()), [])
 
   useEffect(() => {

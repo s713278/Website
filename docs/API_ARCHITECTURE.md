@@ -93,8 +93,11 @@ src/shared/api/
   config.ts                 # adds the demo/live `useApi` flag on top of the package config
   mode.ts                   # isLiveApi()
   useApiError.ts            # small error-state hook for pages
+  fixtures/
+    vendor-dashboard.ts     # demo payloads in backend WIRE shape, not view models
   mappers/
     vendor.ts               # vendor wire payload → app view-model
+    vendor-dashboard.ts     # vendor dashboard wire payloads → dashboard view-models
     vendor-onboarding.ts    # strict setup reference/account mapping + request mappers
   services/                 # the demo/live service layer
     auth.service.ts  catalog.service.ts  cart.service.ts  orders.service.ts
@@ -214,17 +217,20 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
 | `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
 | `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders`, `GET /v1/users/{userId}/orders/history` |
-| `vendor.service.ts` | `getVendorDashboard` | stats derived from `VENDOR_ORDERS`/`VENDOR_PRODUCTS`, plus a hardcoded store name and theme | `Promise.all` over `/v1/vendors/{id}` + `/orders/` + `/products`, aggregated client-side |
-| `vendor-orders.service.ts` | `listVendorOrders`, `updateVendorOrderStatus` | localStorage `md-vendor-orders`, seeded from `modules/vendor/data/demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/orders/*` |
-| `vendor-products.service.ts` | `listVendorProducts`, `setProductAvailability` | localStorage `md-vendor-products`, seeded from same `demo.ts` | `GET`/`PATCH /v1/vendors/{vendorId}/products/*` |
+| `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
+| `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
+| `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
+| `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
-| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Explicit user-selected sample catalog lives in the vendor module, not as a silent service fallback | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
+| `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Wire-shaped vendor-context fixture mounts the console; setup references still come only from the explicitly selected sample catalog | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
 In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
-reads and writes. Demo mode never mounts those account-catalog readers: the wizard waits for the
-vendor to explicitly select the reserved-negative-ID sample catalog, then answers from module-local
-sample data. It never silently converts a live failure into sample data. A persisted sample draft
-carried into Live API mode is blocked at Continue because its synthetic IDs cannot reach an account.
+reads and writes. In Demo mode, `getVendorContext` returns a wire-shaped completed-account fixture
+through `mapVendorContext`, which lets the vendor console mount without a backend request. The setup
+wizard still never mounts the other account-catalog readers: it waits for the vendor to explicitly
+select the reserved-negative-ID sample catalog, then answers from module-local sample data. It never
+silently converts a live failure into sample data. A persisted sample draft carried into Live API
+mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
 #### Vendor setup account hydration
 
@@ -257,6 +263,9 @@ snapshot fields when unavailable.
 `loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor.
 Sign-in and the wizard therefore share the same fan-out rather than issuing it twice. Failed loads
 are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
+The same invalidation also drops the dashboard's narrower context cache, so returning from setup
+cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
+response belonging to an entry that has already been invalidated.
 
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
@@ -292,6 +301,48 @@ on `top_products`, not on the sampled vendor rows, so it is not treated as landi
 > bug to route around. The cart is also single-store by design — adding an item from a
 > different vendor prompts to clear it.
 
+#### Vendor dashboard reads
+
+The vendor dashboard surfaces share one mapping module. `src/shared/api/mappers/vendor-dashboard.ts`
+owns every wire-to-view-model conversion behind them, because the backend is inconsistent in ways
+a page must never learn:
+
+- **Collections arrive in three shapes.** `/orders/` answers a paginated container
+  (`data: { result, page_number, page_size, total_elements, total_pages, last_page }`),
+  `/subs` uses that same measured paging envelope, `/products` answers a bare array, and other reads
+  use Spring's `content`. All three go
+  through `vendorCollectionRows` in `mappers/vendor.ts`, which never throws — a tile that
+  cannot read its collection should be empty, not take the page down. The strict onboarding
+  sibling still throws, deliberately; setup cannot proceed on a shape it does not recognise.
+- **Subscription paging does not inherit the orders fallback.** `mapVendorSubscriptionPage` treats
+  only an explicit `last_page: true` as the last page, so an omitted key cannot stop the walk early.
+  It preserves nullable row values, including a zero quantity, and the page renders every field from
+  the read-only subscription row rather than inventing a detail surface.
+- **Products loads every SKU page.** `mapVendorSizePage` preserves the paging evidence from
+  `/products/skus`; `listVendorSizes` follows `page_number` with `page_size=50` until `last_page`.
+  The service deduplicates by SKU id and rejects incomplete or non-advancing responses instead of
+  presenting a partial catalog as complete. Leaving Products aborts the read and stops further pages.
+- **Overview reads one page of its delivery window.** When more pages remain, its pagination notice
+  and Orders link remain visible even if every loaded order was filtered out as finished. Only a
+  complete result with no open orders is labelled "Nothing waiting."
+- **Insight groups are omitted rather than zeroed.** A vendor with no orders gets
+  `order_status_count: {}`, so `mapVendorInsights` reads every field through the mapper
+  instead of reaching for a nested count.
+- **Status is two independent axes.** `delivery_status` uses the contract enum
+  (`PENDING`/`SCHEDULED`/`IN_PROCESS`/`SHIPPED`/`DELIVERED`/`CANCELLED`) and `payment_status`
+  (`DUE`/`PAID`) is separate, so a delivered-but-unpaid order can be expressed. Anything
+  outside the enum becomes `PENDING` — never an invented state.
+- **Store state derives from submission and approval alone** in
+  `src/modules/vendor/lib/store-state.ts`. The console's temporary approval reading is scoped
+  there; [ADR 0002](./adr/0002-console-assumes-verification-approved-the-vendor.md) owns its
+  removal condition and separation from the wizard's approval gate.
+
+`src/shared/api/fixtures/vendor-dashboard.ts` holds the demo payloads **in backend wire shape**,
+not as view models, so demo mode hands them to the same mappers live mode uses and `isLiveApi()`
+chooses only between fetching and returning a fixture. `fixtures/vendor-dashboard.test.ts` runs
+every fixture through the real mapper, so a fixture that stops matching the wire shape fails a
+test instead of drifting into a parallel reality.
+
 ### 3.4 The demo/live switch
 
 ```ts
@@ -324,7 +375,9 @@ Following `catalogService.getStore('42')` in live mode:
 5. **Request interceptor** (`client/http.ts:32`):
    - if the body is `FormData`, the `Content-Type` header is **deleted** so the browser can set
      `multipart/form-data` with the correct boundary — this is what makes image upload work;
-   - unless `skipAuth`, attaches `Authorization: Bearer <mithra_access_token>`.
+   - unless `skipAuth`, attaches `Authorization: Bearer <mithra_access_token>` — refreshing
+     first when `isAccessTokenExpired()` says the stored token has already expired, so an
+     idle return does not spend a doomed request to discover it (§5 step 6).
 6. **Response interceptor** (`client/http.ts:49`) — passes 2xx straight through. On a 401, and
    only if `skipAuth`/`skipRefresh` are unset and this isn't already a retry:
    `refreshAccessToken()` → on success, re-attach the new token and replay the request once
@@ -352,14 +405,21 @@ See [`SESSION.md`](./SESSION.md) for the full lifecycle and the security posture
 3. **Store** — `setTokens(access, refresh)` writes localStorage `mithra_access_token` /
    `mithra_refresh_token`. These are what the request interceptor reads.
 4. **UI state** — `useAuthStore` (zustand + `persist`, key `md-auth`) separately holds
-   `{ user, token }` for rendering. Entry points: `applySession(session)` (the one place that
-   writes both stores), `completeOtpLogin`, `clearSession` (local wipe, no server call),
+   the user and an in-memory token mirror, but persists only `{ user }`. Entry points:
+   `applySession(session)` (writes identity and API credentials), `completeOtpLogin`,
+   `clearSession` (local wipe, no server call),
    `logout` (server sign-out then `clearSession`), `hasRole`.
-5. **Reload** — `onRehydrateStorage` re-syncs the persisted access token into the token store
-   with `setTokens(access)` — deliberately **without** a second argument, because passing
-   `null` there used to wipe the refresh token on every page load. A microtask then clears the
-   session if a persisted user has no access token left.
-6. **Expiry** — handled entirely by the response interceptor (§4 step 6).
+5. **Reload** — rehydrates identity and reads credentials from the API token store. It never
+   copies a legacy `md-auth` token back into that store. `restoreSession()` completes hydration;
+   [`SESSION.md`](./SESSION.md#lifecycle) owns the restoration and credential-failure behavior.
+6. **Expiry** — detected client-side *before* sending, then again on the wire. The request
+   interceptor calls `isAccessTokenExpired()` (reads `exp`, 30-second skew) and refreshes up
+   front; the response interceptor's 401 path (§4 step 6) remains the backstop for revocation
+   and for tokens the check cannot read. Both use the same single-flight refresh. The check
+   never fails closed: an opaque or malformed token is reported usable, and a transient
+   refresh failure sends the stale token rather than blocking the request.
+   `restoreSession()` still refreshes only when the access token is **absent** — an expired
+   one is left for the interceptor. See [`SESSION.md`](./SESSION.md) for the full lifecycle.
 7. **Give up** — `onUnauthorized` is wired exactly once, in
    `src/app/providers/AppProviders.tsx:12`, to `useAuthStore.getState().clearSession()` —
    *not* `logout()`, because a failed refresh means the server session is already gone and
@@ -374,10 +434,9 @@ See [`SESSION.md`](./SESSION.md) for the full lifecycle and the security posture
 > **demo-only** path — `auth.service.ts` throws in live mode telling you to use OTP. Check
 > which one a page actually uses before changing either.
 
-> **Tokens live in two places** — `mithra_*` (what requests read) and `md-auth` (what the UI
-> reads), kept in sync by hand in `applySession` / `clearSession` / `onRehydrateStorage`. Any
-> new code path that changes the session must go through `applySession` or `clearSession`, not
-> `setTokens` alone, or the two will drift.
+> **Persisted credentials have one owner:** the API token store. `md-auth` stores identity only.
+> Session changes still go through `applySession` or `clearSession` so identity and credentials
+> belong to the same session. See [`SESSION.md`](./SESSION.md) for the lifecycle.
 
 ---
 
@@ -509,11 +568,11 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | Key | Owner | Holds |
 |---|---|---|
 | `mithra_access_token` / `mithra_refresh_token` | `client/tokens.ts` | the tokens requests actually use |
-| `md-auth` | `useAuthStore` | persisted `{ user, token }` for UI restore |
+| `md-auth` | `useAuthStore` | persisted `{ user }` for UI restore; legacy tokens are ignored |
 | `md-cart` | `useCartStore` | the local-only cart |
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
 | `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
-| `md-customer-orders`, `md-vendor-orders`, `md-vendor-products` | demo services | mutable demo-mode state |
+| `md-customer-orders` | demo services | mutable demo-mode state. The vendor dashboard keeps none: its demo data is read-only wire-shaped fixtures, so `md-vendor-orders` and `md-vendor-products` no longer exist |
 | `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
@@ -542,7 +601,6 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
   fail to trigger logout.
 - **`sync:api` needs pnpm** despite this being an npm repo — see §8.
 - **Cart isn't backend-synced** and **`useAuthStore.login`/`register` are demo-only** — §3.3, §5.
-- **Token storage is duplicated** across `mithra_*` and `md-auth` — §5.
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
   session compromise. `SESSION.md` covers the intended migration to httpOnly cookies.
 - **The richer `/storefront` payload isn't wired into the customer storefront.**

@@ -341,7 +341,6 @@ function resumeDelivery(
   return {
     ...base,
     fulfillmentType: checkout.fulfillmentType ?? base.fulfillmentType,
-    orderAcceptancePolicy: checkout.orderAcceptancePolicy ?? base.orderAcceptancePolicy,
     schedulingStrategy: checkout.schedulingStrategy ?? base.schedulingStrategy,
     fixedWindow: {
       minDeliveryDays: schedulingConfigNumber(config, 'min_delivery_days') ?? base.fixedWindow.minDeliveryDays,

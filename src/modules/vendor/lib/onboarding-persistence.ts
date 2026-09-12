@@ -42,7 +42,6 @@ const MEASUREMENTS = new Set([
   'SLOT',
 ])
 const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
-const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
 const SCHEDULING_STRATEGIES = new Set([
   'FIXED_WINDOW',
   'CUSTOMER_SELECT_DATE',
@@ -198,6 +197,11 @@ function isDraftSku(value: unknown): value is DraftSku {
 function isDelivery(value: unknown): value is DeliveryDraft {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     'fulfillmentType',
+    // Setup no longer offers an order-acceptance choice and nothing reads the value, but a
+    // draft written before it was removed still carries the key, and an unknown key fails
+    // the whole draft — which would throw away a vendor's work. So it stays allowed and
+    // unvalidated. `toPersistedDraft` spreads `delivery`, so a draft that has the key goes
+    // on re-persisting it; accepted, because nothing reads it.
     'orderAcceptancePolicy',
     'schedulingStrategy',
     'fixedWindow',
@@ -211,7 +215,6 @@ function isDelivery(value: unknown): value is DeliveryDraft {
     'consentText',
   ])) return false
   if (!isString(value.fulfillmentType) || !FULFILLMENT_TYPES.has(value.fulfillmentType)) return false
-  if (!isString(value.orderAcceptancePolicy) || !ACCEPTANCE_POLICIES.has(value.orderAcceptancePolicy)) return false
   if (!isString(value.schedulingStrategy) || !SCHEDULING_STRATEGIES.has(value.schedulingStrategy)) return false
   if (!isString(value.shippingStrategy) || !SHIPPING_STRATEGIES.has(value.shippingStrategy)) return false
 

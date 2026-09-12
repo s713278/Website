@@ -48,6 +48,9 @@ import {
   type CheckoutOptionsSnapshot,
   type MeasurementCatalog,
 } from '../mappers/vendor-onboarding'
+import { demoVendorContext } from '../fixtures/vendor-dashboard'
+import { isLiveApi } from '../mode'
+import { demoDelay } from './demo-delay'
 
 export type ReferenceRequestConfig = {
   signal?: AbortSignal
@@ -115,6 +118,10 @@ async function getVendorContext(
   vendorId: number | string,
   config: ReferenceRequestConfig = {},
 ): Promise<VendorContext> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    return mapVendorContext(demoVendorContext(vendorId))
+  }
   return mapVendorContext(await apiVendorsService.getContext(vendorId, config))
 }
 

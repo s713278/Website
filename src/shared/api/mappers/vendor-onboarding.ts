@@ -320,6 +320,17 @@ export type VendorContext = {
     tier: string | null
     planName: string | null
     status: string | null
+    currency: string | null
+    monthlyPrice: number | null
+    yearlyPrice: number | null
+    /**
+     * Absent from every deployed response measured so far — the deployed backend models
+     * no trial, returning `tier: FREE` with `trial_days: 0` and no end date. Mapped so a
+     * countdown appears the day the backend starts sending one; never substituted with a
+     * locally computed deadline.
+     */
+    trialEndsAt: string | null
+    trialDays: number | null
     limits: VendorSubscriptionLimits
     usage: VendorSubscriptionUsage
   }
@@ -385,6 +396,11 @@ export function mapVendorContext(payload: unknown): VendorContext {
       tier: lenientString(subscription.tier),
       planName: lenientString(subscription.plan_name),
       status: lenientString(subscription.status),
+      currency: lenientString(subscription.currency),
+      monthlyPrice: lenientNumber(subscription.monthly_price),
+      yearlyPrice: lenientNumber(subscription.yearly_price),
+      trialEndsAt: lenientString(subscription.trial_ends_at),
+      trialDays: lenientInteger(subscription.trial_days),
       limits: {
         maxCategories: lenientInteger(limits.max_categories),
         maxProducts: lenientInteger(limits.max_products),
@@ -854,7 +870,6 @@ export function mapSkuCreateRequest(
 
 export type CheckoutDeliveryInput = {
   fulfillmentType: 'HOME_DELIVERY' | 'STORE_PICKUP' | 'BOTH'
-  orderAcceptancePolicy: 'AUTO_ACCEPT' | 'MANUAL_APPROVAL'
   schedulingStrategy: 'FIXED_WINDOW' | 'CUSTOMER_SELECT_DATE' | 'PREDEFINED_DAYS' | 'INSTANT'
   fixedWindow: { minDeliveryDays: number; maxDeliveryDays: number }
   customerSelectDate: {
@@ -985,7 +1000,10 @@ export function mapCheckoutOptionsRequest(
   const enabled = payments.options.filter((option) => option.enabled)
   return {
     fulfillment_type: delivery.fulfillmentType,
-    order_acceptance_policy: delivery.orderAcceptancePolicy,
+    // Not a caller's choice: the console has no accept step, so a stored MANUAL_APPROVAL
+    // would leave a vendor with orders nothing on screen can move forward. See
+    // docs/adr/0004-new-means-scheduled.md.
+    order_acceptance_policy: 'AUTO_ACCEPT',
     scheduling_strategy: delivery.schedulingStrategy,
     scheduling_config: asJsonNode(schedulingConfig(delivery)),
     shipping_strategy_type: 'ORDER_AMOUNT_THRESHOLD',
@@ -1017,6 +1035,10 @@ export function mapCheckoutOptionsRequest(
  * show: `payment_options` (with UPI/bank `details`), `order_acceptance_policy`,
  * `delivery_slots` and both consent fields all come back. Verified live against a
  * configured vendor. This is the inverse of `mapCheckoutOptionsRequest`.
+ *
+ * `order_acceptance_policy` is read and dropped. The console has one policy and always
+ * writes it, so a vendor still recorded as MANUAL_APPROVAL resumes normally and is
+ * corrected by their next save.
  * ---------------------------------------------------------------------- */
 
 export type CheckoutPaymentSnapshot = {
@@ -1027,7 +1049,6 @@ export type CheckoutPaymentSnapshot = {
 
 export type CheckoutOptionsSnapshot = {
   fulfillmentType: CheckoutDeliveryInput['fulfillmentType'] | null
-  orderAcceptancePolicy: CheckoutDeliveryInput['orderAcceptancePolicy'] | null
   schedulingStrategy: CheckoutDeliveryInput['schedulingStrategy'] | null
   schedulingConfig: UnknownRecord
   shippingConfig: { deliveryCharge: number | null; freeDeliveryThreshold: number | null }
@@ -1038,7 +1059,6 @@ export type CheckoutOptionsSnapshot = {
 }
 
 const FULFILLMENT_TYPES = new Set(['HOME_DELIVERY', 'STORE_PICKUP', 'BOTH'])
-const ACCEPTANCE_POLICIES = new Set(['AUTO_ACCEPT', 'MANUAL_APPROVAL'])
 const SCHEDULING_STRATEGIES = new Set([
   'FIXED_WINDOW',
   'CUSTOMER_SELECT_DATE',
@@ -1081,7 +1101,6 @@ export function mapCheckoutOptionsResponse(payload: unknown): CheckoutOptionsSna
 
   return {
     fulfillmentType: oneOf(data.fulfillment_type, FULFILLMENT_TYPES),
-    orderAcceptancePolicy: oneOf(data.order_acceptance_policy, ACCEPTANCE_POLICIES),
     schedulingStrategy: oneOf(delivery.scheduling_strategy, SCHEDULING_STRATEGIES),
     // Kept raw: the keys differ per strategy, and the response casing does not always
     // match what we write (`min_prep_time_minutes` out, `minPrepTimeMinutes` back).

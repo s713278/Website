@@ -20,6 +20,31 @@ function coverImage(raw: Record<string, unknown>): string {
   return FALLBACK_COVER
 }
 
+/**
+ * Rows from a vendor collection response, given the already-unwrapped `data`.
+ *
+ * Vendor endpoints answer in three shapes and callers must not assume any of them:
+ * `GET /v1/vendors/{id}/products` returns `data: []`, `GET /v1/vendors/{id}/orders/` and
+ * `/products/skus` return a paginated container,
+ * `data: { result: [], page_number, page_size, total_elements, total_pages, last_page }`,
+ * and other reads use Spring's `content`. The first two are verified live.
+ * `mapVendorCategories` and friends already knew this; the dashboard did not, and testing
+ * `Array.isArray` on the container silently produced no orders at all.
+ *
+ * Unlike the onboarding mappers this never throws: a dashboard tile that cannot read its
+ * collection should be empty, not take the whole page down.
+ *
+ * This is the single implementation. `mappers/vendor-dashboard.ts` calls it rather than
+ * keeping a private copy, so the regression test below guards the dashboard read too.
+ */
+export function vendorCollectionRows(data: unknown): Record<string, unknown>[] {
+  const list = Array.isArray(data)
+    ? data
+    : asRecord(data)?.result ?? asRecord(data)?.content
+  if (!Array.isArray(list)) return []
+  return list.filter((row): row is Record<string, unknown> => Boolean(asRecord(row)))
+}
+
 export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undefined {
   const t = asRecord(raw.theme)
   const logoImage =

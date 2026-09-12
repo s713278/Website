@@ -463,7 +463,9 @@ export function mapFutureCheckoutOptions(
         ? { charge: delivery.shipping.charge }
         : { delivery_charge: delivery.shipping.charge, free_delivery_threshold: delivery.shipping.freeDeliveryThreshold }
       : undefined,
-    order_acceptance_policy: delivery.orderAcceptancePolicy,
+    // One policy, always: the console has no accept step. See
+    // docs/adr/0004-new-means-scheduled.md.
+    order_acceptance_policy: 'AUTO_ACCEPT',
     delivery_slots: hasHomeDelivery
       ? delivery.slots.map((slot) => `${slot.startTime}-${slot.endTime}`)
       : [],
