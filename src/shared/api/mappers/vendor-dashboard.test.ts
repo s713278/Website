@@ -327,6 +327,13 @@ describe('mapBulkStatusResult', () => {
 })
 
 describe('mapVendorSizes', () => {
+  it('shows the quantity alongside the unit from the new SKU list', () => {
+    expect(mapVendorSizes({ data: [{
+      sku_id: 4021, vendor_product_id: 900, price_id: 8021,
+      sku_name: 'Milk', quantity_value: 0.5, unit: 'L', list_price: 60, sale_price: 55,
+    }] })[0]).toMatchObject({ skuId: '4021', priceId: '8021', size: '0.5 L' })
+  })
+
   it('maps the real SKU payload, keeping the price id an edit needs', () => {
     // Recorded from vendor 96 on the deployed API.
     const sizes = mapVendorSizes({

@@ -16,6 +16,7 @@ import type {
 } from '@/modules/vendor/types/dashboard'
 import { vendorCollectionRows } from './vendor'
 import type { VendorContext } from './vendor-onboarding'
+import { mapSkuMeasurement } from './sku-measurement'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -305,7 +306,7 @@ function mapSize(row: UnknownRecord): VendorSize {
     productId: str(row.vendor_product_id),
     priceId: str(row.price_id),
     name: str(row.sku_name) ?? 'Size',
-    size: str(row.sku_size),
+    size: mapSkuMeasurement(row).size || null,
     listPrice: num(row.list_price),
     salePrice: num(row.sale_price),
     active: row.is_active !== false,

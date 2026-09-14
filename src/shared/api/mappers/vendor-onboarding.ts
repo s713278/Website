@@ -1,4 +1,5 @@
 import type { components } from '@mithra/api-client'
+import { mapSkuMeasurement } from './sku-measurement'
 
 export type ReferencePage<T> = {
   items: T[]
@@ -485,16 +486,17 @@ export type VendorProductRef = {
 export type VendorSkuRef = {
   vendorProductId: number
   skuId: number
+  priceId: number | null
   /** Server-side name; it appends the size, e.g. "Cow Milk 1L-1 L". */
   name: string
   size: string
-  /** `name` with the size suffix removed — what the vendor actually typed. */
+  /** Product-derived name, without any size suffix. */
   displayName: string
   description: string
   isActive: boolean
   listPrice: number | null
   salePrice: number | null
-  /** Parsed back out of `size`: "1 L" -> 1 and "L". */
+  /** Numeric quantity from the API, or parsed from a legacy size label. */
   quantity: number | null
   unit: string
 }
@@ -630,21 +632,8 @@ export function mapVendorProducts(payload: unknown): VendorProductRef[] {
   }))
 }
 
-/** Splits the server's `sku_size` ("1 L", "500 ml", "12 pcs") into quantity and unit. */
-function parseSkuSize(size: string): { quantity: number | null; unit: string } {
-  const match = size.trim().match(/^([\d.]+)\s*(.*)$/)
-  if (!match) return { quantity: null, unit: size.trim() }
-  const quantity = Number.parseFloat(match[1])
-  return {
-    quantity: Number.isFinite(quantity) ? quantity : null,
-    unit: match[2].trim(),
-  }
-}
-
 /**
- * `mapSkuCreateRequest` sends `name` and the server stores `"<name>-<size>"`, so the
- * suffix is stripped to recover what the vendor typed. Anything that does not match
- * the convention is left alone rather than guessed at.
+ * Some reads append the size to the product-derived name. Strip only an exact suffix.
  */
 function stripSizeSuffix(name: string, size: string): string {
   const suffix = `-${size}`
@@ -663,11 +652,11 @@ function lenientNumber(value: unknown): number | null {
 export function mapVendorSkus(payload: unknown): VendorSkuRef[] {
   return vendorList(payload).map((item) => {
     const name = lenientString(item.sku_name) ?? ''
-    const size = lenientString(item.sku_size) ?? ''
-    const { quantity, unit } = parseSkuSize(size)
+    const { quantity, unit, size } = mapSkuMeasurement(item)
     return {
       vendorProductId: requiredId(item.vendor_product_id),
       skuId: requiredId(item.sku_id),
+      priceId: lenientInteger(item.price_id),
       name,
       size,
       displayName: stripSizeSuffix(name, size),
@@ -680,6 +669,22 @@ export function mapVendorSkus(payload: unknown): VendorSkuRef[] {
       unit,
     }
   })
+}
+
+export function mapVendorSkuPage(payload: unknown): {
+  skus: VendorSkuRef[]
+  pageNumber: number | null
+  lastPage: boolean | null
+} {
+  const skus = mapVendorSkus(payload)
+  const data = isRecord(payload) ? payload.data : null
+  // Older deployments return the complete collection without a paging container.
+  if (Array.isArray(data)) return { skus, pageNumber: 0, lastPage: true }
+  return {
+    skus,
+    pageNumber: isRecord(data) ? lenientInteger(data.page_number) : null,
+    lastPage: isRecord(data) && typeof data.last_page === 'boolean' ? data.last_page : null,
+  }
 }
 
 export type VendorProfile = {
@@ -718,9 +723,8 @@ export function vendorProductIdByPlatformId(products: VendorProductRef[]): Map<n
 /* -------------------------------------------------------------------------
  * Vendor catalog + checkout writes
  *
- * Shapes below are verified against the live API, not inferred from the schema.
- * Where behaviour contradicts the published contract it is called out inline,
- * so nobody "corrects" it back to the documented-but-broken form.
+ * SKU requests follow the supplied OpenAPI revision; earlier live-verified exceptions
+ * for catalog assignment and creation are called out inline.
  * ---------------------------------------------------------------------- */
 
 export type AssignProductsRequest = components['schemas']['AssignProductsRequest']
@@ -819,24 +823,22 @@ export function mapCreatedProduct(payload: unknown): number {
 }
 
 export type SkuCreateInput = {
-  name: string
-  description: string
-  measurementType: SkuMeasurementType
-  unit: string
-  quantity: number
-  listPrice: number
-  salePrice: number
   active: boolean
   homeDelivery: boolean
   storePickup: boolean
+  sizes: Array<{
+    measurementType: SkuMeasurementType
+    unit: string
+    quantity: number
+    listPrice: number
+    salePrice: number
+  }>
 }
 
 /**
- * `eligible_sub_plans` is effectively required: omitting it crashes the backend
- * validator (`HV000028`, HTTP 417) rather than returning a validation error, and an
- * empty array is rejected with "SKU must have at least one eligible subscription
- * plan". Onboarding does not collect subscription plans, so every SKU gets the
- * one-time/flexible plan.
+ * Step 6 collects sizes and prices. Product details are inherited by the backend;
+ * subscription plans are optional and are not configured during setup. One request
+ * creates all sizes of a product that share availability and fulfillment settings.
  */
 export function mapSkuCreateRequest(
   input: SkuCreateInput,
@@ -845,27 +847,28 @@ export function mapSkuCreateRequest(
 ): SkuCreateRequest {
   return {
     product_id: vendorProductId,
-    name: input.name.trim(),
-    description: optionalTrimmed(input.description),
     sku_type: 'ITEM',
     is_active: input.active,
     home_delivery: input.homeDelivery,
     store_pickup: input.storePickup,
-    price_list: [
-      {
-        measurement_type: input.measurementType,
-        unit: input.unit,
-        value: String(input.quantity),
-        effective_date: effectiveDate,
-        list_price: input.listPrice,
-        sale_price: input.salePrice,
-        shipping_price: 0,
-      },
-    ],
-    eligible_sub_plans: [
-      { sub_plan_id: 4, sub_frequency: 'ONE_TIME', delivery_mode: 'FLEXIBLE' },
-    ],
+    price_list: input.sizes.map((size) => ({
+      measurement_type: size.measurementType,
+      unit: size.unit,
+      quantity_value: size.quantity,
+      effective_date: effectiveDate,
+      list_price: size.listPrice,
+      sale_price: size.salePrice,
+      shipping_price: 0,
+    })),
+    subscription_eligible: false,
+    eligible_sub_plans: [],
   }
+}
+
+export type SkuUpdateInput = { quantity: number; unit: string; active: boolean }
+
+export function mapSkuUpdateRequest(input: SkuUpdateInput): components['schemas']['SkuInfoUpdateRequest'] {
+  return { quantity_value: input.quantity, unit: input.unit, is_active: input.active }
 }
 
 export type CheckoutDeliveryInput = {

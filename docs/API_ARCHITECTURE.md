@@ -267,6 +267,46 @@ The same invalidation also drops the dashboard's narrower context cache, so retu
 cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
 response belonging to an entry that has already been invalidated.
 
+#### Vendor setup sizes (Step 6)
+
+The September 2026 OpenAPI contract separates a size's numeric `quantity_value` and `unit`.
+Creation sends them in each `price_list` entry, along with measurement type and prices; it never
+sends the retired string `value`. `product_id` remains the vendor product ID. Names, descriptions,
+and images are inherited from the product, so setup omits those deprecated request fields. Setup
+does not configure subscriptions: new sizes send `subscription_eligible: false` and an empty
+`eligible_sub_plans`, as the updated contract permits.
+
+New sizes of the same vendor product share one POST with multiple `price_list` entries when
+their availability, home-delivery, and pickup flags match. Different products or flag values
+use separate requests because those fields apply to the entire request. Grouping happens after
+reconciliation, so existing sizes are excluded from creation, including sizes recovered on retry.
+
+Account reads load every SKU page before reconciliation, reject incomplete pagination, and retain
+`price_id` for repricing. The shared measurement mapper prefers the separate fields and accepts
+legacy `sku_size` labels for older responses and demo fixtures. Vendor and storefront size labels
+use the same mapping so fractional quantities remain visible.
+
+Quantity, unit, and availability edits use `PATCH /v1/vendors/{vendor_id}/skus/{sku_id}`; quantity
+and unit are sent together, while product details and features are omitted and preserved. Prices
+use `PUT /v1/sku/price/{price_id}` with `sku_id`, `list_price`, and `sale_price`. These edits retain
+the SKU ID and its subscriptions. A missing price record blocks repricing before any writes. A
+partial failure stays visible; retry reads current account values and writes only remaining changes.
+
+After creation, the account is reread and saved IDs replace the local draft IDs without replacing
+the draft's other fields. Repeated saves also recognise an identical size whose successful create
+did not return an ID. Matching uses product, quantity, and unit, never a stale product-derived name.
+Conflicting new drafts must reload instead of taking over an existing size. The wizard records
+returned identities only while the initiating session and step remain current.
+
+The final read must confirm every new size before Step 6 succeeds. If a successful response leaves
+a size missing, the wizard retains the confirmed IDs and shows a save error. A failed batch may
+have saved some sizes; retry reads the account again and groups only the remaining creates.
+
+Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Step 6
+has no fulfillment controls; old drafts can still carry those flags, which the PATCH contract
+cannot update. That remaining exception and the limits of live verification are recorded in
+[API_GAPS.md](./API_GAPS.md#updated-sku-contract).
+
 **Mapping** — `src/shared/api/mappers/vendor.ts` (`mapVendorToStore`, `mapVendorTheme`)
 absorbs the backend's inconsistent field naming (`business_name` *or* `name`, `distance_km`
 *or* `distanceKm`, `price` *or* `selling_price`, `veg` *or* `is_veg`) and supplies defaults.

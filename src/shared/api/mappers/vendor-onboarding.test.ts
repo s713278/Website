@@ -61,6 +61,29 @@ describe('measurement catalog detail enrichment', () => {
  */
 
 describe('mapVendorSkus', () => {
+  it('restores structured quantities and the price record needed for edits', () => {
+    const [sku] = mapVendorSkus({ data: { result: [{
+      vendor_product_id: 900, sku_id: 4021, price_id: 8021,
+      sku_name: 'Milk-0.5 L', quantity_value: 0.5, unit: 'L',
+      list_price: 60, sale_price: 55, is_active: false,
+    }] } })
+
+    expect(sku).toMatchObject({
+      vendorProductId: 900, skuId: 4021, priceId: 8021,
+      displayName: 'Milk', quantity: 0.5, unit: 'L', size: '0.5 L',
+      listPrice: 60, salePrice: 55, isActive: false,
+    })
+  })
+
+  it('prefers quantity_value and unit over a legacy size label', () => {
+    const [sku] = mapVendorSkus({ data: [{
+      vendor_product_id: 900, sku_id: 4021, sku_name: 'Milk',
+      quantity_value: 250, unit: 'ml', sku_size: '1 L',
+    }] })
+
+    expect(sku).toMatchObject({ quantity: 250, unit: 'ml', size: '250 ml' })
+  })
+
   it('splits sku_size and strips the server name suffix', () => {
     const [sku] = mapVendorSkus({
       data: [{

@@ -1,4 +1,5 @@
 import type { Product, ProductPage, ProductVariant, SkuType } from '@/modules/storefront/types'
+import { mapSkuMeasurement } from './sku-measurement'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -29,7 +30,7 @@ function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVaria
   const price = asNumber(raw.sale_price) ?? asNumber(raw.list_price) ?? 0
   return {
     id: String(id),
-    unit: String(raw.sku_size ?? raw.unit ?? '').trim(),
+    unit: mapSkuMeasurement(raw).size,
     price,
     listPrice: asNumber(raw.list_price),
     onSale: raw.on_sale === true,

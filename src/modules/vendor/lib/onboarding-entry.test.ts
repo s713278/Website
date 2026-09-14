@@ -47,7 +47,7 @@ function state(
     categories: [{ vendorCategoryId: 501, platformCategoryId: 10, name: 'Juices', imageUrl: null }],
     products: [{ vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Orange Juice', measurementId: 2 }],
     skus: [{
-      vendorProductId: 900, skuId: 4021, name: 'Orange Juice-1 L', size: '1 L',
+      vendorProductId: 900, skuId: 4021, priceId: 8021, name: 'Orange Juice-1 L', size: '1 L',
       displayName: 'Orange Juice', description: '', isActive: true,
       listPrice: 180, salePrice: 160, quantity: 1, unit: 'L',
     }],
