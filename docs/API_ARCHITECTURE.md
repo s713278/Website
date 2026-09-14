@@ -36,13 +36,12 @@ could be dropped into a second app (a vendor admin, a native shell) unchanged. L
 where this specific app's opinions live: demo mode, and the mapping from the backend's
 inconsistent wire format to the types our components expect.
 
-**The consequence you must internalise:** they are stacked, not merged. Most established Layer 2
-services call Layer 1's raw primitives (`apiGet`/`apiPost`) with hand-written paths rather than its
-typed services. The vendor-onboarding service is the first bounded exception: it calls Layer 1's
-`catalogService`, `vendorsService`, and `platformService`, then validates and maps their generic
-responses before exposing them to the wizard. So service names can still exist in both layers, mean
-different things in each, and changing one does not automatically change the other. Check which one
-you're importing.
+Layer 2 services currently mix calls to Layer 1's raw primitives (`apiGet`/`apiPost`) with calls to
+its domain wrappers. Catalog uses package storefront/vendor wrappers; vendor onboarding uses package
+catalog/vendor/platform wrappers and strict mappers; auth also uses package auth functions. Generated
+operation types do not consistently flow through these services. Names still exist in both layers
+with different signatures, and changing one does not automatically change the other: trace the caller
+and import before editing.
 
 ### The one import rule
 
@@ -186,7 +185,7 @@ One object per backend domain, all thin wrappers over the primitives above.
 | `cart.ts` | `cartService` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` — all under `/v1/vendors/{vendorId}/cart`. |
 | `orders.ts` | `ordersService` | `create`, `createFromCart`, vendor-scoped list/update/cancel/tracking, user order history. |
 | `users.ts` | `usersService` | Profile, mobile/address updates, dashboard, history, preferences, subscriptions. |
-| `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier + delivery-eligibility check (both `skipAuth`). Exports the `Storefront*` types. |
+| `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier, paginated storefront products, and delivery-eligibility check (all `skipAuth`). Exports the `Storefront*` types. |
 | `subscriptions.ts` | `subscriptionsService` | Vendor subscriptions, SKU-level plans, platform plans. |
 | `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, authenticated measurement list/detail reads, SKU pricing, vendor image upload, courier admin. |
 | `social.ts` | `socialService` | Social OAuth connect/callback, profile/media sync. |
@@ -196,7 +195,7 @@ One object per backend domain, all thin wrappers over the primitives above.
 ### 3.3 App services (`src/shared/api/services/*.service.ts`)
 
 The established services have two jobs: **demo-mode fallback** and **payload → view-model mapping**.
-Most functions have the same skeleton:
+An illustrative demo/live skeleton for a service that uses raw transport is:
 
 ```ts
 export async function listStores(query?: string): Promise<Store[]> {
@@ -215,13 +214,13 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | File | Exposes | Demo source | Live endpoint(s) |
 |---|---|---|---|
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
-| `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
+| `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore`, `listStoreProducts`, `getProductSkuDetail` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Package vendor/storefront wrappers; landing rows use `mapLandingStore`, storefront details use `mapVendorToStore`, and product pages/details use dedicated storefront-product mappers |
 | `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders`, `GET /v1/users/{userId}/orders/history` |
 | `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
-| `cart.service.ts` | `get`, `clear`, `addItem`, `upsertItem`, `updateItemQty`, `removeItem` | — | `/v1/vendors/{vendorId}/cart/*` — **imported by nothing.** See below. |
+| `cart.service.ts` | `get`, `clear`, `addItem`, `setItemQty`, `removeItem` | Service returns empty snapshots/no-ops; cart orchestration mutates Zustand locally | `/v1/vendors/{vendorId}/cart/*`, mapped by `mapCartPayload`; called by storefront `cart-actions.ts` |
 | `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Wire-shaped vendor-context fixture mounts the console; setup references still come only from the explicitly selected sample catalog | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
 In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
@@ -335,11 +334,17 @@ included both `id` and `vendor_id`, and optionally included explicit `banner_ima
 `thumbnail_image`. Rows with neither image were present. The response's generic `image_path` occurred
 on `top_products`, not on the sampled vendor rows, so it is not treated as landing-store artwork.
 
-> **Cart is not backend-synced.** `useCartStore` (`src/modules/storefront/store/cart-store.ts`,
-> localStorage `md-cart`) is entirely local and never calls `cartService`. Both layers *have* a
-> cart service written; neither is wired to the store. Backend cart sync is unbuilt work, not a
-> bug to route around. The cart is also single-store by design — adding an item from a
-> different vendor prompts to clear it.
+#### Storefront cart
+
+`src/modules/storefront/lib/cart-actions.ts` connects storefront actions to the app-facing
+`cartService`. Live adds and quantity updates apply the returned cart snapshot after API success;
+deletion removes the local line after the request succeeds, or locally if it has no backend item ID.
+Demo actions update Zustand directly. The package's parallel cart wrapper is not used by this path.
+
+`useCartStore` persists lines and summaries per vendor under `md-cart`; replacing one vendor's cart
+retains other vendors' lines. `hydrateVendorCart` fetches a live snapshot only when that vendor has
+no local lines, so persisted state is not continuously reconciled with the backend. Product metadata
+enriches API lines before they reach the store. Trace this orchestration when changing cart behavior.
 
 #### Vendor dashboard reads
 
@@ -407,84 +412,50 @@ export function isLiveApi() {
 
 Following `catalogService.getStore('42')` in live mode:
 
-1. **Page** calls the app service (`src/shared/api/services/catalog.service.ts:43`).
+1. **Page** calls the app service (`src/shared/api/services/catalog.service.ts`).
 2. **Mode gate** — `isLiveApi()` is true, so the demo branch is skipped.
-3. **Primitive** — `apiGet('/v1/vendors/42', { skipAuth: true })` (`client/http.ts:96`).
+3. **Package wrapper** — `storefrontService.get('42')` calls
+   `apiGet('/v1/vendors/42/storefront', { skipAuth: true })`.
 4. **Instance** — `getHttp()` lazily builds the Axios singleton on first use, reading `baseURL`
-   and `timeoutMs` from the config module (`client/http.ts:74`).
-5. **Request interceptor** (`client/http.ts:32`):
+   and `timeoutMs` from the config module.
+5. **Request interceptor**:
    - if the body is `FormData`, the `Content-Type` header is **deleted** so the browser can set
      `multipart/form-data` with the correct boundary — this is what makes image upload work;
    - unless `skipAuth`, attaches `Authorization: Bearer <mithra_access_token>` — refreshing
      first when `isAccessTokenExpired()` says the stored token has already expired, so an
-     idle return does not spend a doomed request to discover it (§5 step 6).
-6. **Response interceptor** (`client/http.ts:49`) — passes 2xx straight through. On a 401, and
-   only if `skipAuth`/`skipRefresh` are unset and this isn't already a retry:
-   `refreshAccessToken()` → on success, re-attach the new token and replay the request once
-   → on failure, call `onUnauthorized()`. Everything else is normalised by `toApiError` and
-   rejected.
+     idle return does not spend a doomed request to discover it (see the
+     [session lifecycle](./SESSION.md#lifecycle)).
+6. **Response interceptor** — this public request skips authenticated refresh/retry. Protected
+   calls use the shared refresh, retry, and credential-failure rules in the session lifecycle.
+   Errors leave the transport normalized through `toApiError`.
 7. **Envelope check** — `assertApiSuccess` throws if the payload says `success: false` (§3.1).
-8. **Unwrap + map** — `unwrapData(res)` peels `{ data: … }`; `mapVendorToStore` turns the raw
-   vendor into the app's `Store` type.
+8. **Unwrap + map** — `unwrapData(res)` peels `{ data: … }`; `mapVendorToStore` turns the
+   storefront details into the app's `Store` type with an initially empty product list.
 9. **Page** sets state and renders.
 
-Note step 8's partial-failure handling in `getStore`: the products call is wrapped in
-`.catch(() => null)`, so a vendor still renders if its product list 404s. Deliberate.
+Products load separately through `catalogService.listStoreProducts`, which calls the package's
+paginated `/v1/vendors/{vendorId}/storefront/products` wrapper and maps the result.
 
 ---
 
 ## 5. HOW auth and tokens work
 
-See [`SESSION.md`](./SESSION.md) for the full lifecycle and the security posture. Summary:
+The package owns transport and token handling. App `auth.service.ts` maps the verified backend
+identity into a session, and `auth-store.ts` coordinates application state through `applySession`
+and `clearSession`. `AppProviders` configures callbacks, restores the session, and wires feature
+cleanup. Persisted credentials belong to the API token store; `md-auth` persists identity only.
 
-1. **Request OTP** — `authService.requestOtp({ phone, role, countryCode })` →
-   `POST /v1/auth/request-otp`. In demo mode this is a 300 ms no-op and the OTP is `1234`.
-2. **Verify** — `authService.verifyOtp(...)` → `POST /v1/auth/verify-otp`. Tokens are pulled
-   out by `parseTokenResponse()`, which accepts `access_token` / `accessToken` / `token` at
-   either the root or under `data` — the backend isn't consistent.
-3. **Store** — `setTokens(access, refresh)` writes localStorage `mithra_access_token` /
-   `mithra_refresh_token`. These are what the request interceptor reads.
-4. **UI state** — `useAuthStore` (zustand + `persist`, key `md-auth`) separately holds
-   the user and an in-memory token mirror, but persists only `{ user }`. Entry points:
-   `applySession(session)` (writes identity and API credentials), `completeOtpLogin`,
-   `clearSession` (local wipe, no server call),
-   `logout` (server sign-out then `clearSession`), `hasRole`.
-5. **Reload** — rehydrates identity and reads credentials from the API token store. It never
-   copies a legacy `md-auth` token back into that store. `restoreSession()` completes hydration;
-   [`SESSION.md`](./SESSION.md#lifecycle) owns the restoration and credential-failure behavior.
-6. **Expiry** — detected client-side *before* sending, then again on the wire. The request
-   interceptor calls `isAccessTokenExpired()` (reads `exp`, 30-second skew) and refreshes up
-   front; the response interceptor's 401 path (§4 step 6) remains the backstop for revocation
-   and for tokens the check cannot read. Both use the same single-flight refresh. The check
-   never fails closed: an opaque or malformed token is reported usable, and a transient
-   refresh failure sends the stale token rather than blocking the request.
-   `restoreSession()` still refreshes only when the access token is **absent** — an expired
-   one is left for the interceptor. See [`SESSION.md`](./SESSION.md) for the full lifecycle.
-7. **Give up** — `onUnauthorized` is wired exactly once, in
-   `src/app/providers/AppProviders.tsx:12`, to `useAuthStore.getState().clearSession()` —
-   *not* `logout()`, because a failed refresh means the server session is already gone and
-   calling sign-out would risk a loop. The same effect installs the API error logger via
-   `setApiErrorLogger`.
-
-`AppProviders` wraps no context — it is purely this one configuration effect and returns
-`children` unchanged.
-
-> **Auth has two entry points, and only one works live.** Live login is OTP, called directly
-> from the login/register pages. `useAuthStore.login`/`register` are the email+password
-> **demo-only** path — `auth.service.ts` throws in live mode telling you to use OTP. Check
-> which one a page actually uses before changing either.
-
-> **Persisted credentials have one owner:** the API token store. `md-auth` stores identity only.
-> Session changes still go through `applySession` or `clearSession` so identity and credentials
-> belong to the same session. See [`SESSION.md`](./SESSION.md) for the lifecycle.
+Read [SESSION.md](./SESSION.md) before changing OTP, roles, refresh, logout, route gates, or
+session-owned storage. It owns the implemented lifecycle, failure behavior, authorization limits,
+and the separately marked target session model. Human login instructions and demo credentials
+live in [README.md](../README.md#authentication-status).
 
 ---
 
 ## 6. HOW to call the API from a component
 
 There is **no** React Query, SWR, or data context in this app — confirmed, not an oversight.
-Each page owns its own `loading` / `error` / `data` state. The template is
-`src/modules/storefront/pages/StoreDetailPage.tsx`:
+Pages or their hooks own `loading` / `error` / `data` state. An illustrative component read is:
 
 ```tsx
 const [store, setStore] = useState<Store | null>(null)
@@ -609,7 +580,7 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 |---|---|---|
 | `mithra_access_token` / `mithra_refresh_token` | `client/tokens.ts` | the tokens requests actually use |
 | `md-auth` | `useAuthStore` | persisted `{ user }` for UI restore; legacy tokens are ignored |
-| `md-cart` | `useCartStore` | the local-only cart |
+| `md-cart` | `useCartStore` | vendor-scoped lines and summaries; live API snapshots or local demo state |
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
 | `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders` | demo services | mutable demo-mode state. The vendor dashboard keeps none: its demo data is read-only wire-shaped fixtures, so `md-vendor-orders` and `md-vendor-products` no longer exist |
@@ -628,7 +599,7 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
 
 - **Two `catalogService`s, two `cartService`s.** Same names, different layers, different
   signatures. Confirm your import path.
-- **Demo mode is the default.** `VITE_USE_API=false` ships in `.env`. A live-only service
+- **Demo mode is the default.** `VITE_USE_API=false` ships in `.env.example`. A live-only service
   function fails as an empty screen, not an error.
 - **The `useApi` runtime override can't disable live mode** — see §3.4.
 - **A 200 can throw.** `assertApiSuccess` rejects any envelope with `success: false` — §3.1.
@@ -640,12 +611,12 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
   Axios instance built without the just-configured `onUnauthorized`, so a cold-load 401 can
   fail to trigger logout.
 - **`sync:api` needs pnpm** despite this being an npm repo — see §8.
-- **Cart isn't backend-synced** and **`useAuthStore.login`/`register` are demo-only** — §3.3, §5.
+- **Cart hydration skips vendors with cached lines** — see [Storefront cart](#storefront-cart).
+- **`useAuthStore.login`/`register` are demo-only service actions.** The login screens use OTP;
+  see [authentication status](../README.md#authentication-status).
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
   session compromise. `SESSION.md` covers the intended migration to httpOnly cookies.
-- **The richer `/storefront` payload isn't wired into the customer storefront.**
-  `storefrontService.get(identifier)` and the flat storefront functions exist in the package, but
-  the customer surface still renders from `catalogService` (`/v1/vendors/…`). The legacy
-  `getPublicStoreBySlug` now delegates to the identifier endpoint; this fixes the old nonexistent
-  `/v1/public/stores/{slug}` path but does not complete customer storefront adoption.
+- **Storefront details and products load separately.** App `catalogService.getStore` uses the
+  package storefront wrapper and returns an initially empty product list. Use `listStoreProducts`
+  for the paginated catalog; the initial `Store.products` value does not establish an empty catalog.
 - **`pnpm-workspace.yaml` is unused** — §2.
