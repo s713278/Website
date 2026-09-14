@@ -1043,6 +1043,118 @@ body.landing-page {
   color: var(--md-muted);
 }
 
+.price .was {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--md-muted);
+  text-decoration: line-through;
+  margin-right: 0.35rem;
+}
+
+.pricing-fineprint {
+  margin: 0.5rem 0 0;
+  color: var(--md-muted);
+  font-size: 0.9rem;
+}
+
+.price-off {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--md-green-dark);
+}
+
+.price-tax {
+  margin: -0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--md-muted);
+}
+
+.price-best {
+  margin: 0 0 1.25rem;
+  flex: 1;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.price-card.future {
+  opacity: 0.92;
+}
+
+.coming-soon-badge {
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #64748b;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.price-card .btn[aria-disabled='true'] {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.pricing-compare-wrap {
+  margin-top: 2.5rem;
+  overflow-x: auto;
+  border: 1px solid var(--md-border);
+  border-radius: 1.15rem;
+  background: #fff;
+}
+
+.pricing-compare {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+}
+
+.pricing-compare th,
+.pricing-compare td {
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.pricing-compare thead th {
+  background: var(--md-surface-alt);
+  font-weight: 700;
+}
+
+.pricing-compare tbody tr {
+  border-top: 1px solid var(--md-border);
+}
+
+.pricing-compare th:first-child,
+.pricing-compare td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  font-weight: 600;
+  z-index: 1;
+}
+
+.pricing-compare thead th:first-child {
+  background: var(--md-surface-alt);
+}
+
+.pricing-compare .plan-current {
+  background: color-mix(in srgb, var(--md-green) 10%, #fff);
+  color: var(--md-green-deep);
+  font-weight: 600;
+}
+
+.pricing-compare thead th.plan-current {
+  color: var(--md-green-dark);
+}
+
 .price-list {
   list-style: none;
   margin: 0 0 1.25rem;

@@ -22,6 +22,13 @@ import {
   Wheat,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { cn } from '@/lib/utils'
+import {
+  formatPlanPrice,
+  pricingFeatureRows,
+  pricingPlans,
+  type PlanFeatureValue,
+} from '@/modules/marketing/lib/pricing-plans'
 import { Button, ShadcnInput } from '@/shared/components'
 import {
   catalogService,
@@ -178,51 +185,24 @@ const testimonials = [
   },
 ]
 
-const plans = [
-  {
-    name: 'Starter',
-    price: '₹199',
-    suffix: '/month',
-    features: [
-      '1 storefront',
-      'Up to 50 products',
-      'WhatsApp ordering',
-      'Basic analytics',
-      'Theme colour & branding',
-    ],
-    action: 'Start Free',
-    to: '/onboarding',
-  },
-  {
-    name: 'Growth',
-    price: '₹499',
-    suffix: '/month',
-    features: [
-      'Unlimited products',
-      'Subscription selling',
-      'Advanced analytics',
-      'Priority support',
-      'Custom delivery & payments',
-    ],
-    action: 'Start Free',
-    to: '/onboarding',
-    popular: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    suffix: 'pricing',
-    features: [
-      'Multiple stores',
-      'Custom features',
-      'API access',
-      'White-label option',
-      'Dedicated success manager',
-    ],
-    action: 'Contact Us',
-    href: 'mailto:hello@mithradirect.com',
-  },
-] as const
+function PlanFeatureMark({ value }: { value: PlanFeatureValue }) {
+  if (value === true) {
+    return (
+      <span className="inline-flex justify-center">
+        <Check className="size-5 stroke-[2.5] text-emerald-600" aria-hidden />
+        <span className="sr-only">Included</span>
+      </span>
+    )
+  }
+  if (value === false) {
+    return (
+      <span className="text-slate-400" aria-label="Not included">
+        —
+      </span>
+    )
+  }
+  return <span className="font-medium text-slate-800">{value}</span>
+}
 
 function SectionHeader({ title, copy }: { title: string; copy: string }) {
   return (
@@ -1010,59 +990,107 @@ export function PricingSection() {
     <SectionShell id="pricing" className="bg-slate-50">
       <SectionHeader
         title="Simple, transparent pricing"
-        copy="Start free. Upgrade when you’re ready to grow — cancel anytime."
+        copy="Mithra Social Starter is available now. Growth and Business Pro are planned for later. Every plan includes a 14-day free trial."
       />
+      <p className="mt-3 text-center text-sm text-slate-500">
+        Prices shown after 50% off. Monthly charges before taxes.
+      </p>
       <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-3">
-        {plans.map((plan) => (
+        {pricingPlans.map((plan) => (
           <article
-            key={plan.name}
-            className={`relative flex flex-col rounded-3xl bg-white p-7 ${
-              'popular' in plan && plan.popular
+            key={plan.id}
+            className={cn(
+              'relative flex flex-col rounded-3xl bg-white p-7',
+              plan.featured
                 ? 'border-2 border-emerald-500 shadow-xl shadow-emerald-100'
-                : 'border border-slate-200'
-            }`}
+                : 'border border-slate-200',
+              !plan.available && 'opacity-90',
+            )}
           >
-            {'popular' in plan && plan.popular ? (
-              <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white">
-                Most Popular
-              </span>
-            ) : null}
+            <span
+              className={cn(
+                'absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full px-4 py-1.5 text-xs font-bold text-white',
+                plan.available ? 'bg-emerald-600' : 'bg-slate-500',
+              )}
+            >
+              {plan.available ? 'Available now' : 'Coming soon'}
+            </span>
             <h3 className="font-display text-xl font-bold text-slate-950">{plan.name}</h3>
-            <p className="mt-5 flex items-end gap-1">
-              <strong className="font-display text-4xl font-extrabold tracking-tight text-slate-950">
-                {plan.price}
-              </strong>
-              <span className="pb-1 text-sm text-slate-500">{plan.suffix}</span>
+            <p className="mt-2 text-sm font-semibold text-emerald-700">50% off</p>
+            <p className="mt-4 text-sm font-medium text-slate-400 line-through">
+              {formatPlanPrice(plan.originalPrice)}
             </p>
-            <ul className="my-7 flex-1 space-y-3 text-slate-700">
-              {plan.features.map((feature) => (
-                <li key={feature} className="flex gap-2.5">
-                  <Check className="mt-0.5 size-5 shrink-0 stroke-[2.5] text-emerald-600" aria-hidden />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            {'to' in plan ? (
+            <p className="mt-1 flex items-end gap-1">
+              <strong className="font-display text-4xl font-extrabold tracking-tight text-slate-950">
+                {formatPlanPrice(plan.price)}
+              </strong>
+              <span className="pb-1 text-sm text-slate-500">/month</span>
+            </p>
+            <p className="mt-1 text-xs text-slate-500">before taxes</p>
+            <p className="my-7 flex-1 text-sm leading-6 text-slate-600">
+              Best for {plan.bestFor.toLowerCase()}.
+            </p>
+            {plan.available && plan.to ? (
               <Link
                 to={plan.to}
-                className={`rounded-full px-5 py-3 text-center font-bold transition ${
-                  'popular' in plan && plan.popular
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'border-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                }`}
+                className="rounded-full bg-emerald-600 px-5 py-3 text-center font-bold text-white transition hover:bg-emerald-700"
               >
-                {plan.action}
+                {plan.cta}
               </Link>
             ) : (
-              <a
-                href={plan.href}
-                className="rounded-full border-2 border-emerald-300 px-5 py-3 text-center font-bold text-emerald-700 transition hover:bg-emerald-50"
-              >
-                {plan.action}
-              </a>
+              <span className="cursor-not-allowed rounded-full border-2 border-slate-200 px-5 py-3 text-center font-bold text-slate-400">
+                {plan.cta}
+              </span>
             )}
           </article>
         ))}
+      </div>
+      <div className="mt-14 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <caption className="sr-only">Feature comparison across MithraDirect plans</caption>
+          <thead>
+            <tr className="bg-slate-50 text-sm text-slate-950">
+              <th scope="col" className="sticky left-0 z-10 bg-slate-50 px-5 py-5 font-bold">
+                Feature
+              </th>
+              {pricingPlans.map((plan) => (
+                <th
+                  key={plan.id}
+                  scope="col"
+                  className={cn(
+                    'px-5 py-5 text-center font-bold',
+                    plan.featured ? 'bg-emerald-50 text-emerald-800' : '',
+                  )}
+                >
+                  {plan.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pricingFeatureRows.map((row) => (
+              <tr key={row.feature} className="border-t border-slate-100">
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 bg-white px-5 py-4 text-left text-sm font-medium text-slate-900 sm:text-base"
+                >
+                  {row.feature}
+                </th>
+                {pricingPlans.map((plan, index) => (
+                  <td
+                    key={`${row.feature}-${plan.id}`}
+                    className={cn(
+                      'px-5 py-4 text-center text-sm sm:text-base',
+                      plan.featured ? 'bg-emerald-50/70 text-emerald-800' : 'text-slate-700',
+                    )}
+                  >
+                    <PlanFeatureMark value={row.values[index] ?? false} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </SectionShell>
   )
