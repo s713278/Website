@@ -13,8 +13,12 @@
     orders: 'Orders',
     products: 'Products',
     store: 'Store & Share',
+    plan: 'Shop plan',
     settings: 'Settings'
   };
+
+  var PLAN_STORAGE_KEY = 'md-demo-shop-plan';
+  var PLAN_PRICE = 299;
 
   var orderFilter = 'all';
   var state = {
@@ -24,9 +28,137 @@
     qrHref: '',
     qrName: ''
   };
+  var billing = null;
 
   function qs(id) {
     return document.getElementById(id);
+  }
+
+  function isoFromDays(n) {
+    return new Date(Date.now() + n * 86400000).toISOString();
+  }
+
+  function formatDayLabel(iso) {
+    try {
+      return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function historyItem(kind, title, detail, when) {
+    return { kind: kind, title: title, detail: detail, when: when || 'Today' };
+  }
+
+  function defaultBilling() {
+    return {
+      demo: 'trial',
+      status: 'trial',
+      daysLeft: 12,
+      periodEnd: isoFromDays(12),
+      history: [historyItem('trial', 'Free days started', '14 free days', 'Today')]
+    };
+  }
+
+  function billingPreset(id) {
+    if (id === 'soon') {
+      return {
+        demo: 'soon',
+        status: 'trial',
+        daysLeft: 3,
+        periodEnd: isoFromDays(3),
+        history: [historyItem('trial', 'Free days started', '14 free days', '11 days ago')]
+      };
+    }
+    if (id === 'paid') {
+      return {
+        demo: 'paid',
+        status: 'paid',
+        daysLeft: 22,
+        periodEnd: isoFromDays(22),
+        history: [
+          historyItem('trial', 'Free days started', '14 free days', 'Last month'),
+          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(isoFromDays(22)), 'Today')
+        ]
+      };
+    }
+    if (id === 'due') {
+      return {
+        demo: 'due',
+        status: 'due',
+        daysLeft: 0,
+        periodEnd: isoFromDays(-1),
+        history: [
+          historyItem('trial', 'Free days started', '14 free days', '15 days ago'),
+          historyItem('failed', 'Payment did not go through', 'Shop hidden from customers', 'Today')
+        ]
+      };
+    }
+    if (id === 'stopping') {
+      return {
+        demo: 'stopping',
+        status: 'stopping',
+        daysLeft: 8,
+        periodEnd: isoFromDays(8),
+        history: [
+          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(isoFromDays(8)), 'Last week'),
+          historyItem('stopped', 'Plan stopped', 'Shop stays open until paid days end', 'Today')
+        ]
+      };
+    }
+    if (id === 'closed') {
+      return {
+        demo: 'closed',
+        status: 'closed',
+        daysLeft: 0,
+        periodEnd: isoFromDays(-2),
+        history: [
+          historyItem('paid', 'Paid ₹299', 'One month', 'Last month'),
+          historyItem('stopped', 'Plan stopped', 'Paid days ended', '2 days ago')
+        ]
+      };
+    }
+    return defaultBilling();
+  }
+
+  function loadBilling() {
+    try {
+      var raw = sessionStorage.getItem(PLAN_STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.status) return parsed;
+      }
+    } catch (e) {}
+    return defaultBilling();
+  }
+
+  function saveBilling() {
+    try {
+      sessionStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(billing));
+    } catch (e) {}
+  }
+
+  function shopIsClosed() {
+    return billing && (billing.status === 'due' || billing.status === 'closed');
+  }
+
+  function shopNeedsPay() {
+    return !billing || billing.status !== 'paid';
+  }
+
+  function billingTone() {
+    if (!billing || billing.status === 'paid') return '';
+    if (billing.status === 'due' || billing.status === 'closed') return 'danger';
+    if (billing.status === 'stopping') return 'warn';
+    if (Number(billing.daysLeft) <= 3) return 'danger';
+    if (Number(billing.daysLeft) <= 7) return 'warn';
+    return '';
+  }
+
+  function applyDemoPreset(id) {
+    billing = billingPreset(id);
+    saveBilling();
+    renderBilling();
   }
 
   function escapeHtml(s) {
@@ -268,16 +400,12 @@
   function renderStore() {
     var store = state.store;
     var settings = store.settings || {};
-    var sub = store.subscription || {};
     var slug = store.slug || (D ? D.slugify(settings.storeName) : 'my-store');
     var displayUrl = 'mithradirect.com/store/' + slug;
     var storeHref = 'store.html?slug=' + encodeURIComponent(slug);
-    var planName = sub.planName || 'Free';
 
     if (qs('dash-store-name')) qs('dash-store-name').textContent = settings.storeName || 'Your store';
     if (qs('dash-store-url')) qs('dash-store-url').textContent = displayUrl;
-    if (qs('dash-plan-label')) qs('dash-plan-label').textContent = planName + ' plan';
-    if (qs('dash-banner-title')) qs('dash-banner-title').textContent = planName + ' plan active';
 
     ['dash-view-storefront', 'dash-open-store', 'quick-view-store'].forEach(function (id) {
       var el = qs(id);
@@ -312,7 +440,7 @@
         igEl.textContent = '—';
       }
     }
-    if (qs('set-plan')) qs('set-plan').textContent = planName;
+    renderBilling();
     if (qs('set-theme')) qs('set-theme').textContent = settings.themeColor || '—';
     if (qs('set-accent')) qs('set-accent').textContent = settings.accentColor || '—';
     if (qs('set-bg')) qs('set-bg').textContent = settings.backgroundColor || '—';
@@ -349,6 +477,250 @@
     }
 
     renderAccount(store);
+  }
+
+  function renderBilling() {
+    if (!billing) billing = defaultBilling();
+    var tone = billingTone();
+    var closed = shopIsClosed();
+    var needsPay = shopNeedsPay();
+    var dateLabel = formatDayLabel(billing.periodEnd);
+    var days = Number(billing.daysLeft) || 0;
+    var chipLabel = 'Social Starter';
+    var bannerTitle = '';
+    var bannerText = '';
+    var bannerCta = 'Pay ₹299';
+    var kicker = 'Shop plan';
+    var daysHtml = 'Shop is open';
+    var copy = 'Mithra Social Starter is ₹299 each month. Pay with UPI, card or netbanking.';
+    var payLabel = 'Pay ₹299';
+    var showPay = true;
+    var showIfUnpaid = needsPay;
+    var showStop = billing.status === 'paid';
+    var stopCopy = 'Stop any time. The shop stays open until the days you already paid for are over.';
+
+    if (billing.status === 'trial') {
+      chipLabel = days + (days === 1 ? ' day left' : ' days left');
+      bannerTitle = days + ' free ' + (days === 1 ? 'day' : 'days') + ' left';
+      bannerText =
+        days <= 3
+          ? ' — pay ₹299 now so customers can still open your shop.'
+          : ' — after that, pay ₹299 each month to keep the shop open.';
+      kicker = 'Free days';
+      daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
+      copy =
+        days <= 3
+          ? 'Pay ₹299 now so customers can still open your shop when free days end.'
+          : 'After free days, pay ₹299 each month to keep the shop open. UPI, card or netbanking.';
+    } else if (billing.status === 'paid') {
+      chipLabel = 'Social Starter';
+      bannerTitle = '';
+      kicker = 'Paid';
+      daysHtml = 'Shop is open';
+      copy = 'You paid ₹299. Shop stays open until ' + dateLabel + '. Next month is another ₹299.';
+      showPay = false;
+    } else if (billing.status === 'due') {
+      chipLabel = 'Shop closed';
+      bannerTitle = 'Shop is hidden from customers';
+      bannerText = ' — last payment did not go through. Pay ₹299 to open the shop again.';
+      kicker = 'Payment failed';
+      daysHtml = 'Shop is hidden';
+      copy = 'Customers cannot see your shop. Pay ₹299 to open it again. Old orders are still here.';
+    } else if (billing.status === 'stopping') {
+      chipLabel = dateLabel ? 'Open until ' + dateLabel : 'Plan stopped';
+      bannerTitle = dateLabel ? 'Shop stays open until ' + dateLabel : 'Plan stopped';
+      bannerText = ' — then customers cannot see it. You can pay again any time.';
+      kicker = 'Plan stopped';
+      daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
+      copy =
+        'You stopped the plan. Shop stays open until ' +
+        dateLabel +
+        '. Pay ₹299 if you want to keep it after that.';
+      payLabel = 'Keep shop open · ₹299';
+      showIfUnpaid = true;
+      showStop = false;
+      stopCopy = 'Plan already stopped. Shop stays open until paid days end.';
+    } else if (billing.status === 'closed') {
+      chipLabel = 'Shop closed';
+      bannerTitle = 'Shop is hidden from customers';
+      bannerText = ' — pay ₹299 to open it again.';
+      kicker = 'Shop closed';
+      daysHtml = 'Shop is hidden';
+      copy = 'Paid days are over. Customers cannot see your shop. Pay ₹299 to open it again.';
+    }
+
+    var chip = qs('dash-plan-chip');
+    if (qs('dash-plan-label')) qs('dash-plan-label').textContent = chipLabel;
+    if (chip) {
+      chip.classList.toggle('is-warn', tone === 'warn');
+      chip.classList.toggle('is-danger', tone === 'danger');
+    }
+
+    var banner = qs('dash-plan-banner');
+    if (banner) {
+      banner.hidden = billing.status === 'paid';
+      banner.classList.toggle('is-warn', tone === 'warn');
+      banner.classList.toggle('is-danger', tone === 'danger');
+    }
+    if (qs('dash-banner-title')) qs('dash-banner-title').textContent = bannerTitle;
+    if (qs('dash-banner-text')) qs('dash-banner-text').textContent = bannerText;
+    if (qs('dash-banner-cta')) qs('dash-banner-cta').textContent = bannerCta;
+
+    var payCta = qs('dash-pay-cta');
+    if (payCta) {
+      payCta.textContent = needsPay ? 'Pay ₹299' : 'Shop plan';
+      payCta.classList.toggle('btn-primary', needsPay);
+      payCta.classList.toggle('btn-secondary', !needsPay);
+    }
+
+    var hero = qs('dash-plan-hero');
+    if (hero) {
+      hero.classList.toggle('is-warn', tone === 'warn');
+      hero.classList.toggle('is-danger', tone === 'danger');
+    }
+    if (qs('dash-plan-kicker')) qs('dash-plan-kicker').textContent = kicker;
+    if (qs('dash-plan-days')) qs('dash-plan-days').innerHTML = daysHtml;
+    if (qs('dash-plan-copy')) qs('dash-plan-copy').textContent = copy;
+    var payBtn = qs('dash-plan-pay');
+    var payHint = document.querySelector('.dash-plan-pay-hint');
+    if (payBtn) {
+      payBtn.hidden = !showPay;
+      payBtn.textContent = payLabel;
+    }
+    if (payHint) payHint.hidden = !showPay;
+    if (qs('dash-plan-error')) qs('dash-plan-error').hidden = true;
+    if (qs('dash-plan-if-unpaid')) qs('dash-plan-if-unpaid').hidden = !showIfUnpaid;
+
+    var stopPanel = qs('dash-plan-stop-panel');
+    var stopBtn = qs('dash-plan-stop');
+    var stopConfirm = qs('dash-plan-stop-confirm');
+    if (stopPanel) stopPanel.hidden = billing.status !== 'paid' && billing.status !== 'stopping';
+    if (qs('dash-plan-stop-copy')) qs('dash-plan-stop-copy').textContent = stopCopy;
+    if (stopBtn) stopBtn.hidden = !showStop;
+    if (stopConfirm) stopConfirm.hidden = true;
+
+    var history = billing.history || [];
+    var list = qs('dash-plan-history');
+    var empty = qs('dash-plan-history-empty');
+    if (list) {
+      list.innerHTML = history
+        .slice()
+        .reverse()
+        .map(function (item) {
+          return (
+            '<li><strong>' +
+            escapeHtml(item.title || '') +
+            '</strong><span>' +
+            escapeHtml(item.detail || '') +
+            (item.when ? ' · ' + item.when : '') +
+            '</span></li>'
+          );
+        })
+        .join('');
+    }
+    if (empty) empty.hidden = history.length > 0;
+
+    document.querySelectorAll('[data-plan-demo]').forEach(function (chipBtn) {
+      chipBtn.classList.toggle('is-active', chipBtn.getAttribute('data-plan-demo') === billing.demo);
+    });
+
+    var closedPanel = qs('dash-store-closed');
+    var shareBlock = qs('dash-store-share');
+    if (closedPanel) closedPanel.hidden = !closed;
+    if (shareBlock) shareBlock.hidden = closed;
+    var viewStorefront = qs('dash-view-storefront');
+    if (viewStorefront) viewStorefront.hidden = closed;
+
+    if (qs('set-plan')) {
+      qs('set-plan').textContent = closed
+        ? 'Shop closed — pay ₹299'
+        : billing.status === 'trial'
+          ? days + ' free days left'
+          : billing.status === 'stopping'
+            ? 'Stopped · open until ' + dateLabel
+            : 'Social Starter · ₹' + PLAN_PRICE + ' / month';
+    }
+  }
+
+  function setPaySheetBusy(busy) {
+    document.querySelectorAll('[data-pay-method]').forEach(function (btn) {
+      btn.disabled = busy;
+    });
+    var fail = qs('dash-pay-fail');
+    var cancel = qs('dash-pay-cancel');
+    if (fail) fail.hidden = busy;
+    if (cancel) cancel.disabled = busy;
+  }
+
+  function openPaySheet() {
+    var sheet = qs('dash-pay-sheet');
+    var status = qs('dash-pay-status');
+    if (!sheet) return;
+    if (status) {
+      status.hidden = true;
+      status.textContent = 'Paying…';
+    }
+    setPaySheetBusy(false);
+    sheet.hidden = false;
+    document.body.classList.add('dash-pay-open');
+  }
+
+  function closePaySheet() {
+    var sheet = qs('dash-pay-sheet');
+    if (sheet) sheet.hidden = true;
+    document.body.classList.remove('dash-pay-open');
+    setPaySheetBusy(false);
+  }
+
+  function completePayment(ok) {
+    var status = qs('dash-pay-status');
+    var err = qs('dash-plan-error');
+    setPaySheetBusy(true);
+    if (status) {
+      status.hidden = false;
+      status.textContent = ok ? 'Paying…' : 'Checking payment…';
+    }
+    window.setTimeout(function () {
+      if (ok) {
+        billing.status = 'paid';
+        billing.demo = 'paid';
+        billing.daysLeft = 30;
+        billing.periodEnd = isoFromDays(30);
+        billing.history = (billing.history || []).concat([
+          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(billing.periodEnd), 'Just now')
+        ]);
+        saveBilling();
+        closePaySheet();
+        renderBilling();
+        setView('plan');
+      } else {
+        billing.status = 'due';
+        billing.demo = 'due';
+        billing.daysLeft = 0;
+        billing.periodEnd = isoFromDays(-1);
+        billing.history = (billing.history || []).concat([
+          historyItem('failed', 'Payment did not go through', 'Shop hidden from customers', 'Just now')
+        ]);
+        saveBilling();
+        closePaySheet();
+        renderBilling();
+        if (err) {
+          err.hidden = false;
+          err.textContent = 'Payment did not go through. Try UPI again.';
+        }
+        setView('plan');
+      }
+    }, 800);
+  }
+
+  function stopPlan() {
+    billing.status = 'stopping';
+    billing.demo = 'stopping';
+    billing.history = (billing.history || []).concat([
+      historyItem('stopped', 'Plan stopped', 'Shop stays open until paid days end', 'Just now')
+    ]);
+    saveBilling();
+    renderBilling();
   }
 
   function renderStoreQr(storeHref, storeName) {
@@ -500,6 +872,71 @@
         setView(btn.getAttribute('data-view-jump'));
       });
     });
+    document.querySelectorAll('[data-open-pay]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openPaySheet();
+      });
+    });
+    var payHero = qs('dash-plan-pay');
+    if (payHero) {
+      payHero.addEventListener('click', function () {
+        openPaySheet();
+      });
+    }
+    var payCta = qs('dash-pay-cta');
+    if (payCta) {
+      payCta.addEventListener('click', function () {
+        if (shopNeedsPay()) openPaySheet();
+      });
+    }
+    var bannerCta = qs('dash-banner-cta');
+    if (bannerCta) {
+      bannerCta.addEventListener('click', function () {
+        if (shopNeedsPay()) openPaySheet();
+      });
+    }
+    document.querySelectorAll('[data-plan-demo]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        applyDemoPreset(chip.getAttribute('data-plan-demo') || 'trial');
+      });
+    });
+    var stopBtn = qs('dash-plan-stop');
+    var stopYes = qs('dash-plan-stop-yes');
+    var stopNo = qs('dash-plan-stop-no');
+    var stopConfirm = qs('dash-plan-stop-confirm');
+    if (stopBtn && stopConfirm) {
+      stopBtn.addEventListener('click', function () {
+        stopConfirm.hidden = false;
+      });
+    }
+    if (stopNo && stopConfirm) {
+      stopNo.addEventListener('click', function () {
+        stopConfirm.hidden = true;
+      });
+    }
+    if (stopYes) {
+      stopYes.addEventListener('click', function () {
+        stopPlan();
+      });
+    }
+    document.querySelectorAll('[data-pay-method]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        completePayment(true);
+      });
+    });
+    var payFail = qs('dash-pay-fail');
+    if (payFail) {
+      payFail.addEventListener('click', function () {
+        completePayment(false);
+      });
+    }
+    var payCancel = qs('dash-pay-cancel');
+    var payBackdrop = qs('dash-pay-backdrop');
+    if (payCancel) payCancel.addEventListener('click', closePaySheet);
+    if (payBackdrop) payBackdrop.addEventListener('click', closePaySheet);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closePaySheet();
+    });
     document.querySelectorAll('[data-order-filter]').forEach(function (chip) {
       chip.addEventListener('click', function () {
         orderFilter = chip.getAttribute('data-order-filter') || 'all';
@@ -600,6 +1037,7 @@
   }
 
   function init() {
+    billing = loadBilling();
     state.store = loadStore();
     state.orders = sampleOrders(state.store);
     bind();

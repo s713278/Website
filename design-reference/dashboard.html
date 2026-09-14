@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="MithraDirect vendor dashboard demo — overview, orders, products, and store link.">
+    <meta name="description" content="MithraDirect vendor dashboard demo — overview, orders, products, shop plan, and store link.">
     <title>Vendor Dashboard — MithraDirect</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,6 +39,10 @@
                     <span class="dash-nav-icon" aria-hidden="true">↗</span>
                     <span>Store &amp; Share</span>
                 </button>
+                <button type="button" class="dash-nav-item" data-view="plan">
+                    <span class="dash-nav-icon" aria-hidden="true">₹</span>
+                    <span>Shop plan</span>
+                </button>
                 <button type="button" class="dash-nav-item" data-view="settings">
                     <span class="dash-nav-icon" aria-hidden="true">⚙</span>
                     <span>Settings</span>
@@ -67,16 +71,16 @@
                 </div>
                 <div class="dash-topbar-actions">
                     <a href="onboarding.html" class="dash-text-link">Setup</a>
-                    <a href="index.html#pricing" class="btn btn-primary btn-sm" data-cta="upgrade">Upgrade</a>
+                    <button type="button" class="btn btn-primary btn-sm" id="dash-pay-cta" data-view-jump="plan">Pay ₹299</button>
                 </div>
             </header>
 
             <div class="dash-banner" id="dash-plan-banner" role="status">
                 <div>
-                    <strong id="dash-banner-title">Free plan active</strong>
-                    <span id="dash-banner-text"> — share your shop link to get your first WhatsApp orders.</span>
+                    <strong id="dash-banner-title">12 free days left</strong>
+                    <span id="dash-banner-text"> — after that, pay ₹299 each month to keep the shop open.</span>
                 </div>
-                <button type="button" class="dash-banner-cta" data-view-jump="store">Share store link</button>
+                <button type="button" class="dash-banner-cta" id="dash-banner-cta" data-view-jump="plan">Pay ₹299</button>
             </div>
 
             <main class="dash-content" id="dash-content">
@@ -188,8 +192,95 @@
                     </div>
                 </section>
 
+                <!-- Shop plan -->
+                <section class="dash-view" id="view-plan" data-view-panel="plan" hidden>
+                    <h2 id="plan-heading" class="sr-only">Shop plan</h2>
+                    <div class="dash-plan-hero" id="dash-plan-hero">
+                        <p class="dash-plan-kicker" id="dash-plan-kicker">Free days</p>
+                        <p class="dash-plan-days" id="dash-plan-days">12 <span>days left</span></p>
+                        <p class="dash-plan-copy" id="dash-plan-copy">
+                            After free days, pay ₹299 each month to keep the shop open. UPI, card or netbanking.
+                        </p>
+                        <p class="dash-plan-price">Mithra Social Starter · ₹299 / month</p>
+                        <button type="button" class="btn btn-primary dash-plan-pay" id="dash-plan-pay">Pay ₹299</button>
+                        <p class="dash-muted dash-plan-pay-hint">Pay with UPI, card or netbanking. Takes about a minute.</p>
+                        <p class="dash-plan-error" id="dash-plan-error" hidden></p>
+                    </div>
+
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>What you get</h3>
+                        </div>
+                        <ul class="dash-plan-list">
+                            <li>Your own shop link</li>
+                            <li>Customers order on WhatsApp</li>
+                            <li>Share on Instagram and Facebook</li>
+                            <li>Add products and prices</li>
+                            <li>See all orders in one place</li>
+                        </ul>
+                    </div>
+
+                    <div class="dash-panel" id="dash-plan-if-unpaid">
+                        <div class="dash-panel-head">
+                            <h3>If you do not pay</h3>
+                        </div>
+                        <ul class="dash-plan-list dash-plan-list--warn">
+                            <li>Customers cannot open your shop</li>
+                            <li>New orders stop</li>
+                            <li>You can still see old orders</li>
+                            <li>You can pay again any time</li>
+                        </ul>
+                    </div>
+
+                    <div class="dash-panel">
+                        <div class="dash-panel-head">
+                            <h3>Payments you made</h3>
+                        </div>
+                        <ol class="dash-plan-history" id="dash-plan-history"></ol>
+                        <p class="dash-empty" id="dash-plan-history-empty" hidden>Nothing yet. Free days and payments will show here.</p>
+                    </div>
+
+                    <div class="dash-panel" id="dash-plan-stop-panel">
+                        <div class="dash-panel-head">
+                            <h3>Stop the plan</h3>
+                        </div>
+                        <p class="dash-lead" id="dash-plan-stop-copy">Stop any time. The shop stays open until the days you already paid for are over.</p>
+                        <button type="button" class="btn btn-secondary btn-sm" id="dash-plan-stop">Stop the plan</button>
+                        <div class="dash-plan-stop-confirm" id="dash-plan-stop-confirm" hidden>
+                            <p class="dash-lead">Your shop stays open until the paid days end. After that, customers cannot see it. You can pay again any time.</p>
+                            <div class="dash-share-actions">
+                                <button type="button" class="btn btn-secondary btn-sm dash-logout-btn" id="dash-plan-stop-yes">Yes, stop the plan</button>
+                                <button type="button" class="btn btn-primary btn-sm" id="dash-plan-stop-no">Keep plan</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dash-panel dash-plan-demo">
+                        <p class="dash-plan-demo-title">Prototype: try each shop-plan state</p>
+                        <p class="dash-muted">Not a live payment. Use these to walk through the screens.</p>
+                        <div class="dash-filters" id="dash-plan-demo-chips">
+                            <button type="button" class="dash-chip is-active" data-plan-demo="trial">Free days</button>
+                            <button type="button" class="dash-chip" data-plan-demo="soon">3 days left</button>
+                            <button type="button" class="dash-chip" data-plan-demo="paid">Paid</button>
+                            <button type="button" class="dash-chip" data-plan-demo="due">Payment failed</button>
+                            <button type="button" class="dash-chip" data-plan-demo="stopping">Stopped</button>
+                            <button type="button" class="dash-chip" data-plan-demo="closed">Shop closed</button>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Store & Share -->
                 <section class="dash-view" id="view-store" data-view-panel="store" hidden>
+                    <div class="dash-panel dash-store-closed" id="dash-store-closed" hidden>
+                        <div class="dash-panel-head">
+                            <h3>Shop is hidden</h3>
+                        </div>
+                        <p class="dash-lead" id="dash-store-closed-copy">
+                            Customers cannot open your shop until you pay ₹299. Old orders are still here.
+                        </p>
+                        <button type="button" class="btn btn-primary" id="dash-store-pay" data-open-pay="true">Pay ₹299</button>
+                    </div>
+                    <div class="dash-store-share" id="dash-store-share">
                     <div class="dash-panel">
                         <div class="dash-panel-head">
                             <h3>Your shop link</h3>
@@ -230,6 +321,7 @@
                                 <p class="dash-muted" id="dash-qr-hint" hidden></p>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </section>
 
@@ -278,6 +370,32 @@
     </div>
 
     <div class="dash-backdrop" id="dash-backdrop" hidden></div>
+
+    <div class="dash-pay" id="dash-pay-sheet" hidden>
+        <button type="button" class="dash-pay-backdrop" id="dash-pay-backdrop" aria-label="Close payment"></button>
+        <div class="dash-pay-sheet" role="dialog" aria-modal="true" aria-labelledby="dash-pay-title">
+            <p class="dash-pay-brand">Razorpay <span>demo</span></p>
+            <h2 id="dash-pay-title">Pay ₹299</h2>
+            <p class="dash-pay-sub">Mithra Social Starter · 1 month · shop stays open</p>
+            <div class="dash-pay-methods" id="dash-pay-methods">
+                <button type="button" class="dash-pay-method" data-pay-method="upi">
+                    <strong>UPI</strong>
+                    <span>GPay, PhonePe, Paytm</span>
+                </button>
+                <button type="button" class="dash-pay-method" data-pay-method="card">
+                    <strong>Card</strong>
+                    <span>Debit or credit</span>
+                </button>
+                <button type="button" class="dash-pay-method" data-pay-method="netbanking">
+                    <strong>Netbanking</strong>
+                    <span>All Indian banks</span>
+                </button>
+            </div>
+            <p class="dash-pay-status" id="dash-pay-status" hidden>Paying…</p>
+            <button type="button" class="dash-text-link dash-pay-fail" id="dash-pay-fail">Demo: make this payment fail</button>
+            <button type="button" class="btn btn-secondary btn-sm dash-pay-cancel" id="dash-pay-cancel">Cancel</button>
+        </div>
+    </div>
 
     <nav class="dash-bottom-nav" aria-label="Mobile navigation">
         <button type="button" class="dash-bottom-item is-active" data-view="overview">Overview</button>
