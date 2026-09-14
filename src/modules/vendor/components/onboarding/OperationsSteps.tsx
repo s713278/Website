@@ -106,9 +106,7 @@ function makeSku(
   return {
     id: localSkuId(product.id, skus),
     productId: product.id,
-    // The size name is no longer a vendor field; it follows the platform product name so the
-    // backend's `(name, weight, vendor_product_id)` identity stays populated without asking.
-    // Sibling sizes share this name and are told apart by their quantity and unit.
+    // Used locally for previews; the backend derives display details from the product.
     name: product.name,
     description: '',
     skuType: 'ITEM',
@@ -345,8 +343,8 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         id={`sku-${sku.id}-quantity`}
                         label="Quantity"
                         type="number"
-                        min="1"
-                        step="1"
+                        min={(expectedMeasurement ?? sku.measurementType) === 'COUNT' ? '1' : '0.000001'}
+                        step={(expectedMeasurement ?? sku.measurementType) === 'COUNT' ? '1' : 'any'}
                         value={sku.quantity ?? ''}
                         error={issues.find((item) => item.field === `sku-${sku.id}-quantity`)?.message}
                         onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}

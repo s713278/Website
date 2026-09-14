@@ -1,11 +1,11 @@
 import {
-  getErrorMessage,
   isApiError,
   isLiveApi,
   vendorOnboardingService,
   vendorProductIdByPlatformId,
   type CheckoutDeliveryInput,
   type CheckoutPaymentInput,
+  type SkuCreateInput,
   type StorefrontConfigInput,
   type VendorSkuRef,
 } from '@/shared/api'
@@ -56,7 +56,12 @@ export function stepErrorField(step: OnboardingStep): string {
 }
 
 /** What one successful write added to the vendor's account catalog. */
-export type AccountAssignment = { categoryIds?: number[]; productIds?: number[]; skuIds?: number[] }
+export type AccountAssignment = {
+  categoryIds?: number[]
+  productIds?: number[]
+  skuIds?: number[]
+  skuIdByDraftId?: Record<string, number>
+}
 
 /**
  * Told what reached the account, as each write lands.
@@ -143,97 +148,61 @@ function toPaymentInput(
 }
 
 /**
- * The backend's uniqueness key for a SKU row, normalized for comparison.
- *
- * Used to re-attach a draft row to its replacement after an edit changed the server id.
+ * Product-derived names are not part of a size's identity.
  */
 function skuIdentity(
   vendorProductId: number,
-  name: string,
   quantity: number | null,
   unit: string,
 ): string {
   return [
     vendorProductId,
-    name.trim().toLowerCase(),
     quantity ?? '',
     unit.trim().toLowerCase(),
   ].join('::')
 }
 
-/** The backend stores a SKU as `<name>-<value> <unit>`; match that to detect duplicates. */
-function serverSkuName(name: string, quantity: number, unit: string): string {
-  return `${name.trim()}-${quantity} ${unit}`
-}
-
-/** The DB unique constraint on (name, weight, vendor_product_id) surfaces as a 417. */
-function isDuplicateSkuError(error: unknown): boolean {
-  return /duplicate key|tb_sku_unique/i.test(getErrorMessage(error, ''))
-}
-
 export type SkuWritePlan = {
   creates: Array<{ sku: DraftSku; vendorProductId: number }>
+  updates: Array<{ sku: DraftSku; existing: VendorSkuRef }>
   /** Server SKU IDs to delete. */
   deletes: number[]
 }
 
 /**
- * No SKU read returns `home_delivery` or `store_pickup`, so a resumed row cannot report
- * what was actually written. `draftSkus` seeds both to these values on resume, and the
- * account side below compares against the same constants.
- *
- * That is what makes including them safe: an untouched resumed SKU carries exactly these
- * values and still matches, so the catalog is not rewritten on every Continue — while a
- * vendor who actually toggles one produces a difference and gets a real write. Leaving
- * them out meant an explicit fulfillment edit compared equal and was silently dropped
- * while the UI reported success.
- *
- * The change still cannot be read back afterwards; see docs/API_GAPS.md.
+ * Reads omit per-size fulfillment flags. Resume uses these defaults; an explicit legacy
+ * draft change still needs replacement because PATCH cannot carry it. Retry recovery
+ * compares only readable fields. See docs/API_GAPS.md for this remaining limitation.
  */
 const RESUMED_FULFILLMENT = { homeDelivery: true, storePickup: true } as const
 
-/** Everything a SKU row carries that the vendor can change. */
+/** Editable fields that can also be read back to confirm a saved size. */
 function draftFingerprint(sku: DraftSku): string {
   return [
-    sku.name.trim().toLowerCase(),
     sku.quantity ?? '',
     sku.unit.trim().toLowerCase(),
     sku.listPrice ?? '',
     sku.salePrice ?? '',
     sku.active,
-    sku.description.trim(),
-    sku.homeDelivery,
-    sku.storePickup,
   ].join('|')
 }
 
 function accountFingerprint(sku: VendorSkuRef): string {
   return [
-    sku.displayName.trim().toLowerCase(),
     sku.quantity ?? '',
     sku.unit.trim().toLowerCase(),
     sku.listPrice ?? '',
     sku.salePrice ?? '',
     sku.isActive,
-    sku.description.trim(),
-    RESUMED_FULFILLMENT.homeDelivery,
-    RESUMED_FULFILLMENT.storePickup,
   ].join('|')
 }
 
 /**
  * Reconcile the draft's SKUs against the account's.
  *
- * Creating is not enough. A vendor who removes a SKU, drops a price or renames one gets
- * their old row back on the next resume unless the account is told, because the resume
- * rebuilds the draft from the account.
- *
- * Edits are expressed as delete + create rather than an update: `PATCH /skus/{id}` covers
- * only name, description and is_active — never price or size — and currently fails with a
- * JDBC 417 regardless. See docs/API_GAPS.md.
- *
- * Fulfillment flags participate in the comparison against the defaults a resume applies,
- * so an explicit toggle is written rather than silently dropped.
+ * Quantity, unit and availability use PATCH; prices use the price-record PUT. Product
+ * details are inherited and must not cause a write. Only legacy fulfillment changes
+ * retain the documented replacement path because those flags are absent from PATCH.
  *
  * SKUs belonging to a product that is not in the draft are left alone. A vendor cannot
  * unassign a product (403, Admin only), so that state means the account holds a product
@@ -247,6 +216,7 @@ export function planSkuWrites(
 ): SkuWritePlan {
   const draftSkus = draft.skus
   const creates: SkuWritePlan['creates'] = []
+  const updates: SkuWritePlan['updates'] = []
   const deletes: number[] = []
 
   // Scoped to the products the wizard is showing, not to the SKUs it holds: removing a
@@ -257,11 +227,10 @@ export function planSkuWrites(
       .filter((id): id is number => id != null),
   )
   const serverById = new Map(serverSkus.map((sku) => [sku.skuId, sku]))
-  // The server's own uniqueness key, `(name, weight, vendor_product_id)`. Two rows that
-  // agree on it are the same SKU as far as the backend is concerned.
+  const referencedServerIds = new Set(draftSkus.map((sku) => serverSkuIdOf(sku.id)))
   const serverByIdentity = new Map(
     serverSkus.map((sku) => [
-      skuIdentity(sku.vendorProductId, sku.displayName, sku.quantity, sku.unit),
+      skuIdentity(sku.vendorProductId, sku.quantity, sku.unit),
       sku,
     ]),
   )
@@ -278,24 +247,26 @@ export function planSkuWrites(
 
     const serverId = serverSkuIdOf(sku.id)
     let existing = serverId == null ? undefined : serverById.get(serverId)
+    let recoveredCreate = false
+    if (existing && existing.vendorProductId !== vendorProductId) {
+      throw new Error('This size belongs to a different product. Reload your sizes and try again.')
+    }
 
-    // Only for a row that was already on the account. An edit is delete-then-create, so
-    // the replacement carries a new server id while the draft still holds the old one —
-    // the wrapper discards the create response, so the new id never reaches us. Matching
-    // on the backend's own uniqueness key recognises the row anyway. Without this, every
-    // later Continue on Step 6 deleted the replacement and created another, churning the
-    // catalog and reopening the non-atomic replacement window each time.
-    //
-    // Deliberately not applied to a `draft-sku-*` row, which was never on the account: a
-    // new row that merely collides on name and size would adopt the existing SKU and
-    // delete it, destroying a row the vendor never asked to touch. Those keep the old
-    // path, where the duplicate guard and the 417 catch handle the collision.
-    if (!existing && serverId != null) {
+    // Recognise replacements from older drafts and successful creates whose response
+    // supplied no id. A local row may only adopt an identical, otherwise unclaimed row;
+    // it must never take over an account SKU another draft row explicitly references.
+    if (!existing) {
       const candidate = serverByIdentity.get(
-        skuIdentity(vendorProductId, sku.name, sku.quantity, sku.unit),
+        skuIdentity(vendorProductId, sku.quantity, sku.unit),
       )
-      if (candidate && !keptServerIds.has(candidate.skuId) && !deletes.includes(candidate.skuId)) {
+      if (candidate && !keptServerIds.has(candidate.skuId) && !deletes.includes(candidate.skuId)
+        && (serverId != null || (!referencedServerIds.has(candidate.skuId)
+          && draftFingerprint(sku) === accountFingerprint(candidate)))) {
         existing = candidate
+        recoveredCreate = true
+      } else if (candidate && serverId == null && !referencedServerIds.has(candidate.skuId)
+        && !keptServerIds.has(candidate.skuId) && !deletes.includes(candidate.skuId)) {
+        throw new Error(`A ${sku.quantity} ${sku.unit} size is already saved for “${sku.name}”. Reload your sizes before editing it.`)
       }
     }
 
@@ -303,13 +274,21 @@ export function planSkuWrites(
       creates.push({ sku, vendorProductId })
       continue
     }
-    if (draftFingerprint(sku) === accountFingerprint(existing)) {
+    const fulfillmentChanged = sku.homeDelivery !== RESUMED_FULFILLMENT.homeDelivery
+      || sku.storePickup !== RESUMED_FULFILLMENT.storePickup
+    // Recovery can compare only fields the read exposes. Replacing a matching create
+    // merely because its fulfillment flags cannot be read would lose it on every retry.
+    if (draftFingerprint(sku) === accountFingerprint(existing) && (recoveredCreate || !fulfillmentChanged)) {
       keptServerIds.add(existing.skuId)
       continue
     }
-    // Changed: the row has to be replaced, because it cannot be updated in place.
-    deletes.push(existing.skuId)
-    creates.push({ sku, vendorProductId })
+    if (fulfillmentChanged) {
+      deletes.push(existing.skuId)
+      creates.push({ sku, vendorProductId })
+    } else {
+      keptServerIds.add(existing.skuId)
+      updates.push({ sku, existing })
+    }
   }
 
   for (const sku of serverSkus) {
@@ -319,7 +298,7 @@ export function planSkuWrites(
     deletes.push(sku.skuId)
   }
 
-  return { creates, deletes }
+  return { creates, updates, deletes }
 }
 
 /** A pending entry that was created in the platform catalog and given a positive id. */
@@ -563,8 +542,38 @@ export async function persistProducts(
 
 type SkuPersistenceService = Pick<
   typeof vendorOnboardingService,
-  'getVendorProducts' | 'getVendorSkus' | 'createSku' | 'deleteSku'
+  'getVendorProducts' | 'getVendorSkus' | 'createSkus' | 'deleteSku' | 'updateSku' | 'updateSkuPrice'
 >
+
+/** Request-level flags apply to every price entry, so only compatible sizes share a POST. */
+function groupSkuCreates(creates: SkuWritePlan['creates']) {
+  const groups = new Map<string, { vendorProductId: number; input: SkuCreateInput }>()
+  for (const { sku, vendorProductId } of creates) {
+    if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
+    const key = [vendorProductId, sku.active, sku.homeDelivery, sku.storePickup].join('|')
+    let group = groups.get(key)
+    if (!group) {
+      group = {
+        vendorProductId,
+        input: {
+          active: sku.active,
+          homeDelivery: sku.homeDelivery,
+          storePickup: sku.storePickup,
+          sizes: [],
+        },
+      }
+      groups.set(key, group)
+    }
+    group.input.sizes.push({
+      measurementType: sku.measurementType,
+      unit: sku.unit,
+      quantity: sku.quantity,
+      listPrice: sku.listPrice,
+      salePrice: sku.salePrice,
+    })
+  }
+  return [...groups.values()]
+}
 
 export async function persistSkus(
   vendorId: string,
@@ -572,59 +581,81 @@ export async function persistSkus(
   onAssigned: OnAssigned,
   service: SkuPersistenceService = vendorOnboardingService,
 ): Promise<void> {
+  const owner = useAuthStore.getState().user
+  const assertOwner = () => {
+    const current = useAuthStore.getState().user
+    if (!owner || current?.id !== owner.id || current?.vendorId !== vendorId) {
+      throw new Error('Your active store changed. Reopen setup for this store before saving.')
+    }
+  }
+  assertOwner()
   const [products, serverSkus] = await Promise.all([
     service.getVendorProducts(vendorId),
     service.getVendorSkus(vendorId),
   ])
+  assertOwner()
   const vendorProductIds = vendorProductIdByPlatformId(products)
   const plan = planSkuWrites(draft, serverSkus, vendorProductIds)
-  const nameOnAccount = new Set(serverSkus.map((sku) => `${sku.vendorProductId}::${sku.name}`))
-
-  // Deletions first: an edit is delete-then-create, and creating first would collide with
-  // the row being replaced on the (name, weight, vendor_product_id) unique constraint.
-  for (const skuId of plan.deletes) {
-    await service.deleteSku(vendorId, skuId)
-    const removed = serverSkus.find((sku) => sku.skuId === skuId)
-    if (removed) nameOnAccount.delete(`${removed.vendorProductId}::${removed.name}`)
+  for (const { sku, existing } of plan.updates) {
+    if ((sku.listPrice !== existing.listPrice || sku.salePrice !== existing.salePrice) && existing.priceId == null) {
+      throw new Error(`The price record for “${sku.name}” is missing. Reload your sizes and try again.`)
+    }
   }
 
-  for (const { sku, vendorProductId } of plan.creates) {
-    if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
-    const key = `${vendorProductId}::${serverSkuName(sku.name, sku.quantity, sku.unit)}`
-    if (nameOnAccount.has(key)) continue
+  // Explicit removals and legacy fulfillment replacements free their size before writes.
+  for (const skuId of plan.deletes) {
+    assertOwner()
+    await service.deleteSku(vendorId, skuId)
+  }
 
-    try {
-      await service.createSku(
-        vendorId,
-        {
-          name: sku.name,
-          description: sku.description,
-          measurementType: sku.measurementType,
-          unit: sku.unit,
-          quantity: sku.quantity,
-          listPrice: sku.listPrice,
-          salePrice: sku.salePrice,
-          active: sku.active,
-          homeDelivery: sku.homeDelivery,
-          storePickup: sku.storePickup,
-        },
-        vendorProductId,
-      )
-      nameOnAccount.add(key)
-    } catch (error) {
-      // Already on the account under a slightly different local name — not a failure.
-      if (!isDuplicateSkuError(error)) throw error
+  for (const { sku, existing } of plan.updates) {
+    assertOwner()
+    if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
+    if (sku.quantity !== existing.quantity || sku.unit !== existing.unit || sku.active !== existing.isActive) {
+      await service.updateSku(vendorId, existing.skuId, {
+        quantity: sku.quantity, unit: sku.unit, active: sku.active,
+      })
     }
+    if ((sku.listPrice !== existing.listPrice || sku.salePrice !== existing.salePrice) && existing.priceId != null) {
+      assertOwner()
+      await service.updateSkuPrice(existing.skuId, existing.priceId, {
+        listPrice: sku.listPrice, salePrice: sku.salePrice,
+      })
+    }
+  }
+
+  for (const { input, vendorProductId } of groupSkuCreates(plan.creates)) {
+    assertOwner()
+    await service.createSkus(vendorId, input, vendorProductId)
   }
 
   // Report the account's current SKU identity so cumulative size capacity stays right for
   // the rest of the visit. A create returns no id (the wrapper discards it), so the set is
   // re-read once writes have landed; when nothing changed, the entry read already had it.
   // Sizes can be deleted, so this replaces rather than grows the retained set.
+  assertOwner()
   const finalSkus = plan.creates.length || plan.deletes.length
     ? await service.getVendorSkus(vendorId)
     : serverSkus
-  onAssigned({ skuIds: finalSkus.map((sku) => sku.skuId) })
+  assertOwner()
+  const finalByIdentity = new Map(finalSkus.map((sku) => [
+    skuIdentity(sku.vendorProductId, sku.quantity, sku.unit), sku.skuId,
+  ]))
+  const finalIds = new Set(finalSkus.map((sku) => sku.skuId))
+  const updatedIds = new Map(plan.updates.map(({ sku, existing }) => [sku.id, existing.skuId]))
+  const skuIdByDraftId: Record<string, number> = {}
+  for (const sku of draft.skus) {
+    const vendorProductId = vendorProductIds.get(sku.productId)
+    const previousId = serverSkuIdOf(sku.id)
+    const savedId = updatedIds.get(sku.id)
+      ?? (previousId != null && finalIds.has(previousId) ? previousId : undefined)
+      ?? (vendorProductId == null ? undefined : finalByIdentity.get(skuIdentity(vendorProductId, sku.quantity, sku.unit)))
+    if (savedId != null) skuIdByDraftId[sku.id] = savedId
+  }
+  onAssigned({ skuIds: [...finalIds], skuIdByDraftId })
+  if (plan.creates.some(({ sku }) => skuIdByDraftId[sku.id] == null)) {
+    throw new Error('We could not confirm every new size was saved. Try saving again.')
+  }
 }
 
 /**

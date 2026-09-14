@@ -641,19 +641,24 @@ export function OnboardingWizard() {
 
     if (shouldPersist && access.state === 'ready') {
       const controller = beginRequest()
+      const persistenceIsCurrent = () => requestIsCurrent(controller, step)
+        && useAuthStore.getState().user?.vendorId === access.vendorId
+        && useOnboardingStore.getState().draftOwnerId === access.vendorId
       setStatusMessage('Saving to your store…')
       try {
         // Each write reports what it put on the account, so a step that fails part way
-        // still records the part that landed. No re-read: the write is the evidence, and
-        // confirming it would add a request to every Continue. A submitted store only ever
-        // reaches this for Steps 4-5 (assign-only); Step 6 is read-only under review.
-        await persistStep(step, access.vendorId, draft, runtime, recordAssignment, recordCreatedEntry)
+        // still records the part that landed. SKU creates also reread their saved IDs.
+        // A submitted store only reaches this for Steps 4-5 (assign-only); Step 6 is
+        // read-only under review.
+        await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
+          if (persistenceIsCurrent()) recordAssignment(assignment)
+        }, recordCreatedEntry)
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
-        if (!requestIsCurrent(controller, step)) return
+        if (!persistenceIsCurrent()) return
         setStatusMessage(null)
       } catch (error) {
-        if (!requestIsCurrent(controller, step)) return
+        if (!persistenceIsCurrent()) return
         setStatusMessage(null)
         // A failed write is never reported as local success.
         showIssues([

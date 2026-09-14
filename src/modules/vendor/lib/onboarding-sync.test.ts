@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import type { VendorSkuRef } from '@/shared/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHttp, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { User } from '@/shared/types'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
@@ -50,6 +50,7 @@ function draft(overrides: Partial<DraftSku> & Pick<DraftSku, 'id' | 'productId'>
 function account(overrides: Partial<VendorSkuRef> & Pick<VendorSkuRef, 'skuId'>): VendorSkuRef {
   return {
     vendorProductId: 900,
+    priceId: 8021,
     name: 'Orange Juice-1 L',
     size: '1 L',
     displayName: 'Orange Juice',
@@ -97,31 +98,55 @@ describe('planSkuWrites', () => {
     expect(plan.creates).toEqual([])
   })
 
-  it('replaces an account SKU whose price changed, since it cannot be updated in place', () => {
+  it('updates a price without replacing the account SKU', () => {
     const plan = planSkuWrites(
       shown([draft({ id: 'sku-4021', productId: 31, salePrice: 140 })]),
       [account({ skuId: 4021 })],
       productIds,
     )
-    expect(plan.deletes).toEqual([4021])
-    expect(plan.creates).toHaveLength(1)
-    expect(plan.creates[0].sku.salePrice).toBe(140)
-    // Name and description are no longer editable on Step 6, so a price-only edit must carry
-    // the hidden values through the delete-and-recreate rather than blanking account data.
-    expect(plan.creates[0].sku.name).toBe('Orange Juice')
-    expect(plan.creates[0].sku.description).toBe('Cold pressed')
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates).toEqual([])
+    expect(plan.updates).toMatchObject([{ sku: { salePrice: 140 }, existing: { skuId: 4021, priceId: 8021 } }])
   })
 
-  it('replaces an account SKU that was renamed, resized or deactivated', () => {
-    for (const change of [{ name: 'Fresh Juice' }, { quantity: 2 }, { unit: 'ml' }, { active: false }, { description: 'new' }]) {
+  it('updates quantity, unit and availability in place', () => {
+    for (const change of [{ quantity: 2 }, { unit: 'ml' }, { active: false }]) {
       const plan = planSkuWrites(
         shown([draft({ id: 'sku-4021', productId: 31, ...change })]),
         [account({ skuId: 4021 })],
         productIds,
       )
-      expect(plan.deletes, JSON.stringify(change)).toEqual([4021])
-      expect(plan.creates, JSON.stringify(change)).toHaveLength(1)
+      expect(plan.deletes, JSON.stringify(change)).toEqual([])
+      expect(plan.creates, JSON.stringify(change)).toEqual([])
+      expect(plan.updates, JSON.stringify(change)).toHaveLength(1)
     }
+  })
+
+  it('ignores stale product-derived names and descriptions in old drafts', () => {
+    const plan = planSkuWrites(
+      shown([draft({ id: 'sku-4021', productId: 31, name: 'Old name', description: '' })]),
+      [account({ skuId: 4021 })],
+      productIds,
+    )
+
+    expect(plan).toEqual({ creates: [], updates: [], deletes: [] })
+  })
+
+  it('recognises an already-saved local size on a repeated Continue or retry', () => {
+    const plan = planSkuWrites(
+      shown([draft({ id: 'draft-sku-31-1', productId: 31, name: 'Old name', description: '' })]),
+      [account({ skuId: 4021 })],
+      productIds,
+    )
+
+    expect(plan).toEqual({ creates: [], updates: [], deletes: [] })
+  })
+
+  it('refuses to replace an unclaimed saved size with a conflicting new draft', () => {
+    expect(() => planSkuWrites(
+      shown([draft({ id: 'draft-sku-31-1', productId: 31, salePrice: 99 })]),
+      [account({ skuId: 4021 })], productIds,
+    )).toThrow(/already saved/)
   })
 
   it('leaves SKUs of a product the wizard is not showing untouched', () => {
@@ -185,7 +210,7 @@ describe('explicit fulfillment edits on a resumed SKU', () => {
 
 describe('a replaced SKU is recognised despite the stale draft id', () => {
   // An edit is delete-then-create, so the account row gets a new id while the draft keeps
-  // the old `sku-<id>`. `createSku` cannot return the new id — the response is untyped —
+  // the old `sku-<id>`. `createSkus` cannot return the new id — the response is untyped —
   // so reconciliation falls back to the backend's own uniqueness key. Without that, every
   // later Continue deleted the replacement and created another.
   const stale = () => draft({ id: 'sku-4021', productId: 31 })
@@ -203,13 +228,13 @@ describe('a replaced SKU is recognised despite the stale draft id', () => {
     expect(plan.deletes).not.toContain(4055)
   })
 
-  it('still replaces when the vendor actually changed something', () => {
+  it('updates the replacement when the vendor changes its price', () => {
     const edited = { ...stale(), salePrice: 140 }
     const plan = planSkuWrites(shown([edited]), [account({ skuId: 4055 })], productIds)
 
-    expect(plan.deletes).toEqual([4055])
-    expect(plan.creates).toHaveLength(1)
-    expect(plan.creates[0].sku.salePrice).toBe(140)
+    expect(plan.deletes).toEqual([])
+    expect(plan.creates).toEqual([])
+    expect(plan.updates).toMatchObject([{ sku: { salePrice: 140 }, existing: { skuId: 4055 } }])
   })
 
   it('does not attach two draft rows to the same account row', () => {
@@ -367,6 +392,7 @@ describe('persistProducts assignment callbacks', () => {
 })
 
 describe('persistSkus reports the account SKU identity', () => {
+  beforeEach(() => applyVendorSession('v1'))
   const vendorProduct = {
     vendorProductId: 900,
     platformProductId: 31,
@@ -376,6 +402,7 @@ describe('persistSkus reports the account SKU identity', () => {
   }
 
   afterEach(() => {
+    useAuthStore.getState().clearSession()
     useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [] })
   })
 
@@ -398,10 +425,12 @@ describe('persistSkus reports the account SKU identity', () => {
       {
         getVendorProducts: async () => [vendorProduct],
         getVendorSkus: async () => (created ? [account({ skuId: 4001 }), account({ skuId: 4002, name: 'Orange Juice-2 L', size: '2 L', quantity: 2 })] : [account({ skuId: 4001 })]),
-        createSku: async () => {
+        createSkus: async () => {
           created = true
         },
         deleteSku: async () => undefined,
+        updateSku: async () => undefined,
+        updateSkuPrice: async () => undefined,
       },
     )
 
@@ -424,14 +453,289 @@ describe('persistSkus reports the account SKU identity', () => {
           reads += 1
           return [account({ skuId: 4001 })]
         },
-        createSku: async () => undefined,
+        createSkus: async () => undefined,
         deleteSku: async () => undefined,
+        updateSku: async () => undefined,
+        updateSkuPrice: async () => undefined,
       },
     )
 
     // The entry read is reused; no extra read is issued when the plan is empty.
     expect(reads).toBe(1)
     expect(reported).toEqual([4001])
+  })
+})
+
+describe('persistSkus saves', () => {
+  beforeEach(() => applyVendorSession('v1'))
+  afterEach(() => {
+    useAuthStore.getState().clearSession()
+    vi.restoreAllMocks()
+  })
+  function service() {
+    return {
+      getVendorProducts: vi.fn(async () => [{
+        vendorProductId: 900, platformProductId: 31, platformCategoryId: 10,
+        name: 'Orange Juice', measurementId: null,
+      }]),
+      getVendorSkus: vi.fn(async () => [account({ skuId: 4021 })]),
+      createSkus: vi.fn(async () => undefined),
+      deleteSku: vi.fn(async () => undefined),
+      updateSku: vi.fn(async () => undefined),
+      updateSkuPrice: vi.fn(async () => undefined),
+    }
+  }
+
+  it('creates two sizes of one vendor product in one request and binds both saved IDs', async () => {
+    const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      account({ skuId: 4022, quantity: 500, unit: 'gr', listPrice: 140, salePrice: 135 }),
+      account({ skuId: 4021, quantity: 1, unit: 'kg', listPrice: 220, salePrice: 210 }),
+    ])
+    const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31, measurementType: 'WEIGHT', unit: 'kg', quantity: 1, listPrice: 220, salePrice: 210 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, measurementType: 'WEIGHT', unit: 'gr', quantity: 500, listPrice: 140, salePrice: 135 }),
+    ])), assigned, api)
+
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledWith('/v1/vendors/v1/skus', {
+      product_id: 900, sku_type: 'ITEM', is_active: true,
+      home_delivery: true, store_pickup: true,
+      subscription_eligible: false, eligible_sub_plans: [],
+      price_list: [
+        { measurement_type: 'WEIGHT', unit: 'kg', quantity_value: 1, list_price: 220, sale_price: 210, shipping_price: 0, effective_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+        { measurement_type: 'WEIGHT', unit: 'gr', quantity_value: 500, list_price: 140, sale_price: 135, shipping_price: 0, effective_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+      ],
+    }, expect.anything())
+    expect(assigned).toHaveBeenCalledWith({
+      skuIds: [4022, 4021], skuIdByDraftId: { 'draft-sku-31-1': 4021, 'draft-sku-31-2': 4022 },
+    })
+  })
+
+  it('groups nonadjacent new sizes by vendor product and leaves saved sizes out of the POST', async () => {
+    const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
+    api.getVendorProducts.mockResolvedValue([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Orange Juice', measurementId: null },
+      { vendorProductId: 901, platformProductId: 32, platformCategoryId: 10, name: 'Milk', measurementId: null },
+    ])
+    const saved = [account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2 }),
+      account({ skuId: 4023, vendorProductId: 901 }), account({ skuId: 4024, quantity: 3 })]
+    api.getVendorSkus.mockResolvedValueOnce([saved[0]]).mockResolvedValue(saved)
+    const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })
+    const edited = draftWith(shown([
+      draft({ id: 'sku-4021', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2 }),
+      draft({ id: 'draft-sku-32-1', productId: 32 }),
+      draft({ id: 'draft-sku-31-3', productId: 31, quantity: 3 }),
+    ], [product(31), product(32)]))
+
+    await persistSkus('v1', edited, () => undefined, api)
+
+    expect(request.mock.calls.map(([, body]) => body)).toEqual([
+      expect.objectContaining({ product_id: 900, price_list: [
+        expect.objectContaining({ quantity_value: 2 }), expect.objectContaining({ quantity_value: 3 }),
+      ] }),
+      expect.objectContaining({ product_id: 901, price_list: [expect.objectContaining({ quantity_value: 1 })] }),
+    ])
+    // A retry with the original local IDs must recognise every size the batches saved.
+    await persistSkus('v1', edited, () => undefined, api)
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(api.updateSku).not.toHaveBeenCalled()
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { field: 'availability', changed: { active: false }, flags: { is_active: false, home_delivery: true, store_pickup: true } },
+    { field: 'delivery', changed: { homeDelivery: false }, flags: { is_active: true, home_delivery: false, store_pickup: true } },
+    { field: 'pickup', changed: { storePickup: false }, flags: { is_active: true, home_delivery: true, store_pickup: false } },
+  ])('keeps different $field settings in separate requests for the same product', async ({ changed, flags }) => {
+    const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2, isActive: changed.active ?? true }),
+      account({ skuId: 4023, quantity: 3 }),
+    ])
+    const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2, ...changed }),
+      draft({ id: 'draft-sku-31-3', productId: 31, quantity: 3 }),
+    ])), () => undefined, api)
+
+    expect(request.mock.calls.map(([, body]) => body)).toEqual([
+      expect.objectContaining({ product_id: 900, is_active: true, home_delivery: true, store_pickup: true, price_list: [
+        expect.objectContaining({ quantity_value: 1 }), expect.objectContaining({ quantity_value: 3 }),
+      ] }),
+      expect.objectContaining({ product_id: 900, ...flags, price_list: [expect.objectContaining({ quantity_value: 2 })] }),
+    ])
+  })
+
+  it('retries only missing sizes after a batch saves one size then fails', async () => {
+    const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
+    api.getVendorSkus.mockResolvedValueOnce([])
+      .mockResolvedValueOnce([account({ skuId: 4021 })])
+      .mockResolvedValueOnce([account({ skuId: 4021 }), account({ skuId: 4022, quantity: 0.5 })])
+    const request = vi.spyOn(getHttp(), 'post')
+      .mockRejectedValueOnce(new Error('Batch failed'))
+      .mockResolvedValueOnce({ data: { success: true } })
+    const edited = draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 0.5 }),
+    ]))
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', edited, assigned, api)).rejects.toThrow('Batch failed')
+    expect(assigned).not.toHaveBeenCalled()
+    await persistSkus('v1', edited, assigned, api)
+
+    expect(request.mock.calls.map(([, body]) => body)).toEqual([
+      expect.objectContaining({ price_list: [expect.objectContaining({ quantity_value: 1 }), expect.objectContaining({ quantity_value: 0.5 })] }),
+      expect.objectContaining({ price_list: [expect.objectContaining({ quantity_value: 0.5 })] }),
+    ])
+    expect(assigned).toHaveBeenCalledWith({
+      skuIds: [4021, 4022], skuIdByDraftId: { 'draft-sku-31-1': 4021, 'draft-sku-31-2': 4022 },
+    })
+    expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('stops before the next batch when the active vendor changes during a create', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValue([])
+    api.createSkus.mockImplementation(async () => { applyVendorSession('v2') })
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2, active: false }),
+    ])), assigned, api)).rejects.toThrow(/active store changed/)
+
+    expect(api.createSkus).toHaveBeenCalledTimes(1)
+    expect(api.getVendorSkus).toHaveBeenCalledTimes(1)
+    expect(assigned).not.toHaveBeenCalled()
+  })
+
+  it('keeps the save incomplete if a successful batch response did not create every size', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValue([account({ skuId: 4021 })])
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2 }),
+    ])), assigned, api)).rejects.toThrow(/confirm.*size/i)
+    expect(api.createSkus).toHaveBeenCalledTimes(1)
+    expect(assigned).toHaveBeenCalledWith({ skuIds: [4021], skuIdByDraftId: { 'draft-sku-31-1': 4021 } })
+  })
+
+  it('sends only a price update when only the price changed', async () => {
+    const api = service()
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, salePrice: 140 })])), () => undefined, api)
+
+    expect(api.updateSkuPrice).toHaveBeenCalledWith(4021, 8021, { listPrice: 180, salePrice: 140 })
+    expect(api.updateSku).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(api.createSkus).not.toHaveBeenCalled()
+  })
+
+  it('updates size and availability together without touching price or subscriptions', async () => {
+    const api = service()
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, quantity: 0.5, active: false })])), () => undefined, api)
+
+    expect(api.updateSku).toHaveBeenCalledWith('v1', 4021, { quantity: 0.5, unit: 'L', active: false })
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(api.createSkus).not.toHaveBeenCalled()
+  })
+
+  it('keeps the SKU and reports an update failure instead of falling back to replacement', async () => {
+    const api = service()
+    api.updateSku.mockRejectedValue(new Error('Update failed'))
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, quantity: 2 })])), assigned, api))
+      .rejects.toThrow('Update failed')
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(api.createSkus).not.toHaveBeenCalled()
+    expect(assigned).not.toHaveBeenCalled()
+  })
+
+  it('retries only the failed price write after a size update succeeds', async () => {
+    const api = service()
+    const edited = draftWith(shown([draft({ id: 'sku-4021', productId: 31, quantity: 2, salePrice: 140 })]))
+    api.updateSkuPrice.mockRejectedValueOnce(new Error('Price update failed'))
+    await expect(persistSkus('v1', edited, () => undefined, api)).rejects.toThrow('Price update failed')
+
+    api.getVendorSkus.mockResolvedValue([account({ skuId: 4021, quantity: 2 })])
+    await persistSkus('v1', edited, () => undefined, api)
+    expect(api.updateSku).toHaveBeenCalledTimes(1)
+    expect(api.updateSkuPrice).toHaveBeenCalledTimes(2)
+    expect(api.createSkus).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('reports newly saved IDs so the next edit can update the same SKU', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([account({ skuId: 4021 })])
+    const assigned = vi.fn()
+    await persistSkus('v1', draftWith(shown([draft({ id: 'draft-sku-31-1', productId: 31 })])), assigned, api)
+
+    expect(assigned).toHaveBeenCalledWith({ skuIds: [4021], skuIdByDraftId: { 'draft-sku-31-1': 4021 } })
+  })
+
+  it('reuses a successfully created legacy size after a later create fails', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValueOnce([])
+    api.createSkus.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Second create failed'))
+    const edited = draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31, homeDelivery: false }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2 }),
+    ]))
+    await expect(persistSkus('v1', edited, () => undefined, api)).rejects.toThrow('Second create failed')
+
+    api.getVendorSkus.mockResolvedValueOnce([account({ skuId: 4021 })])
+      .mockResolvedValueOnce([account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2 })])
+    await persistSkus('v1', edited, () => undefined, api)
+    expect(api.createSkus).toHaveBeenCalledTimes(3)
+    expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('stops pending saves and ID binding after the active vendor changes', async () => {
+    const api = service()
+    let finishRead!: (rows: VendorSkuRef[]) => void
+    api.getVendorSkus.mockReturnValueOnce(new Promise((resolve) => { finishRead = resolve }))
+    const assigned = vi.fn()
+    const save = persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, salePrice: 140 })])), assigned, api)
+
+    applyVendorSession('v2')
+    finishRead([account({ skuId: 4021 })])
+    await expect(save).rejects.toThrow(/active store changed/)
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    expect(assigned).not.toHaveBeenCalled()
+  })
+
+  it('stops the price write if the vendor changes while the size PATCH is pending', async () => {
+    const api = service()
+    api.updateSku.mockImplementation(async () => { applyVendorSession('v2') })
+    const assigned = vi.fn()
+    await expect(persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, quantity: 2, salePrice: 140 })])), assigned, api))
+      .rejects.toThrow(/active store changed/)
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    expect(assigned).not.toHaveBeenCalled()
+  })
+
+  it('refuses repricing without a price record before performing other writes', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValue([account({ skuId: 4021, priceId: null }), account({ skuId: 4022, quantity: 2 })])
+
+    await expect(persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, salePrice: 140 })])), () => undefined, api))
+      .rejects.toThrow(/price record/i)
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(api.createSkus).not.toHaveBeenCalled()
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
   })
 })
 

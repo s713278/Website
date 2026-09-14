@@ -7,11 +7,11 @@ vendor roles. The React 19 + TypeScript frontend consumes a separately maintaine
 through an OpenAPI/Axios integration.
 
 > **Current status:** demo mode is the default. Live WhatsApp OTP is wired at `/login` (customer)
-> and `/vendor/login` (vendor); the email/password forms remain demo-only.
+> and `/vendor/login` (vendor), with a fixed-code demo flow on those same screens.
 > Vendor onboarding at `/onboarding` verifies the vendor's number through the shared OTP session and
 > persists account-catalog setup steps in Live API mode. Demo mode uses the explicitly selected sample
 > catalog, keeps setup in the browser, and saves a private preview at Step 10. Live API Step 10 submits
-> the store for admin review; the public storefront and sharing unlock only once approved. Remaining
+> the store for review; the public storefront and sharing unlock only once approved. Remaining
 > backend gaps are tracked in [docs/API_GAPS.md](./docs/API_GAPS.md).
 
 ## Product surfaces
@@ -22,7 +22,7 @@ through an OpenAPI/Axios integration.
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
 | Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
-| Authentication | `src/shared/auth` | `/login`, `/register` |
+| Authentication | `src/shared/auth` | `/login`, `/vendor/login`, `/register` (redirect) |
 
 ## Stack
 
@@ -100,25 +100,18 @@ with fallback coordinates.
 | `npm run dev` | Run Vite on port 5173 |
 | `npm run typecheck` | Type-check the project references |
 | `npm run lint` | Run ESLint over `src` |
-| `npm run test` | Run the Vitest unit suite once |
+| `npm run test` | Run all Vitest logic and component tiers once |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run build` | Type-check and create `dist/` |
 | `npm run preview` | Serve an existing production build |
 | `npm run fetch:openapi` | Fetch backend Swagger into `packages/api-client/openapi.json` |
 | `npm run generate:api` | Generate `packages/api-client/src/schema.d.ts` |
 
-The baseline verification for source changes is:
+The [verification baseline in AGENTS.md](./AGENTS.md#verification) defines completion checks for
+source and documentation changes. [docs/TESTING.md](./docs/TESTING.md) owns the test tiers, writing
+rules, and limits; full journeys still need an app run because there is no end-to-end runner.
 
-```bash
-npm run typecheck && npm run lint && npm run test
-```
-
-That one command runs every Vitest tier. There is no end-to-end runner, so full journeys are
-verified by running the app. [docs/TESTING.md](./docs/TESTING.md) owns the tiers and the rules for
-writing in each.
-
-`npm run lint` does not cover `packages/api-client`. Type-check that package directly when it
-changes:
+The API package also has a separate typecheck command:
 
 ```bash
 npm --prefix packages/api-client run typecheck
@@ -127,13 +120,25 @@ npm --prefix packages/api-client run typecheck
 `npm run sync:api` currently invokes `pnpm` inside the local package. Until that script is fixed,
 run `fetch:openapi` and `generate:api` separately.
 
+## Contributing
+
+Start with [AGENTS.md](./AGENTS.md) for the shared working method, change boundaries, and
+task-specific reading guide. It is the source of repository instructions across coding tools.
+Use [CONTEXT.md](./CONTEXT.md) for domain terms and the relevant [ADRs](./docs/adr/) for accepted
+decisions. Detailed implementation facts belong in the owning document listed below.
+
+Keep changes tied to a verifiable outcome, update affected documentation alongside the work, and
+include verification results when handing it over. For a new tool session, carry forward the
+outcome, decisions, and remaining work so the next session can resume from the current diff.
+
 ## Project structure
 
 ```text
 .
-├── AGENTS.md                  # Canonical tool-neutral repository guidance
+├── AGENTS.md                 # Canonical tool-neutral workflow and guardrails
+├── CONTEXT.md                # Product domain glossary
 ├── design-reference/         # Frozen static visual/behavior reference
-├── docs/                     # API, backend-gap, and session documentation
+├── docs/                     # API, backend gaps, sessions, testing, and ADRs
 ├── packages/
 │   └── api-client/
 │       ├── openapi.json      # Generated backend contract snapshot
@@ -160,54 +165,16 @@ run `fetch:openapi` and `generate:api` separately.
     └── styles/global.css
 ```
 
-### Code placement
-
-| Adding | Location |
-|--------|----------|
-| Customer/vendor page | `src/modules/<module>/pages/` |
-| Module-only UI | `src/modules/<module>/components/` |
-| Module Zustand state | `src/modules/<module>/store/` |
-| Shared application UI | `src/shared/components/` |
-| Auth UI or app session state | `src/shared/auth/` |
-| Backend-domain wrapper | `packages/api-client/src/services/` |
-| Demo/live behavior or view-model shaping | `src/shared/api/services/` |
-| Wire-to-view-model mapper | `src/shared/api/mappers/` |
-| Transport/interceptor behavior | `packages/api-client/src/client/` |
-| Route/layout/provider wiring | `src/app/` |
-| Design tokens/global CSS | `src/styles/global.css` |
-
-Prefer the `@/` alias over deep relative imports:
-
-```ts
-import { catalogService, getErrorMessage } from '@/shared/api'
-import { Button, EmptyState } from '@/shared/components'
-import { cn } from '@/lib/utils'
-```
-
-Pages and components should use services exported by `@/shared/api`; they should not call Axios or
-`fetch` directly.
+Placement and import rules live in [AGENTS.md](./AGENTS.md#application-architecture), with
+[API-specific placement](./AGENTS.md#api-placement-rules) alongside the API boundary rules.
 
 ## API architecture
 
-The application currently has two API-related service sets:
-
-1. **`packages/api-client` (`@mithra/api-client`)** owns the Axios transport, client configuration,
-   token/refresh infrastructure, normalized errors, generated OpenAPI declarations, and handwritten
-   backend-domain wrappers. Vite and TypeScript resolve this package directly from source; it has no
-   package build step.
-2. **`src/shared/api`** is the application facade imported by pages. Its services choose demo/live
-   behavior and map backend payloads into application view models.
-
-Most established app services use raw package transport primitives through thin re-export shims;
-they do not consume the package's parallel domain-service wrappers. Vendor onboarding is a bounded
-exception: its app-facing reference service consumes the package catalog wrapper and validates the
-generic live envelopes in dedicated mappers. The generated schema is exported, but service wrappers
-are not consistently built from generated operation types across the repository. This is the
-implemented architecture—not yet a fully stacked generated-type pipeline.
-
-Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before integrating or changing an endpoint.
-Architecture improvements should be proposed and migrated explicitly rather than described as though
-they are already implemented.
+Pages use the `src/shared/api` facade for demo/live behavior and view models. The source-resolved
+`packages/api-client` owns HTTP transport, authentication infrastructure, and backend wrappers.
+App services mix raw transport shims with package wrappers and mappers. The generated schema does
+not yet provide a fully typed pipeline across both layers.
+Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before changing an endpoint or this boundary.
 
 ## Backend contract and regeneration
 
@@ -235,35 +202,20 @@ and request the contract change. Do not invent an endpoint or undocumented paylo
 
 ## Authentication status
 
-The backend's live contract currently uses WhatsApp-phone OTP and JWT bearer authentication:
+Customer and vendor login use WhatsApp OTP at `/login` and `/vendor/login`. `/register` redirects
+to vendor login when signed out, or to the signed-in user's home. Sessions use verified backend
+roles and vendor memberships; tokens currently live in `localStorage`. The approved move to a
+cookie-based refresh credential has not shipped. [docs/SESSION.md](./docs/SESSION.md) owns the
+lifecycle, authorization limits, and target model.
 
-- `POST /v1/auth/request-otp`
-- `POST /v1/auth/verify-otp`
-- `POST /v1/auth/refresh`
-- `POST /v1/auth/signout`
-
-The current frontend transport stores the returned access and refresh tokens in `localStorage`,
-attaches the access token as a Bearer header, and attempts one single-flight refresh after a 401. That
-describes current behavior. A backend-coordinated target using an in-memory access token and a rotating
-Secure HttpOnly refresh cookie is approved but not implemented yet.
-
-Live OTP is wired at `/login` and `/vendor/login`. The email/password forms are demo-only and
-intentionally fail when live API mode is enabled.
-
-A session is created only when the backend reports `mobile_verified: true` and lists the requested
-role in `roles`; the role picked on the login screen is never treated as a grant. Multi-role
-identities and multi-vendor memberships are represented on the session, and a vendor with several
-stores must choose one explicitly.
-
-Demo credentials when `VITE_USE_API=false`:
+With `VITE_USE_API=false`, use a synthetic, valid-format 10-digit mobile number and OTP `1234` on
+either login screen; no WhatsApp message is sent. The email/password service actions remain for
+demo-only tooling and are not the login UI. Their demo credentials are:
 
 | Role | Email | Password |
 |------|-------|----------|
 | Customer | `customer@demo.com` | `demo1234` |
 | Vendor | `vendor@demo.com` | `demo1234` |
-
-See [docs/SESSION.md](./docs/SESSION.md) for the currently implemented lifecycle. It should be updated
-alongside the production auth implementation.
 
 ## Routes
 
@@ -273,8 +225,9 @@ alongside the production auth implementation.
 | `/stores` | Store list |
 | `/stores/:storeId` | Store detail |
 | `/cart` | Cart |
-| `/login`, `/register` | Customer authentication |
+| `/login` | Customer WhatsApp OTP login |
 | `/vendor/login` | Vendor WhatsApp OTP login |
+| `/register` | Redirect to vendor login or the signed-in user's home |
 | `/onboarding` | Ten-step vendor setup; persists in Live API mode or saves a local demo preview |
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
@@ -285,8 +238,9 @@ alongside the production auth implementation.
 
 | Document | Purpose |
 |----------|---------|
-| [AGENTS.md](./AGENTS.md) | Canonical repository guidance for coding agents |
+| [AGENTS.md](./AGENTS.md) | Shared working method, repository guardrails, and verification baseline |
 | [CONTEXT.md](./CONTEXT.md) | Product domain glossary for platform, vendor, draft, and storefront concepts |
+| [docs/adr/](./docs/adr/) | Accepted decisions, their trade-offs, and removal conditions |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |

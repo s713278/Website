@@ -172,6 +172,15 @@ describe('validateStep — step 6 purchasable size rules', () => {
     expect(validateStep(6, draft, runtime)).toEqual([])
   })
 
+  it('enforces the smallest quantity supported by SKU updates', () => {
+    const tooSmall = draftWith([product(1, 'Rice')], [sku({
+      id: 'sku-1', productId: 1, quantity: 0.0000001,
+    })])
+    expect(validateStep(6, tooSmall, runtime)).toContainEqual(expect.objectContaining({ field: 'sku-sku-1-quantity' }))
+    tooSmall.skus[0].quantity = 0.000001
+    expect(validateStep(6, tooSmall, runtime)).toEqual([])
+  })
+
   it('rejects an MRP with more than two decimal places', () => {
     const draft = draftWith(
       [product(1, 'Rice')],

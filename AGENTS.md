@@ -2,16 +2,19 @@
 
 Canonical, tool-neutral guidance for coding agents working in this repository.
 
-Source code and the current backend OpenAPI document take precedence when documentation disagrees
-with implementation. Human setup and project orientation live in [README.md](./README.md). Detailed
-API behavior lives in [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md).
+The user's request defines the task; apply this guidance within the environment's instruction and
+permission rules. Reference documents provide context, not authorization for unrelated actions.
+
+Source code establishes implemented behavior; the current backend OpenAPI document owns the HTTP
+contract. When either disagrees with documentation or an accepted domain decision, identify the
+discrepancy before changing the affected behavior. Keep current behavior distinct from intended behavior.
 
 ## Product in brief
 
 MithraDirect is a hyperlocal e-commerce platform for nearby customers and independent vendors.
 Customers browse storefronts and place orders; vendors manage their storefront, catalog, and order
-operations. Production identity uses WhatsApp phone-number OTP. The React/TypeScript web application
-consumes a separately maintained Spring Boot API through the repository's OpenAPI/Axios layers.
+operations. Production identity uses WhatsApp phone-number OTP. One Vite + React 19 + TypeScript app
+consumes a separately maintained Spring Boot API through the source-resolved `packages/api-client`.
 
 ## Before changing anything
 
@@ -20,58 +23,70 @@ consumes a separately maintained Spring Boot API through the repository's OpenAP
   pull request unless the user explicitly requests that action.
 - `integration` is the shared integration branch and normal pull-request target. Feature work belongs
   on a separate task branch.
-- Keep changes limited to the requested task; do not mix in opportunistic refactors.
 - Never commit secrets, `.env`, credentials, test tokens, or private local tooling configuration.
 - Personal tooling belongs in user-level or locally excluded locations. Do not reference it from
   tracked project documentation.
 
-## Documentation ownership
+## Working method
 
-| File | Owns |
-|------|------|
-| [README.md](./README.md) | Human setup, stack, commands, environment, routes, and project map |
-| [CONTEXT.md](./CONTEXT.md) | Product domain glossary and distinctions between platform, vendor, draft, and storefront concepts |
-| [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API layers, endpoint workflow, transport behavior, and mapping |
-| [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps and approved temporary behavior |
-| [docs/SESSION.md](./docs/SESSION.md) | Implemented authentication, token, refresh, logout, and route-session lifecycle |
-| [docs/TESTING.md](./docs/TESTING.md) | Test tiers, component-test rules, and what has no runner |
-| [packages/api-client/README.md](./packages/api-client/README.md) | Local API package commands, exports, and package-specific usage |
-| [design-reference/README.md](./design-reference/README.md) | Static-reference purpose and inventory |
+Scale the process to the task. A small, unambiguous edit needs a direct change and a focused check;
+multi-step work needs a brief plan pairing each step with its verification.
 
-Each detailed fact should have one owning document. Elsewhere, summarize it briefly and link to the
-owner instead of copying the full explanation.
+### 1. Think before changing
 
-## Repository map
+Read the relevant implementation, tests, and owning documents; define the outcome and evidence of
+success. State assumptions that affect behavior and surface simpler alternatives or conflicts.
+Resolve routine choices from conventions; ask when uncertainty materially changes scope, correctness,
+or an irreversible action. Pause only dependent work and continue what is clear and authorized.
 
-This repository contains one Vite + React 19 + TypeScript application and one source-resolved local
-package.
+### 2. Keep the solution simple
 
-| Surface | Location | Routes (examples) |
-|---------|----------|-------------------|
-| Marketing | `src/modules/marketing` | `/` |
-| Storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
-| Shared app code | `src/shared` | auth, API facade, components, hooks, utilities, types |
-| HTTP/OpenAPI package | `packages/api-client` | generated schema, Axios transport, auth infrastructure, backend services |
+Implement the smallest complete solution using existing seams and conventions. Add abstractions,
+dependencies, or configuration only when the requested behavior needs them. Handle actual failure
+modes at their owning boundary; preserve validation, error reporting, and demo behavior.
 
-`design-reference/` is frozen static HTML used for visual reference. It is not Vite product source.
-There is no `apps/web` package and no `src/features/*` layout in this repository.
+### 3. Make surgical changes
 
-## Commands
+Every changed line should support the request. Match nearby style; keep unrelated formatting,
+refactors, and cleanup out of the diff. Remove imports, variables, and helpers made unused by this
+change; report relevant pre-existing problems separately. Update affected documentation in its owner.
+A factual correction is not a new product decision; surface unresolved policy changes to the user.
+
+### 4. Work toward verifiable completion
+
+Reproduce bugs before fixing them; add regression tests that protect meaningful behavior. Check
+features against requested behavior and failure cases, and refactors against preserved behavior.
+Run the checks under **Verification**, review the final diff, and fix failures caused by the change
+without weakening checks. Report what changed, actual check results, and unresolved limitations,
+including unrelated failures or unavailable checks. Static checks alone do not verify a live journey.
+
+When handing work to another environment or resuming it, carry forward the outcome, decisions,
+changed files, verification results, and blockers. Recheck the working tree before continuing.
+
+## Documentation ownership and reading triggers
+
+Read the relevant owner before changing its area; load additional documents as the task needs them.
+
+| Before working on | Owning document |
+|-------------------|-----------------|
+| Setup, stack, commands, environment, routes, or project layout | [README.md](./README.md) |
+| Domain behavior, naming, or user-facing language | [CONTEXT.md](./CONTEXT.md) — glossary only; keep implementation and plans elsewhere |
+| An architectural or domain decision | Relevant [docs/adr/](./docs/adr/) entries — decisions, trade-offs, and removal conditions |
+| API calls, transport, mapping, or demo/live behavior | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) |
+| A missing contract capability or temporary exception | [docs/API_GAPS.md](./docs/API_GAPS.md) |
+| Authentication, roles, route gates, or session-owned state | [docs/SESSION.md](./docs/SESSION.md) — current lifecycle and separately marked target model |
+| Adding or changing tests | [docs/TESTING.md](./docs/TESTING.md) — tiers, writing rules, and runner limits |
+| API package commands or exports | [packages/api-client/README.md](./packages/api-client/README.md) |
+| Editing the static design reference | [design-reference/README.md](./design-reference/README.md) |
+
+Keep each detailed fact in one owner; summarize and link elsewhere. Keep always-loaded guidance
+focused on recurring decisions and guardrails, with detailed procedures behind reading triggers.
+When a rule fails in practice, clarify or replace it instead of appending a competing instruction.
+
+## Verification
 
 The package manager is npm (`package-lock.json` is authoritative). The committed
 `pnpm-workspace.yaml` is currently unused.
-
-```bash
-npm install
-cp .env.example .env
-npm run dev
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-npm run preview
-```
 
 For code changes, the baseline is:
 
@@ -79,61 +94,49 @@ For code changes, the baseline is:
 npm run typecheck && npm run lint && npm run test
 ```
 
-One `npm run test` runs every tier. `vitest.config.ts` merges `vite.config.ts`, so path aliases
-are defined once. [docs/TESTING.md](./docs/TESTING.md) owns the tiers, how to choose between them,
-and the rules for writing in each — read it before adding a test.
-
-`npm run lint` covers `src`, not `packages/api-client`. The package has its own typecheck:
+`npm run lint` covers `src`, not `packages/api-client`. When the package changes, also run:
 
 ```bash
 npm --prefix packages/api-client run typecheck
 ```
 
+Use focused checks while iterating, then run the baseline on the final code change. Build when
+bundling or production behavior is affected; exercise the affected UI flow when static checks cannot
+establish the result. One `npm run test` runs all Vitest tiers; there is no end-to-end runner.
+Automated tests must isolate the network through the seams in [docs/TESTING.md](./docs/TESTING.md).
+
+For documentation-only changes, check links, commands and claims against their sources, and run
+`git diff --check`; application tests are unnecessary unless executable behavior also changed.
+Setup and the complete command list live in [README.md](./README.md#commands).
+
 ## Backend contract and OpenAPI workflow
 
 The Spring Boot backend is maintained separately. Its `/api/v3/api-docs` document is the frontend's
-authoritative HTTP contract. The development server base configured in the client is
-`https://subscriptionapp-wgf8.onrender.com/api`; service paths begin with `/v1`, producing requests
-under `https://subscriptionapp-wgf8.onrender.com/api/v1/*`.
+authoritative HTTP contract. Configure the base ending in `/api`; service paths already begin with
+`/v1`. [README.md](./README.md#backend-contract-and-regeneration) records the development URL.
 
 - Do not invent endpoints, request fields, response shapes, or undocumented status transitions.
 - If the contract is missing, inconsistent, or unsuitable, record a backend gap and describe the
-  required contract change. Do not hide it behind a silent frontend workaround.
+  required contract change in `docs/API_GAPS.md`. Preserve approved temporary behavior within its
+  documented scope and removal condition; do not introduce a silent frontend workaround.
 - Generic OpenAPI response objects do not provide generated end-to-end safety. Verify real response
   shapes with safe test data before treating an integration as production-ready.
 - Never put live tokens or personal test data in source, documentation, fixtures, logs, or examples.
 
-Regeneration is a two-step workflow:
-
-```bash
-npm run fetch:openapi
-npm run generate:api
-```
-
-The first command fetches Swagger into `packages/api-client/openapi.json`; the second generates
-`packages/api-client/src/schema.d.ts` with `openapi-typescript`. Both files are generated: never edit
-them manually. Review and commit their regenerated diff together when the backend contract changes.
-`npm run sync:api` currently delegates to `pnpm` internally, so use the two npm commands above until
-that script is corrected.
+Regenerate with `npm run fetch:openapi`, then `npm run generate:api`. These produce
+`packages/api-client/openapi.json` and `packages/api-client/src/schema.d.ts` respectively; never edit
+either manually. Review the pair together and include both if a commit is explicitly requested.
+`npm run sync:api` still delegates to `pnpm` internally, so use the two npm commands separately.
 
 ## Current API architecture
 
-Read [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) before changing API code. The implemented
-relationship is:
+`packages/api-client` owns transport, tokens/refresh, normalized errors, generated declarations, and
+backend wrappers. `src/shared/api` owns demo/live behavior and application view models. App services
+mix raw transport shims with package wrappers; catalog and vendor onboarding use wrappers and
+mappers. This is not yet a fully generated-type pipeline; trace the actual caller before editing.
 
-1. `packages/api-client` owns Axios, client configuration, token storage and refresh, normalized
-   errors, generated OpenAPI declarations, and handwritten domain service wrappers. The generated
-   `schema.d.ts` is exported, but the existing domain wrappers are not consistently derived from its
-   operation types.
-2. `src/shared/api` is the React application's facade. Its services select demo/live behavior and
-   shape backend payloads into application view models.
-3. Current app-facing services call the package's raw `apiGet`/`apiPost`/other transport primitives
-   through thin re-export shims. They do not currently consume the package's parallel domain-service
-   wrappers.
-
-Therefore, the repository has two service sets, but they are not yet a fully stacked typed pipeline.
-Do not casually bypass or redesign this boundary during an unrelated feature. Any migration should
-first document current caveats, the target design, ownership, and an incremental transition plan.
+Preserve this boundary during unrelated work. A migration must first document current caveats,
+the target design, ownership, and an incremental transition plan in the architecture owner.
 
 ### API placement rules
 
@@ -150,6 +153,9 @@ Pages and components import API behavior from `@/shared/api`. They must not call
 or import `@mithra/api-client` directly.
 
 ## Application architecture
+
+Product modules are `src/modules/{marketing,storefront,vendor}`; shared app code is in `src/shared`.
+There is no `apps/web` package or `src/features/*` layout.
 
 | Adding | Location |
 |--------|----------|
@@ -171,31 +177,23 @@ or import `@mithra/api-client` directly.
 - Use existing shared wrappers and shadcn primitives rather than creating a parallel component system.
 - Keep vendor theming scoped to a component element and clear it during effect cleanup.
 
-## Authentication: current state and guardrails
+## Authentication guardrails
 
-The backend contract exposes WhatsApp-phone OTP endpoints under `/v1/auth`, then returns an access
-token and refresh token after verification. The OpenAPI security scheme is HTTP Bearer. The current
-frontend stores both tokens in `localStorage` and attaches the access token as an `Authorization`
-header; this is implemented behavior, not a final browser-security recommendation.
-
-The current React login/register pages still use demo email/password actions. Those actions throw in
-live mode; OTP services exist but the production OTP UI is not wired yet. Do not claim otherwise.
-
-Backend identities may hold multiple roles, while the current app `User` model and route guard assume
-one active role. Do not infer authorization solely from the role requested during OTP. The production
-auth task must define how verified roles and the active audience are mapped into frontend session and
-route authorization.
-
-Until that task replaces the lifecycle:
+WhatsApp OTP is wired at `/login` and `/vendor/login`, including a demo path. The current transport
+uses Bearer access tokens and keeps both tokens in `localStorage`; the approved cookie-based target
+has not shipped. [docs/SESSION.md](./docs/SESSION.md) owns lifecycle details and limitations.
 
 - Route token/user changes through `applySession()` and `clearSession()` in `auth-store.ts`.
+- Build sessions from verified backend roles and phone verification. `role` is the active audience;
+  `roles` governs route access. Multiple vendor memberships require an explicit store choice.
 - Keep `onUnauthorized` wired to local session clearing, not server sign-out.
 - Preserve single-flight refresh and one retry after a 401.
-- Verify sign-out against the OpenAPI contract: it requires the refresh-token request body, which the
-  current frontend does not send.
+- Preserve the app-facing sign-out request's refresh-token body and local clearing on failure;
+  the package's parallel `signOut` wrapper is not equivalent.
+- Preserve ownership checks for session-bound drafts and the distinction between explicit sign-out
+  and involuntary session loss.
 
-See [docs/SESSION.md](./docs/SESSION.md) for the currently implemented lifecycle. Update that document
-with the implementation, not in advance of it.
+Update the session document with the implementation, not in advance of it.
 
 ## Current behavior to preserve deliberately
 
@@ -204,8 +202,8 @@ with the implementation, not in advance of it.
 - `assertApiSuccess` can reject an HTTP 200 envelope whose `success` field is false.
 - `isLiveApi()` configuration is currently one-way: an environment-enabled API cannot be disabled by
   passing `useApi: false` later.
-- The Zustand cart (`md-cart`) is local-only and single-store. Existing cart service files are not
-  wired into its runtime flow.
+- The Zustand cart (`md-cart`) persists vendor-scoped lines and summaries. Preserve its live API
+  orchestration and local demo path; [cart behavior](./docs/API_ARCHITECTURE.md#storefront-cart) owns the details.
 - `openapi-fetch` is declared by the API package but currently unused.
 
 ## UI and design reference

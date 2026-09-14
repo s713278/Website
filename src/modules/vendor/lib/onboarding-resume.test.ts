@@ -81,6 +81,7 @@ const SKUS: VendorSkuRef[] = [
   {
     vendorProductId: 900,
     skuId: 4021,
+    priceId: 8021,
     name: 'Orange Juice-1 L',
     size: '1 L',
     displayName: 'Orange Juice',

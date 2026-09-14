@@ -91,8 +91,7 @@ function nonNegative(value: number): boolean {
  * hidden Size name is deliberately absent: it now follows the product (every size of a
  * product carries the same name), so keying on it would let two identical sizes coexist and
  * point the vendor at a control the compact card no longer renders. The visible quantity and
- * unit are the only differentiators a vendor can act on. The backend write path keeps its own
- * name-aware key (`onboarding-sync.ts`); this is the form-level guard.
+ * unit are the only differentiators a vendor can act on, matching the account reconciliation.
  */
 function skuIdentity(sku: DraftSku): string {
   return `${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
@@ -138,6 +137,8 @@ export function validateDraftSku(
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
   if (!positive(sku.quantity)) {
     issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
+  } else if (sku.quantity < 0.000001) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be at least 0.000001.'))
   } else if (sku.measurementType === 'COUNT' && !Number.isInteger(sku.quantity)) {
     // A count is a tally of whole items; only the continuous measurements (weight, volume, …)
     // are sold in fractions. The size carries its product's measurement (the guard above keeps

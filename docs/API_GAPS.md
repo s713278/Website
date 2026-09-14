@@ -59,7 +59,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Ownership and lifecycle for vendor-authored catalog entries | Letting a vendor control what they add to the shared catalog | Vendor tokens can create categories and products, but the entries are shared immediately and have no vendor ownership, delete-own or moderation lifecycle. Detailed below. |
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
-| Updating a SKU in place | Changing a price, size or name at Step 6 | `PATCH /vendors/{id}/skus/{sku_id}` returns **`417`** with a JDBC error on `update tb_sku` for every body tried, and `SkuInfoUpdateRequest` carries only `name`, `description`, `features`, `is_active` — never price or size. Step 6 expresses an edit as delete-then-create, which mints a new `sku_id`. |
+| Per-SKU fulfillment updates | Saving legacy drafts with changed delivery/pickup flags | The updated SKU PATCH still omits these flags. Only this legacy case retains delete-then-create; current Step 6 has no per-size fulfillment controls. See [updated SKU contract](#updated-sku-contract). |
 | Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` returns **`417`** while the store is under review (`vendor_status` PENDING). A submitted store therefore cannot create a new size, so Step 6 is read-only until an administrator approves the store, at which point size creation reopens. A product added while under review stays sizeless until then. This is why `ADDITIVE_CATALOG_STEPS` is `[4, 5]` (categories/products only). |
 | Legacy SKU unit vocabulary | Keeping existing real-account sizes aligned with the backend measurement catalog | New writes use the backend's units, but this work does not migrate SKUs already written with the frontend's old unit vocabulary. Detailed below. |
 | Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
@@ -154,10 +154,33 @@ above and is **not** a frontend defect — the frontend cannot fix any of them a
 | "I can't remove a category or product I picked by mistake." | 403 / no endpoint, above. | A vendor-callable un-assign for both. |
 | "A product I don't want to sell blocks go-live." | Follows from the above: the product cannot be un-assigned, and Step 6 requires every assigned product to carry at least one *active* valid SKU. So a mistakenly assigned product must be priced and sold. | Same un-assign. Until then the only escape is support. |
 
-Not yet exercised: Step 6 expresses a SKU edit as delete-then-create, so the `sku_id`
-changes. Nothing in onboarding references a SKU by id afterwards, but a SKU carrying
-subscription plans (`/skus/{sku_id}/subscription-plans`) may lose them. Worth confirming
-before SKU editing is offered outside onboarding.
+Normal size and price edits now preserve `sku_id`. The remaining legacy fulfillment-only
+replacement may still lose subscription plans; see [updated SKU contract](#updated-sku-contract).
+
+### Updated SKU contract
+
+The supplied September 2026 OpenAPI revision supersedes the older SKU creation and update
+observations below. The frontend now follows that contract for creation, structured measurement
+reads, and in-place edits; [API architecture](./API_ARCHITECTURE.md#vendor-setup-sizes-step-6) owns
+the request mapping and reconciliation details. The old forced one-time subscription plan has
+been removed because the contract explicitly permits no subscription plans.
+
+Creation accepts multiple `price_list` entries, but its generic response does not document a
+created-ID mapping or batch atomicity. The frontend confirms all new sizes through the account
+read and reconciles before retrying. The backend should document per-size results or guarantee
+atomic batch behavior; live verification must include a multi-size create and a failed batch.
+
+The revised PATCH promises to preserve omitted fields, including features. Earlier deployed
+versions returned a JDBC error when features were omitted; the frontend does not restore that
+workaround or silently replace a SKU if the new update fails. Live confirmation against an
+authenticated disposable vendor is still required; isolated tests validate the new contract and
+error paths, not the backend's deployment.
+
+Per-size delivery/pickup flags remain absent from PATCH and from the documented reads. Legacy
+drafts with an explicit flag change retain their existing delete/create behavior, with its
+non-atomic failure window and possible subscription loss. Remove that exception when the backend
+supports reading and updating those flags. The wizard configures fulfillment in Step 7 and
+does not offer these per-size controls. The under-review gate is unchanged.
 
 ### Deployed catalog sorting behavior
 
@@ -182,10 +205,10 @@ the frontend works around it with an inline comment at the call site.
   vendor category ID from `/{vendor_id}/categories`. Passing that returns
   `400 Invalid vendor category id`. It requires the **platform** category ID. Either the docs or the
   implementation is wrong; they disagree.
-- **`POST /skus` crashes instead of validating.** Omitting `eligible_sub_plans` returns
-  `HV000028: Unexpected exception during isValid call` (envelope `500`, HTTP 417). An empty array
-  correctly returns `400 SKU must have at least one eligible subscription plan`, so the validator
-  simply cannot handle the field being absent. The schema marks only `product_id` as required.
+- **Historical SKU subscription validation failure, superseded by the updated contract.** Older
+  deployments rejected omitted or empty `eligible_sub_plans`. The September contract explicitly
+  accepts both; the frontend no longer fabricates a plan to bypass the old validator. See
+  [updated SKU contract](#updated-sku-contract) for the verification boundary.
 - **Three shipping strategies are unimplemented** — see the table above.
 - **`POST /v1/auth/refresh` returns the token as a bare string.** The body is
   `{ success, status, data: "<jwt>" }` — `data` is the access token itself, not an object with an
@@ -213,7 +236,7 @@ the frontend works around it with an inline comment at the call site.
   | Operation | Endpoint | Result |
   |-----------|----------|--------|
   | Delete a SKU | `DELETE /v1/vendors/{id}/skus/{sku_id}` | **200** — works |
-  | Update a SKU | `PATCH /v1/vendors/{id}/skus/{sku_id}` | **417**, JDBC error on `update tb_sku`. Broken regardless of body; and `SkuInfoUpdateRequest` covers only `name`, `description`, `features`, `is_active` — never price or size |
+  | Update a SKU | `PATCH /v1/vendors/{id}/skus/{sku_id}` | Earlier probes returned **417**. This historical result is superseded by the [updated SKU contract](#updated-sku-contract); Step 6 now uses in-place updates. |
   | Un-assign a product | `PATCH /v1/vendors/{id}/delete/products` | **403 Authorization failed.** Body is a bare `int64[]`, not an object; the description says Admin/Customer_Care only, and that is enforced |
   | Un-assign a category | — | **No endpoint exists.** Confirmed by enumerating all 117 paths: every `DELETE` in the contract, plus every path/summary/description mentioning remove, delete, unassign, deactivate or disable |
   | Reset the whole catalog | `DELETE /v1/admin/vendors/{vendorId}/catalog` | **403.** Would do exactly what is needed — "Removes SKUs, prices, subscription plans, product assignments, and category assignments; the vendor profile itself is NOT deleted" — but is admin-only |
@@ -223,8 +246,8 @@ the frontend works around it with an inline comment at the call site.
 
   Consequences the frontend has to live with, until the backend grants a vendor
   un-assign or an admin flow exists:
-  - Step 6 reconciles SKUs against the account — create, and delete what the vendor
-    removed. A price or size change is delete-then-create, because update is unavailable.
+  - Step 6 reconciles SKUs against the account — create, update, and delete what the vendor
+    removed. Only the legacy fulfillment exception still replaces a row.
   - Steps 4 and 5 refuse to deselect anything already saved to the account and say why,
     from the moment the write succeeds rather than only after a reload, and warn that a
     choice is permanent before it is made. Silently allowing it produced the worst
