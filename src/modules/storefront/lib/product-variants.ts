@@ -83,15 +83,3 @@ export function getProductImages(product: Product): string[] {
   if (product.imageUrl) return [product.imageUrl]
   return []
 }
-
-/** Per-kg label for weight-based units, e.g. "(₹398 / kg)". */
-export function formatPricePerKg(price: number, unit: string): string | null {
-  const match = unit.match(/([\d.]+)\s*(g|kg)/i)
-  if (!match) return null
-  const amount = Number.parseFloat(match[1])
-  if (!amount) return null
-  const grams = match[2].toLowerCase() === 'kg' ? amount * 1000 : amount
-  if (!grams) return null
-  const perKg = Math.round((price / grams) * 1000)
-  return `(₹${perKg.toLocaleString('en-IN')} / kg)`
-}

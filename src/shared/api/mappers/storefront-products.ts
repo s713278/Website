@@ -22,6 +22,14 @@ function asSkuType(value: unknown): SkuType {
   return 'ITEM'
 }
 
+function formatSkuSizeLabel(raw: Record<string, unknown>): string {
+  const unit = String(raw.unit ?? '').trim()
+  const qty = asNumber(raw.quantity_value)
+  if (qty == null || !Number.isFinite(qty) || !unit) return ''
+  // 1 -> "1", 1.50 -> "1.5", 0.333333 -> "0.333"
+  return `${parseFloat(qty.toFixed(3)).toString()} ${unit}`
+}
+
 function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVariant | null {
   if (raw.active === false || raw.is_active === false) return null
   const id = raw.sku_id ?? raw.id
@@ -29,7 +37,7 @@ function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVaria
   const price = asNumber(raw.sale_price) ?? asNumber(raw.list_price) ?? 0
   return {
     id: String(id),
-    unit: String(raw.sku_size ?? raw.unit ?? '').trim(),
+    unit: formatSkuSizeLabel(raw),
     price,
     listPrice: asNumber(raw.list_price),
     onSale: raw.on_sale === true,

@@ -39,11 +39,7 @@ export function CardVariantPicker({
         event.stopPropagation()
       }}
     >
-      <p className="text-[11px] font-medium text-slate-500">
-        Size · {variants.length} size{variants.length === 1 ? '' : 's'} available
-      </p>
-
-      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Choose pack size">
+       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Choose pack size">
         {chips.map((variant) => {
           const active = selectedId === variant.id
           return (
