@@ -17,8 +17,15 @@ describe('deriveStoreState', () => {
   beforeEach(() => vi.stubEnv('DEV', false))
   afterEach(() => vi.unstubAllEnvs())
 
-  it('accepts only submission and approval as inputs', () => {
-    expectTypeOf<keyof StoreStateInput>().toEqualTypeOf<'vendorStatus' | 'approvalStatus'>()
+  it('accepts onboarding progress alongside submission and approval', () => {
+    expectTypeOf<keyof StoreStateInput>().toEqualTypeOf<'vendorStatus' | 'approvalStatus' | 'onboarding'>()
+  })
+
+  it.each(['PENDING', 'APPROVED'])('keeps active %s accounts in setup when onboarding is unfinished', (approvalStatus) => {
+    expect(deriveStoreState({
+      vendorStatus: 'ACTIVE', approvalStatus,
+      onboarding: { status: 'IN_PROGRESS', nextStep: 7, description: null },
+    })).toBe('SETTING_UP')
   })
 
   it('keeps an unsubmitted store in setup', () => {

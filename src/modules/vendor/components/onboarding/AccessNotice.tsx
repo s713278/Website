@@ -129,13 +129,21 @@ export function StepNotice({ message }: { message: string }) {
  */
 export function UnderReviewNotice({
   variant = 'locked',
+  approved = false,
 }: {
   variant?: 'catalog' | 'sizes' | 'locked'
+  approved?: boolean
 }) {
   return (
     <div role="status" className="flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5 text-[var(--ob-ink)]">
       <ClockIcon className="mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
-      {variant === 'catalog' ? (
+      {approved ? (
+        <p>
+          <span className="font-semibold">Your store is approved. </span>
+          You can add categories, products and sizes within your plan limits. Previously saved
+          setup details stay locked.
+        </p>
+      ) : variant === 'catalog' ? (
         <p>
           <span className="font-semibold">Your store is under review. </span>
           You can still add categories and products within your plan limits, and each addition

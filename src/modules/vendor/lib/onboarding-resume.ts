@@ -189,9 +189,8 @@ export { isStoreSubmitted, isVendorApproved } from './onboarding-account-status'
 /**
  * The first step that is genuinely unfinished, judged by what is actually saved.
  *
- * Deliberately not `onboarding.next_step`: that value is derived and moves backwards.
- * A vendor who has submitted still reports `IN_PROGRESS` with `next_step` pointing at
- * Step 5 whenever any assigned product lacks a SKU.
+ * This resource-derived fallback is used only when the backend omits its resume pointer.
+ * Unpriced leftover products must never override an explicit `onboarding.next_step`.
  */
 export function earliestIncompleteStep(state: ServerOnboardingState): OnboardingStep {
   if (!hasBusinessType(state)) return 3

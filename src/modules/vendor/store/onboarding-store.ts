@@ -39,7 +39,13 @@ import {
 
 type ImageKind = 'logo' | 'banner'
 
-type AccountCatalog = { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+type AccountCatalog = {
+  categoryIds: number[]
+  productIds: number[]
+  skuIds: number[]
+  /** Backend usage can include inactive sizes omitted from the account list. */
+  unlistedSkuCount?: number
+}
 
 /**
  * The account catalog and the questions asked of it, built together.
@@ -132,6 +138,7 @@ type OnboardingStore = {
     categoryIds: number[]
     productIds: number[]
     skuIds?: number[]
+    skuUsage?: number | null
   }) => void
   /** Whether the account already holds this platform category. */
   isCategoryAssigned: (categoryId: number) => boolean
@@ -462,7 +469,7 @@ export function selectProjectedProductTotal(state: CatalogLimitState): number {
 }
 
 export function selectProjectedSkuTotal(state: CatalogLimitState): number {
-  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus)
+  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus, state.accountCatalog.unlistedSkuCount)
 }
 
 /** Whether the projected total is at or over the cap, so no further entry may be added. */
@@ -558,6 +565,10 @@ export function selectStoreIsSubmitted(state: { storeSubmission: StoreSubmission
   return state.storeSubmission !== null
 }
 
+export function selectStoreIsApproved(state: { storeSubmission: StoreSubmission | null }): boolean {
+  return state.storeSubmission?.approvalStatus?.toUpperCase() === 'APPROVED'
+}
+
 export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draft: createEmptyOnboardingDraft(),
   runtime: createEmptyRuntimeState(),
@@ -632,10 +643,13 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   setAccountCatalog(catalog) {
+    const skuIds = catalog.skuIds ?? []
+    const unlistedSkuCount = Math.max(0, (catalog.skuUsage ?? 0) - new Set(skuIds).size)
     set(accountCatalogSlice({
       categoryIds: catalog.categoryIds,
       productIds: catalog.productIds,
-      skuIds: catalog.skuIds ?? [],
+      skuIds,
+      ...(unlistedSkuCount ? { unlistedSkuCount } : {}),
     }))
   },
 
@@ -656,7 +670,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       skuIds === accountCatalog.skuIds && !idsChanged
     ) return
     set({
-      ...accountCatalogSlice({ categoryIds, productIds, skuIds }),
+      ...accountCatalogSlice({ ...accountCatalog, categoryIds, productIds, skuIds }),
       ...(idsChanged ? { draft: { ...draft, skus } } : {}),
     })
     if (idsChanged) flushScheduledDraftSave(persistCurrentDraft)

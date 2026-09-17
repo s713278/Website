@@ -139,6 +139,7 @@ const SUBMITTED_CONTEXT = context({
   vendorStatus: 'ACTIVE',
   storeIdentifier: 'sk-organic-store',
   approvalStatus: 'PENDING',
+  onboarding: { status: 'COMPLETED', nextStep: 11, description: null },
 })
 
 describe('accountReadsForResumeStep', () => {
@@ -237,14 +238,14 @@ describe('resumeStep — the backend pointer decides', () => {
     expect(backendResumeStep(withNextStep(2).context)).toBe(3)
   })
 
-  it('ignores the pointer once the store is submitted', () => {
+  it('resumes unfinished setup even when the store is active', () => {
     const submitted = withNextStep(6, {
       context: {
         ...SUBMITTED_CONTEXT,
         onboarding: { ...SUBMITTED_CONTEXT.onboarding, nextStep: 6 },
       },
     })
-    expect(resumeStep(submitted)).toBe(10)
+    expect(resumeStep(submitted)).toBe(6)
   })
 
   it('falls back to the derivation only when the field is missing', () => {

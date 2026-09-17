@@ -483,6 +483,17 @@ describe('cumulative catalog limits', () => {
     expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4021])
   })
 
+  it('retains unlisted account usage when a new size is saved', () => {
+    useOnboardingStore.getState().setAccountCatalog({
+      categoryIds: [], productIds: [], skuIds: [4021], skuUsage: 2,
+    })
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(2)
+
+    useOnboardingStore.getState().recordAssignment({ skuIds: [4021, 4022] })
+
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(3)
+  })
+
   it('projects account usage plus new draft entries, reaching the limit early after a switch', () => {
     // Business type A left two categories, three products and four sizes on the account.
     useOnboardingStore.getState().setAccountCatalog({

@@ -268,6 +268,17 @@ response belonging to an entry that has already been invalidated.
 
 #### Vendor setup sizes (Step 6)
 
+After setup is submitted, categories and products remain open for additions. Step 6 allows new
+sizes only when the account's real `approval_status` is `APPROVED`; pending vendors keep a
+read-only step. Previously saved sizes remain locked after submission. The controls and Continue
+handler use the same approval-aware rule, and saving validates new size details, duplicates and
+the projected account total against `subscription.limits.max_skus`. The total includes any
+`subscription.usage.skus` missing from the SKU list, so unlisted inactive sizes still consume
+capacity. That count survives subsequent additions in the same visit. It does not demand pricing
+for unrelated products already on a submitted account. Completed approved stores also offer a
+Sizes shortcut from Step 10. Unfinished accounts retain the normal editable setup flow; their
+entry decision is documented in [SESSION.md](./SESSION.md#where-a-session-lands).
+
 The September 2026 OpenAPI contract separates a size's numeric `quantity_value` and `unit`.
 Creation sends them in each `price_list` entry, along with measurement type and prices; it never
 sends the retired string `value`. `product_id` remains the vendor product ID. Names, descriptions,

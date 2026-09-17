@@ -3,7 +3,7 @@ import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sampl
 import { resumePathAfterLogin, vendorLandingPath } from '@/app/router/role-home'
 import type { User } from '@/shared/types'
 import { resolveOnboardingEntry } from './onboarding-entry'
-import type { ServerOnboardingState } from './onboarding-resume'
+import { resumeStep, type ServerOnboardingState } from './onboarding-resume'
 
 type Context = ServerOnboardingState['context']
 
@@ -19,8 +19,9 @@ function state(
     vendorStatus,
     approvalStatus,
     membershipRole: 'OWNER',
-    // Deliberately claims IN_PROGRESS after submission — the backend really does this.
-    onboarding: { status: 'IN_PROGRESS', description: 'Step 5 is completed', nextStep: 5 },
+    onboarding: vendorStatus === 'ACTIVE'
+      ? { status: 'COMPLETED', description: null, nextStep: 11 }
+      : { status: 'IN_PROGRESS', description: 'Step 5 is completed', nextStep: 5 },
     subscription: {
       tier: 'SILVER',
       planName: 'Silver',
@@ -79,6 +80,14 @@ const vendor: User = {
 }
 
 describe('resolveOnboardingEntry', () => {
+  it('resumes an active approved vendor whose onboarding is still at Step 7', () => {
+    const unfinished = state('ACTIVE', 'APPROVED')
+    unfinished.context.onboarding = { status: 'IN_PROGRESS', nextStep: 7, description: 'Step 6: Set Prices' }
+
+    expect(vendorLandingPath(resolveOnboardingEntry(unfinished))).toBe('/onboarding')
+    expect(resumeStep(unfinished)).toBe(7)
+  })
+
   it('reports a submitted store awaiting approval as submitted', () => {
     expect(resolveOnboardingEntry(state('ACTIVE', 'PENDING'))).toEqual({ kind: 'submitted' })
   })
@@ -87,11 +96,29 @@ describe('resolveOnboardingEntry', () => {
     expect(resolveOnboardingEntry(state('ACTIVE', 'APPROVED'))).toEqual({ kind: 'submitted' })
   })
 
-  it('ignores the backend onboarding block, which reports IN_PROGRESS after submission', () => {
-    const submitted = state('ACTIVE', 'PENDING')
-    expect(submitted.context.onboarding.status).toBe('IN_PROGRESS')
-    expect(submitted.context.onboarding.nextStep).toBe(5)
-    expect(resolveOnboardingEntry(submitted).kind).toBe('submitted')
+  it.each(['PENDING', 'APPROVED'])('resumes unfinished onboarding despite active status and %s approval', (approval) => {
+    const unfinished = state('ACTIVE', approval)
+    unfinished.context.onboarding = { status: 'IN_PROGRESS', description: null, nextStep: 5 }
+    expect(resolveOnboardingEntry(unfinished).kind).toBe('resume')
+    expect(resumeStep(unfinished)).toBe(5)
+  })
+
+  it('keeps an active store in setup when only its status reports incomplete onboarding', () => {
+    const unfinished = state('ACTIVE', 'APPROVED')
+    unfinished.context.onboarding = { status: 'IN_PROGRESS', description: null, nextStep: null }
+    expect(resolveOnboardingEntry(unfinished).kind).toBe('resume')
+  })
+
+  it('uses completion status when the resume pointer is missing', () => {
+    const finished = state('ACTIVE', 'APPROVED')
+    finished.context.onboarding.nextStep = null
+    expect(resolveOnboardingEntry(finished).kind).toBe('submitted')
+  })
+
+  it('keeps legacy activation as a fallback only when onboarding evidence is absent', () => {
+    const legacy = state('ACTIVE', 'PENDING')
+    legacy.context.onboarding = { status: 'UNKNOWN', description: null, nextStep: null }
+    expect(resolveOnboardingEntry(legacy).kind).toBe('submitted')
   })
 
   it('resumes an unfinished store at its first unsaved step', () => {
