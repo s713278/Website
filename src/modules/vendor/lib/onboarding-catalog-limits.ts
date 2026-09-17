@@ -58,6 +58,7 @@ export function projectedProductTotal(
 export function projectedSkuTotal(
   accountSkuIds: readonly number[],
   draftSkus: readonly DraftSku[],
+  unlistedSkuCount = 0,
 ): number {
   const distinct = new Set(accountSkuIds)
   let newLocalSizes = 0
@@ -66,7 +67,7 @@ export function projectedSkuTotal(
     if (serverId != null) distinct.add(serverId)
     else newLocalSizes += 1
   }
-  return distinct.size + newLocalSizes
+  return distinct.size + newLocalSizes + unlistedSkuCount
 }
 
 export type RetainableCatalog = {

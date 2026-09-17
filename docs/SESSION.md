@@ -103,8 +103,14 @@ back to it. An explicit customer destination in `from` still wins, so a vendor h
 not dragged into store setup.
 
 For a vendor it then reads the account — one cached, resume-step-sized hydration shared with the
-wizard — and routes on what is actually saved: a submitted store (`vendor_status: ACTIVE`) goes to
-`/vendor`, anything else to `/onboarding`. The staged read policy and cache lifecycle are documented
+wizard — and routes on completed setup and submission. An active store with
+`onboarding.next_step: 11` goes to `/vendor`; steps 1–10 go to `/onboarding` even if the store
+is active and approved. If the pointer is absent or invalid, `onboarding.status: COMPLETED`
+establishes completion; activation alone is a legacy fallback only when onboarding status is
+also absent or unknown. Approval does not establish completion. The wizard resumes at the backend step
+(at least Step 3 for an already verified session). Direct dashboard visits also show unfinished
+setup instead of an open store, while suspension and rejection retain precedence.
+The staged read policy and cache lifecycle are documented
 in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration). Routing every vendor
 into the wizard and letting it redirect back out is what produced a visible flash through setup for
 vendors who had already finished it.

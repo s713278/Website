@@ -4,14 +4,9 @@ import type { ServerOnboardingState } from './onboarding-resume'
 /**
  * What the vendor's account says the wizard should do for them.
  *
- * `submitted` means the store has been sent for review — `vendor_status: ACTIVE`, whether or
- * not an admin has approved it yet. Approval is a separate, later transition, so it is
- * deliberately not part of this decision: a vendor waiting on approval needs no further
- * setup just as much as one already public, and neither should be handed a setup form.
- *
- * Submission is never read from `onboarding.status` or `onboarding.next_step`. Both are
- * derived server-side and move backwards — a submitted store still reports `IN_PROGRESS`.
- * See docs/API_GAPS.md.
+ * `submitted` means setup is complete and the store is active, whether or not it has
+ * been approved. Explicit unfinished onboarding takes precedence over activation and
+ * approval, including accounts whose status was changed outside the setup flow.
  */
 export type OnboardingEntry = { kind: 'submitted' } | { kind: 'resume' }
 

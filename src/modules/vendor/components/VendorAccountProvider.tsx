@@ -99,6 +99,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
       : {
           vendorStatus: sourceContext.vendorStatus,
           approvalStatus: sourceContext.approvalStatus,
+          onboarding: sourceContext.onboarding,
         }
 
     const demoResumeStep = isDemo

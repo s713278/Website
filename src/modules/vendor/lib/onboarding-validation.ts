@@ -16,7 +16,7 @@ import {
   projectedSkuTotal,
 } from './onboarding-catalog-limits'
 import { expectedMeasurementFor, type MeasurementCatalog } from './onboarding-measurement'
-import { isKnownSkuId } from './onboarding-sku-id'
+import { isAccountSkuId, isKnownSkuId } from './onboarding-sku-id'
 
 /**
  * What the account already holds and the plan caps that are not passed positionally.
@@ -29,10 +29,10 @@ import { isKnownSkuId } from './onboarding-sku-id'
 export type CatalogEnforcement = {
   maxProducts?: number
   maxSkus?: number
-  account?: { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+  account?: { categoryIds: number[]; productIds: number[]; skuIds: number[]; unlistedSkuCount?: number }
 }
 
-const EMPTY_ACCOUNT = { categoryIds: [], productIds: [], skuIds: [] }
+const EMPTY_ACCOUNT: NonNullable<CatalogEnforcement['account']> = { categoryIds: [], productIds: [], skuIds: [] }
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -91,8 +91,7 @@ function nonNegative(value: number): boolean {
  * hidden Size name is deliberately absent: it now follows the product (every size of a
  * product carries the same name), so keying on it would let two identical sizes coexist and
  * point the vendor at a control the compact card no longer renders. The visible quantity and
- * unit are the only differentiators a vendor can act on. The backend write path keeps its own
- * name-aware key (`onboarding-sync.ts`); this is the form-level guard.
+ * unit are the only differentiators a vendor can act on, matching the account reconciliation.
  */
 function skuIdentity(sku: DraftSku): string {
   return `${sku.quantity ?? ''}::${sku.unit.trim().toLowerCase()}`
@@ -138,6 +137,8 @@ export function validateDraftSku(
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
   if (!positive(sku.quantity)) {
     issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
+  } else if (sku.quantity < 0.000001) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be at least 0.000001.'))
   } else if (sku.measurementType === 'COUNT' && !Number.isInteger(sku.quantity)) {
     // A count is a tally of whole items; only the continuous measurements (weight, volume, …)
     // are sold in fractions. The size carries its product's measurement (the guard above keeps
@@ -279,8 +280,8 @@ function productLimitIssue(accountProductIds: number[], draftProductIds: number[
     : []
 }
 
-function skuLimitIssue(accountSkuIds: number[], draftSkus: DraftSku[], maxSkus: number): ValidationIssue[] {
-  return projectedSkuTotal(accountSkuIds, draftSkus) > maxSkus
+function skuLimitIssue(accountSkuIds: number[], draftSkus: DraftSku[], maxSkus: number, unlistedSkuCount = 0): ValidationIssue[] {
+  return projectedSkuTotal(accountSkuIds, draftSkus, unlistedSkuCount) > maxSkus
     ? [issue(6, 'skus', `Your plan allows ${maxSkus} sizes in total, including those already saved to your store.`)]
     : []
 }
@@ -321,7 +322,7 @@ export function validateStep(
   }
   if (step === 6) {
     // Projected post-save size count: account sizes plus new local ones, an edit net-zero.
-    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus)
+    const issues: ValidationIssue[] = skuLimitIssue(account.skuIds, draft.skus, maxSkus, account.unlistedSkuCount)
     for (const product of draft.products) {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
       // The measurement every size of this product must carry. Undefined when no catalog has
@@ -396,21 +397,20 @@ export function readinessIssues(
 }
 
 /**
- * What a submitted store may still validate on Steps 4-5: only the additive delta.
+ * What a submitted store may still validate: catalog limits and new size details.
  *
  * A submitted store is with an administrator, so the whole-store readiness checks in
  * `validateStep` do not apply here — reporting "every product needs a size" on a store
  * that is already submitted blocks the vendor on a problem they were never asked to fix
- * and cannot (existing entries are read-only). This gates the one thing a submitted store
- * can still do wrong: push its catalog past a plan limit. Sizes are excluded — Step 6 is
- * read-only while under review, because the backend rejects a new size (417) until the
- * store is approved. See `CONTEXT.md` ("Submitted", "Plan limit").
+ * and cannot (existing entries are read-only). Step 6 reaches this only after approval;
+ * it checks new sizes against their siblings without requiring every product to be priced.
  */
 export function additiveCatalogIssues(
   step: OnboardingStep,
   draft: VendorOnboardingDraftV1,
   maxCategories: number = ONBOARDING_CONFIG.maxCategories,
   catalog: CatalogEnforcement = {},
+  measurementCatalog: MeasurementCatalog = [],
 ): ValidationIssue[] {
   const account = catalog.account ?? EMPTY_ACCOUNT
   const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
@@ -419,6 +419,17 @@ export function additiveCatalogIssues(
   }
   if (step === 5) {
     return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
+  }
+  if (step === 6) {
+    const issues = skuLimitIssue(account.skuIds, draft.skus, catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus, account.unlistedSkuCount)
+    for (const product of draft.products) {
+      const siblings = draft.skus.filter((sku) => sku.productId === product.id)
+      const measurement = expectedMeasurementFor(product, measurementCatalog)
+      for (const sku of siblings.filter((size) => !isAccountSkuId(size.id))) {
+        issues.push(...validateDraftSku(sku, siblings, measurement))
+      }
+    }
+    return issues
   }
   return []
 }

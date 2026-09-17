@@ -62,10 +62,6 @@
       "description": "APIs for fetching vendors listing and SKU listing in order to display on UI for User journey."
     },
     {
-      "name": "13. Image API",
-      "description": "Endpoints for uploading images to S3 and fetching stored image URLs from the database.\n<br><b>ADMIN</b> can upload/fetch platform-level and vendor-specific images for available types:\nHOMEBANNER, THUMBNAIL, PRODUCT, SKU.</br>\n<br><b>VENDOR</b> can upload/fetch images for their own resources:\nSKU (tb_sku), HOMEBANNER and THUMBNAIL (tb_vendor).</br>\n"
-    },
-    {
       "name": "16. Courier Partners",
       "description": "APIs for managing courier/shipping partners"
     },
@@ -100,6 +96,10 @@
     {
       "name": "10. SKU Subscription Plan API",
       "description": "APIs for managing subscription plans assigned to SKUs"
+    },
+    {
+      "name": "13. Image API",
+      "description": "Endpoints for uploading images to S3 and fetching stored image URLs from the database.\n<br><b>ADMIN</b> can upload/fetch platform-level and vendor-specific images for available types:\nHOMEBANNER, THUMBNAIL, PRODUCT.</br>\n<br><b>VENDOR</b> can upload/fetch images for their own resources:\nPRODUCT (tb_product_vendor), HOMEBANNER and THUMBNAIL (tb_vendor).</br>\n<br><b>DEPRECATED:</b> <code>SKU</code> is no longer a valid image type and returns\n<code>400</code>. A SKU inherits its image from the owning vendor product, so use\n<code>image_type=PRODUCT</code> with <code>reference_id=&lt;vendorProductId&gt;</code>.</br>\n"
     },
     {
       "name": "19. WhatsApp Webhook API",
@@ -1959,8 +1959,8 @@
         "tags": [
           "07. Vendor Profile API"
         ],
-        "summary": "Create Vendor Sku API",
-        "description": "This API is used to create Sku with eligible subscription plans and delivery days.\nONE_TIME with FIXED delivery mode is always required  'eligible_delivery_days'.\n",
+        "summary": "Create Vendor SKU API",
+        "description": "Creates SKUs for a vendor product. The SKU's display name, description and image are no\nlonger supplied here - they are derived from the owning product / vendor product.\n<br/><code>eligible_sub_plans</code> is optional; pass an empty list (or omit it) for SKUs\nwithout subscriptions.\n<br/>ONE_TIME with FIXED delivery mode always requires <code>eligible_delivery_days</code>.\n",
         "operationId": "createVendorSku",
         "parameters": [
           {
@@ -1976,182 +1976,24 @@
           }
         ],
         "requestBody": {
-          "description": "SKU Creation details",
+          "description": "SKU creation details (name, description and image_path are ignored)",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ItemSkuCreateRequest"
               },
               "examples": {
-                "SKU with OneTime with Fixed delivery days": {
-                  "summary": "OneTime subscription sku creation example",
-                  "description": "SKU with OneTime with Fixed delivery days",
-                  "value": {
-                    "product_id": 1,
-                    "name": "Organic Vegetables basket",
-                    "description": "Organic Vegetables basket for 4 people with 2 veggies and 2 leafy items",
-                    "sku_type": "ITEM",
-                    "image_path": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk",
-                    "is_active": true,
-                    "store_pickup": true,
-                    "home_delivery": true,
-                    "price_list": [
-                      {
-                        "measurement_type": "WEIGHT",
-                        "unit": "kg",
-                        "value": "2",
-                        "effective_date": "2025-02-03",
-                        "list_price": 100,
-                        "sale_price": 90,
-                        "shipping_price": 0
-                      }
-                    ],
-                    "eligible_sub_plans": [
-                      {
-                        "sub_plan_id": 1,
-                        "sub_frequency": "ONE_TIME",
-                        "delivery_mode": "FIXED",
-                        "eligible_delivery_days": {
-                          "delivery_days": [
-                            "SUNDAY",
-                            "WEDNESDAY"
-                          ]
-                        }
-                      }
-                    ]
-                  }
+                "SKU with OneTime and Fixed delivery days": {
+                  "summary": "Item SKU with a ONE_TIME FIXED subscription plan",
+                  "$ref": "#/components/examples/Req_Create_Sku_Item_With_Fixed"
                 },
-                "SKU with OneTime,Daily and Custom subscription plans.": {
-                  "summary": "OneTime,Daily and Custom subscription sku creation example",
-                  "description": "SKU with OneTime,Daily and Custom subscription plans.",
-                  "value": {
-                    "product_id": 118,
-                    "name": "Buffalo Full Cream Milk",
-                    "description": "Buffalo Full Cream Milk",
-                    "sku_type": "ITEM",
-                    "image_path": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk",
-                    "subscription_eligible": true,
-                    "is_active": true,
-                    "store_pickup": true,
-                    "home_delivery": true,
-                    "price_list": [
-                      {
-                        "measurement_type": "VOLUME",
-                        "unit": "L",
-                        "value": "0,5",
-                        "effective_date": "2025-01-01",
-                        "list_price": 45,
-                        "sale_price": 42,
-                        "shipping_price": 10
-                      },
-                      {
-                        "measurement_type": "VOLUME",
-                        "unit": "L",
-                        "value": "1",
-                        "effective_date": "2025-01-01",
-                        "list_price": 100,
-                        "sale_price": 90,
-                        "shipping_price": 0
-                      }
-                    ],
-                    "eligible_sub_plans": [
-                      {
-                        "sub_plan_id": 4,
-                        "sub_frequency": "ONE_TIME",
-                        "delivery_mode": "FLEXIBLE"
-                      },
-                      {
-                        "sub_plan_id": 3,
-                        "sub_frequency": "DAILY",
-                        "delivery_mode": "FLEXIBLE"
-                      },
-                      {
-                        "sub_plan_id": 2,
-                        "sub_frequency": "CUSTOM",
-                        "delivery_mode": "FLEXIBLE"
-                      }
-                    ]
-                  }
+                "SKU without any subscription plans": {
+                  "summary": "Item SKU with no subscription plans",
+                  "$ref": "#/components/examples/Req_Create_Sku_Item_No_Subscription"
                 },
-                "SKU with Weekly with Fixed delivery day": {
-                  "summary": "Weekly subscription sku creation example",
-                  "description": "SKU with Weekly with Fixed delivery day",
-                  "value": {
-                    "product_id": 1,
-                    "name": "Pure Cow Ghee",
-                    "description": "Pure Cow Ghee made by cow's milk",
-                    "sku_type": "ITEM",
-                    "image_path": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk",
-                    "is_active": true,
-                    "subscription_eligible": true,
-                    "store_pickup": true,
-                    "home_delivery": true,
-                    "price_list": [
-                      {
-                        "measurement_type": "WEIGHT",
-                        "unit": "kg",
-                        "value": "1",
-                        "effective_date": "2025-02-03",
-                        "list_price": 1000,
-                        "sale_price": 90,
-                        "shipping_price": 0
-                      }
-                    ],
-                    "eligible_sub_plans": [
-                      {
-                        "sub_plan_id": 5,
-                        "sub_frequency": "WEEKLY",
-                        "delivery_mode": "FIXED",
-                        "eligible_delivery_days": {
-                          "delivery_days": [
-                            "SUNDAY"
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                },
-                "Service SKU with Price and Subscription Plans.": {
-                  "summary": "OneTime Service Subscription",
-                  "description": "Service SKU with Price and Subscription Plans.",
-                  "value": {
-                    "product_id": 2,
-                    "description": "9AM–5PM farm access + lunch + snacks.\nLunch, Evening Snacks.",
-                    "name": "Farm Visit",
-                    "sku_type": "SERVICE",
-                    "image_path": "",
-                    "is_active": true,
-                    "subscription_eligible": false,
-                    "price_list": [
-                      {
-                        "measurement_type": "PER_PERSON",
-                        "unit": "Single",
-                        "value": "1",
-                        "effective_date": "2025-02-03",
-                        "list_price": 300,
-                        "sale_price": 250,
-                        "valid_days": 30,
-                        "no_of_services": 1
-                      },
-                      {
-                        "measurement_type": "PER_PERSON",
-                        "unit": "Couple",
-                        "value": "2",
-                        "effective_date": "2025-02-03",
-                        "list_price": 500,
-                        "sale_price": 450,
-                        "valid_days": 30,
-                        "no_of_services": 1
-                      }
-                    ],
-                    "eligible_sub_plans": [
-                      {
-                        "sub_plan_id": 4,
-                        "sub_frequency": "ONE_TIME",
-                        "delivery_mode": "FLEXIBLE"
-                      }
-                    ]
-                  }
+                "Service SKU": {
+                  "summary": "Service SKU with no subscription plans",
+                  "$ref": "#/components/examples/Req_Create_Sku_Service"
                 }
               }
             }
@@ -2684,7 +2526,7 @@
           "13. Image API"
         ],
         "summary": "Fetch vendor image URL from the database",
-        "description": "Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.\n\n<b>Image Types &amp; Parameter Combinations:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).\n      Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>\n  <li><b>SKU</b> - SKU image (reads tb_sku.image_path, must belong to vendor).\n      Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (skuId).</li>\n</ul>\n\n<b>Request Format:</b><br/>\nGET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>\nGET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>\n\n<b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,\n<code>reference_id</code> (when applicable), and a <code>message</code>.\nThe <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.\n\n<b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.\n",
+        "description": "Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.\n\n<b>Image Types &amp; Parameter Combinations:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).\n      Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown\n      for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>\n</ul>\n\n<b>Request Format:</b><br/>\nGET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>\nGET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>\n\n<b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,\n<code>reference_id</code> (when applicable), and a <code>message</code>.\nThe <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.\n\n<b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.\n",
         "operationId": "getVendorImageUrl",
         "parameters": [
           {
@@ -2743,7 +2585,7 @@
           "13. Image API"
         ],
         "summary": "Upload vendor images (home banner, thumbnail, product and sku)",
-        "description": "Uploads images for a specific vendor. Simple API for back office use.\nSupports vendor banner, thumbnail, product, and SKU images using multipart/form-data.\n\n<b>Image Types:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>\n  <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>\n  <li><b>SKU</b> - SKU image (reference_id = skuId, must belong to vendor)</li>\n</ul>\n\n<b>Request Format:</b><br/>\nPOST /v1/vendors/{vendor_id}/images<br/>\nContent-Type: multipart/form-data<br/>\nParameters: image_type, reference_id (optional), fileName (optional), file (required)\n\n<b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.\n",
+        "description": "Uploads images for a specific vendor. Simple API for back office use.\nSupports vendor banner, thumbnail, product, and SKU images using multipart/form-data.\n\n<b>Image Types:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>\n  <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>\n</ul>\n\n<b>Request Format:</b><br/>\nPOST /v1/vendors/{vendor_id}/images<br/>\nContent-Type: multipart/form-data<br/>\nParameters: image_type, reference_id (optional), fileName (optional), file (required)\n\n<b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.\n",
         "operationId": "uploadVendorImage",
         "parameters": [
           {
@@ -3335,8 +3177,9 @@
                           "subscription_id": 703,
                           "sku_id": 202,
                           "item_name": "Buffalo Milk 1L Daily",
-                          "weight": "1000ml",
-                          "display_name": "Buffalo Milk 1L Daily-1000ml",
+                          "quantity_value": 1000,
+                          "unit": "ml",
+                          "display_name": "Buffalo Milk 1L Daily-1000 ml",
                           "image_path": "/images/buffalo-milk.jpg",
                           "vendor_name": "Straight From The Farm (SFTF)",
                           "subscription_status": "ACTIVE",
@@ -4532,8 +4375,8 @@
         "tags": [
           "11. Platform APIs - Product Catalog"
         ],
-        "summary": "Create product",
-        "description": "Create platform level product. <p>measurement_unit_id</p> get from the '/v1/measurements/'",
+        "summary": "Create a product",
+        "description": "Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description.",
         "operationId": "addProduct",
         "parameters": [
           {
@@ -4547,22 +4390,63 @@
           }
         ],
         "requestBody": {
+          "description": "Product details",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProductDTO"
+              },
+              "examples": {
+                "Create product - Minimal": {
+                  "$ref": "#/components/examples/Req_Create_Product_Minimal"
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "OK",
+          "201": {
+            "description": "Product created successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Create_Product_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Product with the same name already exists in this category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Duplicate": {
+                    "$ref": "#/components/examples/Resp_Create_Product_Duplicate"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Create_Product_Category_Not_Found"
+                  }
                 }
               }
             }
@@ -4649,26 +4533,67 @@
         "tags": [
           "11. Platform APIs - Product Catalog"
         ],
-        "summary": "Create a new category",
-        "description": "API accessed by only Admin roles",
+        "summary": "Create a category",
+        "description": "Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles.",
         "operationId": "createCategory",
         "requestBody": {
+          "description": "Category details",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CategoryDTO"
+              },
+              "examples": {
+                "Create category - Minimal": {
+                  "$ref": "#/components/examples/Req_Create_Category_Minimal"
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "OK",
+          "201": {
+            "description": "Category created successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Create_Category_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Validation error": {
+                    "$ref": "#/components/examples/Resp_Create_Category_Validation_Error"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category with the same name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Duplicate": {
+                    "$ref": "#/components/examples/Resp_Create_Category_Duplicate"
+                  }
                 }
               }
             }
@@ -4953,7 +4878,7 @@
           "18. Admin API"
         ],
         "summary": "Import Catalog for Existing Vendor from CSV",
-        "description": "Import catalog data (categories, products, SKUs with prices) for an existing vendor using CSV file.\nVendor must already exist in the system. Skips vendor profile and delivery config creation.\n<br><br>\n<b>CSV Format:</b>\n<br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type\n",
+        "description": "Import catalog data (categories, products, SKUs with prices) for an existing vendor using CSV file.\nVendor must already exist in the system. Skips vendor profile and delivery config creation.\n<br><br>\n<b>CSV Format:</b>\n<br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type\n",
         "operationId": "importCatalogFromCsv",
         "parameters": [
           {
@@ -5009,7 +4934,7 @@
           "18. Admin API"
         ],
         "summary": "Import Catalog for Existing Vendor from JSON",
-        "description": "Import catalog data (categories, products, SKUs with prices) for an existing vendor using JSON payload.\nVendor must already exist in the system. Skips vendor profile and delivery config creation.\n",
+        "description": "Import catalog data (categories, products, SKUs with prices and required quantity_value/unit measurements)\nfor an existing vendor using JSON payload.\nVendor must already exist in the system. Skips vendor profile and delivery config creation.\n",
         "operationId": "importCatalogFromJson",
         "parameters": [
           {
@@ -5060,7 +4985,7 @@
           "18. Admin API"
         ],
         "summary": "Bulk Import Vendor Catalog from CSV",
-        "description": "Bulk import vendor catalog from CSV file. Creates vendor profile, categories (if not exists),\nproducts (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.\n<br><br>\n<b>CSV Format:</b>\n<br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type\n<br><br>\n<b>Example:</b>\n<br>Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT\n",
+        "description": "Bulk import vendor catalog from CSV file. Creates vendor profile, categories (if not exists),\nproducts (if not exists), SKUs with prices and required quantity_value/unit measurements,\nand delivery config with HOME_DELIVERY and FIXED_WINDOW.\n<br><br>\n<b>CSV Format:</b>\n<br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type\n<br><br>\n<b>Example:</b>\n<br>Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT\n",
         "operationId": "bulkImportVendorFromCsv",
         "parameters": [
           {
@@ -5164,7 +5089,7 @@
           "18. Admin API"
         ],
         "summary": "Bulk Import Vendor Catalog from JSON",
-        "description": "Bulk import vendor catalog from JSON payload. Creates vendor profile, categories (if not exists),\nproducts (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.\n",
+        "description": "Bulk import vendor catalog from JSON payload. Creates vendor profile, categories (if not exists),\nproducts (if not exists), SKUs with prices and required quantity_value/unit measurements,\nand delivery config with HOME_DELIVERY and FIXED_WINDOW.\n",
         "operationId": "bulkImportVendorFromJson",
         "requestBody": {
           "content": {
@@ -5361,7 +5286,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Fetch SKU info",
-        "description": "Fetch core SKU information (sku_id, product_id, name, description, features, is_active)\nfor a given vendor and SKU. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.\n",
+        "description": "Fetch core SKU information (sku_id, product_id, name, description, features,\nquantity_value, unit, is_active) for a given vendor and SKU. Accessible by ADMIN,\nVENDOR, or CUSTOMER_CARE.\n<br/><b>Note:</b> <code>name</code>, <code>description</code> and <code>image_path</code>\nare derived from the product / vendor product, not stored on the SKU.\n",
         "operationId": "getSkuInfo",
         "parameters": [
           {
@@ -5446,7 +5371,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Update SKU info",
-        "description": "Partially update core SKU fields: <b>name</b>, <b>description</b>, <b>features</b>,\nand <b>is_active</b>. Only supplied (non-null) fields are written to the database;\nomitted fields are left unchanged. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.\n",
+        "description": "Partially update core SKU fields: <b>features</b>, <b>quantity_value</b>, <b>unit</b>,\nand <b>is_active</b>. quantity_value and unit must be supplied together. Other omitted\nfields are left unchanged.\n<br/><b>Note:</b> <code>name</code> and <code>description</code> are not editable on a\nSKU - they are derived from the owning vendor product. Accessible by ADMIN, VENDOR, or\nCUSTOMER_CARE.\n",
         "operationId": "updateSkuInfo",
         "parameters": [
           {
@@ -5481,17 +5406,8 @@
               },
               "examples": {
                 "Partial SKU info update": {
-                  "summary": "Update description and active flag",
-                  "description": "Partial SKU info update",
-                  "value": {
-                    "name": "Organic Tomato 1 kg",
-                    "description": "Farm-fresh organic tomatoes, pesticide-free",
-                    "features": {
-                      "organic": true,
-                      "shelf_life_days": 5
-                    },
-                    "is_active": true
-                  }
+                  "summary": "Update features and active flag",
+                  "$ref": "#/components/examples/Req_Update_Sku_Info"
                 }
               }
             }
@@ -7559,7 +7475,7 @@
           "02. Vendors and Products Listing API"
         ],
         "summary": "SKU Search by category name,product name and sku name in vendor context.",
-        "description": "This API used for search and list matched skus for given search criteria.\n",
+        "description": "This API searches SKUs and returns separate quantity_value and unit fields.\n",
         "operationId": "searchSkusByKeyword",
         "parameters": [
           {
@@ -7676,7 +7592,7 @@
           "02. Vendors and Products Listing API"
         ],
         "summary": "Fetch SKUs with vendor_id and/or without product_id",
-        "description": "This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.\n<br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.\n<br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.\n<br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2\n",
+        "description": "This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.\n<br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.\n<br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.\n<br>Each SKU returns measurement as separate <b>quantity_value</b> and <b>unit</b> fields.\n<br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2\n",
         "operationId": "fetchSkusByVendorProduct",
         "parameters": [
           {
@@ -8040,6 +7956,89 @@
         }
       }
     },
+    "/v1/vendors/{identifier}/storefront/products": {
+      "get": {
+        "tags": [
+          "20. Vendor Storefront API"
+        ],
+        "summary": "Get storefront product listing with variants",
+        "description": "Returns a paginated list of active products for the storefront, each grouped by\n<code>vendor_product_id</code> and containing price variants with separate\n<code>quantity_value</code> and <code>unit</code> measurement fields.\n<br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.\n<br>Optionally filter by an assigned <code>category_id</code>.\n<br><b>Public endpoint</b> — no bearer token or vendor login required.\n",
+        "operationId": "getStorefrontProducts",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "description": "Vendor identifier — either a numeric vendor ID or the store_identifier slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 91
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products loaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found or not active/approved",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponsePaginationResponseStorefrontProductResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponsePaginationResponseStorefrontProductResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/vendors/search": {
       "get": {
         "tags": [
@@ -8256,7 +8255,7 @@
           "02. Vendors and Products Listing API"
         ],
         "summary": "Fetch Product SKU Details to display on PDP page.",
-        "description": "This API used for fetching SKU information.\n",
+        "description": "This API returns SKU information with separate quantity_value and unit fields.\n",
         "operationId": "fetchSkuDetails",
         "parameters": [
           {
@@ -11461,7 +11460,15 @@
         "properties": {
           "description": {
             "type": "string",
+            "description": "Deprecated. This field is ignored - the SKU description is derived from the vendor product (or product).",
             "example": "Organic and Own farm grown vegetables"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Measurement unit represented by this SKU.",
+            "example": "ml",
+            "maxLength": 50,
+            "minLength": 0
           },
           "product_id": {
             "type": "integer",
@@ -11471,8 +11478,8 @@
           },
           "name": {
             "type": "string",
-            "example": "NON GMO Tomato",
-            "minLength": 1
+            "description": "Deprecated. This field is ignored - the SKU display name is derived from the product.",
+            "example": "Organic Tomato 1 kg"
           },
           "sku_type": {
             "type": "string",
@@ -11485,7 +11492,14 @@
           },
           "image_path": {
             "type": "string",
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk"
+            "description": "Deprecated. This field is ignored - the SKU image is derived from the vendor product (or product).",
+            "example": "data:image/jpeg;base64,/9j/4AAQSkJRgABAQAAAQABAAD/2wCEAAk"
+          },
+          "quantity_value": {
+            "type": "number",
+            "description": "Numeric quantity represented by this SKU.",
+            "example": 250,
+            "minimum": 0.000001
           },
           "is_active": {
             "type": "boolean"
@@ -11517,6 +11531,7 @@
           },
           "eligible_sub_plans": {
             "type": "array",
+            "description": "Optional list of eligible subscription plans. Empty or omitted means the SKU has no subscription plans.",
             "items": {
               "$ref": "#/components/schemas/SubscriptionPlanDTO"
             }
@@ -11533,10 +11548,6 @@
             "type": "string",
             "example": "kg or L"
           },
-          "value": {
-            "type": "string",
-            "example": 0.5
-          },
           "measurement_type": {
             "type": "string",
             "enum": [
@@ -11550,6 +11561,11 @@
               "SLOT"
             ],
             "example": "WEIGHT"
+          },
+          "quantity_value": {
+            "type": "number",
+            "description": "Numeric quantity represented by this SKU",
+            "example": 0.5
           },
           "effective_date": {
             "type": "string",
@@ -12666,10 +12682,14 @@
             "format": "int64"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 2147483647,
+            "minLength": 3
           },
           "description": {
-            "type": "string"
+            "type": "string",
+            "description": "Product description. Defaults to the product name when omitted or blank.",
+            "example": "Fresh whole milk"
           },
           "measurement_unit_id": {
             "type": "integer",
@@ -12690,11 +12710,17 @@
           },
           "name": {
             "type": "string",
-            "example": "Dairy Products"
+            "example": "Dairy Products",
+            "minLength": 1
           },
           "business_type": {
             "type": "string",
             "example": "Retail"
+          },
+          "business_type_id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 12
           },
           "image_path": {
             "type": "string",
@@ -12704,7 +12730,10 @@
             "type": "string",
             "example": "A category dedicated to Milk products, offering a wide range of high-quality items for everyday use."
           }
-        }
+        },
+        "required": [
+          "business_type_id"
+        ]
       },
       "OTPVerificationRequest": {
         "type": "object",
@@ -12991,8 +13020,8 @@
           "image_path": {
             "type": "string"
           },
-          "weight": {
-            "type": "string"
+          "quantity_value": {
+            "type": "number"
           },
           "unit": {
             "type": "string"
@@ -13076,21 +13105,24 @@
       },
       "SkuInfoUpdateRequest": {
         "type": "object",
-        "description": "Request payload for updating core SKU info fields",
+        "description": "Request payload for updating core SKU info fields.\n<br/><b>Note:</b> <code>name</code> and <code>description</code> are no longer editable on a\nSKU - they are derived from the owning vendor product. Update them via the vendor product\nendpoint instead.\n",
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "SKU display name",
-            "example": "Organic Tomato 1kg"
-          },
-          "description": {
-            "type": "string",
-            "description": "SKU description",
-            "example": "Fresh organic tomatoes grown without pesticides"
-          },
           "features": {
             "$ref": "#/components/schemas/JsonNode",
             "description": "SKU features as a JSON value"
+          },
+          "quantity_value": {
+            "type": "number",
+            "description": "Numeric quantity represented by this SKU",
+            "example": 250,
+            "minimum": 0.000001
+          },
+          "unit": {
+            "type": "string",
+            "description": "Measurement unit represented by this SKU",
+            "example": "ml",
+            "maxLength": 50,
+            "minLength": 0
           },
           "is_active": {
             "type": "boolean",
@@ -13506,6 +13538,16 @@
             "$ref": "#/components/schemas/JsonNode",
             "description": "SKU features as a JSON value"
           },
+          "quantity_value": {
+            "type": "number",
+            "description": "Numeric quantity represented by this SKU",
+            "example": 250
+          },
+          "unit": {
+            "type": "string",
+            "description": "SKU measurement unit",
+            "example": "ml"
+          },
           "is_active": {
             "type": "boolean",
             "description": "Whether SKU is active",
@@ -13810,6 +13852,249 @@
             "type": "string",
             "description": "WhatsApp support number with country code",
             "example": "+919900000000"
+          }
+        }
+      },
+      "PaginationResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page_number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_elements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_page": {
+            "type": "boolean"
+          },
+          "meta_data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "APIResponsePaginationResponseStorefrontProductResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "$ref": "#/components/schemas/PaginationResponseStorefrontProductResponse",
+            "description": "Data"
+          }
+        }
+      },
+      "PaginationResponseStorefrontProductResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductResponse"
+            }
+          },
+          "page_number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_elements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_page": {
+            "type": "boolean"
+          },
+          "meta_data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "StorefrontProductResponse": {
+        "type": "object",
+        "properties": {
+          "vendor_product_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Vendor product identifier",
+            "example": 161
+          },
+          "product_name": {
+            "type": "string",
+            "description": "Display product name",
+            "example": "Jute Loofah"
+          },
+          "category_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Category identifier",
+            "example": 5
+          },
+          "category_name": {
+            "type": "string",
+            "description": "Category name",
+            "example": "Bath & Body"
+          },
+          "product_image_path": {
+            "type": "string",
+            "description": "Product image URL",
+            "example": "https://example.com/vendors/1/products/jute_loofah.jpeg"
+          },
+          "product_description": {
+            "type": "string",
+            "description": "Product description",
+            "example": "Eco friendly bamboo and natural products"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether the product has at least one active SKU",
+            "example": true
+          },
+          "min_sale_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Lowest sale price across all variants",
+            "example": 30
+          },
+          "max_sale_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Highest sale price across all variants",
+            "example": 60
+          },
+          "starting_at": {
+            "type": "number",
+            "format": "double",
+            "description": "Price shown on the product card, usually the lowest sale price",
+            "example": 30
+          },
+          "default_sku_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "SKU id to select by default (cheapest active variant)",
+            "example": 1785
+          },
+          "variants_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of variants for this product",
+            "example": 6
+          },
+          "variants": {
+            "type": "array",
+            "description": "Size/price variants of the product",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductVariantResponse"
+            }
+          }
+        }
+      },
+      "StorefrontProductVariantResponse": {
+        "type": "object",
+        "properties": {
+          "sku_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unique SKU identifier",
+            "example": 1785
+          },
+          "quantity_value": {
+            "type": "number",
+            "description": "Numeric quantity represented by the SKU",
+            "example": 250
+          },
+          "unit": {
+            "type": "string",
+            "description": "Measurement unit represented by the SKU",
+            "example": "ml"
+          },
+          "sku_type": {
+            "type": "string",
+            "description": "Type of SKU",
+            "enum": [
+              "ITEM",
+              "SERVICE",
+              "DIGITAL"
+            ],
+            "example": "ITEM"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether the SKU is active",
+            "example": true
+          },
+          "price_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current price record identifier",
+            "example": 248
+          },
+          "list_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Maximum retail price",
+            "example": 30
+          },
+          "sale_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Customer-facing sale price",
+            "example": 30
+          },
+          "discount": {
+            "type": "number",
+            "format": "double",
+            "description": "Discount amount (list_price - sale_price)",
+            "example": 0
+          },
+          "on_sale": {
+            "type": "boolean",
+            "description": "Whether sale_price is lower than list_price",
+            "example": false
           }
         }
       },
@@ -14528,6 +14813,17 @@
       }
     },
     "examples": {
+      "Resp_Create_Category_Success": {
+        "value": {
+          "timestamp": "2026-08-23T23:20:00.123456789",
+          "success": true,
+          "status": 201,
+          "data": {
+            "id": 15,
+            "message": "Category created successfully."
+          }
+        }
+      },
       "Resp_OTP_Auth_Failed_1": {
         "value": {
           "success": false,
@@ -14536,6 +14832,17 @@
           "failure_reason": "OTP is already expired!!",
           "user_message": "User authentication failed!!",
           "api_details": []
+        }
+      },
+      "Resp_Create_Product_Success": {
+        "value": {
+          "timestamp": "2026-08-23T23:30:00.123456789",
+          "success": true,
+          "status": 201,
+          "data": {
+            "id": 205,
+            "message": "Product created successfully."
+          }
         }
       },
       "Resp_Vendor_Request_OTP_Success": {
@@ -14608,6 +14915,16 @@
           "reg_source": "android"
         }
       },
+      "Resp_Create_Category_Validation_Error": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-23T23:20:00.123456789",
+          "failure_reason": "Name is required.",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
       "Resp_Vendor_Update_Business_Type_Not_Found": {
         "value": {
           "success": false,
@@ -14674,6 +14991,27 @@
           "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
           "user_message": "Please check the request and try again!!",
           "api_details": []
+        }
+      },
+      "Req_Create_Sku_Item_No_Subscription": {
+        "value": {
+          "product_id": 118,
+          "sku_type": "ITEM",
+          "subscription_eligible": false,
+          "is_active": true,
+          "store_pickup": true,
+          "home_delivery": true,
+          "price_list": [
+            {
+              "measurement_type": "VOLUME",
+              "unit": "L",
+              "quantity_value": 1,
+              "effective_date": "2025-01-01",
+              "list_price": 100,
+              "sale_price": 90,
+              "shipping_price": 0
+            }
+          ]
         }
       },
       "Res_Sub_OneTime_With_Fixed_Failed_5": {
@@ -14775,6 +15113,13 @@
           "data": null
         }
       },
+      "Req_Create_Category_Minimal": {
+        "value": {
+          "name": "Dairy Products",
+          "business_type": "Retail",
+          "business_type_id": 12
+        }
+      },
       "Resp_Vendor_Context_Success": {
         "value": {
           "timestamp": "2026-08-14T17:10:00.123456789",
@@ -14831,6 +15176,16 @@
           "user_role": "VENDOR"
         }
       },
+      "Resp_Create_Category_Duplicate": {
+        "value": {
+          "success": false,
+          "status": 409,
+          "timestamp": "2026-08-23T23:20:00.123456789",
+          "failure_reason": "Category with the name 'Dairy Products' already exists with id 15",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
       "Resp_Vendor_Update_Business_Type_Forbidden": {
         "value": {
           "success": false,
@@ -14869,6 +15224,33 @@
           }
         }
       },
+      "Req_Create_Product_Minimal": {
+        "value": {
+          "name": "Whole Milk 1L",
+          "measurement_unit_id": 1
+        }
+      },
+      "Req_Create_Sku_Service": {
+        "value": {
+          "product_id": 2,
+          "sku_type": "SERVICE",
+          "subscription_eligible": false,
+          "is_active": true,
+          "price_list": [
+            {
+              "measurement_type": "PER_PERSON",
+              "unit": "Single",
+              "quantity_value": 1,
+              "effective_date": "2025-02-03",
+              "list_price": 300,
+              "sale_price": 250,
+              "valid_days": 30,
+              "no_of_services": 1
+            }
+          ],
+          "eligible_sub_plans": []
+        }
+      },
       "Resp_Authentication_Failed": {
         "value": {
           "success": false,
@@ -14879,12 +15261,57 @@
           "api_details": []
         }
       },
+      "Req_Create_Sku_Item_With_Fixed": {
+        "value": {
+          "product_id": 1,
+          "sku_type": "ITEM",
+          "subscription_eligible": true,
+          "is_active": true,
+          "store_pickup": true,
+          "home_delivery": true,
+          "price_list": [
+            {
+              "measurement_type": "WEIGHT",
+              "unit": "kg",
+              "quantity_value": 2,
+              "effective_date": "2025-02-03",
+              "list_price": 100,
+              "sale_price": 90,
+              "shipping_price": 0
+            }
+          ],
+          "eligible_sub_plans": [
+            {
+              "sub_plan_id": 1,
+              "sub_frequency": "ONE_TIME",
+              "delivery_mode": "FIXED",
+              "eligible_delivery_days": {
+                "delivery_days": [
+                  "SUNDAY",
+                  "WEDNESDAY"
+                ]
+              }
+            }
+          ]
+        }
+      },
       "Req_User_Request_OTP": {
         "value": {
           "country_code": "+91",
           "mobile_number": "9000000001",
           "reg_platform": "Android",
           "user_role": "USER"
+        }
+      },
+      "Req_Update_Sku_Info": {
+        "value": {
+          "features": {
+            "organic": true,
+            "shelf_life_days": 5
+          },
+          "quantity_value": 250,
+          "unit": "g",
+          "is_active": true
         }
       },
       "Resp_Vendor_Context_Not_Found": {
@@ -14906,6 +15333,26 @@
             "user_id": 3051,
             "mobile_verified": false
           }
+        }
+      },
+      "Resp_Create_Product_Category_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-08-23T23:30:00.123456789",
+          "failure_reason": "Category not found with categoryId: 999",
+          "user_message": "Resource not found.",
+          "api_details": []
+        }
+      },
+      "Resp_Create_Product_Duplicate": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-23T23:30:00.123456789",
+          "failure_reason": "Product already exists!!!",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
         }
       },
       "Req_Request_OTP": {

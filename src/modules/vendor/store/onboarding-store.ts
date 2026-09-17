@@ -13,7 +13,8 @@ import {
   projectedSkuTotal,
   retainAssignedCatalog,
 } from '../lib/onboarding-catalog-limits'
-import { applyCreatedEntry, type CreatedCatalogEntry } from '../lib/onboarding-sync'
+import { applyCreatedEntry, type AccountAssignment, type CreatedCatalogEntry } from '../lib/onboarding-sync'
+import { accountSkuId } from '../lib/onboarding-sku-id'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
@@ -38,7 +39,13 @@ import {
 
 type ImageKind = 'logo' | 'banner'
 
-type AccountCatalog = { categoryIds: number[]; productIds: number[]; skuIds: number[] }
+type AccountCatalog = {
+  categoryIds: number[]
+  productIds: number[]
+  skuIds: number[]
+  /** Backend usage can include inactive sizes omitted from the account list. */
+  unlistedSkuCount?: number
+}
 
 /**
  * The account catalog and the questions asked of it, built together.
@@ -131,6 +138,7 @@ type OnboardingStore = {
     categoryIds: number[]
     productIds: number[]
     skuIds?: number[]
+    skuUsage?: number | null
   }) => void
   /** Whether the account already holds this platform category. */
   isCategoryAssigned: (categoryId: number) => boolean
@@ -144,7 +152,7 @@ type OnboardingStore = {
    * a reported `skuIds` is the authoritative current set and replaces what was there. The
    * account is still re-read on entry, and that read stays the reconciliation.
    */
-  recordAssignment: (assignment: Partial<AccountCatalog>) => void
+  recordAssignment: (assignment: AccountAssignment) => void
   /**
    * Author a category into the draft that does not exist in the platform catalog yet.
    *
@@ -461,7 +469,7 @@ export function selectProjectedProductTotal(state: CatalogLimitState): number {
 }
 
 export function selectProjectedSkuTotal(state: CatalogLimitState): number {
-  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus)
+  return projectedSkuTotal(state.accountCatalog.skuIds, state.draft.skus, state.accountCatalog.unlistedSkuCount)
 }
 
 /** Whether the projected total is at or over the cap, so no further entry may be added. */
@@ -557,6 +565,10 @@ export function selectStoreIsSubmitted(state: { storeSubmission: StoreSubmission
   return state.storeSubmission !== null
 }
 
+export function selectStoreIsApproved(state: { storeSubmission: StoreSubmission | null }): boolean {
+  return state.storeSubmission?.approvalStatus?.toUpperCase() === 'APPROVED'
+}
+
 export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draft: createEmptyOnboardingDraft(),
   runtime: createEmptyRuntimeState(),
@@ -631,25 +643,37 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   setAccountCatalog(catalog) {
+    const skuIds = catalog.skuIds ?? []
+    const unlistedSkuCount = Math.max(0, (catalog.skuUsage ?? 0) - new Set(skuIds).size)
     set(accountCatalogSlice({
       categoryIds: catalog.categoryIds,
       productIds: catalog.productIds,
-      skuIds: catalog.skuIds ?? [],
+      skuIds,
+      ...(unlistedSkuCount ? { unlistedSkuCount } : {}),
     }))
   },
 
   recordAssignment(assignment) {
-    const { accountCatalog } = useOnboardingStore.getState()
+    const { accountCatalog, draft } = useOnboardingStore.getState()
     const categoryIds = mergeIds(accountCatalog.categoryIds, assignment.categoryIds)
     const productIds = mergeIds(accountCatalog.productIds, assignment.productIds)
     // Sizes can be deleted, so a reported set is authoritative rather than additive.
     const skuIds = assignment.skuIds ?? accountCatalog.skuIds
+    const skus = draft.skus.map((sku) => {
+      const savedId = assignment.skuIdByDraftId?.[sku.id]
+      return savedId != null && sku.id !== accountSkuId(savedId) ? { ...sku, id: accountSkuId(savedId) } : sku
+    })
+    const idsChanged = skus.some((sku, index) => sku !== draft.skus[index])
     if (
       categoryIds === accountCatalog.categoryIds &&
       productIds === accountCatalog.productIds &&
-      skuIds === accountCatalog.skuIds
+      skuIds === accountCatalog.skuIds && !idsChanged
     ) return
-    set(accountCatalogSlice({ categoryIds, productIds, skuIds }))
+    set({
+      ...accountCatalogSlice({ ...accountCatalog, categoryIds, productIds, skuIds }),
+      ...(idsChanged ? { draft: { ...draft, skus } } : {}),
+    })
+    if (idsChanged) flushScheduledDraftSave(persistCurrentDraft)
   },
 
   addPendingCategory(input) {

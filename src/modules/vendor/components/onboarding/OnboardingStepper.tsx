@@ -25,6 +25,7 @@ export type StepperProps = {
    * from the progress bar, not only from inside the step.
    */
   catalogAdditiveOpen?: boolean
+  storeIsApproved?: boolean
   onNavigate: (step: OnboardingStep) => void
 }
 
@@ -42,6 +43,7 @@ export function OnboardingStepper({
   furthestVisitedStep,
   firstNavigableStep,
   catalogAdditiveOpen = false,
+  storeIsApproved = false,
   onNavigate,
 }: StepperProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -73,7 +75,7 @@ export function OnboardingStepper({
             const reachable = state === 'done' || state === 'open' || state === 'current'
             // A submitted store's catalog steps stay open for additions, so they carry a
             // small marker even while every other submitted step reads as done-and-locked.
-            const additive = catalogAdditiveOpen && isAdditiveCatalogStep(item.step)
+            const additive = catalogAdditiveOpen && isAdditiveCatalogStep(item.step, storeIsApproved)
             const previous = ONBOARDING_STEPS[index - 1]
             const linkDone = previous
               ? ['done', 'settled'].includes(stateOf(previous.step))

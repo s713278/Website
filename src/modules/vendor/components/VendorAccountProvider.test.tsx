@@ -63,7 +63,7 @@ function renderContext(vendorStatus: string, approvalStatus: string, nextStep: n
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
       vendor_id: 'test-vendor', vendor_status: vendorStatus, approval_status: approvalStatus,
-      onboarding: { status: 'IN_PROGRESS', next_step: nextStep },
+      onboarding: { status: nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS', next_step: nextStep },
     },
   }))
   return render(
@@ -90,8 +90,8 @@ describe('VendorAccountProvider store state', () => {
     expect(screen.queryByRole('heading', { name: 'Setup incomplete' })).toBeNull()
   })
 
-  it('opens the work queue for a submitted live PENDING store still reporting next_step 10', async () => {
-    renderContext('ACTIVE', 'PENDING', 10)
+  it('opens the work queue for a submitted live PENDING store with completed onboarding', async () => {
+    renderContext('ACTIVE', 'PENDING', 11)
 
     expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
     expect(screen.getByLabelText('Account approval').textContent).toBe('PENDING')
@@ -109,11 +109,13 @@ describe('VendorAccountProvider store state', () => {
     expect(screen.queryByRole('heading', { name: 'What needs doing' })).toBeNull()
   })
 
-  it.each([1, 5, 10])('keeps an approved live store open even when next_step regresses to %i', async (nextStep) => {
+  it.each([1, 5, 7, 10])('offers setup for an active approved store still at step %i', async (nextStep) => {
     renderContext('ACTIVE', 'APPROVED', nextStep)
 
-    expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Continue setup' })).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'Setup incomplete' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Continue setup' }).getAttribute('href')).toBe('/onboarding')
+    expect(vendorOrdersService.list).not.toHaveBeenCalled()
+    expect(vendorService.getInsights).not.toHaveBeenCalled()
   })
 
   it('still labels the resume step for an unsubmitted store', async () => {

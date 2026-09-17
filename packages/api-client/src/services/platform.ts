@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
+import type { components } from '../schema';
 
 /** FAQs, measurements, SKU price (tag 12, 14) */
 export const platformService = {
@@ -18,7 +19,7 @@ export const platformService = {
 
   getSkuPrice: (skuId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`, { skipAuth: true }),
-  updateSkuPrice: (priceId: number | string, body: Record<string, unknown>) =>
+  updateSkuPrice: (priceId: number | string, body: components['schemas']['SkuPriceUpdateRequest']) =>
     apiPut<ApiEnvelope>(`/v1/sku/price/${priceId}`, body),
 };
 
