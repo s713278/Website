@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   ArrowRightIcon,
-  CheckCircle2Icon,
   InfoIcon,
   Loader2Icon,
   MessageCircleIcon,
-  SmartphoneIcon,
 } from 'lucide-react'
 import { DEMO_OTP, isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components/ui'
@@ -19,29 +17,6 @@ type StepProps = {
   busy: boolean
   statusMessage: string | null
   onContinue: () => void
-}
-
-/**
- * Shown at the navigation floor, in place of the identity steps it replaced.
- *
- * Once a number is verified there is nothing left for Steps 1-2 to ask, so they are
- * closed rather than left reachable and re-asking. This is purely informational — it
- * states whose draft is being edited. Leaving a setup is "Start over" in the header, the
- * single verb for a sign-out, so the notice no longer carries its own way out.
- */
-export function VerifiedIdentityNotice() {
-  const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
-
-  return (
-    <Hint tone="brand" icon={<CheckCircle2Icon className="size-4 text-[var(--ob-brand)]" />}>
-      <p className="min-w-0 leading-5">
-        <span className="font-semibold">Number verified. </span>
-        {maskedPhone
-          ? <>This setup belongs to <strong className="text-[var(--ob-ink)]">{maskedPhone}</strong>.</>
-          : <>This setup belongs to the number you signed in with.</>}
-      </p>
-    </Hint>
-  )
 }
 
 export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps) {
@@ -98,12 +73,8 @@ export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps
 
       <Hint icon={<MessageCircleIcon className="size-4" />}>
         {isLiveApi()
-          ? 'We send a four-digit code to this number on WhatsApp. Standard messaging rates may apply.'
-          : 'Demo mode is on, so no WhatsApp message is sent.'}
-      </Hint>
-      <Hint icon={<SmartphoneIcon className="size-4" />}>
-        This becomes the number customers order on. Once it is verified, reaching a different
-        number means signing out and starting setup again.
+          ? 'We send a four-digit code to this number on WhatsApp.'
+          : <>Demo mode: enter <strong>{DEMO_OTP}</strong> to continue.</>}
       </Hint>
       {statusMessage ? <p role="status" className="text-sm font-medium text-[var(--ob-brand)]">{statusMessage}</p> : null}
     </div>
@@ -136,12 +107,9 @@ export function OtpStep({
   return (
     <div className="space-y-5">
       <Hint tone="brand" icon={<InfoIcon className="size-4 text-[var(--ob-brand)]" />}>
-        <p className="font-semibold">{isLiveApi() ? 'Check WhatsApp' : 'Demo mode'}</p>
-        <p className="mt-0.5 leading-5">
-          {isLiveApi()
-            ? <>We sent a four-digit code to {maskedPhone ?? 'your number'}. Enter it below to verify this number.</>
-            : <>No WhatsApp was sent because demo mode is on. Enter <strong>{DEMO_OTP}</strong> to continue.</>}
-        </p>
+        {isLiveApi()
+          ? <>Enter the four-digit code sent to {maskedPhone ?? 'your number'} on WhatsApp.</>
+          : <>Demo mode: enter <strong>{DEMO_OTP}</strong> to continue.</>}
       </Hint>
 
       <form

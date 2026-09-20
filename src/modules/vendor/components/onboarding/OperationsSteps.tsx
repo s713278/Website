@@ -231,7 +231,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   return (
     <div className="space-y-5">
       <Hint className="mb-5">
-        Give each product at least one size and its price. Add another size only when a different pack sells for a different price.
+        Add one size and price for each product. Add another only for a different pack.
       </Hint>
       {skuLimitReached ? (
         <StepNotice message={`You've reached your plan's limit of ${skuLimit} sizes, counting those already saved to your store.`} />
@@ -464,18 +464,17 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div>
-      <StepSection id="fulfillment" title="Fulfilment" description="How orders reach your customers.">
+      <StepSection id="fulfillment" title="Fulfilment">
         <div className="grid gap-3 @min-[38rem]:grid-cols-3">
           <RadioCard name="fulfillment" value="HOME_DELIVERY" checked={delivery.fulfillmentType === 'HOME_DELIVERY'} title="Home delivery" description="Deliver orders to customers." onChange={() => setFulfillment('HOME_DELIVERY')} />
           <RadioCard name="fulfillment" value="STORE_PICKUP" checked={delivery.fulfillmentType === 'STORE_PICKUP'} title="Store pickup" description="Customers collect from your store." onChange={() => setFulfillment('STORE_PICKUP')} />
           <RadioCard name="fulfillment" value="BOTH" checked={delivery.fulfillmentType === 'BOTH'} title="Both" description="Let customers choose at checkout." onChange={() => setFulfillment('BOTH')} />
         </div>
-        <Hint className="mt-3">Every order is accepted automatically. A new order arrives in your Orders list ready to move — there is no approval step to work through first.</Hint>
       </StepSection>
 
       {hasHomeDelivery ? (
         <>
-          <StepSection id="delivery-schedule" title="Delivery schedule" description="When you deliver, and how far ahead customers can order.">
+          <StepSection id="delivery-schedule" title="Delivery schedule">
             <div className="grid gap-2 @min-[32rem]:grid-cols-2">
               {([
                 ['FIXED_WINDOW', 'Fixed window', 'Deliver within a minimum and maximum number of days.'],
@@ -523,7 +522,7 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
             </div>
           </StepSection>
 
-          <StepSection id="shipping-charge-section" title="Delivery charge" description="What a customer pays to have an order brought to them.">
+          <StepSection id="shipping-charge-section" title="Delivery charge">
             <div className="grid gap-3 @min-[32rem]:grid-cols-2">
               <RadioCard name="shipping" value="FLAT" checked={delivery.shippingStrategy === 'FLAT'} title="Flat charge" description="Use one delivery charge for every order." onChange={() => updateDelivery((current) => ({ ...current, shippingStrategy: 'FLAT' }))} />
               <RadioCard name="shipping" value="ORDER_AMOUNT_THRESHOLD" checked={delivery.shippingStrategy === 'ORDER_AMOUNT_THRESHOLD'} title="Free over a threshold" description="Charge delivery below a chosen order amount." onChange={() => updateDelivery((current) => ({ ...current, shippingStrategy: 'ORDER_AMOUNT_THRESHOLD' }))} />
@@ -537,7 +536,7 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
           <StepSection
             id="delivery-slots"
             title="Delivery slots"
-            description="Optional. Restrict deliveries to set windows in the day."
+            description="Optional delivery windows."
             aside={<Button variant="outline" size="sm" onClick={addSlot}><PlusIcon /> Add slot</Button>}
           >
             <div className="space-y-2">
@@ -559,7 +558,7 @@ export function DeliveryStep({ issues }: { issues: ValidationIssue[] }) {
         </div>
       )}
 
-      <StepSection id="consent" title="Order consent" description="Optional. Shown to a customer before they confirm an order.">
+      <StepSection id="consent" title="Order consent" description="Optional customer message.">
         <div className="grid gap-3 @min-[32rem]:grid-cols-2">
           <Input label="Consent title (optional)" value={delivery.consentTitle} onChange={(event) => updateDelivery((current) => ({ ...current, consentTitle: event.target.value }))} />
           <Input label="Consent message (optional)" value={delivery.consentText} onChange={(event) => updateDelivery((current) => ({ ...current, consentText: event.target.value }))} />
@@ -611,7 +610,7 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
   return (
     <div className="space-y-5">
       <Hint icon={<WalletCardsIcon className="size-4 text-[var(--ob-brand)]" />}>
-        Choose every payment method you accept and mark one as the default.
+        Choose accepted methods and one default.
       </Hint>
       <div id="payment-options" className="space-y-3">
         {draft.payments.map((payment) => {

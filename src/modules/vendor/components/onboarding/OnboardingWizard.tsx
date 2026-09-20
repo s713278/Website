@@ -49,10 +49,10 @@ import {
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice, DraftOnlyNotice, StepNotice, UnderReviewNotice } from './AccessNotice'
+import { AccessNotice, OnboardingStatus, StepNotice, StepRestrictionNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
-import { OtpStep, PhoneStep, VerifiedIdentityNotice } from './IdentitySteps'
+import { OtpStep, PhoneStep } from './IdentitySteps'
 import { DeliveryStep, PaymentStep, SkuStep } from './OperationsSteps'
 import { CorruptDraftDialog, DraftConflictDialog } from './RecoveryDialogs'
 import { OnboardingStepper } from './OnboardingStepper'
@@ -118,7 +118,6 @@ export function OnboardingWizard() {
   const publicationState = useOnboardingStore((state) => state.draft.publication.state)
   const persistenceInitialized = useOnboardingStore((state) => state.persistenceInitialized)
   const persistenceStatus = useOnboardingStore((state) => state.persistenceStatus)
-  const recoveryMessage = useOnboardingStore((state) => state.recoveryMessage)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const completeStep = useOnboardingStore((state) => state.completeStep)
   const goToStep = useOnboardingStore((state) => state.goToStep)
@@ -756,12 +755,6 @@ export function OnboardingWizard() {
           // Live submits for administrator review; demo/sample only saves a private preview.
           : currentStep === 10 ? (step10SubmitsToAccount ? 'Submit for review' : 'Save private preview')
             : 'Continue'
-  // In demo mode nothing reaches a vendor account, so say so on every vendor-scoped step
-  // rather than only on the ones with an open contract gap.
-  //
-  const draftOnlyNotice = currentStep < 3 || liveApi
-    ? null
-    : 'Demo mode is on, so nothing is sent to a vendor account. Set VITE_USE_API=true to save for real.'
   const sampleCatalogFallback = catalogPolicy.canSwitchTo('sample')
     ? requestSampleCatalog
     : undefined
@@ -799,6 +792,11 @@ export function OnboardingWizard() {
                 <div className="shrink-0">
                   <OnboardingStepper {...stepperProps} onNavigate={navigateToStep} />
                 </div>
+                {currentStep >= 3 && currentStep < 10 && (!liveApi || storeIsSubmitted) ? (
+                  <div className="shrink-0 border-b border-[var(--ob-line)]">
+                    <OnboardingStatus demo={!liveApi} submitted={storeIsSubmitted} approved={storeIsApproved} />
+                  </div>
+                ) : null}
 
                 <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 [scrollbar-gutter:stable] sm:px-6 min-[900px]:px-8 min-[900px]:pt-5">
                   <div className="mx-auto w-full max-w-[54rem]">
@@ -849,7 +847,6 @@ export function OnboardingWizard() {
                     </div>
 
                     <div>
-                      {recoveryMessage ? <p role="status" className="mt-4 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-2 text-xs leading-5">{recoveryMessage}</p> : null}
                       {persistenceStatus === 'unavailable' ? <p role="status" className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
 
                       {issues.length ? (
@@ -865,16 +862,8 @@ export function OnboardingWizard() {
                       <div key={currentStep} className="ob-step-enter mt-6">
                         {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} /> : null}
                         {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} onResend={resendOtp} onChangePhone={changeOtpPhone} /> : null}
-                        {/* The identity steps are no longer reachable, so the floor states
-                            which number this setup belongs to and carries the one way out. */}
-                        {catalogUnlocked && identitySettled && currentStep <= firstNavigableStep ? (
-                          <div className="mb-4"><VerifiedIdentityNotice /></div>
-                        ) : null}
-                        {catalogUnlocked && storeIsSubmitted && currentStep >= 3 && currentStep < 10 ? (
-                          <div className="mb-4"><UnderReviewNotice approved={storeIsApproved} variant={isAdditiveCatalogStep(currentStep, storeIsApproved) ? 'catalog' : currentStep === 6 ? 'sizes' : 'locked'} /></div>
-                        ) : null}
-                        {catalogUnlocked && draftOnlyNotice ? (
-                          <div className="mb-4"><DraftOnlyNotice reason={draftOnlyNotice} /></div>
+                        {catalogUnlocked && storeIsSubmitted && currentStep === 6 && !storeIsApproved ? (
+                          <div className="mb-4"><StepRestrictionNotice>Sizes and prices unlock after approval.</StepRestrictionNotice></div>
                         ) : null}
                         {catalogUnlocked && currentStep >= 3 && contextError ? (
                           <div className="mb-4"><StepNotice message={contextError} /></div>

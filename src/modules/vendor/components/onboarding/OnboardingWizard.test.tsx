@@ -101,6 +101,10 @@ describe('onboarding account hydration and size permissions', () => {
   it('keeps a completed pending vendor unable to create sizes', async () => {
     renderAccount('PENDING')
     const add = await openSizes()
+    expect(screen.getByText('Under review')).toBeTruthy()
+    expect(screen.getByText('You can still add categories and products.')).toBeTruthy()
+    expect(screen.getByText('Sizes and prices unlock after approval.')).toBeTruthy()
+    expect(screen.queryByText('Your store is with us for review.')).toBeNull()
     expect(add.matches(':disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
@@ -110,6 +114,8 @@ describe('onboarding account hydration and size permissions', () => {
   it('counts backend usage omitted from the size list against the plan limit', async () => {
     renderAccount('APPROVED', 11, 2, 2)
     const add = await openSizes()
+    expect(screen.getByText('Approved')).toBeTruthy()
+    expect(screen.getByText('You can add to your catalog; saved setup is locked.')).toBeTruthy()
     expect(add.matches(':disabled')).toBe(true)
   })
 

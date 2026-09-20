@@ -222,14 +222,10 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
       */}
       {isLiveApi() ? (
         <div className="mb-6">
-          <StepNotice message="Your store details are sent to your store, but we cannot read them back until MithraDirect approves it — so this step starts from defaults each time you return. Check these fields before continuing." />
+          <StepNotice message="These details are saved, but cannot be read back until approval. Check them before continuing." />
         </div>
       ) : null}
-      <StepSection
-        id="store-basics"
-        title="Store basics"
-        description="What customers see first, and how they reach you."
-      >
+      <StepSection id="store-basics" title="Store basics">
         <div className="grid gap-4 @min-[32rem]:grid-cols-2">
           <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
           <Input id="owner-name" label="Owner name" value={draft.business.ownerName} minLength={3} error={issues.find((item) => item.field === 'owner-name')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, ownerName: event.target.value } }), 9)} placeholder="Full name" />
@@ -247,7 +243,7 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
       <StepSection
         id="theme-presets"
         title="Theme presets"
-        description="A ready-made look for your shop. All presets use a light storefront background."
+        description="Choose a ready-made look."
       >
         <div className="grid gap-2 @min-[32rem]:grid-cols-2">
           {ONBOARDING_THEME_PRESETS.map((preset) => (
@@ -455,12 +451,12 @@ function SubmissionStatus({
           <ClockIcon className="size-7 text-primary" />
         )}
         <h3 className="mt-3 font-display text-xl font-semibold">
-          {approved ? 'Your store is live' : 'Submitted — waiting for approval'}
+          {approved ? 'Your store is live' : 'Under review'}
         </h3>
         <p className="mt-2 text-sm leading-6">
           {approved
-            ? 'Your storefront is public and customers can order from it.'
-            : 'Everything you set up has been saved to your store. MithraDirect reviews new stores before they go public, so it is not reachable by customers yet.'}
+            ? 'Customers can order from your storefront.'
+            : 'Customers can reach your storefront after approval.'}
         </p>
       </div>
       <ShareStore submission={submission} />
@@ -471,8 +467,8 @@ function SubmissionStatus({
         <h3 className="font-display text-sm font-semibold text-[var(--ob-ink)]">Add more to your catalog</h3>
         <p className="mt-1 text-sm leading-6 text-[var(--ob-ink-soft)]">
           {approved
-            ? 'You can keep adding categories, products and sizes within your plan limits. Previously saved setup details stay locked.'
-            : 'You can keep adding categories and products within your plan limits. Sizes and prices open up once your store is approved, and other setup details stay locked.'}
+            ? 'Add categories, products, and sizes within your plan limits. Existing setup is locked.'
+            : 'Add categories and products while you wait. Sizes and prices unlock after approval.'}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => onGoToStep(4)}><PlusIcon /> Categories</Button>
@@ -613,7 +609,7 @@ export function ReviewStep({
       <div className="space-y-5">
         <div className={cn('rounded-xl p-4', issues.length ? 'bg-amber-50/80 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100' : 'bg-[var(--ob-brand-soft)] text-foreground')}>
           <h3 className="font-display font-semibold">{issues.length ? `${issues.length} readiness item${issues.length === 1 ? '' : 's'} to resolve` : 'Your store is ready'}</h3>
-          <p className="mt-1 text-sm leading-6">{issues.length ? 'Each item links back to the step where it can be fixed. The summary below stays available while you resolve them.' : 'Check the summary below, then choose the action at the bottom.'}</p>
+          {issues.length ? <p className="mt-1 text-sm leading-6">Fix these items before submitting.</p> : null}
         </div>
         {/* Readiness issues stay prominent and actionable, above the brief rather than hidden
             by it: the brief is the recap, the list is the work still to do. */}
@@ -633,8 +629,8 @@ export function ReviewStep({
         {/* The consequence sentence sits immediately above the primary action in the footer. */}
         <p className="text-sm leading-6 text-[var(--ob-ink-soft)]">
           {submitsToAccount
-            ? 'Submitting sends your store to MithraDirect for review. While it is being reviewed your setup is read-only, apart from adding more categories and products.'
-            : 'This saves a private preview in this browser only — nothing is sent to a vendor account.'}
+            ? 'Submitting sends your store for review. Setup stays locked while it is reviewed, except for adding categories and products.'
+            : 'This saves a private preview in this browser only.'}
         </p>
       </div>
     )
@@ -644,12 +640,12 @@ export function ReviewStep({
     <div className="space-y-5">
       <div className="rounded-xl bg-[var(--ob-brand-soft)] p-5 text-foreground">
         <CheckCircle2Icon className="size-7 text-primary" />
-        <h3 className="mt-3 font-display text-xl font-semibold">Prototype complete. Not published.</h3>
-        <p className="mt-2 text-sm leading-6">The private preview is saved in this browser. It can be restored here, but it is not a public storefront.</p>
+        <h3 className="mt-3 font-display text-xl font-semibold">Private preview saved</h3>
+        <p className="mt-2 text-sm leading-6">This preview is not public.</p>
       </div>
       <div className="rounded-xl bg-amber-50/80 p-4 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100">
         <h3 className="font-display text-sm font-semibold">Private fields are not stored</h3>
-        <p className="mt-1 text-sm leading-6">Contact numbers, payment credentials, OTPs, and selected images must be entered again after reload.</p>
+        <p className="mt-1 text-sm leading-6">Contact and payment details, OTPs, and images are not stored.</p>
       </div>
       <Button asChild><Link to={`/onboarding/preview/${draft.publication.draftSlug}`}><ExternalLinkIcon /> Open private preview</Link></Button>
     </div>
