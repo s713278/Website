@@ -1,0 +1,2352 @@
+{
+  "_meta": {
+    "contract": "vendor-context-billing-proposed-v2",
+    "fabricated": true,
+    "read_operation": "GET /v1/vendors/{vendor_id}/context",
+    "basis": "User-supplied context response on 19 September; identity anonymised",
+    "current_example": "contexts.current_context preserves the current shape; it has no billing extension",
+    "proposal": "Other contexts add subscription.billing and populate existing subscription.trial_ends_at, price and trial_days",
+    "money_units": "Rupees for INR, matching subscription.monthly_price; convert to paise only at the payment boundary",
+    "time": "Proposed responses require an explicit timezone on timestamp and all billing dates; current_context deliberately preserves its missing offset",
+    "provider_ids": "All mock_* IDs/signatures are invalid for actual Razorpay Checkout",
+    "authority": "Synthetic UI/test states; no real entitlement, verification, cancellation or refund"
+  },
+  "contexts": {
+    "current_context": {
+      "timestamp": "2026-09-19T19:15:09.207751115",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "Free",
+          "status": "ACTIVE",
+          "monthly_price": 0.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 0,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG"
+        ]
+      }
+    },
+    "trial_active": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 1,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "trial_start": {
+      "timestamp": "2026-10-01T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 1,
+            "trial_status": "active",
+            "trial_days_remaining": 14,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "setup_incomplete": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": null,
+        "vendor_status": "INACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "IN_PROGRESS",
+          "next_step": 10,
+          "description": "Complete onboarding"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": null,
+          "billing": {
+            "revision": 1,
+            "trial_status": "not_started",
+            "trial_days_remaining": null,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "SETUP_INCOMPLETE",
+            "store_visible": false,
+            "available_actions": [],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW"
+        ]
+      }
+    },
+    "approval_pending": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": null,
+        "vendor_status": "INACTIVE",
+        "approval_status": "PENDING",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": null,
+          "billing": {
+            "revision": 1,
+            "trial_status": "not_started",
+            "trial_days_remaining": null,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "SETUP_INCOMPLETE",
+            "store_visible": false,
+            "available_actions": [],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW"
+        ]
+      }
+    },
+    "trial_three_days": {
+      "timestamp": "2026-10-12T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 1,
+            "trial_status": "active",
+            "trial_days_remaining": 3,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Your trial ends in 3 days. Set up AutoPay to continue afterwards."
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "trial_last_day": {
+      "timestamp": "2026-10-14T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 1,
+            "trial_status": "active",
+            "trial_days_remaining": 1,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Your trial ends tomorrow. Set up AutoPay to continue afterwards."
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "setup_pending": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 2,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "pending",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": "2026-10-15T10:00:00Z",
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "AutoPay confirmation is pending. Your original trial expiry still applies."
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "setup_confirmed": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 3,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "confirmed",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": "2026-10-15T10:00:00Z",
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "authorisation_failed": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 3,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "failed",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay",
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Retry setup using the existing prepared attempt."
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "authorisation_revoked": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 4,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "revoked",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "trial_expired": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 4,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL_ENDED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "first_fee_pending": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 5,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "pending",
+            "payment_status": "pending",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL_ENDED",
+            "store_visible": false,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Payment confirmation is pending. Paid access has not started."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "first_fee_failed": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 6,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "failed",
+            "payment_status": "failed",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL_ENDED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee",
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Retry the existing first-fee attempt."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "paid_active": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 7,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": "2026-11-15T10:00:00Z",
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "paid_after_expiry": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 7,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": "2026-11-15T10:00:00Z",
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "renewal_pending": {
+      "timestamp": "2026-11-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 8,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "pending",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": "2026-11-15T10:00:00Z",
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "renewal_failed": {
+      "timestamp": "2026-11-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 9,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "failed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": "2026-11-15T10:00:00Z",
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "Payment retry is pending; refresh for its outcome."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "retry_recovered": {
+      "timestamp": "2026-11-17T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 10,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "confirmed",
+            "paid_through": "2026-12-15T10:00:00Z",
+            "next_charge_at": "2026-12-15T10:00:00Z",
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "cancel_requested_trial": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 4,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "confirmed",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": "2026-10-15T10:00:00Z",
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [],
+            "cancellation": {
+              "status": "requested",
+              "requested_at": "2026-10-05T10:00:00Z",
+              "effective_at": null
+            },
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "cancel_failed": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 5,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "confirmed",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": "2026-10-15T10:00:00Z",
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [],
+            "cancellation": {
+              "status": "failed",
+              "requested_at": "2026-10-05T10:00:00Z",
+              "effective_at": null
+            },
+            "refund": null,
+            "notice": "Cancellation is not confirmed; refresh before retrying."
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "cancel_confirmed_trial": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 6,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "revoked",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-05T10:00:00Z",
+              "effective_at": "2026-10-05T10:00:00Z"
+            },
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "cancel_scheduled_paid": {
+      "timestamp": "2026-10-20T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 8,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [],
+            "cancellation": {
+              "status": "scheduled",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-11-15T10:00:00Z"
+            },
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "rejoin_paid_ready": {
+      "timestamp": "2026-10-20T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 9,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-10-20T10:00:00Z"
+            },
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "rejoin_paid_pending": {
+      "timestamp": "2026-10-20T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 10,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "pending",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": "2026-11-15T10:00:00Z",
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "cancel"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "refund_owed": {
+      "timestamp": "2026-11-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 10,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-11-15T10:00:00Z"
+            },
+            "refund": {
+              "status": "owed",
+              "amount": 299.0
+            },
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "refund_pending": {
+      "timestamp": "2026-11-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 11,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-11-15T10:00:00Z"
+            },
+            "refund": {
+              "status": "pending",
+              "amount": 299.0
+            },
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "refund_completed": {
+      "timestamp": "2026-11-16T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 12,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-11-15T10:00:00Z"
+            },
+            "refund": {
+              "status": "completed",
+              "amount": 299.0
+            },
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "refund_failed": {
+      "timestamp": "2026-11-16T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 12,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": {
+              "status": "confirmed",
+              "requested_at": "2026-10-20T10:00:00Z",
+              "effective_at": "2026-11-15T10:00:00Z"
+            },
+            "refund": {
+              "status": "failed",
+              "amount": 299.0
+            },
+            "notice": "The refund is still owed. Support must retry the refund."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "schedule_completed": {
+      "timestamp": "2027-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 19,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "confirmed",
+            "payment_status": "confirmed",
+            "paid_through": "2027-10-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [],
+            "cancellation": null,
+            "refund": null,
+            "notice": "The finite test schedule has ended."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    },
+    "second_vendor": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900002,
+        "business_name": "Second Example Test Store",
+        "store_identifier": "second_example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 1,
+            "trial_status": "active",
+            "trial_days_remaining": 10,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "TRIAL",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
+    "trial_ineligible": {
+      "timestamp": "2026-10-15T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": null,
+          "billing": {
+            "revision": 4,
+            "trial_status": "ineligible",
+            "trial_days_remaining": null,
+            "autopay_status": "not_configured",
+            "payment_status": "none",
+            "paid_through": null,
+            "next_charge_at": null,
+            "access_status": "PAYMENT_REQUIRED",
+            "store_visible": false,
+            "available_actions": [
+              "pay_first_fee"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": "This vendor identity has already used its trial. No new trial is available."
+          }
+        },
+        "eligible_features": [
+          "VIEW",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS"
+        ]
+      }
+    }
+  },
+  "prepareCheckout": {
+    "during_trial": {
+      "request": {
+        "vendor_id": 900001,
+        "action": "setup_autopay",
+        "idempotency_key": "mock_idempotency_during_trial"
+      },
+      "response": {
+        "timestamp": "2026-10-05T10:00:00Z",
+        "success": true,
+        "status": 200,
+        "data": {
+          "attempt_id": "mock_attempt_during_trial",
+          "key_id": "mock_public_key_not_for_checkout",
+          "subscription_id": "mock_subscription_001",
+          "amount": 299.0,
+          "currency": "INR",
+          "charge_at": "2026-10-15T10:00:00Z",
+          "authorisation_amount": 5.0,
+          "expires_at": "2026-10-05T10:10:00Z"
+        }
+      }
+    },
+    "after_expiry": {
+      "request": {
+        "vendor_id": 900001,
+        "action": "pay_first_fee",
+        "idempotency_key": "mock_idempotency_after_expiry"
+      },
+      "response": {
+        "timestamp": "2026-10-15T10:00:00Z",
+        "success": true,
+        "status": 200,
+        "data": {
+          "attempt_id": "mock_attempt_after_expiry",
+          "key_id": "mock_public_key_not_for_checkout",
+          "subscription_id": "mock_subscription_immediate",
+          "amount": 299.0,
+          "currency": "INR",
+          "charge_at": null,
+          "authorisation_amount": null,
+          "expires_at": "2026-10-15T10:10:00Z"
+        }
+      }
+    },
+    "rejoin_trial": {
+      "request": {
+        "vendor_id": 900001,
+        "action": "setup_autopay",
+        "idempotency_key": "mock_idempotency_rejoin_trial"
+      },
+      "response": {
+        "timestamp": "2026-10-05T10:00:00Z",
+        "success": true,
+        "status": 200,
+        "data": {
+          "attempt_id": "mock_attempt_rejoin_trial",
+          "key_id": "mock_public_key_not_for_checkout",
+          "subscription_id": "mock_subscription_replacement_trial",
+          "amount": 299.0,
+          "currency": "INR",
+          "charge_at": "2026-10-15T10:00:00Z",
+          "authorisation_amount": 5.0,
+          "expires_at": "2026-10-05T10:10:00Z"
+        }
+      }
+    },
+    "rejoin_paid": {
+      "request": {
+        "vendor_id": 900001,
+        "action": "setup_autopay",
+        "idempotency_key": "mock_idempotency_rejoin_paid"
+      },
+      "response": {
+        "timestamp": "2026-10-20T10:00:00Z",
+        "success": true,
+        "status": 200,
+        "data": {
+          "attempt_id": "mock_attempt_rejoin_paid",
+          "key_id": "mock_public_key_not_for_checkout",
+          "subscription_id": "mock_subscription_replacement",
+          "amount": 299.0,
+          "currency": "INR",
+          "charge_at": "2026-11-15T10:00:00Z",
+          "authorisation_amount": 5.0,
+          "expires_at": "2026-10-20T10:10:00Z"
+        }
+      }
+    }
+  },
+  "submitCheckout": {
+    "request": {
+      "vendor_id": 900001,
+      "attempt_id": "mock_attempt_during_trial",
+      "razorpay_payment_id": "mock_payment_authorisation",
+      "razorpay_subscription_id": "mock_subscription_001",
+      "razorpay_signature": "mock_signature_not_valid"
+    },
+    "response": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": null
+    },
+    "refresh_context": "setup_pending",
+    "simulated_reconciliation_context": "setup_confirmed"
+  },
+  "requestCancellation": {
+    "request": {
+      "vendor_id": 900001,
+      "idempotency_key": "mock_idempotency_cancel"
+    },
+    "response": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": null
+    },
+    "refresh_context": "cancel_requested_trial",
+    "simulated_reconciliation_context": "cancel_confirmed_trial"
+  },
+  "errors": {
+    "UNAUTHENTICATED": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 401,
+      "message": "Sign in again.",
+      "error_code": "UNAUTHENTICATED",
+      "data": null
+    },
+    "FORBIDDEN_VENDOR": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 403,
+      "message": "This membership is unavailable.",
+      "error_code": "FORBIDDEN_VENDOR",
+      "data": null
+    },
+    "SETUP_INCOMPLETE": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 400,
+      "message": "Complete store setup and approval first.",
+      "error_code": "SETUP_INCOMPLETE",
+      "data": null
+    },
+    "ACTION_UNAVAILABLE": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 409,
+      "message": "Billing status changed. Refresh before continuing.",
+      "error_code": "ACTION_UNAVAILABLE",
+      "data": null
+    },
+    "ATTEMPT_IN_PROGRESS": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 409,
+      "message": "An earlier attempt needs reconciliation.",
+      "error_code": "ATTEMPT_IN_PROGRESS",
+      "data": null
+    },
+    "ATTEMPT_EXPIRED": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 409,
+      "message": "The prepared attempt expired. Refresh the schedule.",
+      "error_code": "ATTEMPT_EXPIRED",
+      "data": null
+    },
+    "SCHEDULE_CHANGED": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 409,
+      "message": "The fee schedule changed. Review it before Checkout.",
+      "error_code": "SCHEDULE_CHANGED",
+      "data": null
+    },
+    "CALLBACK_MISMATCH": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 400,
+      "message": "Checkout details do not match this attempt.",
+      "error_code": "CALLBACK_MISMATCH",
+      "data": null
+    },
+    "INVALID_SIGNATURE": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 400,
+      "message": "Checkout verification failed.",
+      "error_code": "INVALID_SIGNATURE",
+      "data": null
+    },
+    "PROVIDER_UNAVAILABLE": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 503,
+      "message": "Billing confirmation is temporarily unavailable.",
+      "error_code": "PROVIDER_UNAVAILABLE",
+      "data": null,
+      "retry_after_seconds": 5
+    },
+    "IDEMPOTENCY_CONFLICT": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 409,
+      "message": "This request key was already used for different input.",
+      "error_code": "IDEMPOTENCY_CONFLICT",
+      "data": null
+    },
+    "RATE_LIMITED": {
+      "timestamp": "2026-10-05T10:00:00Z",
+      "success": false,
+      "status": 429,
+      "message": "Please wait before refreshing again.",
+      "error_code": "RATE_LIMITED",
+      "data": null,
+      "retry_after_seconds": 5
+    }
+  },
+  "journeys": [
+    {
+      "name": "trial_setup",
+      "contexts": [
+        "trial_active",
+        "setup_pending",
+        "setup_confirmed"
+      ]
+    },
+    {
+      "name": "expired_signup",
+      "contexts": [
+        "trial_expired",
+        "first_fee_pending",
+        "paid_after_expiry"
+      ]
+    },
+    {
+      "name": "trial_cancellation",
+      "contexts": [
+        "setup_confirmed",
+        "cancel_requested_trial",
+        "cancel_confirmed_trial"
+      ]
+    },
+    {
+      "name": "paid_rejoin",
+      "contexts": [
+        "paid_active",
+        "cancel_scheduled_paid",
+        "rejoin_paid_ready",
+        "rejoin_paid_pending"
+      ]
+    },
+    {
+      "name": "renewal_retry",
+      "contexts": [
+        "paid_active",
+        "renewal_pending",
+        "renewal_failed",
+        "retry_recovered"
+      ]
+    },
+    {
+      "name": "refund_success",
+      "contexts": [
+        "cancel_scheduled_paid",
+        "refund_owed",
+        "refund_pending",
+        "refund_completed"
+      ]
+    },
+    {
+      "name": "refund_failure",
+      "contexts": [
+        "refund_owed",
+        "refund_pending",
+        "refund_failed"
+      ]
+    }
+  ]
+}

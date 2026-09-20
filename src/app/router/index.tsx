@@ -54,6 +54,9 @@ const VendorPlanPage = lazy(() =>
     default: module.VendorPlanPage,
   })),
 )
+const VendorBillingPreviewPage = import.meta.env.DEV
+  ? lazy(() => import('@/modules/vendor/pages/VendorBillingPreviewPage').then((module) => ({ default: module.VendorBillingPreviewPage })))
+  : null
 const VendorStorefrontPage = lazy(() =>
   import('@/modules/vendor/pages/VendorStorefrontPage').then((module) => ({
     default: module.VendorStorefrontPage,
@@ -87,6 +90,9 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        {VendorBillingPreviewPage ? (
+          <Route path="dev/vendor-billing" element={<Suspense fallback={<VendorRouteFallback />}><VendorBillingPreviewPage /></Suspense>} />
+        ) : null}
         {/* Local-only vendor onboarding prototype: outside auth guards, with its shared public header owned by the page. */}
         <Route path="onboarding" element={<Suspense fallback={<OnboardingRouteFallback />}><VendorOnboardingPage /></Suspense>} />
         <Route path="onboarding/preview/:draftSlug" element={<Suspense fallback={<OnboardingRouteFallback />}><VendorOnboardingPreviewPage /></Suspense>} />

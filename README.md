@@ -23,6 +23,13 @@ through an OpenAPI/Axios integration.
 | Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/vendor/login`, `/register` (redirect) |
+| Development billing preview | `src/modules/vendor` | `/dev/vendor-billing` (development only) |
+
+The [vendor billing preview](./docs/VENDOR_BILLING_PREVIEW.md) opens Razorpay Test Mode subscription
+Checkout independently of the missing billing backend. Its trial/access scenarios are fixtures;
+it does not add production billing or access restrictions. Those scenarios predate the
+[approved hybrid trial](./docs/VENDOR_BILLING_DECISIONS.md); the preview record identifies the
+remaining implementation differences.
 
 ## Stack
 
@@ -78,6 +85,9 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_API_BASE_URL` | `https://subscriptionapp-wgf8.onrender.com/api` | API base before operation paths such as `/v1/auth/request-otp` |
 | `VITE_APP_ENV` | `development` | Reserved environment label; currently typed but not consumed by application logic |
 | `VITE_PUBLIC_SITE_URL` | `https://mithradirect.com` | Origin customers open. Vendor shop links, the shareable QR, and the WhatsApp share are built from it |
+| `VITE_RAZORPAY_TEST_KEY_ID` | unset | Optional public `rzp_test_…` key for the development billing preview; never a secret |
+| `VITE_RAZORPAY_TEST_SUBSCRIPTION_ID` | unset | Optional immediate-start Test subscription ID for that preview |
+| `VITE_RAZORPAY_TEST_FUTURE_SUBSCRIPTION_ID` | unset | Optional separate future-start Test subscription ID for the legacy AutoPay setup fixture |
 
 `VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
 must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment
@@ -243,6 +253,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | [docs/adr/](./docs/adr/) | Accepted decisions, their trade-offs, and removal conditions |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
+| [docs/VENDOR_BILLING_BACKEND_HANDOFF.md](./docs/VENDOR_BILLING_BACKEND_HANDOFF.md) | Vendor billing backend data/operation requirements and authorised mock responses for development |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |

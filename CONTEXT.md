@@ -144,8 +144,8 @@ _Avoid_: order status (unqualified), ticket state, accepted, pending, scheduled,
 process, shipped, preparing, ready
 
 **Payment status**:
-The vendor's own record that an order has been paid for. The platform never handles the
-money, so it cannot observe a payment; only the vendor can say one happened.
+The vendor's own record that an order has been paid for. The platform never handles customer
+order money, so it cannot observe that payment; only the vendor can say one happened.
 _Avoid_: order status (unqualified), settled, collected, verified
 
 **Payment method**:
@@ -167,3 +167,40 @@ _Avoid_: subscription, tier, package
 Whether a vendor's plan is paid, trialling, or lapsed. Distinct from store state: an open
 store may be unbilled, and a paid-up store may still be awaiting approval.
 _Avoid_: subscription status, account status, plan status
+
+### Vendor platform billing
+
+**Platform membership**:
+A vendor's entitlement to use MithraDirect for a registered store, through a free trial or
+confirmed paid membership. Distinct from a customer's recurring delivery subscription.
+_Avoid_: subscription (unqualified), customer subscription
+
+**Platform fee**:
+The recurring amount a vendor pays MithraDirect for their store's paid platform membership.
+It is separate from money customers pay vendors for orders.
+_Avoid_: order payment, delivery subscription charge
+
+**Trial entitlement**:
+A time-limited right to use the platform without paying the platform fee. It is separate
+from permission to collect future payments.
+_Avoid_: free plan, payment authorisation
+
+**AutoPay authorisation**:
+A vendor's permission to collect recurring platform fees through a supported payment method.
+Authorisation alone does not establish that a platform fee has been paid.
+_Avoid_: paid membership, payment success
+
+**AutoPay setup during trial**:
+A vendor's voluntary authorisation of recurring platform fees beginning when their existing
+trial ends. It preserves all remaining trial time and is not payment of the first platform fee.
+_Avoid_: early paid conversion, start trial
+
+**Paid-through date**:
+The end of the platform membership period covered by confirmed platform fees. Cancelling
+renewal does not remove that already-paid coverage.
+_Avoid_: cancellation date, next payment (as an access boundary)
+
+**Membership cancellation**:
+A vendor's decision to stop future platform-fee collection while retaining any remaining
+trial entitlement or already-paid period.
+_Avoid_: delete store, immediate loss of access, refund

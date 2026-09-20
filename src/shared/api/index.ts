@@ -118,3 +118,7 @@ export { useApiError } from './useApiError'
 
 /** Domain services — single access point for the app */
 export * from './services'
+
+export type { BillingCheckoutAttempt, BillingIntent, VendorBillingService, VendorBillingStatus } from './services/vendor-billing.service'
+export { createVendorBillingPreviewService } from './services/vendor-billing-preview.service'
+export type { BillingPreviewConfig, BillingPreviewScenario } from './services/vendor-billing-preview.service'

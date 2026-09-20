@@ -399,6 +399,87 @@ chooses only between fetching and returning a fixture. `fixtures/vendor-dashboar
 every fixture through the real mapper, so a fixture that stops matching the wire shape fails a
 test instead of drifting into a parallel reality.
 
+#### Vendor platform billing preview
+
+Vendor-to-MithraDirect fees are separate from customer recurring deliveries. The existing
+`vendorSubscriptionsService` and `/v1/api/subscription-plans` delivery-plan master are not a payment
+gateway or platform-fee API. No Spring Boot billing calls are implemented in this phase.
+
+| Concern | Owner | Boundary |
+|---|---|---|
+| Official script, subscription Checkout inputs, browser callback/failure/dismissal, teardown | `src/shared/payments/razorpay-checkout.ts` | No trial, pricing, eligibility, signature secret or access rules |
+| App-facing status/configuration/verification submission contract | `src/shared/api/services/vendor-billing.service.ts` | View models and a three-operation interface; not a generated HTTP contract |
+| Explicit development implementation | `src/shared/api/services/vendor-billing-preview.service.ts` | Test keys and supplied subscription IDs; in-memory fixtures; callbacks only become pending |
+| Billing and trial presentation | `src/modules/vendor/components/VendorBillingPanel.tsx` | Renders service-provided access, trial, authorisation and payment independently |
+| Development route and scenario controls | `src/modules/vendor/pages/VendorBillingPreviewPage.tsx` | DEV-only lazy route `/dev/vendor-billing`, outside auth and vendor-context gates |
+
+The preview service is explicitly constructed rather than selected through `isLiveApi()`: an
+environment-enabled Spring API cannot accidentally make these examples touch real vendor accounts.
+Neither scenario controls nor browser callbacks change auth, cart, onboarding or production routes.
+The parent remounts the billing panel when its service changes; a future production caller must
+likewise scope the panel/service lifetime to the selected authenticated store.
+
+**Approved target, not implemented:** the [19 September hybrid decision](./VENDOR_BILLING_DECISIONS.md)
+supersedes the preview's Option A/B policies. The backend owns the one-time trial after completed
+onboarding and genuine approval. Optional **Pay Now** setup during trial schedules the first fee at
+the original expiry; signup after expiry requires the first fee immediately. Phase-specific text
+explains that difference. Neither auth context gaps nor a frontend clock may define entitlement.
+
+Trial entitlement, mandate authorisation, confirmed paid coverage, provider lifecycle,
+cancellation and refund progress are distinct. Cancellation retains the original trial or paid period;
+rejoining can set up billing again at the same boundary. Failed/unconfirmed collection grants no
+grace beyond that boundary. Server capabilities must retain billing/account and existing-order
+fulfillment while hiding the store and blocking new operations after access expires.
+Successful retries restore only the remaining original cycle. The decision record owns full
+refunds for debits despite timely cancellation and no automatic proration for ordinary
+cancellation; backend reconciliation must preserve those distinctions. Current development uses
+Test cards; eMandate is excluded and UPI deferred under the
+[method scope](./VENDOR_BILLING_DECISIONS.md#current-test-mode-method-scope). Production method
+timing remains a later release gate. Live API mode selects the backend, not Razorpay Live Mode.
+
+Backend integration stage: backend defines the [missing contract](./API_GAPS.md#vendor-platform-billing), then fetch
+OpenAPI and regenerate declarations. Add typed wrappers in `packages/api-client/src/services/`,
+map responses in `src/shared/api/mappers/`, and use the existing authenticated transport. The current
+three-operation `VendorBillingService` and its old intents are insufficient: replace them for
+cancellation/refund progress, schedule/paid-period data, recovery and authoritative action availability. Update the
+fixture scenarios and panel together; the Checkout adapter continues to own only provider/browser
+interaction. Verify real response shapes and the affected journeys before connecting `/vendor/plan`
+to backend billing or claiming real access enforcement. The mock stage below can proceed now.
+
+**Authorised mock contract, 19 September:** the user permits fabricated missing backend data for
+development and tests. The [meeting handoff](./VENDOR_BILLING_BACKEND_HANDOFF.md) and its JSON dataset
+now follow the supplied vendor context envelope and snake_case fields, adding only the minimal
+`subscription.billing` block and populating existing fee/trial data. Reuse the existing context
+read; no new billing-status endpoint is needed. The billing mapper, mock/demo service, panel and
+mock-backed `/vendor/plan` wiring may proceed before the extension ships. Keep proposed types in the app layer;
+actual package HTTP wrappers/generated declarations still follow the published backend contract.
+This is a scoped temporary exception to requiring measured wire-shaped demo fixtures.
+
+Extend the existing context mapper/type to preserve the billing block and timestamp. Missing billing
+data must not break ordinary dashboard hydration. Reuse rupee price/currency fields and the existing
+`eligible_features` list; keep legacy tier/status distinct from paid access. After billing writes,
+refresh vendor context and update shared plan/features/billing together. The successful-read cache
+currently retains context indefinitely, so explicit invalidation or a fresh-read path is required.
+Preserve its vendor-keyed stale-request guard and reject older billing revisions; do not add a second
+independent billing cache. Submission/cancellation write acknowledgements carry no entitlement.
+
+Inject a mock service explicitly using the existing panel seam; a development-only override can
+select it while other services use the live API. Never silently replace a backend error with mock
+success. The mock service simulates transitions without writing real auth/vendor/order state.
+Stamp provenance in the service: mock/demo (simulated Checkout and outcomes), preview (real Test
+Checkout with unverified callback), backend (real server status). Fake provider IDs cannot reach
+Checkout. Production live mode shows billing unavailable until an actual integration exists.
+
+**Removal condition:** once the backend publishes OpenAPI and safe verified examples, regenerate,
+implement wrappers, align the mapper and replace fabricated wire fixtures with scrubbed real
+responses. Keep the lifecycle tests and explicit demo support. Backend integration remains in
+Razorpay Test Mode for this iteration; production activation is separate work.
+
+The preview still asks vendors to forfeit trial days and demonstrates setup as a trial prerequisite;
+those are current-code discrepancies, not approved alternatives. Its prior passing tests validate
+that earlier implementation. See [preview differences](./VENDOR_BILLING_PREVIEW.md#differences-from-the-approved-model)
+and [provider evidence](./research/razorpay-vendor-subscriptions.md) before the implementation migration.
+
 ### 3.4 The demo/live switch
 
 ```ts

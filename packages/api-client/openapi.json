@@ -4465,7 +4465,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Fetch All Categories",
-        "description": "API accessed by  Admin/Customer_Care roles",
+        "description": "API accessed by  Admin/Customer_Care roles. Each returned category now includes the `icon` field.",
         "operationId": "getCategories",
         "parameters": [
           {
@@ -4518,11 +4518,11 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Categories returned successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/PaginationResponse"
                 }
               }
             }
@@ -9876,7 +9876,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Fetch products by category_id",
-        "description": "API accessed by Admin/Customer_Care role only",
+        "description": "API accessed by Admin/Customer_Care role only. Each returned product now includes the `icon` field.",
         "operationId": "getProductsByCategory",
         "parameters": [
           {
@@ -9929,11 +9929,11 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Products returned successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/PaginationResponse"
                 }
               }
             }
