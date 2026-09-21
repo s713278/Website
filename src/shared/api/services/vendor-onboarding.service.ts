@@ -2,6 +2,7 @@ import {
   catalogService as apiCatalogService,
   isApiError,
   platformService as apiPlatformService,
+  pricesService as apiPricesService,
   vendorsService as apiVendorsService,
   type BusinessTypeQuery,
   type CategoryQuery,
@@ -20,11 +21,12 @@ import {
   mapProductCreateRequest,
   mapProductPage,
   mapSkuCreateRequest,
+  mapSkuUpdateRequest,
   mapStorefrontConfigRequest,
   mapVendorCategories,
   mapVendorContext,
   mapVendorProducts,
-  mapVendorSkus,
+  mapVendorSkuPage,
   mapVendorProfile,
   mapCheckoutOptionsResponse,
   mapMeasurementCatalog,
@@ -39,6 +41,7 @@ import {
   type CheckoutPaymentInput,
   type ReferencePage,
   type SkuCreateInput,
+  type SkuUpdateInput,
   type StorefrontConfigInput,
   type VendorCategoryRef,
   type VendorContext,
@@ -172,7 +175,21 @@ async function getVendorSkus(
   vendorId: number | string,
   config: ReferenceRequestConfig = {},
 ): Promise<VendorSkuRef[]> {
-  return mapVendorSkus(await apiVendorsService.getProductSkus(vendorId, config))
+  const skus = new Map<number, VendorSkuRef>()
+  for (let pageNumber = 0; ; pageNumber++) {
+    config.signal?.throwIfAborted()
+    const page = mapVendorSkuPage(await apiVendorsService.getProductSkus(vendorId, {
+      ...config, params: { page_number: pageNumber, page_size: 50 },
+    }))
+    config.signal?.throwIfAborted()
+    if (page.pageNumber !== pageNumber || page.lastPage == null) {
+      throw new Error('Could not load all your sizes. Please try again.')
+    }
+    const previousCount = skus.size
+    for (const sku of page.skus) skus.set(sku.skuId, sku)
+    if (page.lastPage) return [...skus.values()]
+    if (skus.size === previousCount) throw new Error('Could not load all your sizes. Please try again.')
+  }
 }
 
 /* --- Platform catalog authoring ------------------------------------------
@@ -213,12 +230,30 @@ async function assignProducts(
 }
 
 /** POST /v1/vendors/{vendor_id}/skus — `vendorProductId`, never the platform ID. */
-async function createSku(
+async function createSkus(
   vendorId: number | string,
   input: SkuCreateInput,
   vendorProductId: number,
 ): Promise<void> {
   await apiVendorsService.createSku(vendorId, mapSkuCreateRequest(input, vendorProductId))
+}
+
+/** PATCH /v1/vendors/{vendor_id}/skus/{sku_id} preserves fields omitted from the body. */
+async function updateSku(vendorId: number | string, skuId: number, input: SkuUpdateInput): Promise<void> {
+  await apiVendorsService.updateSku(vendorId, skuId, mapSkuUpdateRequest(input))
+}
+
+/** Price writes address the price record, with the owning SKU in the body. */
+async function updateSkuPrice(
+  skuId: number,
+  priceId: number,
+  input: { listPrice: number; salePrice: number },
+): Promise<void> {
+  await apiPricesService.updateSkuPrice(priceId, {
+    sku_id: skuId,
+    list_price: input.listPrice,
+    sale_price: input.salePrice,
+  })
 }
 
 /**
@@ -288,7 +323,9 @@ export const vendorOnboardingService = {
   createCategory,
   createProduct,
   assignProducts,
-  createSku,
+  createSkus,
+  updateSku,
+  updateSkuPrice,
   deleteSku,
   getCheckoutOptions,
   saveCheckoutOptions,

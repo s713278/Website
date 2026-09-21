@@ -172,6 +172,15 @@ describe('validateStep — step 6 purchasable size rules', () => {
     expect(validateStep(6, draft, runtime)).toEqual([])
   })
 
+  it('enforces the smallest quantity supported by SKU updates', () => {
+    const tooSmall = draftWith([product(1, 'Rice')], [sku({
+      id: 'sku-1', productId: 1, quantity: 0.0000001,
+    })])
+    expect(validateStep(6, tooSmall, runtime)).toContainEqual(expect.objectContaining({ field: 'sku-sku-1-quantity' }))
+    tooSmall.skus[0].quantity = 0.000001
+    expect(validateStep(6, tooSmall, runtime)).toEqual([])
+  })
+
   it('rejects an MRP with more than two decimal places', () => {
     const draft = draftWith(
       [product(1, 'Rice')],
@@ -459,18 +468,43 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
     }).some((item) => item.field === 'products')).toBe(true)
   })
 
-  it('never validates sizes: step 6 is not additive for a submitted store', () => {
-    // The backend rejects a new SKU while a store is under review, so Step 6 is read-only
-    // for a submitted store and its size delta is never reached here. Even a draft carrying
-    // a malformed new local size and a size count past the plan limit reports nothing.
+  it('rejects new sizes with missing prices and a total past the plan limit', () => {
     const draft = draftWith(
       [product(41, 'Juice')],
       [sku({ id: 'draft-sku-41-1', productId: 41, name: 'Large', listPrice: null, salePrice: null })],
     )
-    expect(additiveCatalogIssues(6, draft, undefined, {
-      maxSkus: 0,
+    const issues = additiveCatalogIssues(6, draft, undefined, {
+      maxSkus: 3,
       account: { categoryIds: [], productIds: [], skuIds: [4001, 4002, 4003] },
+    })
+    expect(issues.some((item) => item.field === 'skus')).toBe(true)
+    expect(issues.some((item) => item.field === 'sku-draft-sku-41-1-list-price')).toBe(true)
+  })
+
+  it('allows an approved size addition without requiring every saved product to be priced', () => {
+    const draft = draftWith(
+      [product(41, 'Juice'), product(42, 'Unpriced product')],
+      [sku({ id: 'sku-4001', productId: 41 }), sku({ id: 'draft-sku-41-1', productId: 41, quantity: 2 })],
+    )
+    expect(additiveCatalogIssues(6, draft, undefined, {
+      maxSkus: 2,
+      account: { categoryIds: [], productIds: [], skuIds: [4001] },
     })).toEqual([])
+  })
+
+  it('checks new sizes for duplicates against saved sizes', () => {
+    const draft = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'sku-4001', productId: 41 }), sku({ id: 'draft-sku-41-1', productId: 41 })],
+    )
+    expect(additiveCatalogIssues(6, draft).length).toBeGreaterThan(0)
+  })
+
+  it('rejects additions past the limit when inactive account sizes are not listed', () => {
+    const draft = draftWith([product(41, 'Juice')], [sku({ id: 'draft-sku-41-1', productId: 41 })])
+    const account = { categoryIds: [], productIds: [], skuIds: [4001], unlistedSkuCount: 1 }
+    expect(additiveCatalogIssues(6, draft, undefined, { maxSkus: 2, account })
+      .some((item) => item.field === 'skus')).toBe(true)
   })
 })
 

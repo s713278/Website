@@ -43,7 +43,7 @@ export const vendorsService = {
 
   getProducts: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products`, { ...config, skipAuth: true }),
-  getProductSkus: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+  getProductSkus: (vendorId: number | string, config?: Pick<RequestConfig, 'signal' | 'params'>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/skus`, { ...config, skipAuth: true }),
   searchSkus: (
     vendorId: number | string,
@@ -78,7 +78,11 @@ export const vendorsService = {
   ) => apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/skus`, body),
   getSku: (vendorId: number | string, skuId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`),
-  updateSku: (vendorId: number | string, skuId: number | string, body: Record<string, unknown>) =>
+  updateSku: (
+    vendorId: number | string,
+    skuId: number | string,
+    body: components['schemas']['SkuInfoUpdateRequest'],
+  ) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`, body),
   deleteSku: (vendorId: number | string, skuId: number | string) =>
     apiDelete<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`),

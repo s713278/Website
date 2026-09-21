@@ -40,10 +40,11 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Canonical payment-detail keys | A customer-facing consumer for bank details | **No bank/payout endpoint exists anywhere in the contract** — no path, schema or property matching bank/ifsc/payout. `details` is a free-form JsonNode that round-trips whatever it is given (verified). The wizard writes `{account_holder_name, account_number, ifsc_code, bank_name}` under `ONLINE`, matching the documented `upi_account` style. Backend must confirm these keys and that a consumer renders them. |
 | Public store reachability | Sharing a store after go-live | `store_identifier` **is** generated at go-live (`slug-vendorId`) and `/stores/{identifier}` resolves it, but the public storefront returns `404` until an admin sets `approval_status: APPROVED`. Share controls therefore unlock only on approval. `share_link` is still a relative API deep link, not a web URL. |
 | Stable go-live validation contract | Link backend readiness failures to the responsible wizard step | Go-live succeeds with a plain string (`"Vendor is now active and pending admin approval"`); the failure shape is undocumented and untested. Errors fall back to `getErrorMessage`. |
+| Approval reset during go-live | Keeping an approved vendor able to add sizes after completing setup | A September 2026 test report describes an already `APPROVED` account returning to `approval_status: PENDING` after Step 10 called `POST /v1/vendors/{vendor_id}/go-live`. This transition still needs backend review, including how existing approval should be preserved and the intended status after onboarding. The frontend continues to require real `APPROVED` status for submitted size additions. The completed-and-approved UI flow passes with simulated responses; a live check of that combined state awaits an approved account. |
 | QR sharing | The ticket's offline-friendly QR requirement | No QR dependency in the project. The control is rendered disabled pending a decision on adding one. |
 | Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates name and contacts from the vendor record and leaves branding at defaults. |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
-| Vendor-triggered approval | Testing the approved-vendor path end to end | `PATCH /approval` returns `500` for a vendor token, so an approved store cannot be produced without an admin account. The frontend's approved branch is verified against a forced status only. |
+| Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
 | Vendor profile is not writable | Editing store name, owner, contact, email or address | **`PUT /v1/vendors/{id}` returns `417` "Could not commit JPA transaction" for every body shape tried** — echoing the record back unchanged, with the vendor's existing category ids, with `category_ids: []`, with `assign_categories` omitted, and with it null. Nothing changed on the record in any attempt. `VendorProfileRequest` also declares `assign_categories` **required**, which would collide with additive-only category assignment even if the write worked. No other endpoint covers these fields, and the wizard never calls this one, which is why the defect went unnoticed. Settings is therefore read-only. |
 | No trial in the deployed contract | The 15-day free trial and any countdown | The `Resp_Vendor_Context_Success` example shows `tier: SILVER, status: TRIAL, trial_ends_at, trial_days: 14`, but a live vendor returns `tier: FREE, plan_name: Free, status: ACTIVE, monthly_price: 0, trial_days: 0` and **no `trial_ends_at` at all**. The frontend maps the fields and renders a countdown only when an end date is present; it never computes one from a hardcoded trial length. Backend must confirm whether the trial is 14 or 15 days and start sending `trial_ends_at`. |
@@ -60,8 +61,9 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Ownership and lifecycle for vendor-authored catalog entries | Letting a vendor control what they add to the shared catalog | Vendor tokens can create categories and products, but the entries are shared immediately and have no vendor ownership, delete-own or moderation lifecycle. Detailed below. |
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
-| Updating a SKU in place | Changing a price, size or name at Step 6 | `PATCH /vendors/{id}/skus/{sku_id}` returns **`417`** with a JDBC error on `update tb_sku` for every body tried, and `SkuInfoUpdateRequest` carries only `name`, `description`, `features`, `is_active` — never price or size. Step 6 expresses an edit as delete-then-create, which mints a new `sku_id`. |
-| Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` returns **`417`** while the store is under review (`vendor_status` PENDING). A submitted store therefore cannot create a new size, so Step 6 is read-only until an administrator approves the store, at which point size creation reopens. A product added while under review stays sizeless until then. This is why `ADDITIVE_CATALOG_STEPS` is `[4, 5]` (categories/products only). |
+| Per-SKU fulfillment updates | Saving legacy drafts with changed delivery/pickup flags | The updated SKU PATCH still omits these flags. Only this legacy case retains delete-then-create; current Step 6 has no per-size fulfillment controls. See [updated SKU contract](#updated-sku-contract). |
+| Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` has returned **`417`** while approval is `PENDING`. Step 6 stays read-only for submitted pending vendors; real `approval_status: APPROVED` reopens size additions within plan limits. Categories/products remain additive in either case. The dashboard's temporary approval coercion is not used here. See [Step 6 behavior](./API_ARCHITECTURE.md#vendor-setup-sizes-step-6). |
+| Activation inconsistent with onboarding | Resuming an account activated or approved before setup finishes | A September 2026 supplied context reports `ACTIVE`/`APPROVED` with `IN_PROGRESS` and `next_step: 7` after manual database changes. The frontend honors explicit onboarding progress; activation and approval cannot skip remaining steps. Backend writes should preserve that invariant and document the precedence for conflicting fields. See [entry routing](./SESSION.md#where-a-session-lands). |
 | Legacy SKU unit vocabulary | Keeping existing real-account sizes aligned with the backend measurement catalog | New writes use the backend's units, but this work does not migrate SKUs already written with the frontend's old unit vocabulary. Detailed below. |
 | Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
 | Unvalidated `scheduling_config` | Trusting the delivery schedule a vendor configures | The backend stores `scheduling_config` **verbatim without validation** — even `{}` is accepted. `FIXED_WINDOW` and `CUSTOMER_SELECT_DATE` keys come from documented examples; `PREDEFINED_DAYS` and `INSTANT` keys are our own snake_case and no consumer contract confirms them. |
@@ -155,10 +157,42 @@ above and is **not** a frontend defect — the frontend cannot fix any of them a
 | "I can't remove a category or product I picked by mistake." | 403 / no endpoint, above. | A vendor-callable un-assign for both. |
 | "A product I don't want to sell blocks go-live." | Follows from the above: the product cannot be un-assigned, and Step 6 requires every assigned product to carry at least one *active* valid SKU. So a mistakenly assigned product must be priced and sold. | Same un-assign. Until then the only escape is support. |
 
-Not yet exercised: Step 6 expresses a SKU edit as delete-then-create, so the `sku_id`
-changes. Nothing in onboarding references a SKU by id afterwards, but a SKU carrying
-subscription plans (`/skus/{sku_id}/subscription-plans`) may lose them. Worth confirming
-before SKU editing is offered outside onboarding.
+Normal size and price edits now preserve `sku_id`. The remaining legacy fulfillment-only
+replacement may still lose subscription plans; see [updated SKU contract](#updated-sku-contract).
+
+### Updated SKU contract
+
+The supplied September 2026 OpenAPI revision supersedes the older SKU creation and update
+observations below. The frontend now follows that contract for creation, structured measurement
+reads, and in-place edits; [API architecture](./API_ARCHITECTURE.md#vendor-setup-sizes-step-6) owns
+the request mapping and reconciliation details. The old forced one-time subscription plan has
+been removed because the contract explicitly permits no subscription plans.
+
+Creation accepts multiple `price_list` entries, but its generic response does not document a
+created-ID mapping or batch atomicity. The frontend confirms all new sizes through the account
+read and reconciles before retrying. The backend should document per-size results or guarantee
+atomic batch behavior. A single active-size create and read-back passed on an approved live test
+account in September 2026; a multi-size create and a failed batch still need live verification.
+
+A September 2026 live probe on an approved account accepted an inactive size creation, increasing
+`subscription.usage.skus`, but neither `GET /vendors/{id}/products/skus` (including a product filter)
+nor the unfiltered vendor SKU search returned it. The product-detail read exposes no SKU IDs.
+Creation's response is not mapped to IDs by the app service, so this leaves an inactive create
+unconfirmable through the current reconciliation path. Backend should provide an owner-only read
+including inactive sizes and document created IDs in the response. Do not report such a save as
+confirmed or infer a SKU ID. Plan-limit checks include the usage omitted from the list.
+
+The revised PATCH promises to preserve omitted fields, including features. Earlier deployed
+versions returned a JDBC error when features were omitted; the frontend does not restore that
+workaround or silently replace a SKU if the new update fails. Live confirmation against an
+authenticated disposable vendor is still required; isolated tests validate the new contract and
+error paths, not the backend's deployment.
+
+Per-size delivery/pickup flags remain absent from PATCH and from the documented reads. Legacy
+drafts with an explicit flag change retain their existing delete/create behavior, with its
+non-atomic failure window and possible subscription loss. Remove that exception when the backend
+supports reading and updating those flags. The wizard configures fulfillment in Step 7 and
+does not offer these per-size controls. The under-review gate is unchanged.
 
 ### Deployed catalog sorting behavior
 
@@ -183,10 +217,10 @@ the frontend works around it with an inline comment at the call site.
   vendor category ID from `/{vendor_id}/categories`. Passing that returns
   `400 Invalid vendor category id`. It requires the **platform** category ID. Either the docs or the
   implementation is wrong; they disagree.
-- **`POST /skus` crashes instead of validating.** Omitting `eligible_sub_plans` returns
-  `HV000028: Unexpected exception during isValid call` (envelope `500`, HTTP 417). An empty array
-  correctly returns `400 SKU must have at least one eligible subscription plan`, so the validator
-  simply cannot handle the field being absent. The schema marks only `product_id` as required.
+- **Historical SKU subscription validation failure, superseded by the updated contract.** Older
+  deployments rejected omitted or empty `eligible_sub_plans`. The September contract explicitly
+  accepts both; the frontend no longer fabricates a plan to bypass the old validator. See
+  [updated SKU contract](#updated-sku-contract) for the verification boundary.
 - **Three shipping strategies are unimplemented** — see the table above.
 - **`POST /v1/auth/refresh` returns the token as a bare string.** The body is
   `{ success, status, data: "<jwt>" }` — `data` is the access token itself, not an object with an
@@ -214,7 +248,7 @@ the frontend works around it with an inline comment at the call site.
   | Operation | Endpoint | Result |
   |-----------|----------|--------|
   | Delete a SKU | `DELETE /v1/vendors/{id}/skus/{sku_id}` | **200** — works |
-  | Update a SKU | `PATCH /v1/vendors/{id}/skus/{sku_id}` | **417**, JDBC error on `update tb_sku`. Broken regardless of body; and `SkuInfoUpdateRequest` covers only `name`, `description`, `features`, `is_active` — never price or size |
+  | Update a SKU | `PATCH /v1/vendors/{id}/skus/{sku_id}` | Earlier probes returned **417**. This historical result is superseded by the [updated SKU contract](#updated-sku-contract); Step 6 now uses in-place updates. |
   | Un-assign a product | `PATCH /v1/vendors/{id}/delete/products` | **403 Authorization failed.** Body is a bare `int64[]`, not an object; the description says Admin/Customer_Care only, and that is enforced |
   | Un-assign a category | — | **No endpoint exists.** Confirmed by enumerating all 117 paths: every `DELETE` in the contract, plus every path/summary/description mentioning remove, delete, unassign, deactivate or disable |
   | Reset the whole catalog | `DELETE /v1/admin/vendors/{vendorId}/catalog` | **403.** Would do exactly what is needed — "Removes SKUs, prices, subscription plans, product assignments, and category assignments; the vendor profile itself is NOT deleted" — but is admin-only |
@@ -224,8 +258,8 @@ the frontend works around it with an inline comment at the call site.
 
   Consequences the frontend has to live with, until the backend grants a vendor
   un-assign or an admin flow exists:
-  - Step 6 reconciles SKUs against the account — create, and delete what the vendor
-    removed. A price or size change is delete-then-create, because update is unavailable.
+  - Step 6 reconciles SKUs against the account — create, update, and delete what the vendor
+    removed. Only the legacy fulfillment exception still replaces a row.
   - Steps 4 and 5 refuse to deselect anything already saved to the account and say why,
     from the moment the write succeeds rather than only after a reload, and warn that a
     choice is permanent before it is made. Silently allowing it produced the worst

@@ -402,9 +402,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Vendor Sku API
-         * @description This API is used to create Sku with eligible subscription plans and delivery days.
-         *     ONE_TIME with FIXED delivery mode is always required  'eligible_delivery_days'.
+         * Create Vendor SKU API
+         * @description Creates SKUs for a vendor product. The SKU's display name, description and image are no
+         *     longer supplied here - they are derived from the owning product / vendor product.
+         *     <br/><code>eligible_sub_plans</code> is optional; pass an empty list (or omit it) for SKUs
+         *     without subscriptions.
+         *     <br/>ONE_TIME with FIXED delivery mode always requires <code>eligible_delivery_days</code>.
          */
         post: operations["createVendorSku"];
         delete?: never;
@@ -520,8 +523,8 @@ export interface paths {
          *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
          *       <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).
          *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>
-         *       <li><b>SKU</b> - SKU image (reads tb_sku.image_path, must belong to vendor).
-         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (skuId).</li>
+         *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown
+         *           for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>
          *     </ul>
          *
          *     <b>Request Format:</b><br/>
@@ -546,7 +549,7 @@ export interface paths {
          *       <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>
          *       <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>
          *       <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>
-         *       <li><b>SKU</b> - SKU image (reference_id = skuId, must belong to vendor)</li>
+         *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>
          *     </ul>
          *
          *     <b>Request Format:</b><br/>
@@ -945,8 +948,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create product
-         * @description Create platform level product. <p>measurement_unit_id</p> get from the '/v1/measurements/'
+         * Create a product
+         * @description Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description.
          */
         post: operations["addProduct"];
         delete?: never;
@@ -969,8 +972,8 @@ export interface paths {
         get: operations["getCategories"];
         put?: never;
         /**
-         * Create a new category
-         * @description API accessed by only Admin roles
+         * Create a category
+         * @description Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles.
          */
         post: operations["createCategory"];
         delete?: never;
@@ -1095,7 +1098,7 @@ export interface paths {
          *     Vendor must already exist in the system. Skips vendor profile and delivery config creation.
          *     <br><br>
          *     <b>CSV Format:</b>
-         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
+         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type
          */
         post: operations["importCatalogFromCsv"];
         delete?: never;
@@ -1115,7 +1118,8 @@ export interface paths {
         put?: never;
         /**
          * Import Catalog for Existing Vendor from JSON
-         * @description Import catalog data (categories, products, SKUs with prices) for an existing vendor using JSON payload.
+         * @description Import catalog data (categories, products, SKUs with prices and required quantity_value/unit measurements)
+         *     for an existing vendor using JSON payload.
          *     Vendor must already exist in the system. Skips vendor profile and delivery config creation.
          */
         post: operations["importCatalogFromJson"];
@@ -1137,10 +1141,11 @@ export interface paths {
         /**
          * Bulk Import Vendor Catalog from CSV
          * @description Bulk import vendor catalog from CSV file. Creates vendor profile, categories (if not exists),
-         *     products (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.
+         *     products (if not exists), SKUs with prices and required quantity_value/unit measurements,
+         *     and delivery config with HOME_DELIVERY and FIXED_WINDOW.
          *     <br><br>
          *     <b>CSV Format:</b>
-         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
+         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type
          *     <br><br>
          *     <b>Example:</b>
          *     <br>Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT
@@ -1164,7 +1169,8 @@ export interface paths {
         /**
          * Bulk Import Vendor Catalog from JSON
          * @description Bulk import vendor catalog from JSON payload. Creates vendor profile, categories (if not exists),
-         *     products (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.
+         *     products (if not exists), SKUs with prices and required quantity_value/unit measurements,
+         *     and delivery config with HOME_DELIVERY and FIXED_WINDOW.
          */
         post: operations["bulkImportVendorFromJson"];
         delete?: never;
@@ -1226,8 +1232,11 @@ export interface paths {
         };
         /**
          * Fetch SKU info
-         * @description Fetch core SKU information (sku_id, product_id, name, description, features, is_active)
-         *     for a given vendor and SKU. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.
+         * @description Fetch core SKU information (sku_id, product_id, name, description, features,
+         *     quantity_value, unit, is_active) for a given vendor and SKU. Accessible by ADMIN,
+         *     VENDOR, or CUSTOMER_CARE.
+         *     <br/><b>Note:</b> <code>name</code>, <code>description</code> and <code>image_path</code>
+         *     are derived from the product / vendor product, not stored on the SKU.
          */
         get: operations["getSkuInfo"];
         put?: never;
@@ -1241,9 +1250,12 @@ export interface paths {
         head?: never;
         /**
          * Update SKU info
-         * @description Partially update core SKU fields: <b>name</b>, <b>description</b>, <b>features</b>,
-         *     and <b>is_active</b>. Only supplied (non-null) fields are written to the database;
-         *     omitted fields are left unchanged. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.
+         * @description Partially update core SKU fields: <b>features</b>, <b>quantity_value</b>, <b>unit</b>,
+         *     and <b>is_active</b>. quantity_value and unit must be supplied together. Other omitted
+         *     fields are left unchanged.
+         *     <br/><b>Note:</b> <code>name</code> and <code>description</code> are not editable on a
+         *     SKU - they are derived from the owning vendor product. Accessible by ADMIN, VENDOR, or
+         *     CUSTOMER_CARE.
          */
         patch: operations["updateSkuInfo"];
         trace?: never;
@@ -1759,7 +1771,7 @@ export interface paths {
         };
         /**
          * SKU Search by category name,product name and sku name in vendor context.
-         * @description This API used for search and list matched skus for given search criteria.
+         * @description This API searches SKUs and returns separate quantity_value and unit fields.
          */
         get: operations["searchSkusByKeyword"];
         put?: never;
@@ -1807,6 +1819,7 @@ export interface paths {
          * @description This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.
          *     <br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.
          *     <br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.
+         *     <br>Each SKU returns measurement as separate <b>quantity_value</b> and <b>unit</b> fields.
          *     <br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2
          */
         get: operations["fetchSkusByVendorProduct"];
@@ -1933,6 +1946,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{identifier}/storefront/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get storefront product listing with variants
+         * @description Returns a paginated list of active products for the storefront, each grouped by
+         *     <code>vendor_product_id</code> and containing price variants with separate
+         *     <code>quantity_value</code> and <code>unit</code> measurement fields.
+         *     <br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.
+         *     <br>Optionally filter by an assigned <code>category_id</code>.
+         *     <br><b>Public endpoint</b> — no bearer token or vendor login required.
+         */
+        get: operations["getStorefrontProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/search": {
         parameters: {
             query?: never;
@@ -2006,7 +2044,7 @@ export interface paths {
         };
         /**
          * Fetch Product SKU Details to display on PDP page.
-         * @description This API used for fetching SKU information.
+         * @description This API returns SKU information with separate quantity_value and unit fields.
          */
         get: operations["fetchSkuDetails"];
         put?: never;
@@ -3384,23 +3422,42 @@ export interface components {
             delivery_slot?: string;
         };
         ItemSkuCreateRequest: {
-            /** @example Organic and Own farm grown vegetables */
+            /**
+             * @description Deprecated. This field is ignored - the SKU description is derived from the vendor product (or product).
+             * @example Organic and Own farm grown vegetables
+             */
             description?: string;
+            /**
+             * @description Measurement unit represented by this SKU.
+             * @example ml
+             */
+            unit?: string;
             /**
              * Format: int64
              * @description Its vendor's assigned product id not platform level product id.
              * @example 10002
              */
             product_id: number;
-            /** @example NON GMO Tomato */
+            /**
+             * @description Deprecated. This field is ignored - the SKU display name is derived from the product.
+             * @example Organic Tomato 1 kg
+             */
             name?: string;
             /**
              * @example ITEM or SERVICE
              * @enum {string}
              */
             sku_type?: "ITEM" | "SERVICE" | "DIGITAL";
-            /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
+            /**
+             * @description Deprecated. This field is ignored - the SKU image is derived from the vendor product (or product).
+             * @example data:image/jpeg;base64,/9j/4AAQSkJRgABAQAAAQABAAD/2wCEAAk
+             */
             image_path?: string;
+            /**
+             * @description Numeric quantity represented by this SKU.
+             * @example 250
+             */
+            quantity_value?: number;
             is_active?: boolean;
             subscription_eligible?: boolean;
             /** @example false */
@@ -3412,18 +3469,22 @@ export interface components {
             /** @example false */
             return_eligible?: boolean;
             price_list?: components["schemas"]["SkuPriceDTO"][];
+            /** @description Optional list of eligible subscription plans. Empty or omitted means the SKU has no subscription plans. */
             eligible_sub_plans?: components["schemas"]["SubscriptionPlanDTO"][];
         };
         SkuPriceDTO: {
             /** @example kg or L */
             unit?: string;
-            /** @example 0.5 */
-            value?: string;
             /**
              * @example WEIGHT
              * @enum {string}
              */
             measurement_type?: "WEIGHT" | "VOLUME" | "COUNT" | "AREA" | "SERVICE_UNIT" | "DURATION" | "PER_PERSON" | "SLOT";
+            /**
+             * @description Numeric quantity represented by this SKU
+             * @example 0.5
+             */
+            quantity_value?: number;
             /** Format: date */
             effective_date?: string;
             /** @example 100 */
@@ -4018,6 +4079,10 @@ export interface components {
             /** Format: int64 */
             id?: number;
             name?: string;
+            /**
+             * @description Product description. Defaults to the product name when omitted or blank.
+             * @example Fresh whole milk
+             */
             description?: string;
             /** Format: int64 */
             measurement_unit_id?: number;
@@ -4031,6 +4096,11 @@ export interface components {
             name?: string;
             /** @example Retail */
             business_type?: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            business_type_id: number;
             /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
             image_path?: string;
             /** @example A category dedicated to Milk products, offering a wide range of high-quality items for everyday use. */
@@ -4175,7 +4245,7 @@ export interface components {
             sku_variant?: string;
             sku_description?: string;
             image_path?: string;
-            weight?: string;
+            quantity_value?: number;
             unit?: string;
             list_price?: number;
             sale_price?: number;
@@ -4206,20 +4276,25 @@ export interface components {
             /** @enum {string} */
             vendor_status?: "ACTIVE" | "INACTIVE" | "SUSPENDED";
         };
-        /** @description Request payload for updating core SKU info fields */
+        /**
+         * @description Request payload for updating core SKU info fields.
+         *     <br/><b>Note:</b> <code>name</code> and <code>description</code> are no longer editable on a
+         *     SKU - they are derived from the owning vendor product. Update them via the vendor product
+         *     endpoint instead.
+         */
         SkuInfoUpdateRequest: {
-            /**
-             * @description SKU display name
-             * @example Organic Tomato 1kg
-             */
-            name?: string;
-            /**
-             * @description SKU description
-             * @example Fresh organic tomatoes grown without pesticides
-             */
-            description?: string;
             /** @description SKU features as a JSON value */
             features?: components["schemas"]["JsonNode"];
+            /**
+             * @description Numeric quantity represented by this SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description Measurement unit represented by this SKU
+             * @example ml
+             */
+            unit?: string;
             /**
              * @description Whether the SKU is active
              * @example true
@@ -4449,6 +4524,16 @@ export interface components {
             /** @description SKU features as a JSON value */
             features?: components["schemas"]["JsonNode"];
             /**
+             * @description Numeric quantity represented by this SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description SKU measurement unit
+             * @example ml
+             */
+            unit?: string;
+            /**
              * @description Whether SKU is active
              * @example true
              */
@@ -4670,6 +4755,183 @@ export interface components {
              * @example +919900000000
              */
             support_whatsapp_number?: string;
+        };
+        PaginationResponse: {
+            result?: Record<string, never>[];
+            /** Format: int32 */
+            page_number?: number;
+            /** Format: int32 */
+            page_size?: number;
+            /** Format: int64 */
+            total_elements?: number;
+            /** Format: int32 */
+            total_pages?: number;
+            last_page?: boolean;
+            meta_data?: {
+                [key: string]: string;
+            };
+        };
+        APIResponsePaginationResponseStorefrontProductResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["PaginationResponseStorefrontProductResponse"];
+        };
+        PaginationResponseStorefrontProductResponse: {
+            result?: components["schemas"]["StorefrontProductResponse"][];
+            /** Format: int32 */
+            page_number?: number;
+            /** Format: int32 */
+            page_size?: number;
+            /** Format: int64 */
+            total_elements?: number;
+            /** Format: int32 */
+            total_pages?: number;
+            last_page?: boolean;
+            meta_data?: {
+                [key: string]: string;
+            };
+        };
+        StorefrontProductResponse: {
+            /**
+             * Format: int64
+             * @description Vendor product identifier
+             * @example 161
+             */
+            vendor_product_id?: number;
+            /**
+             * @description Display product name
+             * @example Jute Loofah
+             */
+            product_name?: string;
+            /**
+             * Format: int64
+             * @description Category identifier
+             * @example 5
+             */
+            category_id?: number;
+            /**
+             * @description Category name
+             * @example Bath & Body
+             */
+            category_name?: string;
+            /**
+             * @description Product image URL
+             * @example https://example.com/vendors/1/products/jute_loofah.jpeg
+             */
+            product_image_path?: string;
+            /**
+             * @description Product description
+             * @example Eco friendly bamboo and natural products
+             */
+            product_description?: string;
+            /**
+             * @description Whether the product has at least one active SKU
+             * @example true
+             */
+            active?: boolean;
+            /**
+             * Format: double
+             * @description Lowest sale price across all variants
+             * @example 30
+             */
+            min_sale_price?: number;
+            /**
+             * Format: double
+             * @description Highest sale price across all variants
+             * @example 60
+             */
+            max_sale_price?: number;
+            /**
+             * Format: double
+             * @description Price shown on the product card, usually the lowest sale price
+             * @example 30
+             */
+            starting_at?: number;
+            /**
+             * Format: int64
+             * @description SKU id to select by default (cheapest active variant)
+             * @example 1785
+             */
+            default_sku_id?: number;
+            /**
+             * Format: int32
+             * @description Number of variants for this product
+             * @example 6
+             */
+            variants_count?: number;
+            /** @description Size/price variants of the product */
+            variants?: components["schemas"]["StorefrontProductVariantResponse"][];
+        };
+        StorefrontProductVariantResponse: {
+            /**
+             * Format: int64
+             * @description Unique SKU identifier
+             * @example 1785
+             */
+            sku_id?: number;
+            /**
+             * @description Numeric quantity represented by the SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description Measurement unit represented by the SKU
+             * @example ml
+             */
+            unit?: string;
+            /**
+             * @description Type of SKU
+             * @example ITEM
+             * @enum {string}
+             */
+            sku_type?: "ITEM" | "SERVICE" | "DIGITAL";
+            /**
+             * @description Whether the SKU is active
+             * @example true
+             */
+            active?: boolean;
+            /**
+             * Format: int64
+             * @description Current price record identifier
+             * @example 248
+             */
+            price_id?: number;
+            /**
+             * Format: double
+             * @description Maximum retail price
+             * @example 30
+             */
+            list_price?: number;
+            /**
+             * Format: double
+             * @description Customer-facing sale price
+             * @example 30
+             */
+            sale_price?: number;
+            /**
+             * Format: double
+             * @description Discount amount (list_price - sale_price)
+             * @example 0
+             */
+            discount?: number;
+            /**
+             * @description Whether sale_price is lower than list_price
+             * @example false
+             */
+            on_sale?: boolean;
         };
         APIResponsePaginationResponseOrderDetailsDTO: {
             /**
@@ -5798,7 +6060,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description SKU Creation details */
+        /** @description SKU creation details (name, description and image_path are ignored) */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ItemSkuCreateRequest"];
@@ -6762,19 +7024,38 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Product details */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProductDTO"];
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Product created successfully */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Product with the same name already exists in this category */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Category not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -6812,19 +7093,38 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Category details */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CategoryDTO"];
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Category created successfully */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Category with the same name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -8612,6 +8912,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    getStorefrontProducts: {
+        parameters: {
+            query?: {
+                category_id?: number;
+                page_number?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Products loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginationResponse"];
+                };
+            };
+            /** @description Vendor not found or not active/approved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponsePaginationResponseStorefrontProductResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponsePaginationResponseStorefrontProductResponse"];
                 };
             };
         };

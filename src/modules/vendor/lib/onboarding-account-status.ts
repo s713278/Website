@@ -1,6 +1,10 @@
 import type { ServerOnboardingState } from './onboarding-resume'
 
-type AccountStatusState = Pick<ServerOnboardingState, 'context'>
+type AccountStatusState = {
+  context: Pick<ServerOnboardingState['context'], 'vendorStatus' | 'approvalStatus'> & {
+    onboarding?: ServerOnboardingState['context']['onboarding']
+  }
+}
 
 /**
  * Whether the vendor's store has been submitted, and whether an admin has approved it.
@@ -14,7 +18,17 @@ type AccountStatusState = Pick<ServerOnboardingState, 'context'>
  * The import above is `import type`, so it is erased at build time.
  */
 export function isStoreSubmitted(state: AccountStatusState): boolean {
-  return state.context.vendorStatus?.toUpperCase() === 'ACTIVE'
+  const { vendorStatus, onboarding } = state.context
+  if (vendorStatus?.toUpperCase() !== 'ACTIVE') return false
+
+  // The backend's progress wins even if the account was activated manually. Only a
+  // context with no onboarding evidence falls back to the legacy activation signal.
+  const nextStep = onboarding?.nextStep
+  if (nextStep != null && Number.isInteger(nextStep) && nextStep >= 1 && nextStep <= 11) {
+    return nextStep === 11
+  }
+  if (onboarding && onboarding.status !== 'UNKNOWN') return onboarding.status === 'COMPLETED'
+  return true
 }
 
 export function isVendorApproved(state: AccountStatusState): boolean {

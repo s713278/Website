@@ -456,12 +456,42 @@ describe('cumulative catalog limits', () => {
     expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4022, 4030])
   })
 
+  it('binds a saved size to its account id without losing later edits or double-counting capacity', () => {
+    useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      skus: [{
+        id: 'draft-sku-31-1', productId: 31, name: 'Milk', description: '', skuType: 'ITEM',
+        measurementType: 'VOLUME', unit: 'L', quantity: 0.5, listPrice: 60, salePrice: 50,
+        active: true, homeDelivery: true, storePickup: true,
+      }],
+    }))
+
+    useOnboardingStore.getState().recordAssignment({
+      skuIds: [4021], skuIdByDraftId: { 'draft-sku-31-1': 4021 },
+    })
+
+    const state = useOnboardingStore.getState()
+    expect(state.draft.skus[0]).toMatchObject({ id: 'sku-4021', quantity: 0.5, salePrice: 50 })
+    expect(selectProjectedSkuTotal(state)).toBe(1)
+  })
+
   it('leaves SKU identity untouched when a category/product write reports no skuIds', () => {
     useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [4021] })
 
     useOnboardingStore.getState().recordAssignment({ categoryIds: [12] })
 
     expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4021])
+  })
+
+  it('retains unlisted account usage when a new size is saved', () => {
+    useOnboardingStore.getState().setAccountCatalog({
+      categoryIds: [], productIds: [], skuIds: [4021], skuUsage: 2,
+    })
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(2)
+
+    useOnboardingStore.getState().recordAssignment({ skuIds: [4021, 4022] })
+
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(3)
   })
 
   it('projects account usage plus new draft entries, reaching the limit early after a switch', () => {

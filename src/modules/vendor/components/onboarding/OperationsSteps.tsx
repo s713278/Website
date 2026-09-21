@@ -12,7 +12,7 @@ import {
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
 import { Button, EmptyState, Input } from '@/shared/components/ui'
-import { localSkuId } from '../../lib/onboarding-sku-id'
+import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
 import { validateDraftSku } from '../../lib/onboarding-validation'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import {
@@ -106,9 +106,7 @@ function makeSku(
   return {
     id: localSkuId(product.id, skus),
     productId: product.id,
-    // The size name is no longer a vendor field; it follows the platform product name so the
-    // backend's `(name, weight, vendor_product_id)` identity stays populated without asking.
-    // Sibling sizes share this name and are told apart by their quantity and unit.
+    // Used locally for previews; the backend derives display details from the product.
     name: product.name,
     description: '',
     skuType: 'ITEM',
@@ -154,10 +152,8 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
   // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
   // needs to change, so this is idempotent and cannot loop this effect.
   //
-  // Skipped entirely for a submitted store. Its Step 6 is read-only under review — no size
-  // can be created (the backend rejects it, 417) — so scaffolding a blank size would mint a
-  // phantom row that contradicts the "sizes are locked" notice and inflates the size count.
-  // A product added while under review is meant to stay sizeless until approval.
+  // Submitted stores add sizes explicitly after approval. Do not scaffold phantom rows,
+  // consume plan capacity on a read, or reconcile already saved sizes behind their backs.
   //
   // Otherwise, deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an
   // edit the vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6
@@ -319,7 +315,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                 {productSkus.map((sku, index) => {
                   const heading = skuHeading(sku, index)
                   return (
-                  <div key={sku.id} className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${heading} size`}>
+                  <fieldset key={sku.id} disabled={storeIsSubmitted && isAccountSkuId(sku.id)} className="min-w-0 rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${heading} size`}>
                     {/* Active is a sellability control, not a pricing field, so it sits in the
                         card header beside the derived size heading. The heading identifies the
                         size from its quantity and unit in place of the removed name field. */}
@@ -336,17 +332,16 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                         ) : null}
                       </div>
                     </div>
-                    {/* Grouping wrapper only. Step 6 is read-only for a submitted store —
-                        the wizard disables the whole step through its outer fieldset — so no
-                        per-size lock is needed here. */}
+                    {/* Saved sizes stay locked after submission; approved vendors can fill
+                        and remove the new sizes they add before saving them. */}
                     <fieldset className="min-w-0 border-0 p-0">
                     <div className="grid gap-3 @min-[22rem]:grid-cols-2 @min-[44rem]:grid-cols-4">
                       <Input
                         id={`sku-${sku.id}-quantity`}
                         label="Quantity"
                         type="number"
-                        min="1"
-                        step="1"
+                        min={(expectedMeasurement ?? sku.measurementType) === 'COUNT' ? '1' : '0.000001'}
+                        step={(expectedMeasurement ?? sku.measurementType) === 'COUNT' ? '1' : 'any'}
                         value={sku.quantity ?? ''}
                         error={issues.find((item) => item.field === `sku-${sku.id}-quantity`)?.message}
                         onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
@@ -398,7 +393,7 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                       />
                     </div>
                     </fieldset>
-                  </div>
+                  </fieldset>
                   )
                 })}
               </div>

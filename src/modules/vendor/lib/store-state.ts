@@ -1,4 +1,6 @@
 import type { StoreState } from '@/modules/vendor/types/dashboard'
+import type { VendorContext } from '@/shared/api'
+import { isStoreSubmitted } from './onboarding-account-status'
 
 /** `onboarding.next_step` reports this once all ten setup steps are done. */
 const SETUP_COMPLETE_STEP = 11
@@ -20,10 +22,11 @@ function isVendorApproved(approvalStatus: string | null, coercePendingApproval: 
 export type StoreStateInput = {
   vendorStatus: string | null
   approvalStatus: string | null
+  onboarding?: VendorContext['onboarding']
 }
 
 /**
- * The single condition of a store, derived from submission and approval alone.
+ * The single condition of a store, derived from setup progress, submission and approval.
  *
  * Ranking matters, because more than one can be true at once:
  *
@@ -31,9 +34,8 @@ export type StoreStateInput = {
  *    acted against the store, and it must not be hidden behind a setup prompt.
  * 2. **Rejected** outranks the rest for the same reason: verification decided
  *    something the vendor has to see.
- * 3. **Setting up** covers anyone who has not submitted. Go-live sets `ACTIVE`, so
- *    anything else means nothing was ever submitted. `next_step` only labels where
- *    setup resumes: it is resource-derived and can move backwards after submission.
+ * 3. **Setting up** covers unfinished onboarding even when the account is already
+ *    active or approved. Activation alone cannot override explicit setup progress.
  * 4. Past that, approval decides between **open** and **under review**.
  *
  * Note that open is not "accepting orders". Nothing in the backend contract expresses
@@ -61,8 +63,7 @@ export function deriveStoreState(
   if (vendorStatus === 'SUSPENDED') return 'SUSPENDED'
   if (approvalStatus === 'REJECTED') return 'REJECTED'
 
-  const isStoreSubmitted = vendorStatus === 'ACTIVE'
-  if (!isStoreSubmitted) return 'SETTING_UP'
+  if (!isStoreSubmitted({ context: input })) return 'SETTING_UP'
 
   return isVendorApproved(approvalStatus, coercePendingApproval) ? 'OPEN' : 'UNDER_REVIEW'
 }

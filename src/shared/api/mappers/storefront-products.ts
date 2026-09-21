@@ -1,4 +1,5 @@
 import type { Product, ProductPage, ProductVariant, SkuType } from '@/modules/storefront/types'
+import { mapSkuMeasurement } from './sku-measurement'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)

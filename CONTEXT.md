@@ -1,8 +1,8 @@
 # MithraDirect
 
 A hyperlocal marketplace where independent vendors run their own storefront and nearby
-customers order from it. This glossary covers the language of vendor setup and the shared
-catalog, where several words currently do more than one job.
+customers order from it. This glossary defines the language of the catalog, vendor setup,
+store discovery, and store operations.
 
 ## Language
 
@@ -31,10 +31,9 @@ one-way: nothing the vendor assigns can be given back.
 _Avoid_: selection, linking, subscribing
 
 **Size**:
-One purchasable variant of a vendor product — a quantity, a unit and a price. Its
-measurement is the product's, not a choice the size makes: every size of a product shares
-that one measurement, and only the unit within it varies. A vendor product with no active
-size cannot be sold.
+One purchasable quantity, unit, and price of a vendor product, using that product's
+measurement; sizes may vary the unit within that measurement. A vendor product needs at
+least one active size to be sold.
 _Avoid_: SKU, variant, option
 
 **Account catalog**:
@@ -59,42 +58,38 @@ Chosen once at the start of setup.
 _Avoid_: reference mode, live catalog, catalog mode
 
 **Pending entry**:
-A vendor-authored category or product that exists only in the draft and has not yet
-been created in the platform catalog. It stops being pending the moment Continue
-succeeds; in demo mode it stays pending forever.
+A vendor-authored category or product in the draft that has not yet been created in the
+platform catalog. It stops being pending when that creation succeeds; demonstration
+entries never become platform entries.
 _Avoid_: unsaved entry, local entry, draft category
 
 **Vendor-authored category**:
 A platform category introduced by a vendor during setup because the shared catalog did
-not have what they sell. It is a pending entry until Continue creates it for every vendor
-with that business type and assigns it to the author's store.
+not have what they sell. It is a pending entry until it is created for every vendor
+with that business type and assigned to the author's store.
 _Avoid_: custom category, private category, vendor category
 
 **Vendor-authored product**:
 A platform product introduced by a vendor during setup under one of their chosen platform
 categories because the shared catalog did not have what they sell. It is a pending entry
-until Continue creates it in that category and assigns it to the author's store.
+until it is created in that category and assigned to the author's store.
 _Avoid_: custom product, private product, vendor product
 
 ### Modes
 
 **Live API**:
-The application is talking to the real backend. The opposite is demo mode.
+The mode connected to real marketplace accounts. It is independent of catalog source,
+so a vendor may still be browsing the sample catalog.
 _Avoid_: live mode, production mode, online
 
 **Demo mode**:
-The application answers from local data and makes no backend calls, so nothing a vendor
-does reaches an account.
+Demonstration mode in which activity uses sample data and does not change a real account.
 _Avoid_: offline mode, mock mode, test mode
-
-Live API and catalog source are independent: the real backend can be answering while the
-vendor browses the sample catalog. Do not use "live" for both.
 
 ### Store discovery
 
 **Service area**:
-The postal code used to find stores serving a customer's chosen delivery location. It is
-sent together with that location's latitude and longitude.
+The postal code used to find stores serving a customer's chosen delivery location.
 _Avoid_: location, address, search area
 
 ### Vendor setup
@@ -115,19 +110,14 @@ anything this browser remembers.
 _Avoid_: next step, current step, last step
 
 **Submitted**:
-The vendor has sent their finished store for review. From this point nothing already on
-the store can be changed, removed, or started over — with one exception: the vendor may
-still grow their catalog within plan limits, assigning or authoring more categories and
-products, and those additions reach the account without reopening setup. Sizes are the
-boundary of that exception: a new size cannot be created while under review (the backend
-rejects it), so Step 6 is read-only until the store is **approved**, and a product added
-in the meantime stays sizeless until then. Everything else stays read-only until
-**verification** decides.
+The vendor has sent their finished store for review; this records submission, not approval.
+While awaiting a decision, existing setup stays locked except for adding categories and
+products to the account within plan limits; new sizes wait until the store is **approved**.
 _Avoid_: live, complete, published, finished
 
 **Verification**:
-The automated check that decides whether a submitted store may open. It replaces approval
-by an administrator; no person is in the loop.
+The decision process for whether a submitted store may open; the agreed model uses
+automated checks rather than an administrator. Its successful outcome is approval.
 _Avoid_: review (for the checker itself), admin, approval system, moderation
 
 **Approved**:
@@ -142,10 +132,9 @@ _Avoid_: go live, publish, launch
 ### Store operations
 
 **Store state**:
-The single condition of a vendor's store, derived rather than read from one place: setting
-up, under review, open, rejected, or suspended. Suspension outranks everything else. Being
-open means customers can reach the store; it does not mean the store is taking orders, a
-thing the platform does not currently express.
+The condition of a vendor's store: setting up, under review, open, rejected, or suspended.
+Suspension takes precedence; an open store is reachable by customers, which does not mean
+it is taking orders.
 _Avoid_: status, account status, vendor status, online, offline
 
 **Delivery status**:
