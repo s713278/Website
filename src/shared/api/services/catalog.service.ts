@@ -9,9 +9,14 @@ import {
 } from '@/shared/lib/customer-location'
 import { mapLandingStore, type LandingStore } from '../mappers/landing-store'
 import { liveVendorId, mapVendorToStore } from '../mappers/vendor'
+import {
+  mapStorefrontCheckoutOptions,
+  type StorefrontCheckoutOptions,
+} from '../mappers/storefront-checkout'
 import { mapPdpSkuDetail, mapStorefrontProductPage } from '../mappers/storefront-products'
 import { isLiveApi } from '../mode'
 import { ALL_CATEGORY, parseCategoryFilter, productMatchesCategory, type CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
+import { isSearchApiReady, matchesSearchQuery } from '@/shared/lib/search-query'
 
 function delay(ms = 250) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -67,6 +72,109 @@ export async function listStores(query?: string, location?: CustomerLocation): P
     )
   }
   return stores
+}
+
+function mapKeywordVendor(raw: Record<string, unknown>): Store | null {
+  const category = Array.isArray(raw.category)
+    ? raw.category.filter((item): item is string => typeof item === 'string' && item.trim()).join(', ')
+    : raw.category
+  const store = mapVendorToStore({ ...raw, category })
+  return store.id ? store : null
+}
+
+/**
+ * MithraUserApp vendor search: GET /v1/vendors/search/keyword
+ * Same query as the app — service area, keyword, lat/lng, page.
+ * Call only when keyword length is at least 4 (SEARCH_API_MIN_CHARS).
+ */
+export async function searchStoresByKeyword(
+  keyword: string,
+  location: CustomerLocation,
+  pageNumber = 0,
+  pageSize = 10,
+): Promise<Store[]> {
+  const q = keyword.trim()
+  if (!isSearchApiReady(q)) return []
+
+  if (!isLiveApi()) {
+    await delay()
+    return STORES.filter(
+      (store) =>
+        matchesSearchQuery(store.name, q) ||
+        matchesSearchQuery(store.category, q) ||
+        store.products.some((product) => matchesSearchQuery(product.name, q)),
+    )
+  }
+
+  const res = await vendorsService.searchByKeyword({
+    service_area: location.serviceArea,
+    keyword: q,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    page_number: pageNumber,
+    page_size: pageSize,
+  })
+  return asObjectList(unwrapData(res))
+    .map(mapKeywordVendor)
+    .filter((store): store is Store => store != null)
+}
+
+/**
+ * MithraUserApp product search: GET /v1/vendors/{vendor_id}/skus/search
+ * Query param is `keyword`, not `q`. Call only when keyword length is at least 4.
+ */
+export async function searchStoreSkus(
+  storeId: string,
+  keyword: string,
+  pageNumber = 0,
+  pageSize = 10,
+): Promise<ProductPage> {
+  const q = keyword.trim()
+  if (!isSearchApiReady(q)) {
+    return {
+      items: [],
+      pageNumber,
+      pageSize,
+      totalElements: 0,
+      totalPages: 0,
+      lastPage: true,
+    }
+  }
+
+  if (!isLiveApi()) {
+    await delay()
+    const store = getStoreById(storeId) ?? STORES[0]
+    const items = (store?.products ?? []).filter((product) =>
+      matchesSearchQuery(product.name, q),
+    )
+    return {
+      items,
+      pageNumber,
+      pageSize,
+      totalElements: items.length,
+      totalPages: 1,
+      lastPage: true,
+    }
+  }
+
+  const vendorId = await resolveLiveVendorId(storeId)
+  if (!vendorId) {
+    return {
+      items: [],
+      pageNumber,
+      pageSize,
+      totalElements: 0,
+      totalPages: 0,
+      lastPage: true,
+    }
+  }
+
+  const res = await vendorsService.searchSkus(vendorId, {
+    keyword: q,
+    page_number: pageNumber,
+    page_size: pageSize,
+  })
+  return mapStorefrontProductPage(unwrapData(res))
 }
 
 /** Truthful cards for the landing page's location-keyed public home feed. */
@@ -208,6 +316,61 @@ export async function getStore(storeId: string): Promise<Store | null> {
   return store.id ? store : null
 }
 
+/**
+ * GET /v1/vendors/{vendor_id}/checkout_options — delivery/payment choices for customer checkout.
+  */
+type CheckoutOptionsEntry = {
+  promise: Promise<StorefrontCheckoutOptions | null>
+}
+
+const checkoutOptionsByStore = new Map<string, CheckoutOptionsEntry>()
+
+/** Long enough for StrictMode remount; short enough that a later cart→checkout shows a GET. */
+const CHECKOUT_OPTIONS_RETAIN_MS = 1500
+
+function dropCheckoutOptionsEntry(storeId: string, entry: CheckoutOptionsEntry) {
+  if (checkoutOptionsByStore.get(storeId) === entry) {
+    checkoutOptionsByStore.delete(storeId)
+  }
+}
+
+export async function getStoreCheckoutOptions(
+  storeId: string,
+): Promise<StorefrontCheckoutOptions | null> {
+  const existing = checkoutOptionsByStore.get(storeId)
+  if (existing) return existing.promise
+
+  const entry: CheckoutOptionsEntry = {
+    promise: (async (): Promise<StorefrontCheckoutOptions | null> => {
+      if (!isLiveApi()) {
+        await delay()
+        return null
+      }
+
+      const vendorId = await resolveLiveVendorId(storeId)
+      if (!vendorId) return null
+
+      const res = await vendorsService.getCheckoutOptions(vendorId)
+      return mapStorefrontCheckoutOptions(res)
+    })(),
+  }
+
+  checkoutOptionsByStore.set(storeId, entry)
+
+  try {
+    const result = await entry.promise
+    if (result == null) {
+      dropCheckoutOptionsEntry(storeId, entry)
+      return result
+    }
+    window.setTimeout(() => dropCheckoutOptionsEntry(storeId, entry), CHECKOUT_OPTIONS_RETAIN_MS)
+    return result
+  } catch (error) {
+    dropCheckoutOptionsEntry(storeId, entry)
+    throw error
+  }
+}
+
 /** GET /v1/vendors/products/{product_id}/skus/{sku_id} — PDP (mithrauserapp fetchSkuDetails). */
 export async function getProductSkuDetail(
   productId: string | number,
@@ -238,7 +401,10 @@ export async function getProductSkuDetail(
 export const catalogService = {
   listStores,
   listLandingStores,
+  searchStoresByKeyword,
+  searchStoreSkus,
   getStore,
+  getStoreCheckoutOptions,
   listStoreProducts,
   getProductSkuDetail,
 }

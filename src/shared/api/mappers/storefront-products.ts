@@ -22,6 +22,25 @@ function asSkuType(value: unknown): SkuType {
   return 'ITEM'
 }
 
+/** sku_type values — never use these as the product title. */
+const GENERIC_TYPE_LABELS = new Set(['ITEM', 'SERVICE', 'DIGITAL'])
+
+/**
+ * SKU search (`GET .../skus/search`) returns `sku_name`, not `product_name`.
+ * Using only `product_name` / `name` made every hit render as "Item".
+ */
+function pickProductName(raw: Record<string, unknown>): string {
+  const candidates = [raw.product_name, raw.sku_name, raw.item_name, raw.title, raw.name]
+  for (const value of candidates) {
+    if (typeof value !== 'string') continue
+    const name = value.trim()
+    if (!name) continue
+    if (GENERIC_TYPE_LABELS.has(name.toUpperCase())) continue
+    return name
+  }
+  return ''
+}
+
 function formatSkuSizeLabel(raw: Record<string, unknown>): string {
   const unit = String(raw.unit ?? '').trim()
   const qty = asNumber(raw.quantity_value)
@@ -61,16 +80,25 @@ function pickDefaultVariant(
 
 function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
   if (raw.active === false || raw.is_active === false) return null
-  const id = raw.vendor_product_id ?? raw.id
+  const id = raw.vendor_product_id ?? raw.product_id ?? raw.id ?? raw.sku_id
   if (id == null) return null
 
   const variantRows = Array.isArray(raw.variants) ? raw.variants : []
-  const variants = variantRows
+  let variants = variantRows
     .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
     .map(mapStorefrontProductVariant)
     .filter((item): item is ProductVariant => item != null)
 
-  const defaultVariant = pickDefaultVariant(variants, raw.default_sku_id)
+  // SKU search returns a flat SKU row, not a product with a `variants` array.
+  if (!variants.length && (raw.sku_id != null || raw.sale_price != null || raw.list_price != null)) {
+    const skuVariant = mapStorefrontProductVariant({
+      ...raw,
+      sku_id: raw.sku_id ?? raw.id,
+    })
+    if (skuVariant) variants = [skuVariant]
+  }
+
+  const defaultVariant = pickDefaultVariant(variants, raw.default_sku_id ?? raw.sku_id)
   const minPrice = asNumber(raw.min_sale_price)
   const maxPrice = asNumber(raw.max_sale_price)
   const startingAt = asNumber(raw.starting_at)
@@ -78,11 +106,12 @@ function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
 
   const categoryId = asNumber(raw.category_id)
   const categoryName = String(raw.category_name ?? raw.category ?? '').trim()
+  const name = pickProductName(raw)
 
   return {
     id: String(id),
-    name: String(raw.product_name ?? raw.name ?? 'Item').trim() || 'Item',
-    description: String(raw.product_description ?? raw.description ?? ''),
+    name: name || 'Item',
+    description: String(raw.product_description ?? raw.description ?? raw.sku_description ?? ''),
     price,
     veg: Boolean(raw.veg ?? raw.is_veg ?? true),
     imageUrl: httpUrl(raw.product_image_path) || httpUrl(raw.image_path) || httpUrl(raw.image),
@@ -93,7 +122,9 @@ function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
     startingAt,
     inStock: raw.active !== false && raw.is_active !== false,
     defaultVariantId:
-      raw.default_sku_id != null ? String(raw.default_sku_id) : defaultVariant?.id,
+      raw.default_sku_id != null
+        ? String(raw.default_sku_id)
+        : defaultVariant?.id,
     variantsCount: asNumber(raw.variants_count) ?? variants.length,
     variants: variants.length ? variants : undefined,
   }

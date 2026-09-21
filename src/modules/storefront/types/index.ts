@@ -99,6 +99,8 @@ export type Store = {
   theme?: StoreTheme
   categories?: StoreCategory[]
   products: Product[]
+  subscriptionStatus?: string // Vendor shop-plan status from the public storefront payload, when the backend sends it. `HALTED`, `CANCELLED`, and `EXPIRED` hide the shop.
+ 
 }
 export type CartSummary = {
   itemsTotal: number
@@ -123,4 +125,5 @@ export type CartLine = {
   cartItemId?: string
   skuId?: string
   productId?: string
+  imageUrl?: string
 }

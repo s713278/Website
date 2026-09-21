@@ -2,6 +2,11 @@ export function storePath(storeId: string) {
   return `/stores/${storeId}`
 }
 
+/** Store home with the product search bar open. */
+export function storeSearchPath(storeId: string) {
+  return `${storePath(storeId)}?search=1`
+}
+
 export function storeProductPath(storeId: string, productId: string, skuId?: string) {
   const base = `${storePath(storeId)}/products/${productId}`
   if (!skuId) return base

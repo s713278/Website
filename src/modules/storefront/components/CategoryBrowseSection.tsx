@@ -56,9 +56,7 @@ export function CategoryBrowseSection({
         showAllOption
       />
 
-      {searchTooShort ? (
-        <p className="text-sm text-slate-500">Type 2 or more characters to search</p>
-      ) : !showSkeleton && count > 0 ? (
+      {!searchTooShort && !showSkeleton && count > 0 ? (
         <p className="break-words text-sm text-slate-600">
           {searching ? (
             <>

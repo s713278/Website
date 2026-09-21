@@ -28,11 +28,19 @@ export {
 export {
   catalogService,
   getStore,
+  getStoreCheckoutOptions,
   listLandingStores,
   listStoreProducts,
   listStores,
-  getProductSkuDetail
+  searchStoresByKeyword,
+  searchStoreSkus,
+  getProductSkuDetail,
 } from './catalog.service'
+export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../mappers/storefront-checkout'
+export {
+  formatCheckoutDateChip,
+  formatCheckoutDateLabel,
+} from '../mappers/storefront-checkout'
 export { cartService } from './cart.service'
 export {
   listMyOrders,
