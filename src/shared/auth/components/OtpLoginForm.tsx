@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
 import logoDarkMd from '@/assets/logo_dark_md.png'
+import { StoreBrandLogo } from '@/modules/storefront/components/StoreBrandLogo'
 import {
   authService,
   getErrorMessage,
@@ -17,13 +18,24 @@ type Step = 'phone' | 'otp'
 
 type OtpLoginFormProps = {
   role: UserRole
+  shopName?: string
+  shopLogoUrl?: string
+  from?: string
 }
 
-export function OtpLoginForm({ role }: OtpLoginFormProps) {
+export function OtpLoginForm({
+  role,
+  shopName,
+  shopLogoUrl,
+  from: fromProp,
+}: OtpLoginFormProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const completeOtpLogin = useAuthStore((s) => s.completeOtpLogin)
-  const from = (location.state as { from?: string } | null)?.from
+  const from =
+    fromProp || (location.state as { from?: string } | null)?.from
+  const isVendor = role === 'vendor'
+  const shop = !isVendor && shopName ? { name: shopName, logoUrl: shopLogoUrl } : null
 
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
@@ -33,8 +45,6 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
   const [verifying, setVerifying] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const requestGen = useRef(0)
-
-  const isVendor = role === 'vendor'
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -51,7 +61,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
   async function sendOtp() {
     setError('')
     if (!isValidMobile(phone)) {
-      setError('Enter a valid 10-digit mobile number.')
+      setError('Enter a valid 10-digit WhatsApp number.')
       return
     }
 
@@ -99,32 +109,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
     }
   }
 
-  return (
-    <div className="relative min-h-screen bg-[#f8fafc]">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 70% 50% at 50% -10%, rgba(16,185,129,0.16), transparent 55%), radial-gradient(ellipse 40% 30% at 100% 100%, rgba(209,250,229,0.5), transparent)',
-        }}
-      />
-
-      <header className="relative z-10 mx-auto flex max-w-md items-center justify-between px-4 py-6">
-        {/* The real lockup, as on the marketing header — this was a hand-set approximation
-            of it: a circled "M" and the name in Poppins, neither of which is the mark. */}
-        <Link to="/" aria-label="Mithra Direct home">
-          <img
-            src={logoDarkMd}
-            alt="Mithra Direct — Shop Local, Support Local, Grow Together"
-            className="h-9 w-auto"
-          />
-        </Link>
-        <Link to="/" className="text-sm font-medium text-slate-500 hover:text-emerald-700">
-          Back to home
-        </Link>
-      </header>
-
-      <main className="relative z-10 mx-auto flex max-w-md flex-col px-4 pb-16 pt-4">
+  const card = (
         <div className="rounded-2xl border border-[var(--md-border)] bg-white p-6 shadow-[var(--md-shadow)] sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--md-green-700)]">
             {isVendor ? 'Vendor login' : 'Customer login'}
@@ -132,8 +117,10 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
           <h1 className="font-display mt-2 text-2xl font-bold text-slate-900">Sign in with OTP</h1>
           <p className="mt-1 text-sm text-[var(--md-muted)]">
             {isVendor
-              ? 'Verify your mobile to continue store setup.'
-              : 'Verify your mobile to continue to your cart.'}
+              ? 'We’ll send a WhatsApp OTP to verify this number and continue store setup.'
+              : shop
+                ? `A quick OTP on WhatsApp so ${shop.name} can reach you.`
+                : 'We’ll send a WhatsApp OTP to verify this number.'}
           </p>
 
           {step === 'phone' ? (
@@ -146,7 +133,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
             >
               <div className="grid gap-1.5">
                 <label className="text-sm font-medium text-slate-700" htmlFor="phone">
-                  Mobile number
+                  WhatsApp number <span className="text-[var(--md-danger)]">*</span>
                 </label>
                 <div className="flex overflow-hidden rounded-lg border border-input bg-white focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
                   <span className="flex items-center border-r border-input bg-slate-50 px-3 text-sm font-medium text-slate-600">
@@ -160,7 +147,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
                     autoComplete="tel"
                     maxLength={10}
                     required
-                    placeholder="10-digit mobile"
+                    placeholder="10-digit WhatsApp number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="h-11 flex-1 bg-transparent px-3 text-sm outline-none"
@@ -168,7 +155,9 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
                 </div>
               </div>
               {error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
-              <p className="text-xs text-[var(--md-muted)]">We’ll send a 4-digit code to this number.</p>
+              <p className="text-xs text-[var(--md-muted)]">
+                We’ll send a {OTP_LENGTH}-digit code on WhatsApp. This number is required to verify OTP.
+              </p>
               <Button type="submit" fullWidth disabled={sending}>
                 {sending ? 'Sending…' : 'Send OTP'}
               </Button>
@@ -176,7 +165,7 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
           ) : (
             <form className="mt-6 space-y-4" onSubmit={onVerify}>
               <p className="text-sm text-[var(--md-muted)]">
-                Enter the {OTP_LENGTH}-digit code sent to{' '}
+                Enter the {OTP_LENGTH}-digit code we sent on WhatsApp to{' '}
                 <span className="font-medium text-slate-800">+91 {phone}</span>
               </p>
               <Input
@@ -221,25 +210,41 @@ export function OtpLoginForm({ role }: OtpLoginFormProps) {
             </form>
           )}
         </div>
+  )
 
-        <p className="mt-6 text-center text-sm text-[var(--md-muted)]">
-          {isVendor ? (
-            <>
-              Shopping instead?{' '}
-              <Link className="font-semibold text-[var(--md-green-700)]" to="/login">
-                Customer login
-              </Link>
-            </>
-          ) : (
-            <>
-              Selling instead?{' '}
-              <Link className="font-semibold text-[var(--md-green-700)]" to="/vendor/login">
-                Vendor login
-              </Link>
-            </>
-          )}
-        </p>
-      </main>
+  return (
+    <div className="relative min-h-screen bg-[#f8fafc]">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 70% 50% at 50% -10%, rgba(16,185,129,0.16), transparent 55%), radial-gradient(ellipse 40% 30% at 100% 100%, rgba(209,250,229,0.5), transparent)',
+        }}
+      />
+
+      <header className="relative z-10 mx-auto flex max-w-md items-center justify-between px-4 py-6">
+        {shop ? (
+          <Link to={from || '/stores'} aria-label={shop.name}>
+            <StoreBrandLogo storeName={shop.name} logoUrl={shop.logoUrl} />
+          </Link>
+        ) : (
+          <Link to="/" aria-label="Mithra Direct home">
+            <img
+              src={logoDarkMd}
+              alt="Mithra Direct — Shop Local, Support Local, Grow Together"
+              className="h-9 w-auto"
+            />
+          </Link>
+        )}
+        <Link
+          to={shop ? from || '/stores' : '/'}
+          className="text-sm font-medium text-slate-500 hover:text-emerald-700"
+        >
+          {shop ? 'Back to shop' : 'Back to home'}
+        </Link>
+      </header>
+
+      <main className="relative z-10 mx-auto flex max-w-md flex-col px-4 pb-16 pt-4">{card}</main>
     </div>
   )
 }
