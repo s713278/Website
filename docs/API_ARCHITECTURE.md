@@ -269,7 +269,8 @@ response belonging to an entry that has already been invalidated.
 #### Vendor setup sizes (Step 6)
 
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
-sizes only when the account's real `approval_status` is `APPROVED`; pending vendors keep a
+sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
+wire values are accepted for compatibility); pending vendors keep a
 read-only step. Previously saved sizes remain locked after submission. The controls and Continue
 handler use the same approval-aware rule, and saving validates new size details, duplicates and
 the projected account total against `subscription.limits.max_skus`. The total includes any

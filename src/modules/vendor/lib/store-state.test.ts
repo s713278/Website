@@ -57,6 +57,12 @@ describe('deriveStoreState', () => {
     ).toBe('OPEN')
   })
 
+  it('treats the current ACTIVE approval wire value as open', () => {
+    expect(
+      deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'ACTIVE' }),
+    ).toBe('OPEN')
+  })
+
   it('reports rejection, which nothing in the app handled before', () => {
     expect(
       deriveStoreState({ vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED' }),

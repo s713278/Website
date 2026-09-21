@@ -15,6 +15,7 @@ import {
 } from '../lib/onboarding-catalog-limits'
 import { applyCreatedEntry, type AccountAssignment, type CreatedCatalogEntry } from '../lib/onboarding-sync'
 import { accountSkuId } from '../lib/onboarding-sku-id'
+import { isApprovalGranted } from '../lib/onboarding-account-status'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
@@ -566,7 +567,7 @@ export function selectStoreIsSubmitted(state: { storeSubmission: StoreSubmission
 }
 
 export function selectStoreIsApproved(state: { storeSubmission: StoreSubmission | null }): boolean {
-  return state.storeSubmission?.approvalStatus?.toUpperCase() === 'APPROVED'
+  return isApprovalGranted(state.storeSubmission?.approvalStatus ?? null)
 }
 
 export const useOnboardingStore = create<OnboardingStore>((set) => ({

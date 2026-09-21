@@ -70,6 +70,7 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
       vendor_id: 91, vendor_status: 'ACTIVE', approval_status: approvalStatus,
+      store_identifier: 'test-store',
       business_name: 'Test Store',
       onboarding: { status: nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS', next_step: nextStep },
       subscription: { limits: { max_categories: 3, max_products: 10, max_skus: maxSkus }, usage: { skus: skuUsage } },
@@ -90,6 +91,23 @@ function fillNewSize() {
 }
 
 describe('onboarding account hydration and size permissions', () => {
+  it.each(['APPROVED', 'ACTIVE'])('shows the Store & Share panels and dashboard link for %s approval', async (approvalStatus) => {
+    renderAccount(approvalStatus)
+
+    expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Your shop link' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save QR image' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Go to dashboard' }).getAttribute('href')).toBe('/vendor')
+  })
+
+  it('keeps the QR panels and dashboard link out of the under-review step', async () => {
+    renderAccount('PENDING')
+
+    expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Put this on your counter' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Go to dashboard' })).toBeNull()
+  })
+
   it('opens active approved but unfinished setup at the backend step with editable controls', async () => {
     renderAccount('APPROVED', 7)
     expect(await screen.findByRole('button', { name: /Step 7,.*You are here/ })).toBeTruthy()

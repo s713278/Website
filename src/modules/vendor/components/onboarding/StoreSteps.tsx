@@ -7,6 +7,7 @@ import {
   CopyIcon,
   ExternalLinkIcon,
   ImageIcon,
+  LayoutDashboardIcon,
   LayoutGridIcon,
   MessageSquareIcon,
   PencilIcon,
@@ -25,8 +26,10 @@ import {
   ONBOARDING_THEME_PRESETS,
   storefrontPatchForPreset,
 } from '../../data/onboarding-theme-presets'
+import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
+import { StoreSharePanels } from '../StoreSharePanels'
 import { StepNotice } from './AccessNotice'
 import {
   selectCategoryLimit,
@@ -386,7 +389,7 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
 
 function ShareStore({ submission }: { submission: StoreSubmission }) {
   const [copied, setCopied] = useState(false)
-  const approved = submission.approvalStatus?.toUpperCase() === 'APPROVED'
+  const approved = isApprovalGranted(submission.approvalStatus)
   const identifier = submission.storeIdentifier
   const url = identifier ? storefrontUrl(identifier) : null
   const shareable = approved && Boolean(url)
@@ -437,11 +440,13 @@ function ShareStore({ submission }: { submission: StoreSubmission }) {
 function SubmissionStatus({
   submission,
   onGoToStep,
+  storeName,
 }: {
   submission: StoreSubmission
   onGoToStep: (step: OnboardingStep) => void
+  storeName: string
 }) {
-  const approved = submission.approvalStatus?.toUpperCase() === 'APPROVED'
+  const approved = isApprovalGranted(submission.approvalStatus)
   return (
     <div className="space-y-5">
       <div className="rounded-xl bg-[var(--ob-brand-soft)] p-5 text-foreground">
@@ -459,7 +464,11 @@ function SubmissionStatus({
             : 'Customers can reach your storefront after approval.'}
         </p>
       </div>
-      <ShareStore submission={submission} />
+      {approved && submission.storeIdentifier ? (
+        <StoreSharePanels identifier={submission.storeIdentifier} storeName={storeName} />
+      ) : (
+        <ShareStore submission={submission} />
+      )}
       {/* A submitted store lands here, on Step 10, so the one thing it can still do — grow
           its catalog — needs a way in from here or it stays hidden behind the stepper.
           Sizes become available once the store is approved. */}
@@ -476,6 +485,11 @@ function SubmissionStatus({
           {approved ? <Button variant="outline" size="sm" onClick={() => onGoToStep(6)}><PlusIcon /> Sizes</Button> : null}
         </div>
       </div>
+      {approved ? (
+        <Button asChild>
+          <Link to="/vendor"><LayoutDashboardIcon /> Go to dashboard</Link>
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -602,7 +616,10 @@ export function ReviewStep({
     draft.completedSteps.includes(10) &&
     Boolean(draft.publication.draftSlug)
 
-  if (storeSubmission) return <SubmissionStatus submission={storeSubmission} onGoToStep={onGoToStep} />
+  if (storeSubmission) {
+    const storeName = draft.storefront.storeName.trim() || draft.business.businessName.trim() || 'your shop'
+    return <SubmissionStatus submission={storeSubmission} onGoToStep={onGoToStep} storeName={storeName} />
+  }
 
   if (!completed) {
     return (
