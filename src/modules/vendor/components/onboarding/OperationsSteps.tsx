@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BanknoteIcon,
+  BoxIcon,
   CheckCircle2Icon,
   CircleAlertIcon,
+  IndianRupeeIcon,
   LandmarkIcon,
   PlusIcon,
   SmartphoneIcon,
+  TagIcon,
   Trash2Icon,
   WalletCardsIcon,
+  type LucideIcon,
 } from 'lucide-react'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
@@ -132,6 +136,137 @@ function skuHeading(sku: DraftSku, index: number): string {
   return sku.quantity != null && sku.quantity > 0 && sku.unit.trim()
     ? `${sku.quantity} ${sku.unit}`
     : `Size ${index + 1}`
+}
+
+function formatSkuPrice(value: number | null): string {
+  if (value == null) return '—'
+  return `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)}`
+}
+
+function SkuMetric({
+  icon: Icon,
+  label,
+  value,
+  prominent = false,
+}: {
+  icon: LucideIcon
+  label?: string
+  value: string
+  prominent?: boolean
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        aria-hidden="true"
+        className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-[var(--ob-ink)] dark:bg-slate-900/60 dark:text-slate-100"
+      >
+        <Icon className={prominent ? 'size-5' : 'size-4'} strokeWidth={1.8} />
+      </span>
+      <span className="min-w-0">
+        {label ? <span className="block text-xs leading-4 text-[var(--ob-ink-soft)]">{label}</span> : null}
+        <span className={cn(
+          'block truncate font-display font-semibold leading-tight text-[var(--ob-ink)]',
+          'text-sm',
+        )}>
+          {value}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+function SkuStatusSwitch({
+  heading,
+  active,
+  disabled = false,
+  onChange,
+}: {
+  heading: string
+  active: boolean
+  disabled?: boolean
+  onChange?: (active: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      aria-label={`${heading} status: ${active ? 'active' : 'inactive'}`}
+      title={disabled ? 'Size status changes are temporarily unavailable' : `${active ? 'Deactivate' : 'Activate'} ${heading}`}
+      disabled={disabled}
+      onClick={() => onChange?.(!active)}
+      className={cn(
+        'relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
+        active ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute top-1 size-5 rounded-full bg-white shadow-sm transition-[left,right] dark:bg-slate-100',
+          active ? 'right-1' : 'left-1',
+        )}
+      />
+    </button>
+  )
+}
+
+function SkuRemoveButton({
+  heading,
+  active,
+  disabled = false,
+  onClick,
+}: {
+  heading: string
+  active: boolean
+  disabled?: boolean
+  onClick?: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Remove ${heading}`}
+      title={disabled ? 'Removing sizes is temporarily unavailable' : `Remove ${heading}`}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'grid size-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
+        active
+          ? 'bg-red-50 text-red-600 dark:bg-red-950/35 dark:text-red-300'
+          : 'bg-slate-100 text-slate-400 dark:bg-slate-900/60 dark:text-slate-500',
+      )}
+    >
+      <Trash2Icon className="size-4" strokeWidth={1.8} />
+    </button>
+  )
+}
+
+function SkuCompactCard({ sku, heading }: { sku: DraftSku; heading: string }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 @min-[44rem]:grid-cols-[minmax(0,1.35fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto_auto] @min-[44rem]:gap-3">
+      <div className="order-1 min-w-0 @min-[44rem]:order-none">
+        <SkuMetric icon={BoxIcon} value={heading} prominent />
+      </div>
+
+      <div className="order-3 col-span-3 grid grid-cols-2 border-t border-[var(--ob-line)] pt-2 @min-[44rem]:order-none @min-[44rem]:contents">
+        <div className="min-w-0 border-r border-[var(--ob-line)] pr-2 @min-[44rem]:border-r-0 @min-[44rem]:border-l @min-[44rem]:py-0 @min-[44rem]:pr-0 @min-[44rem]:pl-3">
+          <SkuMetric icon={TagIcon} label="MRP" value={formatSkuPrice(sku.listPrice)} />
+        </div>
+        <div className="min-w-0 pl-2 @min-[44rem]:border-l @min-[44rem]:py-0 @min-[44rem]:pl-3">
+          <SkuMetric icon={IndianRupeeIcon} label="Price" value={formatSkuPrice(sku.salePrice)} />
+        </div>
+      </div>
+
+      <div className="order-2 col-span-2 flex items-center justify-end gap-2 @min-[44rem]:order-none @min-[44rem]:contents">
+        <div className="@min-[44rem]:border-l @min-[44rem]:py-0 @min-[44rem]:pl-3">
+          <SkuStatusSwitch heading={heading} active={sku.active} disabled />
+        </div>
+        <div className="@min-[44rem]:border-l @min-[44rem]:py-0 @min-[44rem]:pl-3">
+          <SkuRemoveButton heading={heading} active={sku.active} disabled />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confirm: RequestConfirmation }) {
@@ -314,21 +449,23 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
               <div className="space-y-3">
                 {productSkus.map((sku, index) => {
                   const heading = skuHeading(sku, index)
+                  // Submitted account sizes use the compact read-only presentation. The deployed
+                  // PATCH still fails for active changes in both approval states, so these controls
+                  // display the current state without suggesting that the unavailable write works.
+                  const readOnlyAccountSku = storeIsSubmitted && isAccountSkuId(sku.id)
                   return (
-                  <fieldset key={sku.id} disabled={storeIsSubmitted && isAccountSkuId(sku.id)} className="min-w-0 rounded-xl bg-background p-4 shadow-sm ring-1 ring-[var(--ob-line)] ring-inset" aria-label={`${heading} size`}>
+                  <fieldset key={sku.id} disabled={readOnlyAccountSku} className={cn('min-w-0 rounded-xl bg-background shadow-sm ring-1 ring-[var(--ob-line)] ring-inset', readOnlyAccountSku ? 'p-3' : 'p-4')} aria-label={`${heading} size`}>
+                    {readOnlyAccountSku ? <SkuCompactCard sku={sku} heading={heading} /> : (
+                    <>
                     {/* Active is a sellability control, not a pricing field, so it sits in the
                         card header beside the derived size heading. The heading identifies the
                         size from its quantity and unit in place of the removed name field. */}
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <h4 className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{heading}</h4>
                       <div className="flex shrink-0 items-center gap-3 text-sm">
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" checked={sku.active} onChange={(event) => updateSku(sku.id, { active: event.target.checked })} /> Active
-                        </label>
+                        <SkuStatusSwitch heading={heading} active={sku.active} onChange={(active) => updateSku(sku.id, { active })} />
                         {productSkus.length > 1 ? (
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`Remove ${heading}`} onClick={() => removeSku(sku)}>
-                            <Trash2Icon /> Remove
-                          </Button>
+                          <SkuRemoveButton heading={heading} active={sku.active} onClick={() => removeSku(sku)} />
                         ) : null}
                       </div>
                     </div>
@@ -393,6 +530,8 @@ export function SkuStep({ issues, confirm }: { issues: ValidationIssue[]; confir
                       />
                     </div>
                     </fieldset>
+                    </>
+                    )}
                   </fieldset>
                   )
                 })}

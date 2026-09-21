@@ -182,11 +182,14 @@ unconfirmable through the current reconciliation path. Backend should provide an
 including inactive sizes and document created IDs in the response. Do not report such a save as
 confirmed or infer a SKU ID. Plan-limit checks include the usage omitted from the list.
 
-The revised PATCH promises to preserve omitted fields, including features. Earlier deployed
-versions returned a JDBC error when features were omitted; the frontend does not restore that
-workaround or silently replace a SKU if the new update fails. Live confirmation against an
-authenticated disposable vendor is still required; isolated tests validate the new contract and
-error paths, not the backend's deployment.
+The revised PATCH promises to preserve omitted fields, including features. A September 2026 live
+probe against both an approved and a pending completed vendor still found two deployed failures:
+including the quantity and unit from the current read returned `400 Unsupported measurement unit`,
+while sending only `is_active` returned `417` with a JDBC error because the omitted `features`
+parameter could not be typed. Neither request changed the size. The frontend therefore keeps
+existing size status and removal controls read-only until the backend accepts a safe partial update;
+it does not invent a `features` payload or silently replace a SKU when the update fails. Isolated
+tests validate the new contract and error paths, not the backend's deployment.
 
 Per-size delivery/pickup flags remain absent from PATCH and from the documented reads. Legacy
 drafts with an explicit flag change retain their existing delete/create behavior, with its

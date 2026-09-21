@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { mapVendorContext, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -124,9 +124,66 @@ describe('onboarding account hydration and size permissions', () => {
     expect(screen.getByText('Sizes and prices unlock after approval.')).toBeTruthy()
     expect(screen.queryByText('Your store is with us for review.')).toBeNull()
     expect(add.matches(':disabled')).toBe(true)
+    const card = screen.getByRole('group', { name: '1 L size' })
+    expect(screen.queryByLabelText('Quantity')).toBeNull()
+    expect(within(card).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
+    expect(within(card).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+  })
+
+  it('renders approved saved sizes as compact read-only cards', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+
+    const card = screen.getByRole('group', { name: '1 L size' })
+    expect(within(card).getByText('1 L')).toBeTruthy()
+    expect(within(card).getByText('₹100')).toBeTruthy()
+    expect(within(card).getByText('₹90')).toBeTruthy()
+    expect(screen.queryByLabelText('Quantity')).toBeNull()
+
+    const activeSwitch = within(card).getByRole('switch', { name: '1 L status: active' })
+    expect(activeSwitch.matches(':disabled')).toBe(true)
+    expect(within(card).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
+  })
+
+  it('keeps inactive approved sizes visibly muted without enabling actions', async () => {
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([{
+      ...savedSize,
+      isActive: false,
+    }])
+    renderAccount('APPROVED')
+    await openSizes()
+
+    const card = screen.getByRole('group', { name: '1 L size' })
+    const activeSwitch = within(card).getByRole('switch', { name: '1 L status: inactive' })
+    const removeButton = within(card).getByRole('button', { name: 'Remove 1 L' })
+    expect(activeSwitch.getAttribute('aria-checked')).toBe('false')
+    expect(activeSwitch.className).toContain('bg-slate-300')
+    expect(removeButton.className).toContain('bg-slate-100')
+    expect(removeButton.matches(':disabled')).toBe(true)
+  })
+
+  it('uses the compact switch and remove action for newly added editable sizes', async () => {
+    renderAccount('APPROVED')
+    const add = await openSizes()
+    fireEvent.click(add)
+    fillNewSize()
+
+    const card = screen.getByRole('group', { name: '2 L size' })
+    const activeSwitch = within(card).getByRole('switch', { name: '2 L status: active' })
+    const removeButton = within(card).getByRole('button', { name: 'Remove 2 L' })
+    expect(activeSwitch.matches(':disabled')).toBe(false)
+    expect(activeSwitch.className).toContain('h-7 w-12')
+    expect(removeButton.matches(':disabled')).toBe(false)
+    expect(removeButton.className).toContain('size-9')
+
+    fireEvent.click(activeSwitch)
+    expect(activeSwitch.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(removeButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove size' }))
+    await waitFor(() => expect(screen.queryByRole('group', { name: '2 L size' })).toBeNull())
   })
 
   it('counts backend usage omitted from the size list against the plan limit', async () => {
@@ -141,7 +198,8 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED')
     const add = await openSizes()
     expect(add.matches(':disabled')).toBe(false)
-    expect(screen.getByLabelText('Quantity').matches(':disabled')).toBe(true)
+    expect(within(screen.getByRole('group', { name: '1 L size' })).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
+    expect(screen.queryByLabelText('Quantity')).toBeNull()
     fireEvent.click(add)
     fillNewSize()
     expect(add.matches(':disabled')).toBe(true)
