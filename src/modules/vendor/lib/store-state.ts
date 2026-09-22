@@ -1,6 +1,6 @@
 import type { StoreState } from '@/modules/vendor/types/dashboard'
 import type { VendorContext } from '@/shared/api'
-import { isStoreSubmitted } from './onboarding-account-status'
+import { isApprovalGranted, isStoreSubmitted } from './onboarding-account-status'
 
 /** `onboarding.next_step` reports this once all ten setup steps are done. */
 const SETUP_COMPLETE_STEP = 11
@@ -13,7 +13,7 @@ let warnedAboutPendingApprovalFlag = false
 // Console-only: the wizard's independent approval gate must keep refusing pending size creation.
 function isVendorApproved(approvalStatus: string | null, coercePendingApproval: boolean): boolean {
   return (
-    approvalStatus === 'APPROVED'
+    isApprovalGranted(approvalStatus)
     || (TREAT_PENDING_AS_APPROVED && coercePendingApproval && approvalStatus === 'PENDING')
   )
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   InvalidReferencePayloadError,
   mapCategoryCreateRequest,
+  mapCategoryPage,
   mapCheckoutOptionsRequest,
   mapCheckoutOptionsResponse,
   mapCreatedCategory,
@@ -9,6 +10,7 @@ import {
   mapMeasurementCatalog,
   mergeMeasurementCatalogDetails,
   mapProductCreateRequest,
+  mapProductPage,
   mapStorefrontConfigRequest,
   mapVendorContext,
   mapVendorProfile,
@@ -17,6 +19,48 @@ import {
   type CheckoutPaymentInput,
   type StorefrontConfigInput,
 } from './vendor-onboarding'
+
+describe('catalog reference images', () => {
+  it('keeps both icon and image_path for category and product references', () => {
+    const categoryIcon = 'https://cdn.example.test/categories/icon.svg'
+    const categoryImage = 'https://cdn.example.test/categories/image.jpg'
+    const productIcon = 'https://cdn.example.test/products/icon.svg'
+    const productImage = 'https://cdn.example.test/products/image.jpg'
+
+    expect(mapCategoryPage({
+      data: {
+        result: [{
+          id: 10,
+          name: 'Produce',
+          business_type_id: 7,
+          description: 'Fresh produce',
+          icon: categoryIcon,
+          image_path: categoryImage,
+        }],
+        page_number: 0,
+        total_pages: 1,
+        last_page: true,
+      },
+    }).items[0]).toEqual(expect.objectContaining({ icon: categoryIcon, imageUrl: categoryImage }))
+
+    expect(mapProductPage({
+      data: {
+        result: [{
+          id: 20,
+          name: 'Tomatoes',
+          description: 'Fresh tomatoes',
+          icon: productIcon,
+          image_path: productImage,
+          measurement_id: 2,
+          measurement_name: 'COUNT',
+        }],
+        page_number: 0,
+        total_pages: 1,
+        last_page: true,
+      },
+    }).items[0]).toEqual(expect.objectContaining({ icon: productIcon, imageUrl: productImage }))
+  })
+})
 
 describe('measurement catalog detail enrichment', () => {
   it('adds unit_options from the authenticated detail payload omitted by the live list', () => {
