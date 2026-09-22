@@ -2,6 +2,19 @@ export function storePath(storeId: string) {
   return `/stores/${storeId}`
 }
 
+/** `/stores/273/cart` → `273`. */
+export function storeIdFromPath(path: string | undefined): string | null {
+  if (!path) return null
+  const pathname = path.split('?')[0]
+  const match = /^\/stores\/([^/]+)/.exec(pathname)
+  return match?.[1] ?? null
+}
+
+/** Store home with the product search bar open. */
+export function storeSearchPath(storeId: string) {
+  return `${storePath(storeId)}?search=1`
+}
+
 export function storeProductPath(storeId: string, productId: string, skuId?: string) {
   const base = `${storePath(storeId)}/products/${productId}`
   if (!skuId) return base

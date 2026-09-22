@@ -93,7 +93,7 @@ export function mapVendorTheme(raw: Record<string, unknown>): StoreTheme | undef
 function mapProduct(raw: Record<string, unknown>, index: number, vendorId: string): Product {
   return {
     id: String(raw.sku_id ?? raw.id ?? `${vendorId}-p${index}`),
-    name: String(raw.name ?? raw.sku_name ?? 'Item'),
+    name: String(raw.product_name ?? raw.sku_name ?? raw.name ?? 'Item'),
     description: String(raw.description ?? raw.sku_description ?? ''),
     price: Number(raw.sale_price ?? raw.selling_price ?? raw.list_price ?? raw.price ?? 0),
     veg: Boolean(raw.veg ?? raw.is_veg ?? true),
@@ -164,6 +164,16 @@ function mapTrustStrip(raw: unknown): Store['trustStrip'] {
   return list.length ? list : undefined
 }
 
+function mapSubscriptionStatus(raw: Record<string, unknown>): string | undefined {
+  const nested = asRecord(raw.subscription)
+  const value =
+    raw.subscription_status ??
+    nested?.status ??
+    nested?.subscription_status
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  return value.trim().toUpperCase()
+}
+
 function mapHeroBadges(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const badges = raw
@@ -196,6 +206,7 @@ export function mapVendorToStore(raw: Record<string, unknown>): Store {
     offer: trimmedOrUndefined(raw.announcement_bar) ?? trimmedOrUndefined(raw.offer),
     theme: mapVendorTheme(raw),
     categories: mapCategories(raw.categories),
+    subscriptionStatus: mapSubscriptionStatus(raw),
     products: Array.isArray(raw.products)
       ? mapProducts(raw.products, id)
       : Array.isArray(raw.menu)

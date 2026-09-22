@@ -126,7 +126,7 @@ export async function requestAddToCart({
       price: variant.price,
       returnTo: from,
     })
-    navigate(loginPathForRole('customer'), { state: { from } })
+    navigate(loginPathForRole('customer'), { state: { from, shopName: storeName } })
     return false
   }
 

@@ -25,6 +25,10 @@ function asNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function httpUrl(value: unknown): string | undefined {
+  return typeof value === 'string' && /^https?:\/\//.test(value.trim()) ? value.trim() : undefined
+}
+
 function mapSummary(raw: unknown): CartSummary {
   const s = asRecord(raw) ?? {}
   return {
@@ -45,6 +49,7 @@ function mapLine(raw: unknown, storeId: string, storeName: string): CartLine | n
   const skuId = asString(item.sku_id)
   const cartItemId = asString(item.cart_item_id)
   if (!skuId) return null
+  const imageUrl = httpUrl(item.image_path) || httpUrl(item.image_url) || httpUrl(item.image)
 
   return {
     itemId: skuId,
@@ -58,6 +63,7 @@ function mapLine(raw: unknown, storeId: string, storeName: string): CartLine | n
     discount: asNumber(item.discount),
     cartItemId: cartItemId ?? undefined,
     skuId,
+    ...(imageUrl ? { imageUrl } : {}),
   }
 }
 
