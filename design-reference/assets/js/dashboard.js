@@ -18,6 +18,7 @@
   };
 
   var PLAN_STORAGE_KEY = 'md-demo-shop-plan';
+  var WELCOME_STORAGE_KEY = 'md-demo-welcome-dismissed';
   var PLAN_PRICE = 299;
 
   var orderFilter = 'all';
@@ -504,38 +505,43 @@
       bannerTitle = days + ' free ' + (days === 1 ? 'day' : 'days') + ' left';
       bannerText =
         days <= 3
-          ? ' — pay ₹299 now so customers can still open your shop.'
-          : ' — after that, pay ₹299 each month to keep the shop open.';
+          ? ' — pay ₹299 with Razorpay now so customers can still open your shop.'
+          : ' — after that, subscribe with Razorpay (₹299 / month) to keep the shop open.';
+      bannerCta = 'Pay ₹299';
       kicker = 'Free days';
       daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
       copy =
         days <= 3
-          ? 'Pay ₹299 now so customers can still open your shop when free days end.'
-          : 'After free days, pay ₹299 each month to keep the shop open. UPI, card or netbanking.';
+          ? 'Pay ₹299 with Razorpay now so customers can still open your shop when free days end.'
+          : 'Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹299 each month — to keep it open.';
+      payLabel = 'Pay ₹299 with Razorpay';
     } else if (billing.status === 'paid') {
       chipLabel = 'Social Starter';
       bannerTitle = '';
       kicker = 'Paid';
       daysHtml = 'Shop is open';
-      copy = 'You paid ₹299. Shop stays open until ' + dateLabel + '. Next month is another ₹299.';
+      copy = 'You paid ₹299 via Razorpay. Shop stays open until ' + dateLabel + '. Next month is another ₹299.';
       showPay = false;
     } else if (billing.status === 'due') {
       chipLabel = 'Shop closed';
       bannerTitle = 'Shop is hidden from customers';
-      bannerText = ' — last payment did not go through. Pay ₹299 to open the shop again.';
+      bannerText = ' — last Razorpay payment did not go through. Pay ₹299 to open the shop again.';
+      bannerCta = 'Pay ₹299';
       kicker = 'Payment failed';
       daysHtml = 'Shop is hidden';
-      copy = 'Customers cannot see your shop. Pay ₹299 to open it again. Old orders are still here.';
+      copy = 'Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.';
+      payLabel = 'Pay ₹299 with Razorpay';
     } else if (billing.status === 'stopping') {
       chipLabel = dateLabel ? 'Open until ' + dateLabel : 'Plan stopped';
       bannerTitle = dateLabel ? 'Shop stays open until ' + dateLabel : 'Plan stopped';
-      bannerText = ' — then customers cannot see it. You can pay again any time.';
+      bannerText = ' — then customers cannot see it. You can pay again any time with Razorpay.';
+      bannerCta = 'Keep open · ₹299';
       kicker = 'Plan stopped';
       daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
       copy =
         'You stopped the plan. Shop stays open until ' +
         dateLabel +
-        '. Pay ₹299 if you want to keep it after that.';
+        '. Pay ₹299 with Razorpay if you want to keep it after that.';
       payLabel = 'Keep shop open · ₹299';
       showIfUnpaid = true;
       showStop = false;
@@ -543,10 +549,12 @@
     } else if (billing.status === 'closed') {
       chipLabel = 'Shop closed';
       bannerTitle = 'Shop is hidden from customers';
-      bannerText = ' — pay ₹299 to open it again.';
+      bannerText = ' — pay ₹299 with Razorpay to open it again.';
+      bannerCta = 'Pay ₹299';
       kicker = 'Shop closed';
       daysHtml = 'Shop is hidden';
-      copy = 'Paid days are over. Customers cannot see your shop. Pay ₹299 to open it again.';
+      copy = 'Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.';
+      payLabel = 'Pay ₹299 with Razorpay';
     }
 
     var chip = qs('dash-plan-chip');
@@ -633,19 +641,53 @@
 
     if (qs('set-plan')) {
       qs('set-plan').textContent = closed
-        ? 'Shop closed — pay ₹299'
+        ? 'Shop closed — pay ₹299 with Razorpay'
         : billing.status === 'trial'
           ? days + ' free days left'
           : billing.status === 'stopping'
             ? 'Stopped · open until ' + dateLabel
             : 'Social Starter · ₹' + PLAN_PRICE + ' / month';
     }
+
+    renderWelcome();
+  }
+
+  function welcomeWasDismissed() {
+    try {
+      return sessionStorage.getItem(WELCOME_STORAGE_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function dismissWelcome() {
+    try {
+      sessionStorage.setItem(WELCOME_STORAGE_KEY, '1');
+    } catch (e) {}
+    renderWelcome();
+  }
+
+  function renderWelcome() {
+    var el = qs('dash-welcome');
+    if (!el || !billing) return;
+    var show = billing.status === 'trial' && !welcomeWasDismissed();
+    el.hidden = !show;
+    var copyEl = qs('dash-welcome-copy');
+    if (copyEl && show) {
+      var days = Number(billing.daysLeft) || 0;
+      copyEl.textContent =
+        days <= 3
+          ? 'Only ' +
+            days +
+            (days === 1 ? ' free day' : ' free days') +
+            ' left. Share your shop link, then pay ₹299 with Razorpay so customers can still open it.'
+          : 'Customers can order now. Share your shop link. Before free days end, pay ₹299 with Razorpay to keep the shop open.';
+    }
   }
 
   function setPaySheetBusy(busy) {
-    document.querySelectorAll('[data-pay-method]').forEach(function (btn) {
-      btn.disabled = busy;
-    });
+    var continueBtn = qs('dash-pay-continue');
+    if (continueBtn) continueBtn.disabled = busy;
     var fail = qs('dash-pay-fail');
     var cancel = qs('dash-pay-cancel');
     if (fail) fail.hidden = busy;
@@ -658,7 +700,7 @@
     if (!sheet) return;
     if (status) {
       status.hidden = true;
-      status.textContent = 'Paying…';
+      status.textContent = 'Opening Razorpay…';
     }
     setPaySheetBusy(false);
     sheet.hidden = false;
@@ -678,7 +720,7 @@
     setPaySheetBusy(true);
     if (status) {
       status.hidden = false;
-      status.textContent = ok ? 'Paying…' : 'Checking payment…';
+      status.textContent = ok ? 'Opening Razorpay…' : 'Confirming payment…';
     }
     window.setTimeout(function () {
       if (ok) {
@@ -687,9 +729,12 @@
         billing.daysLeft = 30;
         billing.periodEnd = isoFromDays(30);
         billing.history = (billing.history || []).concat([
-          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(billing.periodEnd), 'Just now')
+          historyItem('paid', 'Paid ₹299 via Razorpay', 'Shop open until ' + formatDayLabel(billing.periodEnd), 'Just now')
         ]);
         saveBilling();
+        try {
+          sessionStorage.setItem(WELCOME_STORAGE_KEY, '1');
+        } catch (e) {}
         closePaySheet();
         renderBilling();
         setView('plan');
@@ -699,14 +744,14 @@
         billing.daysLeft = 0;
         billing.periodEnd = isoFromDays(-1);
         billing.history = (billing.history || []).concat([
-          historyItem('failed', 'Payment did not go through', 'Shop hidden from customers', 'Just now')
+          historyItem('failed', 'Razorpay payment did not go through', 'Shop hidden from customers', 'Just now')
         ]);
         saveBilling();
         closePaySheet();
         renderBilling();
         if (err) {
           err.hidden = false;
-          err.textContent = 'Payment did not go through. Try UPI again.';
+          err.textContent = 'Payment did not go through. Try Razorpay again.';
         }
         setView('plan');
       }
@@ -883,6 +928,16 @@
         openPaySheet();
       });
     }
+    var welcomeDismiss = qs('dash-welcome-dismiss');
+    if (welcomeDismiss) {
+      welcomeDismiss.addEventListener('click', dismissWelcome);
+    }
+    var payContinue = qs('dash-pay-continue');
+    if (payContinue) {
+      payContinue.addEventListener('click', function () {
+        completePayment(true);
+      });
+    }
     var payCta = qs('dash-pay-cta');
     if (payCta) {
       payCta.addEventListener('click', function () {
@@ -919,11 +974,6 @@
         stopPlan();
       });
     }
-    document.querySelectorAll('[data-pay-method]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        completePayment(true);
-      });
-    });
     var payFail = qs('dash-pay-fail');
     if (payFail) {
       payFail.addEventListener('click', function () {

@@ -307,6 +307,58 @@
   gap: 1rem;
 }
 
+.dash-welcome {
+  position: relative;
+  padding-right: 2.5rem;
+  background: linear-gradient(135deg, var(--store-theme-soft, #ecfdf5), #fff);
+  border-color: color-mix(in srgb, var(--store-theme, #bbf7d0) 55%, #fff);
+}
+
+.dash-welcome-kicker {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-deep)) 85%, #000);
+}
+
+.dash-welcome-title {
+  margin: 0.35rem 0 0.5rem;
+  font-family: var(--font-display, inherit);
+  font-size: clamp(1.05rem, 2.4vw, 1.2rem);
+  font-weight: 700;
+  color: var(--md-ink);
+}
+
+.dash-welcome .dash-lead {
+  margin-bottom: 0.85rem;
+}
+
+.dash-welcome-dismiss {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--md-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dash-welcome-dismiss:hover,
+.dash-welcome-dismiss:focus-visible {
+  color: var(--md-ink);
+  background: var(--store-theme-soft, #ecfdf5);
+}
+
 .dash-view {
   display: grid;
   gap: 1rem;
@@ -315,6 +367,7 @@
 .dash-view[hidden],
 .dash-store-share[hidden],
 .dash-store-closed[hidden],
+.dash-welcome[hidden],
 .dash-plan-pay[hidden],
 .dash-plan-stop-confirm[hidden],
 .dash-pay[hidden],
@@ -966,6 +1019,52 @@
   margin: 0.25rem 0 0.9rem;
   font-size: var(--fs-sm);
   color: var(--md-muted);
+}
+
+.dash-pay-summary {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--md-border);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+
+.dash-pay-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  font-size: var(--fs-sm);
+}
+
+.dash-pay-summary li + li {
+  border-top: 1px solid color-mix(in srgb, var(--md-border) 80%, #fff);
+}
+
+.dash-pay-summary span {
+  color: var(--md-muted);
+}
+
+.dash-pay-summary strong {
+  font-weight: 700;
+  color: var(--md-ink);
+}
+
+.dash-pay-hint {
+  margin: 0 0 0.85rem;
+  font-size: var(--fs-xs);
+  color: var(--md-muted);
+}
+
+#dash-pay-continue {
+  width: 100%;
+}
+
+#dash-pay-continue:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .dash-pay-methods {
