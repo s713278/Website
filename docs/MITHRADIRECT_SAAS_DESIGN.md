@@ -88,8 +88,8 @@ No live API calls today.
 From `index.html`:
 
 - Nav **Sample Store** → `store.html`  
-- Nav / mobile **Sign Up** → `onboarding.html`  
-- Hero primarily Play Store + WhatsApp demo (`wa.me/917207200863`)  
+- Nav / mobile **Get Started** → `onboarding.html`  
+- Hero primarily Play Store + WhatsApp demo (`wa.me/919912149049`)  
 - Vendor showcase includes Sai Ram → `store.html`  
 - Bottom CTA **Join as Woman Entrepreneur** / setup → `onboarding.html`  
 
@@ -721,7 +721,7 @@ flowchart TB
 | Slug | `sai-ram-home-foods` |
 | Theme | `#1B5E20` |
 | Tagline | Authentic taste of tradition |
-| Demo WhatsApp | `9876543210` (prototype) |
+| Demo WhatsApp | `9912149049` (Swamy Kunta) |
 
 ### D. Locked decisions (do not reopen without ADR)
 

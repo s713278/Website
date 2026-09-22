@@ -1,0 +1,21 @@
+{
+  "name": "mithradirect-web",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" run dev",
+    "dev:marketing": "pnpm --filter @mithra/marketing dev",
+    "dev:vendor": "pnpm --filter @mithra/vendor-app dev",
+    "dev:storefront": "pnpm --filter @mithra/storefront dev",
+    "build": "pnpm -r --filter \"./apps/*\" run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "generate:api": "pnpm --filter @mithra/api-client generate",
+    "fetch:openapi": "pnpm --filter @mithra/api-client fetch-openapi"
+  },
+  "devDependencies": {
+    "pnpm": "9.15.0",
+    "typescript": "^5.7.3"
+  }
+}

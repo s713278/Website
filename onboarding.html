@@ -2,48 +2,102 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="Setup your Instagram & WhatsApp store on MithraDirect in 10 minutes.">
     <title>Setup Your Store — MithraDirect</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/landing.css">
     <link rel="stylesheet" href="assets/css/onboarding.css">
-    <style>
-        * { font-family: 'Inter', sans-serif; }
-        h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif; }
-    </style>
+    <script src="assets/js/assets-config.js"></script>
 </head>
 <body class="onboarding-page bg-white text-gray-800">
-    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-emerald-100">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <a href="index.html" class="flex items-center gap-2">
-                <img src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="h-9">
+    <header class="ob-header">
+        <div class="ob-header-inner">
+            <a href="index.html" class="ob-brand" aria-label="MithraDirect home">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="brand-logo">
             </a>
-            <div class="text-sm text-gray-500 hidden sm:block">
-                Setup Your Insta &amp; WhatsApp Store in <span class="font-semibold text-emerald-600">10 Minutes</span>
+
+            <div class="ob-header-center" aria-hidden="false">
+                <a href="onboarding.html" class="ob-header-cta">Start my shop</a>
+                <span class="ob-header-sep" aria-hidden="true">·</span>
+                <span class="ob-header-note">Go live in about <strong>10 minutes</strong>.</span>
             </div>
-            <button type="button" id="btn-load-demo" class="text-xs sm:text-sm text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full hover:bg-emerald-50 transition">
-                Load demo data
-            </button>
+
+            <div class="ob-header-actions">
+                <a href="store.html" class="ob-link-quiet">Sample store</a>
+                <button type="button" id="btn-load-demo" class="ob-btn-demo">Load demo data</button>
+                <button type="button" class="ob-menu-toggle" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="ob-mobile-nav" id="mobile-menu">
+            <p class="ob-mobile-title">Setup Your Insta &amp; WhatsApp Store</p>
+            <p class="ob-mobile-sub">Complete these steps — your storefront updates live on the right.</p>
+            <a href="store.html">Sample store</a>
+            <a href="index.html">Home</a>
+            <a href="index.html#features">Features</a>
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms-conditions.html">Terms &amp; Conditions</a>
+            <div class="ob-mobile-cta">
+                <button type="button" id="btn-load-demo-mobile" class="ob-btn-demo ob-btn-demo--block">Load demo data</button>
+            </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="mb-2">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Setup Your Insta &amp; WhatsApp Store</h1>
-            <p class="text-gray-500 mt-1 text-sm sm:text-base">Complete these steps — your storefront updates live on the right.</p>
-        </div>
+    <main class="ob-main">
+        <div class="ob-frame">
+        <div class="ob-layout">
+            <!-- Left: onboarding progress -->
+            <aside class="ob-sidebar" aria-label="Onboarding progress">
+                <div class="ob-progress-card">
+                    <p class="ob-aside-label">Onboarding Progress</p>
+                    <div class="ob-progress-meta">
+                        <span id="ob-progress-text">Step 1 of 10</span>
+                    </div>
+                    <div class="ob-progress-track" aria-hidden="true">
+                        <div class="ob-progress-fill" id="ob-progress-fill" style="width:0%"></div>
+                    </div>
 
-        <!-- Stepper -->
-        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+                    <div class="ob-phase-list" id="ob-phase-list"></div>
 
-        <div class="grid lg:grid-cols-5 gap-8 mt-4">
-            <!-- Wizard panels -->
-            <div class="lg:col-span-3">
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 min-h-[420px]">
+                    <div class="ob-step-list-wrap">
+                        <div class="ob-step-list" id="ob-step-list"></div>
+                    </div>
+                </div>
 
+                <a href="https://wa.me/919912149049?text=Hi%2C%20I%27m%20interested%20in%20MithraDirect%20Enterprise" target="_blank" rel="noopener" class="ob-help-card" aria-label="Contact Us on WhatsApp">
+                    <span class="ob-help-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 18v-6a9 9 0 0118 0v6"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/>
+                        </svg>
+                    </span>
+                    <span class="ob-help-copy">
+                        <span class="ob-help-title">Need help?</span>
+                        <span class="ob-help-sub">Contact Us</span>
+                    </span>
+                    <span class="ob-help-chevron" aria-hidden="true">›</span>
+                </a>
+            </aside>
+
+            <!-- Center: wizard -->
+            <section class="ob-center">
+                <div class="ob-center-card">
+                    <div class="ob-center-top">
+                        <p class="ob-page-kicker">Setup Your Insta &amp; WhatsApp Store</p>
+                        <p class="ob-page-sub">Complete these steps — your storefront updates live on the right.</p>
+                        <nav class="stepper" id="stepper" aria-label="Onboarding progress"></nav>
+                        <p class="ob-step-eyebrow" id="ob-step-eyebrow">Step 1 of 10</p>
+                    </div>
+
+                    <div class="ob-center-body">
                     <!-- Step 1: Verify Mobile -->
                     <section class="step-panel" data-step="1" id="panel-1">
                         <h2 class="text-xl font-bold mb-1">Verify Mobile Number</h2>
@@ -356,47 +410,53 @@
                                 <a id="share-facebook" href="#" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-105 transition" title="Share on Facebook" aria-label="Facebook">
                                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                                 </a>
-                                <a id="share-instagram" href="https://www.instagram.com/" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 text-white flex items-center justify-center hover:scale-105 transition" title="Open Instagram" aria-label="Instagram">
+                                <a id="share-instagram" href="https://www.instagram.com/mithradirect/" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 text-white flex items-center justify-center hover:scale-105 transition" title="Follow MithraDirect on Instagram" aria-label="Instagram">
                                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                                </a>
+                                <a id="share-youtube" href="https://www.youtube.com/@MithraDirect" target="_blank" rel="noopener" class="w-11 h-11 rounded-full bg-red-600 text-white flex items-center justify-center hover:scale-105 transition" title="Watch MithraDirect on YouTube" aria-label="YouTube">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a2.997 2.997 0 00-2.11-2.121C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.388.519A2.997 2.997 0 00.502 6.186 31.36 31.36 0 000 12a31.36 31.36 0 00.502 5.814 2.997 2.997 0 002.11 2.121c1.883.519 9.388.519 9.388.519s7.505 0 9.388-.519a2.997 2.997 0 002.11-2.121A31.36 31.36 0 0024 12a31.36 31.36 0 00-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                                 </a>
                             </div>
                         </div>
                     </section>
-                </div>
-            </div>
-
-            <!-- Live preview -->
-            <div class="lg:col-span-2">
-                <div class="preview-sticky">
-                    <p class="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Storefront Preview (Live)</p>
-                    <div class="phone-frame">
-                        <div class="phone-screen" id="phone-preview"></div>
                     </div>
                 </div>
-            </div>
+            </section>
+
+            <!-- Right: storefront preview -->
+            <aside class="ob-preview" aria-label="Storefront preview">
+                <div class="preview-sticky">
+                    <div class="ob-preview-phone">
+                        <div class="phone-frame">
+                            <div class="phone-screen" id="phone-preview"></div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
         </div>
     </main>
 
-    <!-- Summary bar -->
+    <!-- Summary bar (existing stats preserved) -->
     <footer class="summary-bar">
-        <div class="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-5 gap-3 text-center sm:text-left">
-            <div>
+        <div class="ob-footer-inner">
+            <div class="ob-footer-stat">
                 <div class="stat-label">Total Time</div>
                 <div class="stat-value">~10 Minutes</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">Categories</div>
                 <div class="stat-value"><span id="stat-categories">0</span> Selected</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">Products</div>
                 <div class="stat-value"><span id="stat-products">0</span> Added</div>
             </div>
-            <div>
+            <div class="ob-footer-stat">
                 <div class="stat-label">SKUs</div>
                 <div class="stat-value"><span id="stat-skus">0</span> Configured</div>
             </div>
-            <div class="col-span-2 sm:col-span-1">
+            <div class="ob-footer-stat">
                 <div class="stat-label">WhatsApp Orders</div>
                 <div class="stat-value" id="stat-whatsapp">Pending</div>
             </div>
@@ -404,6 +464,8 @@
     </footer>
 
     <script src="assets/js/store-draft.js"></script>
+    <script src="assets/js/store-api.js"></script>
     <script src="assets/js/onboarding.js"></script>
+    <script src="assets/js/landing.js"></script>
 </body>
 </html>
