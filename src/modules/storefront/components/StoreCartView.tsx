@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, ChevronRight, Loader2, Package, ShoppingBag, X } from 'lucide-react'
+import { ArrowRight, Loader2, Package, ShoppingBag, X } from 'lucide-react'
 import { loginPathForRole } from '@/app/router/role-home'
-import { ProductCard } from './ProductCard'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import {
@@ -10,16 +9,15 @@ import {
   StorefrontMobileActionBar,
 } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import {
-  findProductForCartLine,
   lineAmount,
   lineUnitPrice,
   parseLineUnit,
   priceDetailsFromSummary,
   storeCartLines,
 } from '@/modules/storefront/lib/cart-utils'
-import { storeCartPath, storeCheckoutPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { storeCartPath, storeCheckoutPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
 import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
-import type { CartLine, Product, Store } from '@/modules/storefront/types'
+import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, QuantityStepper } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -60,12 +58,6 @@ export function StoreCartView({
   const totals = priceDetailsFromSummary(summary)
   const itemCount = totals.itemCount
 
-  const suggestions = useMemo(() => {
-    const popular = store.products.filter((product) => product.popular)
-    const pool = popular.length >= 4 ? popular : store.products
-    return pool.slice(0, 4)
-  }, [store.products])
-
   function handleCheckout() {
     const checkoutPath = storeCheckoutPath(store.id)
     if (user?.role === 'customer') {
@@ -83,7 +75,7 @@ export function StoreCartView({
         cartCount={cartCount}
         cartHref={storeCartPath(store.id)}
         searchOpen={false}
-        onToggleSearch={() => navigate(storePath(store.id))}
+        onToggleSearch={() => navigate(storeSearchPath(store.id))}
         pageTitle="Cart"
         onBack={onBack}
       />
@@ -110,47 +102,18 @@ export function StoreCartView({
                 </div>
 
                 <ul className="divide-y divide-slate-100 px-4 sm:px-5">
-                  {storeLines.map((line) => {
-                    const product = findProductForCartLine(store.products, line)
-                    return (
-                      <CartLineRow
-                        key={line.itemId}
-                        line={line}
-                        product={product}
-                        qtyPending={pendingQtyIds?.has(line.itemId) ?? false}
-                        removing={removingIds?.has(line.itemId) ?? false}
-                        onSetQty={onSetQty}
-                        onRemove={onRemove}
-                      />
-                    )
-                  })}
+                  {storeLines.map((line) => (
+                    <CartLineRow
+                      key={line.itemId}
+                      line={line}
+                      qtyPending={pendingQtyIds?.has(line.itemId) ?? false}
+                      removing={removingIds?.has(line.itemId) ?? false}
+                      onSetQty={onSetQty}
+                      onRemove={onRemove}
+                    />
+                  ))}
                 </ul>
               </section>
-
-              {suggestions.length > 0 ? (
-                <section>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h2 className="text-base font-bold text-slate-900 sm:text-lg">You may also like</h2>
-                    <Link
-                      to={storePath(store.id)}
-                      className="inline-flex items-center gap-0.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
-                    >
-                      View all
-                      <ChevronRight className="size-4" aria-hidden />
-                    </Link>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4 sm:gap-4">
-                    {suggestions.map((product) => (
-                      <ProductCard
-                        key={product.id}
-                        storeId={store.id}
-                        storeName={store.name}
-                        product={product}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
             </div>
 
             <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
@@ -232,31 +195,30 @@ export function StoreCartView({
 
 function CartLineRow({
   line,
-  product,
   qtyPending,
   removing,
   onSetQty,
   onRemove,
 }: {
   line: CartLine
-  product?: Product
   qtyPending: boolean
   removing: boolean
   onSetQty: (itemId: string, qty: number) => void
   onRemove: (itemId: string) => void
 }) {
-  const displayName = product?.name ?? line.name.replace(/\s*\([^)]*\)\s*$/, '')
+  const displayName = line.name.replace(/\s*\([^)]*\)\s*$/, '')
   const unit = parseLineUnit(line.name)
-  const meta = [unit, product?.spiceLevel].filter(Boolean).join(' · ')
+  const meta = unit
   const unitPrice = lineUnitPrice(line)
   const total = lineAmount(line)
   const busy = qtyPending || removing
+  const imageUrl = line.imageUrl
 
   return (
     <li className="flex gap-3 py-4">
       <div className="size-[4.15rem] shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 sm:size-[4.5rem]">
-        {product?.imageUrl ? (
-          <img src={product.imageUrl} alt="" className="size-full object-cover" />
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center text-slate-400">
             <Package className="size-6" aria-hidden />

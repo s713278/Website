@@ -4,6 +4,7 @@ import { ShoppingBag } from 'lucide-react'
 import { loginPathForRole } from '@/app/router/role-home'
 import { StoreCartView } from '@/modules/storefront/components/StoreCartView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
+import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import {
   cartActionErrorMessage,
@@ -15,6 +16,7 @@ import {
   requestSetCartQty,
 } from '@/modules/storefront/lib/request-add-to-cart'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
@@ -57,6 +59,7 @@ function CartForStore({ storeId }: { storeId: string }) {
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const { store, loading, error, wrapperRef } = useStorePage(storeId)
+  const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
   const lines = useCartStore((s) => s.lines)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
   const hasLocalLines = lines.some((line) => line.storeId === storeId)
@@ -95,14 +98,15 @@ function CartForStore({ storeId }: { storeId: string }) {
   // Cold-start hydrate once. Do not re-run when the user clears the last item.
   useEffect(() => {
     if (!store || user?.role !== 'customer') return
+    if (storeClosed) return
     if (hydratedRef.current) return
     hydratedRef.current = true
     if (hasLocalLines) return
-    void hydrateVendorCart(store.id, store.name, store.products).catch((error) => {
+    void hydrateVendorCart(store.id, store.name).catch((error) => {
       if (redirectCartUnauthorized(error, navigate, fromPath)) return
       window.alert(cartActionErrorMessage(error))
     })
-  }, [store, user?.role, hasLocalLines, navigate, fromPath])
+  }, [store, storeClosed, user?.role, hasLocalLines, navigate, fromPath])
 
   return (
     <StorePageStates
@@ -115,7 +119,9 @@ function CartForStore({ storeId }: { storeId: string }) {
       emptyDescription="This store may be offline."
       backHref={storePath(storeId)}
     >
-      {store ? (
+      {store && storeClosed ? (
+        <StoreSubscriptionNotice store={store} />
+      ) : store ? (
         <StoreCartView
           store={store}
           lines={lines}
@@ -131,7 +137,6 @@ function CartForStore({ storeId }: { storeId: string }) {
                 storeName: store.name,
                 itemId,
                 qty,
-                products: store.products,
                 returnTo: fromPath,
                 onError: (message) => window.alert(message),
               }),
@@ -146,7 +151,6 @@ function CartForStore({ storeId }: { storeId: string }) {
                 storeName: store.name,
                 itemId,
                 qty: 0,
-                products: store.products,
                 returnTo: fromPath,
                 onError: (message) => window.alert(message),
               }),

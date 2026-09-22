@@ -2,7 +2,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
-import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { storeCartPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { LocationMap } from '@/shared/components/LocationMap'
 import { saveLocation } from '@/shared/lib/customer-location'
@@ -53,7 +53,7 @@ export function LocationMapPage() {
             cartCount={cartCount}
             cartHref={storeCartPath(store.id)}
             searchOpen={false}
-            onToggleSearch={() => navigate(from)}
+            onToggleSearch={() => navigate(storeSearchPath(store.id))}
             pageTitle={editing ? 'Update location' : 'Set delivery location'}
             onBack={() => navigate(from)}
           />

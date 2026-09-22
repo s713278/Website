@@ -6,6 +6,10 @@ import { applyStoreTheme, clearStoreTheme } from '@/shared/lib/theme'
 /** Session cache so back-nav to store/cart is instant (Blinkit-style). */
 const storeCache = new Map<string, Store>()
 
+export function getCachedStore(storeId: string): Store | null {
+  return storeCache.get(storeId) ?? null
+}
+
 /** Load store data and apply vendor theme on a page wrapper. */
 export function useStorePage(storeId: string) {
   const wrapperRef = useRef<HTMLDivElement>(null)

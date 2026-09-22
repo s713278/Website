@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   CategoryBrowseSection,
@@ -15,11 +15,11 @@ import {
 import { useStoreScrollNav } from '@/modules/storefront/hooks/useStoreScrollNav'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import { useStoreProducts } from '@/modules/storefront/hooks/useStoreProducts'
+import { useStoreSkuSearch } from '@/modules/storefront/hooks/useStoreSkuSearch'
 import {
   ALL_CATEGORY,
   buildCategories,
   categoryLabel,
-  filterProducts,
   resolveCategoryFilter,
   type CategoryFilter,
 } from '@/modules/storefront/lib/catalog-filters'
@@ -29,10 +29,13 @@ import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { SearchField } from '@/shared/components'
 import { useSearchQueryParam } from '@/shared/hooks/useSearchQueryParam'
+import { isLiveApi } from '@/shared/api'
+import { isSearchActive, isSearchTooShort, searchUiMinChars } from '@/shared/lib/search-query'
 import { hydrateVendorCart } from '../lib/cart-actions'
+import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
+import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
-const SEARCH_MIN_CHARS = 2
 const SEARCH_DEBOUNCE_MS = 250
 
 export function StoreDetailPage() {
@@ -53,7 +56,11 @@ export function StoreDetailPage() {
       backHref="/stores/r1"
       backLabel="Open demo store"
     >
-      {store ? <StoreHome store={store} itemCount={itemCount} /> : null}
+      {store && isStoreClosedForSubscription(store.subscriptionStatus) ? (
+        <StoreSubscriptionNotice store={store} />
+      ) : store ? (
+        <StoreHome store={store} itemCount={itemCount} />
+      ) : null}
     </StorePageStates>
   )
 }
@@ -64,11 +71,11 @@ type StoreHomeProps = {
 }
 
 function StoreHome({ store, itemCount }: StoreHomeProps) {
-  const { query, setQuery } = useSearchQueryParam()
+  const { query, setQuery, searchRequested } = useSearchQueryParam()
   const [searchDraft, setSearchDraft] = useState(query)
-  const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()))
+  const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()) || searchRequested)
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(ALL_CATEGORY)
-  const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()))
+  const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()) || searchRequested)
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const homeRef = useRef<HTMLDivElement>(null)
   const productsRef = useRef<HTMLElement>(null)
@@ -87,16 +94,13 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   const categories = buildCategories(store, cachedProducts)
 
   const draftTrimmed = searchDraft.trim()
-  const searchTooShort = draftTrimmed.length > 0 && draftTrimmed.length < SEARCH_MIN_CHARS
-  const searchNeedle = draftTrimmed.length >= SEARCH_MIN_CHARS ? draftTrimmed : ''
+  const minChars = searchUiMinChars(isLiveApi())
+  const searchTooShort = isSearchTooShort(searchDraft, minChars)
+  const searchNeedle = isSearchActive(searchDraft, minChars) ? draftTrimmed : ''
   const searching = Boolean(searchNeedle)
+  const skuSearch = useStoreSkuSearch(store.id, searchNeedle)
 
-  /** Search filters the session cache only — never triggers a products API replace. */
-  const browseProducts = useMemo(() => {
-    if (!searching) return products.items
-    const pool = cachedProducts.length ? cachedProducts : products.items
-    return filterProducts(pool, ALL_CATEGORY, searchNeedle)
-  }, [searching, searchNeedle, cachedProducts, products.items])
+  const browseProducts = searching ? skuSearch.items : products.items
 
   useEffect(() => {
     setSearchDraft(query)
@@ -111,10 +115,10 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   }, [searchDraft, query, setQuery])
 
   useEffect(() => {
-    if (!query.trim()) return
+    if (!query.trim() && !searchRequested) return
     setSearchOpen(true)
     setBrowseOpen(true)
-  }, [query])
+  }, [query, searchRequested])
 
   const user = useAuthStore((s) => s.user)
   const hasLocalLines = useCartStore((s) => s.lines.some((line) => line.storeId === store.id))
@@ -230,6 +234,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               placeholder="Search pickles, combos, gifts…"
               aria-label="Search products"
               autoFocus
+              minChars={minChars}
             />
           </div>
         </div>
@@ -241,16 +246,20 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
         }`}
       >
         {browseOpen ? (
-          products.error && products.items.length === 0 && !products.loading && !searching ? (
+          (searching ? skuSearch.error : products.error) &&
+          browseProducts.length === 0 &&
+          !(searching ? skuSearch.loading : products.loading) ? (
             <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
-              <p className="font-medium">{products.error}</p>
-              <button
-                type="button"
-                onClick={() => products.reload()}
-                className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
-              >
-                Try again
-              </button>
+              <p className="font-medium">{searching ? skuSearch.error : products.error}</p>
+              {!searching ? (
+                <button
+                  type="button"
+                  onClick={() => products.reload()}
+                  className="mt-3 inline-flex rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                >
+                  Try again
+                </button>
+              ) : null}
             </div>
           ) : (
             <CategoryBrowseSection
@@ -263,11 +272,11 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               searching={searching}
               searchTooShort={searchTooShort}
               onCategoryChange={selectCategory}
-              totalElements={products.totalElements}
-              hasMore={!products.lastPage}
-              loading={products.loading && !searching}
-              loadingMore={products.loadingMore}
-              onLoadMore={products.loadMore}
+              totalElements={searching ? skuSearch.items.length : products.totalElements}
+              hasMore={searching ? false : !products.lastPage}
+              loading={searching ? skuSearch.loading : products.loading}
+              loadingMore={!searching && products.loadingMore}
+              onLoadMore={searching ? undefined : products.loadMore}
             />
           )
         ) : (

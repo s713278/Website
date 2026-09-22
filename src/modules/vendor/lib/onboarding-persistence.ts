@@ -129,9 +129,10 @@ function isCategoryReference(
   value: unknown,
 ): value is VendorOnboardingDraftV1['categories'][number] {
   return isRecord(value) &&
-    hasOnlyKeys(value, ['id', 'name', 'businessTypeId', 'description', 'imageUrl', 'displayOrder', 'pending']) &&
+    hasOnlyKeys(value, ['id', 'name', 'icon', 'businessTypeId', 'description', 'imageUrl', 'displayOrder', 'pending']) &&
     isReferenceId(value.id) &&
     isString(value.name) &&
+    (value.icon === undefined || isSafeAssetUrl(value.icon)) &&
     (value.businessTypeId === null || isReferenceId(value.businessTypeId)) &&
     isNullableString(value.description) &&
     isSafeAssetUrl(value.imageUrl) &&
@@ -145,6 +146,7 @@ function isSelectedProduct(value: unknown): value is SelectedProduct {
       'id',
       'name',
       'description',
+      'icon',
       'imageUrl',
       'measurementId',
       'measurementName',
@@ -154,6 +156,7 @@ function isSelectedProduct(value: unknown): value is SelectedProduct {
     isReferenceId(value.id) &&
     isString(value.name) &&
     isNullableString(value.description) &&
+    (value.icon === undefined || isSafeAssetUrl(value.icon)) &&
     isSafeAssetUrl(value.imageUrl) &&
     (value.measurementId === null || Number.isSafeInteger(value.measurementId)) &&
     isNullableString(value.measurementName) &&
@@ -420,10 +423,12 @@ export function toPersistedDraft(draft: VendorOnboardingDraftV1): PersistedOnboa
     categories: draft.categories.map((category) => ({
       ...category,
       imageUrl: safeAssetUrl(category.imageUrl),
+      ...(category.icon === undefined ? {} : { icon: safeAssetUrl(category.icon) }),
     })),
     products: draft.products.map((product) => ({
       ...product,
       imageUrl: safeAssetUrl(product.imageUrl),
+      ...(product.icon === undefined ? {} : { icon: safeAssetUrl(product.icon) }),
     })),
     skus: draft.skus.map((sku) => ({ ...sku })),
     delivery: {

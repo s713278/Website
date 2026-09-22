@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { homePathForUser, loginPathForRole } from '@/app/router/role-home'
-import { cartNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { cartNavTarget, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
@@ -25,7 +25,7 @@ export function RootLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const cartCount = visibleCartCount(user, useCartStore((s) => s.itemCount()))
-  const cartTo = cartNavTarget(user)
+  const cartLink = linkFromNavTarget(cartNavTarget(user))
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -45,7 +45,7 @@ export function RootLayout() {
           </div>
           <div className="flex items-center gap-2">
             {(user?.role === 'customer' || !user) && (
-              <NavLink to={cartTo} className={linkClass}>
+              <NavLink to={cartLink.to} state={cartLink.state} className={linkClass}>
                 Cart{cartCount ? ` (${cartCount})` : ''}
               </NavLink>
             )}

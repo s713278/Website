@@ -214,8 +214,8 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | File | Exposes | Demo source | Live endpoint(s) |
 |---|---|---|---|
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
-| `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore`, `listStoreProducts`, `getProductSkuDetail` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Package vendor/storefront wrappers; landing rows use `mapLandingStore`, storefront details use `mapVendorToStore`, and product pages/details use dedicated storefront-product mappers |
-| `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders`, `GET /v1/users/{userId}/orders/history` |
+| `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
+| `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders/from-cart` (live checkout; `POST /v1/orders` is unimplemented), `GET /v1/users/{userId}/orders/history` |
 | `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
@@ -269,7 +269,8 @@ response belonging to an entry that has already been invalidated.
 #### Vendor setup sizes (Step 6)
 
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
-sizes only when the account's real `approval_status` is `APPROVED`; pending vendors keep a
+sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
+wire values are accepted for compatibility); pending vendors keep a
 read-only step. Previously saved sizes remain locked after submission. The controls and Continue
 handler use the same approval-aware rule, and saving validates new size details, duplicates and
 the projected account total against `subscription.limits.max_skus`. The total includes any

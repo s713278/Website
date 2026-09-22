@@ -7,6 +7,16 @@ type AccountStatusState = {
 }
 
 /**
+ * The documented approval value is APPROVED. Some current vendor contexts report ACTIVE in
+ * `approval_status`, so keep that wire value compatible at this boundary until the backend
+ * publishes one canonical enum.
+ */
+export function isApprovalGranted(approvalStatus: string | null): boolean {
+  const status = approvalStatus?.toUpperCase()
+  return status === 'APPROVED' || status === 'ACTIVE'
+}
+
+/**
  * Whether the vendor's store has been submitted, and whether an admin has approved it.
  *
  * A leaf module on purpose. Sign-in has to answer "is this store submitted?" to decide
@@ -32,5 +42,5 @@ export function isStoreSubmitted(state: AccountStatusState): boolean {
 }
 
 export function isVendorApproved(state: AccountStatusState): boolean {
-  return state.context.approvalStatus?.toUpperCase() === 'APPROVED'
+  return isApprovalGranted(state.context.approvalStatus)
 }

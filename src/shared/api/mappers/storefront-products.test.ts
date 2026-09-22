@@ -1,19 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { mapPdpSkuDetail } from './storefront-products'
+import { mapStorefrontProductPage } from './storefront-products'
 
-describe('SKU detail measurements', () => {
-  it('keeps sibling quantities distinguishable when the API returns separate fields', () => {
-    const details = [0.5, 1].map((quantity, index) => mapPdpSkuDetail({
-      vendor_product_id: 900, sku_id: 4021 + index, sku_name: 'Milk',
-      quantity_value: quantity, unit: 'L', sale_price: 55,
-    }))
+describe('mapStorefrontProductPage SKU search rows', () => {
+  it('uses sku_name so search hits do not render as Item', () => {
+    const page = mapStorefrontProductPage({
+      result: [
+        {
+          sku_id: 661,
+          vendor_product_id: 12,
+          sku_name: 'Chicken Biryani',
+          sku_type: 'ITEM',
+          sale_price: 180,
+          list_price: 200,
+          image_path: 'https://cdn.example.com/biryani.jpg',
+        },
+      ],
+    })
 
-    expect(details.map((detail) => detail?.variants?.[0].unit)).toEqual(['0.5 L', '1 L'])
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]?.name).toBe('Chicken Biryani')
+    expect(page.items[0]?.id).toBe('12')
+    expect(page.items[0]?.price).toBe(180)
+    expect(page.items[0]?.imageUrl).toBe('https://cdn.example.com/biryani.jpg')
   })
 
-  it('preserves legacy size labels used by existing responses', () => {
-    expect(mapPdpSkuDetail({
-      vendor_product_id: 900, sku_id: 4021, sku_name: 'Milk', sku_size: '500 ml', sale_price: 55,
-    })?.variants?.[0].unit).toBe('500 ml')
+  it('does not treat sku_type ITEM as the product title', () => {
+    const page = mapStorefrontProductPage({
+      result: [
+        {
+          sku_id: 7,
+          name: 'ITEM',
+          sku_name: 'Hyderabadi Biryani',
+          sale_price: 220,
+        },
+      ],
+    })
+
+    expect(page.items[0]?.name).toBe('Hyderabadi Biryani')
   })
 })

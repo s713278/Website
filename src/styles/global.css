@@ -387,7 +387,8 @@
    Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own outer
    boundary, `--vc-rule` a division between rows inside one. A row rule as dark as a panel
    edge reads as "next panel" rather than "next row". */
-.vendor-console {
+.vendor-console,
+.store-share-scope {
   --vc-panel: #ffffff;
   --vc-edge: color-mix(in srgb, var(--md-green-500) 12%, var(--md-border));
   --vc-rule: #f3f4f6;
@@ -430,6 +431,9 @@
   --vc-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
   --vc-shadow-lift: 0 8px 24px rgba(17, 24, 39, 0.08);
 
+}
+
+.vendor-console {
   background:
     radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
     radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
@@ -486,7 +490,8 @@
 
    Padding is deliberately not set here: `EmptyState` earns its generous px-6 py-16 through
    a utility, and a padding declaration at this specificity would silently outrank it. */
-.vendor-console [data-slot='card'] {
+.vendor-console [data-slot='card'],
+.store-share-scope [data-slot='card'] {
   border: 1px solid var(--vc-edge);
   border-radius: var(--vc-radius);
   box-shadow: var(--vc-shadow);

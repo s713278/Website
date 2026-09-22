@@ -1,11 +1,18 @@
-import { Link, useLocation } from 'react-router-dom'
-import { ChevronLeft, Menu, Search, ShoppingCart, User } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronLeft, ClipboardList, LogOut, Menu, Search, ShoppingCart, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { loginPathForRole } from '@/app/router/role-home'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
-import { visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
 const NAV = [
@@ -74,36 +81,98 @@ function NavItem({
   )
 }
 
+function AccountControl({
+  loginTo,
+  loginState,
+}: {
+  loginTo: string
+  loginState: { from: string; shopName?: string; shopLogoUrl?: string }
+}) {
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
+
+  if (!user) {
+    return (
+      <Link
+        to={loginTo}
+        state={loginState}
+        className="inline-flex h-9 shrink-0 items-center rounded-full bg-[var(--store-theme,var(--md-green-700))] px-3.5 text-sm font-semibold text-white transition hover:opacity-90"
+      >
+        Log in
+      </Link>
+    )
+  }
+
+  const name = user.name?.trim()
+  const placeholder = !name || name === 'User' || name === 'Vendor'
+  const label = placeholder
+    ? user.phone
+      ? `+91 ${user.phone}`
+      : ''
+    : name
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 outline-none transition hover:bg-slate-200 focus-visible:ring-2 focus-visible:ring-[var(--store-theme,var(--md-green-600))]/40"
+        aria-label="Account"
+        title="Account"
+      >
+        <User className="size-[1.125rem]" strokeWidth={1.75} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-52">
+        {label ? (
+          <>
+            <DropdownMenuLabel className="px-2 py-1.5">
+              <p className="truncate text-sm font-semibold text-slate-900">{label}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        <DropdownMenuItem asChild>
+          <Link to="/orders">
+            <ClipboardList />
+            My orders
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => void logout()}>
+          <LogOut />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function HeaderActions({
   searchOpen,
   onToggleSearch,
   cartCount,
   cartHref = '/cart',
-  showAccount = false,
+  storeName,
+  logoUrl,
 }: {
   searchOpen: boolean
   onToggleSearch: () => void
   cartCount: number
   cartHref?: string
-  showAccount?: boolean
+  storeName?: string
+  logoUrl?: string
 }) {
-  const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const badge = visibleCartCount(user, cartCount)
-  // Live guest → force login; after OTP resume the cart they opened.
-  const cartTo = canShopAsCustomer(user)
-    ? cartHref
-    : isLiveApi()
-      ? { pathname: loginPathForRole('customer'), state: { from: cartHref } }
-      : cartHref
-
-  const loginHref = {
-    pathname: loginPathForRole('customer'),
-    state: { from: location.pathname + location.search },
-  }
+  const shop = { name: storeName, logoUrl }
+  // Same as add-to-cart: guest goes to `/login` with `from` = this shop's cart path.
+  const login = customerLoginLink(cartHref, shop)
+  const cartLink = linkFromNavTarget(
+    canShopAsCustomer(user) || !isLiveApi()
+      ? cartHref
+      : { pathname: login.to, state: login.state },
+  )
 
   return (
-    <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
+    <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
       <button
         type="button"
         onClick={onToggleSearch}
@@ -117,18 +186,11 @@ function HeaderActions({
         <Search className="size-[1.125rem]" strokeWidth={1.75} />
       </button>
 
-      {showAccount ? (
-        <Link
-          to={loginHref}
-          className="hidden size-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 sm:inline-flex"
-          aria-label="Sign in"
-        >
-          <User className="size-[1.125rem]" strokeWidth={1.75} />
-        </Link>
-      ) : null}
+      <AccountControl loginTo={login.to} loginState={login.state} />
 
       <Link
-        to={cartTo}
+        to={cartLink.to}
+        state={cartLink.state}
         className="relative inline-flex size-10 shrink-0 items-center justify-center overflow-visible rounded-full text-slate-700 transition hover:bg-slate-100"
         aria-label={`Cart${badge ? `, ${badge} items` : ''}`}
       >
@@ -189,6 +251,8 @@ export function StorefrontHeader({
             onToggleSearch={onToggleSearch}
             cartCount={cartCount}
             cartHref={cartHref}
+            storeName={storeName}
+            logoUrl={logoUrl}
           />
         </div>
       ) : (
@@ -242,7 +306,8 @@ export function StorefrontHeader({
             onToggleSearch={onToggleSearch}
             cartCount={cartCount}
             cartHref={cartHref}
-            showAccount
+            storeName={storeName}
+            logoUrl={logoUrl}
           />
         </div>
       </div>

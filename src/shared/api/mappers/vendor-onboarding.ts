@@ -20,6 +20,8 @@ export type BusinessTypeReference = {
 export type CategoryReference = {
   id: number
   name: string
+  /** Higher-priority catalog artwork when the backend provides it. */
+  icon?: string | null
   /**
    * `null` only on resume, when the business-type lookup failed and the category cannot
    * be attributed. The catalog read still requires a real id — see `mapCategoryPage`.
@@ -34,6 +36,8 @@ export type ProductReference = {
   id: number
   name: string
   description: string | null
+  /** Higher-priority catalog artwork when the backend provides it. */
+  icon?: string | null
   imageUrl: string | null
   measurementId: number | null
   measurementName: string | null
@@ -173,6 +177,7 @@ export function mapCategoryPage(payload: unknown): ReferencePage<CategoryReferen
   return mapPage(payload, (item) => ({
     id: requiredPositiveInteger(item.id),
     name: requiredString(item.name),
+    icon: optionalString(item.icon),
     businessTypeId: requiredPositiveInteger(item.business_type_id),
     description: optionalString(item.description),
     imageUrl: optionalString(item.image_path),
@@ -185,6 +190,7 @@ export function mapProductPage(payload: unknown): ReferencePage<ProductReference
     id: requiredPositiveInteger(item.id),
     name: requiredString(item.name),
     description: optionalString(item.description),
+    icon: optionalString(item.icon),
     imageUrl: optionalString(item.image_path),
     measurementId: optionalInteger(item.measurement_id),
     measurementName: optionalString(item.measurement_name),

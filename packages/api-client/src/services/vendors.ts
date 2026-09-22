@@ -45,10 +45,18 @@ export const vendorsService = {
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products`, { ...config, skipAuth: true }),
   getProductSkus: (vendorId: number | string, config?: Pick<RequestConfig, 'signal' | 'params'>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/skus`, { ...config, skipAuth: true }),
-  searchSkus: (vendorId: number | string, q?: string) =>
+  searchSkus: (
+    vendorId: number | string,
+    queryOrParams?: string | { keyword?: string; page_number?: number; page_size?: number },
+  ) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/search`, {
       skipAuth: true,
-      params: q ? { q } : undefined,
+      params:
+        typeof queryOrParams === 'string'
+          ? queryOrParams
+            ? { keyword: queryOrParams }
+            : undefined
+          : queryOrParams,
     }),
   getProduct: (vendorId: number | string, productId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`),

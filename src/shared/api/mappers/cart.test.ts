@@ -12,6 +12,7 @@ describe('mapCartPayload', () => {
             cart_item_id: 99,
             sku_id: 101,
             sku_name: 'Fresh Milk - 1L',
+            image_path: 'https://cdn.example.com/images/milk.jpg',
             quantity: 2,
             unit_price: 4.99,
           },
@@ -45,6 +46,7 @@ describe('mapCartPayload', () => {
         discount: 0,
         cartItemId: '99',
         skuId: '101',
+        imageUrl: 'https://cdn.example.com/images/milk.jpg',
       },
     ])
     expect(snap.summary.grandTotal).toBe(9.98)

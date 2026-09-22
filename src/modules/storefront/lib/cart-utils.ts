@@ -108,6 +108,7 @@ export function enrichCartLinesWithCatalog(
         // Keep API unit_price / line_total — do not reprice from catalog
         price: line.price,
         lineTotal: line.lineTotal,
+        imageUrl: product.imageUrl || line.imageUrl || prev?.imageUrl,
       }
     }
 
@@ -118,9 +119,10 @@ export function enrichCartLinesWithCatalog(
         skuId,
         itemId: prev.itemId.includes(':') ? prev.itemId : line.itemId,
         name: prev.name,
+        imageUrl: line.imageUrl || prev.imageUrl,
       }
     }
 
-    return { ...line, skuId }
+    return { ...line, skuId, imageUrl: line.imageUrl || prev?.imageUrl }
   })
 }

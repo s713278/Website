@@ -41,7 +41,18 @@ export const useDeliveryAddressStore = create<State>()(
       updateAddress(id, input) {
         set((state) => ({
           addresses: state.addresses.map((address) =>
-            address.id === id ? { ...address, ...input } : address,
+            address.id === id
+              ? {
+                  id,
+                  location: input.location,
+                  lat: input.lat,
+                  lng: input.lng,
+                  city: input.city,
+                  country: input.country,
+                  zipCode: input.zipCode,
+                  backendAddressId: input.backendAddressId,
+                }
+              : address,
           ),
         }))
       },

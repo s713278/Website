@@ -3,9 +3,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ProductDetailPanel } from '@/modules/storefront/components/ProductDetailPanel'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
-import { storePath } from '@/modules/storefront/lib/store-paths'
+import { storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product } from '@/modules/storefront/types'
+import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
+import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { getErrorMessage, getProductSkuDetail } from '@/shared/api'
 
 export function ProductDetailPage() {
@@ -23,6 +25,13 @@ export function ProductDetailPage() {
   const [productError, setProductError] = useState('')
 
   useEffect(() => {
+    if (storeLoading) return
+    if (store && isStoreClosedForSubscription(store.subscriptionStatus)) {
+      setProduct(null)
+      setProductError('')
+      setProductLoading(false)
+      return
+    }
     if (!productId || !skuId) {
       setProduct(null)
       setProductError(productId ? 'Missing pack size (sku).' : 'Missing product.')
@@ -53,29 +62,32 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [productId, skuId])
+  }, [productId, skuId, store, storeLoading])
 
-  const loading = storeLoading || productLoading
-  const error = storeError || productError
+  const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
+  const loading = shopClosed ? storeLoading : storeLoading || productLoading
+  const error = shopClosed ? storeError : storeError || productError
 
   return (
     <StorePageStates
       wrapperRef={wrapperRef}
       loading={loading}
       error={error}
-      ready={Boolean(store && product)}
+      ready={shopClosed || Boolean(store && product)}
       loadingLabel="Loading product…"
       emptyTitle="Product not found"
       emptyDescription="This item may no longer be available."
       backHref={storePath(storeId)}
     >
-      {store && product ? (
+      {shopClosed && store ? (
+        <StoreSubscriptionNotice store={store} />
+      ) : store && product ? (
         <ProductDetailPanel
           store={store}
           product={product}
           cartCount={itemCount}
           onBack={() => navigate(storePath(store.id))}
-          onSearch={() => navigate(storePath(store.id))}
+          onSearch={() => navigate(storeSearchPath(store.id))}
         />
       ) : null}
     </StorePageStates>

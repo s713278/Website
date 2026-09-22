@@ -289,16 +289,16 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   title: string
   description: string
 }> = [
-  { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Start with the number customers know.' },
-  { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code we sent on WhatsApp.' },
-  { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the closest match for your catalog.' },
-  { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Pick the categories your store sells.' },
-  { step: 5, short: 'Products', title: 'Choose products to sell', description: 'Build a focused starting catalog.' },
-  { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Every product you sell needs at least one size with a price.' },
-  { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how and when orders are fulfilled.' },
-  { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Offer at least one method and choose a default.' },
-  { step: 9, short: 'Store', title: 'Add your store details', description: 'Name your store, add its contacts, and make the preview yours.' },
-  { step: 10, short: 'Review', title: 'Review your store', description: 'Resolve readiness items, then preview your store.' },
+  { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Enter the number customers can use to contact you.' },
+  { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code sent to WhatsApp.' },
+  { step: 3, short: 'Business', title: 'Choose your business type', description: 'Choose the closest match for your store.' },
+  { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Choose what your store sells.' },
+  { step: 5, short: 'Products', title: 'Choose products to sell', description: 'Choose the products you sell.' },
+  { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product.' },
+  { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how customers receive orders.' },
+  { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay.' },
+  { step: 9, short: 'Store', title: 'Add your store details', description: 'Add the details customers need.' },
+  { step: 10, short: 'Review', title: 'Review your store', description: 'Check your store before submitting.' },
 ]
 
 /**

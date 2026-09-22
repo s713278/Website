@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="MithraDirect vendor dashboard demo — overview, orders, products, shop plan, and store link.">
+    <meta name="description" content="MithraDirect vendor dashboard — 14 free days live, then subscribe with Razorpay to keep the shop open.">
     <title>Vendor Dashboard — MithraDirect</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,7 +52,7 @@
             <div class="dash-sidebar-foot">
                 <div class="dash-plan-chip" id="dash-plan-chip">
                     <span class="dash-plan-dot" aria-hidden="true"></span>
-                    <span id="dash-plan-label">Free plan</span>
+                    <span id="dash-plan-label">12 days left</span>
                 </div>
                 <a href="store.html" id="dash-view-storefront" class="btn btn-secondary btn-sm btn-block" data-cta="view_storefront">View storefront</a>
             </div>
@@ -87,6 +87,23 @@
                 <!-- Overview -->
                 <section class="dash-view is-active" id="view-overview" data-view-panel="overview" aria-labelledby="overview-heading">
                     <h2 id="overview-heading" class="sr-only">Overview</h2>
+
+                    <!-- First login during free days: shop is live; subscribe later via Razorpay -->
+                    <div class="dash-panel dash-welcome" id="dash-welcome">
+                        <button type="button" class="dash-welcome-dismiss" id="dash-welcome-dismiss" aria-label="Dismiss welcome">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                        <p class="dash-welcome-kicker">Your shop is live</p>
+                        <h3 class="dash-welcome-title">14 free days — then subscribe</h3>
+                        <p class="dash-lead" id="dash-welcome-copy">
+                            Customers can order now. Share your shop link. Before free days end, pay ₹299 with Razorpay to keep the shop open.
+                        </p>
+                        <div class="dash-share-actions">
+                            <button type="button" class="btn btn-primary btn-sm" data-view-jump="store">Share shop</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-view-jump="plan">View shop plan</button>
+                        </div>
+                    </div>
+
                     <div class="dash-metrics" id="dash-metrics">
                         <article class="dash-metric">
                             <p class="dash-metric-label">Orders today</p>
@@ -199,11 +216,11 @@
                         <p class="dash-plan-kicker" id="dash-plan-kicker">Free days</p>
                         <p class="dash-plan-days" id="dash-plan-days">12 <span>days left</span></p>
                         <p class="dash-plan-copy" id="dash-plan-copy">
-                            After free days, pay ₹299 each month to keep the shop open. UPI, card or netbanking.
+                            Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹299 each month — to keep it open.
                         </p>
                         <p class="dash-plan-price">Mithra Social Starter · ₹299 / month</p>
-                        <button type="button" class="btn btn-primary dash-plan-pay" id="dash-plan-pay">Pay ₹299</button>
-                        <p class="dash-muted dash-plan-pay-hint">Pay with UPI, card or netbanking. Takes about a minute.</p>
+                        <button type="button" class="btn btn-primary dash-plan-pay" id="dash-plan-pay" data-open-pay="true">Pay ₹299 with Razorpay</button>
+                        <p class="dash-muted dash-plan-pay-hint">Opens Razorpay Checkout. UPI, card or netbanking — about a minute.</p>
                         <p class="dash-plan-error" id="dash-plan-error" hidden></p>
                     </div>
 
@@ -276,9 +293,9 @@
                             <h3>Shop is hidden</h3>
                         </div>
                         <p class="dash-lead" id="dash-store-closed-copy">
-                            Customers cannot open your shop until you pay ₹299. Old orders are still here.
+                            Free days ended (or payment failed). Customers cannot open your shop until you pay ₹299 with Razorpay. Old orders stay in the dashboard.
                         </p>
-                        <button type="button" class="btn btn-primary" id="dash-store-pay" data-open-pay="true">Pay ₹299</button>
+                        <button type="button" class="btn btn-primary" id="dash-store-pay" data-open-pay="true">Pay ₹299 with Razorpay</button>
                     </div>
                     <div class="dash-store-share" id="dash-store-share">
                     <div class="dash-panel">
@@ -337,7 +354,7 @@
                             <div><dt>WhatsApp</dt><dd id="set-whatsapp">—</dd></div>
                             <div><dt>Location</dt><dd id="set-location">—</dd></div>
                             <div><dt>Instagram</dt><dd id="set-instagram">—</dd></div>
-                            <div><dt>Plan</dt><dd id="set-plan">Free</dd></div>
+                            <div><dt>Plan</dt><dd id="set-plan">12 free days left</dd></div>
                             <div><dt>Primary</dt><dd><span class="dash-theme-swatch" id="set-theme-swatch" hidden></span><span id="set-theme">—</span></dd></div>
                             <div><dt>Accent</dt><dd><span class="dash-theme-swatch dash-theme-swatch--accent" id="set-accent-swatch" hidden></span><span id="set-accent">—</span></dd></div>
                             <div><dt>Background</dt><dd><span class="dash-theme-swatch dash-theme-swatch--bg" id="set-bg-swatch" hidden></span><span id="set-bg">—</span></dd></div>
@@ -374,24 +391,17 @@
     <div class="dash-pay" id="dash-pay-sheet" hidden>
         <button type="button" class="dash-pay-backdrop" id="dash-pay-backdrop" aria-label="Close payment"></button>
         <div class="dash-pay-sheet" role="dialog" aria-modal="true" aria-labelledby="dash-pay-title">
-            <p class="dash-pay-brand">Razorpay <span>demo</span></p>
+            <p class="dash-pay-brand">Razorpay <span>prototype</span></p>
             <h2 id="dash-pay-title">Pay ₹299</h2>
             <p class="dash-pay-sub">Mithra Social Starter · 1 month · shop stays open</p>
-            <div class="dash-pay-methods" id="dash-pay-methods">
-                <button type="button" class="dash-pay-method" data-pay-method="upi">
-                    <strong>UPI</strong>
-                    <span>GPay, PhonePe, Paytm</span>
-                </button>
-                <button type="button" class="dash-pay-method" data-pay-method="card">
-                    <strong>Card</strong>
-                    <span>Debit or credit</span>
-                </button>
-                <button type="button" class="dash-pay-method" data-pay-method="netbanking">
-                    <strong>Netbanking</strong>
-                    <span>All Indian banks</span>
-                </button>
-            </div>
-            <p class="dash-pay-status" id="dash-pay-status" hidden>Paying…</p>
+            <ul class="dash-pay-summary" aria-label="Payment summary">
+                <li><span>Plan</span><strong>Social Starter</strong></li>
+                <li><span>Amount</span><strong>₹299</strong></li>
+                <li><span>Billing</span><strong>Monthly</strong></li>
+            </ul>
+            <p class="dash-pay-hint">You’ll pick UPI, card or netbanking inside Razorpay Checkout.</p>
+            <button type="button" class="btn btn-primary btn-block" id="dash-pay-continue">Continue to Razorpay</button>
+            <p class="dash-pay-status" id="dash-pay-status" hidden>Opening Razorpay…</p>
             <button type="button" class="dash-text-link dash-pay-fail" id="dash-pay-fail">Demo: make this payment fail</button>
             <button type="button" class="btn btn-secondary btn-sm dash-pay-cancel" id="dash-pay-cancel">Cancel</button>
         </div>

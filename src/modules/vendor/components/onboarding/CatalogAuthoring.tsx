@@ -27,10 +27,10 @@ type PermanenceNoticeKind =
  */
 export function PermanenceNotice({ kind }: { kind: PermanenceNoticeKind }) {
   const message = {
-    categories: 'Once you continue, the categories you pick are saved to your store for good. You can add more later, but removing one needs support.',
-    products: 'Once you continue, the products you pick are saved to your store for good. Removing one needs support — but you can set a product inactive on the next step.',
-    'authored-category': 'Anything you add becomes a platform category in the shared catalog for every vendor with this business type. You can remove it before Continue; after Continue, it cannot be removed.',
-    'authored-product': 'Anything you add becomes a platform product in the shared catalog under this category. You can remove it before Continue; after Continue, it cannot be removed.',
+    categories: 'Saved categories cannot be removed here. Choose only what your store sells.',
+    products: 'Saved products cannot be removed here. You can make a product inactive later.',
+    'authored-category': 'This becomes a shared platform category and cannot be removed after Continue.',
+    'authored-product': 'This becomes a shared platform product and cannot be removed after Continue.',
   } satisfies Record<PermanenceNoticeKind, string>
 
   return (

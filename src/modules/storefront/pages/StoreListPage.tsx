@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
-import { catalogService, getErrorMessage } from '@/shared/api'
+import { catalogService, getErrorMessage, isLiveApi } from '@/shared/api'
 import type { Store } from '@/modules/storefront/types'
 import {
   detectBrowserLocation,
@@ -11,7 +11,13 @@ import {
   saveLocation,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/shared/components'
+import { Badge, Button, Card, EmptyState, Input, PageHeader, SearchField, Spinner } from '@/shared/components'
+import {
+  isSearchActive,
+  isSearchApiReady,
+  matchesSearchQuery,
+  searchUiMinChars,
+} from '@/shared/lib/search-query'
 
 export function StoreListPage() {
   const [query, setQuery] = useState('')
@@ -25,15 +31,35 @@ export function StoreListPage() {
   const [error, setError] = useState('')
   const [areaError, setAreaError] = useState('')
 
+  const keyword = query.trim()
+  const minChars = searchUiMinChars(isLiveApi())
+  const searchActive = isSearchActive(keyword, minChars)
+  const useApiSearch = isSearchApiReady(keyword)
+
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
       setLoading(true)
       setError('')
-      void catalogService
-        .listStores(query, location)
+      const request = useApiSearch
+        ? catalogService.searchStoresByKeyword(keyword, location)
+        : catalogService.listStores(undefined, location)
+      void request
         .then((data) => {
-          if (!cancelled) setStores(data)
+          if (cancelled) return
+          if (!useApiSearch && searchActive) {
+            const needle = keyword.toLowerCase()
+            setStores(
+              data.filter(
+                (store) =>
+                  matchesSearchQuery(store.name, needle) ||
+                  matchesSearchQuery(store.category, needle) ||
+                  store.products.some((product) => matchesSearchQuery(product.name, needle)),
+              ),
+            )
+            return
+          }
+          setStores(data)
         })
         .catch((err) => {
           if (!cancelled) setError(getErrorMessage(err, 'Could not load stores'))
@@ -41,13 +67,13 @@ export function StoreListPage() {
         .finally(() => {
           if (!cancelled) setLoading(false)
         })
-    }, query ? 250 : 0)
+    }, searchActive ? 300 : 0)
 
     return () => {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [query, location])
+  }, [keyword, searchActive, useApiSearch, location])
 
   function applyLocation(next: CustomerLocation) {
     saveLocation(next)
@@ -112,14 +138,14 @@ export function StoreListPage() {
       </form>
       {areaError ? <p className="mb-4 text-sm text-[var(--md-danger)]">{areaError}</p> : null}
 
-      <div className="mb-6 max-w-md">
-        <Input
-          name="search"
-          placeholder="Search stores or categories"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+      <SearchField
+        className="mb-6 max-w-md"
+        value={query}
+        onChange={setQuery}
+        placeholder="Search stores, products, or categories"
+        aria-label="Search stores"
+        minChars={minChars}
+      />
 
       {loading ? <Spinner label="Loading stores…" /> : null}
       {!loading && error ? (
@@ -127,8 +153,12 @@ export function StoreListPage() {
       ) : null}
       {!loading && !error && stores.length === 0 ? (
         <EmptyState
-          title="No stores in this area"
-          description="Try another pincode, city, or Use my location."
+          title={searchActive ? 'No matches' : 'No stores in this area'}
+          description={
+            searchActive
+              ? `Nothing matched “${keyword}” in ${location.label}.`
+              : 'Try another pincode, city, or Use my location.'
+          }
         />
       ) : null}
       {!loading && !error && stores.length > 0 ? (

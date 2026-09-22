@@ -1,4 +1,4 @@
-import { BuildingIcon, CircleAlertIcon, ClockIcon, CloudOffIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CheckCircle2Icon, CircleAlertIcon, ClockIcon, DatabaseIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -95,9 +95,8 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
 /**
  * A neutral step-level notice.
  *
- * Kept separate from `DraftOnlyNotice` because that one asserts where the data lives.
- * Saying "Saved in this browser only" about, say, a failed account read tells the vendor
- * something false about their store.
+ * Keep this separate from the quiet status row because it describes a problem that needs
+ * attention rather than ordinary setup state.
  */
 export function StepNotice({ message }: { message: string }) {
   return (
@@ -108,78 +107,55 @@ export function StepNotice({ message }: { message: string }) {
   )
 }
 
-/**
- * Shown on the steps of a store that has already been sent for review.
- *
- * Deliberately not the amber `StepNotice`: nothing is wrong here. The vendor did the
- * thing setup asked of them, and read-only is the consequence of that, so it reads as a
- * status. It also says what happens next, because a vendor who cannot change anything
- * and is not told why will assume the page is broken.
- *
- * The variant tunes the copy to the step:
- * - `catalog` (Steps 4-5): a submitted store can still add categories and products within
- *   its plan limits, so the copy has to invite that rather than deny it — a vendor told
- *   "nothing can change" would never try to add.
- * - `sizes` (Step 6): sizes are read-only under review, because a new size cannot be
- *   created until the store is approved. The copy says so, so a vendor with a just-added,
- *   still-unpriced product knows why they cannot price it yet rather than assuming a bug.
- * - `locked` (Steps 3, 7-9): fully read-only, nothing to add.
- *
- * See `CONTEXT.md` ("Submitted").
- */
-export function UnderReviewNotice({
-  variant = 'locked',
+/** A quiet status row for state that applies to the whole setup. */
+export function OnboardingStatus({
+  demo = false,
+  submitted = false,
   approved = false,
 }: {
-  variant?: 'catalog' | 'sizes' | 'locked'
+  demo?: boolean
+  submitted?: boolean
   approved?: boolean
 }) {
+  if (!demo && !submitted) return null
+
+  const status = demo
+    ? {
+        label: 'Demo mode',
+        detail: 'Changes stay in this browser.',
+        Icon: DatabaseIcon,
+        iconClassName: 'text-amber-700 dark:text-amber-300',
+      }
+    : approved
+      ? {
+          label: 'Approved',
+          detail: 'You can add to your catalog; saved setup is locked.',
+          Icon: CheckCircle2Icon,
+          iconClassName: 'text-[var(--ob-brand)]',
+        }
+      : {
+          label: 'Under review',
+          detail: 'You can still add categories and products.',
+          Icon: ClockIcon,
+          iconClassName: 'text-[var(--ob-brand)]',
+        }
+
+  const { Icon, iconClassName } = status
+
   return (
-    <div role="status" className="flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5 text-[var(--ob-ink)]">
-      <ClockIcon className="mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
-      {approved ? (
-        <p>
-          <span className="font-semibold">Your store is approved. </span>
-          You can add categories, products and sizes within your plan limits. Previously saved
-          setup details stay locked.
-        </p>
-      ) : variant === 'catalog' ? (
-        <p>
-          <span className="font-semibold">Your store is under review. </span>
-          You can still add categories and products within your plan limits, and each addition
-          saves to your store. Everything else stays locked until an administrator decides.
-        </p>
-      ) : variant === 'sizes' ? (
-        <p>
-          <span className="font-semibold">Your store is under review. </span>
-          Sizes and prices are locked for now — you can set them for any newly added product
-          once an administrator approves your store. Contact MithraDirect support if something
-          needs to change.
-        </p>
-      ) : (
-        <p>
-          <span className="font-semibold">Your store is with us for review. </span>
-          You can look through everything you sent, but it cannot be changed from here while an
-          administrator is deciding. Contact MithraDirect support if something needs to change.
-        </p>
-      )}
+    <div role="status" className="mx-auto flex w-full max-w-[54rem] items-center gap-2 px-4 py-2 text-xs leading-5 text-[var(--ob-ink-soft)] sm:px-6 min-[900px]:px-8">
+      <Icon className={`size-3.5 shrink-0 ${iconClassName}`} aria-hidden="true" />
+      <p><span className="font-semibold text-[var(--ob-ink)]">{status.label}</span><span aria-hidden="true"> · </span>{status.detail}</p>
     </div>
   )
 }
 
-/**
- * Shown on steps that are fully usable but cannot yet be saved to the vendor account,
- * because their backend contract is unresolved. Deliberately specific: a vendor should
- * know what is and is not stored on their store.
- */
-export function DraftOnlyNotice({ reason }: { reason: string }) {
+/** A compact explanation for a step whose controls are unavailable. */
+export function StepRestrictionNotice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35">
-      <CloudOffIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-      <p className="text-amber-900 dark:text-amber-100">
-        <span className="font-semibold">Saved in this browser only. </span>
-        {reason}
-      </p>
-    </div>
+    <p role="status" className="flex items-center gap-2 text-sm leading-5 text-[var(--ob-ink-soft)]">
+      <ClockIcon className="size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   )
 }

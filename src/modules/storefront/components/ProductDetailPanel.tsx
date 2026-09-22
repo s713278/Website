@@ -11,7 +11,6 @@ import { VariantPicker } from './VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
 import { requestAddToCart } from '@/modules/storefront/lib/request-add-to-cart'
 import {
-  formatPricePerKg,
   getProductImages,
   hasMultipleVariants,
   variantCartId,
@@ -52,7 +51,6 @@ export function ProductDetailPanel({
   const lineId = variantCartId(product.id, selected.id)
   const inCart = useCartStore((s) => Boolean(s.findLine(store.id, lineId)))
 
-  const perKg = formatPricePerKg(selected.price, selected.unit)
   // Live PDP: API `is_active` → product.inStock / variant.active
   const inStock = selected.active !== false && product.inStock !== false
   const listPrice = selected.listPrice
@@ -163,7 +161,6 @@ export function ProductDetailPanel({
                   </p>
                 ) : null}
               </div>
-              {perKg ? <p className="mt-1 text-sm text-slate-500">{perKg}</p> : null}
             </div>
 
             {store.trustStrip && store.trustStrip.length > 0 ? (

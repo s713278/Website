@@ -115,6 +115,19 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
     expect(parsePersistedEnvelope(envelope(positiveOnly))).not.toBeNull()
   })
 
+  it('keeps catalog icons on selected categories and products', () => {
+    const categoryIcon = 'https://cdn.example.test/categories/icon.svg'
+    const productIcon = 'https://cdn.example.test/products/icon.svg'
+    const withIcons = accountDraft({
+      categories: [{ ...accountCategory, icon: categoryIcon }],
+      products: [{ ...accountProduct, icon: productIcon }],
+    })
+
+    const parsed = parsePersistedEnvelope(envelope(withIcons))
+    expect(parsed?.draft.categories[0].icon).toBe(categoryIcon)
+    expect(parsed?.draft.products[0].icon).toBe(productIcon)
+  })
+
   it('rejects a version-3 envelope, exactly as it rejects an unreadable one', () => {
     expect(parsePersistedEnvelope(envelope(accountDraft(), 3))).toBeNull()
   })

@@ -51,24 +51,34 @@ function catalogChoiceState(
 }
 
 function ReferenceThumb({
-  src,
+  iconSrc,
+  imageSrc,
   fallbackSrc,
 }: {
-  src: string | null
+  iconSrc: string | null | undefined
+  imageSrc: string | null
   fallbackSrc: string
 }) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const usingFallback = !src || failedSrc === src
+  const [failedSources, setFailedSources] = useState<string[]>([])
+  const sources = [iconSrc, imageSrc].filter((source): source is string => Boolean(source))
+  const src = sources.find((source) => !failedSources.includes(source)) ?? fallbackSrc
+
+  useEffect(() => {
+    const currentSources = [iconSrc, imageSrc].filter((source): source is string => Boolean(source))
+    setFailedSources((current) => current.filter((failed) => currentSources.includes(failed)))
+  }, [iconSrc, imageSrc])
 
   return (
     <img
-      src={usingFallback ? fallbackSrc : src}
+      src={src}
       alt=""
       loading="lazy"
       decoding="async"
       className="size-12 shrink-0 rounded-lg object-cover"
       onError={() => {
-        if (!usingFallback && src) setFailedSrc(src)
+        if (src !== fallbackSrc) {
+          setFailedSources((current) => current.includes(src) ? current : [...current, src])
+        }
       }}
     />
   )
@@ -442,7 +452,11 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
                   atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
                 )}
               >
-                <ReferenceThumb src={category.imageUrl} fallbackSrc={categoryFallbackImage} />
+                <ReferenceThumb
+                  iconSrc={category.icon}
+                  imageSrc={category.imageUrl}
+                  fallbackSrc={categoryFallbackImage}
+                />
                 <span className="min-w-0">
                   <strong className="block truncate text-sm text-[var(--ob-ink)]">{category.name}</strong>
                   <span className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
@@ -615,7 +629,11 @@ function ProductCategoryPicker({
                   atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
                 )}
               >
-                <ReferenceThumb src={product.imageUrl} fallbackSrc={productFallbackImage} />
+                <ReferenceThumb
+                  iconSrc={product.icon}
+                  imageSrc={product.imageUrl}
+                  fallbackSrc={productFallbackImage}
+                />
                 <span className="min-w-0">
                   <strong className="line-clamp-2 text-sm leading-5 text-[var(--ob-ink)]">{product.name}</strong>
                   {onStore || choice.pending ? (
