@@ -3,7 +3,9 @@ import { cn } from '@/lib/utils'
 import { VariantSelectSheet } from '@/modules/storefront/components/VariantSelectSheet'
 import {
   duplicateVariantUnits,
+  findVariantBySelection,
   formatVariantLabel,
+  variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
 
@@ -24,9 +26,12 @@ export function CardVariantPicker({
 }: CardVariantPickerProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const preview = variants.slice(0, PREVIEW_LIMIT)
-  const selected = variants.find((variant) => variant.id === selectedId)
+  const selected = findVariantBySelection(variants, selectedId)
   const selectedOutside =
-    Boolean(selected) && !preview.some((variant) => variant.id === selectedId)
+    Boolean(selected) &&
+    !preview.some(
+      (variant) => variantSelectKey(variant) === selectedId || variant.id === selectedId,
+    )
   const chips = selectedOutside && selected ? [...preview, selected] : preview
   const moreCount = Math.max(0, variants.length - preview.length)
   const dupes = duplicateVariantUnits(variants)
@@ -41,12 +46,13 @@ export function CardVariantPicker({
     >
        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Choose pack size">
         {chips.map((variant) => {
-          const active = selectedId === variant.id
+          const key = variantSelectKey(variant)
+          const active = selectedId === key || selectedId === variant.id
           return (
             <button
-              key={variant.id}
+              key={key}
               type="button"
-              onClick={() => onSelect(variant.id)}
+              onClick={() => onSelect(key)}
               aria-pressed={active}
               className={cn(
                 'min-h-9 rounded-full border px-3 py-2 text-[11px] font-semibold transition',

@@ -1,7 +1,7 @@
 /**
  * UI entry for cart mutations.
  * - Customer → cart-actions (API / demo)
- * - Guest → pending + login
+ * - Guest → pending + login, then back to the shop (not the cart)
  * - Errors → backend `user_message` (401 → login)
  */
 import type { NavigateFunction } from 'react-router-dom'
@@ -11,8 +11,9 @@ import {
   cartActionErrorMessage,
   setVendorCartQty,
 } from '@/modules/storefront/lib/cart-actions'
+import { isMissingVendorCartError } from '@/modules/storefront/lib/cart-errors'
 import { savePendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
+import { storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, ProductVariant } from '@/modules/storefront/types'
 import { isApiError } from '@/shared/api'
@@ -27,15 +28,7 @@ function isUnauthorized(error: unknown): boolean {
 }
 
 function isCartNotFound(error: unknown): boolean {
-  if (!isApiError(error)) return false
-  if (error.status === 404) return true
-  const body = error.body
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return false
-  const record = body as Record<string, unknown>
-  if (String(record.reason_code ?? '') === '404' || String(record.status ?? '') === '404') {
-    return true
-  }
-  return /cart not found/i.test(`${record.failure_reason ?? ''} ${record.user_message ?? ''}`)
+  return isMissingVendorCartError(error)
 }
 
 export function redirectCartUnauthorized(
@@ -112,7 +105,7 @@ export async function requestAddToCart({
   onError,
 }: AddArgs): Promise<boolean> {
   const amount = Math.max(1, qty)
-  const from = returnTo ?? storeCartPath(storeId)
+  const from = returnTo ?? storePath(storeId)
 
   if (!canShopAsCustomer(user)) {
     savePendingCartAdd({
@@ -155,7 +148,7 @@ export async function requestSetCartQty({
   returnTo,
   onError,
 }: SetQtyArgs): Promise<boolean> {
-  const from = returnTo ?? storeCartPath(storeId)
+  const from = returnTo ?? storePath(storeId)
 
   if (!canShopAsCustomer(user)) {
     goLogin(navigate, from)

@@ -50,6 +50,7 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
         </Link>
 
         <ProductCartControl
+          key={`${product.id}:${selected.id}`}
           storeId={storeId}
           storeName={storeName}
           product={product}

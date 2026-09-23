@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 import {
   duplicateVariantUnits,
   formatVariantLabel,
+  variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
 
@@ -30,12 +31,13 @@ export function VariantPicker({
       {label ? <p className="mb-2 text-sm font-semibold text-slate-800">{label}</p> : null}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Choose pack size">
         {variants.map((variant) => {
-          const active = selectedId === variant.id
+          const key = variantSelectKey(variant)
+          const active = selectedId === key || selectedId === variant.id
           return (
             <button
-              key={variant.id}
+              key={key}
               type="button"
-              onClick={() => onSelect(variant.id)}
+              onClick={() => onSelect(key)}
               aria-pressed={active}
               className={cn(
                 'min-h-10 rounded-full border px-4 py-2 text-sm font-semibold transition duration-150',

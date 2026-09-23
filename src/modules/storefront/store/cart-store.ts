@@ -1,13 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { PendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
+import { findVendorCartLine, isSameCartSku } from '@/modules/storefront/lib/cart-line-match'
 import {
   buildCartLineSnapshot,
-  resolveVariant,
+  resolveOwnedVariant,
   variantCartId,
   variantLineName,
 } from '@/modules/storefront/lib/product-variants'
 import type { CartLine, CartSummary, Product, ProductVariant } from '../types'
+
+export const CART_STORAGE_KEY = 'md-cart'
 
 /** Demo / interim bill when API `cart_summary` is not stored yet. */
 export function summaryFromLines(lines: CartLine[]): CartSummary {
@@ -49,20 +52,11 @@ type CartState = {
   subtotal: (storeId?: string) => number
 }
 
-function sameSku(a: CartLine, b: { storeId: string; itemId: string; skuId?: string }) {
-  if (a.storeId !== b.storeId) return false
-  return (
-    a.itemId === b.itemId ||
-    (Boolean(b.skuId) && (a.skuId === b.skuId || a.itemId === b.skuId)) ||
-    (Boolean(a.skuId) && a.skuId === b.itemId)
-  )
-}
-
 function upsertLine(
   current: CartLine[],
   next: Omit<CartLine, 'qty'> & { qty: number },
 ): CartLine[] {
-  const existing = current.find((line) => sameSku(line, next))
+  const existing = current.find((line) => isSameCartSku(line, next))
   if (!existing) {
     return [...current, { ...next, lineTotal: next.lineTotal ?? next.price * next.qty }]
   }
@@ -120,11 +114,7 @@ export const useCartStore = create<CartState>()(
       },
 
       findLine(vendorId, itemId) {
-        return get().lines.find(
-          (line) =>
-            line.storeId === vendorId &&
-            (line.itemId === itemId || line.skuId === itemId || line.cartItemId === itemId),
-        )
+        return findVendorCartLine(get().lines, vendorId, itemId)
       },
 
       clearVendor(vendorId) {
@@ -136,7 +126,7 @@ export const useCartStore = create<CartState>()(
       },
 
       addItem(storeId, storeName, item, variant, qty = 1) {
-        const resolved = resolveVariant(item, variant)
+        const resolved = resolveOwnedVariant(item, variant)
         const { itemId, name, price } = buildCartLineSnapshot(item, resolved)
         const nextQty = Math.max(1, qty)
         const next = upsertLine(get().lines, {
@@ -176,26 +166,20 @@ export const useCartStore = create<CartState>()(
       },
 
       removeItem(itemId) {
-        const target = get().lines.find(
-          (line) =>
-            line.itemId === itemId || line.skuId === itemId || line.cartItemId === itemId,
+        const target = get().lines.find((line) =>
+          Boolean(findVendorCartLine([line], line.storeId, itemId)),
         )
-        const next = get().lines.filter(
-          (line) =>
-            line.itemId !== itemId && line.skuId !== itemId && line.cartItemId !== itemId,
-        )
+        if (!target) return
+        const next = get().lines.filter((line) => line !== target)
         set({
           lines: next,
-          summaries: target
-            ? putSummary(next, get().summaries ?? {}, target.storeId)
-            : (get().summaries ?? {}),
+          summaries: putSummary(next, get().summaries ?? {}, target.storeId),
         })
       },
 
       setQty(itemId, qty) {
-        const line = get().lines.find(
-          (entry) =>
-            entry.itemId === itemId || entry.skuId === itemId || entry.cartItemId === itemId,
+        const line = get().lines.find((entry) =>
+          Boolean(findVendorCartLine([entry], entry.storeId, itemId)),
         )
         if (!line) return
         if (qty <= 0) {
@@ -248,7 +232,7 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: 'md-cart',
+      name: CART_STORAGE_KEY,
       merge: (persisted, current) => {
         const raw = (persisted ?? {}) as Partial<CartState>
         return {

@@ -74,7 +74,9 @@ into a session by `applySession()`.
    response-shape surprise
 7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
 8. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
-   handler registered through `onExplicitSignOut()`
+   handler registered through `onExplicitSignOut()`. Customer cleanup clears `md-cart` memory and
+   persist storage, pending add, in-flight cart writes, and storefront session caches. The next
+   customer OTP loads that identity's cart from the server. Vendor payment records stay.
 9. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
 
 ### Refresh response shape

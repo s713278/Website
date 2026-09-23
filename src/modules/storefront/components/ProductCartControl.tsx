@@ -1,9 +1,10 @@
 import { type MouseEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Loader2, Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { lineMatchesVariant } from '@/modules/storefront/lib/cart-line-match'
 import { requestAddToCart, requestSetCartQty } from '@/modules/storefront/lib/request-add-to-cart'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
+import { storePath } from '@/modules/storefront/lib/store-paths'
 import { variantCartId } from '@/modules/storefront/lib/product-variants'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, ProductVariant } from '@/modules/storefront/types'
@@ -25,18 +26,15 @@ export function ProductCartControl({
   className,
 }: ProductCartControlProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const [pending, setPending] = useState(false)
   const lineId = variantCartId(product.id, variant.id)
-  const cartPath = storeCartPath(storeId)
+  const returnTo = `${location.pathname}${location.search}` || storePath(storeId)
 
   const qty = useCartStore((s) => {
-    const line = s.lines.find(
-      (entry) =>
-        entry.storeId === storeId &&
-        (entry.skuId === variant.id ||
-          entry.itemId === lineId ||
-          entry.itemId === variant.id),
+    const line = s.lines.find((entry) =>
+      lineMatchesVariant(entry, storeId, product.id, variant.id),
     )
     return line?.qty ?? 0
   })
@@ -67,7 +65,7 @@ export function ProductCartControl({
         product,
         variant,
         qty: 1,
-        returnTo: cartPath,
+        returnTo,
         onError: (message) => window.alert(message),
       }),
     )
@@ -84,7 +82,7 @@ export function ProductCartControl({
         product,
         variant,
         qty: 1,
-        returnTo: cartPath,
+        returnTo,
         onError: (message) => window.alert(message),
       }),
     )
@@ -92,7 +90,9 @@ export function ProductCartControl({
 
   function handleDecrease(event: MouseEvent) {
     stopNav(event)
-    const line = useCartStore.getState().findLine(storeId, lineId)
+    const line = useCartStore
+      .getState()
+      .lines.find((entry) => lineMatchesVariant(entry, storeId, product.id, variant.id))
     const current = line?.qty ?? qty
     void run(() =>
       requestSetCartQty({
@@ -103,7 +103,7 @@ export function ProductCartControl({
         itemId: lineId,
         qty: current - 1,
         products: [product],
-        returnTo: cartPath,
+        returnTo,
         onError: (message) => window.alert(message),
       }),
     )

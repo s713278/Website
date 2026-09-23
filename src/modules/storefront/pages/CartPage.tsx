@@ -8,7 +8,7 @@ import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSu
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import {
   cartActionErrorMessage,
-  hydrateVendorCart,
+  syncVendorCart,
 } from '@/modules/storefront/lib/cart-actions'
 import {
   canShopAsCustomer,
@@ -62,8 +62,8 @@ function CartForStore({ storeId }: { storeId: string }) {
   const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
   const lines = useCartStore((s) => s.lines)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  const hasLocalLines = lines.some((line) => line.storeId === storeId)
   const hydratedRef = useRef(false)
+  const hydratedUserId = useRef(user?.id)
   const [pendingQtyIds, setPendingQtyIds] = useState(() => new Set<string>())
   const [removingIds, setRemovingIds] = useState(() => new Set<string>())
   const fromPath = `${location.pathname}${location.search}`
@@ -95,18 +95,21 @@ function CartForStore({ storeId }: { storeId: string }) {
     }
   }
 
-  // Cold-start hydrate once. Do not re-run when the user clears the last item.
+  // Cold-start hydrate once per identity. Do not re-run when the user clears the last item.
   useEffect(() => {
+    if (hydratedUserId.current !== user?.id) {
+      hydratedRef.current = false
+      hydratedUserId.current = user?.id
+    }
     if (!store || user?.role !== 'customer') return
     if (storeClosed) return
     if (hydratedRef.current) return
     hydratedRef.current = true
-    if (hasLocalLines) return
-    void hydrateVendorCart(store.id, store.name).catch((error) => {
+    void syncVendorCart(store.id, store.name).catch((error) => {
       if (redirectCartUnauthorized(error, navigate, fromPath)) return
       window.alert(cartActionErrorMessage(error))
     })
-  }, [store, storeClosed, user?.role, hasLocalLines, navigate, fromPath])
+  }, [store, storeClosed, user?.id, user?.role, navigate, fromPath])
 
   return (
     <StorePageStates

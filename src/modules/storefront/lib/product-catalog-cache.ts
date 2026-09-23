@@ -1,4 +1,5 @@
 import type { Product } from '@/modules/storefront/types'
+import { mergeProductRecords } from '@/shared/api/mappers/storefront-products'
 import {
   ALL_CATEGORY,
   type CategoryFilter,
@@ -163,17 +164,17 @@ export function mergeStoreProducts(
     if (!product.id) continue
 
     const previous = bucket.products.get(product.id)
+    const next = previous ? mergeProductRecords(previous, product) : product
 
     // Remove old category indexes before replacing the product.
     if (previous) {
       unindexProduct(bucket, product.id, previous)
     }
 
-    // Upsert product.
-    bucket.products.set(product.id, product)
+    bucket.products.set(product.id, next)
 
     // Add the product to its current category indexes.
-    indexProduct(bucket, product)
+    indexProduct(bucket, next)
   }
 
   trimBucket(bucket)

@@ -351,12 +351,19 @@ on `top_products`, not on the sampled vendor rows, so it is not treated as landi
 `src/modules/storefront/lib/cart-actions.ts` connects storefront actions to the app-facing
 `cartService`. Live adds and quantity updates apply the returned cart snapshot after API success;
 deletion removes the local line after the request succeeds, or locally if it has no backend item ID.
-Demo actions update Zustand directly. The package's parallel cart wrapper is not used by this path.
+Mutations for one vendor run in a queue so an older snapshot cannot wipe a later add. A missing
+cart *line* ("specified item was not found") refreshes that vendor's cart; it does not clear it.
+Logout increments a write epoch and drops `md-cart`, so a late response cannot refill the
+previous identity's cart. After the next customer OTP, `StorefrontLayout` syncs the live cart
+and then applies any pending add. Demo actions update Zustand directly. The package's parallel
+cart wrapper is not used by this path.
 
 `useCartStore` persists lines and summaries per vendor under `md-cart`; replacing one vendor's cart
-retains other vendors' lines. `hydrateVendorCart` fetches a live snapshot only when that vendor has
-no local lines, so persisted state is not continuously reconciled with the backend. Product metadata
-enriches API lines before they reach the store. Trace this orchestration when changing cart behavior.
+retains other vendors' lines. Lines are keyed by SKU, so two sizes of the same product stay
+independent. After login, `syncVendorCart` always replaces that vendor from the server — leftover
+`md-cart` names from the previous session are not kept. Line labels come from the catalog SKU
+(or the size just tapped), not from an older local name. Trace this orchestration when changing
+cart behavior.
 
 #### Vendor dashboard reads
 
@@ -623,7 +630,7 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
   Axios instance built without the just-configured `onUnauthorized`, so a cold-load 401 can
   fail to trigger logout.
 - **`sync:api` needs pnpm** despite this being an npm repo — see §8.
-- **Cart hydration skips vendors with cached lines** — see [Storefront cart](#storefront-cart).
+- **After login the live cart is always replaced from the server** — see [Storefront cart](#storefront-cart).
 - **`useAuthStore.login`/`register` are demo-only service actions.** The login screens use OTP;
   see [authentication status](../README.md#authentication-status).
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a

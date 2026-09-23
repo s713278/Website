@@ -42,12 +42,40 @@ function pickProductName(raw: Record<string, unknown>): string {
   return ''
 }
 
+function sizeFromName(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const dash = value.match(/[-–—]\s*(\d[\d.,]*\s*[a-zA-Z]+)\s*$/)
+  return dash?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
+/**
+ * Pack size for chips and cart lines. Prefer the vendor size label when
+ * quantity_value is shared across SKUs (e.g. both say 1 kg but sku_size is 2 kg).
+ */
 function formatSkuSizeLabel(raw: Record<string, unknown>): string {
-  const unit = String(raw.unit ?? '').trim()
-  const qty = asNumber(raw.quantity_value)
-  if (qty == null || !Number.isFinite(qty) || !unit) return ''
-  // 1 -> "1", 1.50 -> "1.5", 0.333333 -> "0.333"
-  return `${parseFloat(qty.toFixed(3)).toString()} ${unit}`
+  const skuSize = typeof raw.sku_size === 'string' ? raw.sku_size.trim() : ''
+  if (skuSize) return skuSize
+
+  const skuVariant = typeof raw.sku_variant === 'string' ? raw.sku_variant.trim() : ''
+  if (skuVariant && /\d/.test(skuVariant) && !GENERIC_TYPE_LABELS.has(skuVariant.toUpperCase())) {
+    return skuVariant
+  }
+
+  const measured = mapSkuMeasurement(raw)
+  if (measured.quantity != null && measured.unit) {
+    // `unit` is already a full size ("2 kg") — do not prefix quantity_value.
+    if (/\d/.test(measured.unit) && /[a-zA-Z]/.test(measured.unit)) {
+      return measured.unit
+    }
+    return `${parseFloat(measured.quantity.toFixed(3)).toString()} ${measured.unit}`
+  }
+
+  const fromName = sizeFromName(raw.sku_name) || sizeFromName(raw.sku_code) || sizeFromName(raw.name)
+  if (fromName) return fromName
+
+  // API sometimes sends the full size in `unit` ("2 kg") without quantity_value.
+  if (measured.unit && /\d/.test(measured.unit)) return measured.unit
+  return ''
 }
 
 function mapStorefrontProductVariant(raw: Record<string, unknown>): ProductVariant | null {
@@ -131,6 +159,58 @@ function mapStorefrontProduct(raw: Record<string, unknown>): Product | null {
   }
 }
 
+function dedupeVariants(variants: ProductVariant[]): ProductVariant[] {
+  const seen = new Set<string>()
+  const unique: ProductVariant[] = []
+  for (const variant of variants) {
+    if (seen.has(variant.id)) continue
+    seen.add(variant.id)
+    unique.push(variant)
+  }
+  return unique
+}
+
+/** Two SKU rows of the same vendor_product_id become one product with both sizes. */
+export function mergeProductRecords(existing: Product, incoming: Product): Product {
+  const variants = dedupeVariants([...(existing.variants ?? []), ...(incoming.variants ?? [])])
+  const prices = [existing.price, incoming.price, existing.minPrice, incoming.minPrice].filter(
+    (value): value is number => value != null && Number.isFinite(value),
+  )
+  const maxes = [existing.price, incoming.price, existing.maxPrice, incoming.maxPrice].filter(
+    (value): value is number => value != null && Number.isFinite(value),
+  )
+  return {
+    ...existing,
+    ...incoming,
+    id: existing.id,
+    name: existing.name && existing.name !== 'Item' ? existing.name : incoming.name,
+    variants: variants.length ? variants : existing.variants,
+    defaultVariantId: existing.defaultVariantId ?? incoming.defaultVariantId,
+    variantsCount: Math.max(
+      existing.variantsCount ?? 0,
+      incoming.variantsCount ?? 0,
+      variants.length,
+    ),
+    minPrice: prices.length ? Math.min(...prices) : existing.minPrice,
+    maxPrice: maxes.length ? Math.max(...maxes) : existing.maxPrice,
+  }
+}
+
+export function collapseStorefrontProducts(items: Product[]): Product[] {
+  const order: string[] = []
+  const byId = new Map<string, Product>()
+  for (const item of items) {
+    const current = byId.get(item.id)
+    if (!current) {
+      byId.set(item.id, item)
+      order.push(item.id)
+      continue
+    }
+    byId.set(item.id, mergeProductRecords(current, item))
+  }
+  return order.map((id) => byId.get(id)!)
+}
+
 /**
  * Map paginated GET /v1/vendors/{id}/storefront/products payload
  * (after unwrapData — the `data` object with `result` + page meta).
@@ -143,10 +223,12 @@ export function mapStorefrontProductPage(payload: unknown): ProductPage {
       ? payload
       : []
 
-  const items = rows
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map(mapStorefrontProduct)
-    .filter((item): item is Product => item != null)
+  const items = collapseStorefrontProducts(
+    rows
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map(mapStorefrontProduct)
+      .filter((item): item is Product => item != null),
+  )
 
   const pageNumber = asNumber(rec?.page_number) ?? 0
   const pageSize = asNumber(rec?.page_size) ?? items.length

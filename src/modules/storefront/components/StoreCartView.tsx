@@ -9,6 +9,7 @@ import {
   StorefrontMobileActionBar,
 } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import {
+  displayLineName,
   lineAmount,
   lineUnitPrice,
   parseLineUnit,
@@ -206,7 +207,7 @@ function CartLineRow({
   onSetQty: (itemId: string, qty: number) => void
   onRemove: (itemId: string) => void
 }) {
-  const displayName = line.name.replace(/\s*\([^)]*\)\s*$/, '')
+  const displayName = displayLineName(line.name)
   const unit = parseLineUnit(line.name)
   const meta = unit
   const unitPrice = lineUnitPrice(line)

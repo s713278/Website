@@ -3,7 +3,9 @@ import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   duplicateVariantUnits,
+  findVariantBySelection,
   formatVariantLabel,
+  variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -54,7 +56,7 @@ export function VariantSelectSheet({
     )
   }, [query, variants])
 
-  const draft = variants.find((variant) => variant.id === draftId) ?? variants[0]
+  const draft = findVariantBySelection(variants, draftId) ?? variants[0]
 
   if (!open) return null
 
@@ -107,12 +109,13 @@ export function VariantSelectSheet({
           ) : (
             <ul className="space-y-0.5">
               {filtered.map((variant) => {
-                const active = draftId === variant.id
+                const key = variantSelectKey(variant)
+                const active = draftId === key || draftId === variant.id
                 return (
-                  <li key={variant.id}>
+                  <li key={key}>
                     <button
                       type="button"
-                      onClick={() => setDraftId(variant.id)}
+                      onClick={() => setDraftId(key)}
                       className={cn(
                         'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition',
                         active
@@ -166,7 +169,7 @@ export function VariantSelectSheet({
             disabled={!draft}
             onClick={() => {
               if (!draft) return
-              onConfirm(draft.id)
+              onConfirm(variantSelectKey(draft))
               onClose()
             }}
             className="h-11 min-w-[7.5rem] rounded-xl bg-[var(--store-accent,#f97316)] px-5 text-sm font-bold text-white hover:opacity-90"

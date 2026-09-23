@@ -46,6 +46,16 @@ export function vendorLandingPath(entry: OnboardingEntry | null) {
  * `entry` carries the vendor's account state when the caller has already resolved it,
  * so a submitted store is not routed into setup only to be bounced out again.
  */
+function customerResumePath(from: string) {
+  if (from === '/checkout' || from === '/orders') return from
+  if (from === '/cart') return '/'
+  if (!from.startsWith('/stores')) return from
+
+  const pathname = from.split('?')[0]
+  const cartOnShop = /^\/stores\/([^/]+)\/cart\/?$/.exec(pathname)
+  return cartOnShop ? `/stores/${cartOnShop[1]}` : from
+}
+
 export function resumePathAfterLogin(
   user: User,
   from?: string | null,
@@ -58,8 +68,8 @@ export function resumePathAfterLogin(
     isSafePath(from) &&
     (from === '/checkout' || from === '/orders' || from === '/cart' || from.startsWith('/stores'))
   ) {
-    return from
+    return customerResumePath(from)
   }
 
-  return user.roles.includes('vendor') ? vendorLandingPath(entry ?? null) : '/cart'
+  return user.roles.includes('vendor') ? vendorLandingPath(entry ?? null) : '/'
 }

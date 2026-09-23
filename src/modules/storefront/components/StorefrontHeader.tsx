@@ -3,6 +3,7 @@ import { ChevronLeft, ClipboardList, LogOut, Menu, Search, ShoppingCart, User } 
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
 import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { storeIdFromPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import {
@@ -163,8 +164,8 @@ function HeaderActions({
   const user = useAuthStore((s) => s.user)
   const badge = visibleCartCount(user, cartCount)
   const shop = { name: storeName, logoUrl }
-  // Same as add-to-cart: guest goes to `/login` with `from` = this shop's cart path.
-  const login = customerLoginLink(cartHref, shop)
+  const shopId = storeIdFromPath(cartHref)
+  const login = customerLoginLink(shopId ? storePath(shopId) : '/', shop)
   const cartLink = linkFromNavTarget(
     canShopAsCustomer(user) || !isLiveApi()
       ? cartHref
