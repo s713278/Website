@@ -8,20 +8,20 @@ import {
   orderPrimaryImage,
   orderStatusLabel,
 } from '@/modules/storefront/lib/order-display'
-import { storeOrderSuccessPath } from '@/modules/storefront/lib/store-paths'
+import { storeOrderPath } from '@/modules/storefront/lib/store-paths'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
 
 type OrderCardProps = {
   order: CustomerOrder
+  storeId?: string
 }
 
-export function OrderCard({ order }: OrderCardProps) {
+export function OrderCard({ order, storeId }: OrderCardProps) {
   const summary = orderItemsSummary(order.items)
   const imageUrl = orderPrimaryImage(order)
-  const detailHref = order.storeId
-    ? storeOrderSuccessPath(order.storeId, order.id)
-    : '/orders'
+  const shopId = order.storeId || storeId
+  const detailHref = shopId ? storeOrderPath(shopId, order.id) : '/orders'
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">

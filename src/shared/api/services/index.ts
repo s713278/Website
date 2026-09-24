@@ -43,6 +43,7 @@ export {
 } from '../mappers/storefront-checkout'
 export { cartService } from './cart.service'
 export {
+  getMyOrder,
   listMyOrders,
   ordersService,
   placeOrder,

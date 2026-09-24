@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   extractAddressId,
   mapCreateOrderFromCartBody,
+  mapCustomerOrder,
+  mapCustomerOrderDetail,
+  mapCustomerOrderHistory,
   mapNameAndAddressRequest,
   mapPlacedOrder,
 } from './storefront-order'
@@ -151,5 +154,46 @@ describe('mapPlacedOrder', () => {
       status: 'SCHEDULED',
       placedAt: '2026-09-19T10:00:00',
     })
+  })
+})
+
+describe('mapCustomerOrder', () => {
+  it('maps a customer order-detail payload', () => {
+    expect(
+      mapCustomerOrderDetail({
+        data: {
+          order_id: 1720,
+          vendor_id: 91,
+          store_name: 'FreshMart',
+          order_status: 'PENDING',
+          created_at: '2026-04-18T09:30:00',
+          order_amount: { amount: 59.97 },
+          order_items: [
+            { sku_id: 1452, sku_name: 'Organic Milk', size: '1L', quantity: 2, image_path: '/a.jpg' },
+          ],
+        },
+      }),
+    ).toEqual({
+      id: '1720',
+      storeId: '91',
+      storeName: 'FreshMart',
+      total: 59.97,
+      status: 'PENDING',
+      placedAt: '2026-04-18T09:30:00',
+      items: [{ name: 'Organic Milk (1L)', qty: 2, itemId: '1452', imageUrl: '/a.jpg' }],
+    })
+  })
+
+  it('maps history rows from result or a flat list', () => {
+    expect(
+      mapCustomerOrderHistory({
+        data: {
+          result: [{ order_id: 9, vendor_name: 'Shop', amount: 30, order_status: 'DELIVERED' }],
+        },
+      }),
+    ).toEqual([
+      expect.objectContaining({ id: '9', storeName: 'Shop', total: 30, status: 'DELIVERED' }),
+    ])
+    expect(mapCustomerOrder({ id: 3, vendor_name: 'Shop' })?.id).toBe('3')
   })
 })

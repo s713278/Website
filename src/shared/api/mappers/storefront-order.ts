@@ -303,3 +303,73 @@ export function mapPlacedOrder(
     placedAt: asString(data.order_date ?? data.created_at) ?? new Date().toISOString(),
   }
 }
+
+export type MappedCustomerOrder = {
+  id: string
+  storeId?: string
+  storeName: string
+  total: number
+  status: string
+  placedAt: string
+  items: Array<{ name: string; qty: number; itemId?: string; imageUrl?: string }>
+}
+
+function mapCustomerOrderItem(raw: unknown): MappedCustomerOrder['items'][number] {
+  const line = asRecord(raw) ?? {}
+  const name = asString(line.sku_name ?? line.name ?? line.product_name) ?? 'Item'
+  const size = asString(line.size)
+  const imageUrl = asString(line.image_path ?? line.image_url)
+  return {
+    name: size && !name.includes(size) ? `${name} (${size})` : name,
+    qty: Math.max(1, Math.floor(asMoney(line.quantity ?? line.qty) ?? 1)),
+    ...(asString(line.sku_id) ? { itemId: asString(line.sku_id)! } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+  }
+}
+
+function historyItems(raw: Record<string, unknown>) {
+  if (Array.isArray(raw.order_items)) return raw.order_items
+  if (Array.isArray(raw.items)) return raw.items
+  return []
+}
+
+/** GET /v1/users/{id}/orders/history row, or GET /v1/users/{id}/orders/{order_id} data. */
+export function mapCustomerOrder(raw: unknown): MappedCustomerOrder | null {
+  const item = asRecord(raw)
+  if (!item) return null
+  const id = asString(item.order_id ?? item.id)
+  if (!id) return null
+  const amount = asRecord(item.order_amount)
+  return {
+    id,
+    storeId: asString(item.vendor_id) ?? undefined,
+    storeName: asString(item.vendor_name ?? item.store_name ?? item.storeName) ?? 'Store',
+    total: asMoney(amount?.amount ?? item.amount ?? item.total) ?? 0,
+    status: asString(item.order_status ?? item.status) ?? 'placed',
+    placedAt:
+      asString(item.created_at ?? item.order_date ?? item.placedAt ?? item.delivery_date) ??
+      new Date().toISOString(),
+    items: historyItems(item).map(mapCustomerOrderItem),
+  }
+}
+
+export function mapCustomerOrderDetail(payload: unknown): MappedCustomerOrder | null {
+  const root = asRecord(payload)
+  const data = asRecord(root?.data) ?? root
+  return mapCustomerOrder(data)
+}
+
+export function mapCustomerOrderHistory(payload: unknown): MappedCustomerOrder[] {
+  const root = asRecord(payload)
+  const data = root?.data ?? root
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray(asRecord(data)?.content)
+      ? (asRecord(data)?.content as unknown[])
+      : Array.isArray(asRecord(data)?.result)
+        ? (asRecord(data)?.result as unknown[])
+        : []
+  return list
+    .map(mapCustomerOrder)
+    .filter((order): order is MappedCustomerOrder => Boolean(order))
+}

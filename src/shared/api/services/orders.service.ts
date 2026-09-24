@@ -1,11 +1,13 @@
 import type { CartLine } from '@/modules/storefront/types'
 import { reverseGeocode as lookupAreaFromCoords } from '@/shared/lib/customer-location'
-import { apiGet, apiPatch, apiPost, unwrapData } from '../client'
+import { apiGet, apiPatch, apiPost } from '../client'
 import { isLiveApi } from '../mode'
 import {
   asNumericId,
   extractAddressId,
   mapCreateOrderFromCartBody,
+  mapCustomerOrderDetail,
+  mapCustomerOrderHistory,
   mapNameAndAddressRequest,
   mapPlacedOrder,
   parseLocationParts,
@@ -208,31 +210,27 @@ export async function listMyOrders(userId?: string): Promise<CustomerOrder[]> {
 
   if (!userId) return []
   const res = await apiGet<ApiEnvelope<unknown>>(`/v1/users/${userId}/orders/history`)
-  const data = unwrapData(res)
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { content?: unknown[] })?.content)
-      ? (data as { content: unknown[] }).content
-      : []
+  return mapCustomerOrderHistory(res)
+}
 
-  return list
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      storeName: String(item.vendor_name ?? item.storeName ?? item.restaurantName ?? 'Store'),
-      total: Number(item.total ?? 0),
-      status: String(item.status ?? 'placed'),
-      placedAt: String(item.created_at ?? item.placedAt ?? new Date().toISOString()),
-      items: Array.isArray(item.items)
-        ? (item.items as Array<Record<string, unknown>>).map((line) => ({
-            name: String(line.name ?? line.product_name ?? 'Item'),
-            qty: Number(line.qty ?? line.quantity ?? 1),
-          }))
-        : [],
-    }))
+export async function getMyOrder(
+  userId: string | undefined,
+  orderId: string,
+): Promise<CustomerOrder | null> {
+  if (!isLiveApi()) {
+    return readDemoOrders().find((order) => order.id === orderId) ?? null
+  }
+
+  const uid = asNumericId(userId)
+  const oid = asNumericId(orderId)
+  if (!uid || !oid) return null
+
+  const res = await apiGet<ApiEnvelope<unknown>>(`/v1/users/${uid}/orders/${oid}`)
+  return mapCustomerOrderDetail(res)
 }
 
 export const ordersService = {
   placeOrder,
   listMyOrders,
+  getMyOrder,
 }

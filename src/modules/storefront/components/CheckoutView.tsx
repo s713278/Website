@@ -247,9 +247,8 @@ export function CheckoutView({
     }
   }
 
-  const placeOrderLabel = placing
-    ? 'Placing order…'
-    : `Place order · ${formatCurrency(totals.total)}`
+  const placeOrderLabel = placing ? 'Creating order…' : 'Create Order & Send on WhatsApp'
+  const placeOrderAmount = placing ? null : formatCurrency(totals.total)
 
   const itemLabel = `${totals.itemCount} ${totals.itemCount === 1 ? 'item' : 'items'} in your cart`
 
@@ -549,7 +548,12 @@ export function CheckoutView({
                   onClick={() => void placeOrderOnWhatsApp()}
                 >
                   <ShieldCheck className="size-4 shrink-0" aria-hidden />
-                  <span className="flex-1 truncate">{placeOrderLabel}</span>
+                  <span className="min-w-0 flex-1 text-left leading-tight">
+                    <span className="block truncate">{placeOrderLabel}</span>
+                    {placeOrderAmount ? (
+                      <span className="block text-xs font-bold">{placeOrderAmount}</span>
+                    ) : null}
+                  </span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden />
                 </Button>
 
@@ -598,7 +602,12 @@ export function CheckoutView({
               onClick={() => void placeOrderOnWhatsApp()}
             >
               <ShieldCheck className="size-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">{placeOrderLabel}</span>
+              <span className="min-w-0 flex-1 text-left leading-tight">
+                <span className="block truncate">{placeOrderLabel}</span>
+                {placeOrderAmount ? (
+                  <span className="block text-xs font-bold">{placeOrderAmount}</span>
+                ) : null}
+              </span>
               <ChevronRight className="size-4 shrink-0" aria-hidden />
             </Button>
           </StorefrontMobileActionBar>

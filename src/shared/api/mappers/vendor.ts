@@ -204,6 +204,7 @@ export function mapVendorToStore(raw: Record<string, unknown>): Store {
     trustStrip: mapTrustStrip(raw.trust_strip),
     fulfillment: mapFulfillment(raw.fulfillment),
     offer: trimmedOrUndefined(raw.announcement_bar) ?? trimmedOrUndefined(raw.offer),
+    phone: trimmedOrUndefined(raw.order_whatsapp_number) ?? trimmedOrUndefined(raw.phone),
     theme: mapVendorTheme(raw),
     categories: mapCategories(raw.categories),
     subscriptionStatus: mapSubscriptionStatus(raw),

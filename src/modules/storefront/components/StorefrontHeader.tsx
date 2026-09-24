@@ -3,7 +3,7 @@ import { ChevronLeft, ClipboardList, LogOut, Menu, Search, ShoppingCart, User } 
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
 import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
-import { storeIdFromPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { storeIdFromPath, storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import {
@@ -16,12 +16,14 @@ import {
 } from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
-const NAV = [
-  { id: 'home', label: 'Home' },
-  { id: 'categories', label: 'Categories' },
-  { id: 'orders', label: 'Track Order', href: '/orders' },
-  { id: 'contact', label: 'Contact' },
-] as const
+function storeNav(storeId: string | null) {
+  return [
+    { id: 'home', label: 'Home' },
+    { id: 'categories', label: 'Categories' },
+    { id: 'orders', label: 'Track Order', href: storeId ? storeOrdersPath(storeId) : '/orders' },
+    { id: 'contact', label: 'Contact' },
+  ] as const
+}
 
 type StorefrontHeaderProps = {
   storeName: string
@@ -85,9 +87,11 @@ function NavItem({
 function AccountControl({
   loginTo,
   loginState,
+  ordersHref,
 }: {
   loginTo: string
   loginState: { from: string; shopName?: string; shopLogoUrl?: string }
+  ordersHref: string
 }) {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
@@ -131,7 +135,7 @@ function AccountControl({
           </>
         ) : null}
         <DropdownMenuItem asChild>
-          <Link to="/orders">
+          <Link to={ordersHref}>
             <ClipboardList />
             My orders
           </Link>
@@ -165,6 +169,7 @@ function HeaderActions({
   const badge = visibleCartCount(user, cartCount)
   const shop = { name: storeName, logoUrl }
   const shopId = storeIdFromPath(cartHref)
+  const ordersHref = shopId ? storeOrdersPath(shopId) : '/orders'
   const login = customerLoginLink(shopId ? storePath(shopId) : '/', shop)
   const cartLink = linkFromNavTarget(
     canShopAsCustomer(user) || !isLiveApi()
@@ -187,7 +192,7 @@ function HeaderActions({
         <Search className="size-[1.125rem]" strokeWidth={1.75} />
       </button>
 
-      <AccountControl loginTo={login.to} loginState={login.state} />
+      <AccountControl loginTo={login.to} loginState={login.state} ordersHref={ordersHref} />
 
       <Link
         to={cartLink.to}
@@ -289,7 +294,7 @@ export function StorefrontHeader({
             aria-label="Store navigation"
           >
             <div className="flex items-center gap-0.5">
-              {NAV.map((item) => (
+              {storeNav(storeIdFromPath(cartHref)).map((item) => (
                 <NavItem
                   key={item.id}
                   active={activeNav === item.id}

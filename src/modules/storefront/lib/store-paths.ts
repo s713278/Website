@@ -40,7 +40,15 @@ export function locationMapPath(
   return `${storePath(storeId)}/location${query ? `?${query}` : ''}`
 }
 
+export function storeOrdersPath(storeId: string) {
+  return `${storePath(storeId)}/orders`
+}
+
+export function storeOrderPath(storeId: string, orderId: string) {
+  return `${storeOrdersPath(storeId)}/${orderId}`
+}
+
 export function storeOrderSuccessPath(storeId: string, orderId: string) {
-  return `${storePath(storeId)}/orders/${orderId}/success`
+  return `${storeOrderPath(storeId, orderId)}/success`
 }
 

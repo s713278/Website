@@ -26,15 +26,18 @@ export function formatDeliveryWindow(placedAt: string) {
 export function orderStatusLabel(status: string) {
   const labels: Record<string, string> = {
     placed: 'Placed',
+    scheduled: 'Scheduled',
+    pending: 'Placed',
     preparing: 'Preparing',
     on_the_way: 'On the way',
     delivered: 'Delivered',
   }
-  return labels[status] ?? status.replaceAll('_', ' ')
+  const key = status.toLowerCase()
+  return labels[key] ?? status.replaceAll('_', ' ')
 }
 
 export function isPastOrder(status: string) {
-  return status === 'delivered'
+  return status.toUpperCase() === 'DELIVERED'
 }
 
 function findProductByItemName(products: Product[], itemName: string) {
