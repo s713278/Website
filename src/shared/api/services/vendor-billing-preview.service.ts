@@ -1,83 +1,101 @@
-import type { BillingIntent, VendorBillingService, VendorBillingStatus } from './vendor-billing.service'
+import type { SubscriptionCheckoutCallback } from '@/shared/payments/razorpay-checkout'
+import { billingFixtureVendorId, createVendorBillingMockService, type BillingFixtureScenario } from './vendor-billing-fixture.service'
+import type { BillingCheckoutAttempt, VendorBillingService } from './vendor-billing.service'
 
-export type BillingPreviewScenario = 'trial' | 'last_day' | 'expired' | 'setup' | 'authorised_trial' | 'paid'
+export type BillingPreviewScenario = BillingFixtureScenario
 
 export interface BillingPreviewConfig {
   keyId: string
   immediateSubscriptionId: string
   futureSubscriptionId: string
+  /** UTC/offset timestamp copied from an inspected Test Mode future-start subscription. */
+  futureStartAt?: string
 }
 
-/** Isolated fixtures. Never read vendor context, write auth state, or infer entitlement from Checkout. */
-export function createVendorBillingPreviewService(
-  config: BillingPreviewConfig,
-  scenario: BillingPreviewScenario,
-): VendorBillingService {
+function testKey(keyId: string): void {
+  if (!/^rzp_test_[A-Za-z0-9]+$/.test(keyId)) throw new Error('Enter a Razorpay Test Mode public key ID (rzp_test_…). Never enter the key secret.')
+}
+
+function testSubscription(subscriptionId: string, phase: string): void {
+  if (!/^sub_[A-Za-z0-9]+$/.test(subscriptionId)) throw new Error(`Provide a fresh ${phase} Test Mode subscription ID.`)
+}
+
+/** Isolated preview. A real Test callback remains unverified and can only show pending. */
+export function createVendorBillingPreviewService(config: BillingPreviewConfig, scenario: BillingPreviewScenario): VendorBillingService {
   if (!import.meta.env.DEV) throw new Error('The billing preview is available only in development.')
-  const isTrial = ['trial', 'last_day', 'authorised_trial'].includes(scenario)
-  const daysRemaining = scenario === 'last_day' ? 1 : scenario === 'authorised_trial' ? 14 : 3
-  let status: VendorBillingStatus = {
-    storeId: 'development-store',
-    source: 'development',
-    plan: { name: 'MithraDirect monthly platform membership', amountMinor: 29900, currency: 'INR' },
-    trial: {
-      status: isTrial ? 'active' : scenario === 'setup' ? 'not_started' : scenario === 'paid' ? 'converted' : 'ended',
-      endsAt: isTrial ? new Date(Date.now() + daysRemaining * 86400000).toISOString() : null,
-      daysRemaining: isTrial ? daysRemaining : null,
-      reminder: scenario === 'trial' ? 'three_days' : scenario === 'last_day' ? 'last_day' : null,
-    },
-    authorisation: ['authorised_trial', 'paid'].includes(scenario) ? 'confirmed' : 'not_configured',
-    payment: scenario === 'paid' ? 'confirmed' : 'none',
-    accessStatus: isTrial ? 'TRIAL' : scenario === 'setup' ? 'SETUP_REQUIRED' : scenario === 'paid' ? 'PAID' : 'PAYMENT_REQUIRED',
-    canAccessPlatform: isTrial || scenario === 'paid',
-    paidThrough: scenario === 'paid' ? new Date(Date.now() + 30 * 86400000).toISOString() : null,
-    availableActions: scenario === 'setup'
-      ? ['trial_authorisation']
-      : scenario === 'paid' ? []
-        : scenario === 'authorised_trial' ? ['continue_trial']
-          : isTrial ? ['continue_trial', 'paid_membership'] : ['paid_membership'],
-    earlyConversionRequiresBackend: scenario === 'authorised_trial',
-  }
-  const submittedSubscriptions = new Set<string>()
-  const attempts = new Map<string, { intent: BillingIntent; subscriptionId: string }>()
+  const fixture = createVendorBillingMockService(scenario, 'preview')
+  const vendorId = billingFixtureVendorId(scenario)
+  const providerAttempts = new Map<string, string>()
+  const usedSubscriptions = new Set<string>()
+  let lastAttemptWasProvider = false
 
   return {
-    async getStatus() {
-      return structuredClone(status)
-    },
-    async prepareCheckout(intent) {
-      if (!status.availableActions.includes(intent)) throw new Error('This action is not available for the displayed billing status.')
-      if (!/^rzp_test_[A-Za-z0-9]+$/.test(config.keyId)) throw new Error('Enter a Razorpay Test Mode public key ID (rzp_test_…). Never enter the key secret.')
-      const subscriptionId = intent === 'trial_authorisation' ? config.futureSubscriptionId : config.immediateSubscriptionId
-      if (!/^sub_[A-Za-z0-9]+$/.test(subscriptionId)) throw new Error(`Provide a fresh ${intent === 'trial_authorisation' ? 'future-start' : 'immediate-start'} Test Mode subscription ID.`)
-      if (config.futureSubscriptionId && config.futureSubscriptionId === config.immediateSubscriptionId) {
+    getStatus: fixture.getStatus,
+    async prepareCheckout(selectedVendorId, action, idempotencyKey) {
+      const attempt = await fixture.prepareCheckout(selectedVendorId, action, idempotencyKey)
+      if (!config.keyId.trim()) return attempt
+      testKey(config.keyId)
+      if (config.immediateSubscriptionId && config.immediateSubscriptionId === config.futureSubscriptionId) {
         throw new Error('Use different subscriptions for immediate payment and future-start authorisation.')
       }
-      if (submittedSubscriptions.has(subscriptionId)) throw new Error('This subscription already returned a callback. Confirm its status server-side before another attempt.')
-      const attemptId = crypto.randomUUID()
-      attempts.set(attemptId, { intent, subscriptionId })
-      return {
-        attemptId,
-        intent,
+
+      let subscriptionId: string
+      if (action === 'setup_autopay') {
+        // A typed date alone cannot verify provider metadata; the human must enter the inspected start_at.
+        if (!config.futureStartAt || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(config.futureStartAt)
+          || !attempt.expected.chargeAt || !Number.isFinite(Date.parse(config.futureStartAt))
+          || Date.parse(config.futureStartAt) !== Date.parse(attempt.expected.chargeAt)) return attempt
+        testSubscription(config.futureSubscriptionId, 'future-start')
+        subscriptionId = config.futureSubscriptionId
+      } else {
+        testSubscription(config.immediateSubscriptionId, 'immediate-start')
+        subscriptionId = config.immediateSubscriptionId
+      }
+      if (usedSubscriptions.has(subscriptionId)) throw new Error('This Test subscription already returned a callback. Inspect its provider state before another attempt.')
+      providerAttempts.set(attempt.attemptId, subscriptionId)
+      const providerAttempt: BillingCheckoutAttempt = {
+        ...attempt,
+        mode: 'provider',
         config: { keyId: config.keyId, subscriptionId, name: 'MithraDirect', description: 'Vendor platform membership · Test Mode' },
       }
+      return providerAttempt
     },
     async submitCheckout(attempt, callback) {
-      const expected = attempts.get(attempt.attemptId)
-      if (!expected || expected.intent !== attempt.intent || expected.subscriptionId !== callback.razorpay_subscription_id
-        || !callback.razorpay_payment_id || !callback.razorpay_signature) {
+      if (attempt.vendorId !== vendorId) throw new Error('Checkout belongs to another vendor.')
+      if (attempt.mode === 'simulated') {
+        if (callback !== null) throw new Error('A simulated attempt cannot receive a provider callback.')
+        lastAttemptWasProvider = false
+        return fixture.submitCheckout(attempt, null)
+      }
+      const subscriptionId = providerAttempts.get(attempt.attemptId)
+      const details = callback as SubscriptionCheckoutCallback | null
+      if (!subscriptionId || !details?.razorpay_payment_id || !details.razorpay_signature
+        || details.razorpay_subscription_id !== subscriptionId) {
         throw new Error('Checkout returned incomplete or mismatched details. Backend verification is required; access has not changed.')
       }
-      submittedSubscriptions.add(expected.subscriptionId)
-      // This is deliberately NOT verification. No secret or HMAC runs in the browser.
-      // In particular, preserve the original trial expiry and access while conversion is unconfirmed.
-      status = {
-        ...status,
-        authorisation: status.authorisation === 'confirmed' ? 'confirmed' : 'pending',
-        payment: expected.intent === 'paid_membership' ? 'pending' : status.payment,
-        availableActions: status.availableActions.filter((action) => action === 'continue_trial'),
-      }
-      return structuredClone(status)
+      usedSubscriptions.add(subscriptionId)
+      providerAttempts.delete(attempt.attemptId)
+      lastAttemptWasProvider = true
+      return fixture.submitCheckout({ ...attempt, mode: 'simulated', config: null }, null)
+    },
+    async requestCancellation(selectedVendorId, idempotencyKey) {
+      if (lastAttemptWasProvider) throw new Error('This preview cannot cancel a Razorpay Test subscription. Nothing was cancelled; inspect that subscription in the Test Dashboard.')
+      return fixture.requestCancellation(selectedVendorId, idempotencyKey)
+    },
+    async simulateCancellationProgress(selectedVendorId, step) {
+      if (lastAttemptWasProvider) throw new Error('A Test Checkout callback cannot be simulated into cancellation or refund progress.')
+      if (!fixture.simulateCancellationProgress) throw new Error('Simulated cancellation progress is unavailable.')
+      return fixture.simulateCancellationProgress(selectedVendorId, step)
+    },
+    async simulateRenewalProgress(selectedVendorId, step) {
+      if (lastAttemptWasProvider) throw new Error('A Test Checkout callback cannot be simulated into renewal progress.')
+      if (!fixture.simulateRenewalProgress) throw new Error('Simulated renewal progress is unavailable.')
+      return fixture.simulateRenewalProgress(selectedVendorId, step)
+    },
+    async reconcileSimulatedCheckout(selectedVendorId, outcome = 'confirmed') {
+      if (lastAttemptWasProvider) throw new Error('A Test Checkout callback cannot be simulated into verified authorisation.')
+      if (!fixture.reconcileSimulatedCheckout) throw new Error('Simulated reconciliation is unavailable.')
+      return fixture.reconcileSimulatedCheckout(selectedVendorId, outcome)
     },
   }
 }

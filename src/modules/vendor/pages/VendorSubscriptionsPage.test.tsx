@@ -56,6 +56,8 @@ function accountFor(vendorId: string): VendorAccount {
       usage: { categories: 1, products: 1, skus: 1, images: 0 },
     },
     reload: () => {},
+    contextStale: false,
+    refreshContext: async () => { throw new Error('Context refresh is outside this test.') },
     demo: null,
   }
 }

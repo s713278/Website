@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { deriveStoreState } from '@/modules/vendor/lib/store-state'
 import { peekVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import {
+  contextSnapshotMayReplace,
   invalidateVendorContext,
   loadVendorContext,
   peekVendorContext,
@@ -44,29 +45,64 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
     const cached = peekVendorContext(vendorId) ?? peekVendorOnboardingState(vendorId)?.context
     return cached ? { vendorId, context: cached } : null
   })
+  const loadedRef = useRef(loaded)
   const [error, setError] = useState('')
+  const [contextStale, setContextStale] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
+  const refreshClaim = useRef(0)
 
   const reload = useCallback(() => {
+    refreshClaim.current += 1
     if (vendorId) invalidateVendorContext(vendorId)
+    loadedRef.current = null
     setLoaded(null)
     setError('')
+    setContextStale(false)
     setReloadToken((token) => token + 1)
+  }, [vendorId])
+
+  const refreshContext = useCallback(async (): Promise<VendorContext> => {
+    if (!vendorId) throw new Error('Choose a vendor before refreshing billing.')
+    const claim = ++refreshClaim.current
+    invalidateVendorContext(vendorId)
+    try {
+      const context = await loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
+      if (claim !== refreshClaim.current || useAuthStore.getState().user?.vendorId !== vendorId) {
+        throw new Error('The selected vendor changed during refresh.')
+      }
+      const previous = loadedRef.current
+      if (previous?.vendorId === vendorId && !contextSnapshotMayReplace(previous.context, context)) {
+        invalidateVendorContext(vendorId)
+        throw new Error('Vendor context is older than the last confirmed billing status. Please refresh.')
+      }
+      loadedRef.current = { vendorId, context }
+      setLoaded(loadedRef.current)
+      setContextStale(false)
+      return context
+    } catch (cause) {
+      if (claim === refreshClaim.current && useAuthStore.getState().user?.vendorId === vendorId) setContextStale(true)
+      throw cause
+    }
   }, [vendorId])
 
   useEffect(() => {
     if (!vendorId || loaded?.vendorId === vendorId) return
     let cancelled = false
+    const claim = ++refreshClaim.current
 
     // A failure recorded against the previous store must not survive into this one.
     setError('')
 
     void loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
       .then((context) => {
-        if (!cancelled) setLoaded({ vendorId, context })
+        if (!cancelled && claim === refreshClaim.current && useAuthStore.getState().user?.vendorId === vendorId) {
+          loadedRef.current = { vendorId, context }
+          setLoaded(loadedRef.current)
+          setContextStale(false)
+        }
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load your store'))
+        if (!cancelled && claim === refreshClaim.current) setError(getErrorMessage(err, 'Could not load your store'))
       })
 
     return () => {
@@ -117,10 +153,12 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
       context,
       storeState: deriveStoreState(stateInput, { coercePendingApproval: !isDemo }),
       plan: mapVendorPlan(context),
+      contextStale,
+      refreshContext,
       reload,
       demo: isDemo ? { storeState: demoStoreState, select: selectDemoStoreState } : null,
     }
-  }, [vendorId, loaded, reload, demoStoreState, selectDemoStoreState])
+  }, [vendorId, loaded, reload, refreshContext, contextStale, demoStoreState, selectDemoStoreState])
 
   /**
    * A session that holds several stores resolves no `vendorId`, deliberately — picking

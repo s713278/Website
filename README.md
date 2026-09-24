@@ -20,7 +20,7 @@ through an OpenAPI/Axios integration.
 |---------|--------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
+| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/plan`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/vendor/login`, `/register` (redirect) |
 | Development billing preview | `src/modules/vendor` | `/dev/vendor-billing` (development only) |
@@ -89,6 +89,28 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_RAZORPAY_TEST_SUBSCRIPTION_ID` | unset | Optional immediate-start Test subscription ID for that preview |
 | `VITE_RAZORPAY_TEST_FUTURE_SUBSCRIPTION_ID` | unset | Optional separate future-start Test subscription ID for the legacy AutoPay setup fixture |
 
+For the local Plan Test showcase, run `npm run dev:billing-helper` in a separate terminal with
+`RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET` and `RAZORPAY_TEST_PLAN_ID` (the supplied
+monthly Test plan) set in that terminal's environment. Only `rzp_test_` keys are accepted. The
+helper listens on `127.0.0.1:4179`; Vite proxies its local HTTP interface during development.
+Its scenario store defaults to the ignored local file `vendor-billing-test-store.local`;
+`VENDOR_BILLING_TEST_STORE` may point to another locally excluded path. Keep Test credentials out of `VITE_*` variables and repository files.
+Plan's explicit Test switch works in demo and authenticated development sessions. Selecting a
+scenario persists its fixed sample boundaries across reload and helper restart. Pay Now asks the
+helper to create and inspect a Razorpay Test subscription, then opens hosted Test Checkout. The
+helper verifies the callback signature server-side, and each Refresh rereads the Test subscription,
+invoice and payment. Only provider-confirmed AutoPay or captured platform fees are marked
+**Razorpay Test verified**; trial and access remain locally simulated. For renewal exercises, set up
+AutoPay in the Paid sample scenario, trigger accelerated charges in the Razorpay Test Dashboard, then
+refresh Plan. Renewals and retries count only against the original billing cycle. Cancel AutoPay asks
+the helper to stop only the scenario's own Test subscription. Collection is shown stopped only after a
+Refresh reads it cancelled, and Pay Now then sets up a replacement at the same boundary. To start
+again, use **Reset Test scenario**: after confirmation it cancels only this scenario's own Test
+subscriptions and completes once Razorpay Test reads show them closed. Until then it stays pending
+with **Retry reset**. Earlier scenarios remain listed as history, and you then choose a new one.
+The [dated Plan evidence](./docs/VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)
+records which Test card and hosted Checkout steps work for this account.
+
 `VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
 must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment
 link, and the QR they print encodes the same wrong host.
@@ -112,6 +134,8 @@ with fallback coordinates.
 | `npm run lint` | Run ESLint over `src` |
 | `npm run test` | Run all Vitest logic and component tiers once |
 | `npm run test:watch` | Run Vitest in watch mode |
+| `npm run dev:billing-helper` | Run the loopback-only local Plan Test helper |
+| `npm run test:billing-helper` | Test its HTTP persistence and restart behavior |
 | `npm run build` | Type-check and create `dist/` |
 | `npm run preview` | Serve an existing production build |
 | `npm run fetch:openapi` | Fetch backend Swagger into `packages/api-client/openapi.json` |
@@ -242,6 +266,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
+| `/vendor/plan` | Vendor platform billing status; demo mode is simulated, while live billing awaits backend integration |
 | `/vendor/orders`, `/vendor/orders/subscriptions`, `/vendor/orders/:orderId`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` | Protected vendor dashboard, in its own shell outside the customer chrome |
 
 ## Documentation

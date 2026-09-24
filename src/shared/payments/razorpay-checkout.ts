@@ -16,6 +16,11 @@ export type SubscriptionCheckoutResult =
   | { status: 'submitted'; callback: SubscriptionCheckoutCallback }
   | { status: 'dismissed' }
 
+/** The modal was never opened, so this prepared attempt can safely retry script setup. */
+export class CheckoutBeforeOpenError extends Error {
+  constructor(message: string) { super(message); this.name = 'CheckoutBeforeOpenError' }
+}
+
 interface RazorpayOptions {
   key: string
   subscription_id: string
@@ -78,14 +83,16 @@ export async function openSubscriptionCheckout(
 ): Promise<SubscriptionCheckoutResult> {
   const { signal, onPaymentFailure } = options
   if (signal?.aborted) throw new DOMException('Checkout cancelled', 'AbortError')
-  await loadRazorpayCheckout()
+  try { await loadRazorpayCheckout() }
+  catch (cause) { throw new CheckoutBeforeOpenError(cause instanceof Error ? cause.message : 'Could not load Razorpay Checkout.') }
   if (signal?.aborted) throw new DOMException('Checkout cancelled', 'AbortError')
   const Razorpay = window.Razorpay
-  if (!Razorpay) throw new Error('Razorpay is unavailable. Please try again.')
+  if (!Razorpay) throw new CheckoutBeforeOpenError('Razorpay is unavailable. Please try again.')
 
   return new Promise((resolve, reject) => {
     let settled = false
     let checkout: RazorpayInstance | undefined
+    let opening = false
     const finish = (result: SubscriptionCheckoutResult | Error) => {
       if (settled) return
       settled = true
@@ -114,9 +121,11 @@ export async function openSubscriptionCheckout(
         if (!settled) onPaymentFailure?.(error?.description || 'The payment attempt failed. You can retry in Checkout.')
       })
       signal?.addEventListener('abort', abort, { once: true })
+      opening = true
       checkout.open()
     } catch (error) {
-      finish(error instanceof Error ? error : new Error('Could not open Razorpay Checkout.'))
+      const failure = error instanceof Error ? error : new Error('Could not open Razorpay Checkout.')
+      finish(opening ? failure : new CheckoutBeforeOpenError(failure.message))
     }
   })
 }

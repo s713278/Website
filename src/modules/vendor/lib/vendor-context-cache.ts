@@ -17,6 +17,22 @@ import type { VendorContext } from '@/shared/api'
 type Entry = { promise: Promise<VendorContext>; resolved: VendorContext | null }
 
 const entries = new Map<string, Entry>()
+const accepted = new Map<string, VendorContext>()
+
+export function billingRevision(context: VendorContext): number | null {
+  const billing = context.billing
+  if (!billing || typeof billing !== 'object' || Array.isArray(billing)) return null
+  const revision = (billing as Record<string, unknown>).revision
+  return typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0 ? revision : null
+}
+
+/** A billing revision covers the entire context, including its plan and effective features. */
+export function contextSnapshotMayReplace(previous: VendorContext, next: VendorContext): boolean {
+  if (previous.vendorId !== next.vendorId) return false
+  const priorRevision = billingRevision(previous)
+  const nextRevision = billingRevision(next)
+  return priorRevision === null || (nextRevision !== null && nextRevision >= priorRevision)
+}
 
 /** The already-resolved context, or `null`. Never fetches. */
 export function peekVendorContext(vendorId: string): VendorContext | null {
@@ -38,7 +54,15 @@ export function loadVendorContext(
   // never write back over whatever replaced it.
   entry.promise = entry.promise
     .then((context) => {
-      if (entries.get(vendorId) === entry) entry.resolved = context
+      if (context.vendorId !== vendorId) throw new Error('Vendor context was returned for another store.')
+      if (entries.get(vendorId) === entry) {
+        const previous = accepted.get(vendorId)
+        if (previous && !contextSnapshotMayReplace(previous, context)) {
+          throw new Error('Vendor context is older than the last confirmed billing status. Please refresh.')
+        }
+        entry.resolved = context
+        accepted.set(vendorId, context)
+      }
       return context
     })
     .catch((error: unknown) => {
@@ -52,5 +76,5 @@ export function loadVendorContext(
 /** Drop cached context so the next read hits the account. Also used on sign-out. */
 export function invalidateVendorContext(vendorId?: string): void {
   if (vendorId) entries.delete(vendorId)
-  else entries.clear()
+  else { entries.clear(); accepted.clear() }
 }

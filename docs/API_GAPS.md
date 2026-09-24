@@ -17,7 +17,7 @@ tree. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md) for how the API layer is 
 | `POST /v1/vendors/{vendor_id}/delivery-eligibility` | Pincode / lat-lng deliverability check |
 | `GET /v1/vendors/{vendor_id}/products/skus` | SKU list backing the storefront product grid |
 | `GET /v1/users/{user_id}/dashboard` | Vendor-level insights: `total_customers`, `subscriptions_count` (active/pending/paused/expired/cancelled), `order_status_count`, `payment_dues`. Despite the `users` path it serves vendors — the contract carries both an `Admin Response` and a `Vendor Response` example, and a vendor token returns its own figures. **Empty groups come back as bare `{}`, not zeroed keys**, so read them through a mapper rather than reaching for `.delivered_count` directly. |
-| `onboarding.next_step` on `POST /v1/auth/verify-otp` and `GET /v1/vendors/{id}/context` | **The** resume position for an unfinished vendor. 1-based over the ten wizard steps; `11` means setup is complete. Both endpoints return identical values — verify-otp carries it per vendor under `vendors[].onboarding`, alongside `status` and a human `description` ("Step 8: Payments"). |
+| `onboarding.next_step` on `POST /v1/auth/verify-otp` and `GET /v1/vendors/{id}/context` | **The** resume position for an unfinished vendor. 1-based over the ten wizard steps; `11` means setup is complete. Once `onboarding.status` is `COMPLETED` the context omits it (verified after go-live, 24 September 2026) and the frontend reads the status instead. Both endpoints return identical values — verify-otp carries it per vendor under `vendors[].onboarding`, alongside `status` and a human `description` ("Step 8: Payments"). |
 
 Wrapped in `@mithra/api-client` as `storefrontService.get` / `checkDeliveryEligibility`, plus the
 flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `services/legacy.ts`.
@@ -85,17 +85,22 @@ choices are explicitly tracked in the decision record, not inferred from this pr
 resolves the earlier retrieval failure, not the missing implementation; generated files were not
 changed by the review. Re-fetch and regenerate when the backend publishes billing.
 
-**Latest alignment:** the user's supplied vendor context confirms the existing envelope and
-snake_case structure. All billing state will come from that same context endpoint, with a minimal
-`subscription.billing` addition. Reuse plan/usage/onboarding/features; request timezone-qualified
-timestamps and populated fee/trial fields. The handoff and mocks now supersede the standalone
-billing response proposal. The supplied store slug also has no numeric suffix; treat slugs as opaque.
+**Latest alignment, 24 September 2026:** the backend now returns and documents a lifecycle shape
+(`subscription.lifecycle_status`, `trial`, `plan`, `available_paid_plans`, top-level `features`) and
+says go-live starts a 14-day trial. The frontend adopts that shape rather than the 19 September
+`subscription.billing` proposal; the context mapper already reads its plan name, currency, trial
+end and features. The [aligned request](./VENDOR_BILLING_BACKEND_HANDOFF.md) lists what it still
+lacks: `onboarding.next_step` in the OpenAPI example, rupee prices (a live plan returned
+`sale_price: 2.99` for ₹299), a timezone on the envelope `timestamp`, a monotonic `updated_at`,
+`days_remaining` rounded up (a fresh 14-day trial returns `13`), access flags, allowed actions,
+payment/cancellation/refund state and the billing writes. It was raised on the backend Jira stories
+MFPS-64 and MFPS-67 on 24 September. Usage is no longer requested. Store slugs remain opaque.
 
 #### Existing context discrepancies
 
-- `trial_days: 0`, a missing trial expiry and legacy `FREE`/zero-price fields cannot establish
-  trial eligibility, expiry or paid access. Do not infer a new trial from first login or a browser
-  timestamp. Persist the one-time trial against the verified vendor identity, not just a store row.
+- The lifecycle shape now persists a trial (`trial.started_at`/`ends_at`) instead of the earlier
+  `trial_days: 0` and legacy `FREE`/zero-price fields. Still do not infer a trial from first login
+  or a browser timestamp; persist the one-time trial against the verified vendor identity.
 - The current product allows one store per vendor. Keep ownership validation on billing operations;
   it protects against cross-vendor access and does not imply a multi-store product or trial transfer.
 - The checked-in contract, onboarding gate and ADR 0002 use `approval_status: APPROVED`;
@@ -122,7 +127,7 @@ server jobs; the frontend currently has no real billing writes.
 | Extend vendor context for billing/access | Authenticate ownership; return the minimal `subscription.billing` state alongside existing plan/expiry/features. Reuse envelope timestamp with explicit timezone and include a billing revision. Fresh reads must expose reconciled progress after lost callbacks/cancellation responses; no separate billing-status endpoint. |
 | Prepare Checkout for an explicit intent | Accept the selected store, requested setup/payment action and an application idempotency key; validate ownership and allowed action. During trial, schedule the first monthly fee for its persisted expiry; after expiry, prepare immediate first-fee collection. Choose plan/amount/currency/mode/count/schedule server-side, limit methods to those validated for that phase, and reconcile any existing subscription first. Return the minimal preparation payload in the handoff; merchant display text is static app configuration. Never trust a browser price, plan, trial duration, clock or subscription ID. |
 | Submit Checkout result for verification | Accept attempt ID and the three Razorpay callback fields. Resolve expected store/subscription from the authenticated attempt; verify/reconcile and acknowledge receipt. Frontend refreshes vendor context for pending/confirmed state; acknowledgement alone must not imply paid access. |
-| Request cancellation and read its outcome | Authenticate ownership, record/deduplicate receipt and stop future collection while retaining existing coverage. Acknowledge the write; requested/scheduled/confirmed/failed progress and refund state return through refreshed vendor context. Reconcile timeouts/concurrent charges; request receipt alone does not prove cancellation. |
+| Request cancellation and read its outcome | Authenticate ownership, record/deduplicate receipt and stop future collection while retaining existing coverage. Acknowledge the write; requested/scheduled/confirmed/failed progress and refund state return through refreshed vendor context. Reconcile timeouts/concurrent charges; request receipt alone does not prove cancellation. A Razorpay subscription read does not show an accepted cycle-end stop (`charge_at` unchanged, `has_scheduled_changes` false; [Test Mode observation, 23 September 2026](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)), so the backend must persist the accepted cancellation itself or reconcile it from webhooks. |
 | Reconcile and refund a debit despite timely cancellation | Persist the authenticated cancellation's backend receipt time and original access boundary. If the request preceded that boundary but the next monthly fee was collected, record a full-refund obligation against that charge and reconcile refund progress idempotently. Return pending/completed/failed outcomes separately from cancellation and access; no instant-refund guarantee. Backend must define the refund contract and operational recovery. |
 | Provider webhook ingress | Validate raw-body signature with a separate webhook secret; durably receive, deduplicate and reconcile events to the same billing records used by callback verification. This is not a browser redirect endpoint. |
 | Trial grant, expiry and reminder jobs | Atomically claim the identity's trial once onboarding and approval both qualify; persist the original start/expiry. Enforce the access boundary without grace, using server time even with no browser session. Deduplicate reminders; distinguish setup needed, confirmed future billing and cancellation. Channels/times await product decisions. |

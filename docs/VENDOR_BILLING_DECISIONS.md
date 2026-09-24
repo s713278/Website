@@ -106,6 +106,13 @@ only through a later scope decision with evidence that its timing meets the prod
 supplied plan can be reused; consumed subscriptions cannot serve as fresh-signup fixtures. The
 [preview record](./VENDOR_BILLING_PREVIEW.md#test-object-inspection) owns the observed object history.
 
+**UPI remains deferred (reviewed 24 September 2026).** UPI is wanted eventually, but its debits can
+complete by 9 PM IST on the scheduled date and potentially T+1 with retries
+([method timing](./research/razorpay-vendor-subscriptions.md#payment-methods-and-authorisation-charges)),
+which conflicts with the no-grace access boundary. The review kept UPI deferred rather than adding a
+UPI-only exception, accepting a lapse, or restricting where it is offered. Revisit it through a later
+scope decision; enable it in Test Settings only after the current cards-only Test evidence is complete.
+
 ## Approved lifecycle
 
 Let `T` be the persisted trial expiry. These are intended product outcomes, not current API enums.
@@ -155,7 +162,7 @@ Recommendations in this table are **not approved defaults**. Unanswered choices 
 | Decision | Unresolved question / recommendation |
 |---|---|
 | Other refunds | Discretionary refunds, errors outside the cancellation-race case and access following those refunds remain open. Ordinary cancellation has no automatic proration; timely cancellation racing a debit requires a full refund with only original coverage retained. |
-| Payment-method evidence | Current development uses Test cards as scoped above; eMandate is removed and UPI deferred. Future authorisation and hybrid Test evidence remain pending. Production method timing is a later release gate. Do not silently shift `T` or shorten the trial. |
+| Payment-method evidence | Current development uses Test cards as scoped above; eMandate is removed and UPI deferred. Card future authorisation, immediate signup, renewal success, a failed renewal debit and cancellation were observed in Test Mode on 23 September 2026 ([Plan evidence](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)); renewal recovery is unobserved, so that evidence remains open. Production method timing is a later release gate. Do not silently shift `T` or shorten the trial. |
 | Lifecycle completion | Pause/resume and the end of the finite production schedule still need decisions. Successful retries keep the original billing anchor. The finite Test Mode count is not a production duration decision. |
 | Reminders | Decide channels, delivery times/timezone and offsets. Distinguish an action-needed setup reminder from notice of an already-scheduled debit, and from a cancellation/no-renewal notice. |
 | Production commercial terms | Production taxes/invoicing, subscription duration and refund handling need decisions separate from the ₹299 Test Mode total. |
@@ -164,3 +171,68 @@ Recommendations in this table are **not approved defaults**. Unanswered choices 
 [backend requirements](./API_GAPS.md#vendor-platform-billing) owns required contract capabilities
 and acceptance evidence. This document owns product decisions, including any answers added during
 the follow-up interview.
+
+## Dashboard Test Mode pivot — 23 September 2026
+
+**Status:** accepted design; shared understanding confirmed on 23 September 2026. Implementation
+remains deferred at the user's request. The decisions below describe the target behavior.
+
+- Demonstrate Razorpay Test Mode Checkout for platform membership from the vendor dashboard's
+  `/vendor/plan` page, preserving the approved hybrid trial and payment rules above. The
+  demonstration must support creating Test subscriptions using the supplied Test plan.
+- **Local development only**, confirmed in the first interview round. A deployed staging or
+  public demonstration is outside this pivot.
+- A temporary **server helper** will create Test subscriptions, verify Checkout results and read
+  provider state, so the Plan page can show provider-confirmed Test outcomes before the Spring
+  billing backend is available. The Test secret stays server-side. Signature authenticity,
+  AutoPay authorisation and a confirmed platform fee remain distinct facts.
+- An **explicit Razorpay Test Mode switch on the Plan page** selects this demonstration. Its
+  existing Pay Now action then opens hosted Checkout. Ordinary app demo billing remains usable
+  with simulated sample data and without Razorpay configuration.
+- Keep `/dev/vendor-billing` as a secondary diagnostic preview. `/vendor/plan` is the primary
+  surface for demonstrating the new Test integration.
+- The operator may use the **Razorpay Test Dashboard to trigger accelerated Test charges**, then
+  refresh Plan to read their actual provider outcomes. Creating subscriptions, opening Checkout
+  and requesting cancellation remain part of the Plan journey through the helper.
+- Use **separate repeatable scenarios**, such as a trial in progress, a trial already expired and
+  paid membership. Keep each scenario's displayed billing dates aligned with its provider records.
+  A continuous demonstration clock is outside this pivot; the 14-day trial and monthly fee remain
+  the product rules. An accelerated provider charge is not evidence that the app's trial elapsed.
+- Preserve the selected demo vendor's trial, billing attempts and provider associations locally
+  across **browser reloads and helper restarts**. Starting a fresh demonstration requires an
+  explicit reset workflow; reloading must not silently create a replacement subscription.
+- Show lifecycle and restriction outcomes **on Plan**: trial/paid/expired status, retained coverage
+  and restriction messages. Enforcing those restrictions across the sample storefront and vendor
+  workflows is outside this pivot.
+- Require actual **provider Test evidence** for trial AutoPay setup, immediate payment after
+  expiry, renewal success/failure/recovery, cancellation and rejoining. Demonstrate cancellation
+  races and refund progress separately with labelled fixtures; an actual Test refund is not
+  required for this pivot. The approved refund policy is unchanged.
+- Reset must reconcile and cancel any unfinished Test subscription created for that scenario
+  before permitting a replacement, while retaining its history. If cancellation is unconfirmed,
+  reset stays pending. Subscriptions outside the helper's scenarios are outside reset's scope.
+- Offer the Test Mode switch in both **demo and backend-authenticated vendor sessions**, locally.
+  Use the selected vendor to associate an isolated Test scenario. Provider Test results and
+  simulated membership access must not overwrite the account's real billing, shared context,
+  authentication or order state, or change the global API mode.
+- Preserve the completed panel, mapper, service and shared-context work. The existing
+  [preview and dashboard behavior](./API_ARCHITECTURE.md#vendor-platform-billing-preview) remains
+  the implementation baseline while the revised scope is designed.
+
+All three interview rounds and the final confirmation are complete. This scope supersedes the
+earlier restriction reserving Test Checkout to the separate preview until Spring billing integration.
+The spec and remaining tickets still need to be revised to match. Ordinary demo billing remains
+provider-isolated; the explicit local Test selection is the new exception.
+
+Provider confirmation applies to observed Test authorisation, payment and subscription records.
+The helper's trial eligibility and membership/access presentation are demonstration state. Future
+trial setup must retain the original expiry and provider start date; use the separate paid scenario
+for accelerated renewal exercises. An early Test charge or failure cannot move an unexpired access
+boundary or stand in as evidence of production enforcement. The
+[provider research](./research/razorpay-vendor-subscriptions.md#test-lifecycle-expiry-and-safe-reuse)
+owns Test timing constraints.
+
+The next specification and ticket revision must add helper provisioning, verification, persistence
+and safe reset work, and retarget the remaining lifecycle and manual evidence work to Plan.
+Completed work remains the baseline. Published Spring billing integration and real access
+enforcement remain separate work; the temporary helper is not the production billing backend.

@@ -204,6 +204,33 @@ describe('mapVendorContext', () => {
     expect(context.subscription.limits.maxCategories).toBe(10)
     expect(context.eligibleFeatures).toEqual(['DASHBOARD', 'CATALOG'])
   })
+
+  it('reads plan, trial and features from the nested lifecycle shape', () => {
+    const context = mapVendorContext({
+      data: {
+        vendor_id: 273,
+        vendor_status: 'ACTIVE',
+        approval_status: 'APPROVED',
+        onboarding: { status: 'COMPLETED', description: 'Onboarding completed' },
+        subscription: {
+          lifecycle_status: 'TRIAL_ACTIVE',
+          trial: { started_at: '2026-09-24T03:16:30.397Z', ends_at: '2026-10-08T03:16:30.397Z', days_total: 14 },
+          plan: { plan_code: 'SOCIAL_STARTER_TRIAL', plan_name: 'Social Starter Trial', currency: 'INR' },
+        },
+        features: ['STOREFRONT', 'ORDERS'],
+      },
+    })
+
+    expect(context.subscription).toMatchObject({
+      tier: null,
+      planName: 'Social Starter Trial',
+      currency: 'INR',
+      trialEndsAt: '2026-10-08T03:16:30.397Z',
+      trialDays: 14,
+    })
+    expect(context.eligibleFeatures).toEqual(['STOREFRONT', 'ORDERS'])
+    expect(context.billingCapabilitiesValid).toBe(true)
+  })
 })
 
 describe('mapVendorProfile', () => {

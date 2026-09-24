@@ -576,9 +576,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Go live
+         * Go live and start trial
          * @description Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,
          *     and set the vendor status to ACTIVE. Admin approval may still be required.
+         *
+         *     On success, the vendor is enrolled in the configured default platform trial plan
+         *     (e.g. Social Starter Trial, 14 days). No Razorpay subscription is created at this
+         *     step. Repeated calls are idempotent and will not reset or extend the trial.
          */
         post: operations["goLive"];
         delete?: never;
@@ -967,7 +971,7 @@ export interface paths {
         };
         /**
          * Fetch All Categories
-         * @description API accessed by  Admin/Customer_Care roles
+         * @description API accessed by  Admin/Customer_Care roles. Each returned category now includes the `icon` field.
          */
         get: operations["getCategories"];
         put?: never;
@@ -1871,7 +1875,14 @@ export interface paths {
         };
         /**
          * Get vendor dashboard context
-         * @description Returns onboarding, subscription tier, usage, and eligible features.
+         * @description Returns the vendor's onboarding state and current subscription context.
+         *
+         *     The `subscription` object reflects the vendor's current lifecycle state
+         *     (e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted
+         *     trial dates, storefront/dashboard access flags, the active plan's features and
+         *     limits, and a list of available paid plans with UI-driven allowed actions.
+         *
+         *     Trial expiry is evaluated at request time; no background job is required.
          */
         get: operations["getVendorContext"];
         put?: never;
@@ -1934,7 +1945,7 @@ export interface paths {
         };
         /**
          * Get vendor storefront
-         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
+         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories (with icon), products, trust strip and share link.
          *     <br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).
          */
         get: operations["getStorefront"];
@@ -2572,7 +2583,7 @@ export interface paths {
         };
         /**
          * Fetch products by category_id
-         * @description API accessed by Admin/Customer_Care role only
+         * @description API accessed by Admin/Customer_Care role only. Each returned product now includes the `icon` field.
          */
         get: operations["getProductsByCategory"];
         put?: never;
@@ -4105,6 +4116,11 @@ export interface components {
             image_path?: string;
             /** @example A category dedicated to Milk products, offering a wide range of high-quality items for everyday use. */
             description?: string;
+            /**
+             * @description Category icon
+             * @example dairy-icon
+             */
+            icon?: string;
         };
         OTPVerificationRequest: {
             /**
@@ -7075,13 +7091,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Categories returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };
@@ -9934,13 +9950,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Products returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };

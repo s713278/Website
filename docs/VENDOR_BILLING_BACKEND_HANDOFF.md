@@ -1,6 +1,129 @@
-# Vendor billing: minimal vendor context additions
+# Vendor billing: what the vendor context still needs
 
-**Team meeting handoff · 19 September 2026 · proposed additions, not a shipped contract.**
+**Backend alignment request · 24 September 2026.** The frontend now adopts the lifecycle shape that
+`GET /v1/vendors/{vendor_id}/context` returns today (`subscription.lifecycle_status`, `trial`, `plan`,
+`available_paid_plans` and top-level `features`). We map it to our screens ourselves. This section
+lists only what that response still lacks for Razorpay billing. Field names are suggestions in the
+response's existing style; the backend may choose others and the frontend mapper will follow.
+
+## Already usable as returned
+
+| Returned field | Frontend use |
+|---|---|
+| `subscription.lifecycle_status` | Membership state: `NOT_STARTED` → setup incomplete, `TRIAL_ACTIVE` → trial, `TRIAL_EXPIRED` → trial ended, `ACTIVE` → paid |
+| `subscription.display_status` | Status label |
+| `subscription.trial.started_at`, `ends_at`, `days_total`, `days_remaining`, `expired` | Trial countdown and exact end date |
+| `subscription.plan` | Current plan name, features and limits |
+| `subscription.available_paid_plans` | Plan choice (monthly, and yearly where offered) and prices |
+| Top-level `features` | Effective permissions, replacing `eligible_features` |
+
+We no longer need `tier`, `monthly_price`, `trial_days`, `trial_ends_at`, `eligible_features`,
+`subscription.usage`, a separate `revision` or a `notice` text; the frontend writes its own messages.
+
+## Requirements for the current response
+
+These requirements and the additions below were raised on the backend Jira stories on 24 September
+2026: context requirements on MFPS-64, and billing writes on MFPS-67. Observations below were
+verified that day against a fresh dev vendor taken through go-live.
+
+1. **Show `onboarding.next_step` in the OpenAPI example.** The live context returns it during setup
+   and omits it once `onboarding.status` is `COMPLETED`; the frontend then reads the status, so no
+   response change is needed. Only the example leaves it out.
+2. **Prices in rupees.** A live Social Starter plan returned `sale_price: 2.99`, `list_price: 5.99`,
+   `discount: 3.00`; the agreed price is ₹299 (list ₹599). Return `299.00` in rupees, as the OpenAPI
+   example does. The frontend will not multiply by 100: if 2.99 comes from a Razorpay plan created
+   with `amount: 299` (paise), Razorpay would also charge ₹2.99. Razorpay plan amounts must be in paise
+   (`29900`).
+3. **Timezones on every timestamp.** The envelope `timestamp` is returned without an offset (it is
+   IST, for example `2026-09-24T12:54:05.110441213`), and the OpenAPI example omits it on `trial` and
+   `updated_at` too. Live `trial.*` and `updated_at` already carry one, in two forms (`+05:30` before
+   go-live, `Z` after). Billing refuses dates it cannot place in time; return `Z` or an offset on all
+   of them.
+4. **`updated_at` must be the latest change.** One existing vendor's response had `updated_at` a day
+   before `trial.started_at`; a fresh go-live was consistent. It should move forward whenever any
+   billing field changes, so a stale read can never replace a newer one.
+5. **Define `days_remaining`.** A vendor who had just gone live, with exactly 14 days left, got `13`.
+   Count whole days
+   **rounded up** to `trial.ends_at` from server time: 14 on the first day, `1` in the final 24 hours,
+   `0` once expired. The screen also shows the exact end time from `ends_at` in IST.
+6. **Return what the endpoint description promises.** It lists "storefront/dashboard access flags"
+   and "UI-driven allowed actions", but neither appears in the response or its example; see
+   additions 2 and 3.
+
+## Additions for Razorpay billing
+
+1. **One more `lifecycle_status`: `PAYMENT_REQUIRED`**, for a paid period that ended or a renewal
+   that failed. Cancelling during a trial or paid period keeps the current status until its end.
+2. **Access flags:** `subscription.access: { storefront_visible, dashboard_enabled }`, enforced on the
+   server too. An expired or unpaid store must be hidden, and the frontend must not decide that.
+3. **Allowed actions:** `allowed_actions` on each `available_paid_plans` entry (`START_AUTOPAY` during
+   the trial, charged at `trial.ends_at`; `PAY_NOW` after expiry) and `subscription.allowed_actions`
+   (`CANCEL`). Buttons appear only when listed.
+4. **Payment state:** `subscription.payment`:
+
+   | Field | Values |
+   |---|---|
+   | `autopay_status` | `NOT_SETUP`, `PENDING`, `ACTIVE`, `FAILED`, `REVOKED` |
+   | `last_payment_status` | `NONE`, `PENDING`, `CAPTURED`, `FAILED` |
+   | `paid_through` | End of confirmed paid coverage, or null |
+   | `next_charge_at` | Next scheduled charge, or null |
+
+5. **Cancellation:** `subscription.cancellation`, null or `{ status, requested_at, effective_at }`
+   with status `REQUESTED`, `SCHEDULED`, `CONFIRMED` or `FAILED`.
+6. **Refund (can follow later):** `subscription.refund`, null or `{ status, amount }` for a renewal
+   collected after a timely cancellation. Until it exists the refund display stays hidden.
+
+Example `subscription` during a trial with AutoPay set up (existing fields abbreviated):
+
+```json
+{
+  "lifecycle_status": "TRIAL_ACTIVE",
+  "display_status": "Free trial",
+  "trial": { "started_at": "2026-09-24T03:16:30Z", "ends_at": "2026-10-08T03:16:30Z", "days_total": 14, "days_remaining": 14, "expired": false },
+  "plan": { "plan_code": "SOCIAL_STARTER_TRIAL", "...": "..." },
+  "available_paid_plans": [
+    { "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY", "billing_cycle": "MONTHLY", "currency": "INR", "sale_price": 299.00, "list_price": 599.00, "discount": 300.00, "allowed_actions": [] }
+  ],
+  "access": { "storefront_visible": true, "dashboard_enabled": true },
+  "allowed_actions": ["CANCEL"],
+  "payment": { "autopay_status": "ACTIVE", "last_payment_status": "NONE", "paid_through": null, "next_charge_at": "2026-10-08T03:16:30Z" },
+  "cancellation": null,
+  "refund": null,
+  "updated_at": "2026-09-25T09:00:00Z"
+}
+```
+
+## Writes
+
+No billing write exists in the published contract. Each uses the existing envelope, and after each
+the frontend reads the context again; an acknowledgement alone never grants access.
+
+| Operation | Request | Response |
+|---|---|---|
+| `POST /v1/vendors/{vendor_id}/subscription/checkout` | `plan_code`, `idempotency_key` | `attempt_id`, public `key_id`, `razorpay_subscription_id`, `amount` (rupees), `currency`, `charge_at` (null = pay now), `expires_at` |
+| `POST /v1/vendors/{vendor_id}/subscription/verify` | `attempt_id`, `razorpay_payment_id`, `razorpay_subscription_id`, `razorpay_signature` | `data: null` |
+| `POST /v1/vendors/{vendor_id}/subscription/cancel` | `idempotency_key` | `data: null` |
+
+The backend decides from `lifecycle_status` whether checkout charges at trial end or now, and also
+needs a Razorpay webhook to record renewals, failures and cancellations. Errors use the envelope
+with a safe `message` and an `error_code`. Route names are suggestions; publish the chosen ones in
+OpenAPI.
+
+## Frontend transition
+
+Nothing on screen changes while this is pending. The context mapper already reads the lifecycle
+shape's plan name, currency, trial end and `features`; live billing stays marked unavailable until
+the additions above arrive. The mock dataset and preview keep the 19 September shape below until
+the backend confirms its field names, then move to the agreed shape and are checked against a real
+response.
+
+---
+
+# Mock dataset shape (19 September proposal)
+
+**Superseded as a backend request by the section above.** It still documents the fabricated
+[mock dataset](./examples/vendor-billing/mock-responses.json) that the preview and tests use.
+
 
 Use the existing **`GET /v1/vendors/{vendor_id}/context`** for all billing status reads. Add one
 `data.subscription.billing` block, populate the existing plan/trial fields and refresh this same
@@ -23,7 +146,7 @@ are fabricated extensions for frontend tests; they do not establish backend/prov
 | `subscription.plan_name`, `monthly_price`, `currency` | Display the agreed plan and full monthly fee, including during trial. Proposed Test values are ₹299 and INR; the supplied response currently says Free/0. |
 | `subscription.trial_days` | Configured trial length, proposed 14; **not days remaining**. The supplied response currently has 0. |
 | `subscription.trial_ends_at` | Original granted trial expiry or null. Already mapped by the app and present in the OpenAPI example; absent from the supplied response. |
-| `subscription.limits`, `subscription.usage` | Preserve the existing usage panel and quota data |
+| `subscription.limits`, `subscription.usage` | Quota data; the Plan page no longer shows usage against limits |
 | `data.eligible_features` | Reuse the existing list for effective permissions; do not add another capabilities list |
 | Envelope `timestamp` | Server as-of time; add an explicit timezone (`Z` or offset), rather than another `server_time` field |
 
@@ -150,8 +273,9 @@ restores coverage only to the original cycle end. Pending authorisation and pend
 grant access. [API gaps](./API_GAPS.md#backend-acceptance-evidence-before-production-wiring) owns the
 server acceptance checklist.
 
-The 32 context fixtures include the unextended current response, ineligibility and all previous
-trial/payment/renewal/cancellation/refund/rejoining scenarios. Four preparation examples, 12 errors
+The 33 context fixtures include the unextended current response, ineligibility and all previous
+trial/payment/renewal/cancellation/refund/rejoining scenarios. `authorisation_revoked_paid` is the
+paid-coverage variant of `authorisation_revoked` and uses only existing fields. Four preparation examples, 12 errors
 and seven journeys remain. Feed `contexts.<scenario>` through the proposed context/billing mapper;
 stamp mock/demo/preview/backend provenance in the service, not the wire payload. Preserve the complete
 envelope and unrelated context fields. Missing `billing` means billing unavailable, never a granted

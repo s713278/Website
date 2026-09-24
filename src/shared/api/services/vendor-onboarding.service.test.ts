@@ -27,8 +27,8 @@ describe('getVendorContext', () => {
       approvalStatus: 'APPROVED',
       onboarding: { status: 'COMPLETED', nextStep: 11 },
       subscription: {
-        tier: 'FREE',
-        trialEndsAt: null,
+        tier: 'PLATFORM_MONTHLY',
+        trialEndsAt: expect.stringMatching(/Z$/),
       },
     })
     expect(request).not.toHaveBeenCalled()

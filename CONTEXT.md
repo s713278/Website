@@ -86,6 +86,11 @@ _Avoid_: live mode, production mode, online
 Demonstration mode in which activity uses sample data and does not change a real account.
 _Avoid_: offline mode, mock mode, test mode
 
+**Razorpay Test Mode**:
+The provider environment used to demonstrate platform-fee collection with simulated payments
+and no real money. Its subscription and payment records are distinct from the app's sample data.
+_Avoid_: demo mode (for the provider environment), live billing
+
 ### Store discovery
 
 **Service area**:

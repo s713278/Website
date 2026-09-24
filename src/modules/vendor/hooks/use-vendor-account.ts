@@ -14,6 +14,9 @@ export type VendorAccount = {
   context: VendorContext
   storeState: StoreState
   plan: VendorPlan
+  contextStale: boolean
+  /** Bypass the retained context after billing or another account change. */
+  refreshContext: () => Promise<VendorContext>
   /** Re-read the account after something that changes it. */
   reload: () => void
   /**

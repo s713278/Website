@@ -693,6 +693,71 @@
         ]
       }
     },
+    "authorisation_revoked_paid": {
+      "timestamp": "2026-10-25T10:00:00Z",
+      "success": true,
+      "status": 200,
+      "data": {
+        "vendor_id": 900001,
+        "business_name": "Example Test Store",
+        "store_identifier": "example_test_store",
+        "vendor_status": "ACTIVE",
+        "approval_status": "APPROVED",
+        "role": "OWNER",
+        "onboarding": {
+          "status": "COMPLETED",
+          "next_step": 11,
+          "description": "Onboarding completed"
+        },
+        "subscription": {
+          "tier": "FREE",
+          "plan_name": "MithraDirect monthly platform membership",
+          "status": "ACTIVE",
+          "monthly_price": 299.0,
+          "yearly_price": 0.0,
+          "currency": "INR",
+          "trial_days": 14,
+          "limits": {
+            "max_skus": 25,
+            "max_products": 10,
+            "max_categories": 3,
+            "max_images": 10
+          },
+          "usage": {
+            "images": 0,
+            "skus": 9,
+            "products": 5,
+            "categories": 2
+          },
+          "trial_ends_at": "2026-10-15T10:00:00Z",
+          "billing": {
+            "revision": 8,
+            "trial_status": "ended",
+            "trial_days_remaining": 0,
+            "autopay_status": "revoked",
+            "payment_status": "confirmed",
+            "paid_through": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
+            "access_status": "PAID",
+            "store_visible": true,
+            "available_actions": [
+              "setup_autopay"
+            ],
+            "cancellation": null,
+            "refund": null,
+            "notice": null
+          }
+        },
+        "eligible_features": [
+          "DASHBOARD",
+          "VIEW",
+          "CATALOG",
+          "ORDERS",
+          "FULFILL_EXISTING_ORDERS",
+          "NEW_ORDERS"
+        ]
+      }
+    },
     "trial_expired": {
       "timestamp": "2026-10-15T10:00:00Z",
       "success": true,

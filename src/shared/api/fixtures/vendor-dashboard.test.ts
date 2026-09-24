@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mapVendorContext } from '../mappers/vendor-onboarding'
+import { mapVendorBillingStatus } from '../mappers/vendor-billing'
 import {
   mapVendorInsights,
   mapVendorOrderDetail,
@@ -39,8 +40,14 @@ import {
 describe('demo fixtures survive the real mappers', () => {
   beforeEach(resetDemoState)
 
-  it('maps the completed vendor context with the measured Free plan', () => {
-    const context = mapVendorContext(demoVendorContext('r1'))
+  it('maps the completed vendor context with simulated billing over the measured seed', () => {
+    const mapped = mapVendorContext(demoVendorContext('r1'))
+    const { serverTime, billing, billingCapabilitiesValid, ...context } = mapped
+
+    expect(serverTime).toMatch(/Z$/)
+    expect(billing).toMatchObject({ revision: 1, access_status: 'TRIAL' })
+    expect(mapVendorBillingStatus(mapped, 'demo', 'r1').trial.status).toBe('active')
+    expect(billingCapabilitiesValid).toBe(true)
 
     expect(context).toEqual({
       vendorId: 'r1',
@@ -55,14 +62,14 @@ describe('demo fixtures survive the real mappers', () => {
         nextStep: 11,
       },
       subscription: {
-        tier: 'FREE',
-        planName: 'Free',
+        tier: 'PLATFORM_MONTHLY',
+        planName: 'MithraDirect monthly',
         status: 'ACTIVE',
         currency: 'INR',
-        monthlyPrice: 0,
+        monthlyPrice: 299,
         yearlyPrice: 0,
-        trialEndsAt: null,
-        trialDays: 0,
+        trialEndsAt: expect.stringMatching(/Z$/),
+        trialDays: 14,
         limits: { maxCategories: 3, maxProducts: 10, maxSkus: 25, maxImages: 10 },
         usage: { categories: 1, products: 1, skus: 2, images: 0 },
       },

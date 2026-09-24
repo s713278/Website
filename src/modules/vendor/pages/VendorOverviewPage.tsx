@@ -4,14 +4,15 @@ import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
 import { StoreStatusScreen } from '@/modules/vendor/components/StoreStatusScreen'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import {
   isoDay,
   selectWorkQueue,
   workQueueStatusCounts,
   workQueueWindow,
 } from '@/modules/vendor/lib/work-queue'
-import type { VendorInsights, VendorOrderPage, VendorPlan } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, vendorOrdersService, vendorService } from '@/shared/api'
+import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
+import { getErrorMessage, vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Spinner } from '@/shared/components'
 
@@ -40,14 +41,45 @@ function MetricTile({ to, label, value }: { to: string; label: string; value: Re
  * The reference's fourth tile is the day's takings. There is none to show: no order read in
  * the contract carries a creation date, so "today" cannot be asked for, and the console's
  * one money figure lives on Orders beside the delivery range it describes. The catalog size
- * takes the slot — it is real, it comes from the context the shell has already read, and it
- * is the number that explains a refused product add.
+ * takes the slot, counted from the catalog itself: the vendor context no longer reports usage.
  *
  * Every status renders separately and always renders a number. The backend omits
  * zero-valued keys entirely, so `workQueueStatusCounts` supplies the `0` — a blank where
  * "none" belongs reads as missing data, not as nothing to do.
  */
-function Metrics({ userId, plan }: { userId: string; plan: VendorPlan }) {
+/**
+ * Products counted the way the Products page groups them, so the two never disagree. Loads on
+ * its own so a slow catalog read never holds back the order counts; a failed read shows a dash.
+ */
+function ProductCountTile({ vendorId }: { vendorId: string }) {
+  const [count, setCount] = useState<number | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+    setCount(null)
+    setFailed(false)
+
+    void vendorProductsService
+      .listSizes(vendorId, controller.signal)
+      .then((sizes) => {
+        if (!cancelled) setCount(groupByProduct(sizes).length)
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true)
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [vendorId])
+
+  return <MetricTile to="/vendor/products" label="Products" value={failed ? '—' : count ?? '…'} />
+}
+
+function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
   const [insights, setInsights] = useState<VendorInsights | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -90,11 +122,7 @@ function Metrics({ userId, plan }: { userId: string; plan: VendorPlan }) {
           value={count}
         />
       ))}
-      <MetricTile
-        to="/vendor/products"
-        label="Products"
-        value={plan.usage.products ?? '—'}
-      />
+      <ProductCountTile vendorId={vendorId} />
     </div>
   )
 }
@@ -262,11 +290,11 @@ function QuickActions({ storeIdentifier }: { storeIdentifier: string | null }) {
  */
 function OpenStoreOverview({ vendorId }: { vendorId: string }) {
   const userId = useAuthStore((s) => s.user?.id)
-  const { context, plan } = useVendorAccount()
+  const { context } = useVendorAccount()
 
   return (
     <div className="grid gap-4">
-      {userId ? <Metrics userId={userId} plan={plan} /> : null}
+      {userId ? <Metrics userId={userId} vendorId={vendorId} /> : null}
       <WorkQueue vendorId={vendorId} />
       <QuickActions storeIdentifier={context.storeIdentifier} />
     </div>

@@ -2671,8 +2671,8 @@
         "tags": [
           "07. Vendor Profile API"
         ],
-        "summary": "Go live",
-        "description": "Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,\nand set the vendor status to ACTIVE. Admin approval may still be required.\n",
+        "summary": "Go live and start trial",
+        "description": "Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,\nand set the vendor status to ACTIVE. Admin approval may still be required.\n\nOn success, the vendor is enrolled in the configured default platform trial plan\n(e.g. Social Starter Trial, 14 days). No Razorpay subscription is created at this\nstep. Repeated calls are idempotent and will not reset or extend the trial.\n",
         "operationId": "goLive",
         "parameters": [
           {
@@ -7723,7 +7723,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Get vendor dashboard context",
-        "description": "Returns onboarding, subscription tier, usage, and eligible features.",
+        "description": "Returns the vendor's onboarding state and current subscription context.\n\nThe `subscription` object reflects the vendor's current lifecycle state\n(e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted\ntrial dates, storefront/dashboard access flags, the active plan's features and\nlimits, and a list of available paid plans with UI-driven allowed actions.\n\nTrial expiry is evaluated at request time; no background job is required.\n",
         "operationId": "getVendorContext",
         "parameters": [
           {
@@ -7908,7 +7908,7 @@
           "20. Vendor Storefront API"
         ],
         "summary": "Get vendor storefront",
-        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.\n<br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).",
+        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories (with icon), products, trust strip and share link.\n<br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).",
         "operationId": "getStorefront",
         "parameters": [
           {
@@ -12729,6 +12729,11 @@
           "description": {
             "type": "string",
             "example": "A category dedicated to Milk products, offering a wide range of high-quality items for everyday use."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Category icon",
+            "example": "dairy-icon"
           }
         },
         "required": [
@@ -15137,33 +15142,63 @@
               "description": "Step 2 is completed"
             },
             "subscription": {
-              "tier": "SILVER",
-              "plan_name": "Silver",
-              "status": "TRIAL",
-              "trial_ends_at": "2026-08-28T17:10:00.123456789",
-              "monthly_price": 999,
-              "yearly_price": 9999,
-              "currency": "INR",
-              "trial_days": 14,
-              "limits": {
-                "max_categories": 10,
-                "max_products": 50,
-                "max_skus": 100,
-                "max_images": 50
+              "lifecycle_status": "TRIAL_ACTIVE",
+              "display_status": "Free trial",
+              "trial": {
+                "started_at": "2026-09-07T17:10:00.123456789",
+                "ends_at": "2026-09-21T17:10:00.123456789",
+                "days_total": 14,
+                "days_remaining": 0,
+                "expired": false
               },
-              "usage": {
-                "categories": 2,
-                "products": 5,
-                "skus": 12,
-                "images": 3
-              }
+              "plan": {
+                "plan_code": "SOCIAL_STARTER_TRIAL",
+                "plan_name": "Social Starter Trial",
+                "description": "14-day free trial for new vendors",
+                "features": [
+                  "STOREFRONT",
+                  "ORDERS",
+                  "CUSTOMERS",
+                  "CATALOG",
+                  "NOTIFICATIONS"
+                ],
+                "limits": {
+                  "max_products": 100,
+                  "max_images_per_product": 10,
+                  "max_staff_users": 2
+                },
+                "billing_cycle": "TRIAL",
+                "currency": "INR",
+                "sale_price": 0
+              },
+              "available_paid_plans": [
+                {
+                  "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+                  "plan_name": "Mithra Social Starter",
+                  "billing_cycle": "MONTHLY",
+                  "currency": "INR",
+                  "sale_price": 299,
+                  "list_price": 599,
+                  "discount": 300
+                },
+                {
+                  "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY",
+                  "plan_name": "Mithra Social Starter (Yearly)",
+                  "billing_cycle": "YEARLY",
+                  "currency": "INR",
+                  "sale_price": 2999,
+                  "list_price": 5999,
+                  "discount": 3000
+                }
+              ],
+              "updated_at": "2026-09-21T17:10:00.123456789"
             },
-            "eligible_features": [
-              "DASHBOARD",
-              "VIEW",
+            "features": [
+              "STOREFRONT",
+              "ORDERS",
+              "CUSTOMERS",
               "CATALOG",
-              "PRICES",
-              "ORDERS"
+              "NOTIFICATIONS"
             ]
           }
         }

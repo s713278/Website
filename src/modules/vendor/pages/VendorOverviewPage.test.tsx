@@ -9,8 +9,9 @@ import type {
   VendorInsights,
   VendorOrderPage,
   VendorOrderSummary,
+  VendorSize,
 } from '@/modules/vendor/types/dashboard'
-import { vendorOrdersService, vendorService } from '@/shared/api'
+import { vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { VendorOverviewPage } from './VendorOverviewPage'
 
@@ -24,6 +25,7 @@ const TODAY = new Date(2026, 8, 6, 9, 0, 0)
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(TODAY)
+  vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([])
   // Insights are keyed on the user id, so the page needs a session. Applied through the
   // store's own action rather than by writing state, which is a path production never takes.
   useAuthStore.getState().applySession({
@@ -87,6 +89,8 @@ function accountFor(storeState: StoreState): VendorAccount {
       usage: { categories: 1, products: 1, skus: 1, images: 0 },
     },
     reload: () => {},
+    contextStale: false,
+    refreshContext: async () => { throw new Error('Context refresh is outside this test.') },
     demo: null,
   }
 }
@@ -286,6 +290,37 @@ describe('VendorOverviewPage status counts', () => {
 
     expect(screen.queryByRole('link', { name: 'New 0' })).toBeNull()
     expect(screen.getByText('Loading your order counts…')).toBeTruthy()
+  })
+})
+
+function size(skuId: string, productId: string | null): VendorSize {
+  return { skuId, productId, priceId: null, name: `Product ${productId ?? skuId}`, size: null, listPrice: null, salePrice: null, active: true, imagePath: null }
+}
+
+describe('VendorOverviewPage product count', () => {
+  it('counts products from the catalog, grouping sizes as the Products page does', async () => {
+    stubQueue([])
+    stubInsights({})
+    const listSizes = vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([
+      size('1', 'p1'), size('2', 'p1'), size('3', 'p2'), size('4', null),
+    ])
+
+    renderFor()
+    await settle()
+
+    expect(listSizes).toHaveBeenCalledWith('vendor-1', expect.any(AbortSignal))
+    expect(screen.getByRole('link', { name: 'Products 3' }).getAttribute('href')).toBe('/vendor/products')
+  })
+
+  it('shows a dash rather than zero when the catalog read fails', async () => {
+    stubQueue([])
+    stubInsights({})
+    vi.spyOn(vendorProductsService, 'listSizes').mockRejectedValue(new Error('Could not load all your products.'))
+
+    renderFor()
+    await settle()
+
+    expect(screen.getByRole('link', { name: 'Products —' })).toBeTruthy()
   })
 })
 
