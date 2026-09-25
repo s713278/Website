@@ -1,6 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
-import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import { storeCartPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
@@ -12,7 +11,7 @@ export function LocationMapPage() {
   const { storeId = 'r1' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { store, loading, error, wrapperRef } = useStorePage(storeId)
+  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-only' })
   const cartCount = useCartStore((s) => s.itemCount(storeId))
   const addresses = useDeliveryAddressStore((s) => s.addresses)
   const addAddress = useDeliveryAddressStore((s) => s.addAddress)
@@ -35,35 +34,22 @@ export function LocationMapPage() {
   }
 
   return (
-    <StorePageStates
-      wrapperRef={wrapperRef}
-      loading={loading}
-      error={error}
-      ready={Boolean(store)}
-      loadingLabel="Loading map…"
-      emptyTitle="Store not found"
-      emptyDescription="This store may be offline."
-      backHref={from}
-    >
-      {store ? (
-        <div className="flex min-h-screen flex-col">
-          <StorefrontHeader
-            storeName={store.name}
-            logoUrl={store.theme?.logoImage}
-            cartCount={cartCount}
-            cartHref={storeCartPath(store.id)}
-            searchOpen={false}
-            onToggleSearch={() => navigate(storeSearchPath(store.id))}
-            pageTitle={editing ? 'Update location' : 'Set delivery location'}
-            onBack={() => navigate(from)}
-          />
-          <LocationMap
-            initial={editing}
-            confirmLabel={editing ? 'Update location' : 'Confirm location'}
-            onConfirm={saveAndBack}
-          />
-        </div>
-      ) : null}
-    </StorePageStates>
+    <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
+      <StorefrontHeader
+        storeName={store?.name ?? 'Store'}
+        logoUrl={store?.theme?.logoImage}
+        cartCount={cartCount}
+        cartHref={storeCartPath(storeId)}
+        searchOpen={false}
+        onToggleSearch={() => navigate(storeSearchPath(storeId))}
+        pageTitle={editing ? 'Update location' : 'Set delivery location'}
+        onBack={() => navigate(from)}
+      />
+      <LocationMap
+        initial={editing}
+        confirmLabel={editing ? 'Update location' : 'Confirm location'}
+        onConfirm={saveAndBack}
+      />
+    </div>
   )
 }

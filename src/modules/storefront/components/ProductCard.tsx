@@ -3,11 +3,11 @@ import { Package } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CardVariantPicker } from '@/modules/storefront/components/CardVariantPicker'
 import { ProductCartControl } from '@/modules/storefront/components/ProductCartControl'
+import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
-import { formatProductPriceRange, hasDistinctPriceRange } from '@/modules/storefront/lib/product-price'
+import { useProductVariantCartState } from '@/modules/storefront/lib/cart-write-pending'
 import { storeProductPath } from '@/modules/storefront/lib/store-paths'
 import type { Product } from '@/modules/storefront/types'
-import { formatCurrency } from '@/shared/lib/utils'
 type ProductCardProps = {
   storeId: string
   storeName: string
@@ -21,6 +21,7 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
     storeId,
   )
   const productHref = storeProductPath(storeId, product.id, selected.id)
+  const { isPending } = useProductVariantCartState(storeId, product.id)
 
   return (
     <article
@@ -66,22 +67,13 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
           >
             {product.name}
           </Link>
-          <p
-            className="shrink-0 text-right text-[15px] font-bold leading-tight text-[var(--store-accent,#ea580c)] sm:text-base"
-            aria-label={`Price ${formatCurrency(selected.price)}`}
-          >
-            {formatCurrency(selected.price)}
-          </p>
-        </div>
-
-        <div className="mt-1">
-          {multi && hasDistinctPriceRange(product) ? (
-            <p className="text-[13px] font-bold leading-tight text-[var(--store-accent,#ea580c)]/90 sm:text-[15px]">
-              {formatProductPriceRange(product)}
-            </p>
-          ) : !multi && selected.unit ? (
-            <p className="text-[11px] font-medium leading-none text-slate-500">{selected.unit}</p>
-          ) : null}
+          <ProductPrice
+            price={selected.price}
+            listPrice={selected.listPrice}
+            size="sm"
+            className="shrink-0 flex-col items-end gap-0"
+            saleClassName="text-[15px] leading-tight text-[var(--store-accent,#ea580c)] sm:text-base"
+          />
         </div>
 
         {multi ? (
@@ -89,6 +81,7 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
             variants={variants}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            isPending={isPending}
             className="mt-2.5"
           />
         ) : null}

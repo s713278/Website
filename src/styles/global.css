@@ -201,6 +201,27 @@
     }
   }
 
+  .md-pop-in {
+    animation: md-pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes md-pop-in {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .md-pop-in {
+      animation: none;
+    }
+  }
+
 }
 
 @theme inline {

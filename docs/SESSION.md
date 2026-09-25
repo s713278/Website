@@ -14,7 +14,7 @@ still needs are recorded under "Outstanding: the approved target session model" 
 | Session mapping | `src/shared/api/services/auth.service.ts` | Builds the session from the backend's verified identity |
 | Auth UI state | `src/shared/auth/store/auth-store.ts` | Persists the user only; session actions write API credentials |
 | Startup restoration | `AppProviders` → `restoreSession()` | One shot; owns `isHydrated` |
-| Route gates | `ProtectedRoute` | `customer` → checkout/orders; `vendor` → `/vendor/*` |
+| Route gates | `ProtectedRoute` | `customer` → `/checkout` and `/orders`; shop-scoped cart, checkout, and orders stay on the store header so **Sign in** can replace account after logout; `vendor` → `/vendor/*` |
 
 ## What the session contains
 
@@ -74,7 +74,12 @@ into a session by `applySession()`.
    response-shape surprise
 7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
 8. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
-   handler registered through `onExplicitSignOut()`
+   handler registered through `onExplicitSignOut()`. Customer cleanup clears `md-cart` memory and
+   persist storage, pending add, and in-flight cart writes. The public storefront cache stays so
+   `/login` can still show that shop's name and logo. The next customer OTP loads that identity's
+   cart from the server. Vendor payment records stay. Storefront logout stays on the page and
+   shows **Sign in** in the header; tapping it opens `/login` with `from` plus `shopName` /
+   `shopLogoUrl`. Protected customer routes still redirect to that login.
 9. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
 
 ### Refresh response shape

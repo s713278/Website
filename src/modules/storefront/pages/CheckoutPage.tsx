@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CheckoutView } from '@/modules/storefront/components/CheckoutView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
-import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { getCachedStore, useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { syncVendorCart } from '@/modules/storefront/lib/cart-actions'
 import { storeCartPath, storeCheckoutPath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { catalogService, type StorefrontCheckoutOptions } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /** Store checkout at `/stores/:storeId/checkout`. `/checkout` redirects here. */
 export function CheckoutPage() {
@@ -23,15 +25,31 @@ export function CheckoutPage() {
 
 function CheckoutForStore({ storeId }: { storeId: string }) {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
   const lines = useCartStore((s) => s.lines)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  // Prefer session cache for chrome/theme; checkout-specific config comes from checkout_options.
   const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const cartHydrated = useRef(false)
   const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
   const [checkoutOptions, setCheckoutOptions] = useState<StorefrontCheckoutOptions | null>(null)
   const [optionsLoading, setOptionsLoading] = useState(true)
   const [checkoutUnavailable, setCheckoutUnavailable] = useState(false)
   const storeLines = lines.filter((line) => line.storeId === storeId)
+  const [cartReady, setCartReady] = useState(() => storeLines.length > 0 || user?.role !== 'customer')
+
+  useEffect(() => {
+    if (cartHydrated.current || user?.role !== 'customer') return
+    if (storeLines.length > 0) {
+      setCartReady(true)
+      return
+    }
+    cartHydrated.current = true
+    void syncVendorCart(storeId, getCachedStore(storeId)?.name ?? store?.name ?? '')
+      .catch(() => {
+        /* empty cart still redirects below */
+      })
+      .finally(() => setCartReady(true))
+  }, [store?.name, storeId, storeLines.length, user?.role])
 
   useEffect(() => {
     let cancelled = false
@@ -60,11 +78,11 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
     }
   }, [storeId])
 
-  if (!loading && !optionsLoading && storeLines.length === 0) {
+  if (!loading && !optionsLoading && cartReady && storeLines.length === 0) {
     return <Navigate to={storeCartPath(storeId)} replace />
   }
 
-  const pageLoading = loading || optionsLoading
+  const pageLoading = loading || optionsLoading || !cartReady
 
   return (
     <StorePageStates

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatCheckoutDateLabel,
+  formatDeliveryEstimate,
   mapStorefrontCheckoutOptions,
 } from './storefront-checkout'
 
@@ -48,13 +48,8 @@ describe('mapStorefrontCheckoutOptions', () => {
       '2026-09-20',
       '2026-09-21',
     ])
-    expect(mapped?.deliverySlots.map((slot) => slot.id)).toEqual([
-      'date-2026-09-19',
-      'date-2026-09-20',
-      'date-2026-09-21',
-    ])
-    expect(mapped?.deliverySlots[0]?.date).toBe('2026-09-19')
-    expect(mapped?.deliverySlots[0]?.label).toBe(formatCheckoutDateLabel('2026-09-19'))
+    expect(mapped?.deliverySlots).toEqual([])
+    expect(formatDeliveryEstimate(mapped?.availableDeliveryDates ?? [])).toBe('19–21 Sept')
     expect(mapped?.paymentOptions).toEqual([
       { id: '76', label: 'Cash on delivery', type: 'CASH_ON_DELIVERY', isDefault: true },
     ])
@@ -89,10 +84,9 @@ describe('mapStorefrontCheckoutOptions', () => {
       },
     })
 
-    expect(mapped?.deliverySlots.map((slot) => slot.id)).toEqual([
-      'date-2026-04-17',
-      'date-2026-04-18',
-    ])
+    expect(mapped?.availableDeliveryDates).toEqual(['2026-04-17', '2026-04-18'])
+    expect(mapped?.deliverySlots).toEqual([])
+    expect(formatDeliveryEstimate(mapped?.availableDeliveryDates ?? [])).toBe('17–18 Apr')
     expect(mapped?.paymentOptions.map((option) => option.id)).toEqual(['cod', 'online'])
     expect(mapped?.paymentOptions[0]?.isDefault).toBe(true)
     expect(mapped?.shipping.deliveryCharge).toBe(30)
@@ -112,5 +106,18 @@ describe('mapStorefrontCheckoutOptions', () => {
       '6 PM - 9 PM',
       '9 PM - 12 AM',
     ])
+  })
+})
+
+describe('formatDeliveryEstimate', () => {
+  it('shows first-to-last day in the same month', () => {
+    expect(formatDeliveryEstimate(['2026-09-26', '2026-09-27', '2026-09-28'])).toBe(
+      formatDeliveryEstimate(['2026-09-28', '2026-09-26', '2026-09-27']),
+    )
+    expect(formatDeliveryEstimate(['2026-09-26', '2026-09-27', '2026-09-28'])).toMatch(/^26–28 /)
+  })
+
+  it('shows a single day when the window has one date', () => {
+    expect(formatDeliveryEstimate(['2026-09-26'])).toMatch(/^26 /)
   })
 })

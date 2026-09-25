@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ChevronLeft, ClipboardList, LogOut, Menu, Search, ShoppingCart, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
 import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { storeIdFromPath, storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import {
@@ -15,26 +16,30 @@ import {
 } from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
-const NAV = [
-  { id: 'home', label: 'Home' },
-  { id: 'categories', label: 'Categories' },
-  { id: 'orders', label: 'Track Order', href: '/orders' },
-  { id: 'contact', label: 'Contact' },
-] as const
+function storeNav(storeId: string | null) {
+  return [
+    { id: 'home', label: 'Home' },
+    { id: 'categories', label: 'Categories' },
+    { id: 'orders', label: 'Track Order', href: storeId ? storeOrdersPath(storeId) : '/orders' },
+    { id: 'contact', label: 'Contact' },
+  ] as const
+}
 
 type StorefrontHeaderProps = {
   storeName: string
   logoUrl?: string
-  cartCount: number
+  cartCount?: number
   cartHref?: string
   activeNav?: string
-  searchOpen: boolean
-  onToggleSearch: () => void
+  searchOpen?: boolean
+  onToggleSearch?: () => void
   onNavClick?: (id: string) => void
   onOpenMenu?: () => void
   /** When set, shows a compact back row for sub-pages (e.g. all products). */
   pageTitle?: string
   onBack?: () => void
+  /** Shop actions including Sign in / account. Off only when a page hides the whole action cluster. */
+  showActions?: boolean
   className?: string
 }
 
@@ -84,21 +89,26 @@ function NavItem({
 function AccountControl({
   loginTo,
   loginState,
+  ordersHref,
 }: {
   loginTo: string
   loginState: { from: string; shopName?: string; shopLogoUrl?: string }
+  ordersHref: string
 }) {
+  const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const from = `${location.pathname}${location.search}`
+  const signInState = { ...loginState, from }
 
   if (!user) {
     return (
       <Link
         to={loginTo}
-        state={loginState}
+        state={signInState}
         className="inline-flex h-9 shrink-0 items-center rounded-full bg-[var(--store-theme,var(--md-green-700))] px-3.5 text-sm font-semibold text-white transition hover:opacity-90"
       >
-        Log in
+        Sign in
       </Link>
     )
   }
@@ -130,7 +140,7 @@ function AccountControl({
           </>
         ) : null}
         <DropdownMenuItem asChild>
-          <Link to="/orders">
+          <Link to={ordersHref}>
             <ClipboardList />
             My orders
           </Link>
@@ -148,23 +158,27 @@ function AccountControl({
 function HeaderActions({
   searchOpen,
   onToggleSearch,
-  cartCount,
+  cartCount = 0,
   cartHref = '/cart',
   storeName,
   logoUrl,
+  trackOrderAlways = false,
 }: {
   searchOpen: boolean
   onToggleSearch: () => void
-  cartCount: number
+  cartCount?: number
   cartHref?: string
   storeName?: string
   logoUrl?: string
+  /** Compact headers have no desktop nav, so Track Order stays visible at every width. */
+  trackOrderAlways?: boolean
 }) {
   const user = useAuthStore((s) => s.user)
   const badge = visibleCartCount(user, cartCount)
   const shop = { name: storeName, logoUrl }
-  // Same as add-to-cart: guest goes to `/login` with `from` = this shop's cart path.
-  const login = customerLoginLink(cartHref, shop)
+  const shopId = storeIdFromPath(cartHref)
+  const ordersHref = shopId ? storeOrdersPath(shopId) : '/orders'
+  const login = customerLoginLink(shopId ? storePath(shopId) : '/', shop)
   const cartLink = linkFromNavTarget(
     canShopAsCustomer(user) || !isLiveApi()
       ? cartHref
@@ -172,7 +186,7 @@ function HeaderActions({
   )
 
   return (
-    <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+    <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
       <button
         type="button"
         onClick={onToggleSearch}
@@ -186,7 +200,19 @@ function HeaderActions({
         <Search className="size-[1.125rem]" strokeWidth={1.75} />
       </button>
 
-      <AccountControl loginTo={login.to} loginState={login.state} />
+      <Link
+        to={ordersHref}
+        className={cn(
+          'inline-flex size-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100',
+          !trackOrderAlways && 'lg:hidden',
+        )}
+        aria-label="Track order"
+        title="Track order"
+      >
+        <ClipboardList className="size-[1.125rem]" strokeWidth={1.75} />
+      </Link>
+
+      <AccountControl loginTo={login.to} loginState={login.state} ordersHref={ordersHref} />
 
       <Link
         to={cartLink.to}
@@ -209,15 +235,16 @@ function HeaderActions({
 export function StorefrontHeader({
   storeName,
   logoUrl,
-  cartCount,
+  cartCount = 0,
   cartHref,
   activeNav = 'home',
-  searchOpen,
-  onToggleSearch,
+  searchOpen = false,
+  onToggleSearch = () => undefined,
   onNavClick,
   onOpenMenu,
   pageTitle,
   onBack,
+  showActions = true,
   className,
 }: StorefrontHeaderProps) {
   const browsing = Boolean(onBack)
@@ -230,12 +257,12 @@ export function StorefrontHeader({
       )}
     >
       {browsing ? (
-        <div className="store-shell-inner flex h-12 items-center gap-3 sm:h-[3.25rem]">
+        <div className="store-shell-inner flex h-12 items-center gap-2 sm:h-[3.25rem] sm:gap-3">
           <button
             type="button"
             onClick={onBack}
             className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 hover:text-[var(--store-theme,var(--md-green-700))]"
-            aria-label="Back to store home"
+            aria-label="Go back"
           >
             <ChevronLeft className="size-5" strokeWidth={2.25} aria-hidden />
           </button>
@@ -246,18 +273,21 @@ export function StorefrontHeader({
             </p>
           ) : null}
 
-          <HeaderActions
-            searchOpen={searchOpen}
-            onToggleSearch={onToggleSearch}
-            cartCount={cartCount}
-            cartHref={cartHref}
-            storeName={storeName}
-            logoUrl={logoUrl}
-          />
+          {showActions ? (
+            <HeaderActions
+              searchOpen={searchOpen}
+              onToggleSearch={onToggleSearch}
+              cartCount={cartCount}
+              cartHref={cartHref}
+              storeName={storeName}
+              logoUrl={logoUrl}
+              trackOrderAlways
+            />
+          ) : null}
         </div>
       ) : (
       <div className="store-shell-inner overflow-visible">
-        <div className="flex h-16 items-center gap-3 lg:h-[4.5rem] lg:gap-6">
+        <div className="flex h-16 min-w-0 items-center gap-2 sm:gap-3 lg:h-[4.5rem] lg:gap-6">
           {/* Mobile menu */}
           <button
             type="button"
@@ -268,10 +298,10 @@ export function StorefrontHeader({
             <Menu className="size-5" strokeWidth={1.75} />
           </button>
 
-          {/* Brand */}
+          {/* Brand — may shrink so search / account / track stay on screen */}
           <a
             href="#top"
-            className="flex min-w-0 shrink-0 items-center lg:min-w-[220px]"
+            className="flex min-w-0 flex-1 items-center overflow-hidden lg:min-w-[220px] lg:flex-none"
             onClick={() => onNavClick?.('home')}
           >
             <StoreBrandLogo
@@ -288,7 +318,7 @@ export function StorefrontHeader({
             aria-label="Store navigation"
           >
             <div className="flex items-center gap-0.5">
-              {NAV.map((item) => (
+              {storeNav(storeIdFromPath(cartHref)).map((item) => (
                 <NavItem
                   key={item.id}
                   active={activeNav === item.id}

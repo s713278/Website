@@ -75,12 +75,24 @@ function mapTimeSlot(value: unknown, index: number): StorefrontCheckoutSlot | nu
   }
 }
 
+function isoDayParts(isoDate: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return null
+  return {
+    iso: isoDate,
+    day: new Intl.DateTimeFormat('en-IN', { day: 'numeric' }).format(date),
+    month: new Intl.DateTimeFormat('en-IN', { month: 'short' }).format(date),
+    year: new Intl.DateTimeFormat('en-IN', { year: 'numeric' }).format(date),
+  }
+}
+
 /** `2026-09-18` → "Thu, 18 Sep". Falls back to the raw ISO date. */
 export function formatCheckoutDateLabel(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
-  if (!match) return isoDate
+  const parts = isoDayParts(isoDate)
+  if (!parts) return isoDate
   const date = new Date(`${isoDate}T12:00:00`)
-  if (Number.isNaN(date.getTime())) return isoDate
   return date.toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
@@ -88,24 +100,21 @@ export function formatCheckoutDateLabel(isoDate: string): string {
   })
 }
 
-/** Short chip label: weekday + day. */
-export function formatCheckoutDateChip(isoDate: string): { weekday: string; day: string } {
-  const date = new Date(`${isoDate}T12:00:00`)
-  if (Number.isNaN(date.getTime())) return { weekday: isoDate, day: '' }
-  return {
-    weekday: date.toLocaleDateString('en-IN', { weekday: 'short' }),
-    day: date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+/**
+ * Eligible-date window for customers — first to last, not a picked day.
+ * `['2026-09-26','2026-09-27','2026-09-28']` → `26–28 Sept`.
+ */
+export function formatDeliveryEstimate(dates: string[]): string {
+  const unique = [...new Set(dates.map((item) => item.trim()).filter((item) => isoDayParts(item)))].sort()
+  const start = unique[0] ? isoDayParts(unique[0]) : null
+  const end = unique[unique.length - 1] ? isoDayParts(unique[unique.length - 1]!) : null
+  if (!start) return ''
+  if (!end || start.iso === end.iso) return `${start.day} ${start.month}`
+  if (start.month === end.month && start.year === end.year) {
+    return `${start.day}–${end.day} ${start.month}`
   }
-}
-
-function mapDateSlot(date: string, index: number): StorefrontCheckoutSlot {
-  return {
-    id: `date-${date}`,
-    date,
-    label: formatCheckoutDateLabel(date),
-    description: 'Available delivery date',
-    recommended: index === 0,
-  }
+  if (start.year === end.year) return `${start.day} ${start.month}–${end.day} ${end.month}`
+  return `${start.day} ${start.month} ${start.year}–${end.day} ${end.month} ${end.year}`
 }
 
 function stringList(...candidates: unknown[]): string[] {
@@ -139,16 +148,11 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
     delivery.available_delivery_dates,
   )
 
-  const timeSlots = (
+  const deliverySlots = (
     Array.isArray(data.delivery_slots) ? data.delivery_slots : []
   )
     .map(mapTimeSlot)
     .filter((slot): slot is StorefrontCheckoutSlot => slot != null)
-
-  const deliverySlots =
-    timeSlots.length > 0
-      ? timeSlots
-      : availableDeliveryDates.map(mapDateSlot)
 
   const paymentsRaw = Array.isArray(data.payment_options) ? data.payment_options : []
   const paymentOptions: StorefrontCheckoutPayment[] = []

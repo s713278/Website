@@ -215,7 +215,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 |---|---|---|---|
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
 | `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
-| `orders.service.ts` | `placeOrder`, `listMyOrders` | localStorage `md-customer-orders` | `POST /v1/orders/from-cart` (live checkout; `POST /v1/orders` is unimplemented), `GET /v1/users/{userId}/orders/history` |
+| `orders.service.ts` | `placeOrder`, `listMyOrders`, `listMyOrdersPage`, `getMyOrder` | localStorage `md-customer-orders` | `POST /v1/orders/from-cart` (live checkout; `POST /v1/orders` is unimplemented), `GET /v1/users/{userId}/orders/history/paged` (`page` + `size`, default 20), `GET /v1/users/{userId}/orders/{orderId}` |
 | `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
@@ -351,12 +351,53 @@ on `top_products`, not on the sampled vendor rows, so it is not treated as landi
 `src/modules/storefront/lib/cart-actions.ts` connects storefront actions to the app-facing
 `cartService`. Live adds and quantity updates apply the returned cart snapshot after API success;
 deletion removes the local line after the request succeeds, or locally if it has no backend item ID.
-Demo actions update Zustand directly. The package's parallel cart wrapper is not used by this path.
+In-flight add/qty writes are tracked per SKU so switching pack size shows a loader instead of a
+stale Add.
+Mutations for one vendor run in a queue so an older snapshot cannot wipe a later add. A missing
+cart *line* ("specified item was not found") refreshes that vendor's cart; it does not clear it.
+Logout increments a write epoch and drops `md-cart`, so a late response cannot refill the
+previous identity's cart. After the next customer OTP, `StorefrontLayout` only applies a
+pending add-to-cart. Live cart GET belongs to the shop home and cart pages (checkout hydrates
+only when that vendor has no local lines). Demo actions update Zustand directly. The package's
+parallel cart wrapper is not used by this path.
 
 `useCartStore` persists lines and summaries per vendor under `md-cart`; replacing one vendor's cart
-retains other vendors' lines. `hydrateVendorCart` fetches a live snapshot only when that vendor has
-no local lines, so persisted state is not continuously reconciled with the backend. Product metadata
-enriches API lines before they reach the store. Trace this orchestration when changing cart behavior.
+retains other vendors' lines. Lines are keyed by SKU, so two sizes of the same product stay
+independent. After login, `syncVendorCart` always replaces that vendor from the server — leftover
+`md-cart` names from the previous session are not kept. Line labels come from the catalog SKU
+(or the size just tapped), not from an older local name. Trace this orchestration when changing
+cart behavior.
+
+#### Storefront customer orders
+
+Checkout shows `eligible_delivery_dates` as one estimated window (first to last
+date, e.g. `26–28 Sept`), not a picked day. From-cart still sends the first eligible `delivery_date`
+when the timing type requires one, and writes that window into `notes`.
+
+Each storefront page owns its HTTP calls:
+
+| Page | Live GETs |
+|------|-----------|
+| Store list | nearby stores / keyword search |
+| Store home | storefront + products (+ cart once if signed in) |
+| Product detail | SKU detail; storefront only on cache miss |
+| Cart | cart; storefront only on cache miss |
+| Checkout | checkout_options; storefront on cache miss; cart only if no local lines |
+| Location / success / orders | none for chrome (memory cache) |
+| My orders | `GET /v1/users/{userId}/orders/history/paged` — page 0 first (`size` 20); next page when the list bottom is visible |
+| Order details | `GET /v1/users/{userId}/orders/{orderId}` |
+
+Live customer history uses `mapCustomerOrderHistoryPage` on the paged
+container (`result`, `page_number`, `page_size`, `total_elements`,
+`total_pages`, `last_page`). Detail goes through `mapCustomerOrderDetail`.
+The storefront order-details page renders documented
+fields only: `order_id`, `store_name`, `order_status`, `payment_status`,
+`delivery_date`, `delivery_method`, `notes`, `customer_name`, `customer_mobile`,
+`delivery_address.address.address1`, `order_amount` (`items_count`, `gross_amount`,
+`discount`, `delivery_charges`, `service_charge`, `tax_amount`, `amount`), and
+`order_items` (`sku_name`, `size`, `quantity`, `unit_price`, `list_price`,
+`line_total`, `discount`, `image_path`). Item size stays on its own field; it is
+not folded into the name.
 
 #### Vendor dashboard reads
 
@@ -623,7 +664,7 @@ order and support WhatsApp numbers and rejects local image URLs. Live account se
   Axios instance built without the just-configured `onUnauthorized`, so a cold-load 401 can
   fail to trigger logout.
 - **`sync:api` needs pnpm** despite this being an npm repo — see §8.
-- **Cart hydration skips vendors with cached lines** — see [Storefront cart](#storefront-cart).
+- **After login the live cart is always replaced from the server** — see [Storefront cart](#storefront-cart).
 - **`useAuthStore.login`/`register` are demo-only service actions.** The login screens use OTP;
   see [authentication status](../README.md#authentication-status).
 - **Tokens are readable by JavaScript.** localStorage is an interim choice; any XSS is a
