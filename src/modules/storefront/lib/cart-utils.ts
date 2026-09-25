@@ -193,6 +193,7 @@ export function enrichCartLinesWithCatalog(
         // Keep API unit_price / line_total — do not reprice from catalog
         price: line.price,
         lineTotal: line.lineTotal,
+        listPrice: line.listPrice ?? variant.listPrice ?? prev?.listPrice,
         imageUrl: product.imageUrl || line.imageUrl || prev?.imageUrl,
       }
     }

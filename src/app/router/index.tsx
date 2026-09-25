@@ -127,12 +127,10 @@ export function AppRouter() {
           <Route path="stores/:storeId/products/:productId" element={<ProductDetailPage />} />
           <Route path="stores/:storeId/cart" element={<CartPage />} />
           <Route path="stores/:storeId/location" element={<LocationMapPage />} />
-          <Route element={<ProtectedRoute roles={['customer']} />}>
-            <Route path="stores/:storeId/checkout" element={<CheckoutPage />} />
-            <Route path="stores/:storeId/orders/:orderId/success" element={<OrderSuccessPage />} />
-            <Route path="stores/:storeId/orders/:orderId" element={<OrderDetailPage />} />
-            <Route path="stores/:storeId/orders" element={<OrdersPage />} />
-          </Route>
+          <Route path="stores/:storeId/checkout" element={<CheckoutPage />} />
+          <Route path="stores/:storeId/orders/:orderId/success" element={<OrderSuccessPage />} />
+          <Route path="stores/:storeId/orders/:orderId" element={<OrderDetailPage />} />
+          <Route path="stores/:storeId/orders" element={<OrdersPage />} />
         </Route>
 
         <Route element={<RootLayout />}>

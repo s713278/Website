@@ -138,6 +138,7 @@ export function buildCartLineSnapshot(product: Product, variant: ProductVariant)
     itemId: variantCartId(product.id, variant.id),
     name: variantLineName(product.name, variant.unit),
     price: variant.price,
+    listPrice: variant.listPrice,
   }
 }
 

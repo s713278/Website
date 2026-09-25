@@ -15,7 +15,7 @@ import {
   Truck,
 } from 'lucide-react'
 import {
-  formatCheckoutDateChip,
+  formatDeliveryEstimate,
   getErrorMessage,
   ordersService,
   type StorefrontCheckoutOptions,
@@ -23,16 +23,22 @@ import {
 } from '@/shared/api'
 import { DeliveryAddressPicker } from '@/shared/components/DeliveryAddressPicker'
 import { useDeliveryLocation } from '@/shared/hooks/useDeliveryLocation'
+import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { StorefrontMobileActionBar } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import { lineAmount, priceDetailsFromSummary } from '@/modules/storefront/lib/cart-utils'
+import { DELIVERY_ESTIMATE_NOTE } from '@/modules/storefront/lib/order-display'
 import {
   storeCartPath,
   storeOrderSuccessPath,
   storePath,
   storeSearchPath,
 } from '@/modules/storefront/lib/store-paths'
-import { buildWhatsAppOrderMessage } from '@/modules/storefront/lib/whatsapp-order'
+import {
+  buildWhatsAppOrderMessage,
+  saveWhatsAppOrderDraft,
+  whatsappHref,
+} from '@/modules/storefront/lib/whatsapp-order'
 import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -56,41 +62,6 @@ function deliveryMethodLabel(method: string) {
   return 'Home delivery'
 }
 
-/** Customer-facing copy for API `scheduling_strategy`. */
-function schedulingStrategyLabel(strategy: string | null | undefined): {
-  title: string
-  hint: string
-} | null {
-  if (!strategy) return null
-  switch (strategy) {
-    case 'FIXED_WINDOW':
-      return {
-        title: 'Fixed window',
-        hint: 'Choose a delivery date from the window this store offers',
-      }
-    case 'CUSTOMER_SELECT_DATE':
-      return {
-        title: 'Choose your date',
-        hint: 'Pick any available delivery date below',
-      }
-    case 'PREDEFINED_DAYS':
-      return {
-        title: 'Scheduled days',
-        hint: 'Delivery on the store’s scheduled days',
-      }
-    case 'INSTANT':
-      return {
-        title: 'Instant delivery',
-        hint: 'Your order goes out as soon as it’s confirmed',
-      }
-    default:
-      return {
-        title: strategy.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()),
-        hint: 'Delivery schedule from this store',
-      }
-  }
-}
-
 function paymentIcon(type: StorefrontCheckoutPayment['type'] | undefined) {
   return type === 'CASH_ON_DELIVERY' ? Banknote : CreditCard
 }
@@ -112,7 +83,6 @@ export function CheckoutView({
   // Totals come from cart API summary — do not recompute delivery from checkout_options.
   const totals = priceDetailsFromSummary(summary)
 
-  const clear = useCartStore((s) => s.clear)
   const user = useAuthStore((s) => s.user)
   const phone = user?.phone ?? ''
   const { selected, pickerProps, openChange, openMap } = useDeliveryLocation(store.id)
@@ -120,8 +90,8 @@ export function CheckoutView({
   const deliverySlots = checkoutOptions?.deliverySlots ?? []
   const paymentOptions = checkoutOptions?.paymentOptions ?? []
   const deliveryMethods = checkoutOptions?.deliveryMethods ?? []
-  const scheduling = schedulingStrategyLabel(checkoutOptions?.schedulingStrategy)
-  const useDateChips = deliverySlots.some((slot) => Boolean(slot.date))
+  const estimateDates = checkoutOptions?.availableDeliveryDates ?? []
+  const estimateLabel = formatDeliveryEstimate(estimateDates)
   const consentTitle = checkoutOptions?.consentTitle
   const consentText = checkoutOptions?.consentText
   const requiresConsent = Boolean(consentTitle || consentText)
@@ -152,16 +122,16 @@ export function CheckoutView({
   }, [consentTitle, consentText])
 
   const selectedSlot = deliverySlots.find((slot) => slot.id === deliverySlot)
-  const slotLabel = selectedSlot?.label ?? 'Delivery'
+  const slotLabel = estimateLabel || selectedSlot?.label || 'Delivery'
   const deliveryMethod = deliveryMethods[0] ?? 'HOME_DELIVERY'
-  const deliveryDate = selectedSlot?.date ?? selectedSlot?.id ?? ''
+  const deliveryDate = estimateDates[0] ?? selectedSlot?.date ?? ''
 
   const selectedPayment = paymentOptions.find((option) => option.id === payment)
   const selectedPaymentLabel = selectedPayment?.label ?? 'Payment'
 
   const canPlace =
     Boolean(selected) &&
-    Boolean(deliverySlot || deliverySlots.length === 0) &&
+    Boolean(estimateLabel || deliverySlot || deliverySlots.length === 0) &&
     Boolean(payment || paymentOptions.length === 0) &&
     (!requiresConsent || consentAccepted) &&
     !placing
@@ -185,7 +155,13 @@ export function CheckoutView({
         storeName: store.name,
         address: selected.location,
         phone,
-        note: `Slot: ${slotLabel} · Payment: ${selectedPaymentLabel}`,
+        note: [
+          estimateLabel ? `Estimated delivery: ${estimateLabel}` : null,
+          selectedSlot ? `Slot: ${selectedSlot.label}` : null,
+          `Payment: ${selectedPaymentLabel}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
         lines,
         deliveryFee: totals.delivery,
         total: totals.total,
@@ -230,7 +206,8 @@ export function CheckoutView({
         paymentLabel: selectedPaymentLabel,
       })
 
-      clear()
+      saveWhatsAppOrderDraft(order.id, message)
+      const waLink = whatsappHref(store.phone ?? '', message)
 
       navigate(storeOrderSuccessPath(store.id, order.id), {
         replace: true,
@@ -238,6 +215,7 @@ export function CheckoutView({
           storeName: store.name,
           deliverySlot: slotLabel,
           whatsappMessage: message,
+          whatsappHref: waLink,
         },
       })
     } catch (err) {
@@ -247,7 +225,6 @@ export function CheckoutView({
     }
   }
 
-  const placeOrderLabel = placing ? 'Creating order…' : 'Create Order & Send on WhatsApp'
   const placeOrderAmount = placing ? null : formatCurrency(totals.total)
 
   const itemLabel = `${totals.itemCount} ${totals.itemCount === 1 ? 'item' : 'items'} in your cart`
@@ -306,11 +283,7 @@ export function CheckoutView({
           >
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
               <section className="space-y-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.04)] sm:p-7">
-                <CheckoutSection
-                  icon={MapPin}
-                  title="Deliver to"
-                  hint="Where should we send this order?"
-                >
+                <CheckoutSection icon={MapPin} title="Delivery address">
                   {selected ? (
                     <div className="flex items-center gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-4 py-3.5">
                       <div className="min-w-0 flex-1">
@@ -335,7 +308,7 @@ export function CheckoutView({
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center">
-                      <p className="text-sm text-slate-600">Add a delivery location to continue.</p>
+                      <p className="text-sm text-slate-600">Add your address</p>
                       <Button
                         type="button"
                         className="mt-4 rounded-xl bg-[var(--store-theme,var(--md-green-800))] px-6 text-white hover:opacity-90"
@@ -347,69 +320,35 @@ export function CheckoutView({
                   )}
                 </CheckoutSection>
 
+                {estimateLabel ? (
+                  <CheckoutSection title="Estimated delivery" icon={CalendarDays}>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3.5">
+                      <p className="text-sm font-bold text-slate-900">{estimateLabel}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p>
+                    </div>
+                  </CheckoutSection>
+                ) : null}
+
                 {deliverySlots.length > 0 ? (
-                  <CheckoutSection
-                    title={useDateChips ? 'Delivery date' : 'Delivery window'}
-                    hint={
-                      scheduling?.hint ??
-                      (useDateChips
-                        ? 'Pick a date from the options below'
-                        : 'Choose a convenient delivery time')
-                    }
-                    icon={CalendarDays}
-                  >
-                    {useDateChips ? (
-                      <div className="grid grid-cols-3 gap-2.5">
-                        {deliverySlots.map((slot) => {
-                          const chip = slot.date
-                            ? formatCheckoutDateChip(slot.date)
-                            : { weekday: slot.label, day: '' }
-                          const checked = deliverySlot === slot.id
-                          return (
-                            <button
-                              key={slot.id}
-                              type="button"
-                              onClick={() => setDeliverySlot(slot.id)}
-                              className={cn(
-                                'flex w-full min-w-0 items-center justify-between gap-1.5 rounded-2xl border px-2.5 py-3 text-left transition sm:gap-2 sm:px-3.5',
-                                checked
-                                  ? 'border-[var(--store-theme,var(--md-green-500))] bg-[var(--store-theme-soft,rgba(16,185,129,0.12))]'
-                                  : 'border-slate-200 bg-white hover:border-slate-300',
-                              )}
-                            >
-                              <span className="min-w-0">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                  {chip.weekday}
-                                </span>
-                                <span className="mt-0.5 block text-sm font-bold text-slate-900">
-                                  {chip.day || slot.label}
-                                </span>
-                              </span>
-                              <RadioMark checked={checked} />
-                            </button>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {deliverySlots.map((slot) => (
-                          <ChoiceRow
-                            key={slot.id}
-                            checked={deliverySlot === slot.id}
-                            onChange={() => setDeliverySlot(slot.id)}
-                            name="delivery-slot"
-                            title={slot.label}
-                            subtitle={slot.description}
-                            recommended={slot.recommended}
-                          />
-                        ))}
-                      </div>
-                    )}
+                  <CheckoutSection title="Delivery time" icon={CalendarDays}>
+                    <div className="space-y-2.5">
+                      {deliverySlots.map((slot) => (
+                        <ChoiceRow
+                          key={slot.id}
+                          checked={deliverySlot === slot.id}
+                          onChange={() => setDeliverySlot(slot.id)}
+                          name="delivery-slot"
+                          title={slot.label}
+                          subtitle={slot.description}
+                          recommended={slot.recommended}
+                        />
+                      ))}
+                    </div>
                   </CheckoutSection>
                 ) : null}
 
                 {paymentOptions.length > 0 ? (
-                  <CheckoutSection title="Payment" hint="How would you like to pay?" icon={CreditCard}>
+                  <CheckoutSection title="Payment" icon={CreditCard}>
                     <div className="space-y-2.5">
                       {paymentOptions.map((option) => {
                         const Icon = paymentIcon(option.type)
@@ -470,9 +409,16 @@ export function CheckoutView({
                             </p>
                             <p className="mt-0.5 text-xs text-slate-500">Qty {line.qty}</p>
                           </div>
-                          <p className="shrink-0 text-sm font-bold text-slate-900">
-                            {formatCurrency(lineAmount(line))}
-                          </p>
+                          <ProductPrice
+                            price={lineAmount(line)}
+                            listPrice={
+                              line.listPrice != null && line.listPrice > line.price
+                                ? line.listPrice * line.qty
+                                : undefined
+                            }
+                            size="sm"
+                            className="shrink-0 flex-col items-end gap-0"
+                          />
                         </div>
                       )
                     })}
@@ -504,26 +450,20 @@ export function CheckoutView({
                     </p>
                   </div>
 
-                  {deliverySlot ? (
+                  {estimateLabel || selectedPaymentLabel ? (
                     <p className="mt-4 flex items-start gap-2 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.1))] px-3.5 py-2.5 text-xs leading-relaxed text-slate-600">
                       <ShieldCheck
                         className="mt-0.5 size-3.5 shrink-0 text-[var(--store-theme,var(--md-green-700))]"
                         aria-hidden
                       />
                       <span>
-                        {scheduling ? (
+                        {estimateLabel ? (
                           <>
-                            <span className="font-medium text-slate-700">{scheduling.title}</span>
-                            {' · '}
+                            Estimated <span className="font-medium text-slate-700">{estimateLabel}</span>
                           </>
                         ) : null}
-                        Arriving <span className="font-medium text-slate-700">{slotLabel}</span>
-                        {selectedPaymentLabel ? (
-                          <>
-                            {' · '}
-                            {selectedPaymentLabel}
-                          </>
-                        ) : null}
+                        {estimateLabel && selectedPaymentLabel ? ' · ' : null}
+                        {selectedPaymentLabel}
                       </span>
                     </p>
                   ) : null}
@@ -543,18 +483,11 @@ export function CheckoutView({
                   type="button"
                   fullWidth
                   size="lg"
-                  className="hidden h-12 justify-between rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
+                  className="hidden h-auto min-h-12 justify-between rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
                   disabled={!canPlace}
                   onClick={() => void placeOrderOnWhatsApp()}
                 >
-                  <ShieldCheck className="size-4 shrink-0" aria-hidden />
-                  <span className="min-w-0 flex-1 text-left leading-tight">
-                    <span className="block truncate">{placeOrderLabel}</span>
-                    {placeOrderAmount ? (
-                      <span className="block text-xs font-bold">{placeOrderAmount}</span>
-                    ) : null}
-                  </span>
-                  <ChevronRight className="size-4 shrink-0" aria-hidden />
+                  <PlaceOrderCta placing={placing} amount={placeOrderAmount} />
                 </Button>
 
                 {requiresConsent ? (
@@ -578,7 +511,7 @@ export function CheckoutView({
             </div>
           </main>
 
-          <StorefrontMobileActionBar className="min-h-[5.5rem]">
+          <StorefrontMobileActionBar>
             <p
               className={cn(
                 'mb-2 min-h-4 text-center text-xs',
@@ -593,20 +526,23 @@ export function CheckoutView({
                   ? 'Accept the store terms above to continue'
                   : ' '}
             </p>
+            <div className="mb-2.5 flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium text-slate-600">Total</span>
+              <span className="text-lg font-bold tabular-nums text-slate-900">
+                {formatCurrency(totals.total)}
+              </span>
+            </div>
             <Button
               type="button"
               fullWidth
               size="lg"
-              className="h-12 justify-between rounded-full bg-[var(--store-theme,var(--md-green-700))] text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              className="h-auto min-h-12 justify-center gap-2 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
               disabled={!canPlace}
               onClick={() => void placeOrderOnWhatsApp()}
             >
               <ShieldCheck className="size-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 text-left leading-tight">
-                <span className="block truncate">{placeOrderLabel}</span>
-                {placeOrderAmount ? (
-                  <span className="block text-xs font-bold">{placeOrderAmount}</span>
-                ) : null}
+              <span className="min-w-0 text-sm font-semibold">
+                {placing ? 'Creating order…' : 'Create order'}
               </span>
               <ChevronRight className="size-4 shrink-0" aria-hidden />
             </Button>
@@ -615,6 +551,21 @@ export function CheckoutView({
           <DeliveryAddressPicker {...pickerProps} />
         </>
       )}
+    </>
+  )
+}
+
+function PlaceOrderCta({ placing, amount }: { placing: boolean; amount: string | null }) {
+  return (
+    <>
+      <ShieldCheck className="size-4 shrink-0" aria-hidden />
+      <span className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+        <span className="min-w-0 truncate text-sm font-semibold">
+          {placing ? 'Creating order…' : 'Create order'}
+        </span>
+        {amount ? <span className="shrink-0 text-sm font-bold tabular-nums">{amount}</span> : null}
+      </span>
+      <ChevronRight className="size-4 shrink-0" aria-hidden />
     </>
   )
 }

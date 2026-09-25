@@ -16,6 +16,7 @@ import {
   variantLineName,
 } from '@/modules/storefront/lib/product-variants'
 import { enqueueVendorCart, resetVendorCartQueue } from '@/modules/storefront/lib/vendor-cart-queue'
+import { clearCartWrites } from '@/modules/storefront/lib/cart-write-pending'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, CartSummary, Product, ProductVariant } from '@/modules/storefront/types'
 
@@ -25,6 +26,7 @@ let writeEpoch = 0
 export function invalidateCartWrites() {
   writeEpoch += 1
   resetVendorCartQueue()
+  clearCartWrites()
 }
 
 function catalogForVendor(vendorId: string, extra: Product[] = []): Product[] {
@@ -201,13 +203,23 @@ async function setVendorCartQtyNow(
   }
 }
 
+const cartSyncInFlight = new Map<string, Promise<void>>()
+
 /** Replace this vendor's local cart with the live server snapshot. */
 export function syncVendorCart(
   vendorId: string,
   storeName = '',
   products: Product[] = [],
 ): Promise<void> {
-  return enqueueVendorCart(vendorId, () => syncVendorCartNow(vendorId, storeName, products))
+  const existing = cartSyncInFlight.get(vendorId)
+  if (existing) return existing
+  const pending = enqueueVendorCart(vendorId, () =>
+    syncVendorCartNow(vendorId, storeName, products),
+  ).finally(() => {
+    if (cartSyncInFlight.get(vendorId) === pending) cartSyncInFlight.delete(vendorId)
+  })
+  cartSyncInFlight.set(vendorId, pending)
+  return pending
 }
 
 /** Load this vendor from the server (same as sync). */

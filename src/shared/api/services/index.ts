@@ -38,16 +38,20 @@ export {
 } from './catalog.service'
 export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../mappers/storefront-checkout'
 export {
-  formatCheckoutDateChip,
   formatCheckoutDateLabel,
+  formatDeliveryEstimate,
 } from '../mappers/storefront-checkout'
 export { cartService } from './cart.service'
 export {
   getMyOrder,
   listMyOrders,
+  listMyOrdersPage,
   ordersService,
   placeOrder,
   type CustomerOrder,
+  type CustomerOrderBill,
+  type CustomerOrderHistoryPage,
+  type CustomerOrderItem,
   type PlaceOrderInput,
 } from './orders.service'
 export {

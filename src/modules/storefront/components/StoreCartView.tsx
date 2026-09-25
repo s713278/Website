@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Loader2, Package, ShoppingBag, X } from 'lucide-react'
-import { loginPathForRole } from '@/app/router/role-home'
+import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
+import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import {
@@ -65,7 +66,11 @@ export function StoreCartView({
       navigate(checkoutPath)
       return
     }
-    navigate(loginPathForRole('customer'), { state: { from: checkoutPath } })
+    const login = customerLoginLink(checkoutPath, {
+      name: store.name,
+      logoUrl: store.theme?.logoImage,
+    })
+    navigate(login.to, { state: login.state })
   }
 
   return (
@@ -234,7 +239,15 @@ function CartLineRow({
               {displayName}
             </h3>
             {meta ? <p className="mt-0.5 text-xs text-slate-500">{meta}</p> : null}
-            <p className="mt-1 text-xs text-slate-500">{formatCurrency(unitPrice)} each</p>
+            <p className="mt-1 text-xs text-slate-500">
+              <ProductPrice
+                price={unitPrice}
+                listPrice={line.listPrice}
+                size="sm"
+                saleClassName="text-xs font-medium text-slate-500"
+              />{' '}
+              each
+            </p>
           </div>
           <button
             type="button"

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag } from 'lucide-react'
-import { loginPathForRole } from '@/app/router/role-home'
 import { StoreCartView } from '@/modules/storefront/components/StoreCartView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
@@ -11,39 +10,19 @@ import {
   syncVendorCart,
 } from '@/modules/storefront/lib/cart-actions'
 import {
-  canShopAsCustomer,
   redirectCartUnauthorized,
   requestSetCartQty,
 } from '@/modules/storefront/lib/request-add-to-cart'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
-import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
-import { Spinner } from '@/shared/components/ui'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /** Store cart at `/stores/:storeId/cart`. `/cart` redirects here when the cart has items. */
 export function CartPage() {
   const { storeId } = useParams()
-  const location = useLocation()
-  const user = useAuthStore((s) => s.user)
-  const isHydrated = useAuthStore((s) => s.isHydrated)
   const lines = useCartStore((s) => s.lines)
-
-  // Live cart is server-owned — Meesho-style: guest must login before seeing cart.
-  if (isLiveApi()) {
-    if (!isHydrated) return <Spinner label="Checking session…" />
-    if (!canShopAsCustomer(user)) {
-      return (
-        <Navigate
-          to={loginPathForRole('customer')}
-          replace
-          state={{ from: `${location.pathname}${location.search}` }}
-        />
-      )
-    }
-  }
 
   if (!storeId) {
     const cartStoreId = lines[0]?.storeId
@@ -58,7 +37,7 @@ function CartForStore({ storeId }: { storeId: string }) {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
-  const { store, loading, error, wrapperRef } = useStorePage(storeId)
+  const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
   const lines = useCartStore((s) => s.lines)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
@@ -106,7 +85,7 @@ function CartForStore({ storeId }: { storeId: string }) {
     if (hydratedRef.current) return
     hydratedRef.current = true
     void syncVendorCart(store.id, store.name).catch((error) => {
-      if (redirectCartUnauthorized(error, navigate, fromPath)) return
+      if (redirectCartUnauthorized(error, navigate, fromPath, store.id, store.name)) return
       window.alert(cartActionErrorMessage(error))
     })
   }, [store, storeClosed, user?.id, user?.role, navigate, fromPath])

@@ -41,7 +41,7 @@ const SEARCH_DEBOUNCE_MS = 250
 export function StoreDetailPage() {
   const { storeId = 'r1' } = useParams()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  const { store, loading, error, wrapperRef } = useStorePage(storeId)
+  const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
 
   return (
     <StorePageStates

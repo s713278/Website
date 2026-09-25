@@ -127,7 +127,7 @@ export const useCartStore = create<CartState>()(
 
       addItem(storeId, storeName, item, variant, qty = 1) {
         const resolved = resolveOwnedVariant(item, variant)
-        const { itemId, name, price } = buildCartLineSnapshot(item, resolved)
+        const { itemId, name, price, listPrice } = buildCartLineSnapshot(item, resolved)
         const nextQty = Math.max(1, qty)
         const next = upsertLine(get().lines, {
           itemId,
@@ -137,6 +137,7 @@ export const useCartStore = create<CartState>()(
           price,
           qty: nextQty,
           lineTotal: price * nextQty,
+          listPrice,
           productId: item.id,
           skuId: resolved.id === 'default' ? undefined : resolved.id,
         })

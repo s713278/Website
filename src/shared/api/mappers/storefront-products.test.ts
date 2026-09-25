@@ -46,6 +46,8 @@ describe('mapStorefrontProductPage SKU search rows', () => {
       ['4152', '1 KG'],
       ['4453', '2 KG'],
     ])
+    expect(variants[0]).toMatchObject({ price: 245, listPrice: 250, onSale: false })
+    expect(variants[1]).toMatchObject({ price: 450, listPrice: 500 })
   })
 
   it('uses sku_name so search hits do not render as Item', () => {

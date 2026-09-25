@@ -1,10 +1,12 @@
 import { invalidateCartWrites } from '@/modules/storefront/lib/cart-actions'
 import { clearPendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
 import { clearAllProductCaches } from '@/modules/storefront/lib/product-catalog-cache'
-import { clearStorePageCache } from '@/modules/storefront/hooks/useStorePage'
 import { CART_STORAGE_KEY, useCartStore } from '@/modules/storefront/store/cart-store'
 
-/** Auth, cart persist, pending add, and storefront session caches for this browser. */
+/**
+ * Drop this identity's cart and pending add.
+ * Keep the public storefront cache — login still needs the shop name and logo.
+ */
 export function clearCustomerSessionCaches() {
   invalidateCartWrites()
   useCartStore.getState().clear()
@@ -16,6 +18,5 @@ export function clearCustomerSessionCaches() {
     /* private mode */
   }
   clearPendingCartAdd()
-  clearStorePageCache()
   clearAllProductCaches()
 }

@@ -49,6 +49,15 @@ export function asNumericId(value: unknown): number | null {
   return null
 }
 
+function asNonNegativeInt(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.trunc(value)
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim())
+  return null
+}
+
+/** Documented default for GET /v1/users/{id}/orders/history/paged `size`. */
+export const CUSTOMER_ORDER_HISTORY_PAGE_SIZE = 20
+
 function asMoney(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
@@ -311,7 +320,33 @@ export type MappedCustomerOrder = {
   total: number
   status: string
   placedAt: string
-  items: Array<{ name: string; qty: number; itemId?: string; imageUrl?: string }>
+  items: Array<{
+    name: string
+    qty: number
+    itemId?: string
+    imageUrl?: string
+    size?: string
+    unitPrice?: number
+    listPrice?: number
+    lineTotal?: number
+    discount?: number
+  }>
+  paymentStatus?: string
+  deliveryDate?: string
+  deliveryMethod?: string
+  notes?: string
+  customerName?: string
+  customerMobile?: string
+  addressLine?: string
+  bill?: {
+    itemsCount: number
+    grossAmount: number
+    discount: number
+    deliveryCharges: number
+    serviceCharge: number
+    taxAmount: number
+    amount: number
+  }
 }
 
 function mapCustomerOrderItem(raw: unknown): MappedCustomerOrder['items'][number] {
@@ -319,11 +354,48 @@ function mapCustomerOrderItem(raw: unknown): MappedCustomerOrder['items'][number
   const name = asString(line.sku_name ?? line.name ?? line.product_name) ?? 'Item'
   const size = asString(line.size)
   const imageUrl = asString(line.image_path ?? line.image_url)
+  const unitPrice = asMoney(line.unit_price ?? line.sale_price)
+  const listPrice = asMoney(line.list_price)
+  const lineTotal = asMoney(line.line_total)
+  const discount = asMoney(line.discount)
   return {
-    name: size && !name.includes(size) ? `${name} (${size})` : name,
+    name,
     qty: Math.max(1, Math.floor(asMoney(line.quantity ?? line.qty) ?? 1)),
     ...(asString(line.sku_id) ? { itemId: asString(line.sku_id)! } : {}),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(size ? { size } : {}),
+    ...(unitPrice != null ? { unitPrice } : {}),
+    ...(listPrice != null ? { listPrice } : {}),
+    ...(lineTotal != null ? { lineTotal } : {}),
+    ...(discount != null && discount > 0 ? { discount } : {}),
+  }
+}
+
+function mapDeliveryAddressLine(data: Record<string, unknown>): string | undefined {
+  const block = asRecord(data.delivery_address)
+  const addr = asRecord(block?.address) ?? block
+  if (!addr) return undefined
+  const line = asString(addr.address1)
+  if (line) return line
+  return (
+    [asString(addr.city), asString(addr.state), asString(addr.zipCode), asString(addr.country)]
+      .filter(Boolean)
+      .join(', ') || undefined
+  )
+}
+
+function mapOrderBill(raw: Record<string, unknown> | null) {
+  if (!raw) return undefined
+  const amount = asMoney(raw.amount)
+  if (amount == null && asMoney(raw.gross_amount) == null) return undefined
+  return {
+    itemsCount: Math.max(0, Math.floor(asMoney(raw.items_count) ?? 0)),
+    grossAmount: asMoney(raw.gross_amount) ?? 0,
+    discount: asMoney(raw.discount) ?? 0,
+    deliveryCharges: asMoney(raw.delivery_charges) ?? 0,
+    serviceCharge: asMoney(raw.service_charge) ?? 0,
+    taxAmount: asMoney(raw.tax_amount) ?? 0,
+    amount: amount ?? asMoney(raw.gross_amount) ?? 0,
   }
 }
 
@@ -340,6 +412,8 @@ export function mapCustomerOrder(raw: unknown): MappedCustomerOrder | null {
   const id = asString(item.order_id ?? item.id)
   if (!id) return null
   const amount = asRecord(item.order_amount)
+  const bill = mapOrderBill(amount)
+  const addressLine = mapDeliveryAddressLine(item)
   return {
     id,
     storeId: asString(item.vendor_id) ?? undefined,
@@ -350,6 +424,14 @@ export function mapCustomerOrder(raw: unknown): MappedCustomerOrder | null {
       asString(item.created_at ?? item.order_date ?? item.placedAt ?? item.delivery_date) ??
       new Date().toISOString(),
     items: historyItems(item).map(mapCustomerOrderItem),
+    ...(asString(item.payment_status) ? { paymentStatus: asString(item.payment_status)! } : {}),
+    ...(asString(item.delivery_date) ? { deliveryDate: asString(item.delivery_date)! } : {}),
+    ...(asString(item.delivery_method) ? { deliveryMethod: asString(item.delivery_method)! } : {}),
+    ...(asString(item.notes) ? { notes: asString(item.notes)! } : {}),
+    ...(asString(item.customer_name) ? { customerName: asString(item.customer_name)! } : {}),
+    ...(asString(item.customer_mobile) ? { customerMobile: asString(item.customer_mobile)! } : {}),
+    ...(addressLine ? { addressLine } : {}),
+    ...(bill ? { bill } : {}),
   }
 }
 
@@ -372,4 +454,44 @@ export function mapCustomerOrderHistory(payload: unknown): MappedCustomerOrder[]
   return list
     .map(mapCustomerOrder)
     .filter((order): order is MappedCustomerOrder => Boolean(order))
+}
+
+export type MappedCustomerOrderHistoryPage = {
+  orders: MappedCustomerOrder[]
+  pageNumber: number
+  pageSize: number
+  totalElements: number | null
+  totalPages: number | null
+  lastPage: boolean
+}
+
+/** GET /v1/users/{id}/orders/history/paged — documented `result` + page fields. */
+export function mapCustomerOrderHistoryPage(payload: unknown): MappedCustomerOrderHistoryPage {
+  const orders = mapCustomerOrderHistory(payload)
+  const root = asRecord(payload)
+  const data = asRecord(root?.data)
+  if (!data) {
+    return {
+      orders,
+      pageNumber: 0,
+      pageSize: orders.length,
+      totalElements: orders.length,
+      totalPages: 1,
+      lastPage: true,
+    }
+  }
+
+  const pageNumber = asNonNegativeInt(data.page_number) ?? 0
+  const pageSize = asNonNegativeInt(data.page_size) ?? orders.length
+  const totalElements = asNonNegativeInt(data.total_elements)
+  const totalPages = asNonNegativeInt(data.total_pages)
+  const lastPageFlag = data.last_page
+  const lastPage =
+    typeof lastPageFlag === 'boolean'
+      ? lastPageFlag
+      : totalPages != null
+        ? pageNumber >= Math.max(0, totalPages - 1)
+        : pageSize === 0 || orders.length < pageSize
+
+  return { orders, pageNumber, pageSize, totalElements, totalPages, lastPage }
 }

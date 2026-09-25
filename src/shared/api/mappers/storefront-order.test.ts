@@ -5,6 +5,7 @@ import {
   mapCustomerOrder,
   mapCustomerOrderDetail,
   mapCustomerOrderHistory,
+  mapCustomerOrderHistoryPage,
   mapNameAndAddressRequest,
   mapPlacedOrder,
 } from './storefront-order'
@@ -180,7 +181,86 @@ describe('mapCustomerOrder', () => {
       total: 59.97,
       status: 'PENDING',
       placedAt: '2026-04-18T09:30:00',
-      items: [{ name: 'Organic Milk (1L)', qty: 2, itemId: '1452', imageUrl: '/a.jpg' }],
+      items: [{ name: 'Organic Milk', qty: 2, itemId: '1452', imageUrl: '/a.jpg', size: '1L' }],
+      bill: {
+        itemsCount: 0,
+        grossAmount: 0,
+        discount: 0,
+        deliveryCharges: 0,
+        serviceCharge: 0,
+        taxAmount: 0,
+        amount: 59.97,
+      },
+    })
+  })
+
+  it('maps live customer order detail fields for the storefront page', () => {
+    const mapped = mapCustomerOrderDetail({
+      success: true,
+      data: {
+        order_id: 1941,
+        vendor_id: 273,
+        store_name: 'SRK Traditional Foods and Pickles',
+        order_status: 'SCHEDULED',
+        payment_status: 'DUE',
+        delivery_date: '2026-09-27',
+        delivery_method: 'HOME_DELIVERY',
+        notes: 'Slot: Sun, 27 Sept · Payment: Cash on delivery',
+        customer_name: 'User',
+        customer_mobile: '9898989898',
+        delivery_address: {
+          id: 2562,
+          address: {
+            address1: 'Mirdoddi, Telangana 502108, India',
+            city: 'Mirdoddi',
+            zipCode: '502108',
+          },
+        },
+        order_amount: {
+          items_count: 3,
+          gross_amount: 660,
+          discount: 30,
+          delivery_charges: 0,
+          service_charge: 0,
+          tax_amount: 0,
+          amount: 630,
+        },
+        order_items: [
+          {
+            sku_id: 4602,
+            sku_name: 'Mixed Vegetable Pickle',
+            size: '500 gr',
+            quantity: 3,
+            unit_price: 210,
+            list_price: 220,
+            line_total: 630,
+            discount: 30,
+            image_path: 'https://example.com/mixed.webp',
+          },
+        ],
+      },
+    })
+    expect(mapped).toMatchObject({
+      id: '1941',
+      storeId: '273',
+      storeName: 'SRK Traditional Foods and Pickles',
+      status: 'SCHEDULED',
+      paymentStatus: 'DUE',
+      deliveryDate: '2026-09-27',
+      deliveryMethod: 'HOME_DELIVERY',
+      addressLine: 'Mirdoddi, Telangana 502108, India',
+      customerMobile: '9898989898',
+      bill: { itemsCount: 3, grossAmount: 660, discount: 30, amount: 630 },
+      items: [
+        {
+          name: 'Mixed Vegetable Pickle',
+          size: '500 gr',
+          qty: 3,
+          unitPrice: 210,
+          listPrice: 220,
+          lineTotal: 630,
+        },
+      ],
     })
   })
 
@@ -195,5 +275,66 @@ describe('mapCustomerOrder', () => {
       expect.objectContaining({ id: '9', storeName: 'Shop', total: 30, status: 'DELIVERED' }),
     ])
     expect(mapCustomerOrder({ id: 3, vendor_name: 'Shop' })?.id).toBe('3')
+  })
+
+  it('reads history items[] list_price as MRP', () => {
+    const [order] = mapCustomerOrderHistory({
+      data: [
+        {
+          order_id: 1941,
+          vendor_name: 'SRK Traditional Foods and Pickles',
+          amount: 630,
+          order_amount: { gross_amount: 660, discount: 30, amount: 630 },
+          items: [
+            {
+              sku_name: 'Mixed Vegetable Pickle',
+              size: '500 gr',
+              quantity: 3,
+              unit_price: 210,
+              list_price: 220,
+              line_total: 630,
+            },
+          ],
+        },
+      ],
+    })
+    expect(order?.total).toBe(630)
+    expect(order?.bill?.grossAmount).toBe(660)
+    expect(order?.items[0]).toMatchObject({
+      name: 'Mixed Vegetable Pickle',
+      listPrice: 220,
+      unitPrice: 210,
+      lineTotal: 630,
+    })
+  })
+
+  it('maps paged history metadata from the documented container', () => {
+    expect(
+      mapCustomerOrderHistoryPage({
+        data: {
+          result: [{ order_id: 9, vendor_id: 273, vendor_name: 'Shop', amount: 30 }],
+          page_number: 1,
+          page_size: 20,
+          total_elements: 41,
+          total_pages: 3,
+          last_page: false,
+        },
+      }),
+    ).toEqual({
+      orders: [expect.objectContaining({ id: '9', storeId: '273' })],
+      pageNumber: 1,
+      pageSize: 20,
+      totalElements: 41,
+      totalPages: 3,
+      lastPage: false,
+    })
+  })
+
+  it('treats a short unpaged list as the last page', () => {
+    expect(
+      mapCustomerOrderHistoryPage({
+        data: [{ order_id: 1, vendor_name: 'Shop', amount: 10 }],
+      }).lastPage,
+    ).toBe(true)
   })
 })

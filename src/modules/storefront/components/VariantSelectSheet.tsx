@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import {
   duplicateVariantUnits,
   findVariantBySelection,
@@ -8,7 +9,6 @@ import {
   variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
-import { formatCurrency } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui'
 
 type VariantSelectSheetProps = {
@@ -137,9 +137,12 @@ export function VariantSelectSheet({
                       <span className="min-w-0 flex-1 text-sm font-semibold text-slate-900">
                         {formatVariantLabel(variant, dupes.has(variant.unit || variant.id))}
                       </span>
-                      <span className="shrink-0 text-sm font-bold text-slate-800">
-                        {formatCurrency(variant.price)}
-                      </span>
+                      <ProductPrice
+                        price={variant.price}
+                        listPrice={variant.listPrice}
+                        size="sm"
+                        className="shrink-0 flex-col items-end gap-0"
+                      />
                     </button>
                   </li>
                 )
@@ -155,9 +158,12 @@ export function VariantSelectSheet({
               {draft ? (
                 <>
                   {draft.unit || 'Size'}{' '}
-                  <span className="text-[var(--store-accent,#ea580c)]">
-                    {formatCurrency(draft.price)}
-                  </span>
+                  <ProductPrice
+                    price={draft.price}
+                    listPrice={draft.listPrice}
+                    size="sm"
+                    saleClassName="text-[var(--store-accent,#ea580c)]"
+                  />
                 </>
               ) : (
                 '—'

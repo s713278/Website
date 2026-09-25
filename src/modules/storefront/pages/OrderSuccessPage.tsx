@@ -1,127 +1,94 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
-import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
-import {
-  storeCartPath,
-  storeOrderPath,
-  storeOrdersPath,
-  storePath,
-} from '@/modules/storefront/lib/store-paths'
-import { whatsappHref } from '@/modules/storefront/lib/whatsapp-order'
+import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { storeCartPath, storeOrderPath, storeOrdersPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
+import { readWhatsAppOrderDraft, whatsappHref } from '@/modules/storefront/lib/whatsapp-order'
 
 type SuccessState = {
   storeName?: string
   whatsappMessage?: string
+  whatsappHref?: string
 }
-
-const WA_OPEN_SECONDS = 3
 
 export function OrderSuccessPage() {
   const { storeId = '', orderId = '' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state as SuccessState | null) ?? {}
-  const { store, loading, error, wrapperRef } = useStorePage(storeId)
-  const [secondsLeft, setSecondsLeft] = useState(WA_OPEN_SECONDS)
-
-  const message = state.whatsappMessage ?? ''
-  const waHref = message ? whatsappHref(store?.phone ?? '', message) : ''
+  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-only' })
+  const clearVendor = useCartStore((s) => s.clearVendor)
 
   useEffect(() => {
-    if (!waHref) return
-    const tick = window.setInterval(() => {
-      setSecondsLeft((left) => Math.max(0, left - 1))
-    }, 1000)
-    const open = window.setTimeout(() => {
-      window.open(waHref, '_blank', 'noopener')
-    }, WA_OPEN_SECONDS * 1000)
-    return () => {
-      window.clearInterval(tick)
-      window.clearTimeout(open)
-    }
-  }, [waHref])
+    if (storeId) clearVendor(storeId)
+  }, [storeId, clearVendor])
+
+  const message = state.whatsappMessage || readWhatsAppOrderDraft(orderId)
+  const waHref =
+    state.whatsappHref || (message ? whatsappHref(store?.phone ?? '', message) : '')
+  const storeName = state.storeName ?? store?.name ?? 'Store'
 
   if (!storeId || !orderId) return <Navigate to="/orders" replace />
 
   return (
-    <StorePageStates
-      wrapperRef={wrapperRef}
-      loading={loading}
-      error={error}
-      ready={Boolean(store)}
-      loadingLabel="Loading order…"
-      emptyTitle="Store not found"
-      emptyDescription="This store may be offline."
-      backHref={storePath(storeId)}
-    >
-      {store ? (
-        <>
-          <StorefrontHeader
-            storeName={store.name}
-            logoUrl={store.theme?.logoImage}
-            cartCount={0}
-            cartHref={storeCartPath(store.id)}
-            searchOpen={false}
-            onToggleSearch={() => navigate(storePath(store.id))}
-            pageTitle="Order created"
-            onBack={() => navigate(storeOrdersPath(store.id))}
-            activeNav="orders"
-          />
+    <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
+      <StorefrontHeader
+        storeName={storeName}
+        logoUrl={store?.theme?.logoImage}
+        cartHref={storeCartPath(storeId)}
+        searchOpen={false}
+        onToggleSearch={() => navigate(storeSearchPath(storeId))}
+        pageTitle="Order created"
+        onBack={() => navigate(storeOrdersPath(storeId))}
+      />
 
-          <main className="store-shell-inner flex-1 py-10 sm:py-12">
-            <div className="mx-auto max-w-md px-4 text-center">
-              <span className="md-pop-in mx-auto inline-flex size-[4.5rem] items-center justify-center rounded-full border border-emerald-200 bg-[var(--store-theme-soft,rgba(16,185,129,0.16))] text-[var(--store-theme,var(--md-green-700))]">
-                <Check className="size-9" strokeWidth={2.5} aria-hidden />
-              </span>
-              <h1 className="font-display mt-5 text-2xl font-bold text-slate-900">
-                Order Created Successfully!
-              </h1>
-              <p className="mt-5 text-sm text-slate-500">Order ID</p>
-              <p className="mt-1 break-all text-xl font-bold tracking-wide text-[var(--store-theme,var(--md-green-800))]">
-                {orderId}
-              </p>
+      <main className="store-shell-inner flex-1 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-10 lg:py-14">
+        <div className="mx-auto w-full max-w-md text-center sm:max-w-lg sm:rounded-3xl sm:border sm:border-slate-100 sm:bg-white sm:px-8 sm:py-10 sm:shadow-sm">
+          <span className="md-pop-in mx-auto inline-flex size-16 items-center justify-center rounded-full border border-emerald-200 bg-[var(--store-theme-soft,rgba(16,185,129,0.16))] text-[var(--store-theme,var(--md-green-700))] sm:size-[4.5rem]">
+            <Check className="size-8 sm:size-9" strokeWidth={2.5} aria-hidden />
+          </span>
+          <h1 className="font-display mt-4 text-[1.35rem] font-bold leading-tight text-slate-900 sm:mt-5 sm:text-2xl">
+            Order Created Successfully!
+          </h1>
+          <p className="mt-4 text-xs text-slate-500 sm:mt-5 sm:text-sm">Order ID</p>
+          <p className="mt-1 break-all text-lg font-bold tracking-wide text-[var(--store-theme,var(--md-green-800))] sm:text-xl">
+            {orderId}
+          </p>
 
-              {waHref ? (
-                <>
-                  <a
-                    href={waHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--store-theme,var(--md-green-800))] px-5 text-sm font-semibold text-white hover:opacity-90"
-                  >
-                    <WhatsAppIcon />
-                    Send Order on WhatsApp
-                  </a>
-                  <p className="mt-3 text-xs text-slate-500">
-                    {secondsLeft > 0
-                      ? `Opening WhatsApp in ${secondsLeft}s…`
-                      : 'WhatsApp should be open. If not, tap the button.'}
-                  </p>
-                </>
-              ) : null}
+          {waHref ? (
+            <a
+              href={waHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--store-theme,var(--md-green-800))] px-3 py-3 text-sm font-semibold text-white hover:opacity-90 sm:mt-8 sm:px-5 sm:text-[15px]"
+            >
+              <WhatsAppIcon />
+              <span className="min-w-0 text-balance">Send Order on WhatsApp</span>
+            </a>
+          ) : null}
 
-              <div className="mt-5 flex flex-col gap-3">
-                <Link
-                  to={storeOrderPath(store.id, orderId)}
-                  className="text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
-                >
-                  View Order Details
-                </Link>
-                <Link to={storePath(store.id)} className="text-sm font-medium text-slate-500 hover:text-slate-700">
-                  Continue Shopping
-                </Link>
-              </div>
-            </div>
-          </main>
+          <div className="mt-4 flex flex-col items-center gap-1 sm:mt-5 sm:gap-2">
+            <Link
+              to={storeOrderPath(storeId, orderId)}
+              className="inline-flex min-h-11 items-center px-3 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+            >
+              View Order Details
+            </Link>
+            <Link
+              to={storePath(storeId)}
+              className="inline-flex min-h-11 items-center px-3 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              Continue Shopping
+            </Link>
+          </div>
+        </div>
+      </main>
 
-          <StorePageFooter store={store} />
-        </>
-      ) : null}
-    </StorePageStates>
+      {store ? <StorePageFooter store={store} /> : null}
+    </div>
   )
 }
 

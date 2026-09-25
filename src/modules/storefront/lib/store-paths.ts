@@ -44,6 +44,12 @@ export function storeOrdersPath(storeId: string) {
   return `${storePath(storeId)}/orders`
 }
 
+/** History, detail, and success — these pages must not fetch storefront or cart. */
+export function isStoreOrdersPath(path: string | undefined): boolean {
+  if (!path) return false
+  return /^\/stores\/[^/]+\/orders(?:\/|$)/.test(path.split('?')[0] ?? '')
+}
+
 export function storeOrderPath(storeId: string, orderId: string) {
   return `${storeOrdersPath(storeId)}/${orderId}`
 }

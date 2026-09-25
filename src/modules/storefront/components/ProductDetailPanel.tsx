@@ -1,24 +1,19 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Loader2, Star } from 'lucide-react'
+import { useMemo } from 'react'
+import { Star } from 'lucide-react'
 import { ProductCartControl } from './ProductCartControl'
 import { ProductGallery } from './ProductGallery'
+import { ProductPrice } from './ProductPrice'
 import { resolveTrustIcon } from '@/modules/storefront/lib/trust-icons'
 import { StoreCartBar } from './StoreCartBar'
 import { StorePageFooter } from './StorePageFooter'
 import { StorefrontHeader } from './StorefrontHeader'
 import { VariantPicker } from './VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
-import { requestAddToCart } from '@/modules/storefront/lib/request-add-to-cart'
-import {
-  getProductImages,
-  hasMultipleVariants,
-  variantCartId,
-} from '@/modules/storefront/lib/product-variants'
-import { storeCartPath, storeCheckoutPath } from '@/modules/storefront/lib/store-paths'
+import { useProductVariantCartState } from '@/modules/storefront/lib/cart-write-pending'
+import { getProductImages, hasMultipleVariants } from '@/modules/storefront/lib/product-variants'
+import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, Store } from '@/modules/storefront/types'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 
@@ -32,7 +27,7 @@ type ProductDetailPanelProps = {
 
 /**
  * PDP from live SKU detail only — no marketing placeholders.
- * Cart = ProductCartControl (same as cards). Buy Now adds only if missing.
+ * Cart = ProductCartControl (same as cards).
  */
 export function ProductDetailPanel({
   store,
@@ -41,46 +36,13 @@ export function ProductDetailPanel({
   onBack,
   onSearch,
 }: ProductDetailPanelProps) {
-  const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const images = useMemo(() => getProductImages(product), [product])
   const { variants, selected, selectedId, setSelectedId } = useSelectedVariant(product, store.id)
-  const [buyPending, setBuyPending] = useState(false)
-
-  const lineId = variantCartId(product.id, selected.id)
-  const inCart = useCartStore((s) => Boolean(s.findLine(store.id, lineId)))
+  const { isPending } = useProductVariantCartState(store.id, product.id)
 
   // Live PDP: API `is_active` → product.inStock / variant.active
   const inStock = selected.active !== false && product.inStock !== false
-  const listPrice = selected.listPrice
-  const showListPrice =
-    listPrice != null && Number.isFinite(listPrice) && listPrice > selected.price
-  const checkoutPath = storeCheckoutPath(store.id)
-
-  async function handleBuyNow() {
-    if (buyPending || !inStock) return
-    setBuyPending(true)
-    try {
-      if (!inCart) {
-        const added = await requestAddToCart({
-          user,
-          navigate,
-          storeId: store.id,
-          storeName: store.name,
-          product,
-          variant: selected,
-          qty: 1,
-          returnTo: checkoutPath,
-          onError: (message) => window.alert(message),
-        })
-        if (!added) return
-      }
-      navigate(checkoutPath)
-    } finally {
-      setBuyPending(false)
-    }
-  }
 
   return (
     <>
@@ -107,10 +69,6 @@ export function ProductDetailPanel({
             <h1 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
               {product.name}
             </h1>
-
-            {selected.unit ? (
-              <p className="mt-1.5 text-sm text-slate-500">{selected.unit}</p>
-            ) : null}
 
             {product.description ? (
               <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
@@ -151,16 +109,7 @@ export function ProductDetailPanel({
             </div>
 
             <div className="mt-4">
-              <div className="flex flex-wrap items-baseline gap-2">
-                <p className="text-2xl font-bold text-slate-900 sm:text-[1.75rem]">
-                  {formatCurrency(selected.price)}
-                </p>
-                {showListPrice ? (
-                  <p className="text-sm text-slate-400 line-through">
-                    {formatCurrency(listPrice)}
-                  </p>
-                ) : null}
-              </div>
+              <ProductPrice price={selected.price} listPrice={selected.listPrice} size="lg" />
             </div>
 
             {store.trustStrip && store.trustStrip.length > 0 ? (
@@ -185,13 +134,11 @@ export function ProductDetailPanel({
               <VariantPicker
                 variants={variants}
                 selectedId={selectedId}
-                onSelect={(id) => {
-                  if (buyPending) return
-                  setSelectedId(id)
-                }}
+                onSelect={setSelectedId}
+                isPending={isPending}
                 label="Select Pack Size"
                 tone="solid"
-                className={`mt-5${buyPending ? ' pointer-events-none opacity-60' : ''}`}
+                className="mt-5"
               />
             ) : null}
 
@@ -209,25 +156,6 @@ export function ProductDetailPanel({
                   Out of stock
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-11 min-h-11 min-w-[7.5rem] rounded-lg border-[var(--store-theme,var(--md-green-800))] px-5 text-sm text-[var(--store-theme,var(--md-green-800))] sm:h-9 sm:min-h-9 sm:px-4"
-                onClick={() => {
-                  void handleBuyNow()
-                }}
-                disabled={!inStock || buyPending}
-                aria-busy={buyPending}
-              >
-                {buyPending ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                    Please wait…
-                  </>
-                ) : (
-                  'Buy Now'
-                )}
-              </Button>
             </div>
           </div>
         </div>
