@@ -10,11 +10,10 @@ import {
 } from '@/modules/vendor/lib/vendor-context-cache'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
-  demoService,
   getErrorMessage,
+  isLiveApi,
   mapVendorPlan,
   vendorOnboardingService,
-  type DemoStoreStateKey,
   type VendorContext,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -110,55 +109,22 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
     }
   }, [vendorId, loaded, reloadToken])
 
-  /**
-   * The demo store state, held in React so a switch re-renders.
-   *
-   * The service owns the mapping from a state to the two context fields it derives from;
-   * this only holds which one is selected.
-   */
-  const [demoStoreState, setDemoStoreState] = useState(() => demoService.storeStateKey())
-
-  const selectDemoStoreState = useCallback((key: DemoStoreStateKey) => {
-    demoService.select(key)
-    setDemoStoreState(key)
-  }, [])
-
   const account = useMemo<VendorAccount | null>(() => {
     if (!vendorId || !loaded || loaded.vendorId !== vendorId) return null
-    const sourceContext = loaded.context
-    const isDemo = demoService.isDemo()
+    const { context } = loaded
 
-    // Demo substitutes the two fields the derivation reads, never the derived state — so
-    // a demo screen is only ever shown a combination the backend could actually produce.
-    const stateInput = isDemo
-      ? demoService.storeStateFields(demoStoreState)
-      : {
-          vendorStatus: sourceContext.vendorStatus,
-          approvalStatus: sourceContext.approvalStatus,
-          onboarding: sourceContext.onboarding,
-        }
-
-    const demoResumeStep = isDemo
-      ? demoService.storeStateResumeStep(demoStoreState)
-      : null
-    const context = demoResumeStep == null
-      ? sourceContext
-      : {
-          ...sourceContext,
-          onboarding: { ...sourceContext.onboarding, nextStep: demoResumeStep },
-        }
-
+    // Demo reads its seeded context, an approved, active, completed store, without the
+    // live-backend approval compensation.
     return {
       vendorId,
       context,
-      storeState: deriveStoreState(stateInput, { coercePendingApproval: !isDemo }),
+      storeState: deriveStoreState(context, { coercePendingApproval: isLiveApi() }),
       plan: mapVendorPlan(context),
       contextStale,
       refreshContext,
       reload,
-      demo: isDemo ? { storeState: demoStoreState, select: selectDemoStoreState } : null,
     }
-  }, [vendorId, loaded, reload, refreshContext, contextStale, demoStoreState, selectDemoStoreState])
+  }, [vendorId, loaded, reload, refreshContext, contextStale])
 
   /**
    * A session that holds several stores resolves no `vendorId`, deliberately — picking

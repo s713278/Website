@@ -332,19 +332,17 @@ describe('vendor billing fixture service', () => {
     expect(failed.accessStatus).not.toBe('PAID')
   })
 
-  it('runs renewal_retry without grace and restores only the original cycle at retry time', async () => {
+  it('keeps the store open while a renewal is retried and restores only the original cycle at retry time', async () => {
     const service = createVendorBillingMockService('paid_active')
     const vendorId = billingFixtureVendorId('paid_active')
     const paid = await service.getStatus(vendorId)
     expect(paid.simulatedRenewalSteps).toEqual(['renewal_due'])
     const due = await service.simulateRenewalProgress!(vendorId, 'renewal_due')
-    const failed = await service.simulateRenewalProgress!(vendorId, 'renewal_failed')
-    for (const [status, payment] of [[due, 'pending'], [failed, 'failed']] as const) {
-      expect(status.membership.paymentStatus).toBe(payment)
-      expect(status.membership.paidThrough).toBe(paid.membership.paidThrough)
-      expect(status.accessStatus).toBe('PAYMENT_REQUIRED')
-      expect(status.storeVisible).toBe(false)
-    }
+    expect(due.membership.paymentStatus).toBe('pending')
+    expect(due.membership.paidThrough).toBe(paid.membership.paidThrough)
+    expect(due.accessStatus).toBe('PAID')
+    expect(due.storeVisible).toBe(true)
+    expect(due.simulatedRenewalSteps).toEqual(['renewal_retry_confirmed', 'renewal_failed'])
     await expect(service.simulateRenewalProgress!(vendorId, 'renewal_due')).rejects.toThrow('not available')
 
     const recovered = await service.simulateRenewalProgress!(vendorId, 'renewal_retry_confirmed')
@@ -354,7 +352,24 @@ describe('vendor billing fixture service', () => {
     expect(recovered.membership.paidThrough).toBe('2026-12-15T10:00:00Z')
     expect(recovered.membership.nextChargeAt).toBe(recovered.membership.paidThrough)
     expect(recovered.simulatedRenewalSteps).toBeUndefined()
-    expect(recovered.revision).toBeGreaterThan(failed.revision)
+    expect(recovered.revision).toBeGreaterThan(due.revision)
+  })
+
+  it('fails a renewal only when collection halts: the store is hidden, AutoPay cancelled and Pay Now offered', async () => {
+    const service = createVendorBillingMockService('paid_active')
+    const vendorId = billingFixtureVendorId('paid_active')
+    const paid = await service.getStatus(vendorId)
+    await service.simulateRenewalProgress!(vendorId, 'renewal_due')
+    const halted = await service.simulateRenewalProgress!(vendorId, 'renewal_failed')
+    expect(halted.membership.paymentStatus).toBe('failed')
+    expect(halted.membership.paidThrough).toBe(paid.membership.paidThrough)
+    expect(halted.membership.nextChargeAt).toBeNull()
+    expect(halted.authorisation.status).toBe('revoked')
+    expect(halted.accessStatus).toBe('PAYMENT_REQUIRED')
+    expect(halted.storeVisible).toBe(false)
+    expect(halted.availableActions).toEqual(['pay_first_fee'])
+    // A halted renewal is not retried: recovery is a new paid period.
+    expect(halted.simulatedRenewalSteps).toBeUndefined()
   })
 
   it('keeps revoked authorisation distinct and retains trial or paid coverage', async () => {
@@ -373,7 +388,7 @@ describe('vendor billing fixture service', () => {
     expect(pending.accessStatus).toBe('PAID')
   })
 
-  it('exercises all seven named journeys through explicit simulated service outcomes', async () => {
+  it('exercises all eight named journeys through explicit simulated service outcomes', async () => {
     const advance = async (service: VendorBillingService, vendorId: string, from: BillingFixtureScenario, to: BillingFixtureScenario) => {
       if (to === 'cancel_requested_trial' || (from === 'paid_active' && to === 'cancel_scheduled_paid')) return service.requestCancellation(vendorId, `${from}-${to}`)
       if (to === 'setup_pending' || to === 'rejoin_paid_pending') return service.submitCheckout(await service.prepareCheckout(vendorId, 'setup_autopay', to), null)
@@ -387,7 +402,7 @@ describe('vendor billing fixture service', () => {
       if (!step) throw new Error(`No explicit outcome for ${from} -> ${to}`)
       return service.simulateCancellationProgress!(vendorId, step)
     }
-    expect(fixtures.journeys).toHaveLength(7)
+    expect(fixtures.journeys).toHaveLength(8)
     for (const journey of fixtures.journeys) {
       const contexts = journey.contexts as BillingFixtureScenario[]
       const service = createVendorBillingMockService(contexts[0])

@@ -425,7 +425,11 @@ test('reads trial AutoPay authorisation from the provider without a callback and
 
     currentTime = '2026-10-07T11:00:00Z'
     const due = await status(url, 'trial_V')
-    assert.equal(due.accessStatus, 'TRIAL_ENDED')
+    // The scheduled first fee is still being collected: the collection retry period keeps the shop open.
+    assert.equal(due.trialStatus, 'ended')
+    assert.equal(due.accessStatus, 'TRIAL')
+    assert.equal(due.storeVisible, true)
+    assert.equal(due.collectionRetrying, true)
     assert.equal(due.paymentStatus, 'pending')
     // The authorised trial object charges at the boundary, so no separate first fee is offered.
     assert.deepEqual(due.availableActions, ['cancel'])
@@ -557,13 +561,13 @@ test('permits a separate first fee after expiry only once the trial AutoPay obje
   })
 })
 
-test('treats retrying, halted or paused collection as unconfirmed and keeps rereading it', async () => {
+test('treats retrying or paused collection as unconfirmed and keeps rereading it', async () => {
   currentTime = '2026-09-23T10:00:00Z'
   const provider = fakeProvider()
   await withHelper({ file: isolatedStore(), provider }, async (url) => {
     await request(url, 'POST', '/vendors/expired_V/scenario', { scenario: 'expired_trial' })
     await prepare(url, 'expired_V', 'pay_first_fee', 'prepare_key_1')
-    for (const providerStatus of ['pending', 'halted', 'paused']) {
+    for (const providerStatus of ['pending', 'paused']) {
       provider.subscriptions.get('sub_fake1').status = providerStatus
       const record = await status(url, 'expired_V')
       assert.equal(record.attempts[0].state, 'provider_pending', providerStatus)
@@ -575,6 +579,27 @@ test('treats retrying, halted or paused collection as unconfirmed and keeps rere
     }
     provider.authenticate('sub_fake1', 'active', 0)
     assert.equal((await status(url, 'expired_V')).authorisationStatus, 'confirmed')
+  })
+})
+
+test('a Pay ₹299 first charge that halts is failed: the helper cancels it, and Pay ₹299 returns once it reads closed', async () => {
+  currentTime = '2026-09-23T10:00:00Z'
+  const provider = fakeProvider()
+  await withHelper({ file: isolatedStore(), provider }, async (url) => {
+    await request(url, 'POST', '/vendors/expired_V/scenario', { scenario: 'expired_trial' })
+    await prepare(url, 'expired_V', 'pay_first_fee', 'prepare_key_1')
+    provider.subscriptions.get('sub_fake1').status = 'halted'
+    const halted = await status(url, 'expired_V')
+    assert.equal(halted.attempts[0].haltedAt, currentTime.replace('Z', '.000Z'))
+    assert.deepEqual(provider.calls.cancel.map(({ id, cancelAtCycleEnd }) => [id, cancelAtCycleEnd]), [['sub_fake1', false]])
+    assert.deepEqual([halted.cancellation.stage, halted.cancellation.reason], ['acknowledged', 'halted'])
+    assert.equal(halted.storeVisible, false)
+    // One agreement at a time: nothing new until Razorpay Test shows the halted one closed.
+    assert.deepEqual(halted.availableActions, [])
+    const closed = await status(url, 'expired_V')
+    assert.equal(closed.cancellation.stage, 'confirmed')
+    assert.deepEqual(closed.availableActions, ['pay_first_fee'])
+    assert.equal(provider.calls.cancel.length, 1)
   })
 })
 
@@ -683,7 +708,7 @@ test('reads accelerated renewal success, pending, failure and retry against the 
     assert.equal(renewed.accessStatus, 'PAID')
     assert.deepEqual(renewed.providerVerified, { authorisation: true, payment: true, coverage: true })
 
-    // The next accelerated charge is issued but not settled: pending, then failed while Razorpay retries.
+    // The next accelerated charge is issued but not settled, then declined while Razorpay retries: still pending.
     provider.charge('sub_fake1', { start: at(second), end: at(third), invoiceStatus: 'issued', paymentStatus: 'failed' })
     const pending = await status(url, 'paid_V')
     assert.equal(pending.paymentStatus, 'pending')
@@ -691,34 +716,38 @@ test('reads accelerated renewal success, pending, failure and retry against the 
     assert.equal(pending.nextChargeAt, second)
     assert.equal(pending.accessStatus, 'PAID')
     provider.subscriptions.get('sub_fake1').status = 'pending'
-    const failed = await status(url, 'paid_V')
-    assert.equal(failed.paymentStatus, 'failed')
-    assert.equal(failed.accessStatus, 'PAID')
-    assert.equal(failed.paidThrough, second)
-    // A stale read showing the subscription active again cannot roll the failure back to pending.
-    provider.subscriptions.get('sub_fake1').status = 'active'
-    assert.equal((await status(url, 'paid_V')).paymentStatus, 'failed')
-    provider.subscriptions.get('sub_fake1').status = 'pending'
+    const retrying = await status(url, 'paid_V')
+    assert.equal(retrying.paymentStatus, 'pending')
+    assert.equal(retrying.accessStatus, 'PAID')
+    assert.equal(retrying.paidThrough, second)
+    assert.equal(retrying.collectionRetrying, false)
   })
+
+  // A store written when a retrying read counted as failed re-derives while Razorpay still retries.
+  const saved = JSON.parse(readFileSync(store, 'utf8'))
+  saved.vendors.paid_V.attempts[0].renewal.status = 'failed'
+  writeFileSync(store, JSON.stringify(saved))
 
   currentTime = '2026-11-23T10:00:01Z'
   await withHelper({ file: store, provider }, async (url) => {
-    // At the local boundary the failed fee restricts the demonstration with no grace.
+    // Past the boundary Razorpay is still retrying, so the collection retry period keeps the shop open.
     const lapsed = await status(url, 'paid_V')
-    assert.equal(lapsed.accessStatus, 'PAYMENT_REQUIRED')
-    assert.equal(lapsed.storeVisible, false)
-    assert.equal(lapsed.paymentStatus, 'failed')
+    assert.equal(lapsed.accessStatus, 'PAID')
+    assert.equal(lapsed.storeVisible, true)
+    assert.equal(lapsed.collectionRetrying, true)
+    assert.equal(lapsed.paymentStatus, 'pending')
     assert.equal(lapsed.paidThrough, second)
     assert.equal(lapsed.nextChargeAt, second)
     assert.deepEqual(lapsed.availableActions, ['cancel'])
 
-    // The retry two days later settles the same invoice and restores only the original cycle's remainder.
+    // The retry two days later settles the same invoice; the cycle keeps its dates.
     currentTime = '2026-11-25T10:00:00Z'
     retryInvoice(provider, 'inv_fake4')
     provider.subscriptions.get('sub_fake1').status = 'active'
     const recovered = await status(url, 'paid_V')
     assert.equal(recovered.paymentStatus, 'confirmed')
     assert.equal(recovered.accessStatus, 'PAID')
+    assert.equal(recovered.collectionRetrying, false)
     assert.equal(recovered.paidThrough, third)
     assert.equal(recovered.nextChargeAt, third)
     assert.deepEqual(recovered.attempts[0].renewals.map((item) => [item.invoiceId, item.periodStart, item.periodEnd]), [['inv_fake4', second, third]])
@@ -732,8 +761,66 @@ test('reads accelerated renewal success, pending, failure and retry against the 
     assert.deepEqual(restored.associations.map((item) => item.id), ['sub_fake1'])
   })
   assert.equal(provider.calls.create.length, 1)
-  const saved = readFileSync(store, 'utf8')
-  assert.equal(saved.includes('local_test_placeholder'), false)
+  assert.equal(readFileSync(store, 'utf8').includes('local_test_placeholder'), false)
+})
+
+test('a renewal halted past the boundary is failed: service stops and the helper cancels the subscription', async () => {
+  currentTime = '2026-09-23T10:00:00Z'
+  const provider = fakeProvider()
+  await withHelper({ file: isolatedStore(), provider }, async (url) => {
+    await request(url, 'POST', '/vendors/paid_V/scenario', { scenario: 'paid_sample' })
+    await prepare(url, 'paid_V', 'setup_autopay', 'prepare_key_1')
+    provider.authenticate('sub_fake1', 'active', 0)
+    provider.charge('sub_fake1', { start: at(anchor), end: at(second) })
+    await status(url, 'paid_V')
+    provider.charge('sub_fake1', { start: at(second), end: at(third), invoiceStatus: 'issued', paymentStatus: 'failed' })
+    provider.subscriptions.get('sub_fake1').status = 'pending'
+    currentTime = '2026-11-25T10:00:00Z'
+    assert.equal((await status(url, 'paid_V')).storeVisible, true)
+
+    // Every retry is used: Razorpay halts collection, so the fee has failed.
+    currentTime = '2026-11-26T10:00:00Z'
+    provider.subscriptions.get('sub_fake1').status = 'halted'
+    const halted = await status(url, 'paid_V')
+    assert.equal(halted.paymentStatus, 'failed')
+    assert.equal(halted.accessStatus, 'PAYMENT_REQUIRED')
+    assert.equal(halted.storeVisible, false)
+    assert.equal(halted.collectionRetrying, false)
+    assert.equal(halted.paidThrough, second)
+    assert.deepEqual(provider.calls.cancel.map(({ id, cancelAtCycleEnd }) => [id, cancelAtCycleEnd]), [['sub_fake1', false]])
+    assert.deepEqual([halted.cancellation.stage, halted.cancellation.reason], ['acknowledged', 'halted'])
+
+    const closed = await status(url, 'paid_V')
+    assert.equal(closed.cancellation.stage, 'confirmed')
+    assert.equal(closed.authorisationStatus, 'revoked')
+    // A stale read showing the subscription active again cannot reopen it or roll the failure back.
+    provider.subscriptions.get('sub_fake1').status = 'active'
+    const stale = await status(url, 'paid_V')
+    assert.equal(stale.paymentStatus, 'failed')
+    assert.equal(stale.storeVisible, false)
+    assert.equal(provider.calls.cancel.length, 1)
+  })
+})
+
+test('an unanswered halt cancellation is retried on the next read', async () => {
+  currentTime = '2026-09-23T10:00:00Z'
+  const provider = fakeProvider()
+  await withHelper({ file: isolatedStore(), provider }, async (url) => {
+    await request(url, 'POST', '/vendors/trial_V/scenario', { scenario: 'active_trial' })
+    await prepare(url, 'trial_V', 'setup_autopay', 'prepare_key_1')
+    provider.authenticate('sub_fake1')
+    await status(url, 'trial_V')
+    currentTime = '2026-10-10T10:00:00Z'
+    provider.subscriptions.get('sub_fake1').status = 'halted'
+    provider.failCancel = 'rejected'
+    const unanswered = await status(url, 'trial_V')
+    assert.equal(unanswered.providerCheck, 'unavailable')
+    assert.equal(unanswered.cancellation.stage, 'requested')
+    assert.equal(unanswered.storeVisible, false)
+    const retried = await status(url, 'trial_V')
+    assert.equal(retried.cancellation.stage, 'acknowledged')
+    assert.equal(provider.calls.cancel.length, 2)
+  })
 })
 
 test('never counts a duplicate, shifted or stale renewal read and never rolls coverage back', async () => {
@@ -842,7 +929,8 @@ test('keeps provider-verified coverage labelled past the boundary and reads coll
     provider.authenticate('sub_fake1', 'active', 0)
     provider.charge('sub_fake1', { start: at(anchor), end: at(second) })
     assert.deepEqual((await status(url, 'paid_V')).providerVerified, { authorisation: true, payment: true, coverage: true })
-    const cases = [['pending', 'confirmed'], ['halted', 'failed'], ['paused', 'pending'], ['unrecognised', 'pending'], ['active', 'confirmed']]
+    // Halted collection is cancelled by the helper, so it has its own test.
+    const cases = [['pending', 'confirmed'], ['paused', 'pending'], ['unrecognised', 'pending'], ['active', 'confirmed']]
     for (const [providerStatus, authorisation] of cases) {
       provider.subscriptions.get('sub_fake1').status = providerStatus
       assert.equal((await status(url, 'paid_V')).authorisationStatus, authorisation, providerStatus)
@@ -1124,7 +1212,7 @@ test('an external revocation is not reported as a helper cancellation', async ()
   })
 })
 
-test('stops a lapsed paid agreement immediately because no paid cycle remains to finish', async () => {
+test('stops a retrying paid agreement immediately, ending the retry period, because no paid cycle remains to finish', async () => {
   currentTime = '2026-09-23T10:00:00Z'
   const provider = fakeProvider()
   await withHelper({ file: isolatedStore(), provider }, async (url) => {
@@ -1136,10 +1224,15 @@ test('stops a lapsed paid agreement immediately because no paid cycle remains to
     provider.subscriptions.get('sub_fake1').status = 'pending'
     currentTime = '2026-11-24T10:00:00Z'
     const lapsed = await status(url, 'paid_V')
-    assert.equal(lapsed.accessStatus, 'PAYMENT_REQUIRED')
+    // Razorpay is still retrying, so the shop stays open until the vendor stops the plan.
+    assert.equal(lapsed.accessStatus, 'PAID')
+    assert.equal(lapsed.collectionRetrying, true)
     assert.deepEqual(lapsed.availableActions, ['cancel'])
     const requested = (await cancel(url, 'paid_V', 'cancel_key_1')).body.record
     assert.equal(requested.cancellation.mode, 'immediate')
+    // The cancellation ends the retries, so service stops at once, before any read confirms it.
+    assert.equal(requested.accessStatus, 'PAYMENT_REQUIRED')
+    assert.equal(requested.storeVisible, false)
     assert.deepEqual(provider.calls.cancel.map(({ cancelAtCycleEnd }) => cancelAtCycleEnd), [false])
     const confirmed = await status(url, 'paid_V')
     assert.equal(confirmed.cancellation.status, 'confirmed')
@@ -1508,5 +1601,499 @@ test('the ledger intent and association routes also refuse a pending reset and a
     await request(url, 'POST', '/vendors/trial_V/scenario', { scenario: 'active_trial' })
     assert.match((await request(url, 'POST', '/vendors/trial_V/intents', { action: 'setup_autopay', idempotencyKey: 'prepare_key_1' })).body.error, /earlier, reset Test scenario/)
     assert.deepEqual((await status(url, 'trial_V')).attempts, [])
+  })
+})
+
+test('seeds the six prototype states relative to helper time and keeps them across a restart', async () => {
+  currentTime = '2026-09-24T10:00:00Z'
+  const expected = {
+    free_days: { trialEndsAt: '2026-10-06T10:00:00.000Z', paidThrough: null, autoPay: 'none', failedPaymentAt: null, events: [{ kind: 'free_days_started', at: '2026-09-22T10:00:00.000Z', days: 14 }], accessStatus: 'TRIAL', daysRemaining: 12, storeVisible: true, availableActions: ['setup_autopay'] },
+    three_days_left: { trialEndsAt: '2026-09-27T10:00:00.000Z', paidThrough: null, autoPay: 'none', failedPaymentAt: null, events: [{ kind: 'free_days_started', at: '2026-09-13T10:00:00.000Z', days: 14 }], accessStatus: 'TRIAL', daysRemaining: 3, storeVisible: true, availableActions: ['setup_autopay'] },
+    paid: { trialEndsAt: '2026-09-24T10:00:00.000Z', paidThrough: '2026-10-24T10:00:00.000Z', autoPay: 'on', failedPaymentAt: null, events: [{ kind: 'free_days_started', at: '2026-09-10T10:00:00.000Z', days: 14 }, { kind: 'paid', at: '2026-09-24T10:00:00.000Z', amountMinor: 29900, paidThrough: '2026-10-24T10:00:00.000Z' }], accessStatus: 'PAID', daysRemaining: 0, storeVisible: true },
+    // Razorpay retried the first ₹299 from the trial end for three days, then halted collection.
+    payment_failed: { trialEndsAt: '2026-09-21T10:00:00.000Z', paidThrough: null, autoPay: 'none', failedPaymentAt: '2026-09-24T10:00:00.000Z', events: [{ kind: 'free_days_started', at: '2026-09-07T10:00:00.000Z', days: 14 }, { kind: 'autopay_on', at: '2026-09-16T10:00:00.000Z', chargeAt: '2026-09-21T10:00:00.000Z' }, { kind: 'payment_failed', at: '2026-09-24T10:00:00.000Z' }], accessStatus: 'TRIAL_ENDED', daysRemaining: 0, storeVisible: false, availableActions: ['pay_first_fee'] },
+    stopped: { trialEndsAt: '2026-09-02T10:00:00.000Z', paidThrough: '2026-10-02T10:00:00.000Z', autoPay: 'cancelled', failedPaymentAt: null, events: [{ kind: 'paid', at: '2026-09-02T10:00:00.000Z', amountMinor: 29900, paidThrough: '2026-10-02T10:00:00.000Z' }, { kind: 'plan_stopped', at: '2026-09-24T10:00:00.000Z', paidThrough: '2026-10-02T10:00:00.000Z' }], accessStatus: 'PAID', daysRemaining: 0, storeVisible: true, availableActions: ['setup_autopay'] },
+    shop_closed: { trialEndsAt: '2026-08-22T10:00:00.000Z', paidThrough: '2026-09-22T10:00:00.000Z', autoPay: 'cancelled', failedPaymentAt: null, events: [{ kind: 'paid', at: '2026-08-22T10:00:00.000Z', amountMinor: 29900, paidThrough: '2026-09-22T10:00:00.000Z' }, { kind: 'plan_stopped', at: '2026-09-22T10:00:00.000Z', paidThrough: '2026-09-22T10:00:00.000Z' }], accessStatus: 'PAYMENT_REQUIRED', daysRemaining: 0, storeVisible: false, availableActions: ['pay_first_fee'] },
+  }
+  const helper = await open()
+  try {
+    for (const [scenario, seed] of Object.entries(expected)) {
+      const selected = await request(helper.url, 'POST', `/vendors/seed_${scenario}/scenario`, { scenario }, 'http://127.0.0.1:5173')
+      assert.equal(selected.status, 201, scenario)
+      for (const [field, value] of Object.entries(seed)) assert.deepEqual(selected.body.record[field], value, `${scenario}.${field}`)
+    }
+  } finally { await helper.close() }
+  const reopened = await open()
+  try {
+    for (const [scenario, seed] of Object.entries(expected)) {
+      const { record } = (await request(reopened.url, 'GET', `/vendors/seed_${scenario}/status`)).body
+      assert.equal(record.scenario, scenario)
+      assert.equal(record.trialEndsAt, seed.trialEndsAt)
+      assert.equal(record.autoPay, seed.autoPay)
+      assert.deepEqual(record.events, seed.events)
+    }
+  } finally { await reopened.close() }
+})
+
+test('switches the r1-prototype key by guarded reset then select and never touches vendor r1', async () => {
+  currentTime = '2026-09-24T10:00:00Z'
+  const parked = {
+    vendorId: 'r1', scenario: 'paid_sample', generation: 4, selectedAt: '2026-09-23T12:00:00.000Z', revision: 9, serverTime: '2026-09-23T12:00:00.000Z',
+    trialEndsAt: '2026-09-16T12:00:00.000Z', paidThrough: '2026-10-23T12:00:00.000Z',
+    attempts: [{ attemptId: 'lt_parked', action: 'setup_autopay', idempotencyKey: 'parked_key_1', state: 'fee_confirmed', associationId: 'sub_parked', providerStatus: 'pending' }],
+    associations: [{ id: 'sub_parked', state: 'verified' }],
+  }
+  const stored = JSON.parse(readFileSync(file, 'utf8'))
+  stored.vendors.r1 = parked
+  stored.history.r1 = [{ generation: 3, scenario: 'paid_sample', retiredKeys: [] }]
+  writeFileSync(file, JSON.stringify(stored))
+  const r1Before = () => { const data = JSON.parse(readFileSync(file, 'utf8')); return JSON.stringify([data.vendors.r1, data.history.r1]) }
+  const before = r1Before()
+  const provider = fakeProvider()
+  const helper = await open({ provider })
+  try {
+    assert.equal((await request(helper.url, 'POST', '/vendors/r1-prototype/scenario', { scenario: 'free_days' }, 'http://127.0.0.1:5173')).body.record.generation, 1)
+    const reset = await request(helper.url, 'POST', '/vendors/r1-prototype/resets', { scenario: 'free_days', generation: 1, idempotencyKey: 'proto_reset_1' })
+    assert.equal(reset.body.record, null)
+    assert.deepEqual(reset.body.history.map((entry) => entry.scenario), ['free_days'])
+    const next = await request(helper.url, 'POST', '/vendors/r1-prototype/scenario', { scenario: 'stopped' })
+    assert.equal(next.status, 201)
+    assert.equal(next.body.record.generation, 2)
+    assert.equal(r1Before(), before)
+    assert.deepEqual(provider.calls.cancel, [])
+  } finally { await helper.close() }
+})
+
+test('sets up prototype trial AutoPay at the trial end, records verified setup and confirmed turn-off, and keeps the free days', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    for (const scenario of ['free_days', 'three_days_left']) {
+      currentTime = '2026-09-24T10:00:00Z'
+      const vendor = `proto_${scenario}`
+      const selected = (await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario })).body.record
+      const { attempt } = (await prepare(url, vendor, 'setup_autopay', `prepare_${scenario}`)).body
+      assert.equal(attempt.expected.chargeAt, selected.trialEndsAt)
+      assert.equal(provider.calls.create.at(-1).start_at, at(selected.trialEndsAt))
+      const subscriptionId = attempt.config.subscriptionId
+      assert.equal((await submit(url, vendor, { attemptId: attempt.attemptId, subscriptionId, paymentId: 'pay_proto1', signature: sign('pay_proto1', subscriptionId) })).status, 200)
+      // A verified callback alone adds no history: only a provider read confirms AutoPay.
+      assert.deepEqual((await status(url, vendor)).events, selected.events)
+
+      provider.authenticate(subscriptionId)
+      const on = await status(url, vendor)
+      assert.equal(on.scenario, scenario)
+      assert.equal(on.authorisationStatus, 'confirmed')
+      assert.equal(on.nextChargeAt, selected.trialEndsAt)
+      assert.equal(on.trialEndsAt, selected.trialEndsAt)
+      assert.equal(on.daysRemaining, selected.daysRemaining)
+      assert.equal(on.accessStatus, 'TRIAL')
+      assert.equal(on.paymentStatus, 'none')
+      assert.equal(on.paidThrough, null)
+      assert.deepEqual(on.availableActions, ['cancel'])
+      assert.deepEqual(on.events, [...selected.events, { kind: 'autopay_on', at: '2026-09-24T10:00:00.000Z', chargeAt: selected.trialEndsAt }])
+      assert.equal((await status(url, vendor)).events.length, selected.events.length + 1)
+
+      currentTime = '2026-09-24T11:00:00Z'
+      assert.equal((await cancel(url, vendor, `cancel_${scenario}`)).status, 200)
+      const off = await status(url, vendor)
+      assert.equal(off.cancellation.status, 'confirmed')
+      assert.equal(off.authorisationStatus, 'revoked')
+      assert.equal(off.nextChargeAt, null)
+      assert.equal(off.trialEndsAt, selected.trialEndsAt)
+      assert.equal(off.daysRemaining, selected.daysRemaining)
+      assert.deepEqual(off.availableActions, ['setup_autopay'])
+      assert.deepEqual(off.events.slice(selected.events.length), [
+        { kind: 'autopay_on', at: '2026-09-24T10:00:00.000Z', chargeAt: selected.trialEndsAt },
+        { kind: 'autopay_off', at: '2026-09-24T11:00:00.000Z' },
+      ])
+    }
+    // Scenarios without seeded history gain none.
+    currentTime = '2026-09-24T10:00:00Z'
+    await request(url, 'POST', '/vendors/plain_V/scenario', { scenario: 'active_trial' })
+    const { attempt } = (await prepare(url, 'plain_V', 'setup_autopay', 'prepare_plain')).body
+    provider.authenticate(attempt.config.subscriptionId)
+    const plain = await status(url, 'plain_V')
+    assert.equal(plain.authorisationStatus, 'confirmed')
+    assert.equal(plain.events, undefined)
+  })
+  // The history survives a restart.
+  await withHelper({ file: store, provider }, async (url) => {
+    assert.equal((await status(url, 'proto_free_days')).events.at(-1).kind, 'autopay_off')
+  })
+})
+
+test('pays ₹299 now in Payment failed and Shop closed, moving to Paid only once Razorpay Test shows the fee captured', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    for (const scenario of ['payment_failed', 'shop_closed']) {
+      currentTime = '2026-09-24T10:00:00Z'
+      const vendor = `proto_${scenario}`
+      const selected = (await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario })).body.record
+      assert.deepEqual(selected.availableActions, ['pay_first_fee'], scenario)
+      const { attempt } = (await prepare(url, vendor, 'pay_first_fee', `prepare_${scenario}`)).body
+      // An immediate start: no start_at, and ₹299 collected now.
+      assert.equal(attempt.expected.chargeAt, null)
+      assert.equal(attempt.expected.amountMinor, 29900)
+      assert.equal('start_at' in provider.calls.create.at(-1), false)
+      const subscriptionId = attempt.config.subscriptionId
+
+      // A closed or failed Checkout leaves the object fresh: nothing moves and the same payment is offered again.
+      const unchanged = await status(url, vendor)
+      assert.equal(unchanged.scenario, scenario)
+      assert.equal(unchanged.paymentStatus, 'none')
+      assert.deepEqual(unchanged.availableActions, ['pay_first_fee'])
+      assert.deepEqual(unchanged.events, selected.events)
+      assert.equal((await prepare(url, vendor, 'pay_first_fee', `prepare_${scenario}_reload`)).body.attempt.attemptId, attempt.attemptId)
+
+      currentTime = '2026-09-24T10:05:00Z'
+      assert.equal((await submit(url, vendor, { attemptId: attempt.attemptId, subscriptionId, paymentId: 'pay_proto2', signature: sign('pay_proto2', subscriptionId) })).status, 200)
+      provider.authenticate(subscriptionId, 'active', 0)
+      // Razorpay ends the first cycle at IST midnight; the fee is captured moments after the callback.
+      const start = at('2026-09-24T10:05:00Z')
+      const end = at('2026-10-24T18:30:00Z')
+      provider.charge(subscriptionId, { start, end, paymentStatus: 'authorized' })
+      const pending = await status(url, vendor)
+      assert.equal(pending.scenario, scenario)
+      assert.equal(pending.paymentStatus, 'pending')
+      assert.equal(pending.storeVisible, false)
+      assert.deepEqual(pending.events, selected.events)
+
+      provider.payments.get([...provider.payments.keys()].at(-1)).status = 'captured'
+      currentTime = '2026-09-24T10:06:00Z'
+      const paid = await status(url, vendor)
+      assert.equal(paid.scenario, 'paid')
+      assert.equal(paid.generation, selected.generation)
+      assert.equal(paid.paidThrough, '2026-10-24T18:30:00.000Z')
+      assert.equal(paid.nextChargeAt, '2026-10-24T18:30:00.000Z')
+      assert.equal(paid.autoPay, 'on')
+      assert.equal(paid.accessStatus, 'PAID')
+      assert.equal(paid.storeVisible, true)
+      assert.deepEqual(paid.providerVerified, { authorisation: true, payment: true, coverage: true })
+      assert.deepEqual(paid.events, [...selected.events, { kind: 'paid', at: '2026-09-24T10:05:00.000Z', amountMinor: 29900, paidThrough: '2026-10-24T18:30:00.000Z' }])
+      // Rereads never add a second row or move anything again.
+      assert.deepEqual((await status(url, vendor)).events, paid.events)
+    }
+  })
+  // The paid state survives a restart.
+  await withHelper({ file: store, provider }, async (url) => {
+    const restored = await status(url, 'proto_shop_closed')
+    assert.equal(restored.scenario, 'paid')
+    assert.equal(restored.events.at(-1).kind, 'paid')
+  })
+})
+
+test('stops the sample Paid locally at its paid-through and keeps the shop open again with a future-start subscription there', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_stop_sample'
+    const selected = (await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'paid' })).body.record
+    assert.ok(selected.availableActions.includes('cancel'))
+
+    currentTime = '2026-09-24T10:10:00Z'
+    assert.equal((await cancel(url, vendor, 'stop_sample_1')).status, 200)
+    const stopped = await status(url, vendor)
+    // The sample has no provider object, so the stop is a local state change.
+    assert.deepEqual(provider.calls.cancel, [])
+    assert.equal(stopped.scenario, 'stopped')
+    assert.equal(stopped.generation, selected.generation)
+    assert.equal(stopped.paidThrough, '2026-10-24T10:00:00.000Z')
+    assert.equal(stopped.autoPay, 'cancelled')
+    assert.equal(stopped.accessStatus, 'PAID')
+    assert.deepEqual(stopped.availableActions, ['setup_autopay'])
+    assert.deepEqual(stopped.events, [...selected.events, { kind: 'plan_stopped', at: '2026-09-24T10:10:00.000Z', paidThrough: '2026-10-24T10:00:00.000Z' }])
+    // A replayed stop converges on it.
+    assert.equal((await cancel(url, vendor, 'stop_sample_1')).status, 200)
+    assert.deepEqual((await status(url, vendor)).events, stopped.events)
+
+    const { attempt } = (await prepare(url, vendor, 'setup_autopay', 'keep_open_sample')).body
+    assert.equal(attempt.expected.chargeAt, '2026-10-24T10:00:00.000Z')
+    assert.equal(provider.calls.create.at(-1).start_at, at('2026-10-24T10:00:00.000Z'))
+    // A closed Checkout leaves Stopped unchanged.
+    assert.equal((await status(url, vendor)).scenario, 'stopped')
+
+    const subscriptionId = attempt.config.subscriptionId
+    currentTime = '2026-09-24T10:20:00Z'
+    await submit(url, vendor, { attemptId: attempt.attemptId, subscriptionId, paymentId: 'pay_keep1', signature: sign('pay_keep1', subscriptionId) })
+    assert.equal((await status(url, vendor)).scenario, 'stopped')
+    provider.authenticate(subscriptionId)
+    const kept = await status(url, vendor)
+    assert.equal(kept.scenario, 'paid')
+    assert.equal(kept.paidThrough, '2026-10-24T10:00:00.000Z')
+    assert.equal(kept.nextChargeAt, '2026-10-24T10:00:00.000Z')
+    assert.equal(kept.autoPay, 'on')
+    assert.equal(kept.authorisationStatus, 'confirmed')
+    assert.deepEqual(kept.availableActions, ['cancel'])
+    assert.deepEqual(kept.events, [...stopped.events, { kind: 'plan_resumed', at: '2026-09-24T10:20:00.000Z', chargeAt: '2026-10-24T10:00:00.000Z' }])
+
+    // Stopping again cancels that pre-fee agreement at once, and only a read showing it closed stops Paid.
+    currentTime = '2026-09-24T10:30:00Z'
+    provider.failCancel = 'accepted'
+    const accepted = await cancel(url, vendor, 'stop_sample_2')
+    assert.equal(accepted.body.record.scenario, 'paid')
+    assert.equal((await status(url, vendor)).scenario, 'paid')
+    provider.subscriptions.get(subscriptionId).status = 'cancelled'
+    assert.deepEqual(provider.calls.cancel.map(({ id, cancelAtCycleEnd }) => ({ id, cancelAtCycleEnd })), [{ id: subscriptionId, cancelAtCycleEnd: false }])
+    // No AutoPay rows are added beside the stop.
+    const again = await status(url, vendor)
+    assert.equal(again.scenario, 'stopped')
+    assert.equal(again.paidThrough, '2026-10-24T10:00:00.000Z')
+    assert.deepEqual(again.availableActions, ['setup_autopay'])
+    assert.deepEqual(again.events, [...kept.events, { kind: 'plan_stopped', at: '2026-09-24T10:30:00.000Z', paidThrough: '2026-10-24T10:00:00.000Z' }])
+  })
+})
+
+test('stops a real Paid at cycle end, then closes it before a future-start replacement at the same paid-through', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  provider.readStore = () => structuredClone(JSON.parse(readFileSync(store, 'utf8')).vendors.proto_stop_real)
+  await withHelper({ file: store, provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_stop_real'
+    await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'payment_failed' })
+    const { attempt: fee } = (await prepare(url, vendor, 'pay_first_fee', 'pay_real_1')).body
+    const old = fee.config.subscriptionId
+    await submit(url, vendor, { attemptId: fee.attemptId, subscriptionId: old, paymentId: 'pay_real1', signature: sign('pay_real1', old) })
+    provider.authenticate(old, 'active', 0)
+    provider.charge(old, { start: at('2026-09-24T10:00:00Z'), end: at('2026-10-24T18:30:00Z') })
+    const paid = await status(url, vendor)
+    assert.equal(paid.scenario, 'paid')
+    assert.deepEqual(paid.availableActions, ['cancel'])
+    const paidThrough = '2026-10-24T18:30:00.000Z'
+
+    // An unanswered stop leaves Paid unchanged; the retry reuses the same request.
+    currentTime = '2026-09-24T10:10:00Z'
+    provider.failCancel = 'timeout'
+    assert.equal((await cancel(url, vendor, 'stop_real_1')).status, 504)
+    const unanswered = await status(url, vendor)
+    assert.equal(unanswered.scenario, 'paid')
+    assert.deepEqual(unanswered.events, paid.events)
+    assert.equal((await cancel(url, vendor, 'stop_real_1')).status, 200)
+    assert.deepEqual(provider.calls.cancel.map(({ cancelAtCycleEnd }) => cancelAtCycleEnd), [true, true])
+    const stopped = await status(url, vendor)
+    assert.equal(stopped.scenario, 'stopped')
+    assert.equal(stopped.paidThrough, paidThrough)
+    assert.equal(stopped.autoPay, 'cancelled')
+    assert.equal(stopped.nextChargeAt, null)
+    assert.deepEqual(stopped.cancellation, { status: 'scheduled', stage: 'scheduled', mode: 'cycle_end', requestedAt: '2026-09-24T10:10:00.000Z', effectiveAt: paidThrough })
+    assert.equal(stopped.providerVerified.coverage, true)
+    assert.deepEqual(stopped.availableActions, ['setup_autopay'])
+    assert.deepEqual(stopped.events, [...paid.events, { kind: 'plan_stopped', at: '2026-09-24T10:10:00.000Z', paidThrough }])
+    assert.equal(provider.subscriptions.get(old).status, 'active')
+
+    // Keep shop open: a refused or unconfirmed close of the old subscription creates nothing and leaves Stopped as it was.
+    const created = provider.calls.create.length
+    provider.failCancel = 'rejected'
+    assert.equal((await prepare(url, vendor, 'setup_autopay', 'keep_real_1')).status, 502)
+    provider.failCancel = 'accepted'
+    assert.equal((await prepare(url, vendor, 'setup_autopay', 'keep_real_1')).status, 504)
+    assert.equal(provider.calls.create.length, created)
+    const waiting = await status(url, vendor)
+    assert.equal(waiting.scenario, 'stopped')
+    assert.deepEqual(waiting.events, stopped.events)
+    assert.deepEqual(waiting.availableActions, ['setup_autopay'])
+
+    currentTime = '2026-09-24T10:20:00Z'
+    const prepared = await prepare(url, vendor, 'setup_autopay', 'keep_real_1')
+    assert.equal(prepared.status, 200)
+    const closes = provider.calls.cancel.slice(2)
+    assert.deepEqual(closes.map(({ id, cancelAtCycleEnd }) => ({ id, cancelAtCycleEnd })), Array(3).fill({ id: old, cancelAtCycleEnd: false }))
+    // The close is recorded before Razorpay is asked.
+    assert.ok(closes.every((call) => call.storedBefore.attempts.find((item) => item.associationId === old).cancellation.closeRequestedAt))
+    assert.equal(provider.subscriptions.get(old).status, 'cancelled')
+    const { attempt } = prepared.body
+    assert.equal(attempt.expected.chargeAt, paidThrough)
+    assert.equal(provider.calls.create.at(-1).start_at, at(paidThrough))
+    assert.equal(provider.calls.create.length, created + 1)
+
+    currentTime = '2026-09-24T10:25:00Z'
+    const replacement = attempt.config.subscriptionId
+    await submit(url, vendor, { attemptId: attempt.attemptId, subscriptionId: replacement, paymentId: 'pay_keep2', signature: sign('pay_keep2', replacement) })
+    provider.authenticate(replacement)
+    const kept = await status(url, vendor)
+    assert.equal(kept.scenario, 'paid')
+    assert.equal(kept.paidThrough, paidThrough)
+    assert.equal(kept.nextChargeAt, paidThrough)
+    assert.equal(kept.paymentStatus, 'confirmed')
+    assert.deepEqual(kept.providerVerified, { authorisation: true, payment: true, coverage: true })
+    assert.deepEqual(kept.availableActions, ['cancel'])
+    assert.deepEqual(kept.events, [...stopped.events, { kind: 'plan_resumed', at: '2026-09-24T10:25:00.000Z', chargeAt: paidThrough }])
+    // The fee already paid is the only one: no second ₹299 invoice for covered time.
+    assert.equal(provider.invoices.filter((item) => item.amount === 29900).length, 1)
+  })
+})
+
+test('moves a real Paid to Stopped when Razorpay Test shows it closed without Stop the plan, and keeps the shop open from there', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_revoked_real'
+    await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'payment_failed' })
+    const old = (await prepare(url, vendor, 'pay_first_fee', 'pay_revoked_1')).body.attempt.config.subscriptionId
+    provider.authenticate(old, 'active', 0)
+    provider.charge(old, { start: at('2026-09-24T10:00:00Z'), end: at('2026-10-24T18:30:00Z') })
+    const paid = await status(url, vendor)
+    assert.equal(paid.scenario, 'paid')
+    const paidThrough = '2026-10-24T18:30:00.000Z'
+
+    // The card issuer or the Test Dashboard cancels the subscription; nobody pressed Stop the plan.
+    currentTime = '2026-09-25T10:00:00Z'
+    provider.subscriptions.get(old).status = 'cancelled'
+    const ended = await status(url, vendor)
+    assert.equal(ended.scenario, 'stopped')
+    assert.equal(ended.paidThrough, paidThrough)
+    assert.equal(ended.accessStatus, 'PAID')
+    assert.equal(ended.autoPay, 'cancelled')
+    assert.equal(ended.authorisationStatus, 'revoked')
+    assert.equal(ended.nextChargeAt, null)
+    assert.equal(ended.cancellation, null)
+    assert.deepEqual(ended.availableActions, ['setup_autopay'])
+    assert.deepEqual(ended.events, [...paid.events, { kind: 'autopay_ended', at: '2026-09-25T10:00:00.000Z', paidThrough }])
+    assert.deepEqual((await status(url, vendor)).events, ended.events)
+
+    // Keep shop open has nothing left to close and schedules its replacement at the same paid-through.
+    const cancels = provider.calls.cancel.length
+    const prepared = await prepare(url, vendor, 'setup_autopay', 'keep_revoked_1')
+    assert.equal(prepared.status, 200)
+    assert.equal(provider.calls.cancel.length, cancels)
+    assert.equal(prepared.body.attempt.expected.chargeAt, paidThrough)
+    provider.authenticate(prepared.body.attempt.config.subscriptionId)
+    const kept = await status(url, vendor)
+    assert.equal(kept.scenario, 'paid')
+    assert.equal(kept.paidThrough, paidThrough)
+    assert.equal(kept.nextChargeAt, paidThrough)
+    assert.deepEqual(kept.events.at(-1), { kind: 'plan_resumed', at: '2026-09-25T10:00:00.000Z', chargeAt: paidThrough })
+  })
+})
+
+test("moves the sample Paid to Stopped when Razorpay Test shows Keep shop open's AutoPay closed from outside", async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_revoked_sample'
+    const selected = (await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'stopped' })).body.record
+    const subscriptionId = (await prepare(url, vendor, 'setup_autopay', 'keep_sample_1')).body.attempt.config.subscriptionId
+    provider.authenticate(subscriptionId)
+    assert.equal((await status(url, vendor)).scenario, 'paid')
+    currentTime = '2026-09-24T10:30:00Z'
+    provider.subscriptions.get(subscriptionId).status = 'cancelled'
+    const ended = await status(url, vendor)
+    assert.equal(ended.scenario, 'stopped')
+    assert.equal(ended.paidThrough, selected.paidThrough)
+    assert.deepEqual(ended.events.at(-1), { kind: 'autopay_ended', at: '2026-09-24T10:30:00.000Z', paidThrough: selected.paidThrough })
+    assert.deepEqual(ended.availableActions, ['setup_autopay'])
+  })
+})
+
+test('adds one Paid ₹299 row for a trial AutoPay fee Razorpay collects early and for each renewal of a real Paid', async () => {
+  const store = isolatedStore()
+  const provider = fakeProvider()
+  await withHelper({ file: store, provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const trial = 'proto_fee_trial'
+    const selected = (await request(url, 'POST', `/vendors/${trial}/scenario`, { scenario: 'three_days_left' })).body.record
+    const setup = (await prepare(url, trial, 'setup_autopay', 'setup_fee_1')).body.attempt.config.subscriptionId
+    provider.authenticate(setup)
+    const on = await status(url, trial)
+    // A Test Dashboard Charge this now: the first fee's cycle still starts at the original trial end.
+    currentTime = '2026-09-24T10:10:00Z'
+    provider.subscriptions.get(setup).status = 'active'
+    provider.charge(setup, { start: at(selected.trialEndsAt), end: at('2026-10-27T18:30:00Z') })
+    const charged = await status(url, trial)
+    assert.equal(charged.scenario, 'three_days_left')
+    assert.equal(charged.trialEndsAt, selected.trialEndsAt)
+    assert.deepEqual(charged.events, [...on.events, { kind: 'paid', at: '2026-09-24T10:10:00.000Z', amountMinor: 29900, paidThrough: '2026-10-27T18:30:00.000Z' }])
+    assert.deepEqual((await status(url, trial)).events, charged.events)
+
+    const paid = 'proto_fee_renewal'
+    await request(url, 'POST', `/vendors/${paid}/scenario`, { scenario: 'payment_failed' })
+    const subscription = (await prepare(url, paid, 'pay_first_fee', 'pay_fee_1')).body.attempt.config.subscriptionId
+    provider.authenticate(subscription, 'active', 0)
+    provider.charge(subscription, { start: at('2026-09-24T10:10:00Z'), end: at('2026-10-24T18:30:00Z') })
+    const first = await status(url, paid)
+    assert.equal(first.events.filter((event) => event.kind === 'paid').length, 1)
+    currentTime = '2026-09-24T10:20:00Z'
+    provider.charge(subscription, { start: at('2026-10-24T18:30:00Z'), end: at('2026-11-24T18:30:00Z') })
+    const renewed = await status(url, paid)
+    assert.equal(renewed.paidThrough, '2026-11-24T18:30:00.000Z')
+    assert.deepEqual(renewed.events, [...first.events, { kind: 'paid', at: '2026-09-24T10:20:00.000Z', amountMinor: 29900, paidThrough: '2026-11-24T18:30:00.000Z' }])
+    assert.deepEqual((await status(url, paid)).events, renewed.events)
+  })
+})
+
+test('keeps a real Paid open while Razorpay retries past paid-through, and moves it to Payment failed when collection halts', async () => {
+  const provider = fakeProvider()
+  await withHelper({ file: isolatedStore(), provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_halted_after'
+    await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'payment_failed' })
+    const old = (await prepare(url, vendor, 'pay_first_fee', 'pay_halted_1')).body.attempt.config.subscriptionId
+    provider.authenticate(old, 'active', 0)
+    provider.charge(old, { start: at('2026-09-24T10:00:00Z'), end: at('2026-10-24T18:30:00Z') })
+    const paid = await status(url, vendor)
+    assert.equal(paid.scenario, 'paid')
+
+    // The renewal due at paid-through is declined and Razorpay retries: still Paid, the shop open.
+    provider.charge(old, { start: at('2026-10-24T18:30:00Z'), end: at('2026-11-24T18:30:00Z'), invoiceStatus: 'issued', paymentStatus: 'failed' })
+    provider.subscriptions.get(old).status = 'pending'
+    currentTime = '2026-10-26T10:00:00Z'
+    const retrying = await status(url, vendor)
+    assert.equal(retrying.scenario, 'paid')
+    assert.equal(retrying.storeVisible, true)
+    assert.equal(retrying.collectionRetrying, true)
+    assert.deepEqual(retrying.events, paid.events)
+
+    // Every retry is used: Payment failed, and the helper cancels the halted subscription.
+    currentTime = '2026-10-28T10:00:00Z'
+    provider.subscriptions.get(old).status = 'halted'
+    const failed = await status(url, vendor)
+    assert.equal(failed.scenario, 'payment_failed')
+    assert.equal(failed.failedPaymentAt, '2026-10-28T10:00:00.000Z')
+    assert.deepEqual(failed.events, [...paid.events, { kind: 'payment_failed', at: '2026-10-28T10:00:00.000Z' }])
+    assert.equal(failed.storeVisible, false)
+    assert.deepEqual(provider.calls.cancel.map(({ id, cancelAtCycleEnd }) => [id, cancelAtCycleEnd]), [[old, false]])
+    assert.deepEqual(failed.availableActions, [])
+
+    // Once Razorpay Test shows it closed, Pay ₹299 starts a new paid period; the retry days are not billed.
+    assert.deepEqual((await status(url, vendor)).availableActions, ['pay_first_fee'])
+    const next = (await prepare(url, vendor, 'pay_first_fee', 'pay_halted_2')).body.attempt.config.subscriptionId
+    assert.notEqual(next, old)
+    provider.authenticate(next, 'active', 0)
+    provider.charge(next, { start: at('2026-10-28T10:00:00Z'), end: at('2026-11-27T18:30:00Z') })
+    const repaid = await status(url, vendor)
+    assert.equal(repaid.scenario, 'paid')
+    assert.equal(repaid.paidThrough, '2026-11-27T18:30:00.000Z')
+    assert.equal(repaid.storeVisible, true)
+  })
+})
+
+test('moves a real Paid halted before paid-through to Stopped, keeping the paid days', async () => {
+  const provider = fakeProvider()
+  await withHelper({ file: isolatedStore(), provider }, async (url) => {
+    currentTime = '2026-09-24T10:00:00Z'
+    const vendor = 'proto_halted_before'
+    await request(url, 'POST', `/vendors/${vendor}/scenario`, { scenario: 'payment_failed' })
+    const old = (await prepare(url, vendor, 'pay_first_fee', 'pay_halted_1')).body.attempt.config.subscriptionId
+    provider.authenticate(old, 'active', 0)
+    provider.charge(old, { start: at('2026-09-24T10:00:00Z'), end: at('2026-10-24T18:30:00Z') })
+    const paid = await status(url, vendor)
+
+    // An accelerated Test renewal halts early: it cannot move the paid boundary.
+    currentTime = '2026-09-25T10:00:00Z'
+    provider.charge(old, { start: at('2026-10-24T18:30:00Z'), end: at('2026-11-24T18:30:00Z'), invoiceStatus: 'issued', paymentStatus: 'failed' })
+    provider.subscriptions.get(old).status = 'halted'
+    const halted = await status(url, vendor)
+    assert.equal(halted.scenario, 'paid')
+    assert.equal(halted.storeVisible, true)
+    const ended = await status(url, vendor)
+    assert.equal(ended.scenario, 'stopped')
+    assert.equal(ended.paidThrough, '2026-10-24T18:30:00.000Z')
+    assert.equal(ended.storeVisible, true)
+    assert.deepEqual(ended.events, [...paid.events, { kind: 'autopay_ended', at: '2026-09-25T10:00:00.000Z', paidThrough: '2026-10-24T18:30:00.000Z', reason: 'halted' }])
   })
 })

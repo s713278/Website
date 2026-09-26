@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   ClipboardList,
   Gauge,
@@ -13,7 +13,7 @@ import { NavLink, Link, Outlet, useLocation } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { demoService } from '@/shared/api'
+import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
@@ -182,56 +182,15 @@ function PlanBanner() {
   )
 }
 
-const DEMO_STATE_LABELS: Record<string, string> = {
-  SETTING_UP: 'Setting up',
-  UNDER_REVIEW: 'Under review',
-  OPEN: 'Open',
-  REJECTED: 'Rejected',
-  SUSPENDED: 'Suspended',
-}
-
 /**
- * Demo-only store-state switcher.
+ * The six-state Plan prototype's banner and header button: local development in demo mode only.
  *
- * Two of the five states — rejected and suspended — cannot be reached on a test account
- * without an administrator acting against a real store, so without this the screens for
- * them could be built and never seen. Absent entirely under a live API: it changes nothing
- * there, and a dead control on a real dashboard invites a support question.
- *
- * It writes the two fields `deriveStoreState` reads, so it cannot show a combination the
- * backend could not produce.
- *
- * It sits in the main column rather than the rail because the rail is hidden below `lg`,
- * and a walkthrough given on a phone needs the switcher as much as one given on a laptop.
+ * They read the prototype state Plan shares, and link to Plan rather than opening Checkout. A
+ * production build drops the import entirely, and a live API keeps the plan pill and `PlanBanner`.
  */
-function DemoStateSwitcher() {
-  const { demo } = useVendorAccount()
-  if (!demo) return null
-
-  return (
-    <div className="mt-8 rounded-[var(--vc-radius)] border border-dashed border-[var(--vc-edge)] bg-[var(--vc-panel)] p-4">
-      <p className="text-sm font-semibold text-slate-700">Demo: store state</p>
-      <p className="mt-0.5 text-xs text-[var(--md-muted)]">Not shown on a live account.</p>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {demoService.storeStateKeys.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => demo.select(key)}
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs transition',
-              demo.storeState === key
-                ? 'border-[var(--vc-tint-line)] bg-[var(--vc-tint)] font-medium text-[var(--vc-tint-ink)]'
-                : 'border-[var(--vc-edge)] text-slate-600 hover:bg-slate-50',
-            )}
-          >
-            {DEMO_STATE_LABELS[key] ?? key}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
+const prototypeChrome = import.meta.env.DEV ? () => import('@/modules/vendor/components/BillingPrototypeChrome') : null
+const PrototypeShellBanner = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeShellBanner })))
+const PrototypeHeaderButton = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeHeaderButton })))
 
 /**
  * The console frame.
@@ -249,6 +208,7 @@ function VendorChrome() {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
   const title = pageTitle(pathname)
+  const showPrototype = !isLiveApi()
 
   // Arriving somewhere is what closing the drawer means, so the route is what closes it —
   // not each link having to remember to.
@@ -345,19 +305,30 @@ function VendorChrome() {
               vendor token and pricing is undecided, so every tier but the current one would
               be invented. The pill keeps its place and says where it actually goes.
             */}
-            <Link to="/vendor/plan">
-              <Button size="sm" className="rounded-full">
-                Your plan
-              </Button>
-            </Link>
+            {PrototypeHeaderButton && showPrototype ? (
+              <Suspense fallback={null}>
+                <PrototypeHeaderButton />
+              </Suspense>
+            ) : (
+              <Link to="/vendor/plan">
+                <Button size="sm" className="rounded-full">
+                  Your plan
+                </Button>
+              </Link>
+            )}
           </div>
         </header>
 
-        <PlanBanner />
+        {PrototypeShellBanner && showPrototype ? (
+          <Suspense fallback={null}>
+            <PrototypeShellBanner />
+          </Suspense>
+        ) : (
+          <PlanBanner />
+        )}
 
         <main className="flex-1 px-[var(--vc-gutter)] pt-4 pb-6">
           <Outlet />
-          <DemoStateSwitcher />
         </main>
       </div>
 

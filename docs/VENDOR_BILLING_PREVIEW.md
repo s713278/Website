@@ -18,14 +18,33 @@ September provider observations below describe the earlier Checkout exercise onl
 [Plan Test Mode evidence](#plan-test-mode-evidence--23-september-2026) records Plan's hosted
 Test journeys.
 
-On Plan in development, **Show a sample billing status** selects an isolated fixture panel. Its
-phase selector includes AutoPay set up during trial, paid membership, expired trial, failed
-first-fee/AutoPay, cancelled trial, revoked AutoPay (trial and paid) and completed Test schedule
-examples. **Pay Now**, **Cancel AutoPay** and explicit simulated outcomes demonstrate all seven
-dataset journeys without changing the selected account: trial setup, expired signup, trial
-cancellation, paid rejoin, renewal retry, and refund success and failure. Choosing another phase
-recreates the fixture only; it never resets provider state and is not the provider-safe
-**Reset Test scenario** on Plan's local Razorpay Test Mode.
+Since 24 September, demo Plan in development no longer offers **Show a sample billing status** or
+**Use local Razorpay Test Mode**. It shows a six-state prototype instead (Free days, 3 days left,
+Paid, Payment failed, Stopped, Shop closed). Its chips are seeded through the local helper under
+its own vendor key, and choosing a chip runs the guarded reset before selecting. In Free days and
+3 days left, **Set up AutoPay** opens hosted Test Checkout for a future-start subscription at the
+trial end. Only after helper verification and a provider read does Plan show AutoPay on; the
+state and free days stay unchanged. **Turn off AutoPay** cancels through the helper. In Payment
+failed and Shop closed, **Pay ₹299 with Razorpay** opens hosted Test Checkout for an immediate-start
+subscription. Plan shows "Confirming payment…" until a provider read shows the fee captured. Then
+the helper moves the scenario to Paid, paid through the end of the provider's first invoice
+period, and adds a "Paid ₹299" history row. In Paid, **Stop the plan** asks once, then moves to
+Stopped with the same paid-through date. The seeded sample stops locally. A real Test subscription
+is cancelled at cycle end, and Stopped then rests on the helper's record of Razorpay accepting
+that request, because provider reads cannot show a scheduled stop. In Stopped, **Keep shop open**
+first closes any stopped subscription and reads it back closed. It then opens hosted Test
+Checkout for a future-start subscription at the paid-through date. Once the provider read shows
+it authorised, the state returns to Paid with the same paid-through and the next ₹299 due then.
+Every demo vendor page in development shows the current state's banner and a header button ("Pay
+₹299", "Keep open · ₹299" or "Shop plan"), Overview included. Both read the state Plan shows and
+only link to Plan, so Checkout opens nowhere else. They are messages only: the storefront and orders
+are not gated. The demo "store state" switcher and its fixture states are removed; the demo store
+is always approved and active. Live mode and production demo builds are unchanged. The
+[decision record](./VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
+owns the six states. The 23 September and first 24 September Plan evidence below describes the
+earlier controls; the [six-state evidence](#six-state-prototype-evidence--24-september-2026) records
+the prototype, and the [evaluation](#prototype-evaluation-and-fixes--24-september-2026) records its
+edge cases and two fixes.
 
 ## Differences from the approved model
 
@@ -387,6 +406,303 @@ reads through the Razorpay CLI, and Dashboard steps by the Test account operator
   the provider and refreshing Plan after that date is the remaining recovery check: a verified
   renewal for 24 Nov → 24 Dec 2026 IST, and no new cycle.
 - A clean simulated renewal failure remains unobserved.
+
+## Six-state prototype evidence — 24 September 2026
+
+Hosted Razorpay Test runs of the six-state prototype on demo Plan, recorded between 15:15 and 15:22
+UTC. The two Plan Test Mode records above stay unchanged. **No Spring backend was involved**:
+states, trial and access are the helper's local simulation, and Razorpay facts are Test Mode facts.
+
+**Environment.** Linux (WSL2). Headless Chromium drove the local development app in demo mode
+(`VITE_USE_API=false`) and the official hosted Checkout. The helper ran on `127.0.0.1:4179` with
+its default local store. Every scenario used helper vendor key `r1-prototype`; vendor `r1` was not
+touched. Provider reads were read-only REST calls with the helper's Test key.
+
+**Evidence sources.** *App* is Plan's visible text. *Helper* is the helper's status response.
+*Provider* is a Razorpay Test read.
+
+**Checkout steps.** These were the same for every payment. Contact details came first (synthetic
+values), then the domestic Visa test card ending 4366, typed key by key. Then **Save this card as
+per RBI guidelines**, **Skip OTP**, **Pay on bank's page**, and the simulator's **Success** or
+**Failure**. Checkout offered cards only.
+
+### Free days: AutoPay setup and turn off (generation 48, 15:15–15:16)
+
+- *App:* the button read **Set up AutoPay · ₹299 on 6 Oct**, with "Your card is checked with a
+  refundable ₹5 charge now; the first ₹299 is charged on 6 Oct, when free days end."
+- *App (failure):* the bank page's **Failure**, then closing Checkout, showed "The card payment did
+  not go through (Payment failed), so AutoPay is not set up. Nothing changed; your free days are the
+  same." The state stayed on 12 days left.
+- *App (success):* Plan stayed in Free days with 12 days left and showed "AutoPay on — first ₹299 on
+  6 Oct". The banner read "12 free days left — AutoPay is on, so the first ₹299 is charged on 6
+  Oct.", and history gained "AutoPay on · First ₹299 on 6 Oct".
+- *Helper:* the attempt was `authorised`, with authorisation `confirmed`. `nextChargeAt` equalled
+  the trial end, `2026-10-06T14:48:34.857Z`. Access stayed `TRIAL`, with payment `none` and no
+  paid-through date.
+- *App/helper (turn off):* **Turn off AutoPay** gave an immediate cancellation, confirmed at
+  15:16:05.984Z. Plan returned to plain Free days with the same trial end, **Set up AutoPay**
+  offered again, and a new "AutoPay turned off" row.
+- *Provider:* `sub_Tfv5nhXrg0DK4A` is `cancelled`, with `start_at` `2026-10-06T14:48:34Z` (the trial
+  end), `paid_count` 0 and no invoice.
+
+### 3 days left: dismissal, failure, AutoPay setup and turn off (generation 49, 15:16–15:17)
+
+- *App (dismissal):* Checkout was opened, then closed with **Yes, exit** before any card entry. Plan
+  showed "Checkout was closed before AutoPay was set up. Nothing changed; your free days are the
+  same.", still 3 days left.
+- *App (failure):* the same failure notice as in Free days, with the state unchanged.
+- *Helper:* the dismissal, the failure and the success reused one prepared Test subscription.
+- *App (success):* "AutoPay on — first ₹299 on 27 Sept", still in 3 days left, with a neutral
+  banner.
+- *Helper:* `nextChargeAt` equalled the trial end, `2026-09-27T15:16:19.046Z`, and access stayed
+  `TRIAL`.
+- *App/helper (turn off):* confirmed at 15:17:19.007Z, back to "Set up AutoPay now so customers can
+  still open your shop when free days end."
+- *Provider:* `sub_Tfv6xjIg99y5zg` is `cancelled`, with `start_at` `2026-09-27T15:16:19Z`,
+  `paid_count` 0 and no invoice.
+
+### Payment failed → Paid (generation 50, 15:17–15:18)
+
+- *App (failure):* "The card payment did not go through (Payment failed). Nothing changed; your shop
+  is still hidden." The state was unchanged.
+- *App (success):* Plan showed Paid: "Shop is open. You paid ₹299 via Razorpay. Shop stays open
+  until 23 Oct. Next ₹299 is charged on 24 Oct." There was no banner, and history gained "Paid ₹299
+  · Shop open until 23 Oct".
+- *Helper:* the scenario moved to `paid` in the same generation. The attempt was `fee_confirmed`,
+  for the fee period `2026-09-24T15:18:08Z` → `2026-10-23T18:30:00Z`. The first cycle ends at IST
+  midnight, so the last paid day is 23 Oct. Access was `PAID`, and every provider-verified flag was
+  true.
+- *Provider:* `sub_Tfv8FzK4qXrgP8` has `paid_count` 1 and one ₹299 invoice, `paid`. The next chip
+  choice cancelled it (`ended_at` 15:18:41Z), and the invoice was kept, not refunded.
+- *Not observed live:* "Confirming payment…". The fee was already captured at the first reread
+  after Success.
+
+### Shop closed → Paid (generation 51, 15:18–15:19)
+
+- *App:* the same failure notice, then Paid "until 23 Oct. Next ₹299 is charged on 24 Oct."
+  History kept the seeded "Plan stopped" and "Paid ₹299" rows below the new one.
+- *Helper:* `fee_confirmed`, for the fee period `2026-09-24T15:19:16Z` → `2026-10-23T18:30:00Z`.
+- *Provider:* `sub_Tfv9Sat0SFLm04` has `paid_count` 1 and one ₹299 invoice, `paid`. The next reset
+  cancelled it (`ended_at` 15:19:48Z).
+
+### Real Paid → Stop → Stopped → Keep shop open → Paid (generation 52, 15:19–15:21)
+
+1. *App/helper:* in Payment failed, **Pay ₹299 with Razorpay** → **Success** → Paid on
+   `sub_TfvAceDGhhkH3A`. The fee period began at 15:20:00Z and ran to `2026-10-23T18:30:00Z`.
+2. *App:* **Stop the plan** asked "Stop the plan? No more ₹299 is charged. Your shop stays open
+   until 23 Oct, then customers cannot see it."
+3. *Helper (stop):* **Yes, stop the plan** requested a **cycle-end** stop at 15:20:17.806Z.
+   Razorpay's acceptance moved the scenario to `stopped`, keeping the same paid-through date.
+4. *App (Stopped):* "Shop stays open until 23 Oct" and **Keep shop open · ₹299**. The source line
+   read "Razorpay Test accepted a stop at the end of the paid days. Its reads cannot show a scheduled
+   stop, so this comes from the local helper's record of that acceptance." The banner and header
+   read "Keep open · ₹299".
+5. *App:* the Keep shop open help text read "Your card is checked with a refundable ₹5 charge now;
+   ₹299 is charged on 24 Oct, when paid days end."
+6. *Helper (keep open):* the helper persisted the close intent at 15:20:20.389Z and cancelled the
+   stopped subscription immediately. Its read showed it closed at 15:20:21.608Z. Only then did it
+   create `sub_TfvBDLB9yapAEg`.
+7. *App/helper (Paid again):* after **Success**, the replacement read `authorised` and Plan showed
+   Paid "until 23 Oct. Next ₹299 is charged on 24 Oct." History gained "Plan stopped" and "AutoPay
+   set up again · Next ₹299 on 24 Oct".
+8. *App/helper (second stop):* a second **Stop the plan** cancelled the pre-fee replacement
+   immediately. Plan moved to Stopped only after a read confirmed it (15:20:51.464Z), with "Razorpay
+   Test shows the stopped subscription cancelled. The days you already paid for are kept."
+- *Provider:* `sub_TfvAceDGhhkH3A` is `cancelled` (`ended_at` 15:20:21Z), with `paid_count` 1 and
+  its one ₹299 invoice `paid`, not refunded.
+- *Provider:* `sub_TfvBDLB9yapAEg` is `cancelled`, with `start_at` `2026-10-23T18:30:00Z` (the
+  paid-through date), `paid_count` 0 and no invoice. No second ₹299 was charged for the covered
+  period.
+- *Provider fact relied on:* after accepting a cycle-end stop, Razorpay Test still accepted an
+  immediate cancel of the same subscription. A read then showed it `cancelled`, with its paid
+  invoice kept and no refund. The 23 September reset observation above found the same.
+
+### Clean-up and limitations
+
+- *Helper:* a final chip choice left `r1-prototype` on Free days, generation 53. All six
+  subscriptions above read `cancelled` at the provider. Only `r1-prototype` helper routes were
+  called, and there were no page errors. Vendor `r1`'s stored record and history were identical
+  before and after.
+- *App:* `/dev/vendor-billing` still loaded, with its simulated billing and no page errors.
+- **Not repeated in this run:** the sample Paid's local stop, a failed Keep shop open Checkout, the
+  banner and header on the other vendor pages, and the helper-down display. Automated tests cover
+  them, and earlier local runs on 24 September exercised them.
+- **Never exercised live:** a dismissed Keep shop open Checkout, and a refused or unanswered close
+  of the stopped subscription. Only automated helper-fake tests cover them.
+- Real renewal, a production bank, Spring verification and enforcement remain unexercised. The
+  prototype has no clock, and a Test charge never advances a trial.
+
+## Prototype evaluation and fixes — 24 September 2026
+
+Edge-case evaluation of the six-state prototype, about 17:35–18:45 UTC, after the record above. No
+Spring backend was involved. The helper ran on its own port with a separate temporary store, so the
+operator's helper on 4179, its store and vendor `r1` were untouched. Vite ran in demo mode and
+proxied to that helper, and headless Chromium drove hosted Test Checkout with the steps above.
+**Evidence sources** are as above, plus two more. *CLI* is a Razorpay CLI write with the helper's
+Test key, standing in for a change made outside Plan. *Induced* is a deliberate local fault.
+
+### Automated checks
+
+- `npm run typecheck` and `npm run lint` passed (0 errors, the two existing Fast Refresh warnings).
+  `npm run test` passed 67 files / 951 tests before the fixes and 954 after.
+  `npm run test:billing-helper` passed 46 tests before and 48 after.
+- `npm run build` passed. `dist` contains no prototype code, helper route or new copy.
+- `npm run test` does not run the helper suite, because `vitest.config.ts` includes only `src`.
+  Run `npm run test:billing-helper` separately.
+- Two full runs alongside browser work, at a load average near 11, hit the known router-assertion
+  and onboarding timeouts, plus one Plan production-build timeout. Each file passed alone, and a
+  full run under lower load passed 954/954.
+- The production bundle contains the Razorpay Checkout script URL, through the committed billing
+  panel's import. The script loads only when Checkout opens. The 18 September "absent" observation
+  below predates that panel.
+
+### Regression walks (all passed)
+
+- **Free days and 3 days left:** a dismissal, a bank-page Failure and a Success each used one
+  subscription (`sub_TfxUybQNvpxXXC`, `sub_TfxWUODUiyTBR2`). AutoPay turned on with the free days
+  unchanged, and Turn off AutoPay was confirmed by a read.
+- **Payment failed → Paid** (`sub_TfxXgCaUz9yZJa`): open until 23 Oct, next ₹299 on 24 Oct.
+- **Sample Paid and real Paid:** Stop → Stopped → Keep shop open → Paid → Stop again, with the same
+  paid-through date throughout.
+- **Chrome:** the banner and header showed on every demo vendor page, and the header button opened
+  Plan without Checkout.
+
+### Newly exercised live
+
+- **Keep shop open, dismissed and failed** (*app/helper/provider*): the scenario was a real Stopped
+  with a scheduled cycle-end stop.
+  - A dismissed Checkout left Stopped with the same paid-through date. Preparation had already
+    closed the stopped subscription, so the source line changed to "Razorpay Test shows the stopped
+    subscription cancelled".
+  - A bank-page Failure also left Stopped, and Success returned to Paid.
+  - All three used one replacement, `sub_TfxaVmmBr2a1XS`, starting at the paid-through date.
+- **Callback never delivered** (*induced/app/helper*): a reload while Checkout still showed "Payment
+  Successful", before its handler ran, left the fee unsubmitted. The next load's provider read
+  showed Paid. F3 below covers a submission that fails.
+- **Concurrency** (*helper/provider*): two simultaneous preparations got 200 and 409 "already in
+  progress". A third key and a replayed key converged on the same `sub_TfxhxFwxr52KrV`, and no
+  second object was created.
+- **Helper restart and helper down** (*app*): trial AutoPay on survived a helper restart and reload.
+  With the helper stopped, Plan showed its notice, disabled every payment button and kept the chips
+  display-only. Orders still showed the banner.
+- **Unconfirmed reset** (*induced/app/helper/provider*): every Razorpay cancel request was made to
+  fail.
+  - A chip switch showed "Switching…" and **Retry switch**. The helper kept the reset pending and
+    refused a preparation with 409.
+  - After a normal restart, Retry switch from a fresh page completed, and `sub_TfxhxFwxr52KrV`
+    read `cancelled`.
+  - From a reloaded page, the retry reseeded the previous state rather than the chip first chosen.
+- **Hostile requests** (*helper*):
+  - A foreign `Origin` or a non-JSON write got 403.
+  - Forged signatures on the real attempt got 400, with nothing recorded.
+  - A callback for another subscription got 409, as did a replayed key from a reset generation and
+    a reset naming the wrong generation.
+  - An oversized body got 500 "Local helper storage failed", and invalid JSON got 500. Both were
+    refused, but with misleading status codes.
+- **External trial cancellation** (*CLI/app*): cancelling trial AutoPay (`sub_TfxgZ63cyS3Fkp`) at
+  Razorpay returned Plan to plain 3 days left, with Set up AutoPay offered again. Its history row
+  reads "AutoPay turned off", as if the vendor did it.
+
+### Defects fixed
+
+- **F3, lost callback submission** (*induced/app*): the helper's submission route was blocked after
+  a successful ₹299.
+  - *Before:* Plan said "The local Test helper is not running", kept Payment failed ("Shop is
+    hidden") and disabled every button. The helper was up, and a reload showed Paid. No second
+    charge was possible.
+  - *Fix:* Plan shows "Checkout finished, but its result did not reach the local helper…" and
+    rereads. It shows the helper down only if that reread also fails.
+  - *After (18:36Z, `sub_TfyVua86iUKngC`):* Plan showed Paid at once, with that notice.
+- **F5, AutoPay ended outside Plan** (*CLI/app/helper*): a real Paid's subscription was cancelled at
+  Razorpay.
+  - *Before:* Plan kept "Shop is open… until 23 Oct" but dropped the next-charge line, disabled
+    Stop the plan and offered no way to set AutoPay up again.
+  - *Fix:* the helper moves Paid to Stopped with an `autopay_ended` event
+    ([decision](./VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)).
+  - *After (18:37–18:38Z):* Plan read "AutoPay ended" with the same paid-through date (24 Oct),
+    "Keep open · ₹299" in the header and a history row. Keep shop open's hosted Checkout created
+    `sub_TfyXxTydXE1j1e` at that date and returned to Paid.
+
+### Open findings (not fixed)
+
+- **Pause at Razorpay** (*CLI/app*): after a real Paid subscription was paused, the helper reported
+  authorisation pending, and Plan still named the next ₹299 on 24 Oct. A paused subscription is not
+  charged. The backend proposal's `autopay_status` has no paused value.
+- **Stop after pause and resume** (*CLI/provider*): Razorpay accepted a cycle-end stop on the
+  paused subscription. After resume it read `active`, with `charge_at` 23 Oct and no visible
+  scheduled change, so whether the stop survives cannot be read before that date. The object was
+  then cancelled, leaving nothing to charge.
+- **Refund of a confirmed fee** (*CLI/helper*): a full Test refund of the first ₹299 (payment
+  `refunded`, `full`) left the helper Paid, with the payment confirmed and provider-verified. A
+  confirmed fee is never reread, and access after such a refund is an open decision.
+- **No clock** (*helper clock moved 13 days ahead, on a copy of the store*): the helper reported the
+  trial ended, the store hidden and only `pay_first_fee` available. Plan still showed Free days, 0
+  days left and a disabled Set up AutoPay. A 3 days left demo reaches this after three real days.
+- **Copy:** "Payments you made" lists AutoPay rows, and "If you do not pay" stays after AutoPay is on.
+
+### Operator checks — 24 September, 19:20–21:30 UTC
+
+These checks were run by the Test account operator on the operator's own helper (4179), store and
+demo Vite (5173). The Test Dashboard's **Charge this now** offers **Charge as Success** and **Charge
+as failure**. Provider reads were REST calls with the helper's Test key.
+
+1. **First AutoPay fee collected early** (*operator/provider/helper/app*):
+   - The operator set up 3 days left AutoPay (`sub_TfzIAnTYW5hmN4`), then used **Charge as Success**.
+   - The ₹299 was captured at 19:30:36Z. Its invoice covered the original trial end
+     (`2026-09-27T19:20:17Z`) to `2026-10-27T18:30:00Z`, and the next charge was 28 Oct IST.
+   - The helper recorded the fee as confirmed, with the trial and its days unchanged.
+   - **Defect F6:** Plan still read "AutoPay on — first ₹299 on 28 Oct", and history gained no Paid row.
+2. **First AutoPay fee failing: not testable on this account** (*operator/provider*):
+   - **Charge as failure** on a trial AutoPay subscription produced a captured ₹299, with no failed
+     attempt, on `sub_TfzjaezxBaysqR` (19:52Z), `sub_Tg0K6G4eY1TLhL` (20:24Z) and
+     `sub_Tg0a1hWrGpcC46`.
+   - On the last, the operator's choice was confirmed. The invoice stayed `issued` with its payment
+     `created` from 20:41:43Z, then was captured by 20:47:30Z.
+   - *Control:* an authorised future-start subscription left untouched (`sub_Tg02cuYuMb6Nkp`, from
+     20:07Z) stayed `authenticated`, with no invoice, for 13.5 minutes. Razorpay does not charge
+     early by itself.
+   - The risk read from the code stays unverified: after a failed first AutoPay fee, Pay ₹299 is
+     refused while that subscription is open.
+3. **Renewal, then a Dashboard cancel** (*operator/provider/helper/app*):
+   - On a real Paid (`sub_Tg0u2fx98pxrTK`, first fee paid in Checkout), **Charge as Success** issued
+     the next original cycle's invoice, `2026-10-24T18:30Z` → `2026-11-24T18:30Z`. It was captured
+     at about 21:06Z.
+   - Unlike 23 September, no per-cycle mandate limit applied: the first fee here was a Checkout
+     payment, not a mandate debit.
+   - Plan read "Shop stays open until 24 Nov. Next ₹299 is charged on 25 Nov."
+   - **Defect F7:** the renewal added no Paid row to history.
+   - The Dashboard **Cancel** (immediate, at 21:17:24Z) moved Plan to **AutoPay ended** on the next
+     read. It showed "Shop stays open until 24 Nov", 61 days left and Keep shop open · ₹299. This
+     confirms the F5 fix outside the CLI.
+4. **Phone-sized Checkout** (*operator/provider*):
+   - In desktop Chrome's device mode, Payment failed → Pay ₹299 was run: two bank-page failures,
+     then a success, all on `sub_Tg1OsrKrMtFLfG`. Plan moved to Paid.
+   - No layout problem was reported. A real phone cannot reach the helper, which accepts only
+     `localhost` origins.
+
+**F6 and F7 fixed (25 September, automated evidence only):**
+- A fee confirmed outside Pay ₹299 now appends one Paid row, dated at the read. That covers a trial
+  AutoPay fee collected early and each renewal.
+- In free days, once the first ₹299 is collected, the card reads "AutoPay on — first ₹299 paid, shop
+  open until ‹date›. Next ₹299 on ‹date›." The banner says the first ₹299 is already paid.
+- Helper and card tests cover both. Hosted confirmation needs one more Charge this now.
+
+### Not exercised
+
+- A failed first AutoPay fee and a failed renewal: the Test Dashboard's failure option captured the
+  payment.
+- Hosted Checkout on a real phone.
+- The renewal-recovery recheck after 2026-11-26.
+
+### Clean-up
+
+All 14 Test subscriptions from the agent's evaluation read `cancelled`. Six collected a Test ₹299,
+one of which was then refunded. The operator's helper store and vendor `r1` were not changed by
+the agent's runs.
+
+Of the operator checks' seven subscriptions, six read `cancelled`, with their paid invoices kept.
+`sub_Tg1OsrKrMtFLfG` stays `active` as the operator's current Paid scenario, with its next ₹299
+due 24 Oct 18:30Z. Choosing any chip cancels it.
 
 ## Validation record
 

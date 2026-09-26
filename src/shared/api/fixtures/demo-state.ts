@@ -27,45 +27,6 @@ import {
 
 type Row = Record<string, unknown>
 
-/** The five states `deriveStoreState` can produce, as the two fields it derives them from. */
-export type DemoStoreStateKey = 'SETTING_UP' | 'UNDER_REVIEW' | 'OPEN' | 'REJECTED' | 'SUSPENDED'
-
-export type DemoStoreStateOverride = {
-  vendorStatus: string
-  approvalStatus: string
-}
-
-/**
- * The switcher writes these two fields and lets `deriveStoreState` run, rather than
- * setting a `StoreState` directly. Setting the outcome would make the switcher a second
- * source of truth, free to display a combination the real derivation could never produce.
- */
-const STORE_STATES: Record<DemoStoreStateKey, DemoStoreStateOverride> = {
-  SETTING_UP: { vendorStatus: 'INACTIVE', approvalStatus: 'PENDING' },
-  UNDER_REVIEW: { vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' },
-  OPEN: { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
-  REJECTED: { vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED' },
-  SUSPENDED: { vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED' },
-}
-
-export const DEMO_STORE_STATE_KEYS = Object.keys(STORE_STATES) as DemoStoreStateKey[]
-
-/** The two fields a given key derives from. Pure, so the switcher can be tested directly. */
-export function storeStateFieldsFor(key: DemoStoreStateKey): DemoStoreStateOverride {
-  return STORE_STATES[key]
-}
-
-/**
- * Resume step shown by the switcher's synthetic setting-up scenario.
- *
- * The context seed remains a truthful completed account (`next_step: 11`). Only the
- * setting-up walkthrough needs a visible resume point, and Step 10 is the last real setup
- * screen. This value labels that screen; it is never read by `deriveStoreState`.
- */
-export function storeStateResumeStepFor(key: DemoStoreStateKey): number | null {
-  return key === 'SETTING_UP' ? 10 : null
-}
-
 type DemoBillingPhase = 'trial_active' | 'setup_pending' | 'setup_confirmed' | 'setup_failed'
   | 'cancel_requested' | 'cancel_confirmed' | 'cancel_failed' | 'replacement_prepared'
 
@@ -74,7 +35,6 @@ type DemoState = {
   subscriptions: Row[]
   sizes: Row[]
   profile: Row
-  storeState: DemoStoreStateKey
   /** Set to make the next demo read reject, so error handling is demonstrable. */
   failNextRead: boolean
   billingPhases: Map<string, DemoBillingPhase>
@@ -89,7 +49,6 @@ function seed(): DemoState {
     subscriptions: DEMO_VENDOR_SUBSCRIPTIONS.map((row) => ({ ...row })),
     sizes: DEMO_VENDOR_SIZES.map((row) => ({ ...row })),
     profile: { ...DEMO_VENDOR_PROFILE },
-    storeState: 'OPEN',
     failNextRead: false,
     billingPhases: new Map(),
     billingCancelRequestedAt: new Map(),
@@ -163,18 +122,6 @@ export function demoSizes(): Row[] {
 
 export function demoProfile(): Row {
   return state.profile
-}
-
-export function demoStoreStateOverride(): DemoStoreStateOverride {
-  return STORE_STATES[state.storeState]
-}
-
-export function demoStoreStateKey(): DemoStoreStateKey {
-  return state.storeState
-}
-
-export function setDemoStoreState(key: DemoStoreStateKey) {
-  state.storeState = key
 }
 
 /**

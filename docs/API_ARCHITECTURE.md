@@ -415,16 +415,24 @@ gateway or platform-fee API. No Spring Boot billing calls are implemented in thi
 | Explicit development implementation | `src/shared/api/services/vendor-billing-preview.service.ts` | Test keys and inspected subscription schedule; real callbacks only become pending |
 | Billing and trial presentation | `src/modules/vendor/components/VendorBillingPanel.tsx` | Renders service-provided access, trial, authorisation and payment independently |
 | Development route and scenario controls | `src/modules/vendor/pages/VendorBillingPreviewPage.tsx` | DEV-only lazy route `/dev/vendor-billing`, outside auth and vendor-context gates |
-| Plan page | `src/modules/vendor/pages/VendorPlanPage.tsx` | Billing from the selected auth vendor, without usage against limits; a DEV-only sample override affects this panel alone |
-| Local Plan Test helper | `scripts/vendor-billing-test-helper.mjs`, `src/shared/api/services/vendor-billing-local-test.service.ts` | Loopback development HTTP, locally excluded scenario ledger, server-side Razorpay Test subscription creation/inspection, callback signature verification, provider readback and cancellation; no Spring call |
+| Plan page | `src/modules/vendor/pages/VendorPlanPage.tsx` | Billing panel from the selected auth vendor, without usage against limits; in development demo mode it lazy-loads the six-state prototype instead |
+| Local Plan Test helper | `scripts/vendor-billing-test-helper.mjs`, `src/shared/api/services/vendor-billing-local-test.service.ts` | Loopback development HTTP, locally excluded scenario ledger, server-side Razorpay Test subscription creation/inspection, callback signature verification, provider readback and cancellation; no Spring call. The prototype's only transport |
+| Six-state prototype seeds | `src/shared/api/fixtures/billing-prototype.ts` | One seed and event definition, imported by the app and loaded directly by the helper |
+| Prototype state read and view model | `src/modules/vendor/hooks/use-billing-prototype.ts`, `src/modules/vendor/lib/billing-prototype-card.ts` | One shared helper read for Plan and the shell; card, banner, header and history derived once; no Checkout code |
+| Prototype Plan and chrome | `src/modules/vendor/components/VendorBillingPrototype.tsx`, `BillingPrototypeChrome.tsx`, `BillingStateBanner.tsx` | Plan's card, sections, actions and chips; the banner and header button on every demo vendor page, linking to Plan |
 
 The preview service is explicitly constructed rather than selected through `isLiveApi()`: an
 environment-enabled Spring API cannot accidentally make these examples touch real vendor accounts.
 Neither scenario controls nor browser callbacks change auth, cart, onboarding or production routes.
 The parent remounts the billing panel when its service changes and passes the fixture `vendorId`.
 The plan page keys its panel on the selected auth `vendorId`, never the public store slug.
-Its DEV-only sample override offers active/expired and failed-payment fixture phases through the
-injected panel seam without changing global API mode, shared context, auth or orders.
+Plan's former development controls, the sample-status override and the local Test Mode switch,
+were replaced by the [six-state prototype](#six-state-plan-prototype) on 24 September 2026.
+
+The ticket 12–17 paragraphs below describe the helper's machinery, which the prototype still
+drives. Their Plan controls (the switch, the local Test panel's Pay Now, Cancel AutoPay and
+**Reset Test scenario**) are no longer rendered. The helper still serves the three original
+scenarios, so stored records such as vendor `r1` keep reading.
 
 **Local Plan Test foundation (ticket 12):** an explicit development-only switch selects a
 helper-backed service for the panel and selected auth vendor. The ordinary context service,
@@ -463,8 +471,10 @@ signature records only that an authentic callback arrived. The payment ID and si
 stored. Each status read rereads associated subscriptions that are not yet settled: ownership
 notes, plan (monthly, INR, ₹299), the original `start_at` for trial setup, the earliest ₹299
 invoice and its captured, unrefunded payment. Only `authenticated`/`active` confirm authorisation;
-`pending`, `halted`, `paused` or an unknown status stays pending and is reread, and only
-`cancelled`, `completed` or `expired` is closed. A refundable token charge, an
+`pending`, `paused` or an unknown status stays pending and is reread, and only
+`cancelled`, `completed` or `expired` is closed. A `halted` read records `haltedAt` and is a failed fee:
+the helper persists an immediate cancellation (`reason: 'halted'`) and asks Razorpay Test to cancel
+the subscription, retrying an unanswered request on the next read. A refundable token charge, an
 `authenticated`/`active` status or a signature alone never confirms the fee. The first fee must be
 that earliest invoice, cover one month and start at the original trial expiry, or not before the
 immediate-start preparation. Only its invoice/payment IDs and billing period are stored, once;
@@ -493,10 +503,17 @@ A retry settles that same invoice, so the recovered coverage and next renewal da
 original anchor. Payment time and dashboard acceleration never start a new month or move a trial
 expiry. Counted renewals are append-only, and paid charges outside the chain, such as duplicates or
 periods starting at charge time, are reported as uncounted. The latest due fee is `pending` for an
-open invoice and `failed` while Razorpay shows `pending`/`halted`; a later stale read cannot turn a
-failure back into pending. Unknown statuses and unavailable reads stay pending or stale. Past the
-confirmed boundary the local scenario becomes `PAYMENT_REQUIRED`, with the store hidden and no
-grace period. After a confirmed fee, authorisation follows the latest subscription status:
+open invoice, including while Razorpay retries it (`pending`), and `failed` only once Razorpay shows
+`halted`; a later stale read cannot turn that failure back into pending. A `failed` recorded by the
+earlier rule re-derives while Razorpay still shows `pending`. Unknown statuses and unavailable reads
+stay pending or stale. Past the confirmed boundary, a scheduled fee still being collected (an
+authorised or retrying AutoPay agreement, or a fee-confirmed one with no cancellation and no halt)
+is the collection retry period: `collectionRetrying` is true, the store stays visible and access
+keeps the status of the coverage that ended (`PAID`, or `TRIAL` for a first fee at trial end). A
+fee paid now (`pay_first_fee` before its fee) has none. A halt, or any cancellation that has not
+failed, ends it; then the local scenario becomes `PAYMENT_REQUIRED` or `TRIAL_ENDED`, with the store
+hidden and no grace period. After a halt, `pay_first_fee` is offered again only once every object
+reads closed. After a confirmed fee, authorisation follows the latest subscription status:
 `authenticated`, `active`, retrying `pending` and a completed finite Test schedule stay confirmed.
 `halted` is failed and paused or unknown statuses are pending. `cancelled` and `expired` are
 revoked. A closed subscription is final: nothing further is scheduled and confirmed coverage is
@@ -579,8 +596,8 @@ any real entitlement and after-expiry fee confirmation.
 
 Trial entitlement, mandate authorisation, confirmed paid coverage, provider lifecycle,
 cancellation and refund progress are distinct. Cancellation retains the original trial or paid period;
-rejoining can set up billing again at the same boundary. Failed/unconfirmed collection grants no
-grace beyond that boundary. Server capabilities must retain billing/account and existing-order
+rejoining can set up billing again at the same boundary. A scheduled fee still being collected keeps
+service past that boundary until collection halts; a failed (halted) fee grants no grace. Server capabilities must retain billing/account and existing-order
 fulfillment while hiding the store and blocking new operations after access expires.
 Successful retries restore only the remaining original cycle. The decision record owns full
 refunds for debits despite timely cancellation and no automatic proration for ordinary
@@ -622,10 +639,9 @@ submit/cancellation refresh tests; no backend cancellation write is connected ye
 The preview injects a mock-backed service explicitly using the existing panel seam. The plan page
 uses a demo context service when `isLiveApi()` is false and a backend context service otherwise;
 live billing remains unavailable with retry and usage intact until authenticated backend integration,
-even if a proposed billing block appears before its writes are connected. Its DEV-only override selects
-an isolated mock panel while other services continue in live mode. Backend errors never produce mock
-success. Simulated transitions stay in vendor-keyed demo memory or the isolated override and make
-no real auth/vendor/order writes.
+even if a proposed billing block appears before its writes are connected. Backend errors never
+produce mock success. Simulated transitions stay in vendor-keyed demo memory and make no real
+auth/vendor/order writes.
 The simulated Plan and fixture paths now keep a preparation key for one logical request, including
 a lost response, and reject reuse for a different vendor or action. The panel compares the prepared
 amount, currency and first collection instant with the displayed values; a null collection date
@@ -637,7 +653,7 @@ another explicit Pay Now. A failed read leaves the last confirmed snapshot stale
 The fixture can explicitly simulate failed setup/first fee and later confirmation; a retry reuses
 the same logical attempt and is labelled as a retry, and only confirmation restores simulated paid
 access after expiry.
-Plan cancellation is simulated in demo memory and the DEV sample override. **Cancel AutoPay** appears
+Plan cancellation is simulated in demo memory. **Cancel AutoPay** appears
 only when the status lists `cancel` and opens a second-step confirmation quoting the status's trial
 expiry or current paid-through date, sending nothing until **Confirm cancellation**. One logical key
 covers repeated clicks and a lost response; an error marks the snapshot stale and reads status before
@@ -664,13 +680,14 @@ one authorised context's refund into another. The dataset has no confirmed conte
 after earlier paid coverage, so the sample simulates only its failure. The simulated clock never runs
 backwards between fixture contexts.
 Renewal outcomes (`simulateRenewalProgress`) are offered only when the status lists them in
-`simulatedRenewalSteps`. A pending or failed renewal at the boundary shows limited access and no
-grace, even though the historic paid-through date remains. A successful retry two days later restores
-coverage only to the original cycle's end, with the renewal date unchanged. Revoked authorisation is
+`simulatedRenewalSteps`. A pending renewal at the boundary keeps the store open while it is
+collected; from there a successful retry two days later restores coverage only to the original
+cycle's end, with the renewal date unchanged, and a halt (`renewal_failed`) shows limited access with
+no grace, AutoPay revoked and Pay Now for a new paid period, even though the historic paid-through
+date remains. Revoked authorisation is
 shown separately from a failed or confirmed fee and keeps the trial or paid coverage the status
 supplies. When the finite Test schedule has ended, the panel shows the notice and restricted access
-and offers only the actions the status lists. Replacing a DEV sample fixture never touches provider
-state.
+and offers only the actions the status lists. Replacing a fixture never touches provider state.
 Stamp provenance in the service: mock/demo (simulated Checkout and outcomes), preview (real Test
 Checkout with unverified callback), local_test (helper-prepared Test Checkout, helper-verified
 provider facts marked separately and simulated access), backend (real server status). Fake provider IDs cannot reach
@@ -683,8 +700,75 @@ Razorpay Test Mode for this iteration; production activation is separate work.
 
 The earlier preview asked vendors to forfeit trial days and demonstrated setup as a trial
 prerequisite; that behavior has been removed. Its dated provider evidence remains
-[historical](./VENDOR_BILLING_PREVIEW.md#validation-record). Helper provider cancellation,
-renewal/rejoin readback and backend confirmation remain separate ticket work.
+[historical](./VENDOR_BILLING_PREVIEW.md#validation-record). Backend confirmation remains separate
+ticket work.
+
+##### Six-state Plan prototype
+
+The [decision record](./VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
+owns the six states and their rules. Everything below exists only when `import.meta.env.DEV` is set
+and `isLiveApi()` is false. `VendorPlanPage` and `VendorShell` lazy-load it, so production output,
+live mode and the production demo panel are unchanged.
+
+- **Seeds.** `billing-prototype.ts` defines `PROTOTYPE_VENDOR_KEY` (`r1-prototype`), the six states
+  and `prototypeSeed(state, now)`, including seeded history `events`. It is plain erasable
+  TypeScript with no imports. The helper loads it directly (see the
+  [Node requirement](../README.md#prerequisites)), so the displayed seed and the helper record
+  cannot disagree.
+- **Shared read.** `use-billing-prototype.ts` keeps one module-level store (`useSyncExternalStore`)
+  of the helper status and the displayed state. `loadPrototypeState()` is single-flight. It reads
+  the helper and selects Free days when nothing is stored. Every Plan mount rereads and marks the
+  helper `reading`, keeping the last state on screen with actions and chips disabled. A click
+  during a status read would otherwise get the helper's 409. With the helper unreachable
+  (`LocalTestHelperUnavailableError`), the local seed is shown display-only. `prototypeView` derives
+  Plan's card, the banner and the header label once, from `billing-prototype-card.ts`. Tests that
+  render the prototype or its chrome call `resetBillingPrototypeState()`.
+- **Chips.** Choosing a different chip (or retrying a pending switch) reads fresh state, runs the guarded reset for the current generation (one
+  idempotency key per generation, reused on retry), then selects the new state. It shows
+  "Switching…" until the reset is read closed, and **Retry switch** while it stays pending.
+- **Checkout actions.** Set up AutoPay, Pay ₹299 and Keep shop open share one sequence: helper
+  preparation, hosted Checkout through `openSubscriptionCheckout`, callback submission and a helper
+  reread. The preparation key is per generation and action, so a dismissal or failure reuses the
+  same Razorpay object. A synchronous in-flight guard prevents duplicate opens, and unmounting
+  aborts Checkout. The state changes only from a helper reread after verification and a provider
+  read. While a fee or authorisation is pending, Plan shows a waiting notice and **Check again**.
+  If the callback submission cannot reach the helper (`LocalTestHelperUnavailableError`), the payment
+  may already be taken. Plan then shows a "result did not reach the local helper" notice and
+  rereads. The helper's provider read recovers the outcome, and the helper is shown down only if
+  that reread also fails.
+- **Helper transitions.** The helper stores each verified transition in the record, keeping the
+  same generation, and appends a history event. `payNowScenarios` offers `pay_first_fee` in Payment
+  failed and Shop closed. A captured first fee moves the record to `paid`, through the provider
+  invoice's period end. Trial AutoPay adds `autopay_on`/`autopay_off` events only. The sample Paid
+  offers `cancel` as a local stop (`sampleStop`) with no provider call. On a real subscription,
+  `cancel` requests a cycle-end stop, and Razorpay's acceptance moves Paid to Stopped. In Stopped,
+  `closeStoppedAgreement` persists the intent, cancels the stopped subscription now and rereads it,
+  and creates the replacement only after a read shows it closed. An authorised replacement moves
+  Stopped to Paid with the same paid-through date. When a read shows Paid's current agreement closed
+  without a stop from Plan (the card issuer, the Test Dashboard or the Razorpay API), the helper
+  moves Paid to Stopped with the same paid-through date and an `autopay_ended` event. Plan's Stopped
+  card then says AutoPay was cancelled outside MithraDirect and offers Keep shop open. When the
+  helper itself cancelled after a halt before paid-through (only a Test-accelerated renewal gets
+  there), the event carries `reason: 'halted'` and the card says Razorpay could not collect ₹299.
+  A halt read at or after the boundary instead moves Paid or free days to Payment failed with a
+  `payment_failed` event, and Pay ₹299 returns once the halted subscription reads closed. While the
+  helper reports `collectionRetrying`, Plan's card reads only "Shop is open · AutoPay on." with no
+  date, countdown or banner.
+  A fee confirmed outside Pay ₹299 (a trial AutoPay fee that Razorpay collected, or a renewal along
+  the paid cycle) appends one `paid` event, dated at the read. When free days still run after the
+  first ₹299 was collected, for example through a Test Dashboard charge, the trial is unchanged. The
+  card and banner say that fee is paid and name the next ₹299.
+- **Chrome.** `BillingPrototypeChrome` renders `PrototypeShellBanner` (using `BillingStateBanner`)
+  under the top bar and `PrototypeHeaderButton` in place of the plan pill, keeping the Setup link.
+  Both only link to `/vendor/plan`. After a helper read error other than "unavailable", the chrome
+  keeps the last displayed state; before any state is shown there is no banner, and the header
+  falls back to "Shop plan". Plan shows the error.
+- **Removed.** The demo store-state switcher, its fixtures (`STORE_STATES` and related),
+  `demoService` and the account provider's `demo` slot. So were Plan's former local Test panel
+  (`VendorBillingLocalTest`) and sample override (`VendorBillingMockOverride`), and the billing
+  panel's `local_test` presentation branches. The provider derives
+  store state from the loaded context in both modes. `deriveStoreState`, `AccessNotice` and
+  `StoreStatusScreen` still serve live vendors.
 
 ### 3.4 The demo/live switch
 

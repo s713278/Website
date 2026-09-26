@@ -58,7 +58,8 @@ Exact resolved versions are recorded in `package-lock.json`.
 
 ## Prerequisites
 
-- Node.js 20.19 or newer; Node 22 LTS is recommended.
+- Node.js 20.19 or newer; Node 22 LTS is recommended. The local billing helper needs Node 22.18 or
+  newer, because it loads a TypeScript fixture directly.
 - npm 10 or newer.
 
 The repository uses `package-lock.json`. The committed `pnpm-workspace.yaml` is currently unused.
@@ -95,21 +96,19 @@ monthly Test plan) set in that terminal's environment. Only `rzp_test_` keys are
 helper listens on `127.0.0.1:4179`; Vite proxies its local HTTP interface during development.
 Its scenario store defaults to the ignored local file `vendor-billing-test-store.local`;
 `VENDOR_BILLING_TEST_STORE` may point to another locally excluded path. Keep Test credentials out of `VITE_*` variables and repository files.
-Plan's explicit Test switch works in demo and authenticated development sessions. Selecting a
-scenario persists its fixed sample boundaries across reload and helper restart. Pay Now asks the
-helper to create and inspect a Razorpay Test subscription, then opens hosted Test Checkout. The
-helper verifies the callback signature server-side, and each Refresh rereads the Test subscription,
-invoice and payment. Only provider-confirmed AutoPay or captured platform fees are marked
-**Razorpay Test verified**; trial and access remain locally simulated. For renewal exercises, set up
-AutoPay in the Paid sample scenario, trigger accelerated charges in the Razorpay Test Dashboard, then
-refresh Plan. Renewals and retries count only against the original billing cycle. Cancel AutoPay asks
-the helper to stop only the scenario's own Test subscription. Collection is shown stopped only after a
-Refresh reads it cancelled, and Pay Now then sets up a replacement at the same boundary. To start
-again, use **Reset Test scenario**: after confirmation it cancels only this scenario's own Test
-subscriptions and completes once Razorpay Test reads show them closed. Until then it stays pending
-with **Retry reset**. Earlier scenarios remain listed as history, and you then choose a new one.
-The [dated Plan evidence](./docs/VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)
-records which Test card and hosted Checkout steps work for this account.
+With the helper running, demo mode in development (`VITE_USE_API=false`, `npm run dev`) shows a
+six-state prototype on `/vendor/plan`: Free days, 3 days left, Paid, Payment failed, Stopped and
+Shop closed. Choosing a different state at the bottom of Plan seeds it under the helper vendor key
+`r1-prototype`, after cancelling that key's earlier Test subscriptions. Each payment action opens
+hosted Razorpay Test Checkout through the helper, and stopping or turning off AutoPay also goes
+through it. The helper verifies the callback signature server-side, and the state changes only
+after a Razorpay Test read or acceptance confirms the result; the seeded Paid sample stops locally. Without the helper, the
+states still display, but their actions are disabled. Live mode and production builds have no
+prototype. The [decision record](./docs/VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
+owns the states, and the
+[dated evidence](./docs/VENDOR_BILLING_PREVIEW.md#six-state-prototype-evidence--24-september-2026)
+records which Test card and hosted Checkout steps work for this account. Never reset or reuse the
+helper vendor `r1`, which is kept for a renewal-recovery check.
 
 `VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
 must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment

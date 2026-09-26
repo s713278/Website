@@ -767,29 +767,33 @@ describe('VendorBillingPanel', () => {
       expect(screen.getByText(/Confirmed paid coverage through/).textContent).toContain('15 Nov 2026')
     })
 
-    it('runs renewal_retry with no grace at the boundary and the original renewal date after retry', async () => {
+    it('keeps the store open while a renewal is retried, and the original renewal date after the retry succeeds', async () => {
       render(<VendorBillingPanel service={createVendorBillingMockService('paid_active')} vendorId={vendorId} />)
       fireEvent.click(await screen.findByRole('button', { name: 'Simulate renewal fee due' }))
       await screen.findByText(/is awaiting confirmation/)
-      expect(screen.getByText(/Platform fee due/).textContent).toContain('15 Nov 2026')
-      expect(screen.getByText(/Last confirmed paid coverage ended/).textContent).toContain('15 Nov 2026')
-      expect(screen.getByText(/Your paid coverage has ended. There is no grace period/)).toBeTruthy()
-      expect(screen.getByText('Limited')).toBeTruthy()
-      expect(text()).not.toMatch(/Confirmed paid|boundary still applies|first platform fee/)
+      expect(screen.getByText(/Platform fee due/).textContent).toMatch(/15 Nov 2026.*The store stays open while it is being collected, retries included\./)
+      expect(screen.getByText('Available')).toBeTruthy()
+      expect(text()).not.toMatch(/no grace period|store is hidden/)
       expect(screen.queryByRole('button', { name: 'Pay Now' })).toBeNull()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Simulate renewal failure' }))
-      await screen.findByText(/was not collected/)
-      expect(screen.getByText('Failed')).toBeTruthy()
-      expect(screen.getByText(/Payment retry is pending/)).toBeTruthy()
-      expect(text()).not.toMatch(/Confirmed paid/)
-
       fireEvent.click(screen.getByRole('button', { name: 'Simulate successful retry' }))
-      await screen.findByText(/Confirmed paid coverage through/)
+      await screen.findByText(/Next platform fee scheduled for/)
       expect(screen.getByText(/Confirmed paid coverage through/).textContent).toContain('15 Dec 2026')
       expect(screen.getByText(/Next platform fee scheduled for/).textContent).toContain('15 Dec 2026')
       expect(text()).not.toMatch(/17 Dec 2026|16 Dec 2026|Jan 2027/)
-      expect(screen.queryByRole('button', { name: /Simulate renewal|Simulate successful retry/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Simulate renewal|Simulate successful retry|Simulate collection halted/ })).toBeNull()
+    })
+
+    it('restricts access with no grace only once collection halts, offering a new paid period', async () => {
+      render(<VendorBillingPanel service={createVendorBillingMockService('paid_active')} vendorId={vendorId} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Simulate renewal fee due' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Simulate collection halted' }))
+      await screen.findByText(/Collection halted after every retry/)
+      expect(screen.getByText('Limited')).toBeTruthy()
+      expect(screen.getByText(/Your paid coverage has ended. There is no grace period/)).toBeTruthy()
+      expect(screen.getByText(/Last confirmed paid coverage ended/).textContent).toContain('15 Nov 2026')
+      expect(screen.getByText(/Your paid coverage has ended, so Pay Now starts a new subscription/)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Simulate successful retry/ })).toBeNull()
     })
 
     it.each([
@@ -806,13 +810,16 @@ describe('VendorBillingPanel', () => {
       expect(screen.queryByRole('button', { name: 'Cancel AutoPay' })).toBeNull()
     })
 
-    it('shows a pending or failed fee due at a retained paid boundary without implying grace', async () => {
+    it('shows a pending or failed fee due at a retained paid boundary: collection keeps the store open, a failure grants no grace', async () => {
       const paid = await createVendorBillingMockService('paid_active').getStatus(vendorId)
-      for (const [paymentStatus, outcome] of [['failed', 'was not collected'], ['pending', 'is awaiting confirmation']] as const) {
+      for (const [paymentStatus, outcome, after] of [
+        ['failed', 'was not collected', /15 Nov 2026.*Paid coverage still ends .*15 Nov 2026.*no grace period/],
+        ['pending', 'is awaiting confirmation', /15 Nov 2026.*The store stays open while it is being collected, retries included\./],
+      ] as const) {
         const service: VendorBillingService = { ...createVendorBillingMockService('paid_active'), getStatus: async () => ({ ...paid, membership: { ...paid.membership, paymentStatus } }) }
         const view = render(<VendorBillingPanel service={service} vendorId={vendorId} />)
         const line = await screen.findByText(new RegExp(`Platform fee due .* ${outcome}`))
-        expect(line.textContent).toMatch(/15 Nov 2026.*Paid coverage still ends .*15 Nov 2026.*no grace period/)
+        expect(line.textContent).toMatch(after)
         expect(screen.getByText('PAID')).toBeTruthy()
         expect(screen.queryByText(/Next platform fee scheduled/)).toBeNull()
         view.unmount()

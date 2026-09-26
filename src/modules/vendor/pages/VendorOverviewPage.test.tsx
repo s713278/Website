@@ -91,7 +91,6 @@ function accountFor(storeState: StoreState): VendorAccount {
     reload: () => {},
     contextStale: false,
     refreshContext: async () => { throw new Error('Context refresh is outside this test.') },
-    demo: null,
   }
 }
 

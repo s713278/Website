@@ -64,8 +64,6 @@ function accountFor(vendorId: string): VendorAccount {
     reload: () => {},
     contextStale: false,
     refreshContext: async () => { throw new Error('Context refresh is outside this test.') },
-    // Live-mode shape: the demo switcher is absent unless the API is off.
-    demo: null,
   }
 }
 

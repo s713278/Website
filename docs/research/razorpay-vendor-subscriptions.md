@@ -293,20 +293,31 @@ times remain product decisions. A trial without a mandate has no provider debit 
 Cards and UPI document an initial scheduled attempt plus retries on T+1, T+2 and T+3, then
 `halted` if unsuccessful; recovery preserves the subsequent billing schedule. eMandate retries
 wait for bank confirmation; documented holiday handling can move debit to T−1 or T−3. Manual
-charging of domestic cards is not supported by the retries guide.
-[Payment retries](https://razorpay.com/docs/payments/subscriptions/payment-retries/).
+charging of domestic cards is not supported by the retries guide. A `halted` subscription still
+raises invoices but does not charge them; it returns to `active` if the customer changes the card,
+though the FAQ also says UPI-authorised subscriptions cannot be updated.
+[Payment retries](https://razorpay.com/docs/payments/subscriptions/payment-retries/),
+[Subscriptions FAQ](https://razorpay.com/docs/payments/subscriptions/faqs/).
+
+Razorpay's Subscriptions Test guide documents cards only. The `success@razorpay` and
+`failure@razorpay` UPI IDs are documented for one-time payments; whether they authorise a Test
+UPI AutoPay subscription is unverified (checked 24 September 2026).
+[Subscriptions test guide](https://razorpay.com/docs/payments/subscriptions/test/),
+[Test UPI details](https://razorpay.com/docs/payments/payments/test-upi-details/).
 
 **Approved launch rule:** offer only methods proven by testing to meet the required timing for the
-relevant phase. Which methods pass is still an evidence gap. Before offering eMandate, establish a
-configuration that preserves the promised
+relevant phase. Cards are offered; UPI is decided but on standby, with its launch check in the
+[decision record](../VENDOR_BILLING_DECISIONS.md#upi-standby-and-switch-on).
+Before offering eMandate, establish a configuration that preserves the promised
 no-platform-fee trial and the required after-expiry payment behavior. Earlier holiday debits would
 conflict with the approved policy. Treat an unsupported timing promise as a launch-method gap.
-Backend access and recovery-period policy must remain separate from provider retries. The approved
-policy has no grace: full service stops when trial/confirmed paid coverage ends, even if collection
-or its confirmation is pending. Failed renewal must not erase existing paid coverage.
+Since 24 September 2026, a scheduled fee that is pending or being retried keeps service; only a
+`halted` collection is a failure that stops it, with no grace after that. A fee paid immediately
+after expiry still needs confirmation before access. Failed renewal must not erase existing paid
+coverage.
 
-**Approved retry policy:** when a scheduled charge succeeds on retry, restore only the remainder
-of its original billing cycle and preserve the renewal date. Do not create a new month from retry
+**Approved retry policy:** when a scheduled charge succeeds on retry, keep its original billing
+cycle and preserve the renewal date. Do not create a new month from retry
 confirmation or compensate by extending the period. Other refund cases, pause/resume and finite
 schedule completion remain product questions; ordinary cancellation has no automatic proration.
 

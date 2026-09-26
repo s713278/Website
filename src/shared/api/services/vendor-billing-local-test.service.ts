@@ -1,6 +1,21 @@
+import type { PrototypeSeed, PrototypeState } from '../fixtures/billing-prototype'
 import type { BillingAction, BillingCheckoutAttempt, VendorBillingService, VendorBillingStatus } from './vendor-billing.service'
 
-export type LocalTestScenario = 'active_trial' | 'expired_trial' | 'paid_sample'
+export type LocalTestScenario = 'active_trial' | 'expired_trial' | 'paid_sample' | PrototypeState
+
+/**
+ * `pending` is an authentic callback not yet confirmed; `turning_off` a cancellation not yet read back as closed;
+ * `ending` a cycle-end stop Razorpay Test accepted, which its reads cannot show, so only the helper's record has it.
+ */
+export type LocalTestAutoPayStatus = 'off' | 'pending' | 'on' | 'turning_off' | 'ending'
+
+/** The helper could not be reached at all, as opposed to refusing a request. */
+export class LocalTestHelperUnavailableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('Local Test helper is unavailable. Start npm run dev:billing-helper with Test credentials, then refresh Plan.', options)
+    this.name = 'LocalTestHelperUnavailableError'
+  }
+}
 
 /** How reset left one provider object recorded for the scenario; only the first three are settled. */
 export type LocalTestResetOutcome = 'closed' | 'cancelled_by_reset' | 'never_created'
@@ -34,6 +49,19 @@ export interface LocalTestScenarioState {
   objectCount: number
   reset: { requestedAt: string; objects: LocalTestResetObject[] } | null
   history: LocalTestHistoryEntry[]
+  /** Helper time of this read; relative dates are derived from it. */
+  serverTime: string | null
+  /** The current generation's seeded dates. */
+  seed: PrototypeSeed | null
+  /** The current AutoPay agreement as this read found it at Razorpay Test. */
+  autoPay: { status: LocalTestAutoPayStatus; chargeAt: string | null } | null
+  /**
+   * The platform fee as this read found it; `verified` once Razorpay Test has shown a ₹299 captured, and `retrying`
+   * through the collection retry period, when the boundary has passed but Razorpay is still collecting.
+   */
+  payment: { status: LocalTestRecord['paymentStatus']; verified: boolean; nextChargeAt: string | null; retrying: boolean } | null
+  /** The billing actions the helper offers now; none after a read that missed the provider. */
+  actions: BillingAction[]
 }
 
 interface LocalTestRecord {
@@ -48,9 +76,15 @@ interface LocalTestRecord {
   trialStatus: VendorBillingStatus['trial']['status']
   trialEndsAt: string
   paidThrough: string | null
+  /** Seeded by prototype states only. */
+  autoPay?: PrototypeSeed['autoPay']
+  failedPaymentAt?: string | null
+  events?: PrototypeSeed['events']
   daysRemaining: number
   accessStatus: VendorBillingStatus['accessStatus']
   storeVisible: boolean
+  /** The boundary has passed but Razorpay is still collecting the scheduled fee, so service continues. Absent on older records. */
+  collectionRetrying?: boolean
   nextChargeAt: string | null
   availableActions: BillingAction[]
   authorisationStatus: 'not_configured' | 'pending' | 'confirmed' | 'failed' | 'revoked'
@@ -61,6 +95,8 @@ interface LocalTestRecord {
     status: NonNullable<VendorBillingStatus['cancellation']>['status']
     /** `requested` is unanswered by Razorpay Test; `acknowledged` is an accepted immediate stop not yet read back. */
     stage: CancellationStage; mode: 'immediate' | 'cycle_end'; requestedAt: string; effectiveAt: string | null
+    /** `halted` when the helper cancelled after Razorpay halted collection; absent on older records. */
+    reason?: 'halted' | null
   } | null
   /** Whether this read reached Razorpay Test; an unavailable read keeps the recorded results. */
   providerCheck: 'current' | 'unavailable' | 'deferred' | 'not_checked'
@@ -72,7 +108,7 @@ interface LocalTestRecord {
     renewals?: FeePeriod[]
     /** Razorpay Test's latest due fee after confirmed coverage, or a paid charge it did not count. */
     renewal?: { dueAt: string; status: 'pending' | 'failed' | null; problem: 'uncounted' | null } | null
-    /** Razorpay Test's latest subscription status after a confirmed fee; confirmed coverage survives any of them. */
+    /** Razorpay Test's latest subscription status; confirmed coverage survives any of them. */
     providerStatus?: string
     cancellation?: { state: CancellationStage; effectiveAt: string | null } | null
   }>
@@ -101,7 +137,7 @@ async function helperRequest(vendorId: string, operation: string, payload?: obje
     return body
   } catch (error) {
     if (error instanceof TypeError || error instanceof SyntaxError) {
-      throw new Error('Local Test helper is unavailable. Start npm run dev:billing-helper with Test credentials, then refresh Plan.', { cause: error })
+      throw new LocalTestHelperUnavailableError({ cause: error })
     }
     throw error
   }
@@ -164,14 +200,14 @@ function renewalSummary(record: LocalTestRecord): string[] {
   const { renewal, providerStatus } = paid
   const helperCancelled = paid.cancellation?.state === 'confirmed'
   return [
-    renewal?.status === 'failed' ? `Razorpay Test shows the platform fee due ${displayDate(renewal.dueAt)} failed; paid coverage is not extended until that same fee is collected.`
-      : renewal?.status === 'pending' ? `Razorpay Test shows the platform fee due ${displayDate(renewal.dueAt)} issued but not yet collected.` : null,
+    renewal?.status === 'failed' ? `Razorpay Test halted collection of the platform fee due ${displayDate(renewal.dueAt)} after every retry, so the fee failed and paid coverage is not extended.`
+      : renewal?.status === 'pending' ? `Razorpay Test shows the platform fee due ${displayDate(renewal.dueAt)} issued but not yet collected. Service continues while Razorpay collects it, retries included.` : null,
     renewal?.problem ? 'Razorpay Test shows a charge that is not the next original billing cycle, so it is not counted and the renewal date is unchanged.' : null,
     helperCancelled ? null
       : providerStatus === 'cancelled' ? 'Razorpay Test shows this subscription cancelled outside this Plan page, for example in the Test Dashboard or by the card issuer; no further platform fee can be collected. Confirmed coverage is kept.'
       : providerStatus === 'expired' ? 'Razorpay Test shows this subscription expired; no further platform fee can be collected. Confirmed coverage is kept.'
       : providerStatus === 'completed' ? 'Razorpay Test shows this finite Test schedule completed; no further platform fee is scheduled. Confirmed coverage is kept.'
-        : providerStatus === 'halted' ? 'Razorpay Test shows collection halted after failed retries. Confirmed coverage is kept.' : null,
+        : providerStatus === 'halted' ? 'Razorpay Test shows collection halted after failed retries, so the local helper cancels this subscription. Confirmed coverage is kept.' : null,
   ].filter((line): line is string => Boolean(line))
 }
 
@@ -182,6 +218,11 @@ function cancellationSummary(record: LocalTestRecord): string[] {
   const lines = replaced.map((attempt) => `An earlier Test AutoPay agreement was cancelled at your request${attempt.cancellation?.effectiveAt ? ` as of ${displayDate(attempt.cancellation.effectiveAt)}` : ''}; a new AutoPay setup replaces it.`)
   const { cancellation } = record
   if (!cancellation) return lines
+  if (cancellation.reason === 'halted') {
+    return [...lines, cancellation.stage === 'confirmed'
+      ? 'Razorpay Test shows this subscription cancelled by the local helper after collection halted. A cancellation is not a refund; no refund was requested.'
+      : 'Razorpay Test halted collection after every retry, so the local helper asked it to cancel this subscription. It is shown cancelled only once a status read confirms it.']
+  }
   return [...lines, {
     requested: 'Your cancellation request is recorded, but Razorpay Test has not confirmed receiving it, so AutoPay may still collect. Refresh billing status; Cancel AutoPay retries the same request.',
     acknowledged: 'Razorpay Test accepted the request to stop AutoPay now. It is shown cancelled only once a status read confirms it.',
@@ -215,12 +256,28 @@ function toStatus(record: LocalTestRecord): VendorBillingStatus {
   }
 }
 
+function autoPayOf(record: LocalTestRecord): NonNullable<LocalTestScenarioState['autoPay']> {
+  const stage = record.cancellation?.stage
+  if (stage === 'requested' || stage === 'acknowledged') return { status: 'turning_off', chargeAt: record.nextChargeAt }
+  if (stage === 'scheduled') return { status: 'ending', chargeAt: null }
+  if (record.authorisationStatus === 'confirmed') return { status: 'on', chargeAt: record.nextChargeAt }
+  return { status: record.authorisationStatus === 'pending' ? 'pending' : 'off', chargeAt: null }
+}
+
 function toScenarioState({ record, history }: HelperReply): LocalTestScenarioState {
   return {
     scenario: record?.scenario ?? null, generation: record ? record.generation ?? 1 : null,
     objectCount: record?.attempts.filter((attempt) => attempt.associationId || attempt.state === 'provider_requested').length ?? 0,
     reset: record?.reset ? { requestedAt: record.reset.requestedAt, objects: record.reset.objects } : null,
     history: history ?? [],
+    serverTime: record?.serverTime ?? null,
+    seed: record ? { trialEndsAt: record.trialEndsAt, paidThrough: record.paidThrough, autoPay: record.autoPay ?? 'none', failedPaymentAt: record.failedPaymentAt ?? null, events: record.events ?? [] } : null,
+    // Records saved before the status fields existed read as AutoPay off with no actions.
+    autoPay: record?.authorisationStatus ? autoPayOf(record) : null,
+    payment: record?.paymentStatus ? {
+      status: record.paymentStatus, verified: record.providerVerified.coverage, nextChargeAt: record.nextChargeAt, retrying: record.collectionRetrying ?? false,
+    } : null,
+    actions: record?.availableActions ? toStatus(record).availableActions : [],
   }
 }
 

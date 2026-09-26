@@ -1120,8 +1120,8 @@
             "payment_status": "pending",
             "paid_through": "2026-11-15T10:00:00Z",
             "next_charge_at": "2026-11-15T10:00:00Z",
-            "access_status": "PAYMENT_REQUIRED",
-            "store_visible": false,
+            "access_status": "PAID",
+            "store_visible": true,
             "available_actions": [
               "cancel"
             ],
@@ -1138,7 +1138,7 @@
       }
     },
     "renewal_failed": {
-      "timestamp": "2026-11-15T10:00:00Z",
+      "timestamp": "2026-11-18T10:00:00Z",
       "success": true,
       "status": 200,
       "data": {
@@ -1178,18 +1178,18 @@
             "revision": 9,
             "trial_status": "ended",
             "trial_days_remaining": 0,
-            "autopay_status": "confirmed",
+            "autopay_status": "revoked",
             "payment_status": "failed",
             "paid_through": "2026-11-15T10:00:00Z",
-            "next_charge_at": "2026-11-15T10:00:00Z",
+            "next_charge_at": null,
             "access_status": "PAYMENT_REQUIRED",
             "store_visible": false,
             "available_actions": [
-              "cancel"
+              "pay_first_fee"
             ],
             "cancellation": null,
             "refund": null,
-            "notice": "Payment retry is pending; refresh for its outcome."
+            "notice": "Collection halted after every retry, so AutoPay was cancelled. Pay the monthly fee to restore service."
           }
         },
         "eligible_features": [
@@ -2392,7 +2392,6 @@
       "contexts": [
         "paid_active",
         "renewal_pending",
-        "renewal_failed",
         "retry_recovered"
       ]
     },
@@ -2411,6 +2410,14 @@
         "refund_owed",
         "refund_pending",
         "refund_failed"
+      ]
+    },
+    {
+      "name": "renewal_halted",
+      "contexts": [
+        "paid_active",
+        "renewal_pending",
+        "renewal_failed"
       ]
     }
   ]

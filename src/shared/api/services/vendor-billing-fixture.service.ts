@@ -18,12 +18,15 @@ const CANCELLATION_STEPS: Partial<Record<BillingFixtureScenario, Partial<Record<
   refund_owed: { refund_started: 'refund_pending' },
   refund_pending: { refund_completed: 'refund_completed', refund_failed: 'refund_failed' },
 }
-/** The dataset's renewal_retry journey. Renewal periods come from the contexts, never from the retry time. */
+/**
+ * The dataset's renewal_retry and renewal_halted journeys. While a renewal is retried the store stays open; a retry
+ * that succeeds keeps the original cycle, and a halt after every retry is the failure. Renewal periods come from the
+ * contexts, never from the retry time.
+ */
 const RENEWAL_STEPS: Partial<Record<BillingFixtureScenario, Partial<Record<SimulatedRenewalStep, BillingFixtureScenario>>>> = {
   paid_active: { renewal_due: 'renewal_pending' },
   paid_after_expiry: { renewal_due: 'renewal_pending' },
-  renewal_pending: { renewal_failed: 'renewal_failed' },
-  renewal_failed: { renewal_retry_confirmed: 'retry_recovered' },
+  renewal_pending: { renewal_retry_confirmed: 'retry_recovered', renewal_failed: 'renewal_failed' },
 }
 /** A paid replacement's pending context; other setups use the generic trial-setup context. */
 const REPLACEMENT_PENDING: Partial<Record<BillingFixtureScenario, BillingFixtureScenario>> = {

@@ -36,7 +36,7 @@ const SIMULATED_STEP_LABELS: Record<SimulatedCancellationStep, string> = {
 
 const SIMULATED_RENEWAL_LABELS: Record<SimulatedRenewalStep, string> = {
   renewal_due: 'Simulate renewal fee due',
-  renewal_failed: 'Simulate renewal failure',
+  renewal_failed: 'Simulate collection halted',
   renewal_retry_confirmed: 'Simulate successful retry',
 }
 
@@ -433,7 +433,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
   const paymentPending = status.authorisation.status === 'pending' || status.membership.paymentStatus === 'pending'
   const canCancel = status.availableActions.includes('cancel')
   const retained = retainedBoundary(status)
-  const simulated = status.source !== 'backend' && status.source !== 'local_test'
+  const simulated = status.source !== 'backend'
   const simulatedSteps = simulated && service.simulateCancellationProgress ? simulatedCancellationSteps(status) : []
   const renewalSteps = simulated && service.simulateRenewalProgress ? status.simulatedRenewalSteps ?? [] : []
   // Without retained trial or paid access, a pending or failed fee grants nothing: there is no grace period.
@@ -441,8 +441,6 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
   const feeOutcomeOutstanding = !retained && feeUnsettled
   // An early renewal attempt that has not succeeded leaves coverage at its confirmed end, not beyond it.
   const feeDueDuringCoverage = retained?.kind === 'paid' && feeUnsettled
-  // A local Test paid boundary is provider-confirmed only after a verified fee; before that it is sample data.
-  const sampleCoverage = status.source === 'local_test' && !status.providerVerified?.coverage
   const mutationsBlocked = busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()
 
   return (
@@ -453,9 +451,8 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
           <div>
             <h2 className="font-display text-xl font-semibold">Your platform membership</h2>
             <p className="mt-1 text-sm text-muted-foreground">{status.plan.name}</p>
-            {status.source !== 'backend' && status.source !== 'local_test' ? <Badge tone="warning">Simulated billing</Badge> : null}
+            {simulated ? <Badge tone="warning">Simulated billing</Badge> : null}
             {status.source === 'preview' ? <Badge>Razorpay Test Mode preview</Badge> : null}
-            {status.source === 'local_test' ? <Badge tone="warning">Local Test scenario · trial and access simulated</Badge> : null}
           </div>
           <p className="font-display text-2xl font-semibold">{displayMoney(status.plan.amountMinor)}<span className="text-sm font-normal text-muted-foreground"> / month</span></p>
         </div>
@@ -470,10 +467,12 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
         {status.trial.status === 'ended' && status.accessStatus !== 'PAID' ? <p>{status.membership.paidThrough
           ? 'Your paid coverage has ended. There is no grace period.'
           : 'Your trial has ended. Paid membership requires confirmation of the first platform fee.'}</p> : null}
-        {status.membership.paidThrough ? <p>{status.source !== 'local_test' ? (status.accessStatus === 'PAID' ? 'Confirmed paid coverage through' : 'Last confirmed paid coverage ended')
-          : `${sampleCoverage ? 'Sample paid coverage' : 'Razorpay Test verified fee period'} ${status.accessStatus === 'PAID' ? 'through' : 'ended'}`} {displayDate(status.membership.paidThrough)}.</p> : null}
+        {status.membership.paidThrough ? <p>{status.accessStatus === 'PAID' ? 'Confirmed paid coverage through' : 'Last confirmed paid coverage ended'} {displayDate(status.membership.paidThrough)}.</p> : null}
         {status.membership.nextChargeAt ? <p>{feeOutcomeOutstanding || feeDueDuringCoverage
-          ? `Platform fee due ${displayDate(status.membership.nextChargeAt)} ${status.membership.paymentStatus === 'pending' ? 'is awaiting confirmation' : 'was not collected'}.${feeDueDuringCoverage && retained ? ` Paid coverage still ends ${displayDate(retained.at)}; there is no grace period after it.` : ''}`
+          ? `Platform fee due ${displayDate(status.membership.nextChargeAt)} ${status.membership.paymentStatus === 'pending' ? 'is awaiting confirmation' : 'was not collected'}.${
+            // A scheduled fee still being collected keeps the store open until collection halts; a fee paid now does not.
+            status.membership.paymentStatus === 'pending' ? (status.storeVisible ? ' The store stays open while it is being collected, retries included.' : '')
+              : feeDueDuringCoverage && retained ? ` Paid coverage still ends ${displayDate(retained.at)}; there is no grace period after it.` : ''}`
           : `Next platform fee scheduled for ${displayDate(status.membership.nextChargeAt)}.`}</p> : null}
         <div aria-live="polite" className="grid gap-5 empty:hidden">
         {status.cancellation ? <section aria-label="Cancellation progress" className="grid gap-1 rounded-lg border p-4 text-sm">
@@ -503,21 +502,21 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
           <p className="text-muted-foreground">The amount is the total across every unintended fee. Refunds never add access or change your coverage dates.</p>
         </section> : null}
         </div>
-        {!status.storeVisible ? <p>{status.source === 'local_test' ? 'Local demonstration only: a restricted vendor\'s store is hidden from the marketplace and new orders are blocked.' : 'The store is hidden from the marketplace and new orders are blocked.'} Billing and account remain available{status.capabilities.includes('ORDERS') ? '; existing orders can still be viewed' : ''}{status.capabilities.includes('FULFILL_EXISTING_ORDERS') ? ' and orders placed before expiry can still be fulfilled' : ''}.{status.source === 'local_test' ? ' This Test scenario does not gate your real storefront or vendor operations.' : ''}</p> : null}
+        {!status.storeVisible ? <p>The store is hidden from the marketplace and new orders are blocked. Billing and account remain available{status.capabilities.includes('ORDERS') ? '; existing orders can still be viewed' : ''}{status.capabilities.includes('FULFILL_EXISTING_ORDERS') ? ' and orders placed before expiry can still be fulfilled' : ''}.</p> : null}
         {status.notice ? <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">{status.notice}</p> : null}
         {canSetup ? <div className="grid gap-3 border-t pt-5">
           <p className="text-sm">{retained?.kind === 'paid'
-            ? `Pay Now sets up AutoPay again for your paid membership. No fee is taken today: the next ${displayMoney(status.plan.amountMinor)} platform fee is scheduled for ${displayDate(retained.at)}, when your ${sampleCoverage ? 'sample' : 'confirmed'} paid coverage ends. There is no new trial and no duplicate fee.`
+            ? `Pay Now sets up AutoPay again for your paid membership. No fee is taken today: the next ${displayMoney(status.plan.amountMinor)} platform fee is scheduled for ${displayDate(retained.at)}, when your confirmed paid coverage ends. There is no new trial and no duplicate fee.`
             : <>{status.authorisation.status === 'failed' ? 'Pay Now retries the failed AutoPay setup during your existing trial.'
               : status.authorisation.status === 'revoked' ? 'Pay Now sets up AutoPay again during your existing trial; it does not start a new trial.'
                 : 'Pay Now sets up AutoPay during your existing trial.'} The first monthly platform fee is scheduled for {status.trial.endsAt ? displayDate(status.trial.endsAt) : 'the end of your confirmed coverage'}; all remaining trial days stay yours.</>}</p>
           <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} onClick={() => prepare('setup_autopay')}>Pay Now</Button>
         </div> : null}
         {canPayFirstFee ? <div className="grid gap-3 border-t pt-5">
-          <p className="text-sm">{status.membership.paymentStatus === 'failed'
-            ? `Pay Now retries the failed first ${displayMoney(status.plan.amountMinor)} platform fee. It is collected now; paid access begins only after that fee is confirmed.`
-            : status.membership.paidThrough
-              ? `Your paid coverage has ended, so Pay Now starts a new subscription. The ${displayMoney(status.plan.amountMinor)} platform fee is collected now; paid access returns only after that fee is confirmed. No new trial is offered.`
+          <p className="text-sm">{status.membership.paidThrough
+            ? `Your paid coverage has ended, so Pay Now starts a new subscription. The ${displayMoney(status.plan.amountMinor)} platform fee is collected now; paid access returns only after that fee is confirmed. No new trial is offered.`
+            : status.membership.paymentStatus === 'failed'
+              ? `Pay Now retries the failed first ${displayMoney(status.plan.amountMinor)} platform fee. It is collected now; paid access begins only after that fee is confirmed.`
               : `Pay Now starts an immediate subscription. The first ${displayMoney(status.plan.amountMinor)} platform fee is collected now; paid access begins only after that fee is confirmed.`}</p>
           <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} onClick={() => prepare('pay_first_fee')}>Pay Now</Button>
         </div> : null}

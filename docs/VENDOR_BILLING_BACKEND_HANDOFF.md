@@ -34,14 +34,18 @@ verified that day against a fresh dev vendor taken through go-live.
    example does. The frontend will not multiply by 100: if 2.99 comes from a Razorpay plan created
    with `amount: 299` (paise), Razorpay would also charge ₹2.99. Razorpay plan amounts must be in paise
    (`29900`).
-3. **Timezones on every timestamp.** The envelope `timestamp` is returned without an offset (it is
-   IST, for example `2026-09-24T12:54:05.110441213`), and the OpenAPI example omits it on `trial` and
-   `updated_at` too. Live `trial.*` and `updated_at` already carry one, in two forms (`+05:30` before
-   go-live, `Z` after). Billing refuses dates it cannot place in time; return `Z` or an offset on all
-   of them.
-4. **`updated_at` must be the latest change.** One existing vendor's response had `updated_at` a day
-   before `trial.started_at`; a fresh go-live was consistent. It should move forward whenever any
-   billing field changes, so a stale read can never replace a newer one.
+3. **IST with `+05:30` on every timestamp.** The envelope `timestamp` is returned without an offset
+   (it is IST, for example `2026-09-24T12:54:05.110441213`), and the OpenAPI example omits it on
+   `trial` and `updated_at` too. Live `trial.*` and a stored `updated_at` use `Z`; `updated_at` before
+   go-live uses `+05:30`. MithraDirect operates only in India, so return every timestamp, including
+   the envelope, in IST with its offset (`2026-10-08T08:46:30+05:30`). Billing refuses dates it
+   cannot place in time; the frontend also accepts `Z`, but never a time without an offset.
+4. **`updated_at` is the last real change.** It should be a stored value that moves forward only when
+   a subscription or billing field changes, including trial start, so a stale read can never replace a
+   newer one once billing writes exist. Today, before go-live it is generated on every read (three
+   reads 8 s apart returned three values), and one existing trial vendor's value is exactly 24 h before
+   `trial.started_at`; a fresh go-live was consistent. Before a subscription exists, return `null` or
+   omit it rather than the current time.
 5. **Define `days_remaining`.** A vendor who had just gone live, with exactly 14 days left, got `13`.
    Count whole days
    **rounded up** to `trial.ends_at` from server time: 14 on the first day, `1` in the final 24 hours,
@@ -264,19 +268,24 @@ agreement. Honour `success: false` even in HTTP 200 and refresh context before o
 The [product decisions](./VENDOR_BILLING_DECISIONS.md) are unchanged: approval-triggered independent
 trial, optional AutoPay at its original end, immediate signup after expiry, no grace, retained
 existing-order fulfilment, cancellation with retained coverage, full refund of an unintended fee
-after timely cancellation, and rejoining/retry without resetting the billing boundary.
+after timely cancellation, and rejoining/retry without resetting the billing boundary. On
+24 September 2026 they were amended: UPI is decided alongside cards (on standby until an account can enable it), and a scheduled fee still
+pending or retrying keeps service until its collection halts
+([UPI and collection retries](./VENDOR_BILLING_DECISIONS.md#upi-and-collection-retries--24-september-2026)).
 
 The backend must persist and enforce those rules, reconcile callbacks/webhooks/jobs, prevent
-duplicate chargeable subscriptions/refunds, and expose the resulting context. Failed renewal is
-shown with `payment_status: failed` while the original `paid_through` is retained; a successful retry
-restores coverage only to the original cycle end. Pending authorisation and pending refunds cannot
+duplicate chargeable subscriptions/refunds, and expose the resulting context. A retrying scheduled
+fee is `payment_status: pending` with service kept. Only a halted collection is
+`payment_status: failed`, shown while the original `paid_through` is retained; the backend then
+cancels that subscription. A successful retry keeps the original cycle end. Pending authorisation and pending refunds cannot
 grant access. [API gaps](./API_GAPS.md#backend-acceptance-evidence-before-production-wiring) owns the
 server acceptance checklist.
 
 The 33 context fixtures include the unextended current response, ineligibility and all previous
 trial/payment/renewal/cancellation/refund/rejoining scenarios. `authorisation_revoked_paid` is the
 paid-coverage variant of `authorisation_revoked` and uses only existing fields. Four preparation examples, 12 errors
-and seven journeys remain. Feed `contexts.<scenario>` through the proposed context/billing mapper;
+and eight journeys remain; on 25 September `renewal_retry` was split so a retried renewal keeps the store open and
+`renewal_halted` ends in the halted failure. Feed `contexts.<scenario>` through the proposed context/billing mapper;
 stamp mock/demo/preview/backend provenance in the service, not the wire payload. Preserve the complete
 envelope and unrelated context fields. Missing `billing` means billing unavailable, never a granted
 trial or payment; the current context must still load the existing vendor dashboard normally.

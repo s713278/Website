@@ -130,7 +130,7 @@ server jobs; the frontend currently has no real billing writes.
 | Request cancellation and read its outcome | Authenticate ownership, record/deduplicate receipt and stop future collection while retaining existing coverage. Acknowledge the write; requested/scheduled/confirmed/failed progress and refund state return through refreshed vendor context. Reconcile timeouts/concurrent charges; request receipt alone does not prove cancellation. A Razorpay subscription read does not show an accepted cycle-end stop (`charge_at` unchanged, `has_scheduled_changes` false; [Test Mode observation, 23 September 2026](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)), so the backend must persist the accepted cancellation itself or reconcile it from webhooks. |
 | Reconcile and refund a debit despite timely cancellation | Persist the authenticated cancellation's backend receipt time and original access boundary. If the request preceded that boundary but the next monthly fee was collected, record a full-refund obligation against that charge and reconcile refund progress idempotently. Return pending/completed/failed outcomes separately from cancellation and access; no instant-refund guarantee. Backend must define the refund contract and operational recovery. |
 | Provider webhook ingress | Validate raw-body signature with a separate webhook secret; durably receive, deduplicate and reconcile events to the same billing records used by callback verification. This is not a browser redirect endpoint. |
-| Trial grant, expiry and reminder jobs | Atomically claim the identity's trial once onboarding and approval both qualify; persist the original start/expiry. Enforce the access boundary without grace, using server time even with no browser session. Deduplicate reminders; distinguish setup needed, confirmed future billing and cancellation. Channels/times await product decisions. |
+| Trial grant, expiry and reminder jobs | Atomically claim the identity's trial once onboarding and approval both qualify; persist the original start/expiry. Enforce the access boundary without grace, using server time even with no browser session; a scheduled fee still pending or retrying keeps service until its collection halts. Deduplicate reminders; distinguish setup needed, confirmed future billing and cancellation. Channels/times await product decisions. |
 | Recover an interrupted billing attempt or rejoin after cancellation | Reconcile created, authenticated, charge-pending, expired and cancelled provider objects before retry/replacement. Rejoining during retained trial/paid coverage is allowed at that same expiry, without a new trial or duplicate fee. Setup crossing expiry must not silently change the schedule or leave two debit-capable subscriptions. |
 
 Backend should return meaningful ownership/eligibility errors, already-subscribed/conflicting-attempt
@@ -185,9 +185,11 @@ provider fields and restrictions. At minimum:
    pre-start cancellation. Establish paid membership from confirmed platform-fee coverage. A fee
    charged earlier than the promised date is a discrepancy to reconcile, not permission to
    forfeit trial days. After unpaid expiry, immediate signup requires confirmed payment before
-   restored access. There is no grace for an authorised but delayed/failed first or renewal charge:
-   full service stops at the end of trial/confirmed paid coverage, with existing-order fulfillment
-   and payment recovery retained. Browser pending state cannot grant an extension.
+   restored access. A scheduled first or renewal fee that the provider reports pending or retrying
+   keeps service through its collection retry period; only a `halted` collection is a failed
+   platform fee. Then full service stops with no grace, existing-order fulfillment and payment
+   recovery are retained, and the backend cancels the halted subscription. A cancellation during
+   the retry period stops service immediately. Browser pending state cannot grant an extension.
 6. Track recurring charged/pending/halted/cancelled/completed/paused/resumed/updated states separately
    from entitlement. Failed renewal or cancellation must not erase a period already paid for.
    Cancellation confirmation must not be undone by an old authenticated/active webhook. A real
@@ -195,8 +197,9 @@ provider fields and restrictions. At minimum:
    as stale. A next-period fee collected despite a timely cancellation must be refunded in full
    without extending access. Ordinary cancellation retains paid coverage without automatic
    proration. Other refund cases remain open.
-7. A successful retry of a scheduled first/renewal fee restores only the remainder of its original
-   billing cycle. Reconcile the charge's invoice/period rather than calculating a new month from
+7. A successful retry of a scheduled first/renewal fee keeps its original billing cycle.
+   Recovery after a halt is a new immediate-start signup whose period begins at confirmation; the
+   unpaid retry days are not billed. Reconcile the charge's invoice/period rather than calculating a new month from
    callback or retry time. Do not append interrupted days or extend coverage twice; a stale
    successful charge for a period already ended cannot grant current access.
 
@@ -248,8 +251,9 @@ payment schedule and obtain the vendor's explicit agreement before a replacement
 Payment methods must be validated for the required dates: a future `start_at` alone does not
 guarantee the exact debit/confirmation time for every method.
 
-Current development is scoped to **Test cards**, with eMandate excluded and UPI deferred; the
-[decision record](./VENDOR_BILLING_DECISIONS.md#current-test-mode-method-scope) owns the rationale.
+Cards are offered, UPI is decided but on standby, and eMandate is excluded; the
+[decision record](./VENDOR_BILLING_DECISIONS.md#upi-standby-and-switch-on) owns the rationale, the
+account prerequisite and UPI's launch check. The current Test implementation is cards-only.
 Use the existing account's Subscriptions settings and verify the hosted method set, immediate
 signup and future-start authorisation. No custom method selector or all-method matrix is needed
 for this iteration. Existing Test observations do not establish production bank behavior. Before
@@ -295,8 +299,9 @@ displays example reminder states and sends no notifications.
 - First-charge/renewal failures, delayed confirmations, near-expiry setup, method-specific token
   transactions and debit dates are measured separately from access. Confirm no-grace expiry and
   retained existing-order fulfillment and the timely-cancellation refund rule.
-- A retry succeeding two days into the original cycle restores only its remaining time and keeps
-  its original renewal date. Duplicate charge events cannot add another period. Ordinary paid
+- A scheduled fee pending or retrying past the boundary keeps service; its `halted` collection
+  stops service and cancels that subscription; a cancellation during retries stops service at once.
+- A retry succeeding two days into the original cycle keeps service and its original renewal date. Duplicate charge events cannot add another period. Ordinary paid
   cancellation retains that cycle without an automatic prorated refund.
 - Only methods proven to meet timing requirements are offered for the corresponding phase;
   unsupported methods cannot bypass that restriction through another Checkout entry point.

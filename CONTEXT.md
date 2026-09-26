@@ -209,3 +209,14 @@ _Avoid_: cancellation date, next payment (as an access boundary)
 A vendor's decision to stop future platform-fee collection while retaining any remaining
 trial entitlement or already-paid period.
 _Avoid_: delete store, immediate loss of access, refund
+
+**Collection retry period**:
+The days after a scheduled platform fee is first missed while it is still being collected
+from the vendor's chosen payment method. Service continues throughout; a missed attempt is
+not yet a failure.
+_Avoid_: grace period, payment failed, overdue
+
+**Failed platform fee**:
+A scheduled platform fee that can no longer be collected because every collection attempt
+has been used up. Only this, not a pending or retrying fee, restricts the vendor's service.
+_Avoid_: missed payment, declined attempt, membership cancellation

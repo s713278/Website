@@ -3,12 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
-  demoService,
+  configureApiClient,
   mapVendorContext,
   vendorOnboardingService,
   vendorOrdersService,
@@ -21,9 +22,6 @@ import type { VendorContext } from '@/shared/api'
 
 beforeEach(() => {
   invalidateVendorContext()
-  vi.spyOn(demoService, 'isDemo').mockReturnValue(false)
-  vi.spyOn(demoService, 'storeStateKey').mockReturnValue('OPEN')
-  vi.spyOn(demoService, 'select').mockImplementation(() => {})
   vi.stubEnv('DEV', false)
   vi.spyOn(vendorOrdersService, 'list').mockResolvedValue({
     orders: [], page: 0, totalPages: 0, totalElements: 0, lastPage: true,
@@ -48,16 +46,13 @@ afterEach(() => {
   useAuthStore.getState().clearSession()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+  resetBillingPrototypeState()
 })
 
 function AccountReading() {
-  const { context, demo } = useVendorAccount()
-  return (
-    <>
-      <output aria-label="Account approval">{context.approvalStatus}</output>
-      {demo ? <button onClick={() => demo.select('UNDER_REVIEW')}>Show under review</button> : null}
-    </>
-  )
+  const { context } = useVendorAccount()
+  return <output aria-label="Account approval">{context.approvalStatus}</output>
 }
 
 function BillingAccountReading() {
@@ -120,15 +115,22 @@ describe('VendorAccountProvider store state', () => {
     expect(screen.queryByRole('link', { name: 'Continue setup' })).toBeNull()
   })
 
-  it('keeps the demo under-review screen reachable when the selection changes', async () => {
-    vi.spyOn(demoService, 'isDemo').mockReturnValue(true)
-    renderContext('ACTIVE', 'PENDING', 10)
+  it('opens the seeded demo store as approved and active, with no store-state switch', async () => {
+    vi.stubEnv('VITE_USE_API', 'false')
+    configureApiClient({ useApi: false })
+    // Overview's DEV plan card reads the local helper; keep it off the network, as if the helper were down.
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    render(
+      <MemoryRouter>
+        <VendorAccountProvider>
+          <AccountReading />
+          <VendorOverviewPage />
+        </VendorAccountProvider>
+      </MemoryRouter>,
+    )
+
     expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show under review' }))
-
-    expect(screen.getByRole('heading', { name: 'Awaiting approval' })).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'What needs doing' })).toBeNull()
+    expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
   })
 
   it.each([1, 5, 7, 10])('offers setup for an active approved store still at step %i', async (nextStep) => {
