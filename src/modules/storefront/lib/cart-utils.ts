@@ -134,7 +134,7 @@ export function priceDetailsFromSummary(summary: CartSummary) {
     service: summary.serviceCharge,
     packaging: 0,
     total: summary.grandTotal,
-    itemCount: summary.totalQuantity,
+    itemCount: summary.itemsCount,
     lineCount: summary.itemsCount,
   }
 }

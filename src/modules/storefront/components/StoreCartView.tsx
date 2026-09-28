@@ -127,7 +127,9 @@ export function StoreCartView({
                 <h2 className="text-base font-bold text-slate-900">Price Details</h2>
                 <dl className="mt-4 space-y-2.5 text-sm">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-600">Subtotal ({itemCount} items)</dt>
+                    <dt className="text-slate-600">
+                      Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                    </dt>
                     <dd className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</dd>
                   </div>
                   {totals.delivery > 0 ? (

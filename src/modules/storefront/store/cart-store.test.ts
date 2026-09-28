@@ -79,4 +79,10 @@ describe('cart store SKU lines', () => {
     expect(left[0]?.skuId).toBe('102')
     expect(left[0]?.qty).toBe(2)
   })
+
+  it('counts unique SKU lines, not summed quantity', () => {
+    useCartStore.getState().addItem('91', 'Shop', pickle, small, 1)
+    useCartStore.getState().addItem('91', 'Shop', pickle, large, 2)
+    expect(useCartStore.getState().itemCount('91')).toBe(2)
+  })
 })

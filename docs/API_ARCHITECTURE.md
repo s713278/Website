@@ -363,7 +363,8 @@ parallel cart wrapper is not used by this path.
 
 `useCartStore` persists lines and summaries per vendor under `md-cart`; replacing one vendor's cart
 retains other vendors' lines. Lines are keyed by SKU, so two sizes of the same product stay
-independent. After login, `syncVendorCart` always replaces that vendor from the server — leftover
+independent. Header, cart bar, cart page, and checkout **item counts** use unique SKU lines
+(`items_count`), not summed quantity (`total_quantity`) — same as order success/detail. After login, `syncVendorCart` always replaces that vendor from the server — leftover
 `md-cart` names from the previous session are not kept. Line labels come from the catalog SKU
 (or the size just tapped), not from an older local name. Trace this orchestration when changing
 cart behavior.
