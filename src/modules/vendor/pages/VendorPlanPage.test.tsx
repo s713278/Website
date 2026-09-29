@@ -961,6 +961,209 @@ describe('VendorPlanPage', () => {
       })
     })
 
+    describe('Staying current', () => {
+      /** Lets pending promises and timers due within `ms` run. */
+      const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+      const focus = () => act(async () => { window.dispatchEvent(new Event('focus')) })
+      const day = 24 * 60 * 60 * 1000
+      const autoPayOn = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+
+      beforeEach(() => {
+        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+        vi.useRealTimers()
+        vi.useFakeTimers()
+        vi.setSystemTime(daysBeforeEnd(12.5))
+      })
+
+      it('rereads when the window regains focus', async () => {
+        const reads = stubReads(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('13')).toBeTruthy()
+        reads.readSubscription.mockImplementation(async () => autoPayOn())
+        await focus()
+        await wait()
+        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
+      })
+
+      it('rereads at T, so free days turn into Shop closed at that moment', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        const reads = stubReads(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('3')).toBeTruthy()
+        await wait(Date.parse(trialEnd) - Date.now() - 1)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        expect(screen.getByText('3')).toBeTruthy()
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(screen.getByText('Shop closed')).toBeTruthy()
+        expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      })
+
+      it('rereads at a P 30 days away, beyond the longest browser timer, so Paid turns into Shop closed at that moment', async () => {
+        const paidThrough = Date.parse('2026-11-12T18:30Z')
+        vi.setSystemTime(paidThrough - 30 * day)
+        const reads = stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('Paid')).toBeTruthy()
+        // A browser runs a timer set beyond about 24.8 days at once.
+        await wait(25 * day)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        await wait(paidThrough - Date.now() - 1)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        expect(screen.getByText('Paid')).toBeTruthy()
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(screen.getByText('Shop closed')).toBeTruthy()
+        expect(screen.getByText('Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      })
+
+      const readFailure = (status: number, kind: 'server' | 'network', message = 'Something went wrong on our side. Please try again later.') =>
+        new ApiError(message, status, null, '/v1/vendors/vendor-1/subscription', kind)
+      const badGateway = () => readFailure(502, 'server')
+      const unavailable = () => readFailure(503, 'server')
+      const offline = () => readFailure(0, 'network', 'You appear to be offline. Check your connection and try again.')
+      const notResponding = 'MithraDirect isn’t responding. Try again in a minute.'
+
+      it('retries a read quietly 5, 15 and 30 s apart on 502, 503 and network failures, then says MithraDirect isn’t responding; Try again rereads', async () => {
+        const reads = stubReads(async () => trial())
+        reads.readSubscription.mockRejectedValueOnce(badGateway()).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(offline()).mockRejectedValueOnce(badGateway())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        expect(screen.getByRole('status').textContent).toBe('Reading shop plan…')
+        await wait(4_999)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        await wait(15_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(screen.queryByRole('alert')).toBeNull()
+        await wait(29_999)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(screen.getByRole('status').textContent).toBe('Reading shop plan…')
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(4)
+        expect(screen.getByRole('alert').textContent).toBe(notResponding)
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again'])
+        await wait(60_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(4)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+        await wait()
+        expect(reads.readSubscription).toHaveBeenCalledTimes(5)
+        expect(screen.getByText('13')).toBeTruthy()
+        expect(screen.queryByRole('alert')).toBeNull()
+      })
+
+      it('shows any other read failure at once through getErrorMessage, with no quiet retries', async () => {
+        const reads = stubReads(async () => { throw readFailure(500, 'server', 'Billing is down for a moment.') })
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByRole('alert').textContent).toBe('Billing is down for a moment.')
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again'])
+        await wait(60_000)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it.each([
+        ['any other failure', () => readFailure(500, 'server', 'Billing is down for a moment.'), 0, 2, 'Billing is down for a moment.'],
+        ['an outage, after its quiet retries', unavailable, 50_000, 5, notResponding],
+      ])('keeps the last view on screen with the error line and Try again when a background reread hits %s', async (_, failure, retrying, calls, message) => {
+        const reads = stubReads(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        reads.readSubscription.mockImplementation(async () => { throw failure() })
+        await focus()
+        await wait(retrying)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(calls)
+        expect(screen.getByRole('alert').textContent).toBe(message)
+        expect(screen.getByText('13')).toBeTruthy()
+        expect(screen.getByText('Free days')).toBeTruthy()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Set up AutoPay · ₹299 on 12 Oct'])
+
+        reads.readSubscription.mockImplementation(async () => autoPayOn())
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+        await wait()
+        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.queryByRole('alert')).toBeNull()
+      })
+
+      it('keeps Confirming on screen when Check again fails', async () => {
+        vi.setSystemTime(daysBeforeEnd(-0.5))
+        const reads = stubReads(async () => autoPayOn())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        reads.readSubscription.mockImplementation(async () => { throw readFailure(500, 'server', 'Billing is down for a moment.') })
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+        await wait()
+        expect(screen.getByRole('alert').textContent).toBe('Billing is down for a moment.')
+        expect(screen.getByText('Shop closed')).toBeTruthy()
+        expect(screen.getByText(/^Confirming payment…/)).toBeTruthy()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Check again'])
+      })
+
+      it('rereads on neither focus nor T after unmount', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        const reads = stubReads(async () => trial())
+        const { unmount } = show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        unmount()
+        await focus()
+        await wait(3 * day)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it('stops a read’s quiet retries once nothing shows it, and reads afresh on return', async () => {
+        const reads = stubReads(async () => { throw unavailable() })
+        const { unmount } = show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        unmount()
+        await wait(60_000)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        reads.readSubscription.mockImplementation(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('13')).toBeTruthy()
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+      })
+
+      it('rereads on neither focus nor T after sign-out through clearSession', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        const reads = stubReads(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        act(() => { useAuthStore.getState().clearSession() })
+        await wait()
+        const signedOut = reads.readSubscription.mock.calls.length
+        await focus()
+        await wait(3 * day)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(signedOut)
+      })
+
+      it('never rereads the first vendor on focus or at its T after a vendor switch through applySession', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        // The second vendor's read never lands, so only the switch itself can clear the first vendor's timer.
+        const reads = stubReads((vendorId) => vendorId === 'vendor-1' ? Promise.resolve(trial()) : new Promise(() => {}))
+        const firstVendorReads = () => reads.readSubscription.mock.calls.filter(([vendorId]) => vendorId === 'vendor-1').length
+        const view = render(page('vendor-1'))
+        await wait()
+        signIn('vendor-2')
+        view.rerender(page('vendor-2'))
+        await wait()
+        expect(screen.getByRole('status').textContent).toBe('Reading shop plan…')
+        const switched = firstVendorReads()
+        await focus()
+        await wait(3 * day)
+        expect(firstVendorReads()).toBe(switched)
+        expect(reads.readSubscription).toHaveBeenLastCalledWith('vendor-2', expect.anything())
+      })
+    })
+
     it('shows only the note for a shop that is not live', async () => {
       stubReads(async () => ({ kind: 'not-live' }))
       show(accountFor(context('trial_active', 'vendor-1')))
@@ -983,7 +1186,7 @@ describe('VendorPlanPage', () => {
     })
 
     it('takes the error path when only the plans list fails', async () => {
-      stubReads(async () => trial(), async () => { throw new ApiError('Plans are unavailable.', 503, null, '/v1/subscription-plans', 'server') })
+      stubReads(async () => trial(), async () => { throw new ApiError('Plans are unavailable.', 500, null, '/v1/subscription-plans', 'server') })
       show(accountFor(context('trial_active', 'vendor-1')))
       expect((await screen.findByRole('alert')).textContent).toBe('Plans are unavailable.')
       expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()

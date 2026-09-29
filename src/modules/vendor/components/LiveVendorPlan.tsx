@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PrototypeCard } from '@/modules/vendor/lib/billing-prototype-card'
+import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
 import { liveBillingWording, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { cancelLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
@@ -28,24 +29,11 @@ function StateCard({ card, children }: { card: PrototypeCard; children?: ReactNo
   </Card>
 }
 
+const notResponding = 'MithraDirect isn’t responding. Try again in a minute.'
 const cancelFailed = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
 const confirmFailed = 'We couldn’t confirm this payment here. If money was taken, it will show once Razorpay confirms it.'
-/** The waits before each `confirm` retry. */
-const confirmRetryDelays = [5_000, 15_000, 30_000]
 const pollEvery = 5_000
 const pollFor = 90_000
-
-/** A `confirm` failure that may not have reached the backend: 502, 503 or the network. */
-const shouldRetryConfirm = (cause: unknown) => isApiError(cause) && (cause.status === 502 || cause.status === 503 || cause.kind === 'network')
-
-/** Resolves after `ms`, or at once when `signal` aborts. */
-function pause(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve) => {
-    const done = () => { window.clearTimeout(timer); resolve() }
-    const timer = window.setTimeout(done, ms)
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
 const whatYouGet = ['Your own shop link', 'Customers order on WhatsApp', 'Share on Instagram and Facebook', 'Add products and prices', 'See all orders in one place']
 const ifYouDoNotPay = ['Customers cannot open your shop', 'New orders stop', 'You can still see old orders', 'You can pay again any time']
 
@@ -63,7 +51,8 @@ export function LiveVendorPlan() {
   // A new session clears the shared read, even for the same vendor, so Plan reads again.
   const sessionUser = useAuthStore((state) => state.user)
   const { view, error, reading } = useLiveBilling(vendorId)
-  const errorMessage = useMemo(() => error ? getErrorMessage(error) : null, [error])
+  // The shared read retries an outage quietly, so one shown here has run out of retries.
+  const errorMessage = useMemo(() => error ? isBriefOutage(error) ? notResponding : getErrorMessage(error) : null, [error])
 
   /** The actions of this vendor and session: aborted on a change or unmount, so Plan ignores a late answer. */
   const actions = useRef<{ controller: AbortController; running: boolean } | null>(null)
@@ -166,8 +155,8 @@ export function LiveVendorPlan() {
         return
       } catch (cause) {
         if (signal.aborted) return
-        if (shouldRetryConfirm(cause) && retry < confirmRetryDelays.length) {
-          await pause(confirmRetryDelays[retry], signal)
+        if (isBriefOutage(cause) && retry < retryDelays.length) {
+          await pause(retryDelays[retry], signal)
           if (signal.aborted) return
           continue
         }
@@ -177,17 +166,19 @@ export function LiveVendorPlan() {
     }
   }
 
-  if (errorMessage) return <div className="grid gap-2 text-sm">
+  // A failed reread keeps the last view on screen, under this line.
+  const readAlert = errorMessage ? <div className="grid gap-2 text-sm">
     <p role="alert" className="text-destructive">{errorMessage}</p>
     <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Try again</Button>
-  </div>
-  if (!view) return <p role="status">Reading shop plan…</p>
+  </div> : null
+  if (!view) return readAlert ?? <p role="status">Reading shop plan…</p>
 
   const { card, note, confirming, stopConfirmation, checkout: purpose } = liveBillingWording(view)
   const actionAlert = actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null
   // A read that changed the view ends the hold; the effect above then clears it.
   const held = hold && hold.from === view.state ? hold : null
   return <div className="grid gap-4">
+    {readAlert}
     {note ? <Card className="p-5"><p>{note}</p></Card> : null}
     {card ? <>
       <StateCard card={card}>

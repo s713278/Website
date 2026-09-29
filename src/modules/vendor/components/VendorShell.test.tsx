@@ -432,4 +432,76 @@ describe('VendorShell under the live API', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Plan')
     expect(subscribe).not.toHaveBeenCalled()
   })
+
+  describe('staying current', () => {
+    /** Lets pending promises and timers due within `ms` run. */
+    const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+    const focus = () => act(async () => { window.dispatchEvent(new Event('focus')) })
+
+    beforeEach(() => {
+      // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+      vi.useRealTimers()
+      vi.useFakeTimers()
+      vi.setSystemTime(daysBeforeEnd(12.5))
+    })
+
+    it('rereads once on window focus on a page other than Plan, and the chrome follows', async () => {
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      reads.mockImplementation(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+      await focus()
+      await wait()
+      expect(banner()?.textContent).toBe('13 free days left — AutoPay is on, so the first ₹299 is charged on 12 Oct.Shop plan')
+      expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy()
+      expect(reads).toHaveBeenCalledTimes(2)
+    })
+
+    it('rereads once at T on a page other than Plan, so the chrome shows the shop hidden at that moment', async () => {
+      vi.setSystemTime(daysBeforeEnd(2.5))
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(banner()?.textContent).toMatch(/^3 free days left/)
+      await wait(Date.parse(trialEnd) - Date.now() - 1)
+      expect(reads).toHaveBeenCalledOnce()
+      await wait(1)
+      expect(banner()?.textContent).toBe('Shop is hidden from customers — pay ₹299 with Razorpay to open it again.Pay ₹299')
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      expect(reads).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps the last view in Plan, the banner and the header when a background reread fails, with the error line on Plan', async () => {
+      vi.setSystemTime(daysBeforeEnd(2.5))
+      freeTierStore()
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/plan', <LiveVendorPlan />)
+      await wait()
+      const warning = banner()?.textContent
+      expect(warning).toMatch(/^3 free days left — set up AutoPay now/)
+      reads.mockImplementation(async () => { throw new ApiError('Something went wrong on our side. Please try again later.', 503, null, '/v1/vendors/r1/subscription', 'server') })
+      await focus()
+      await wait(50_000)
+      expect(reads).toHaveBeenCalledTimes(5)
+      expect(screen.getByRole('alert').textContent).toBe('MithraDirect isn’t responding. Try again in a minute.')
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+      expect(screen.getByText('Free days')).toBeTruthy()
+      expect(banner()?.textContent).toBe(warning)
+      expect(banner()!.className).toContain('destructive')
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      expect(planBanner()).toBeNull()
+    })
+
+    it('rereads on neither focus nor T once the console unmounts', async () => {
+      vi.setSystemTime(daysBeforeEnd(2.5))
+      const reads = stubReads(async () => trial())
+      const { unmount } = renderShell('/vendor/plan', <LiveVendorPlan />)
+      await wait()
+      unmount()
+      await focus()
+      await wait(3 * 24 * 60 * 60 * 1000)
+      expect(reads).toHaveBeenCalledOnce()
+    })
+  })
 })

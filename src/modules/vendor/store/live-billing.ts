@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
 import { liveBillingService, mapLiveBilling, mapLivePlanName, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
@@ -10,9 +11,11 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
  * response that lands after that is dropped, so the next vendor on this browser never sees it.
  */
 export interface LiveBillingRead {
+  /** The last view read. A failed reread keeps it, with its plan name, beside the error. */
   view: LiveBillingView | null
   /** The subscription's plan name, for the rail and Settings; the vendor context no longer has it. */
   planName: string | null
+  /** The last read's failure, or `null` once a read lands. A 502, 503 or network failure here has run out of retries. */
   error: unknown
   reading: boolean
 }
@@ -25,37 +28,63 @@ const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: nul
 const unread: LiveBillingRead = { view: null, planName: null, error: null, reading: true }
 let snapshot = empty
 let generation = 0
-let inFlight: { vendorId: string; generation: number; controller: AbortController; promise: Promise<void> } | null = null
+/** The read in flight; `waiting` while it waits to retry. */
+let inFlight: { vendorId: string; generation: number; controller: AbortController; waiting: boolean; promise: Promise<void> } | null = null
 const listeners = new Set<() => void>()
+/** The reread at the shown view's next T or P. */
+let boundaryTimer: number | undefined
 
+/** A new view sets the boundary timer again; a session or vendor change leaves none to set. */
 function publish(next: Snapshot) {
+  const viewChanged = next.view !== snapshot.view
   snapshot = next
+  if (viewChanged) armBoundary()
   listeners.forEach((listener) => listener())
 }
 
-/** Reads the vendor's billing. A read already in flight for that vendor is joined. It never rejects. */
+/**
+ * Reads the vendor's billing. A read already in flight for that vendor, including its retries, is
+ * joined. A 502, 503 or network failure is retried quietly 5, 15 and 30 s apart before it shows,
+ * unless nothing shows the read any more. It never rejects.
+ */
 export function readLiveBilling(vendorId: string): Promise<void> {
   if (inFlight?.vendorId === vendorId) return inFlight.promise
   inFlight?.controller.abort()
   const claim = ++generation
   const controller = new AbortController()
+  const flight = { vendorId, generation: claim, controller, waiting: false }
   const current = () => claim === generation && useAuthStore.getState().user?.vendorId === vendorId
   publish({ ...(snapshot.vendorId === vendorId ? snapshot : empty), vendorId, reading: true })
 
   const promise = (async () => {
     try {
-      const [read, plans] = await Promise.all([
-        liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
-        liveBillingService.listPaidPlans({ signal: controller.signal }),
-      ])
-      if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), error: null, reading: false })
-    } catch (error) {
-      if (current()) publish({ vendorId, plans: null, view: null, planName: null, error, reading: false })
+      for (let retry = 0; ; retry += 1) {
+        try {
+          const [read, plans] = await Promise.all([
+            liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
+            liveBillingService.listPaidPlans({ signal: controller.signal }),
+          ])
+          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), error: null, reading: false })
+          return
+        } catch (error) {
+          if (!current()) return
+          if (isBriefOutage(error) && retry < retryDelays.length) {
+            flight.waiting = true
+            await pause(retryDelays[retry], controller.signal)
+            flight.waiting = false
+            if (!current()) return
+            continue
+          }
+          // A failed reread keeps the last view on screen, beside the error.
+          publish({ ...snapshot, error, reading: false })
+          return
+        }
+      }
     } finally {
       if (inFlight?.generation === claim) inFlight = null
     }
   })()
-  inFlight = { vendorId, generation: claim, controller, promise }
+  inFlight = Object.assign(flight, { promise })
   return promise
 }
 
@@ -71,17 +100,20 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   if (useAuthStore.getState().user !== user || snapshot.vendorId !== vendorId || !snapshot.plans) return
   const read = { kind: 'subscription', subscription } as const
   const view = mapLiveBilling(read, snapshot.plans, new Date())
+  dropRead()
+  publish({ ...snapshot, view, planName: mapLivePlanName(read), error: null, reading: false })
+}
+
+/** Drops the read in flight, so neither its response nor its retries land. */
+function dropRead() {
   generation += 1
   inFlight?.controller.abort()
   inFlight = null
-  publish({ ...snapshot, view, planName: mapLivePlanName(read), error: null, reading: false })
 }
 
 /** Forgets the read and drops any response still on its way. */
 export function resetLiveBilling() {
-  generation += 1
-  inFlight?.controller.abort()
-  inFlight = null
+  dropRead()
   publish(empty)
 }
 
@@ -90,9 +122,63 @@ useAuthStore.subscribe((state, previous) => {
   if (state.user !== previous.user) resetLiveBilling()
 })
 
+/*
+  While anything shows the read, it stays current: returning to the window rereads it, and so does
+  the view's next T or P, when its free days or paid days end. Day counts stay as read until then.
+  There is one focus listener and one timer however many components show the read, so they cause
+  one reread. Once nothing shows it, a read waiting to retry gives up, and the next showing reads
+  afresh.
+*/
+
+/** The longest delay a browser timer takes (about 24.8 days); a longer one runs at once. */
+const maxTimerDelay = 2 ** 31 - 1
+
+/** The view's T or P, while it is still ahead. */
+function nextBoundary(view: LiveBillingView | null): number | null {
+  const boundary = view && 'trialEndsAt' in view ? view.trialEndsAt : view && 'paidThrough' in view ? view.paidThrough : null
+  const at = boundary === null ? null : Date.parse(boundary)
+  return at !== null && at > Date.now() ? at : null
+}
+
+/**
+ * Sets the timer for the shown view's next T or P, replacing any earlier one. A paid period can be
+ * 30 days away, beyond the longest timer, so a long wait is set in steps.
+ */
+function armBoundary() {
+  if (boundaryTimer !== undefined) window.clearTimeout(boundaryTimer)
+  boundaryTimer = undefined
+  const { vendorId, view } = snapshot
+  const at = listeners.size > 0 ? nextBoundary(view) : null
+  if (vendorId === null || at === null) return
+  const arm = () => {
+    const delay = at - Date.now()
+    boundaryTimer = delay > maxTimerDelay ? window.setTimeout(arm, maxTimerDelay) : window.setTimeout(() => void readLiveBilling(vendorId), delay)
+  }
+  arm()
+}
+
+/** Rereads for the signed-in vendor, and for no one after sign-out. */
+function rereadOnFocus() {
+  const vendorId = useAuthStore.getState().user?.vendorId
+  if (vendorId) void readLiveBilling(vendorId)
+}
+
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
-  return () => { listeners.delete(listener) }
+  if (listeners.size === 1) {
+    window.addEventListener('focus', rereadOnFocus)
+    armBoundary()
+  }
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size > 0) return
+    window.removeEventListener('focus', rereadOnFocus)
+    armBoundary()
+    if (inFlight?.waiting) {
+      dropRead()
+      publish({ ...snapshot, reading: false })
+    }
+  }
 }
 
 /** The shared read for this vendor; another vendor's read is never returned. */
