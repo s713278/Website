@@ -48,8 +48,8 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
 | Vendor profile is not writable | Editing store name, owner, contact, email or address | **`PUT /v1/vendors/{id}` returns `417` "Could not commit JPA transaction" for every body shape tried** — echoing the record back unchanged, with the vendor's existing category ids, with `category_ids: []`, with `assign_categories` omitted, and with it null. Nothing changed on the record in any attempt. `VendorProfileRequest` also declares `assign_categories` **required**, which would collide with additive-only category assignment even if the write worked. No other endpoint covers these fields, and the wizard never calls this one, which is why the defect went unnoticed. Settings is therefore read-only. |
-| No authoritative trial entitlement in the deployed contract | The agreed 14-day free trial and access enforcement | The `Resp_Vendor_Context_Success` example shows `tier: SILVER, status: TRIAL, trial_ends_at, trial_days: 14`, but measured live context returns `tier: FREE, plan_name: Free, status: ACTIVE, monthly_price: 0, trial_days: 0` and **no `trial_ends_at`**. The 14-day hybrid policy is approved; backend entitlement and enforcement remain unimplemented. The production frontend still renders expiry only when provided. See [vendor platform billing](#vendor-platform-billing). |
-| Vendor platform billing | Vendor-to-MithraDirect recurring fees, trial eligibility, verification and store access | Vendor context read exists; its billing extension and the three billing write contracts are missing. The explicitly labeled [development preview](./VENDOR_BILLING_PREVIEW.md) opens Test Mode Checkout using supplied configuration; it never grants real access. Required backend capabilities are [below](#vendor-platform-billing). |
+| 14-day trial in production | The agreed 14-day free trial and access enforcement | Go-live now starts a trial, and `GET /v1/vendors/{vendor_id}/subscription` carries `trial_started_at` and `trial_ends_at`. Dev deliberately runs a 1-day trial so subscriptions come due quickly; production must give 14 days, a [release blocker](#production-release-blockers). The app counts days from `trial_ends_at` and assumes no length. |
+| Vendor platform billing | Vendor-to-MithraDirect recurring fees, trial eligibility, verification and store access | The backend published its own billing API, and the Live API reads it. Gaps A–J and the production release blockers are [below](#vendor-platform-billing). The explicitly labeled [development preview](./VENDOR_BILLING_PREVIEW.md) stays demo-only; it never grants real access. |
 | `eligible_features` is unexplained | Deciding what a plan actually unlocks | Live returns `["DASHBOARD","VIEW","CATALOG"]` where the doc example returns five entries including `ORDERS` and `PRICES`. Nothing documents what the list governs. Mapped but **not** used for gating: gating on it would hide Orders from every FREE-tier vendor, which is currently all of them. |
 | No rejection reason | Telling a rejected vendor what to change | `approval_status` includes `REJECTED` (`ApprovalStatusRequest`), but no field anywhere carries why. The dashboard can only say "Setup needs changes" and point at support. |
 | ~~No courier partner list~~ **closed 10 Sep 2026** | Setting an order to SHIPPED with tracking | `GET /v1/courier-partners` **does** return real seeded partners (id 1 `DTDC`, 2 `PROFESSIONAL_COURIER`, 3 `INDIA_POST`, …) with a `tracking_url_template`, so `courier_partner_id` is obtainable. The earlier "no endpoint lists them" claim was wrong. The console still advances through `POST …/orders/bulk-status-update` rather than tracking — see the row below for why. |
@@ -72,95 +72,168 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 
 ### Vendor platform billing
 
-**Requested 18 September 2026; revised 19 September for the approved hybrid trial. Backend contract
-unimplemented.** Scope and agreed product rules are
-owned by [the billing decision record](./VENDOR_BILLING_DECISIONS.md). The frontend
-[development preview](./VENDOR_BILLING_PREVIEW.md) is a temporary integration seam, not an approved
-production workaround. Remove that seam from any production path only after authenticated backend
-operations and verified provider reconciliation exist. The hybrid is approved; remaining product
-choices are explicitly tracked in the decision record, not inferred from this proposed contract.
+**Updated 29 September 2026.** The backend published its own billing API instead of the
+24 September request to extend the vendor context with billing and add three write contracts. That
+request is withdrawn, including its access flags, allowed actions, payment, cancellation and refund
+state, attempt IDs and idempotency keys. This section lists where the published API still falls
+short. [The billing decision record](./VENDOR_BILLING_DECISIONS.md) owns the product rules, and the
+[architecture owner](./API_ARCHITECTURE.md) owns how the Live API reads and writes billing. The
+[development preview](./VENDOR_BILLING_PREVIEW.md) and the local test server stay demo-only.
 
-**Contract recheck, 19 September 2026:** a fresh public `/api/v3/api-docs` read succeeded with
-118 paths, matching the checked-in path set. No platform-billing operations are present. This
-resolves the earlier retrieval failure, not the missing implementation; generated files were not
-changed by the review. Re-fetch and regenerate when the backend publishes billing.
+The published operations are the subscription read, subscribe, `confirm`, cancel and history under
+`/v1/vendors/{vendor_id}/subscription`, the plans list `GET /v1/subscription-plans`, and a Razorpay
+webhook that moves the status. Another vendor gets `403`; before go-live the read returns `404`.
+Since 29 September the vendor context is flat: top-level `features` and `limits`, and no
+`subscription` block, so it carries no plan, trial, `days_remaining` or lifecycle status. The live
+OpenAPI context description and examples match that shape. Billing reads none of the context.
 
-**Latest alignment, 24 September 2026:** the backend now returns and documents a lifecycle shape
-(`subscription.lifecycle_status`, `trial`, `plan`, `available_paid_plans`, top-level `features`) and
-says go-live starts a 14-day trial. The frontend adopts that shape rather than the 19 September
-`subscription.billing` proposal; the context mapper already reads its plan name, currency, trial
-end and features. The [aligned request](./VENDOR_BILLING_BACKEND_HANDOFF.md) lists what it still
-lacks: `onboarding.next_step` in the OpenAPI example, rupee prices (a live plan returned
-`sale_price: 2.99` for ₹299), a timezone on the envelope `timestamp`, a monotonic `updated_at`,
-`days_remaining` rounded up (a fresh 14-day trial returns `13`), access flags, allowed actions,
-payment/cancellation/refund state and the billing writes. It was raised on the backend Jira stories
-MFPS-64 and MFPS-67 on 24 September. Usage is no longer requested. Store slugs remain opaque.
+#### Billing gaps A–J
 
-#### Existing context discrepancies
+Verified on dev with fresh test vendors, a real Razorpay Test Checkout and a dashboard "Charge this
+now", 28–29 September 2026. Each gap says how the Live API copes until it is fixed; the app reads
+today's responses and the corrected ones alike, so a fix needs no app change.
 
-- The lifecycle shape now persists a trial (`trial.started_at`/`ends_at`) instead of the earlier
-  `trial_days: 0` and legacy `FREE`/zero-price fields. Still do not infer a trial from first login
-  or a browser timestamp; persist the one-time trial against the verified vendor identity.
-- The current product allows one store per vendor. Keep ownership validation on billing operations;
-  it protects against cross-vendor access and does not imply a multi-store product or trial transfer.
-- The checked-in contract, onboarding gate and ADR 0002 use `approval_status: APPROVED`;
-  `ACTIVE` belongs to `vendor_status`. The fresh public contract confirms both enums. Earlier
-  `approval_status: ACTIVE` wording is corrected to genuine `APPROVED`; no enum rename is requested.
-  A manually adjusted test account does not establish general approval/trial-grant behavior.
-- Trial creation must atomically establish that both onboarding completion and genuine approval
-  have occurred, then claim the identity's one-time grant. Either event alone is insufficient;
-  approval arriving after Step 10 must not consume the trial while the store waits. The console's
-  temporary `PENDING` approval coercion is not evidence of approval for billing.
-  Store approval, billing access, visibility and accepting new orders are different decisions;
-  a paid membership must not bypass rejection/suspension or incomplete onboarding.
-- Existing `/v1/api/subscription-plans` defines delivery frequency/mode (`SubscriptionPlanDTO`),
-  not a Razorpay platform-fee plan. Do not repurpose that master or customer `/subs` reads.
+- **A. Cancel returns `500` until the first charge.**
+  - Evidence: cancel returned `500` "Unable to cancel the subscription at this time." for a
+    subscription Razorpay held as `authenticated` (card approved) and for one still `created`
+    (never paid). Razorpay stayed unchanged. Razorpay rejects a cycle-end cancel before the first
+    charge ("no billing cycle is going on"); an immediate cancel works, confirmed on a separate Test
+    account. Once a charge has happened (`active`), cancel returns `200` with
+    `cancel_at_period_end: true`.
+  - Impact: a vendor who sets up AutoPay during the free days cannot turn it off, and is charged
+    when they end.
+  - Required change: cancel a `created` or `authenticated` subscription immediately and return the
+    vendor to `TRIAL_ACTIVE` for the rest of the trial. Use a cycle-end cancel only for `active`.
+    When Razorpay refuses, return a 4xx with its reason, not a `500`.
+  - App: Turn off AutoPay and Stop the plan still send cancel; a `500` shows "Couldn’t turn off
+    AutoPay right now. Try again later or contact support."
+- **B. `ACTIVE` before the ₹299 is collected.**
+  - Evidence: the `subscription.activated` webhook, sent when Razorpay starts cycle 1 and issues
+    the invoice, moved the status to `ACTIVE` about six minutes before the ₹299 was captured and
+    `subscription.charged` arrived. Seen twice. With UPI the wait can be hours, and if the charge
+    fails and the `pending` or `halted` webhook is late or lost, the vendor stays `ACTIVE` unpaid.
+  - Required change: move to `ACTIVE` on `subscription.charged`, not `activated`. Until then keep
+    the current status: the trial, or `PAST_DUE` while Razorpay retries.
+  - App: `ACTIVE` without `current_period_end` reads Collecting ("Shop is open · AutoPay on"), not
+    Paid.
+- **C. Trial status lost on subscribe, even when Checkout is closed unpaid.**
+  - Evidence: subscribing during the trial moves the status to `PAYMENT_PENDING` with the paid
+    plan, and `next_billing_at` stays empty after the card is approved. The trial dates themselves
+    stay correct. Subscribing alone is enough: a vendor who subscribed and then closed Checkout
+    without paying still read `PAYMENT_PENDING` with the paid plan 20 minutes later, with
+    `razorpay_status: created`. Razorpay held that subscription as `created`, with no payment
+    method. Razorpay cannot charge a `created` subscription, so no webhook ever moves that vendor
+    on: after `trial_ends_at` the row stays `PAYMENT_PENDING` for good instead of `TRIAL_EXPIRED`.
+  - Required change: subscribing alone changes nothing. Keep `TRIAL_ACTIVE` and the trial plan
+    until the first ₹299 is collected (`charged`), whatever `razorpay_status` is. Once Razorpay
+    reports `authenticated`, set `next_billing_at` to `trial_ends_at`. At trial end, cancel a
+    subscription that is still `created`. Keep `PAYMENT_PENDING` only for paying after the trial.
+  - App: AutoPay counts as agreed only when `razorpay_status` is `authenticated` or `active`.
+    Without it, `PAYMENT_PENDING` reads as free days before `trial_ends_at` and Shop closed after
+    it. With it, the free days show "AutoPay on".
+  - Temporary exception: after trial AutoPay, the app reads `PAYMENT_PENDING` past `trial_ends_at`
+    as "Shop closed · Confirming payment…" until Razorpay charges, about a day while D lasts. That
+    departs from the [rule](#provider-verification-and-reconciliation-requirements) that a
+    scheduled fee pending or retrying past the boundary keeps service. The rule stands: with C
+    fixed, the same vendor reads Collecting and the shop stays open.
+- **D. First charge falls 24 hours after the trial ends.**
+  - Evidence: on 28 September, subscribe created the Razorpay subscription with `start_at` exactly
+    24 hours after `trial_ends_at`. AutoPay vendors got an extra free day, a day passed with the
+    trial over and nothing charged, and every renewal landed a day later. On 29 September a
+    subscription created after the trial ended had a start time already past (see I); with the
+    extra 24 hours it would still have been in the future, so the offset looks removed.
+  - Required change: `start_at` = `trial_ends_at` exactly. Confirm with a Razorpay read of a new
+    subscription's `start_at`. Existing subscriptions keep the `start_at` they were created with.
+  - App: the "AutoPay on — first ₹299 on …" date is `next_billing_at`, else `trial_ends_at`: a day
+    early while D lasts, never late.
+- **E. AutoPay cannot be turned back on before the paid period ends.**
+  - Evidence: after a paid-period cancel, subscribe returned `409` "An active subscription already
+    exists." Seen twice.
+  - Required change: when `cancel_at_period_end` is true, allow subscribe. Cancel the old
+    subscription at Razorpay immediately (its paid invoice stays), then create the new one with
+    `start_at` = `current_period_end`; during the trial, `trial_ends_at`.
+  - App: Keep shop open still sends subscribe; a `409` shows "Couldn’t turn AutoPay back on right
+    now. Your shop stays open until ‹last paid day›."
+- **F. `next_billing_at` is not cleared after a paid-period cancel.**
+  - Evidence: after the cancel, the read still showed the old next charge date, likely copied from
+    Razorpay's `charge_at`, which a cycle-end cancel leaves unchanged. It also stayed after an
+    immediate cancel at Razorpay (see H).
+  - Required change: null while `cancel_at_period_end` is true. If AutoPay is turned back on, the
+    new first charge date.
+  - App: ignores `next_billing_at` whenever `cancel_at_period_end` is true.
+- **G. Minor.**
+  - History (MFPS-87): repeating `confirm` adds a second `PAYMENT_AUTHORIZED` row, and repeating
+    cancel a second `CANCELLATION_REQUESTED`. Charge events carry no amount. The app dedupes by
+    event type and payment ID, and shows rows without amounts until `amount` arrives; it never
+    infers one.
+  - The envelope `timestamp` has no timezone (it is IST); please add an offset.
+  - Dev returns Render `502` for one to three minutes several times a day. The app retries reads
+    at 5, 15 and 30 s.
+  - OpenAPI doc bugs: the subscription read and the plans list document prices in paise (`29900`),
+    but the API returns rupees (`299`); and the Razorpay webhook path is not listed.
+  - `days_remaining` rounding down is moot: the context dropped the field on 29 September. The app
+    counts free days from `trial_ends_at`, rounded up.
+  - Recommended `confirm` fix, **not a release blocker.** Today `confirm` only verifies the
+    signature and writes a `PAYMENT_AUTHORIZED` history row; the webhook moves the status. The app
+    stops `confirm` retries when the vendor leaves Plan, so a lost `confirm` can drop that history
+    row but never the payment or the status. Recommended backend changes, in order:
+    1. write payment history from the Razorpay webhooks (`subscription.authenticated`,
+       `payment.authorized`, `subscription.charged`), not only from `confirm`;
+    2. make `confirm` idempotent on `razorpay_payment_id`: a repeat returns `200` and writes nothing
+       new, which also removes the duplicate rows above;
+    3. reconcile subscriptions stuck in `PAYMENT_PENDING` against Razorpay's API on a schedule, in
+       case a webhook is late or lost.
 
-#### Operations the backend must define in OpenAPI
+    Only after 1 and 2 would a frontend outbox (resending an unsent `confirm` on the next visit) be
+    safe; none is planned.
+- **H. An immediate cancel at Razorpay moves the status to `CANCELLED` while the paid period
+  remains.**
+  - Evidence: on 29 September a paid subscription was cancelled immediately in the Razorpay
+    dashboard. The webhook moved the status from `ACTIVE` to `CANCELLED` at once
+    (`SUBSCRIPTION_CANCELLED`), with `current_period_end` still a month ahead. The paid period
+    itself is kept correctly.
+  - Required change: shop enforcement (MFPS-66) must keep a `CANCELLED` shop with a future
+    `current_period_end` open; otherwise the shop disappears a month early. Keeping `ACTIVE` until
+    `current_period_end` would do too.
+  - App: reads it as Stopped, "AutoPay ended", open until the last paid day.
+- **I. Paying after the trial ends fails.**
+  - Evidence: on 29 September, two minutes after a trial ended without AutoPay, subscribe returned
+    `500` "Unable to initiate subscription payment at this time." A retry returned `200`, but
+    Checkout offered a refundable ₹5 now and ₹299 monthly, as for a trial, not ₹299 now. Paying by
+    Test card failed with Razorpay's "Subscription's start time is past the current time. Cannot do
+    an auth transaction now." The backend built a trial-style subscription starting at the trial
+    end, which had already passed; likely tied to J.
+  - Impact: every vendor whose trial ends without AutoPay has no way to pay.
+  - Required change: after the trial, subscribe creates an immediate-start subscription, so
+    Checkout collects ₹299 at once.
+  - App: Pay ₹299 still sends subscribe; a failure shows the backend's message.
+- **J. The status does not flip at trial end.**
+  - Evidence: two to three minutes after `trial_ends_at`, the subscription read still showed
+    `TRIAL_ACTIVE` with the trial plan, while the vendor context, before it was flattened later that
+    day, already read `TRIAL_EXPIRED`.
+  - Required change: move to `TRIAL_EXPIRED` at `trial_ends_at` on server time.
+  - App: past `trial_ends_at` with no paid period reads Shop closed, "Free days are over", from the
+    dates.
 
-These are **capabilities and proposed additions**, not invented routes. Reuse the existing
-`GET /v1/vendors/{vendor_id}/context` read. Backend owns the three missing write contracts and
-server jobs; the frontend currently has no real billing writes.
+#### Production release blockers
 
-| Operation | Required behavior and result |
-|---|---|
-| Extend vendor context for billing/access | Authenticate ownership; return the minimal `subscription.billing` state alongside existing plan/expiry/features. Reuse envelope timestamp with explicit timezone and include a billing revision. Fresh reads must expose reconciled progress after lost callbacks/cancellation responses; no separate billing-status endpoint. |
-| Prepare Checkout for an explicit intent | Accept the selected store, requested setup/payment action and an application idempotency key; validate ownership and allowed action. During trial, schedule the first monthly fee for its persisted expiry; after expiry, prepare immediate first-fee collection. Choose plan/amount/currency/mode/count/schedule server-side, limit methods to those validated for that phase, and reconcile any existing subscription first. Return the minimal preparation payload in the handoff; merchant display text is static app configuration. Never trust a browser price, plan, trial duration, clock or subscription ID. |
-| Submit Checkout result for verification | Accept attempt ID and the three Razorpay callback fields. Resolve expected store/subscription from the authenticated attempt; verify/reconcile and acknowledge receipt. Frontend refreshes vendor context for pending/confirmed state; acknowledgement alone must not imply paid access. |
-| Request cancellation and read its outcome | Authenticate ownership, record/deduplicate receipt and stop future collection while retaining existing coverage. Acknowledge the write; requested/scheduled/confirmed/failed progress and refund state return through refreshed vendor context. Reconcile timeouts/concurrent charges; request receipt alone does not prove cancellation. A Razorpay subscription read does not show an accepted cycle-end stop (`charge_at` unchanged, `has_scheduled_changes` false; [Test Mode observation, 23 September 2026](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)), so the backend must persist the accepted cancellation itself or reconcile it from webhooks. |
-| Reconcile and refund a debit despite timely cancellation | Persist the authenticated cancellation's backend receipt time and original access boundary. If the request preceded that boundary but the next monthly fee was collected, record a full-refund obligation against that charge and reconcile refund progress idempotently. Return pending/completed/failed outcomes separately from cancellation and access; no instant-refund guarantee. Backend must define the refund contract and operational recovery. |
-| Provider webhook ingress | Validate raw-body signature with a separate webhook secret; durably receive, deduplicate and reconcile events to the same billing records used by callback verification. This is not a browser redirect endpoint. |
-| Trial grant, expiry and reminder jobs | Atomically claim the identity's trial once onboarding and approval both qualify; persist the original start/expiry. Enforce the access boundary without grace, using server time even with no browser session; a scheduled fee still pending or retrying keeps service until its collection halts. Deduplicate reminders; distinguish setup needed, confirmed future billing and cancellation. Channels/times await product decisions. |
-| Recover an interrupted billing attempt or rejoin after cancellation | Reconcile created, authenticated, charge-pending, expired and cancelled provider objects before retry/replacement. Rejoining during retained trial/paid coverage is allowed at that same expiry, without a new trial or duplicate fee. Setup crossing expiry must not silently change the schedule or leave two debit-capable subscriptions. |
+No production release of Live API billing until all of these are cleared. The
+[decision record](./VENDOR_BILLING_DECISIONS.md#live-api-billing--29-september-2026) owns the
+decision; this list tracks the backend side:
 
-Backend should return meaningful ownership/eligibility errors, already-subscribed/conflicting-attempt
-results, expired/consumed-subscription reasons, pending verification and retry guidance. Retrying
-preparation must retrieve/reconcile the same logical attempt rather than create another chargeable
-subscription. Concurrent tabs, duplicate requests and timeouts require a per-store constraint/lock;
-do not assume the provider creation API implements MithraDirect's idempotency policy.
+- gap **A** (cancel before the first charge);
+- gap **D**, which looks fixed; confirm with a Razorpay read of a new subscription's `start_at`;
+- gap **I** (paying after the trial);
+- a 14-day trial in production (dev deliberately runs 1 day);
+- **MFPS-66** shop enforcement on server time, which must keep `CANCELLED` with a future
+  `current_period_end` open, per gap H;
+- eMandate switched off on the Checkout account. Trial AutoPay Checkout currently offers UPI, cards
+  and eMandate, and eMandate is excluded.
 
-#### Proposed status data
+Gaps B, C, E, F, G and J are not blockers; the app tolerates them.
 
-The [backend meeting handoff](./VENDOR_BILLING_BACKEND_HANDOFF.md#add-only-this-billing-information)
-owns the field-level proposal, operation inputs/outputs, error contract and
-[fabricated responses](./examples/vendor-billing/mock-responses.json). These replace the earlier
-illustrative status object here so the two proposals cannot drift. The user authorised fabricated
-missing data for frontend implementation and tests on 19 September. The current vendor context
-shape is supplied; only its billing extension and the three write contracts remain missing.
-
-The mapper, mock/demo service, panel and mock-backed route wiring can proceed against these
-responses. Keep the fabricated shape explicitly proposed, separate from generated declarations.
-Do not call invented URLs or treat mock verification/refunds/access as real. The
-[architecture owner](./API_ARCHITECTURE.md#vendor-platform-billing-preview) defines selection,
-isolation and the condition for replacing fabricated wire data with real response fixtures.
-
-Reuse context identity, onboarding, plan prices in rupees, trial expiry, features and timestamp.
-The billing block adds only independent trial/AutoPay/latest-payment status, paid-through/next-charge
-dates, access/visibility/actions, cancellation receipt/stop, refund summary, notice and revision.
-Provider IDs, period/charge/refund history and reconciliation details remain server-side. Provider
-`active` alone is insufficient. Backend enforces discovery, direct storefront access, new orders
-and stale carts while preserving existing-order fulfilment. The feature list's effective meanings
-must be documented; today's unexplained list is not permission to add frontend route gates.
+The requirements below predate the published API. They still describe behavior the backend must
+meet, whatever the endpoints are called.
 
 #### Provider verification and reconciliation requirements
 

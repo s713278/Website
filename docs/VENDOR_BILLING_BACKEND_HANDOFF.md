@@ -1,5 +1,10 @@
 # Vendor billing: what the vendor context still needs
 
+> **Superseded (29 September 2026) by the published backend billing API.** The backend chose its
+> own subscription endpoints instead of this context extension, and the context no longer carries a
+> `subscription` block. Kept for history only. The current gaps and production release blockers are
+> in [API gaps](./API_GAPS.md#vendor-platform-billing).
+
 **Backend alignment request · 24 September 2026.** The frontend now adopts the lifecycle shape that
 `GET /v1/vendors/{vendor_id}/context` returns today (`subscription.lifecycle_status`, `trial`, `plan`,
 `available_paid_plans` and top-level `features`). We map it to our screens ourselves. This section
