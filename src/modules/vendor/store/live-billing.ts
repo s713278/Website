@@ -15,9 +15,10 @@ export interface LiveBillingRead {
   reading: boolean
 }
 
-interface Snapshot extends LiveBillingRead { vendorId: string | null }
+/** `plans` is the last plans response, so a cancel response can be mapped without reading it again. */
+interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown }
 
-const empty: Snapshot = { vendorId: null, view: null, error: null, reading: false }
+const empty: Snapshot = { vendorId: null, plans: null, view: null, error: null, reading: false }
 /** What a vendor sees before its first read lands. */
 const unread: LiveBillingRead = { view: null, error: null, reading: true }
 let snapshot = empty
@@ -45,15 +46,31 @@ export function readLiveBilling(vendorId: string): Promise<void> {
         liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
         liveBillingService.listPaidPlans({ signal: controller.signal }),
       ])
-      if (current()) publish({ vendorId, view: mapLiveBilling(read, plans, new Date()), error: null, reading: false })
+      if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), error: null, reading: false })
     } catch (error) {
-      if (current()) publish({ vendorId, view: null, error, reading: false })
+      if (current()) publish({ vendorId, plans: null, view: null, error, reading: false })
     } finally {
       if (inFlight?.generation === claim) inFlight = null
     }
   })()
   inFlight = { vendorId, generation: claim, controller, promise }
   return promise
+}
+
+/**
+ * Turns off AutoPay or stops the plan. The response is the subscription, so it replaces the vendor's
+ * view directly, with no reread; a read still on its way is dropped. A failure rejects and leaves
+ * the view as it was. Once `signal` aborts, or the session or vendor changes, the response is ignored.
+ */
+export async function cancelLiveBilling(vendorId: string, { signal }: { signal: AbortSignal }): Promise<void> {
+  const user = useAuthStore.getState().user
+  const subscription = await liveBillingService.cancel(vendorId)
+  if (signal.aborted || useAuthStore.getState().user !== user || snapshot.vendorId !== vendorId || !snapshot.plans) return
+  const view = mapLiveBilling({ kind: 'subscription', subscription }, snapshot.plans, new Date())
+  generation += 1
+  inFlight?.controller.abort()
+  inFlight = null
+  publish({ ...snapshot, view, error: null, reading: false })
 }
 
 /** Forgets the read and drops any response still on its way. */

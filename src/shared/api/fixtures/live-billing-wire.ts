@@ -150,3 +150,17 @@ export function liveHaltedSubscription(overrides: Record<string, unknown> = {}) 
     ...overrides,
   })
 }
+
+/**
+ * AutoPay turned off during the free days: the cancel response expected once gap A is fixed, since
+ * dev answers this cancel with a 500 today. CANCELLED at Razorpay too, with the trial dates kept.
+ */
+export function liveTrialAutoPayCancelledSubscription(overrides: Record<string, unknown> = {}) {
+  return liveTrialAutoPaySubscription({
+    status: 'CANCELLED',
+    razorpay_status: 'cancelled',
+    cancelled_at: '2026-09-28T11:15:02.30416Z',
+    updated_at: '2026-09-28T11:15:02.30416Z',
+    ...overrides,
+  })
+}

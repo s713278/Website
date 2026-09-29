@@ -13,7 +13,7 @@ import {
 } from '@/shared/api'
 import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
-  liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveTrialAutoPayCancelledSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LiveVendorPlan } from './LiveVendorPlan'
@@ -249,6 +249,35 @@ describe('VendorShell under the live API', () => {
     expect(within(banner()!).getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(planBanner()).toBeNull()
+  })
+
+  it('shows Stopped on Plan, the warning banner and Keep open · ₹299 at once after Stop the plan, with no reread', async () => {
+    vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+    freeTierStore()
+    const reads = stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+    const cancel = vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveStoppedSubscription())
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop the plan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+    expect(await screen.findByText('Plan stopped')).toBeTruthy()
+    expect(banner()?.textContent).toBe('Shop stays open until 12 Nov — then customers cannot see it. You can pay again any time with Razorpay.Keep open · ₹299')
+    expect(banner()!.className).toContain('amber')
+    expect(header().getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(planBanner()).toBeNull()
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(reads).toHaveBeenCalledOnce()
+  })
+
+  it('shows Free days on Plan, the banner and the header at once after Turn off AutoPay, with no reread', async () => {
+    freeTierStore()
+    const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+    vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveTrialAutoPayCancelledSubscription())
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
+    await waitFor(() => expect(banner()?.textContent).toBe('13 free days left — after that, subscribe with Razorpay (₹299 / month) to keep the shop open.Pay ₹299'))
+    expect(screen.getByText(/^Your shop is live free until/)).toBeTruthy()
+    expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(reads).toHaveBeenCalledOnce()
   })
 
   it('shows the confirming banner and the Shop plan header while a payment is confirmed', async () => {
