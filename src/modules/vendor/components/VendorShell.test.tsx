@@ -11,7 +11,10 @@ import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, prototypeSeed, vendorOnboardingService,
   type LiveSubscriptionRead, type PrototypeState,
 } from '@/shared/api'
-import { liveActivatedSubscription, livePlans, liveTrialAutoPaySubscription, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
+import {
+  liveActivatedSubscription, liveCancelledPaidSubscription, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription,
+  liveTrialSubscription,
+} from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LiveVendorPlan } from './LiveVendorPlan'
 import { VendorBillingPrototype } from './VendorBillingPrototype'
@@ -204,6 +207,32 @@ describe('VendorShell under the live API', () => {
     await waitFor(() => expect(planBanner()).toBeTruthy())
     expect(banner()).toBeNull()
     expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+  })
+
+  it('shows no billing banner while paid, so PlanBanner can show', async () => {
+    vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    expect(await screen.findByText(/^You paid ₹299 via Razorpay\./)).toBeTruthy()
+    expect(banner()).toBeNull()
+    expect(planBanner()).toBeTruthy()
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+  })
+
+  it.each([
+    ['stopped', liveStoppedSubscription],
+    ['AutoPay ended', liveCancelledPaidSubscription],
+  ])('shows the warning banner and Keep open · ₹299 when %s', async (_, subscription) => {
+    vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: subscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(banner()?.textContent).toBe('Shop stays open until 12 Nov — then customers cannot see it. You can pay again any time with Razorpay.Keep open · ₹299'))
+    expect(banner()!.className).toContain('amber')
+    expect(within(banner()!).getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(header().getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(planBanner()).toBeNull()
   })
 
   it('shows PlanBanner and Shop plan for a shop that is not live', async () => {

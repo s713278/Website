@@ -10,7 +10,9 @@ import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
 import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
-import { liveActivatedSubscription, livePlans, liveTrialAutoPaySubscription, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
+import {
+  liveActivatedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
+} from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { resetDemoState } from '@/shared/api/fixtures/demo-state'
 import { VendorPlanPage } from './VendorPlanPage'
@@ -203,6 +205,31 @@ describe('VendorPlanPage', () => {
       expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
       expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
       expect(container.textContent).not.toMatch(/Oct/)
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Paid with the last paid day and next charge, and no "If you do not pay"', async () => {
+      vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+      stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Shop is open')).toBeTruthy()
+      expect(screen.getByText('Paid')).toBeTruthy()
+      expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 12 Nov. Next ₹299 is charged on 13 Nov.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Stopped with its days until P and no next-charge date, gap F', async () => {
+      // 21 days before P; the stopped response still carries next_billing_at (13 Nov).
+      vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+      stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription() }))
+      const { container } = show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('21')).toBeTruthy()
+      expect(screen.getByText('Plan stopped')).toBeTruthy()
+      expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(container.textContent).not.toMatch(/13 Nov|Next ₹299/)
       expect(screen.queryAllByRole('button')).toEqual([])
     })
 

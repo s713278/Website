@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { liveActivatedSubscription, liveMonthlyPlan, livePlans, liveTrialAutoPaySubscription, liveTrialSubscription } from '../fixtures/live-billing-wire'
+import {
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveMonthlyPlan, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription,
+  liveTrialSubscription,
+} from '../fixtures/live-billing-wire'
 import { LiveBillingUnreadableError, mapLiveBilling } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
@@ -107,6 +110,75 @@ describe('mapLiveBilling', () => {
 
     it('leaves PAYMENT_PENDING with AutoPay on after T to row 8b, not Collecting', () => {
       expect(() => mapLiveBilling(autoPay(), livePlans, new Date(trialEnd))).toThrow(LiveBillingUnreadableError)
+    })
+  })
+
+  describe('rows 3–5: a paid period', () => {
+    const periodEnd = '2026-11-12T18:30:00.000Z'
+    const paid = (overrides: Record<string, unknown> = {}) => ({ kind: 'subscription' as const, subscription: livePaidSubscription(overrides) })
+    const stopped = (overrides: Record<string, unknown> = {}) => ({ kind: 'subscription' as const, subscription: liveStoppedSubscription(overrides) })
+    /** A moment `days` before the paid period ends. */
+    const daysBeforePeriodEnd = (days: number) => new Date(Date.parse(periodEnd) - days * 24 * 60 * 60 * 1000)
+    const now = daysBeforePeriodEnd(20.5)
+
+    it('row 3: shows Paid, the expected "Paid" response, with the paid period and next_billing_at', () => {
+      expect(mapLiveBilling(paid(), livePlans, now)).toEqual({
+        state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: periodEnd,
+      })
+    })
+
+    it('row 3: leaves the next charge out when next_billing_at is missing', () => {
+      expect(mapLiveBilling(paid({ next_billing_at: null }), livePlans, now)).toMatchObject({ state: 'paid', nextChargeAt: null })
+    })
+
+    it('row 3: lands the expected "AutoPay back on before the period ends" response on Paid', () => {
+      const rejoined = paid({ razorpay_subscription_id: 'sub_FakeRejoin0001', razorpay_status: 'authenticated' })
+      expect(mapLiveBilling(rejoined, livePlans, now)).toMatchObject({ state: 'paid', paidThrough: periodEnd, nextChargeAt: periodEnd })
+    })
+
+    it('row 4: shows Stopped with the rounded-up days until P, the expected "AutoPay turned off while paid" response', () => {
+      expect(mapLiveBilling(stopped({ next_billing_at: null }), livePlans, now)).toEqual({
+        state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+      })
+    })
+
+    it('row 4, gap F: ignores next_billing_at while cancel_at_period_end is true', () => {
+      const view = mapLiveBilling(stopped(), livePlans, now)
+      expect(view).toEqual({ state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21 })
+      expect(view).not.toHaveProperty('nextChargeAt')
+    })
+
+    it('row 5, gap H: keeps today’s CANCELLED shape open until P as AutoPay ended, ignoring next_billing_at', () => {
+      expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, now)).toEqual({
+        state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+      })
+    })
+
+    it('row 5: keeps a CANCELLED or EXPIRED shop open until P as AutoPay ended', () => {
+      for (const status of ['CANCELLED', 'EXPIRED']) {
+        expect(mapLiveBilling(paid({ status, razorpay_status: 'cancelled', next_billing_at: null }), livePlans, now)).toEqual({
+          state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+        })
+      }
+    })
+
+    it('row 5: shows AutoPay ended for ACTIVE with Razorpay cancelled, the expected "AutoPay stopped by the bank or at Razorpay" response', () => {
+      expect(mapLiveBilling(paid({ razorpay_status: 'cancelled', next_billing_at: null }), livePlans, now)).toEqual({
+        state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+      })
+    })
+
+    it('stops matching rows 3–5 at now = P', () => {
+      const atP = new Date(periodEnd)
+      expect(mapLiveBilling(paid(), livePlans, new Date(Date.parse(periodEnd) - 1)).state).toBe('paid')
+      expect(() => mapLiveBilling(paid(), livePlans, atP)).toThrow(LiveBillingUnreadableError)
+      expect(() => mapLiveBilling(stopped(), livePlans, atP)).toThrow(LiveBillingUnreadableError)
+      expect(() => mapLiveBilling(paid({ status: 'CANCELLED', razorpay_status: 'cancelled' }), livePlans, atP)).toThrow(LiveBillingUnreadableError)
+      expect(() => mapLiveBilling(paid({ razorpay_status: 'cancelled' }), livePlans, atP)).toThrow(LiveBillingUnreadableError)
+    })
+
+    it('counts one day left in the last day before P', () => {
+      expect(mapLiveBilling(stopped(), livePlans, daysBeforePeriodEnd(0.01))).toMatchObject({ state: 'stopped', daysLeft: 1 })
     })
   })
 

@@ -80,3 +80,44 @@ export function liveActivatedSubscription(overrides: Record<string, unknown> = {
     ...overrides,
   })
 }
+
+/**
+ * Paid: Razorpay captured the ₹299. The period comes from the invoice and ends at IST midnight, and
+ * `next_billing_at` is the period end.
+ */
+export function livePaidSubscription(overrides: Record<string, unknown> = {}) {
+  return liveActivatedSubscription({
+    current_period_start: '2026-10-13T10:10:02Z',
+    current_period_end: '2026-11-12T18:30Z',
+    next_billing_at: '2026-11-12T18:30Z',
+    updated_at: '2026-10-13T10:10:05.23761Z',
+    ...overrides,
+  })
+}
+
+/**
+ * The plan stopped during a paid period, as dev returns it today (gap F): still ACTIVE with
+ * `cancel_at_period_end`, and `next_billing_at` not cleared.
+ */
+export function liveStoppedSubscription(overrides: Record<string, unknown> = {}) {
+  return livePaidSubscription({
+    cancel_at_period_end: true,
+    updated_at: '2026-10-14T08:21:47.90412Z',
+    ...overrides,
+  })
+}
+
+/**
+ * A stopped plan cancelled at Razorpay during the paid period, as dev returns it today (gap H): the
+ * webhook sets CANCELLED at once, the paid period and `next_billing_at` (gap F) stay. The
+ * `razorpay_status` was not recorded; `cancelled` is inferred, and CANCELLED alone decides the row.
+ */
+export function liveCancelledPaidSubscription(overrides: Record<string, unknown> = {}) {
+  return liveStoppedSubscription({
+    status: 'CANCELLED',
+    razorpay_status: 'cancelled',
+    cancelled_at: '2026-10-20T07:42:05.11873Z',
+    updated_at: '2026-10-20T07:42:05.11873Z',
+    ...overrides,
+  })
+}

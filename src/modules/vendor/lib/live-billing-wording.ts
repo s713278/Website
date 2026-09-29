@@ -21,6 +21,8 @@ const dateTime = (value: string) => new Intl.DateTimeFormat('en-IN', {
 }).format(new Date(value))
 /** The day in IST, such as "12 Oct". */
 const shortDate = (value: string) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(new Date(value))
+/** The IST day of P minus 1 ms: Razorpay ends a cycle at IST midnight, which belongs to the next day. */
+const lastPaidDay = (paidThrough: string) => shortDate(new Date(Date.parse(paidThrough) - 1).toISOString())
 const planLine = (plan: LiveBillingPlan) => `${plan.name} · ${rupees(plan.price)} / month`
 const freeDaysLead = (days: number) => `${days} free ${days === 1 ? 'day' : 'days'} left`
 
@@ -28,16 +30,39 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
   if (view.state === 'not_live') return { card: null, note: 'Free days start when your shop goes live.', banner: null, header: 'Shop plan' }
 
   const price = rupees(view.plan.price)
+  const planCard = { plan: planLine(view.plan), sample: null, action: null, autoPay: null }
   if (view.state === 'collecting') return {
-    card: {
-      tone: 'neutral', eyebrow: 'Shop plan', figure: { headline: 'Shop is open' }, body: 'AutoPay on.',
-      plan: planLine(view.plan), sample: null, action: null, autoPay: null,
-    },
+    card: { ...planCard, tone: 'neutral', eyebrow: 'Shop plan', figure: { headline: 'Shop is open' }, body: 'AutoPay on.' },
     note: null, banner: null, header: 'Shop plan',
   }
 
+  if (view.state === 'paid') {
+    const nextCharge = view.nextChargeAt ? ` Next ${price} is charged on ${shortDate(view.nextChargeAt)}.` : ''
+    return {
+      card: {
+        ...planCard, tone: 'neutral', eyebrow: 'Paid', figure: { headline: 'Shop is open' },
+        body: `You paid ${price} via Razorpay. Shop stays open until ${lastPaidDay(view.paidThrough)}.${nextCharge}`,
+      },
+      note: null, banner: null, header: 'Shop plan',
+    }
+  }
+  if (view.state === 'stopped' || view.state === 'autopay_ended') {
+    const paidUntil = lastPaidDay(view.paidThrough)
+    const keepOpen = `Keep open · ${price}`
+    const reason = view.state === 'stopped' ? 'You stopped the plan.' : `AutoPay was cancelled outside MithraDirect, so no more ${price} is charged.`
+    return {
+      card: {
+        ...planCard, tone: 'warning', eyebrow: view.state === 'stopped' ? 'Plan stopped' : 'AutoPay ended', figure: { days: view.daysLeft },
+        body: `${reason} Shop stays open until ${paidUntil}. Pay ${price} with Razorpay if you want to keep it after that.`,
+      },
+      note: null,
+      banner: { tone: 'warning', lead: `Shop stays open until ${paidUntil}`, text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: keepOpen },
+      header: keepOpen,
+    }
+  }
+
   const payNow = `Pay ${price}`
-  const card = { eyebrow: 'Free days', figure: { days: view.daysLeft }, plan: planLine(view.plan), sample: null, action: null, autoPay: null }
+  const card = { ...planCard, eyebrow: 'Free days', figure: { days: view.daysLeft } }
   // One wording at every count: AutoPay on stays neutral with 3 days or fewer left.
   if (view.state === 'autopay_on') {
     const firstCharge = shortDate(view.firstChargeAt)

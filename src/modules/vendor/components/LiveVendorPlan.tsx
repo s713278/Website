@@ -62,8 +62,8 @@ export function LiveVendorPlan() {
       <Section title="What you get">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">{whatYouGet.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section>
-      {/* Hidden while Razorpay collects: the vendor has nothing to pay. */}
-      {view.state !== 'collecting' ? <Section title="If you do not pay">
+      {/* Hidden while paid or while Razorpay collects: the vendor has nothing to pay. */}
+      {view.state !== 'collecting' && view.state !== 'paid' ? <Section title="If you do not pay">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm text-[var(--badge-warning-fg)]">{ifYouDoNotPay.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section> : null}
     </> : null}
