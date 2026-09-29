@@ -22,6 +22,7 @@ function StateCard({ card }: { card: PrototypeCard }) {
       : <h2 className="font-display text-4xl font-bold">{card.figure.headline}</h2>}
     <p>{card.body}</p>
     <p className="text-sm font-semibold text-primary">{card.plan}</p>
+    {card.autoPay ? <p className="font-semibold text-primary">{card.autoPay}</p> : null}
   </Card>
 }
 
@@ -61,9 +62,10 @@ export function LiveVendorPlan() {
       <Section title="What you get">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">{whatYouGet.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section>
-      <Section title="If you do not pay">
+      {/* Hidden while Razorpay collects: the vendor has nothing to pay. */}
+      {view.state !== 'collecting' ? <Section title="If you do not pay">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm text-[var(--badge-warning-fg)]">{ifYouDoNotPay.map((item) => <li key={item}>{item}</li>)}</ul>
-      </Section>
+      </Section> : null}
     </> : null}
   </div>
 }

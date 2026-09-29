@@ -11,7 +11,7 @@ import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, prototypeSeed, vendorOnboardingService,
   type LiveSubscriptionRead, type PrototypeState,
 } from '@/shared/api'
-import { livePlans, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
+import { liveActivatedSubscription, livePlans, liveTrialAutoPaySubscription, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LiveVendorPlan } from './LiveVendorPlan'
 import { VendorBillingPrototype } from './VendorBillingPrototype'
@@ -183,6 +183,27 @@ describe('VendorShell under the live API', () => {
     expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(screen.getAllByRole('status', { name: 'Shop plan status' })).toHaveLength(1)
     expect(planBanner()).toBeNull()
+  })
+
+  it('shows the neutral AutoPay-on banner and the Shop plan header while free days last', async () => {
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(banner()?.textContent).toBe('13 free days left — AutoPay is on, so the first ₹299 is charged on 12 Oct.Shop plan'))
+    expect(banner()!.className).toContain('--vc-banner')
+    expect(within(banner()!).getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(planBanner()).toBeNull()
+  })
+
+  it('shows no billing banner while Razorpay collects, so PlanBanner can show', async () => {
+    vi.setSystemTime(daysBeforeEnd(-1))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: liveActivatedSubscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(planBanner()).toBeTruthy())
+    expect(banner()).toBeNull()
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
   })
 
   it('shows PlanBanner and Shop plan for a shop that is not live', async () => {

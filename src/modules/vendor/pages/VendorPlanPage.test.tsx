@@ -10,7 +10,7 @@ import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
 import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
-import { livePlans, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
+import { liveActivatedSubscription, livePlans, liveTrialAutoPaySubscription, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { resetDemoState } from '@/shared/api/fixtures/demo-state'
 import { VendorPlanPage } from './VendorPlanPage'
@@ -182,6 +182,28 @@ describe('VendorPlanPage', () => {
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('3')).toBeTruthy()
       expect(screen.getByText('Set up AutoPay now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.')).toBeTruthy()
+    })
+
+    it('shows free days with its AutoPay-on line and no action', async () => {
+      stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+      expect(screen.getByText('13')).toBeTruthy()
+      expect(screen.getByText('Free days are unchanged. When they end, Razorpay charges ₹299 each month to keep the shop open.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Collecting with no action, no dates and no "If you do not pay"', async () => {
+      vi.setSystemTime(daysBeforeEnd(-1))
+      stubReads(async () => ({ kind: 'subscription', subscription: liveActivatedSubscription() }))
+      const { container } = show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Shop is open')).toBeTruthy()
+      expect(screen.getByText('AutoPay on.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+      expect(container.textContent).not.toMatch(/Oct/)
+      expect(screen.queryAllByRole('button')).toEqual([])
     })
 
     it('shows only the note for a shop that is not live', async () => {

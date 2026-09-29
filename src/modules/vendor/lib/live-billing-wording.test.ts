@@ -47,6 +47,37 @@ describe('liveBillingWording', () => {
     expect(wording.header).toBe('Pay ₹349')
   })
 
+  it('words free days with AutoPay on, with the first charge date in IST and no action', () => {
+    // 11 Oct 11:00 pm in UTC is 12 Oct in IST.
+    const view: LiveBillingView = { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 13, firstChargeAt: '2026-10-11T23:00:00Z' }
+    expect(liveBillingWording(view)).toEqual({
+      card: {
+        tone: 'neutral', eyebrow: 'Free days', figure: { days: 13 },
+        body: 'Free days are unchanged. When they end, Razorpay charges ₹299 each month to keep the shop open.',
+        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: 'AutoPay on — first ₹299 on 12 Oct',
+      },
+      note: null,
+      banner: { tone: 'neutral', lead: '13 free days left', text: 'AutoPay is on, so the first ₹299 is charged on 12 Oct.', action: 'Shop plan' },
+      header: 'Shop plan',
+    })
+  })
+
+  it('keeps AutoPay on neutral with 3 days or fewer left', () => {
+    const wording = liveBillingWording({ state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 1, firstChargeAt: trialEndsAt })
+    expect(wording.card?.tone).toBe('neutral')
+    expect(wording.banner).toMatchObject({ tone: 'neutral', lead: '1 free day left' })
+  })
+
+  it('words Collecting with no dates, no action, no banner and the Shop plan header', () => {
+    expect(liveBillingWording({ state: 'collecting', shop: 'open', plan })).toEqual({
+      card: {
+        tone: 'neutral', eyebrow: 'Shop plan', figure: { headline: 'Shop is open' }, body: 'AutoPay on.',
+        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
+      },
+      note: null, banner: null, header: 'Shop plan',
+    })
+  })
+
   it('gives a shop that is not live the note only, no banner and the Shop plan header', () => {
     expect(liveBillingWording({ state: 'not_live', plan })).toEqual({
       card: null, note: 'Free days start when your shop goes live.', banner: null, header: 'Shop plan',

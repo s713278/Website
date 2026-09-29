@@ -10,6 +10,10 @@ export interface LiveBillingPlan { code: string; name: string; price: number }
  */
 export type LiveBillingView =
   | { state: 'free_days' | 'three_days_left'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
+  /** Free days with AutoPay agreed; `firstChargeAt` is when Razorpay charges the first fee. */
+  | { state: 'autopay_on'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number; firstChargeAt: string }
+  /** Razorpay is collecting the first fee or a renewal: open, with no dates. */
+  | { state: 'collecting'; shop: 'open'; plan: LiveBillingPlan }
   | { state: 'not_live'; plan: LiveBillingPlan }
 
 /** A billing read that matches no mapping row. Plan shows it as a read error with Try again. */
@@ -73,9 +77,26 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   const trialEndsAt = instant(subscription.trial_ends_at)
   const periodEnd = instant(subscription.current_period_end)
 
+  const beforeTrialEnd = trialEndsAt !== null && now.getTime() < Date.parse(trialEndsAt)
+
+  // Row 2.
+  if (status === 'PAST_DUE') return { state: 'collecting', shop: 'open', plan }
+  // Row 3a, gap B: dev sets ACTIVE when Razorpay activates, before the fee is captured. ACTIVE
+  // without a paid period is still being collected.
+  if (status === 'ACTIVE' && periodEnd === null) return { state: 'collecting', shop: 'open', plan }
+
+  // Row 7. Gap C: dev reports trial AutoPay as PAYMENT_PENDING with no `next_billing_at`, so the date
+  // falls back to T. Gap D: Razorpay charges 24 h after T, so until D is fixed this date is a day early.
+  if ((status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING') && autoPayAgreed && trialEndsAt && beforeTrialEnd) {
+    const firstChargeAt = instant(subscription.next_billing_at) ?? trialEndsAt
+    return { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: daysUntil(trialEndsAt, now), firstChargeAt }
+  }
+  // Row 8, gap D: free days have ended and Razorpay has not charged yet. PAYMENT_PENDING here is row 8b.
+  if (status === 'TRIAL_ACTIVE' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) return { state: 'collecting', shop: 'open', plan }
+
   // Row 9. A CANCELLED subscription with a paid period belongs to rows 5 and 6, which come first.
   const freeDaysStatus = status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING' || (status === 'CANCELLED' && periodEnd === null)
-  if (freeDaysStatus && !autoPayAgreed && trialEndsAt && now.getTime() < Date.parse(trialEndsAt)) {
+  if (freeDaysStatus && !autoPayAgreed && trialEndsAt && beforeTrialEnd) {
     const daysLeft = daysUntil(trialEndsAt, now)
     return { state: daysLeft <= 3 ? 'three_days_left' : 'free_days', shop: 'open', plan, trialEndsAt, daysLeft }
   }

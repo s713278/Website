@@ -45,3 +45,38 @@ export function liveTrialSubscription(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+/** The paid plan's fields, which the subscription carries once a Razorpay subscription exists. */
+const paidPlanFields = {
+  plan_code: 'MITHRA_SOCIAL_STARTER_MONTHLY',
+  plan_name: 'Mithra Social Starter',
+  sale_price: 299,
+}
+
+/**
+ * Trial AutoPay approved in Checkout, as dev returns it today (gap C): PAYMENT_PENDING with the paid
+ * plan and no `next_billing_at`, while the trial dates stay correct.
+ */
+export function liveTrialAutoPaySubscription(overrides: Record<string, unknown> = {}) {
+  return liveTrialSubscription({
+    ...paidPlanFields,
+    status: 'PAYMENT_PENDING',
+    razorpay_subscription_id: 'sub_FakeAutoPay0001',
+    razorpay_status: 'authenticated',
+    updated_at: '2026-09-28T10:09:41.52841Z',
+    ...overrides,
+  })
+}
+
+/**
+ * Razorpay has activated the subscription but not yet captured the ₹299 (gap B): ACTIVE with no paid
+ * period and no next charge.
+ */
+export function liveActivatedSubscription(overrides: Record<string, unknown> = {}) {
+  return liveTrialAutoPaySubscription({
+    status: 'ACTIVE',
+    razorpay_status: 'active',
+    updated_at: '2026-10-13T10:04:20.4113Z',
+    ...overrides,
+  })
+}
