@@ -3,6 +3,7 @@ import type { PrototypeCard } from '@/modules/vendor/lib/billing-prototype-card'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
 import { liveBillingWording, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { LivePaymentsYouMade } from '@/modules/vendor/components/LivePaymentsYouMade'
 import { cancelLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
 import { getErrorMessage, isApiError, liveBillingService, mapLiveCheckout, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -50,7 +51,7 @@ export function LiveVendorPlan() {
   const { vendorId } = useVendorAccount()
   // A new session clears the shared read, even for the same vendor, so Plan reads again.
   const sessionUser = useAuthStore((state) => state.user)
-  const { view, error, reading } = useLiveBilling(vendorId)
+  const { view, error, reading, trialStartedAt } = useLiveBilling(vendorId)
   // The shared read retries an outage quietly, so one shown here has run out of retries.
   const errorMessage = useMemo(() => error ? isBriefOutage(error) ? notResponding : getErrorMessage(error) : null, [error])
 
@@ -66,6 +67,8 @@ export function LiveVendorPlan() {
    */
   const [hold, setHold] = useState<{ from: LiveBillingView['state']; waiting: string; expired: boolean } | null>(null)
   const polling = hold !== null && !hold.expired
+  /** Successful `confirm` calls: each one rereads the history. A cancel's response is a new view, which does too. */
+  const [confirmed, setConfirmed] = useState(0)
 
   // The shared read drops a response for a previous vendor or session, so there is nothing to cancel here.
   useEffect(() => {
@@ -152,6 +155,7 @@ export function LiveVendorPlan() {
     for (let retry = 0; ; retry += 1) {
       try {
         await liveBillingService.confirm(vendorId, callback)
+        if (!signal.aborted) setConfirmed((count) => count + 1)
         return
       } catch (cause) {
         if (signal.aborted) return
@@ -208,6 +212,9 @@ export function LiveVendorPlan() {
       {view.state !== 'collecting' && view.state !== 'paid' ? <Section title="If you do not pay">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm text-[var(--badge-warning-fg)]">{ifYouDoNotPay.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section> : null}
+      <Section title="Payments you made">
+        <LivePaymentsYouMade vendorId={vendorId} view={view} reading={reading} trialStartedAt={trialStartedAt} writes={confirmed} />
+      </Section>
       {stopConfirmation ? <Section title="Stop the plan">
         {confirmStop ? <>
           <p className="text-sm">{stopConfirmation}</p>

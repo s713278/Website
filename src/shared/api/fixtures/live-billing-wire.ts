@@ -178,3 +178,36 @@ export function liveSubscribeResponse(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+/**
+ * One `GET …/subscription/history` entry. Dev sends no amount, and since 29 September it leaves null
+ * fields out, so an event without a payment has no `external_payment_id` key.
+ */
+export function liveHistoryEvent(eventType: string, overrides: Record<string, unknown> = {}) {
+  return {
+    event_type: eventType,
+    new_status: 'PAYMENT_PENDING',
+    external_subscription_id: 'sub_FakeAutoPay0001',
+    event_at: '2026-09-28T10:09:41.52841Z',
+    previous_status: 'PAYMENT_PENDING',
+    ...overrides,
+  }
+}
+
+/**
+ * `GET …/subscription/history` for the paid shop that then stopped its plan, newest first as dev
+ * sends it. It keeps dev's duplicate rows (gap G): a repeated `confirm` and a repeated cancel each
+ * wrote their event twice.
+ */
+export function liveStoppedHistory() {
+  return [
+    liveHistoryEvent('CANCELLATION_REQUESTED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', event_at: '2026-10-14T08:22:30.1174Z' }),
+    liveHistoryEvent('CANCELLATION_REQUESTED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', event_at: '2026-10-14T08:21:47.90412Z' }),
+    liveHistoryEvent('SUBSCRIPTION_CHARGED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', external_payment_id: 'pay_FakeCharge0001', event_at: '2026-10-13T10:10:02.31872Z' }),
+    liveHistoryEvent('SUBSCRIPTION_ACTIVATED', { previous_status: 'PAYMENT_PENDING', new_status: 'ACTIVE', event_at: '2026-10-13T10:04:20.4113Z' }),
+    liveHistoryEvent('PAYMENT_AUTHORIZED', { external_payment_id: 'pay_FakeMandate0001', event_at: '2026-09-28T10:09:58.01263Z' }),
+    liveHistoryEvent('PAYMENT_AUTHORIZED', { external_payment_id: 'pay_FakeMandate0001', event_at: '2026-09-28T10:09:52.77405Z' }),
+    liveHistoryEvent('SUBSCRIPTION_AUTHENTICATED', { event_at: '2026-09-28T10:09:41.52841Z' }),
+    liveHistoryEvent('CHECKOUT_CREATED', { previous_status: 'TRIAL_ACTIVE', event_at: '2026-09-28T10:08:03.64419Z' }),
+  ]
+}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
@@ -11,7 +11,7 @@ import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveHistoryEvent, livePaidSubscription, livePlans, liveStoppedHistory, liveStoppedSubscription,
   liveTrialAutoPayCancelledSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -142,11 +142,15 @@ describe('VendorPlanPage', () => {
       })
     }
 
-    /** Stubs both reads of the shared billing read; nothing reaches the dev backend. */
-    function stubReads(subscription: (vendorId: string) => Promise<LiveSubscriptionRead>, plans: () => Promise<unknown> = async () => livePlans) {
+    /** Stubs both reads of the shared billing read, and Plan's history read; nothing reaches the dev backend. */
+    function stubReads(
+      subscription: (vendorId: string) => Promise<LiveSubscriptionRead>, plans: () => Promise<unknown> = async () => livePlans,
+      history: () => Promise<unknown> = async () => [],
+    ) {
       return {
         readSubscription: vi.spyOn(liveBillingService, 'readSubscription').mockImplementation((vendorId) => subscription(String(vendorId))),
         listPaidPlans: vi.spyOn(liveBillingService, 'listPaidPlans').mockImplementation(plans),
+        readHistory: vi.spyOn(liveBillingService, 'readHistory').mockImplementation(history),
       }
     }
 
@@ -1246,6 +1250,121 @@ describe('VendorPlanPage', () => {
       expect(screen.queryByText('Free days')).toBeNull()
       await act(async () => { second.resolve({ kind: 'not-live' }) })
       expect(screen.getByText('Free days start when your shop goes live.')).toBeTruthy()
+    })
+
+    describe('Payments you made', () => {
+      /** Lets pending promises and timers due within `ms` run. */
+      const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+      const section = () => screen.getByRole('region', { name: 'Payments you made' })
+      const rows = () => within(section()).queryAllByRole('listitem').map((row) => row.textContent)
+      const charged = liveHistoryEvent('SUBSCRIPTION_CHARGED', {
+        previous_status: 'ACTIVE', new_status: 'ACTIVE', external_payment_id: 'pay_FakeCharge0001', event_at: '2026-10-13T10:10:02.31872Z',
+      })
+
+      beforeEach(() => {
+        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+        vi.useRealTimers()
+        vi.useFakeTimers()
+        vi.setSystemTime(daysBeforeEnd(12.5))
+      })
+
+      it('lists each event once, newest first, from "Free days started", with no amount the backend did not send', async () => {
+        vi.setSystemTime(new Date('2026-10-15T06:00:00Z'))
+        const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription() }), undefined, async () => liveStoppedHistory())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.')).toBeTruthy()
+        expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'AutoPay set up17 days ago', 'Free days started17 days ago'])
+        expect(section().textContent).not.toMatch(/₹/)
+        expect(reads.readHistory).toHaveBeenCalledExactlyOnceWith('vendor-1', expect.anything())
+      })
+
+      it('shows an amount only when the event carries one', async () => {
+        vi.setSystemTime(new Date('2026-10-15T06:00:00Z'))
+        stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }), undefined, async () => [{ ...charged, amount: 299 }])
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(rows()).toEqual(['Payment received₹299 · 2 days ago', 'Free days started17 days ago'])
+      })
+
+      it('keeps a history failure inside the section, with its own Try again', async () => {
+        const reads = stubReads(async () => trial(), undefined, async () => { throw new ApiError('History is unavailable.', 500, null, '/v1/vendors/vendor-1/subscription/history', 'server') })
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getAllByRole('alert')).toEqual([within(section()).getByRole('alert')])
+        expect(within(section()).getByRole('alert').textContent).toBe('History is unavailable.')
+        expect(screen.getByText('13')).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Set up AutoPay · ₹299 on 12 Oct' })).toBeTruthy()
+
+        reads.readHistory.mockResolvedValue([])
+        fireEvent.click(within(section()).getByRole('button', { name: 'Try again' }))
+        await wait()
+        expect(rows()).toEqual(['Free days started2 days ago'])
+        expect(screen.queryByRole('alert')).toBeNull()
+        expect(reads.readHistory).toHaveBeenCalledTimes(2)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it('rereads the history after a successful cancel, which still needs no subscription reread', async () => {
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        const reads = stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }), undefined, async () => [charged])
+        vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveStoppedSubscription())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(rows()).toEqual(['Payment received10 days ago', 'Free days started25 days ago'])
+        reads.readHistory.mockResolvedValue(liveStoppedHistory())
+        fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+        await wait()
+        expect(rows()[0]).toBe('Plan stopped9 days ago')
+        expect(reads.readHistory).toHaveBeenCalledTimes(2)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it('rereads the history once confirm succeeds, before the next poll read', async () => {
+        const reads = stubReads(async () => trial())
+        vi.spyOn(liveBillingService, 'subscribe').mockResolvedValue(liveSubscribeResponse())
+        vi.spyOn(checkout, 'openSubscriptionCheckout').mockResolvedValue({
+          status: 'submitted', callback: { razorpay_payment_id: 'pay_FakePayment0001', razorpay_subscription_id: 'sub_FakeAutoPay0001', razorpay_signature: 'fake_signature_0001' },
+        })
+        const confirmed = deferred<unknown>()
+        vi.spyOn(liveBillingService, 'confirm').mockReturnValue(confirmed.promise)
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        fireEvent.click(screen.getByRole('button', { name: 'Set up AutoPay · ₹299 on 12 Oct' }))
+        await wait()
+        expect(reads.readHistory).toHaveBeenCalledOnce()
+        await act(async () => { confirmed.resolve(null) })
+        await wait()
+        expect(reads.readHistory).toHaveBeenCalledTimes(2)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it('drops a history read that lands after a vendor switch', async () => {
+        const first = deferred<unknown>()
+        const reads = stubReads(async () => trial(), undefined, () => first.promise)
+        const view = render(page('vendor-1'))
+        await wait()
+        expect(within(section()).getByRole('status').textContent).toBe('Reading payments…')
+        reads.readHistory.mockResolvedValue([])
+        act(() => { signIn('vendor-2') })
+        view.rerender(page('vendor-2'))
+        await wait()
+        await act(async () => { first.resolve(liveStoppedHistory()) })
+        expect(rows()).toEqual(['Free days started2 days ago'])
+        expect(reads.readHistory).toHaveBeenLastCalledWith('vendor-2', expect.anything())
+      })
+
+      it('rereads the history whenever Plan rereads, such as on focus', async () => {
+        const reads = stubReads(async () => trial())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(reads.readHistory).toHaveBeenCalledOnce()
+        await act(async () => { window.dispatchEvent(new Event('focus')) })
+        await wait()
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(reads.readHistory).toHaveBeenCalledTimes(2)
+      })
     })
   })
 })

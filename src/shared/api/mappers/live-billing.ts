@@ -157,15 +157,82 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   throw new LiveBillingUnreadableError()
 }
 
+/** The subscription row, or `null` before go-live or when the read carries no object. */
+function subscriptionRecord(read: LiveSubscriptionRead): WireRecord | null {
+  return read.kind === 'subscription' && read.subscription !== null && typeof read.subscription === 'object' ? read.subscription as WireRecord : null
+}
+
 /**
  * The vendor's current plan name from `GET …/subscription`, or `null` before go-live or when the
  * row has none. The vendor context no longer carries the plan. Under gap C it names the paid plan
  * as soon as subscribe runs.
  */
 export function mapLivePlanName(read: LiveSubscriptionRead): string | null {
-  if (read.kind === 'not-live' || read.subscription === null || typeof read.subscription !== 'object') return null
-  const name = (read.subscription as WireRecord).plan_name
+  const name = subscriptionRecord(read)?.plan_name
   return typeof name === 'string' && name.trim() ? name.trim() : null
+}
+
+/** When the free days started: `trial_started_at` from `GET …/subscription`, or `null` before go-live or without a readable one. */
+export function mapLiveTrialStart(read: LiveSubscriptionRead): string | null {
+  try {
+    return instant(subscriptionRecord(read)?.trial_started_at)
+  } catch {
+    return null
+  }
+}
+
+/** One row of "Payments you made". `amount` is in rupees, and only when the event sent one. */
+export interface LiveBillingHistoryRow { title: string; at: string; amount: number | null }
+
+/** A Plan stop is a cancellation requested while paid; one in the free days turns off AutoPay. */
+const planStopped = (event: WireRecord) => event.event_type === 'CANCELLATION_REQUESTED' && event.previous_status === 'ACTIVE'
+
+/**
+ * Maps `GET …/subscription/history` and the subscription's `trial_started_at` to "Payments you made",
+ * newest first. Dev records some events twice (G), so an event shows once per type and payment ID, or
+ * per type and subscription ID when it has no payment. The oldest copy keeps its time. Dev sends no
+ * amounts, so none is inferred. Checkout, authorization, activation and unknown events are ignored.
+ */
+export function mapLiveBillingHistory(payload: unknown, trialStartedAt: string | null): LiveBillingHistoryRow[] {
+  if (!Array.isArray(payload)) throw new LiveBillingUnreadableError()
+  const events = payload.map(record)
+  const shown = new Set<string>()
+  const rows: LiveBillingHistoryRow[] = []
+  // Oldest first, so the first copy of a duplicate is kept and a stop is seen before its end.
+  for (const event of [...events].reverse()) {
+    const title = historyTitle(event, events)
+    if (!title) continue
+    const key = `${String(event.event_type)}:${String(event.external_payment_id ?? event.external_subscription_id ?? event.event_at)}`
+    if (shown.has(key)) continue
+    shown.add(key)
+    const amount = typeof event.amount === 'number' && Number.isFinite(event.amount) ? event.amount : null
+    rows.push({ title, at: eventAt(event), amount })
+  }
+  if (trialStartedAt) rows.push({ title: 'Free days started', at: trialStartedAt, amount: null })
+  return rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+}
+
+/** A shown event's time; one without a readable time makes the history unreadable. */
+function eventAt(event: WireRecord): string {
+  const at = instant(event.event_at)
+  if (at === null) throw new LiveBillingUnreadableError()
+  return at
+}
+
+function historyTitle(event: WireRecord, events: WireRecord[]): string | null {
+  switch (event.event_type) {
+    case 'SUBSCRIPTION_CHARGED': return 'Payment received'
+    case 'SUBSCRIPTION_AUTHENTICATED': return 'AutoPay set up'
+    case 'CANCELLATION_REQUESTED': return planStopped(event) ? 'Plan stopped' : 'AutoPay turned off'
+    case 'SUBSCRIPTION_CANCELLED': {
+      // A stopped plan's subscription ends at P; the stop already says so.
+      const ended = Date.parse(eventAt(event))
+      const stoppedFirst = events.some((other) => planStopped(other) && other.external_subscription_id === event.external_subscription_id
+        && Date.parse(eventAt(other)) <= ended)
+      return stoppedFirst ? null : 'AutoPay ended'
+    }
+    default: return null
+  }
 }
 
 /** What Razorpay Checkout opens with, from a subscribe response. */

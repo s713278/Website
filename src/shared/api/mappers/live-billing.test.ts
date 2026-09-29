@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveMonthlyPlan, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveHistoryEvent, liveMonthlyPlan, liveStoppedHistory, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
   liveStoppedSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
-import { LiveBillingUnreadableError, mapLiveBilling, mapLiveCheckout, mapLivePlanName } from './live-billing'
+import { LiveBillingUnreadableError, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLivePlanName, mapLiveTrialStart } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
 const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
@@ -363,5 +363,96 @@ describe('mapLiveCheckout', () => {
     expect(() => mapLiveCheckout(liveSubscribeResponse({ razorpay_key_id: null }))).toThrow(message)
     expect(() => mapLiveCheckout(liveSubscribeResponse({ razorpay_subscription_id: '' }))).toThrow(message)
     expect(() => mapLiveCheckout(null)).toThrow(message)
+  })
+})
+
+describe('mapLiveBillingHistory', () => {
+  const trialStartedAt = '2026-09-28T10:04:16.169Z'
+  const titles = (payload: unknown, started: string | null = null) => mapLiveBillingHistory(payload, started).map((row) => row.title)
+
+  it('lists the stopped shop once per event, newest first, from "Free days started"', () => {
+    expect(mapLiveBillingHistory(liveStoppedHistory(), trialStartedAt)).toEqual([
+      { title: 'Plan stopped', at: '2026-10-14T08:21:47.904Z', amount: null },
+      { title: 'Payment received', at: '2026-10-13T10:10:02.318Z', amount: null },
+      { title: 'AutoPay set up', at: '2026-09-28T10:09:41.528Z', amount: null },
+      { title: 'Free days started', at: trialStartedAt, amount: null },
+    ])
+  })
+
+  it('shows a duplicate charge with the same payment ID once', () => {
+    const charge = (at: string, payment = 'pay_FakeCharge0001') =>
+      liveHistoryEvent('SUBSCRIPTION_CHARGED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', external_payment_id: payment, event_at: at })
+    expect(titles([charge('2026-10-13T10:10:05Z'), charge('2026-10-13T10:10:02Z')])).toEqual(['Payment received'])
+    expect(titles([charge('2026-11-13T10:10:02Z', 'pay_FakeCharge0002'), charge('2026-10-13T10:10:02Z')])).toEqual(['Payment received', 'Payment received'])
+  })
+
+  it('shows cancellations without a payment ID on two subscriptions, a trial turn-off and a later paid stop', () => {
+    expect(titles([
+      liveHistoryEvent('CANCELLATION_REQUESTED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', external_subscription_id: 'sub_FakeRejoin0001', event_at: '2026-11-02T09:00:00Z' }),
+      liveHistoryEvent('CANCELLATION_REQUESTED', { external_payment_id: null, new_status: 'CANCELLED', event_at: '2026-09-28T11:15:02Z' }),
+    ])).toEqual(['Plan stopped', 'AutoPay turned off'])
+  })
+
+  it('names each event', () => {
+    const event = (type: string, previous = 'PAYMENT_PENDING') => titles([liveHistoryEvent(type, { previous_status: previous })])
+    expect(event('SUBSCRIPTION_CHARGED', 'ACTIVE')).toEqual(['Payment received'])
+    expect(event('SUBSCRIPTION_AUTHENTICATED')).toEqual(['AutoPay set up'])
+    expect(event('CANCELLATION_REQUESTED', 'ACTIVE')).toEqual(['Plan stopped'])
+    expect(event('CANCELLATION_REQUESTED', 'PAYMENT_PENDING')).toEqual(['AutoPay turned off'])
+    expect(event('CANCELLATION_REQUESTED', 'TRIAL_ACTIVE')).toEqual(['AutoPay turned off'])
+    expect(event('SUBSCRIPTION_CANCELLED', 'ACTIVE')).toEqual(['AutoPay ended'])
+  })
+
+  it('skips "AutoPay ended" when the plan was stopped first on that subscription', () => {
+    const stopped = liveHistoryEvent('CANCELLATION_REQUESTED', { previous_status: 'ACTIVE', new_status: 'ACTIVE', event_at: '2026-10-14T08:21:47Z' })
+    const ended = (subscription: string, at = '2026-11-12T18:30:05Z') =>
+      liveHistoryEvent('SUBSCRIPTION_CANCELLED', { previous_status: 'ACTIVE', new_status: 'CANCELLED', external_subscription_id: subscription, event_at: at })
+    expect(titles([ended('sub_FakeAutoPay0001'), stopped])).toEqual(['Plan stopped'])
+    // Another subscription's stop, or a trial turn-off, does not hide it.
+    expect(titles([ended('sub_FakeRejoin0001'), stopped])).toEqual(['AutoPay ended', 'Plan stopped'])
+    const turnedOff = liveHistoryEvent('CANCELLATION_REQUESTED', { new_status: 'CANCELLED', event_at: '2026-09-28T11:15:02Z' })
+    expect(titles([ended('sub_FakeAutoPay0001', '2026-09-28T11:15:04Z'), turnedOff])).toEqual(['AutoPay ended', 'AutoPay turned off'])
+    // An end recorded before the stop was not caused by it.
+    expect(titles([stopped, ended('sub_FakeAutoPay0001', '2026-10-14T08:00:00Z')])).toEqual(['Plan stopped', 'AutoPay ended'])
+  })
+
+  it('adds "Free days started" from trial_started_at, in its place by date, and leaves it out without one', () => {
+    expect(titles([], trialStartedAt)).toEqual(['Free days started'])
+    expect(titles([liveHistoryEvent('SUBSCRIPTION_AUTHENTICATED')], trialStartedAt)).toEqual(['AutoPay set up', 'Free days started'])
+    expect(titles([liveHistoryEvent('SUBSCRIPTION_AUTHENTICATED')])).toEqual(['AutoPay set up'])
+  })
+
+  it('ignores checkout, authorization, activation and unknown events', () => {
+    expect(titles(['CHECKOUT_CREATED', 'PAYMENT_AUTHORIZED', 'SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_PAUSED'].map((type) => liveHistoryEvent(type)))).toEqual([])
+  })
+
+  it('shows an amount only when an event carries one', () => {
+    const charge = (overrides: Record<string, unknown>) =>
+      mapLiveBillingHistory([liveHistoryEvent('SUBSCRIPTION_CHARGED', { external_payment_id: 'pay_FakeCharge0001', ...overrides })], null)[0].amount
+    expect(charge({})).toBeNull()
+    expect(charge({ amount: null })).toBeNull()
+    expect(charge({ amount: 299 })).toBe(299)
+  })
+
+  it('lists newest first whatever order the events arrive in', () => {
+    expect(titles([
+      liveHistoryEvent('SUBSCRIPTION_AUTHENTICATED', { event_at: '2026-09-28T10:09:41Z' }),
+      liveHistoryEvent('SUBSCRIPTION_CHARGED', { external_payment_id: 'pay_FakeCharge0001', event_at: '2026-10-13T10:10:02Z' }),
+    ], trialStartedAt)).toEqual(['Payment received', 'AutoPay set up', 'Free days started'])
+  })
+
+  it('rejects a response that is not a list, or a shown event without a readable time', () => {
+    expect(() => mapLiveBillingHistory({ events: [] }, null)).toThrow(LiveBillingUnreadableError)
+    expect(() => mapLiveBillingHistory([liveHistoryEvent('SUBSCRIPTION_AUTHENTICATED', { event_at: '2026-09-28T10:09:41' })], null)).toThrow(LiveBillingUnreadableError)
+    expect(mapLiveBillingHistory([liveHistoryEvent('CHECKOUT_CREATED', { event_at: null })], null)).toEqual([])
+  })
+})
+
+describe('mapLiveTrialStart', () => {
+  it('reads trial_started_at, and null before go-live or when it is missing or unreadable', () => {
+    expect(mapLiveTrialStart(subscription())).toBe('2026-09-28T10:04:16.169Z')
+    expect(mapLiveTrialStart({ kind: 'not-live' })).toBeNull()
+    expect(mapLiveTrialStart(subscription({ trial_started_at: undefined }))).toBeNull()
+    expect(mapLiveTrialStart(subscription({ trial_started_at: '28 Sep' }))).toBeNull()
   })
 })

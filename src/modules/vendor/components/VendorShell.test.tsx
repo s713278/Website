@@ -168,9 +168,10 @@ describe('VendorShell under the live API', () => {
   const daysBeforeEnd = (days: number) => new Date(Date.parse(trialEnd) - days * 24 * 60 * 60 * 1000)
   const trial = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialSubscription() })
 
-  /** Stubs both halves of the shared billing read; nothing reaches the dev backend. */
+  /** Stubs both halves of the shared billing read, and Plan's history read; nothing reaches the dev backend. */
   function stubReads(subscription: () => Promise<LiveSubscriptionRead>) {
     vi.spyOn(liveBillingService, 'listPaidPlans').mockResolvedValue(livePlans)
+    vi.spyOn(liveBillingService, 'readHistory').mockResolvedValue([])
     return vi.spyOn(liveBillingService, 'readSubscription').mockImplementation(subscription)
   }
 
