@@ -340,6 +340,8 @@ describe('VendorPlanPage', () => {
       })
 
       it('shows gap A’s message for a 500 from Turn off AutoPay, after one call, and keeps the view', async () => {
+        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+        vi.useRealTimers()
         vi.useFakeTimers()
         vi.setSystemTime(daysBeforeEnd(12.5))
         const reads = stubReads(async () => autoPayOn())
@@ -357,6 +359,8 @@ describe('VendorPlanPage', () => {
       })
 
       it('shows gap A’s message for a 500 from Stop the plan, after one call, and keeps Paid', async () => {
+        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+        vi.useRealTimers()
         vi.useFakeTimers()
         vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
         const reads = stubReads(async () => paid())
