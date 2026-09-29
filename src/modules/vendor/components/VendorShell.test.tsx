@@ -280,6 +280,22 @@ describe('VendorShell under the live API', () => {
     expect(reads).toHaveBeenCalledOnce()
   })
 
+  it('updates the banner and header when a Stop the plan response lands after leaving Plan', async () => {
+    vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+    let respond!: (subscription: unknown) => void
+    vi.spyOn(liveBillingService, 'cancel').mockReturnValue(new Promise((resolve) => { respond = resolve }))
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop the plan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+    fireEvent.click(screen.getAllByRole('link', { name: /Overview/ })[0])
+    expect(await screen.findByText('Overview page')).toBeTruthy()
+    await act(async () => { respond(liveStoppedSubscription()) })
+    expect(banner()?.textContent).toBe('Shop stays open until 12 Nov — then customers cannot see it. You can pay again any time with Razorpay.Keep open · ₹299')
+    expect(header().getByRole('link', { name: 'Keep open · ₹299' })).toBeTruthy()
+  })
+
   it('shows the confirming banner and the Shop plan header while a payment is confirmed', async () => {
     vi.setSystemTime(daysBeforeEnd(-0.5))
     freeTierStore()

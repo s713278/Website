@@ -47,7 +47,7 @@ export function LiveVendorPlan() {
   const { view, error, reading } = useLiveBilling(vendorId)
   const errorMessage = useMemo(() => error ? getErrorMessage(error) : null, [error])
 
-  /** The actions of this vendor and session: aborted on a change or unmount, so a late answer is ignored. */
+  /** The actions of this vendor and session: aborted on a change or unmount, so Plan ignores a late answer. */
   const actions = useRef<{ controller: AbortController; running: boolean } | null>(null)
   const [acting, setActing] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -73,7 +73,7 @@ export function LiveVendorPlan() {
     setActing(true)
     setActionError(null)
     try {
-      await cancelLiveBilling(vendorId, { signal: current.controller.signal })
+      await cancelLiveBilling(vendorId)
       if (!current.controller.signal.aborted) setConfirmStop(false)
     } catch (cause) {
       // Gap A: dev answers a cancel before the first charge with a 500.

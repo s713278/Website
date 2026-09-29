@@ -60,12 +60,13 @@ export function readLiveBilling(vendorId: string): Promise<void> {
 /**
  * Turns off AutoPay or stops the plan. The response is the subscription, so it replaces the vendor's
  * view directly, with no reread; a read still on its way is dropped. A failure rejects and leaves
- * the view as it was. Once `signal` aborts, or the session or vendor changes, the response is ignored.
+ * the view as it was. It is shown even after Plan unmounts, so the chrome stays true; only a session
+ * or vendor change drops it.
  */
-export async function cancelLiveBilling(vendorId: string, { signal }: { signal: AbortSignal }): Promise<void> {
+export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const user = useAuthStore.getState().user
   const subscription = await liveBillingService.cancel(vendorId)
-  if (signal.aborted || useAuthStore.getState().user !== user || snapshot.vendorId !== vendorId || !snapshot.plans) return
+  if (useAuthStore.getState().user !== user || snapshot.vendorId !== vendorId || !snapshot.plans) return
   const view = mapLiveBilling({ kind: 'subscription', subscription }, snapshot.plans, new Date())
   generation += 1
   inFlight?.controller.abort()

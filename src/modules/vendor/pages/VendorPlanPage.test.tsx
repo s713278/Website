@@ -409,7 +409,7 @@ describe('VendorPlanPage', () => {
         expect(cancel).toHaveBeenCalledOnce()
       })
 
-      it('ignores a cancel response that lands after unmount', async () => {
+      it('still shows a cancel response that lands after Plan unmounts in the shared read, with no error', async () => {
         const reads = stubReads(async () => autoPayOn())
         const response = deferred<unknown>()
         vi.spyOn(liveBillingService, 'cancel').mockReturnValue(response.promise)
@@ -419,10 +419,12 @@ describe('VendorPlanPage', () => {
         view.unmount()
         await act(async () => { response.resolve(liveTrialAutoPayCancelledSubscription()) })
         expect(errors).not.toHaveBeenCalled()
-        // The remount's reread never lands, so Plan shows whatever the shared read still holds.
+        // The remount's reread never lands, so Plan shows whatever the shared read holds.
         reads.readSubscription.mockReturnValue(new Promise(() => {}))
         show(accountFor(context('trial_active', 'vendor-1')))
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText(/^Your shop is live free until/)).toBeTruthy()
+        expect(screen.queryByText(/^AutoPay on/)).toBeNull()
+        expect(screen.queryByRole('alert')).toBeNull()
       })
 
       it('ignores a cancel response that lands after a vendor switch', async () => {
