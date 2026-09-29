@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { NavLink, Link, Outlet, useLocation } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
+import { LiveHeaderButton, LiveShellBanner } from '@/modules/vendor/components/LiveBillingChrome'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { isLiveApi } from '@/shared/api'
@@ -186,7 +187,8 @@ function PlanBanner() {
  * The six-state Plan prototype's banner and header button: local development in demo mode only.
  *
  * They read the prototype state Plan shares, and link to Plan rather than opening Checkout. A
- * production build drops the import entirely, and a live API keeps the plan pill and `PlanBanner`.
+ * production build drops the import entirely and keeps the plan pill and `PlanBanner`; the live API
+ * has its own billing chrome.
  */
 const prototypeChrome = import.meta.env.DEV ? () => import('@/modules/vendor/components/BillingPrototypeChrome') : null
 const PrototypeShellBanner = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeShellBanner })))
@@ -208,7 +210,7 @@ function VendorChrome() {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
   const title = pageTitle(pathname)
-  const showPrototype = !isLiveApi()
+  const live = isLiveApi()
 
   // Arriving somewhere is what closing the drawer means, so the route is what closes it —
   // not each link having to remember to.
@@ -303,9 +305,12 @@ function VendorChrome() {
               The reference's top-right pill points at marketing pricing and says "Upgrade".
               Neither is available here: `GET /v1/api/subscription-plans` answers 403 on a
               vendor token and pricing is undecided, so every tier but the current one would
-              be invented. The pill keeps its place and says where it actually goes.
+              be invented. The pill keeps its place and says where it actually goes. With the
+              live API it names the billing state's next step instead, and still links to Plan.
             */}
-            {PrototypeHeaderButton && showPrototype ? (
+            {live ? (
+              <LiveHeaderButton />
+            ) : PrototypeHeaderButton ? (
               <Suspense fallback={null}>
                 <PrototypeHeaderButton />
               </Suspense>
@@ -319,7 +324,9 @@ function VendorChrome() {
           </div>
         </header>
 
-        {PrototypeShellBanner && showPrototype ? (
+        {live ? (
+          <LiveShellBanner planBanner={<PlanBanner />} />
+        ) : PrototypeShellBanner ? (
           <Suspense fallback={null}>
             <PrototypeShellBanner />
           </Suspense>
