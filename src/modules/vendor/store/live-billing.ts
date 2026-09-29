@@ -103,7 +103,7 @@ export function readLiveBilling(vendorId: string): Promise<void> {
 }
 
 /**
- * Turns off AutoPay or stops the plan. The response is the subscription, so it replaces the vendor's
+ * Stops the plan. The response is the subscription, so it replaces the vendor's
  * view directly, with no reread; a read still on its way is dropped. A failure rejects and leaves
  * the view as it was. It is shown even after Plan unmounts, so the chrome stays true; only a session
  * or vendor change drops it.

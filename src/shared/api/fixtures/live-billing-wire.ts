@@ -54,8 +54,9 @@ const paidPlanFields = {
 }
 
 /**
- * Trial AutoPay approved in Checkout, as dev returns it today (gap C): PAYMENT_PENDING with the paid
- * plan and no `next_billing_at`, while the trial dates stay correct.
+ * Pay ₹299 with Razorpay during free days, as dev returns it today (gaps K and C): Checkout approved
+ * an AutoPay-only subscription, read as PAYMENT_PENDING with the paid plan and no `next_billing_at`,
+ * while the trial dates stay correct.
  */
 export function liveTrialAutoPaySubscription(overrides: Record<string, unknown> = {}) {
   return liveTrialSubscription({
@@ -64,6 +65,20 @@ export function liveTrialAutoPaySubscription(overrides: Record<string, unknown> 
     razorpay_subscription_id: 'sub_FakeAutoPay0001',
     razorpay_status: 'authenticated',
     updated_at: '2026-09-28T10:09:41.52841Z',
+    ...overrides,
+  })
+}
+
+/**
+ * Pay ₹299 with Razorpay during free days, in the read gap K requests (not built on dev): the trial
+ * status and plan stay until the ₹299 is captured, with a Razorpay subscription `created` until
+ * Checkout pays and approves AutoPay.
+ */
+export function liveEarlyFeeSubscription(overrides: Record<string, unknown> = {}) {
+  return liveTrialSubscription({
+    razorpay_subscription_id: 'sub_FakeEarlyFee0001',
+    razorpay_status: 'created',
+    updated_at: '2026-09-30T09:12:40.20931Z',
     ...overrides,
   })
 }
@@ -147,20 +162,6 @@ export function liveHaltedSubscription(overrides: Record<string, unknown> = {}) 
     razorpay_status: 'cancelled',
     next_billing_at: null,
     updated_at: '2026-11-15T18:30:12.40731Z',
-    ...overrides,
-  })
-}
-
-/**
- * AutoPay turned off during the free days: the cancel response expected once gap A is fixed, since
- * dev answers this cancel with a 500 today. CANCELLED at Razorpay too, with the trial dates kept.
- */
-export function liveTrialAutoPayCancelledSubscription(overrides: Record<string, unknown> = {}) {
-  return liveTrialAutoPaySubscription({
-    status: 'CANCELLED',
-    razorpay_status: 'cancelled',
-    cancelled_at: '2026-09-28T11:15:02.30416Z',
-    updated_at: '2026-09-28T11:15:02.30416Z',
     ...overrides,
   })
 }

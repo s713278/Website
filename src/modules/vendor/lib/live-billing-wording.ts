@@ -135,44 +135,37 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     }
   }
   const card = { ...planCard, eyebrow: 'Free days', figure: { days: view.daysLeft } }
-  // One wording at every count: AutoPay on stays neutral with 3 days or fewer left.
-  if (view.state === 'autopay_on') {
-    const firstCharge = shortDate(view.firstChargeAt)
-    return {
-      card: {
-        ...card, tone: 'neutral',
-        body: `Free days are unchanged. When they end, Razorpay charges ${price} each month to keep the shop open.`,
-        autoPay: `AutoPay on — first ${price} on ${firstCharge}`,
-      },
-      note: null, confirming: null, stopConfirmation: null, checkout: null,
-      banner: { tone: 'neutral', lead: freeDaysLead(view.daysLeft), text: `AutoPay is on, so the first ${price} is charged on ${firstCharge}.`, action: 'Shop plan' },
-      header: 'Shop plan',
-    }
+  const liveUntil = `Your shop is live free until ${dateTime(view.trialEndsAt)}.`
+  // One wording at every count: the vendor has paid, so 3 days left does not apply. No banner, so
+  // the shell's own banner shows.
+  if (view.state === 'free_days_confirming') return {
+    card: { ...card, tone: 'neutral', body: `${liveUntil} Your free days are kept.` },
+    note: null, confirming: confirmingPayment, stopConfirmation: null, checkout: null, banner: null, header: 'Shop plan',
   }
-  const freeDaysEnd = shortDate(view.trialEndsAt)
-  const setUpAutoPay = {
-    label: `Set up AutoPay · ${price} on ${freeDaysEnd}`,
-    help: `Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; the first ${price} is charged on ${freeDaysEnd}, when free days end.`,
+  // The early first fee: the backend decides what Checkout charges (gap K).
+  const payEarly = {
+    label: `Pay ${price} with Razorpay`,
+    help: `Opens Razorpay Checkout. Pay ${price} now by card or UPI. Your free days are kept: your paid month starts on ${shortDate(view.trialEndsAt)}, then AutoPay charges ${price} each month.`,
   }
-  const setUpAutoPayCheckout: LiveCheckoutPurpose = {
-    waiting: 'Confirming AutoPay…',
-    failed: (reason) => `The payment did not go through (${reason}), so AutoPay is not set up. Nothing changed; your free days are the same.`,
+  const payEarlyCheckout: LiveCheckoutPurpose = {
+    waiting: confirmingPayment,
+    failed: (reason) => `The payment did not go through (${reason}). Nothing changed; your free days are the same.`,
   }
   if (view.state === 'three_days_left') return {
     card: {
-      ...card, tone: 'danger', action: setUpAutoPay,
-      body: `Set up AutoPay now so customers can still open your shop when free days end. Free days end on ${dateTime(view.trialEndsAt)}.`,
+      ...card, tone: 'danger', action: payEarly,
+      body: `Pay ${price} now so customers can still open your shop when free days end. Free days end on ${dateTime(view.trialEndsAt)}.`,
     },
-    note: null, confirming: null, stopConfirmation: null, checkout: setUpAutoPayCheckout,
-    banner: { tone: 'danger', lead: freeDaysLead(view.daysLeft), text: 'set up AutoPay now so customers can still open your shop when free days end.', action: payNow },
+    note: null, confirming: null, stopConfirmation: null, checkout: payEarlyCheckout,
+    banner: { tone: 'danger', lead: freeDaysLead(view.daysLeft), text: `pay ${price} now so customers can still open your shop when free days end.`, action: payNow },
     header: payNow,
   }
   return {
     card: {
-      ...card, tone: 'neutral', action: setUpAutoPay,
-      body: `Your shop is live free until ${dateTime(view.trialEndsAt)}. After that, subscribe with Razorpay — ${price} each month — to keep it open.`,
+      ...card, tone: 'neutral', action: payEarly,
+      body: `${liveUntil} After that, subscribe with Razorpay — ${price} each month — to keep it open.`,
     },
-    note: null, confirming: null, stopConfirmation: null, checkout: setUpAutoPayCheckout,
+    note: null, confirming: null, stopConfirmation: null, checkout: payEarlyCheckout,
     banner: { tone: 'neutral', lead: freeDaysLead(view.daysLeft), text: `after that, subscribe with Razorpay (${price} / month) to keep the shop open.`, action: payNow },
     header: payNow,
   }

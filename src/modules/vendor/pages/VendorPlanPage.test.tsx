@@ -12,7 +12,7 @@ import {
 } from '@/shared/api'
 import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveHistoryEvent, livePaidSubscription, livePlans, liveStoppedHistory, liveStoppedSubscription,
-  liveTrialAutoPayCancelledSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { resetDemoState } from '@/shared/api/fixtures/demo-state'
@@ -170,7 +170,7 @@ describe('VendorPlanPage', () => {
       signIn('vendor-1')
     })
 
-    it('shows free days with the rounded-up count, the exact end and the sections, and Set up AutoPay as its only action', async () => {
+    it('shows free days with the rounded-up count, the exact end and the sections, and Pay ₹299 with Razorpay as its only action', async () => {
       const reads = stubReads(async () => trial())
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('13')).toBeTruthy()
@@ -179,7 +179,8 @@ describe('VendorPlanPage', () => {
       expect(screen.getByText('Mithra Social Starter · ₹299 / month')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Set up AutoPay · ₹299 on 12 Oct'])
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹299 with Razorpay'])
+      expect(screen.getByText('Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹299 each month.')).toBeTruthy()
       expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
       for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
       expect(reads.readSubscription).toHaveBeenCalledWith('vendor-1', expect.anything())
@@ -190,18 +191,48 @@ describe('VendorPlanPage', () => {
       stubReads(async () => trial())
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('3')).toBeTruthy()
-      expect(screen.getByText('Set up AutoPay now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Set up AutoPay · ₹299 on 12 Oct' })).toBeTruthy()
+      expect(screen.getByText('Pay ₹299 now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' })).toBeTruthy()
     })
 
-    it('shows free days with its AutoPay-on line and Turn off AutoPay as its only action', async () => {
+    it('shows free days while the payment is confirmed (row 7) with no action and no "If you do not pay"; Check again rereads, gaps K and C', async () => {
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+      expect(screen.getByText('Free days')).toBeTruthy()
+      expect(screen.getByText('13')).toBeTruthy()
+      expect(screen.getByText('Confirming payment… Card payments take about a minute; UPI can take a few hours.')).toBeTruthy()
+      expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
+
+      reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+      expect(await screen.findByText('Paid')).toBeTruthy()
+      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps row 7 neutral with 3 days or fewer left', async () => {
+      vi.setSystemTime(daysBeforeEnd(0.5))
       stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
       show(accountFor(context('trial_active', 'vendor-1')))
-      expect(await screen.findByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
-      expect(screen.getByText('13')).toBeTruthy()
-      expect(screen.getByText('Free days are unchanged. When they end, Razorpay charges ₹299 each month to keep the shop open.')).toBeTruthy()
-      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Turn off AutoPay'])
+      expect(await screen.findByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+      expect(screen.getByText('1')).toBeTruthy()
+      expect(screen.queryByText(/^Pay ₹299 now/)).toBeNull()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
+    })
+
+    it('shows neither Set up AutoPay nor Turn off AutoPay in any Live state', async () => {
+      const reads = [trial, (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })]
+      for (const [days, read] of [12.5, 2.5, -0.5].flatMap((days) => reads.map((read) => [days, read] as const))) {
+        vi.setSystemTime(daysBeforeEnd(days))
+        resetLiveBilling()
+        stubReads(async () => read())
+        const { container, unmount } = show(accountFor(context('trial_active', 'vendor-1')))
+        expect(await screen.findAllByText(/^(Free days|Shop closed)$/)).toHaveLength(1)
+        expect(container.textContent).not.toMatch(/Set up AutoPay|Turn off AutoPay|AutoPay on —/)
+        unmount()
+      }
     })
 
     it('shows Collecting with no action, no dates and no "If you do not pay"', async () => {
@@ -265,7 +296,7 @@ describe('VendorPlanPage', () => {
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹299 with Razorpay'])
     })
 
-    it('shows Confirming with no action but Check again, which rereads through the service, gap C', async () => {
+    it('shows Confirming once free days end before the payment is confirmed (row 8), with no Pay button but Check again, which rereads, gaps C and K', async () => {
       vi.setSystemTime(daysBeforeEnd(-0.5))
       const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
       show(accountFor(context('trial_active', 'vendor-1')))
@@ -286,11 +317,9 @@ describe('VendorPlanPage', () => {
       expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
     })
 
-    describe('Turn off AutoPay and Stop the plan', () => {
-      const autoPayOn = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+    describe('Stop the plan', () => {
       const paid = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: livePaidSubscription() })
       const gapA = () => new ApiError('Internal server error', 500, null, '/v1/vendors/vendor-1/subscription/cancel', 'server')
-      const gapAMessage = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
       const gapAStopMessage = 'Couldn’t stop the plan right now. Try again later or contact support.'
 
       /** Opens the confirm step of Stop the plan and confirms it. */
@@ -298,22 +327,6 @@ describe('VendorPlanPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
         fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
       }
-
-      it('turns off AutoPay with one cancel call and shows the response as Free days, with no reread', async () => {
-        const reads = stubReads(async () => autoPayOn())
-        const cancel = vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveTrialAutoPayCancelledSubscription())
-        show(accountFor(context('trial_active', 'vendor-1')))
-        fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
-        expect(await screen.findByText('Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.')).toBeTruthy()
-        expect(screen.getByText('13')).toBeTruthy()
-        expect(screen.queryByText(/^AutoPay on/)).toBeNull()
-        expect(screen.queryByRole('button', { name: 'Turn off AutoPay' })).toBeNull()
-        expect(screen.queryByRole('alert')).toBeNull()
-        expect(cancel).toHaveBeenCalledOnce()
-        expect(cancel).toHaveBeenCalledWith('vendor-1')
-        expect(reads.readSubscription).toHaveBeenCalledOnce()
-        expect(reads.listPaidPlans).toHaveBeenCalledOnce()
-      })
 
       it('stops the plan after its confirm step with one cancel call, showing Stopped with no reread', async () => {
         vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
@@ -344,25 +357,6 @@ describe('VendorPlanPage', () => {
         expect(cancel).not.toHaveBeenCalled()
       })
 
-      it('shows gap A’s message for a 500 from Turn off AutoPay, after one call, and keeps the view', async () => {
-        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
-        vi.useRealTimers()
-        vi.useFakeTimers()
-        vi.setSystemTime(daysBeforeEnd(12.5))
-        const reads = stubReads(async () => autoPayOn())
-        const cancel = vi.spyOn(liveBillingService, 'cancel').mockRejectedValue(gapA())
-        show(accountFor(context('trial_active', 'vendor-1')))
-        await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-        fireEvent.click(screen.getByRole('button', { name: 'Turn off AutoPay' }))
-        await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-        expect(screen.getByRole('alert').textContent).toBe(gapAMessage)
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
-        expect(screen.getByRole('button', { name: 'Turn off AutoPay' })).toBeTruthy()
-        await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
-        expect(cancel).toHaveBeenCalledOnce()
-        expect(reads.readSubscription).toHaveBeenCalledOnce()
-      })
-
       it('shows gap A’s message for a 500 from Stop the plan, after one call, and keeps Paid', async () => {
         // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
         vi.useRealTimers()
@@ -383,26 +377,15 @@ describe('VendorPlanPage', () => {
       })
 
       it('shows getErrorMessage for any other failure, after one call', async () => {
-        stubReads(async () => autoPayOn())
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        stubReads(async () => paid())
         const cancel = vi.spyOn(liveBillingService, 'cancel').mockRejectedValue(
           new ApiError('Subscription is not active.', 409, null, '/v1/vendors/vendor-1/subscription/cancel', 'client'))
         show(accountFor(context('trial_active', 'vendor-1')))
-        fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
+        await screen.findByRole('button', { name: 'Stop the plan' })
+        stopThePlan()
         expect((await screen.findByRole('alert')).textContent).toBe('Subscription is not active.')
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
-        expect(cancel).toHaveBeenCalledOnce()
-      })
-
-      it('makes one call for a double click', async () => {
-        stubReads(async () => autoPayOn())
-        const response = deferred<unknown>()
-        const cancel = vi.spyOn(liveBillingService, 'cancel').mockReturnValue(response.promise)
-        show(accountFor(context('trial_active', 'vendor-1')))
-        const turnOff = await screen.findByRole('button', { name: 'Turn off AutoPay' })
-        fireEvent.click(turnOff)
-        fireEvent.click(turnOff)
-        await act(async () => { response.resolve(liveTrialAutoPayCancelledSubscription()) })
-        expect(await screen.findByText(/^Your shop is live free until/)).toBeTruthy()
+        expect(screen.getByText('Paid')).toBeTruthy()
         expect(cancel).toHaveBeenCalledOnce()
       })
 
@@ -422,44 +405,50 @@ describe('VendorPlanPage', () => {
       })
 
       it('still shows a cancel response that lands after Plan unmounts in the shared read, with no error', async () => {
-        const reads = stubReads(async () => autoPayOn())
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        const reads = stubReads(async () => paid())
         const response = deferred<unknown>()
         vi.spyOn(liveBillingService, 'cancel').mockReturnValue(response.promise)
         const errors = vi.spyOn(console, 'error')
         const view = show(accountFor(context('trial_active', 'vendor-1')))
-        fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
+        await screen.findByRole('button', { name: 'Stop the plan' })
+        stopThePlan()
         view.unmount()
-        await act(async () => { response.resolve(liveTrialAutoPayCancelledSubscription()) })
+        await act(async () => { response.resolve(liveStoppedSubscription()) })
         expect(errors).not.toHaveBeenCalled()
         // The remount's reread never lands, so Plan shows whatever the shared read holds.
         reads.readSubscription.mockReturnValue(new Promise(() => {}))
         show(accountFor(context('trial_active', 'vendor-1')))
-        expect(screen.getByText(/^Your shop is live free until/)).toBeTruthy()
-        expect(screen.queryByText(/^AutoPay on/)).toBeNull()
+        expect(screen.getByText('Plan stopped')).toBeTruthy()
+        expect(screen.queryByText('Paid')).toBeNull()
         expect(screen.queryByRole('alert')).toBeNull()
       })
 
       it('ignores a cancel response that lands after a vendor switch', async () => {
-        stubReads((vendorId) => Promise.resolve(vendorId === 'vendor-1' ? autoPayOn() : { kind: 'not-live' }))
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        stubReads((vendorId) => Promise.resolve(vendorId === 'vendor-1' ? paid() : { kind: 'not-live' }))
         const success = deferred<unknown>()
         vi.spyOn(liveBillingService, 'cancel').mockReturnValue(success.promise)
         const view = render(page('vendor-1'))
-        fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
+        await screen.findByRole('button', { name: 'Stop the plan' })
+        stopThePlan()
         signIn('vendor-2')
         view.rerender(page('vendor-2'))
         expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
-        await act(async () => { success.resolve(liveTrialAutoPayCancelledSubscription()) })
+        await act(async () => { success.resolve(liveStoppedSubscription()) })
         expect(screen.getByText('Free days start when your shop goes live.')).toBeTruthy()
-        expect(screen.queryByText(/^Your shop is live free until/)).toBeNull()
+        expect(screen.queryByText('Plan stopped')).toBeNull()
         expect(screen.queryByRole('alert')).toBeNull()
       })
 
       it('ignores a cancel failure that lands after a vendor switch', async () => {
-        stubReads((vendorId) => Promise.resolve(vendorId === 'vendor-1' ? autoPayOn() : { kind: 'not-live' }))
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        stubReads((vendorId) => Promise.resolve(vendorId === 'vendor-1' ? paid() : { kind: 'not-live' }))
         let fail!: (error: unknown) => void
         vi.spyOn(liveBillingService, 'cancel').mockReturnValue(new Promise((_, reject) => { fail = reject }))
         const view = render(page('vendor-1'))
-        fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
+        await screen.findByRole('button', { name: 'Stop the plan' })
+        stopThePlan()
         signIn('vendor-2')
         view.rerender(page('vendor-2'))
         expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
@@ -468,10 +457,14 @@ describe('VendorPlanPage', () => {
       })
     })
 
-    describe('Set up AutoPay', () => {
-      const setUp = 'Set up AutoPay · ₹299 on 12 Oct'
-      const waiting = 'Confirming AutoPay…'
-      const autoPayOn = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+    describe('Pay ₹299 with Razorpay during free days', () => {
+      const payEarly = 'Pay ₹299 with Razorpay'
+      const waiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
+      /** Row 7: free days while Razorpay confirms the payment, in today's shape (gaps K and C). A Confirming view. */
+      const confirmingFreeDays = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+      /** Settled reads: Paid (row 3) and Collecting (row 3a). */
+      const paid = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: livePaidSubscription() })
+      const collecting = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveActivatedSubscription() })
       /** The handler's three values; every ID is a placeholder. */
       const callback = { razorpay_payment_id: 'pay_FakePayment0001', razorpay_subscription_id: 'sub_FakeAutoPay0001', razorpay_signature: 'fake_signature_0001' }
       const submitted = (): SubscriptionCheckoutResult => ({ status: 'submitted', callback: { ...callback } })
@@ -480,7 +473,7 @@ describe('VendorPlanPage', () => {
       const confirm = () => vi.spyOn(liveBillingService, 'confirm')
       /** Lets pending promises and timers due within `ms` run. */
       const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
-      const button = () => screen.getByRole<HTMLButtonElement>('button', { name: setUp })
+      const button = () => screen.getByRole<HTMLButtonElement>('button', { name: payEarly })
 
       beforeEach(() => {
         // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
@@ -489,14 +482,19 @@ describe('VendorPlanPage', () => {
         vi.setSystemTime(daysBeforeEnd(12.5))
       })
 
-      it('subscribes, opens Checkout, confirms, then polls every 5 s until a read shows AutoPay on', async () => {
+      it.each([
+        ['Free days', 12.5, 'Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.', paid, 'Paid'],
+        ['3 days left', 2.5, 'Pay ₹299 now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.', collecting, 'AutoPay on.'],
+      ])('from %s: subscribes, opens Checkout, confirms, then polls every 5 s through row 7 until a settled read', async (_, days, body, settled, settledText) => {
+        vi.setSystemTime(daysBeforeEnd(days))
         const reads = stubReads(async () => trial())
         const subscribed = subscribe()
         const opened = open().mockResolvedValue(submitted())
         const confirmed = confirm().mockResolvedValue(null)
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        expect(screen.getByText('Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; the first ₹299 is charged on 12 Oct, when free days end.')).toBeTruthy()
+        expect(screen.getByText(body)).toBeTruthy()
+        expect(screen.getByText('Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹299 each month.')).toBeTruthy()
         fireEvent.click(button())
         await wait()
         expect(subscribed).toHaveBeenCalledExactlyOnceWith('vendor-1', 'MITHRA_SOCIAL_STARTER_MONTHLY')
@@ -514,19 +512,29 @@ describe('VendorPlanPage', () => {
         expect(screen.getByText(waiting)).toBeTruthy()
         expect(button().disabled).toBe(true)
 
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        // Row 7 is a Confirming view: its own status line is the waiting line, and the poll goes on.
+        reads.readSubscription.mockResolvedValue(confirmingFreeDays())
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(4)
+
+        reads.readSubscription.mockResolvedValue(settled())
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(5)
+        expect(screen.getByText(settledText)).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
-        expect(screen.queryByRole('button', { name: setUp })).toBeNull()
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
         await wait(90_000)
-        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(5)
         expect(screen.queryByRole('alert')).toBeNull()
       })
 
-      /** Shows Plan, presses Set up AutoPay and lets Checkout submit, leaving Plan polling. */
-      async function setUpAutoPay() {
+      /** Shows Plan, presses Pay ₹299 with Razorpay and lets Checkout submit, leaving Plan polling. */
+      async function payDuringFreeDays() {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         fireEvent.click(button())
@@ -538,7 +546,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         await wait(85_000)
         expect(button().disabled).toBe(true)
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
@@ -557,36 +565,44 @@ describe('VendorPlanPage', () => {
         expect(screen.getAllByText(waiting)).toHaveLength(1)
         expect(button().disabled).toBe(true)
 
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        // Row 7 does not end it either; its status line and Check again stand in for the waiting line.
+        reads.readSubscription.mockResolvedValue(confirmingFreeDays())
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
         await wait()
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.getAllByRole('button', { name: 'Check again' })).toHaveLength(1)
+
+        reads.readSubscription.mockResolvedValue(paid())
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+        await wait()
+        expect(screen.getByText('Paid')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
       })
 
-      it('keeps polling and holding when Free days turn into 3 days left, which still offers Set up AutoPay', async () => {
+      it('keeps polling and holding when Free days turn into 3 days left, which still offers Pay ₹299 with Razorpay', async () => {
         const reads = stubReads(async () => trial())
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
         // 2 s before the count rounds up to 3: the first poll read lands at 3 days left.
         vi.setSystemTime(daysBeforeEnd(3).getTime() - 2_000)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.getByText('Free days')).toBeTruthy()
         expect(screen.getByText('4')).toBeTruthy()
         await wait(5_000)
         expect(screen.getByText('3')).toBeTruthy()
-        expect(screen.getByText(/^Set up AutoPay now/)).toBeTruthy()
+        expect(screen.getByText(/^Pay ₹299 now/)).toBeTruthy()
         expect(screen.getByText(waiting)).toBeTruthy()
         expect(button().disabled).toBe(true)
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
         expect(button().disabled).toBe(true)
 
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        reads.readSubscription.mockResolvedValue(paid())
         await wait(5_000)
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Paid')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         await wait(90_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(4)
@@ -597,7 +613,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         cleanup()
@@ -612,10 +628,10 @@ describe('VendorPlanPage', () => {
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
         expect(button().disabled).toBe(true)
 
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        reads.readSubscription.mockResolvedValue(paid())
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
         await wait()
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Paid')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
       })
 
@@ -624,12 +640,12 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         cleanup()
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        reads.readSubscription.mockResolvedValue(paid())
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Paid')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
       })
@@ -643,7 +659,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.getByText(waiting)).toBeTruthy()
         cleanup()
         act(change)
@@ -664,7 +680,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         const confirmed = confirm().mockRejectedValueOnce(badGateway()).mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(offline()).mockResolvedValue(null)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(confirmed).toHaveBeenCalledTimes(1)
         await wait(4_999)
         expect(confirmed).toHaveBeenCalledTimes(1)
@@ -687,7 +703,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         const confirmed = confirm().mockRejectedValue(badGateway())
-        await setUpAutoPay()
+        await payDuringFreeDays()
         await wait(50_000)
         expect(confirmed).toHaveBeenCalledTimes(4)
         expect(screen.getByRole('alert').textContent).toBe('Bad gateway')
@@ -705,13 +721,13 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue(submitted())
         const confirmed = confirm().mockRejectedValue(failure)
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.getByRole('alert').textContent).toBe('We couldn’t confirm this payment here. If money was taken, it will show once Razorpay confirms it.')
         expect(screen.getByText(waiting)).toBeTruthy()
-        reads.readSubscription.mockResolvedValue(autoPayOn())
+        reads.readSubscription.mockResolvedValue(paid())
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText('Paid')).toBeTruthy()
         await wait(60_000)
         expect(confirmed).toHaveBeenCalledOnce()
       })
@@ -721,7 +737,7 @@ describe('VendorPlanPage', () => {
         const subscribed = vi.spyOn(liveBillingService, 'subscribe').mockRejectedValue(
           new ApiError('Unable to create the subscription.', 500, null, '/v1/vendors/vendor-1/subscription', 'server'))
         const opened = open()
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.getByRole('alert').textContent).toBe('Unable to create the subscription.')
         expect(button().disabled).toBe(false)
         expect(screen.queryByText(waiting)).toBeNull()
@@ -739,8 +755,8 @@ describe('VendorPlanPage', () => {
           return { status: 'dismissed' }
         })
         const confirmed = confirm()
-        await setUpAutoPay()
-        expect(screen.getByRole('alert').textContent).toBe('The payment did not go through (Your payment was declined by the bank.), so AutoPay is not set up. Nothing changed; your free days are the same.')
+        await payDuringFreeDays()
+        expect(screen.getByRole('alert').textContent).toBe('The payment did not go through (Your payment was declined by the bank.). Nothing changed; your free days are the same.')
         expect(screen.getByText('13')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(button().disabled).toBe(false)
@@ -752,7 +768,7 @@ describe('VendorPlanPage', () => {
         subscribe()
         open().mockResolvedValue({ status: 'dismissed' })
         const confirmed = confirm()
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.queryByRole('alert')).toBeNull()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(button().disabled).toBe(false)
@@ -766,7 +782,7 @@ describe('VendorPlanPage', () => {
         const subscribed = subscribe()
         const opened = open().mockRejectedValueOnce(new CheckoutBeforeOpenError('Could not load Razorpay. Check your connection and try again.'))
           .mockResolvedValueOnce({ status: 'dismissed' })
-        await setUpAutoPay()
+        await payDuringFreeDays()
         expect(screen.getByRole('alert').textContent).toBe('Could not load Razorpay. Check your connection and try again.')
         expect(button().disabled).toBe(false)
         fireEvent.click(button())
@@ -797,7 +813,7 @@ describe('VendorPlanPage', () => {
         open().mockResolvedValue(submitted())
         const confirmed = confirm().mockRejectedValue(badGateway())
         const errors = vi.spyOn(console, 'error')
-        await setUpAutoPay()
+        await payDuringFreeDays()
         cleanup()
         // The poll, its cap and the wait before confirm's first retry are all gone.
         expect(vi.getTimerCount()).toBe(0)
@@ -1114,7 +1130,9 @@ describe('VendorPlanPage', () => {
       const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
       const focus = () => act(async () => { window.dispatchEvent(new Event('focus')) })
       const day = 24 * 60 * 60 * 1000
-      const autoPayOn = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+      /** Row 7: free days while the payment is confirmed. */
+      const confirmingFreeDays = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
+      const keptFreeDays = 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.'
 
       beforeEach(() => {
         // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
@@ -1128,10 +1146,10 @@ describe('VendorPlanPage', () => {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         expect(screen.getByText('13')).toBeTruthy()
-        reads.readSubscription.mockImplementation(async () => autoPayOn())
+        reads.readSubscription.mockImplementation(async () => confirmingFreeDays())
         await focus()
         await wait()
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText(keptFreeDays)).toBeTruthy()
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
       })
@@ -1149,6 +1167,22 @@ describe('VendorPlanPage', () => {
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(screen.getByText('Shop closed')).toBeTruthy()
         expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      })
+
+      it('rereads at T for row 7, so free days while the payment is confirmed turn into Confirming at that moment (row 8)', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        const reads = stubReads(async () => confirmingFreeDays())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText(keptFreeDays)).toBeTruthy()
+        await wait(Date.parse(trialEnd) - Date.now() - 1)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(screen.getByText('Shop closed')).toBeTruthy()
+        expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+        expect(screen.getByText(/^Confirming payment…/)).toBeTruthy()
+        expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
       })
 
       it('rereads at a P 30 days away, beyond the longest browser timer, so Paid turns into Collecting at that moment', async () => {
@@ -1249,18 +1283,18 @@ describe('VendorPlanPage', () => {
         expect(screen.getByRole('alert').textContent).toBe(message)
         expect(screen.getByText('13')).toBeTruthy()
         expect(screen.getByText('Free days')).toBeTruthy()
-        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Set up AutoPay · ₹299 on 12 Oct'])
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Pay ₹299 with Razorpay'])
 
-        reads.readSubscription.mockImplementation(async () => autoPayOn())
+        reads.readSubscription.mockImplementation(async () => confirmingFreeDays())
         fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
         await wait()
-        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.getByText(keptFreeDays)).toBeTruthy()
         expect(screen.queryByRole('alert')).toBeNull()
       })
 
       it('keeps Confirming on screen when Check again fails', async () => {
         vi.setSystemTime(daysBeforeEnd(-0.5))
-        const reads = stubReads(async () => autoPayOn())
+        const reads = stubReads(async () => confirmingFreeDays())
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         reads.readSubscription.mockImplementation(async () => { throw readFailure(500, 'server', 'Billing is down for a moment.') })
@@ -1455,7 +1489,7 @@ describe('VendorPlanPage', () => {
         expect(screen.getAllByRole('alert')).toEqual([within(section()).getByRole('alert')])
         expect(within(section()).getByRole('alert').textContent).toBe('History is unavailable.')
         expect(screen.getByText('13')).toBeTruthy()
-        expect(screen.getByRole('button', { name: 'Set up AutoPay · ₹299 on 12 Oct' })).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' })).toBeTruthy()
 
         reads.readHistory.mockResolvedValue([])
         fireEvent.click(within(section()).getByRole('button', { name: 'Try again' }))
@@ -1492,7 +1526,7 @@ describe('VendorPlanPage', () => {
         vi.spyOn(liveBillingService, 'confirm').mockReturnValue(confirmed.promise)
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        fireEvent.click(screen.getByRole('button', { name: 'Set up AutoPay · ₹299 on 12 Oct' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }))
         await wait()
         expect(reads.readHistory).toHaveBeenCalledOnce()
         await act(async () => { confirmed.resolve(null) })

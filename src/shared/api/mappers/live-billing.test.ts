@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveHistoryEvent, liveMonthlyPlan, liveStoppedHistory, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveEarlyFeeSubscription, liveHaltedSubscription, liveHistoryEvent, liveMonthlyPlan, liveStoppedHistory, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
   liveStoppedSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
 import { LiveBillingUnreadableError, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLivePlanName, mapLiveTrialStart } from './live-billing'
@@ -11,6 +11,13 @@ const subscription = (overrides: Record<string, unknown> = {}) =>
   ({ kind: 'subscription' as const, subscription: liveTrialSubscription(overrides) })
 const autoPay = (overrides: Record<string, unknown> = {}) =>
   ({ kind: 'subscription' as const, subscription: liveTrialAutoPaySubscription(overrides) })
+/** Gap K's requested read after Pay ₹299 with Razorpay during free days. */
+const early = (overrides: Record<string, unknown> = {}) =>
+  ({ kind: 'subscription' as const, subscription: liveEarlyFeeSubscription(overrides) })
+/** Row 7: free days while the payment is confirmed. */
+const confirmingFreeDays = (daysLeft: number) => ({ state: 'free_days_confirming', shop: 'open', plan, trialEndsAt: trialEnd, daysLeft })
+/** Row 8: free days over while the payment is confirmed. */
+const confirmingAfterFreeDays = { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }
 /** A moment `days` before the trial ends. */
 const daysBeforeEnd = (days: number) => new Date(Date.parse(trialEnd) - days * 24 * 60 * 60 * 1000)
 
@@ -63,32 +70,90 @@ describe('mapLiveBilling', () => {
     })
   })
 
-  describe('row 7: free days with AutoPay on', () => {
-    it('shows free days with the first ₹299 on next_billing_at', () => {
-      const agreed = subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'authenticated', next_billing_at: '2026-10-13T10:04:16Z' })
-      expect(mapLiveBilling(agreed, livePlans, daysBeforeEnd(12.5))).toEqual({
-        state: 'autopay_on', shop: 'open', plan, trialEndsAt: trialEnd, daysLeft: 13, firstChargeAt: '2026-10-13T10:04:16.000Z',
+  describe('row 7: free days while the payment is confirmed', () => {
+    it('shows free days, neutral at every count, for a trial status with AutoPay agreed and no P', () => {
+      const agreed = subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'authenticated' })
+      expect(mapLiveBilling(agreed, livePlans, daysBeforeEnd(12.5))).toEqual(confirmingFreeDays(13))
+      expect(mapLiveBilling(agreed, livePlans, daysBeforeEnd(0.5))).toEqual(confirmingFreeDays(1))
+      expect(mapLiveBilling(subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'active' }), livePlans, daysBeforeEnd(2.5)))
+        .toEqual(confirmingFreeDays(3))
+    })
+
+    it('moves to row 8 at now = T', () => {
+      expect(mapLiveBilling(autoPay(), livePlans, new Date(Date.parse(trialEnd) - 1)).state).toBe('free_days_confirming')
+      expect(mapLiveBilling(autoPay(), livePlans, new Date(trialEnd))).toEqual(confirmingAfterFreeDays)
+    })
+  })
+
+  describe('row 8: free days over while the payment is confirmed', () => {
+    it('closes the shop with Confirming for each trial status with AutoPay agreed and no P', () => {
+      for (const status of ['TRIAL_ACTIVE', 'TRIAL_EXPIRED', 'PAYMENT_PENDING']) {
+        expect(mapLiveBilling(autoPay({ status }), livePlans, daysBeforeEnd(-0.5))).toEqual(confirmingAfterFreeDays)
+      }
+    })
+  })
+
+  describe('gap K: Pay ₹299 with Razorpay during free days', () => {
+    it('today’s shape (PAYMENT_PENDING, authenticated, no P) reads row 7 before T and row 8 after', () => {
+      expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(10))).toEqual(confirmingFreeDays(10))
+      expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(-0.5))).toEqual(confirmingAfterFreeDays)
+    })
+
+    it('the fixed shape: subscribed with Checkout closed unpaid still reads Free days (row 9)', () => {
+      expect(mapLiveBilling(early(), livePlans, daysBeforeEnd(10))).toMatchObject({ state: 'free_days', daysLeft: 10 })
+    })
+
+    it('the fixed shape: ₹299 paid, not yet recorded, reads row 9, then row 7 once AutoPay reads agreed', () => {
+      expect(mapLiveBilling(early(), livePlans, daysBeforeEnd(2.5)).state).toBe('three_days_left')
+      expect(mapLiveBilling(early({ razorpay_status: 'authenticated' }), livePlans, daysBeforeEnd(2.5)))
+        .toEqual(confirmingFreeDays(3))
+    })
+
+    it('the fixed shape: still unrecorded at T reads row 8', () => {
+      expect(mapLiveBilling(early({ razorpay_status: 'authenticated' }), livePlans, new Date(trialEnd)))
+        .toEqual(confirmingAfterFreeDays)
+    })
+  })
+
+  describe('gap C: rows 9, 7 and 8 with TRIAL_ACTIVE and with PAYMENT_PENDING', () => {
+    for (const status of ['TRIAL_ACTIVE', 'PAYMENT_PENDING']) {
+      it(status, () => {
+        expect(mapLiveBilling(early({ status }), livePlans, daysBeforeEnd(10)).state).toBe('free_days')
+        expect(mapLiveBilling(early({ status, razorpay_status: 'authenticated' }), livePlans, daysBeforeEnd(10)).state).toBe('free_days_confirming')
+        expect(mapLiveBilling(early({ status, razorpay_status: 'authenticated' }), livePlans, daysBeforeEnd(-0.5)).state).toBe('confirming')
       })
-    })
+    }
+  })
 
-    it('falls back to T for the first ₹299 without next_billing_at', () => {
-      const agreed = subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'active' })
-      expect(mapLiveBilling(agreed, livePlans, daysBeforeEnd(12.5))).toMatchObject({ state: 'autopay_on', firstChargeAt: trialEnd })
-    })
-
-    it('keeps AutoPay on with 3 days or fewer left', () => {
-      expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(0.5))).toMatchObject({ state: 'autopay_on', daysLeft: 1 })
-    })
-
-    it('lands today’s gap C shape (PAYMENT_PENDING, authenticated, no next_billing_at) on AutoPay on, dated T', () => {
-      expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(10))).toEqual({
-        state: 'autopay_on', shop: 'open', plan, trialEndsAt: trialEnd, daysLeft: 10, firstChargeAt: trialEnd,
+  describe('gap J: rows 8 and 10 with TRIAL_ACTIVE after T and with TRIAL_EXPIRED', () => {
+    for (const status of ['TRIAL_ACTIVE', 'TRIAL_EXPIRED']) {
+      it(status, () => {
+        expect(mapLiveBilling(early({ status, razorpay_status: 'authenticated' }), livePlans, daysBeforeEnd(-0.5)))
+          .toEqual(confirmingAfterFreeDays)
+        expect(mapLiveBilling(early({ status }), livePlans, daysBeforeEnd(-0.5)))
+          .toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' })
       })
+    }
+  })
+
+  describe('unseen trial combinations take the read error path', () => {
+    const periodEnd = '2026-11-12T18:30Z'
+
+    it('a trial status with AutoPay agreed and P ahead', () => {
+      for (const status of ['TRIAL_ACTIVE', 'TRIAL_EXPIRED', 'PAYMENT_PENDING']) {
+        const withPeriod = autoPay({ status, current_period_end: periodEnd })
+        expect(() => mapLiveBilling(withPeriod, livePlans, daysBeforeEnd(10))).toThrow(LiveBillingUnreadableError)
+        expect(() => mapLiveBilling(withPeriod, livePlans, daysBeforeEnd(-0.5))).toThrow(LiveBillingUnreadableError)
+      }
     })
 
-    it('lands the expected "Trial, AutoPay on" response on AutoPay on', () => {
-      const expected = subscription({ razorpay_subscription_id: 'sub_FakeTrial0005', razorpay_status: 'authenticated', next_billing_at: trialEnd })
-      expect(mapLiveBilling(expected, livePlans, daysBeforeEnd(10))).toMatchObject({ state: 'autopay_on', firstChargeAt: trialEnd })
+    it('a trial status with AutoPay agreed and P past, other than row 8b', () => {
+      const pastPeriod = '2026-10-01T18:30Z'
+      for (const status of ['TRIAL_ACTIVE', 'TRIAL_EXPIRED']) {
+        expect(() => mapLiveBilling(autoPay({ status, current_period_end: pastPeriod }), livePlans, daysBeforeEnd(-0.5))).toThrow(LiveBillingUnreadableError)
+      }
+      // Row 8b needs now ≥ T as well.
+      expect(() => mapLiveBilling(autoPay({ current_period_end: pastPeriod }), livePlans, daysBeforeEnd(5))).toThrow(LiveBillingUnreadableError)
     })
   })
 
@@ -106,22 +171,6 @@ describe('mapLiveBilling', () => {
     it('row 3a: collects an ACTIVE subscription with no paid period, today’s gap B shape', () => {
       expect(mapLiveBilling({ kind: 'subscription', subscription: liveActivatedSubscription() }, livePlans, now))
         .toEqual({ state: 'collecting', shop: 'open', plan })
-    })
-
-    it('row 8: collects once free days end with AutoPay on and the trial kept', () => {
-      const agreed = subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'authenticated', next_billing_at: trialEnd })
-      expect(mapLiveBilling(agreed, livePlans, now)).toEqual({ state: 'collecting', shop: 'open', plan })
-    })
-
-    it('moves TRIAL_ACTIVE with AutoPay on from row 7 to row 8 at now = T', () => {
-      const agreed = subscription({ razorpay_subscription_id: 'sub_FakeTrial0004', razorpay_status: 'authenticated' })
-      expect(mapLiveBilling(agreed, livePlans, new Date(Date.parse(trialEnd) - 1)).state).toBe('autopay_on')
-      expect(mapLiveBilling(agreed, livePlans, new Date(trialEnd)).state).toBe('collecting')
-    })
-
-    it('moves PAYMENT_PENDING with AutoPay on from row 7 to row 8b, not Collecting, at now = T', () => {
-      expect(mapLiveBilling(autoPay(), livePlans, new Date(Date.parse(trialEnd) - 1)).state).toBe('autopay_on')
-      expect(mapLiveBilling(autoPay(), livePlans, new Date(trialEnd)).state).toBe('confirming')
     })
   })
 
@@ -288,10 +337,6 @@ describe('mapLiveBilling', () => {
     })
 
     describe('row 8b: Confirming', () => {
-      it('confirms today’s gap C+D shape (PAYMENT_PENDING, authenticated) after T, in free-days wording without P', () => {
-        expect(mapLiveBilling(autoPay(), livePlans, afterTrial)).toEqual({ state: 'confirming', shop: 'hidden', plan, ended: 'free_days' })
-      })
-
       it('confirms in paid wording with P, such as a payment after a halt', () => {
         const payingAgain = liveHaltedSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0001', razorpay_status: 'authenticated' })
         expect(mapLiveBilling({ kind: 'subscription', subscription: payingAgain }, livePlans, afterPeriod))

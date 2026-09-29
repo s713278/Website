@@ -13,7 +13,7 @@ import {
 } from '@/shared/api'
 import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
-  liveSubscribeResponse, liveTrialAutoPayCancelledSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import * as checkout from '@/shared/payments/razorpay-checkout'
@@ -212,22 +212,31 @@ describe('VendorShell under the live API', () => {
     freeTierStore()
     stubReads(async () => trial())
     renderShell('/vendor/plan', <LiveVendorPlan />)
-    await waitFor(() => expect(banner()?.textContent).toMatch(/^3 free days left — set up AutoPay now so customers can still open your shop when free days end\./))
+    await waitFor(() => expect(banner()?.textContent).toMatch(/^3 free days left — pay ₹299 now so customers can still open your shop when free days end\./))
     expect(banner()!.className).toContain('destructive')
     expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(screen.getAllByRole('status', { name: 'Shop plan status' })).toHaveLength(1)
     expect(planBanner()).toBeNull()
   })
 
-  it('shows the neutral AutoPay-on banner and the Shop plan header while free days last', async () => {
+  it.each([13, 1])('shows no billing banner and the Shop plan header while a payment is confirmed in free days (row 7), %i days left, so PlanBanner can show', async (days) => {
+    vi.setSystemTime(daysBeforeEnd(days - 0.5))
     freeTierStore()
     stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
     renderShell('/vendor', <LiveVendorPlan />)
-    await waitFor(() => expect(banner()?.textContent).toBe('13 free days left — AutoPay is on, so the first ₹299 is charged on 12 Oct.Shop plan'))
-    expect(banner()!.className).toContain('--vc-banner')
-    expect(within(banner()!).getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+    await waitFor(() => expect(planBanner()).toBeTruthy())
+    expect(banner()).toBeNull()
     expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(header().queryByRole('link', { name: 'Pay ₹299' })).toBeNull()
+  })
+
+  it('keeps PlanBanner to its own conditions in row 7', async () => {
+    stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy())
+    await act(async () => {})
     expect(planBanner()).toBeNull()
+    expect(banner()).toBeNull()
   })
 
   it('shows no billing banner while Razorpay collects, so PlanBanner can show', async () => {
@@ -301,18 +310,6 @@ describe('VendorShell under the live API', () => {
     expect(reads).toHaveBeenCalledOnce()
   })
 
-  it('shows Free days on Plan, the banner and the header at once after Turn off AutoPay, with no reread', async () => {
-    freeTierStore()
-    const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
-    vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveTrialAutoPayCancelledSubscription())
-    renderShell('/vendor/plan', <LiveVendorPlan />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Turn off AutoPay' }))
-    await waitFor(() => expect(banner()?.textContent).toBe('13 free days left — after that, subscribe with Razorpay (₹299 / month) to keep the shop open.Pay ₹299'))
-    expect(screen.getByText(/^Your shop is live free until/)).toBeTruthy()
-    expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
-    expect(reads).toHaveBeenCalledOnce()
-  })
-
   it('updates the banner and header when a Stop the plan response lands after leaving Plan', async () => {
     vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
     freeTierStore()
@@ -330,7 +327,8 @@ describe('VendorShell under the live API', () => {
   })
 
   it('follows the read, not the confirmation hold: the header still says Pay ₹299 after leaving Plan, and Plan still holds on return', async () => {
-    const setUp = 'Set up AutoPay · ₹299 on 12 Oct'
+    const payEarly = 'Pay ₹299 with Razorpay'
+    const waiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
     freeTierStore()
     stubReads(async () => trial())
     vi.spyOn(liveBillingService, 'subscribe').mockResolvedValue(liveSubscribeResponse())
@@ -339,20 +337,20 @@ describe('VendorShell under the live API', () => {
     } })
     vi.spyOn(liveBillingService, 'confirm').mockResolvedValue(null)
     renderShell('/vendor/plan', <LiveVendorPlan />)
-    fireEvent.click(await screen.findByRole('button', { name: setUp }))
-    expect(await screen.findByText('Confirming AutoPay…')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: payEarly }))
+    expect(await screen.findByText(waiting)).toBeTruthy()
     expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     fireEvent.click(rail().getByRole('link', { name: 'Overview' }))
     expect(await screen.findByText('Overview page')).toBeTruthy()
     expect(banner()?.textContent).toMatch(/^13 free days left/)
     expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     fireEvent.click(header().getByRole('link', { name: 'Pay ₹299' }))
-    expect(await screen.findByText('Confirming AutoPay…')).toBeTruthy()
+    expect(await screen.findByText(waiting)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: setUp }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: payEarly }).disabled).toBe(true)
   })
 
-  it('shows the confirming banner and the Shop plan header while a payment is confirmed', async () => {
+  it('shows the confirming danger banner and the Shop plan header once free days end before the payment is confirmed (row 8)', async () => {
     vi.setSystemTime(daysBeforeEnd(-0.5))
     freeTierStore()
     stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
@@ -480,7 +478,7 @@ describe('VendorShell under the live API', () => {
       reads.mockImplementation(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
       await focus()
       await wait()
-      expect(banner()?.textContent).toBe('13 free days left — AutoPay is on, so the first ₹299 is charged on 12 Oct.Shop plan')
+      expect(banner()).toBeNull()
       expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy()
       expect(reads).toHaveBeenCalledTimes(2)
     })
@@ -526,7 +524,7 @@ describe('VendorShell under the live API', () => {
       renderShell('/vendor/plan', <LiveVendorPlan />)
       await wait()
       const warning = banner()?.textContent
-      expect(warning).toMatch(/^3 free days left — set up AutoPay now/)
+      expect(warning).toMatch(/^3 free days left — pay ₹299 now/)
       reads.mockImplementation(async () => { throw new ApiError('Something went wrong on our side. Please try again later.', 503, null, '/v1/vendors/r1/subscription', 'server') })
       await focus()
       await wait(50_000)

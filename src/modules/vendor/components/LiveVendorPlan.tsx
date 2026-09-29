@@ -25,14 +25,12 @@ function StateCard({ card, children }: { card: PrototypeCard; children?: ReactNo
       : <h2 className="font-display text-4xl font-bold">{card.figure.headline}</h2>}
     <p>{card.body}</p>
     <p className="text-sm font-semibold text-primary">{card.plan}</p>
-    {card.autoPay ? <p className="font-semibold text-primary">{card.autoPay}</p> : null}
     {children}
   </Card>
 }
 
 const notResponding = 'MithraDirect isn’t responding. Try again in a minute.'
-/** Gap A: what a cancel's 500 means, per action. */
-const turnOffFailed = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
+/** Gap A: what a cancel's 500 means. */
 const stopFailed = 'Couldn’t stop the plan right now. Try again later or contact support.'
 const confirmFailed = 'We couldn’t confirm this payment here. If money was taken, it will show once Razorpay confirms it.'
 const pollEvery = 5_000
@@ -94,8 +92,8 @@ export function LiveVendorPlan() {
     }
   }, [polling, vendorId])
 
-  /** Turn off AutoPay and Stop the plan: one call per click, never retried; a failure leaves the view. */
-  async function cancel(refused: string) {
+  /** Stop the plan: one call per click, never retried; a failure leaves the view. */
+  async function stopPlan() {
     const current = actions.current
     if (!current || current.running) return
     current.running = true
@@ -107,7 +105,7 @@ export function LiveVendorPlan() {
     } catch (cause) {
       // Gap A: dev answers a cancel before Razorpay's first cycle with a 500; after an early first
       // fee, that is any stop before P.
-      if (!current.controller.signal.aborted) setActionError(isApiError(cause) && cause.status === 500 ? refused : getErrorMessage(cause))
+      if (!current.controller.signal.aborted) setActionError(isApiError(cause) && cause.status === 500 ? stopFailed : getErrorMessage(cause))
     } finally {
       current.running = false
       if (!current.controller.signal.aborted) setActing(false)
@@ -189,10 +187,6 @@ export function LiveVendorPlan() {
           <p className="text-xs text-muted-foreground">{card.action.help}</p>
           {actionAlert}
         </div> : null}
-        {view.state === 'autopay_on' ? <>
-          <Button className="w-fit px-0" variant="link" disabled={acting} onClick={() => void cancel(turnOffFailed)}>Turn off AutoPay</Button>
-          {actionAlert}
-        </> : null}
       </StateCard>
       {/* A Confirming view's own status line is the waiting line, so it never shows twice. */}
       {hold && !confirming ? <div className="grid gap-2 text-sm">
@@ -207,8 +201,8 @@ export function LiveVendorPlan() {
       <Section title="What you get">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">{whatYouGet.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section>
-      {/* Hidden while paid or while Razorpay collects: the vendor has nothing to pay. */}
-      {view.state !== 'collecting' && view.state !== 'paid' ? <Section title="If you do not pay">
+      {/* Hidden while paid, while Razorpay collects or while it confirms a payment in free days: the vendor has nothing to pay. */}
+      {view.state !== 'collecting' && view.state !== 'paid' && view.state !== 'free_days_confirming' ? <Section title="If you do not pay">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm text-[var(--badge-warning-fg)]">{ifYouDoNotPay.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section> : null}
       <Section title="Payments you made">
@@ -218,7 +212,7 @@ export function LiveVendorPlan() {
         {confirmStop ? <>
           <p className="text-sm">{stopConfirmation}</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="danger" className="w-fit rounded-full" disabled={acting} onClick={() => void cancel(stopFailed)}>Yes, stop the plan</Button>
+            <Button variant="danger" className="w-fit rounded-full" disabled={acting} onClick={() => void stopPlan()}>Yes, stop the plan</Button>
             <Button variant="outline" className="w-fit rounded-full" disabled={acting} onClick={() => setConfirmStop(false)}>Keep the plan</Button>
           </div>
         </> : <>

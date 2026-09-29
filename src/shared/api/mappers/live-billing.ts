@@ -10,8 +10,8 @@ export interface LiveBillingPlan { code: string; name: string; price: number }
  */
 export type LiveBillingView =
   | { state: 'free_days' | 'three_days_left'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
-  /** Free days with AutoPay agreed; `firstChargeAt` is when Razorpay charges the first fee. */
-  | { state: 'autopay_on'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number; firstChargeAt: string }
+  /** Free days while Razorpay confirms the ₹299 paid early (the early first fee); the free days are kept. */
+  | { state: 'free_days_confirming'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
   /** Razorpay is collecting the first fee or a renewal: open, with no dates. */
   | { state: 'collecting'; shop: 'open'; plan: LiveBillingPlan }
   /** A paid period until `paidThrough` (P); `nextChargeAt` is `next_billing_at`, when there is one. */
@@ -125,20 +125,22 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   // without a paid period is still being collected.
   if (status === 'ACTIVE' && periodEnd === null) return { state: 'collecting', shop: 'open', plan }
 
-  // Row 7. Gap C: dev reports trial AutoPay as PAYMENT_PENDING with no `next_billing_at`, so the date
-  // falls back to T. Gap D: Razorpay charges 24 h after T, so until D is fixed this date is a day early.
-  if ((status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING') && autoPayAgreed && trialEndsAt && beforeTrialEnd) {
-    const firstChargeAt = instant(subscription.next_billing_at) ?? trialEndsAt
-    return { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: daysUntil(trialEndsAt, now), firstChargeAt }
-  }
-  // Row 8, gap D: free days have ended and Razorpay has not charged yet. PAYMENT_PENDING here is row 8b.
-  if (status === 'TRIAL_ACTIVE' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) return { state: 'collecting', shop: 'open', plan }
-  // Row 8b, gap C: dev reports trial AutoPay as PAYMENT_PENDING, so after T it reads as a payment
-  // being confirmed. Until C and D are fixed, trial AutoPay shows this for the day before its charge.
-  // A P still ahead matches neither row 10's nor row 11's wording, so it takes the read error path
-  // rather than call an open shop closed.
-  if (status === 'PAYMENT_PENDING' && autoPayAgreed && trialEndsAt && !beforeTrialEnd && (periodEnd === null || periodOver)) {
-    return { state: 'confirming', shop: 'hidden', plan, ended: periodEnd === null ? 'free_days' : 'paid_days' }
+  // Rows 7, 8 and 8b: Razorpay has the payment, the backend has not recorded it yet. Rows 7 and 8
+  // need no P: a trial status with AutoPay agreed and P set is unseen, so it takes the read error path.
+  const trialStatus = status === 'TRIAL_ACTIVE' || status === 'TRIAL_EXPIRED' || status === 'PAYMENT_PENDING'
+  if (trialStatus && autoPayAgreed && trialEndsAt) {
+    // Row 7. Gap K: dev has no early first fee yet, so Pay ₹299 with Razorpay makes an AutoPay-only
+    // subscription, which reads here until T. Gap C: dev reports it as PAYMENT_PENDING.
+    if (status !== 'TRIAL_EXPIRED' && beforeTrialEnd && periodEnd === null) {
+      return { state: 'free_days_confirming', shop: 'open', plan, trialEndsAt, daysLeft: daysUntil(trialEndsAt, now) }
+    }
+    // Row 8, before row 10, so an unconfirmed ₹299 never offers another. Gap J: dev keeps TRIAL_ACTIVE
+    // after T. Gap K: dev's AutoPay-only subscription reads here from T until Razorpay charges.
+    if (!beforeTrialEnd && periodEnd === null) return { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }
+    // Row 8b, gap C: a payment after paid days, such as after a halt, still PAYMENT_PENDING. A P
+    // still ahead matches no row, so it takes the read error path rather than call an open shop closed.
+    if (status === 'PAYMENT_PENDING' && !beforeTrialEnd && periodOver) return { state: 'confirming', shop: 'hidden', plan, ended: 'paid_days' }
+    throw new LiveBillingUnreadableError()
   }
 
   // Row 9. A CANCELLED subscription with a paid period belongs to rows 5 and 6′, which come first.
@@ -148,8 +150,8 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
     return { state: daysLeft <= 3 ? 'three_days_left' : 'free_days', shop: 'open', plan, trialEndsAt, daysLeft }
   }
   // Row 10, gap J: dev keeps TRIAL_ACTIVE after T, so row 9's facts past T close the shop as well.
-  // Gap I's shape (PAYMENT_PENDING, `created`, no P, after T) lands here too.
-  if (status === 'TRIAL_EXPIRED' || (freeDaysStatus && !autoPayAgreed && trialEndsAt && !beforeTrialEnd && periodEnd === null)) {
+  // Gap I's shape (PAYMENT_PENDING, `created`, no P, after T) lands here too. AutoPay agreed is row 8's.
+  if ((status === 'TRIAL_EXPIRED' && !autoPayAgreed) || (freeDaysStatus && !autoPayAgreed && trialEndsAt && !beforeTrialEnd && periodEnd === null)) {
     return { state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' }
   }
   // Row 11: paying again after paid days, such as after a halt, until Razorpay has the payment.

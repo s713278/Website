@@ -8,11 +8,12 @@ const trialEndsAt = '2026-10-12T10:04:16.169Z'
 const freeDays = (daysLeft: number, state: 'free_days' | 'three_days_left' = 'free_days'): LiveBillingView =>
   ({ state, shop: 'open', plan, trialEndsAt, daysLeft })
 
-const setUpAutoPay = {
-  label: 'Set up AutoPay · ₹299 on 12 Oct',
-  help: 'Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; the first ₹299 is charged on 12 Oct, when free days end.',
+const payEarly = {
+  label: 'Pay ₹299 with Razorpay',
+  help: 'Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹299 each month.',
 }
-const setUpAutoPayCheckout = { waiting: 'Confirming AutoPay…', failed: expect.any(Function) }
+const confirmingPayment = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
+const payEarlyCheckout = { waiting: confirmingPayment, failed: expect.any(Function) }
 const payNow = { label: 'Pay ₹299 with Razorpay', help: 'Opens Razorpay Checkout. Pay by card or UPI.' }
 const payNowCheckout = {
   waiting: 'Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.',
@@ -25,9 +26,9 @@ describe('liveBillingWording', () => {
       card: {
         tone: 'neutral', eyebrow: 'Free days', figure: { days: 13 },
         body: 'Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.',
-        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: setUpAutoPay, autoPay: null,
+        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: payEarly, autoPay: null,
       },
-      note: null, confirming: null, stopConfirmation: null, checkout: setUpAutoPayCheckout,
+      note: null, confirming: null, stopConfirmation: null, checkout: payEarlyCheckout,
       banner: { tone: 'neutral', lead: '13 free days left', text: 'after that, subscribe with Razorpay (₹299 / month) to keep the shop open.', action: 'Pay ₹299' },
       header: 'Pay ₹299',
     })
@@ -37,24 +38,26 @@ describe('liveBillingWording', () => {
     expect(liveBillingWording(freeDays(3, 'three_days_left'))).toEqual({
       card: {
         tone: 'danger', eyebrow: 'Free days', figure: { days: 3 },
-        body: 'Set up AutoPay now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.',
-        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: setUpAutoPay, autoPay: null,
+        body: 'Pay ₹299 now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.',
+        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: payEarly, autoPay: null,
       },
-      note: null, confirming: null, stopConfirmation: null, checkout: setUpAutoPayCheckout,
-      banner: { tone: 'danger', lead: '3 free days left', text: 'set up AutoPay now so customers can still open your shop when free days end.', action: 'Pay ₹299' },
+      note: null, confirming: null, stopConfirmation: null, checkout: payEarlyCheckout,
+      banner: { tone: 'danger', lead: '3 free days left', text: 'pay ₹299 now so customers can still open your shop when free days end.', action: 'Pay ₹299' },
       header: 'Pay ₹299',
     })
   })
 
-  it('words Set up AutoPay’s failed payment after Checkout closes', () => {
-    expect(liveBillingWording(freeDays(13)).checkout?.failed('Your payment was declined by the bank.'))
-      .toBe('The payment did not go through (Your payment was declined by the bank.), so AutoPay is not set up. Nothing changed; your free days are the same.')
+  it('words Pay ₹299 with Razorpay’s failed payment after Checkout closes, in Free days and 3 days left', () => {
+    for (const view of [freeDays(13), freeDays(3, 'three_days_left')]) {
+      expect(liveBillingWording(view).checkout?.failed('Your payment was declined by the bank.'))
+        .toBe('The payment did not go through (Your payment was declined by the bank.). Nothing changed; your free days are the same.')
+    }
   })
 
-  it('dates Set up AutoPay at the IST day of the trial end', () => {
+  it('dates the paid month’s start in Pay ₹299 with Razorpay’s help at the IST day of the trial end', () => {
     // 11:30 pm on 12 Oct in UTC is already 13 Oct in IST.
     const view: LiveBillingView = { state: 'free_days', shop: 'open', plan, trialEndsAt: '2026-10-12T18:30:00.000Z', daysLeft: 13 }
-    expect(liveBillingWording(view).card?.action?.label).toBe('Set up AutoPay · ₹299 on 13 Oct')
+    expect(liveBillingWording(view).card?.action?.help).toContain('your paid month starts on 13 Oct,')
   })
 
   it('says "day" for the last free day', () => {
@@ -66,32 +69,35 @@ describe('liveBillingWording', () => {
     expect(wording.card?.body).toContain('₹349 each month')
     expect(wording.card?.plan).toBe('Mithra Social Starter · ₹349 / month')
     expect(wording.card?.action).toEqual({
-      label: 'Set up AutoPay · ₹349 on 12 Oct',
-      help: 'Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; the first ₹349 is charged on 12 Oct, when free days end.',
+      label: 'Pay ₹349 with Razorpay',
+      help: 'Opens Razorpay Checkout. Pay ₹349 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹349 each month.',
     })
     expect(wording.banner).toMatchObject({ text: 'after that, subscribe with Razorpay (₹349 / month) to keep the shop open.', action: 'Pay ₹349' })
     expect(wording.header).toBe('Pay ₹349')
   })
 
-  it('words free days with AutoPay on, with the first charge date in IST and no action', () => {
-    // 11 Oct 11:00 pm in UTC is 12 Oct in IST.
-    const view: LiveBillingView = { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 13, firstChargeAt: '2026-10-11T23:00:00Z' }
-    expect(liveBillingWording(view)).toEqual({
-      card: {
-        tone: 'neutral', eyebrow: 'Free days', figure: { days: 13 },
-        body: 'Free days are unchanged. When they end, Razorpay charges ₹299 each month to keep the shop open.',
-        plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: 'AutoPay on — first ₹299 on 12 Oct',
-      },
-      note: null, confirming: null, stopConfirmation: null, checkout: null,
-      banner: { tone: 'neutral', lead: '13 free days left', text: 'AutoPay is on, so the first ₹299 is charged on 12 Oct.', action: 'Shop plan' },
-      header: 'Shop plan',
-    })
-  })
+  describe('Free days while the payment is confirmed (row 7)', () => {
+    const confirmingFreeDays = (daysLeft: number): LiveBillingView => ({ state: 'free_days_confirming', shop: 'open', plan, trialEndsAt, daysLeft })
 
-  it('keeps AutoPay on neutral with 3 days or fewer left', () => {
-    const wording = liveBillingWording({ state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 1, firstChargeAt: trialEndsAt })
-    expect(wording.card?.tone).toBe('neutral')
-    expect(wording.banner).toMatchObject({ tone: 'neutral', lead: '1 free day left' })
+    it('words the Free days card with the free days kept, the confirming status, no action, no banner and the Shop plan header', () => {
+      expect(liveBillingWording(confirmingFreeDays(13))).toEqual({
+        card: {
+          tone: 'neutral', eyebrow: 'Free days', figure: { days: 13 },
+          body: 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.',
+          plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
+        },
+        note: null, confirming: confirmingPayment, stopConfirmation: null, checkout: null, banner: null, header: 'Shop plan',
+      })
+    })
+
+    it('stays neutral with 3 days or fewer left', () => {
+      for (const daysLeft of [3, 1]) {
+        const wording = liveBillingWording(confirmingFreeDays(daysLeft))
+        expect(wording.card).toMatchObject({ tone: 'neutral', body: 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.', figure: { days: daysLeft } })
+        expect(wording.banner).toBeNull()
+        expect(wording.header).toBe('Shop plan')
+      }
+    })
   })
 
   it('words Collecting with no dates, no action, no banner and the Shop plan header', () => {
@@ -259,13 +265,14 @@ describe('isSettledView', () => {
   it.each<[string, LiveBillingView]>([
     ['Paid', { state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough }],
     ['Collecting', { state: 'collecting', shop: 'open', plan }],
-    ['AutoPay on', { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 13, firstChargeAt: trialEndsAt }],
   ])('settles on %s, which is not Confirming and offers no Checkout action', (_, view) => {
     expect(isSettledView(view)).toBe(true)
   })
 
   it.each<[string, LiveBillingView]>([
-    ['Confirming (row 8b)', { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }],
+    ['Free days, payment confirming (row 7)', { state: 'free_days_confirming', shop: 'open', plan, trialEndsAt, daysLeft: 13 }],
+    ['Confirming (row 8)', { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }],
+    ['Confirming (row 8b)', { state: 'confirming', shop: 'hidden', plan, ended: 'paid_days' }],
     ['Free days', freeDays(13)],
     ['3 days left', freeDays(3, 'three_days_left')],
     ['Payment failed', { state: 'payment_failed', shop: 'hidden', plan }],
