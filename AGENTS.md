@@ -60,6 +60,9 @@ Run the checks under **Verification**, review the final diff, and fix failures c
 without weakening checks. Report what changed, actual check results, and unresolved limitations,
 including unrelated failures or unavailable checks. Static checks alone do not verify a live journey.
 
+When reporting information to the user, be extremely concise and sacrifice grammar for the sake of
+concision.
+
 When handing work to another environment or resuming it, carry forward the outcome, decisions,
 changed files, verification results, and blockers. Recheck the working tree before continuing.
 
