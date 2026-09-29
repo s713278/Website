@@ -1,17 +1,25 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { configureApiClient, mapVendorContext, mapVendorPlan, type VendorContext } from '@/shared/api'
+import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
+import {
+  ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
+} from '@/shared/api'
+import { livePlans, liveTrialSubscription } from '@/shared/api/fixtures/live-billing-wire'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { resetDemoState } from '@/shared/api/fixtures/demo-state'
 import { VendorPlanPage } from './VendorPlanPage'
 
 beforeEach(() => { vi.stubEnv('VITE_USE_API', 'false'); configureApiClient({ useApi: false }) })
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetDemoState(); resetBillingPrototypeState() })
+afterEach(() => {
+  cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers()
+  resetDemoState(); resetBillingPrototypeState(); useAuthStore.getState().clearSession(); resetLiveBilling()
+})
 
 function context(scenario: 'trial_active' | 'current_context', vendorId = 'vendor-1') {
   const fixture = fixtures.contexts[scenario]
@@ -57,42 +65,11 @@ describe('VendorPlanPage', () => {
     expect(screen.queryByText('Simulated billing')).toBeNull()
   })
 
-  it('keeps live Plan free of the prototype, its helper and the old billing controls', async () => {
-    configureApiClient({ useApi: true })
-    const fetch = vi.fn()
-    vi.stubGlobal('fetch', fetch)
-    show(accountFor(context('current_context')))
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('Billing unavailable'))
-    expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
-    for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
-    expect(fetch).not.toHaveBeenCalled()
-  })
-
   it('keeps the demo billing panel in a production build, with no prototype', async () => {
     (await productionBuild()).show(accountFor(context('trial_active')))
     expect(await screen.findByText('Simulated billing')).toBeTruthy()
     expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
     for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
-  })
-
-  it('makes an unextended live context unavailable without inventing billing', async () => {
-    configureApiClient({ useApi: true })
-    show(accountFor(context('current_context')))
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('Billing unavailable'))
-    expect(screen.queryByText(/Trial access until|₹299|days remaining/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Pay Now' })).toBeNull()
-  })
-
-  it('re-keys on the selected vendor and ignores the first vendor’s late read', async () => {
-    configureApiClient({ useApi: true })
-    let resolveFirst!: (value: VendorContext) => void
-    const first = accountFor(context('trial_active'), () => new Promise((resolve) => { resolveFirst = resolve }))
-    const second = accountFor(context('current_context', 'second_vendor'))
-    const view = show(first)
-    view.rerender(<VendorAccountContext.Provider value={second}><VendorPlanPage /></VendorAccountContext.Provider>)
-    await screen.findByRole('alert')
-    resolveFirst(first.context)
-    await waitFor(() => expect(screen.queryByText('TRIAL')).toBeNull())
   })
 
   describe('production demo build', () => {
@@ -145,5 +122,150 @@ describe('VendorPlanPage', () => {
       expect(screen.getByText(/Trial access until/).textContent).toBe(trialEnd)
     })
 
+  })
+
+  describe('Live API', () => {
+    /** 3:34 pm IST on 12 Oct. */
+    const trialEnd = '2026-10-12T10:04:16.169Z'
+    const daysBeforeEnd = (days: number) => new Date(Date.parse(trialEnd) - days * 24 * 60 * 60 * 1000)
+    const trial = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialSubscription() })
+
+    function signIn(vendorId: string) {
+      useAuthStore.getState().applySession({
+        token: 'test-token', refreshToken: null,
+        user: { id: `user-${vendorId}`, name: 'Test Vendor', email: 'vendor@example.test', role: 'vendor', roles: ['vendor'], vendors: [{ vendorId }], vendorId },
+      })
+    }
+
+    /** Stubs both reads of the shared billing read; nothing reaches the dev backend. */
+    function stubReads(subscription: (vendorId: string) => Promise<LiveSubscriptionRead>, plans: () => Promise<unknown> = async () => livePlans) {
+      return {
+        readSubscription: vi.spyOn(liveBillingService, 'readSubscription').mockImplementation((vendorId) => subscription(String(vendorId))),
+        listPaidPlans: vi.spyOn(liveBillingService, 'listPaidPlans').mockImplementation(plans),
+      }
+    }
+
+    function deferred<T>() {
+      let resolve!: (value: T) => void
+      const promise = new Promise<T>((res) => { resolve = res })
+      return { promise, resolve }
+    }
+
+    const page = (vendorId: string) =>
+      <VendorAccountContext.Provider value={accountFor(context('trial_active', vendorId))}><VendorPlanPage /></VendorAccountContext.Provider>
+
+    beforeEach(() => {
+      configureApiClient({ useApi: true })
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(daysBeforeEnd(12.5))
+      signIn('vendor-1')
+    })
+
+    it('shows free days with the rounded-up count, the exact end and the sections, but no actions', async () => {
+      const reads = stubReads(async () => trial())
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('13')).toBeTruthy()
+      expect(screen.getByText('Free days')).toBeTruthy()
+      expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.')).toBeTruthy()
+      expect(screen.getByText('Mithra Social Starter · ₹299 / month')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.queryAllByRole('button')).toEqual([])
+      expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
+      for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
+      expect(reads.readSubscription).toHaveBeenCalledWith('vendor-1', expect.anything())
+    })
+
+    it('warns with 3 days left', async () => {
+      vi.setSystemTime(daysBeforeEnd(2.5))
+      stubReads(async () => trial())
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('3')).toBeTruthy()
+      expect(screen.getByText('Set up AutoPay now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.')).toBeTruthy()
+    })
+
+    it('shows only the note for a shop that is not live', async () => {
+      stubReads(async () => ({ kind: 'not-live' }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
+      expect(screen.queryByRole('region')).toBeNull()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows a failed read with Try again, which rereads', async () => {
+      const reads = stubReads(async () => { throw new ApiError('Billing is down for a moment.', 500, null, '/v1/vendors/vendor-1/subscription', 'server') })
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect((await screen.findByRole('alert')).textContent).toBe('Billing is down for a moment.')
+      expect(screen.queryByRole('region')).toBeNull()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again'])
+      reads.readSubscription.mockImplementation(async () => trial())
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByText('13')).toBeTruthy()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+    })
+
+    it('takes the error path when only the plans list fails', async () => {
+      stubReads(async () => trial(), async () => { throw new ApiError('Plans are unavailable.', 503, null, '/v1/subscription-plans', 'server') })
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect((await screen.findByRole('alert')).textContent).toBe('Plans are unavailable.')
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    })
+
+    it('takes the error path for a response that matches no row', async () => {
+      stubReads(async () => ({ kind: 'subscription', subscription: liveTrialSubscription({ status: 'SOMETHING_NEW' }) }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect((await screen.findByRole('alert')).textContent).toBe('Couldn’t read your shop plan. Try again in a moment.')
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    })
+
+    it('rereads on mount, and a read landing after unmount raises no error', async () => {
+      const first = deferred<LiveSubscriptionRead>()
+      const reads = stubReads(() => first.promise)
+      const errors = vi.spyOn(console, 'error')
+      show(accountFor(context('trial_active', 'vendor-1'))).unmount()
+      await act(async () => { first.resolve(trial()) })
+      expect(errors).not.toHaveBeenCalled()
+      reads.readSubscription.mockImplementation(async () => ({ kind: 'not-live' }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+    })
+
+    it('drops the first vendor’s late read after a vendor switch through applySession', async () => {
+      const first = deferred<LiveSubscriptionRead>()
+      stubReads((vendorId) => vendorId === 'vendor-1' ? first.promise : Promise.resolve({ kind: 'not-live' }))
+      const view = render(page('vendor-1'))
+      signIn('vendor-2')
+      view.rerender(page('vendor-2'))
+      expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
+      await act(async () => { first.resolve(trial()) })
+      expect(screen.queryByText('Free days')).toBeNull()
+      expect(screen.getByText('Free days start when your shop goes live.')).toBeTruthy()
+    })
+
+    it('reads again when a new session starts for the same vendor', async () => {
+      const reads = stubReads(async () => trial())
+      render(page('vendor-1'))
+      expect(await screen.findByText('13')).toBeTruthy()
+      act(() => { signIn('vendor-1') })
+      expect(await screen.findByText('13')).toBeTruthy()
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+    })
+
+    it('drops a read that lands after sign-out, so the next vendor never sees it', async () => {
+      const first = deferred<LiveSubscriptionRead>()
+      const second = deferred<LiveSubscriptionRead>()
+      stubReads((vendorId) => vendorId === 'vendor-1' ? first.promise : second.promise)
+      const view = render(page('vendor-1'))
+      act(() => { useAuthStore.getState().clearSession() })
+      await act(async () => { first.resolve(trial()) })
+      signIn('vendor-2')
+      view.rerender(page('vendor-2'))
+      expect(screen.getByRole('status').textContent).toBe('Reading shop plan…')
+      expect(screen.queryByText('Free days')).toBeNull()
+      await act(async () => { second.resolve({ kind: 'not-live' }) })
+      expect(screen.getByText('Free days start when your shop goes live.')).toBeTruthy()
+    })
   })
 })

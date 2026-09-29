@@ -1,5 +1,5 @@
 import { setDemoBillingPhase } from '../fixtures/demo-state'
-import { mapVendorBillingStatus, VendorBillingUnavailableError } from '../mappers/vendor-billing'
+import { mapVendorBillingStatus } from '../mappers/vendor-billing'
 import type { VendorContext } from '../mappers/vendor-onboarding'
 import type { BillingCheckoutAttempt, VendorBillingService } from './vendor-billing.service'
 
@@ -8,9 +8,8 @@ type BillingAcknowledgements = {
   requestCancellation?: (...args: Parameters<VendorBillingService['requestCancellation']>) => Promise<void>
 }
 
-/** The dashboard provider owns this read; every status is mapped from its accepted context. */
+/** Demo billing: the dashboard provider owns this read; every status is mapped from its accepted context. */
 export function createVendorBillingContextService(
-  source: 'demo' | 'backend',
   refreshContext: () => Promise<VendorContext>,
   acknowledgements: BillingAcknowledgements = {},
 ): VendorBillingService {
@@ -19,15 +18,12 @@ export function createVendorBillingContextService(
   const submitted = new Set<string>()
   const cancellations = new Map<string, { vendorId: string; result: Promise<void> }>()
   const getStatus: VendorBillingService['getStatus'] = async (vendorId) => {
-    const context = await refreshContext()
-    if (source === 'backend') throw new VendorBillingUnavailableError('Billing is unavailable until the authenticated backend integration is complete.')
-    return mapVendorBillingStatus(context, source, vendorId)
+    return mapVendorBillingStatus(await refreshContext(), 'demo', vendorId)
   }
 
   return {
     getStatus,
     async prepareCheckout(vendorId, action, idempotencyKey) {
-      if (source === 'backend') throw new Error('Billing setup is unavailable until the backend billing contract is connected.')
       if (!idempotencyKey.trim()) throw new Error('A billing request key is required.')
       const prior = preparations.get(idempotencyKey)
       if (prior) {
@@ -59,7 +55,6 @@ export function createVendorBillingContextService(
       try { return await result } finally { preparing.delete(idempotencyKey) }
     },
     async submitCheckout(attempt, callback) {
-      if (source === 'backend') throw new Error('Billing confirmation is unavailable until the backend billing contract is connected.')
       if (callback !== null || attempt.mode !== 'simulated' || submitted.has(attempt.attemptId)
         || ![...preparations.values()].some((prepared) => prepared.attemptId === attempt.attemptId && prepared.vendorId === attempt.vendorId && prepared.action === attempt.action)) {
         throw new Error('The simulated Checkout attempt is missing, already used or mismatched.')
@@ -70,7 +65,6 @@ export function createVendorBillingContextService(
       return getStatus(attempt.vendorId)
     },
     async requestCancellation(vendorId, idempotencyKey) {
-      if (source === 'backend') throw new Error('Cancellation is unavailable until the backend billing contract is connected.')
       if (!idempotencyKey.trim()) throw new Error('A billing request key is required.')
       if (acknowledgements.requestCancellation) {
         await acknowledgements.requestCancellation(vendorId, idempotencyKey)
@@ -93,7 +87,6 @@ export function createVendorBillingContextService(
       return getStatus(vendorId)
     },
     async simulateCancellationProgress(vendorId, step) {
-      if (source === 'backend') throw new Error('Simulated cancellation is unavailable for backend billing.')
       const status = await getStatus(vendorId)
       if (status.cancellation?.status !== 'requested' || (step !== 'cancellation_confirmed' && step !== 'cancellation_failed')) {
         throw new Error('This simulated cancellation step is not available for the current billing status.')
@@ -102,7 +95,6 @@ export function createVendorBillingContextService(
       return getStatus(vendorId)
     },
     async reconcileSimulatedCheckout(vendorId, outcome = 'confirmed') {
-      if (source === 'backend') throw new Error('Simulated confirmation is unavailable for backend billing.')
       const status = await getStatus(vendorId)
       if (status.authorisation.status !== 'pending') throw new Error('Only a pending simulated setup can be confirmed.')
       setDemoBillingPhase(vendorId, outcome === 'failed' ? 'setup_failed' : 'setup_confirmed')

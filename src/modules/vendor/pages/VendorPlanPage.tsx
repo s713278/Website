@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react'
+import { LiveVendorPlan } from '@/modules/vendor/components/LiveVendorPlan'
 import { VendorBillingPanel } from '@/modules/vendor/components/VendorBillingPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { createVendorBillingContextService, isLiveApi } from '@/shared/api'
@@ -8,16 +9,19 @@ const VendorBillingPrototype = import.meta.env.DEV
   ? lazy(() => import('@/modules/vendor/components/VendorBillingPrototype').then((module) => ({ default: module.VendorBillingPrototype })))
   : null
 
-export function VendorPlanPage() {
+/** Demo mode in a production build: the billing panel over the demo context. */
+function DemoBillingPanel() {
   const { vendorId, refreshContext } = useVendorAccount()
-  const source = isLiveApi() ? 'backend' : 'demo'
-  const service = useMemo(() => createVendorBillingContextService(source, refreshContext), [source, refreshContext])
+  const service = useMemo(() => createVendorBillingContextService(refreshContext), [refreshContext])
+  return <VendorBillingPanel key={vendorId} vendorId={vendorId} service={service} />
+}
 
+export function VendorPlanPage() {
   return (
     <div className="grid max-w-3xl gap-4">
-      {source === 'demo' && VendorBillingPrototype ? <Suspense fallback={<p>Loading shop plan…</p>}>
+      {isLiveApi() ? <LiveVendorPlan /> : VendorBillingPrototype ? <Suspense fallback={<p>Loading shop plan…</p>}>
         <VendorBillingPrototype />
-      </Suspense> : <VendorBillingPanel key={vendorId} vendorId={vendorId} service={service} />}
+      </Suspense> : <DemoBillingPanel />}
     </div>
   )
 }

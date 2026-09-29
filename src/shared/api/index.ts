@@ -120,6 +120,8 @@ export { useApiError } from './useApiError'
 export * from './services'
 
 export { mapVendorBillingStatus, rupeesToMinorPaise, VendorBillingUnavailableError } from './mappers/vendor-billing'
+export { LiveBillingUnreadableError, mapLiveBilling } from './mappers/live-billing'
+export type { LiveBillingPlan, LiveBillingView } from './mappers/live-billing'
 export type { BillingAction, BillingCheckoutAttempt, BillingSource, SimulatedCancellationStep, SimulatedRenewalStep, VendorBillingService, VendorBillingStatus } from './services/vendor-billing.service'
 export { billingFixtureVendorId, createVendorBillingMockService } from './services/vendor-billing-fixture.service'
 export type { BillingFixtureScenario } from './services/vendor-billing-fixture.service'

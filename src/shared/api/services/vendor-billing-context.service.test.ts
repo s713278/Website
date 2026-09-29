@@ -15,7 +15,7 @@ describe('createVendorBillingContextService', () => {
       snapshots.push(context)
       return context
     })
-    const service = createVendorBillingContextService('demo', refreshContext)
+    const service = createVendorBillingContextService(refreshContext)
     const first = await service.getStatus('demo-vendor')
     expect(first.source).toBe('demo')
     expect(first.trial.status).toBe('active')
@@ -38,7 +38,7 @@ describe('createVendorBillingContextService', () => {
   })
 
   it('retries failed demo AutoPay with its original preparation and a monotonic revision', async () => {
-    const service = createVendorBillingContextService('demo', async () => mapVendorContext(demoVendorContext('demo-vendor')))
+    const service = createVendorBillingContextService(async () => mapVendorContext(demoVendorContext('demo-vendor')))
     const first = await service.getStatus('demo-vendor')
     const attempt = await service.prepareCheckout('demo-vendor', 'setup_autopay', 'retry-key')
     const pending = await service.submitCheckout(attempt, null)
@@ -55,7 +55,7 @@ describe('createVendorBillingContextService', () => {
 
   it('records one demo cancellation per key, rereads context and confirms only on an explicit simulated outcome', async () => {
     const refreshContext = vi.fn(async () => mapVendorContext(demoVendorContext('demo-vendor')))
-    const service = createVendorBillingContextService('demo', refreshContext)
+    const service = createVendorBillingContextService(refreshContext)
     const attempt = await service.prepareCheckout('demo-vendor', 'setup_autopay', 'setup-key')
     const pending = await service.submitCheckout(attempt, null)
     expect(pending.availableActions).toEqual([])
@@ -83,7 +83,7 @@ describe('createVendorBillingContextService', () => {
   })
 
   it('confirms a requested demo cancellation without shortening the trial', async () => {
-    const service = createVendorBillingContextService('demo', async () => mapVendorContext(demoVendorContext('demo-vendor')))
+    const service = createVendorBillingContextService(async () => mapVendorContext(demoVendorContext('demo-vendor')))
     await expect(service.requestCancellation('demo-vendor', 'too-early')).rejects.toThrow('not available')
     const attempt = await service.prepareCheckout('demo-vendor', 'setup_autopay', 'setup-key')
     await service.submitCheckout(attempt, null)
@@ -98,26 +98,6 @@ describe('createVendorBillingContextService', () => {
     expect(confirmed.accessStatus).toBe('TRIAL')
   })
 
-  it('keeps live billing unavailable even if a proposed billing block appears before integration', async () => {
-    const fixture = fixtures.contexts.trial_active
-    const context = mapVendorContext(fixture)
-    const refreshContext = vi.fn(async () => context)
-    const service = createVendorBillingContextService('backend', refreshContext)
-    await expect(service.getStatus(context.vendorId)).rejects.toThrow(/authenticated backend integration/)
-    await expect(service.prepareCheckout(context.vendorId, 'setup_autopay', 'key')).rejects.toThrow(/unavailable/)
-    await expect(service.requestCancellation(context.vendorId, 'key')).rejects.toThrow(/unavailable/)
-    await expect(service.simulateCancellationProgress!(context.vendorId, 'cancellation_confirmed')).rejects.toThrow(/unavailable/)
-    expect(refreshContext).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not turn an unextended or failed backend context into mock success', async () => {
-    const oldContext = mapVendorContext(fixtures.contexts.current_context)
-    const refreshContext = vi.fn().mockResolvedValueOnce(oldContext).mockRejectedValueOnce(new Error('backend offline'))
-    const service = createVendorBillingContextService('backend', refreshContext)
-    await expect(service.getStatus(oldContext.vendorId)).rejects.toThrow(/authenticated backend integration/)
-    await expect(service.getStatus(oldContext.vendorId)).rejects.toThrow('backend offline')
-  })
-
   it('returns a fresh shared context after injected submit and cancellation acknowledgements', async () => {
     let current = mapVendorContext(fixtures.contexts.trial_active)
     const refreshContext = vi.fn(async () => current)
@@ -128,7 +108,7 @@ describe('createVendorBillingContextService', () => {
         ...next.subscription, usage: { ...next.subscription.usage, products: 7 },
       } }
     })
-    const service = createVendorBillingContextService('demo', refreshContext, { submitCheckout, requestCancellation })
+    const service = createVendorBillingContextService(refreshContext, { submitCheckout, requestCancellation })
     const attempt = await service.prepareCheckout(current.vendorId, 'setup_autopay', 'prepare-key')
     const readsBeforeSubmit = refreshContext.mock.calls.length
     const pending = await service.submitCheckout(attempt, null)
@@ -146,7 +126,7 @@ describe('createVendorBillingContextService', () => {
   })
 
   it('rejoins the demo trial with setup_autopay after confirmed cancellation and clears that cancellation', async () => {
-    const service = createVendorBillingContextService('demo', async () => mapVendorContext(demoVendorContext('demo-vendor')))
+    const service = createVendorBillingContextService(async () => mapVendorContext(demoVendorContext('demo-vendor')))
     const first = await service.getStatus('demo-vendor')
     await service.submitCheckout(await service.prepareCheckout('demo-vendor', 'setup_autopay', 'setup'), null)
     await service.reconcileSimulatedCheckout!('demo-vendor')
