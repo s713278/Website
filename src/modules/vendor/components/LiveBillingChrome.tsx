@@ -1,10 +1,9 @@
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BillingStateBanner } from '@/modules/vendor/components/BillingStateBanner'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { liveBillingWording, type LiveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
-import { readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import { Button } from '@/shared/components/ui'
 
 /*
@@ -18,16 +17,7 @@ import { Button } from '@/shared/components/ui'
  */
 function useLiveBillingChrome(): LiveBillingWording | null {
   const { vendorId } = useVendorAccount()
-  // A new session clears the shared read, even for the same vendor, so the chrome reads again.
-  const sessionUser = useAuthStore((state) => state.user)
-  const { view, error } = useLiveBilling(vendorId)
-  const loaded = view !== null || error !== null
-
-  // The shared read drops a response for a previous vendor or session, so there is nothing to cancel here.
-  useEffect(() => {
-    if (!loaded) void readLiveBilling(vendorId)
-  }, [vendorId, sessionUser, loaded])
-
+  const { view } = useStartedLiveBilling(vendorId)
   return view ? liveBillingWording(view) : null
 }
 

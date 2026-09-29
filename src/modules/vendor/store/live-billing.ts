@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react'
-import { liveBillingService, mapLiveBilling, type LiveBillingView } from '@/shared/api'
+import { useEffect, useSyncExternalStore } from 'react'
+import { liveBillingService, mapLiveBilling, mapLivePlanName, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /**
@@ -11,6 +11,8 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
  */
 export interface LiveBillingRead {
   view: LiveBillingView | null
+  /** The subscription's plan name, for the rail and Settings; the vendor context no longer has it. */
+  planName: string | null
   error: unknown
   reading: boolean
 }
@@ -18,9 +20,9 @@ export interface LiveBillingRead {
 /** `plans` is the last plans response, so a cancel response can be mapped without reading it again. */
 interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown }
 
-const empty: Snapshot = { vendorId: null, plans: null, view: null, error: null, reading: false }
+const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, error: null, reading: false }
 /** What a vendor sees before its first read lands. */
-const unread: LiveBillingRead = { view: null, error: null, reading: true }
+const unread: LiveBillingRead = { view: null, planName: null, error: null, reading: true }
 let snapshot = empty
 let generation = 0
 let inFlight: { vendorId: string; generation: number; controller: AbortController; promise: Promise<void> } | null = null
@@ -46,9 +48,9 @@ export function readLiveBilling(vendorId: string): Promise<void> {
         liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
         liveBillingService.listPaidPlans({ signal: controller.signal }),
       ])
-      if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), error: null, reading: false })
+      if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), error: null, reading: false })
     } catch (error) {
-      if (current()) publish({ vendorId, plans: null, view: null, error, reading: false })
+      if (current()) publish({ vendorId, plans: null, view: null, planName: null, error, reading: false })
     } finally {
       if (inFlight?.generation === claim) inFlight = null
     }
@@ -67,11 +69,12 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const user = useAuthStore.getState().user
   const subscription = await liveBillingService.cancel(vendorId)
   if (useAuthStore.getState().user !== user || snapshot.vendorId !== vendorId || !snapshot.plans) return
-  const view = mapLiveBilling({ kind: 'subscription', subscription }, snapshot.plans, new Date())
+  const read = { kind: 'subscription', subscription } as const
+  const view = mapLiveBilling(read, snapshot.plans, new Date())
   generation += 1
   inFlight?.controller.abort()
   inFlight = null
-  publish({ ...snapshot, view, error: null, reading: false })
+  publish({ ...snapshot, view, planName: mapLivePlanName(read), error: null, reading: false })
 }
 
 /** Forgets the read and drops any response still on its way. */
@@ -96,4 +99,22 @@ const subscribe = (listener: () => void) => {
 export function useLiveBilling(vendorId: string): LiveBillingRead {
   const current = useSyncExternalStore(subscribe, () => snapshot)
   return current.vendorId === vendorId ? current : unread
+}
+
+/**
+ * The shared read for this vendor, started when none is loaded: the chrome, the rail and Settings
+ * use it. A read already in flight, such as Plan's, is joined.
+ */
+export function useStartedLiveBilling(vendorId: string): LiveBillingRead {
+  // A new session clears the shared read, even for the same vendor, so it is read again.
+  const sessionUser = useAuthStore((state) => state.user)
+  const read = useLiveBilling(vendorId)
+  const loaded = read.view !== null || read.error !== null
+
+  // The shared read drops a response for a previous vendor or session, so there is nothing to cancel here.
+  useEffect(() => {
+    if (!loaded) void readLiveBilling(vendorId)
+  }, [vendorId, sessionUser, loaded])
+
+  return read
 }

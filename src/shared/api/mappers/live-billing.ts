@@ -157,6 +157,17 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   throw new LiveBillingUnreadableError()
 }
 
+/**
+ * The vendor's current plan name from `GET …/subscription`, or `null` before go-live or when the
+ * row has none. The vendor context no longer carries the plan. Under gap C it names the paid plan
+ * as soon as subscribe runs.
+ */
+export function mapLivePlanName(read: LiveSubscriptionRead): string | null {
+  if (read.kind === 'not-live' || read.subscription === null || typeof read.subscription !== 'object') return null
+  const name = (read.subscription as WireRecord).plan_name
+  return typeof name === 'string' && name.trim() ? name.trim() : null
+}
+
 /** What Razorpay Checkout opens with, from a subscribe response. */
 export interface LiveCheckoutConfig { keyId: string; subscriptionId: string }
 

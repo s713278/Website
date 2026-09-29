@@ -8,7 +8,7 @@ import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-p
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
 import {
-  ApiError, configureApiClient, liveBillingService, mapVendorContext, prototypeSeed, vendorOnboardingService,
+  ApiError, configureApiClient, liveBillingService, mapVendorContext, prototypeSeed, vendorOnboardingService, vendorService,
   type LiveSubscriptionRead, type PrototypeState,
 } from '@/shared/api'
 import {
@@ -16,6 +16,7 @@ import {
   liveTrialAutoPayCancelledSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { VendorSettingsPage } from '../pages/VendorSettingsPage'
 import { LiveVendorPlan } from './LiveVendorPlan'
 import { VendorBillingPrototype } from './VendorBillingPrototype'
 import { VendorShell } from './VendorShell'
@@ -50,6 +51,7 @@ function renderShell(path: string, plan: ReactNode = <VendorBillingPrototype />)
           <Route path="orders" element={<p>Orders page</p>} />
           <Route path="products" element={<p>Products page</p>} />
           <Route path="plan" element={plan} />
+          <Route path="settings" element={<VendorSettingsPage />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -58,6 +60,19 @@ function renderShell(path: string, plan: ReactNode = <VendorBillingPrototype />)
 
 const banner = () => screen.queryByRole('status', { name: 'Shop plan status' })
 const header = () => within(screen.getByRole('banner'))
+const rail = () => within(screen.getByRole('complementary', { name: 'Vendor navigation' }))
+/** The rail's plan chip, such as "Free plan"; the rail's "Plan" link does not match. */
+const planChip = () => rail().queryByText(/ plan$/)
+/** The value of the Plan row on Settings. */
+const settingsPlan = () => screen.getByText('Plan', { selector: 'dt' }).nextElementSibling?.textContent
+
+/** Settings' store details, with nothing but a name set. */
+function storeProfile() {
+  vi.spyOn(vendorService, 'getStoreProfile').mockResolvedValue({
+    vendorId: 'r1', businessName: 'Green Bowl Grocers', description: null, businessType: null, ownerName: null, contactPerson: null,
+    contactNumber: null, email: null, address: null, bannerImage: null, storeIdentifier: null,
+  })
+}
 
 beforeEach(() => {
   invalidateVendorContext()
@@ -123,6 +138,20 @@ describe('VendorShell in demo development', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stopped' }))
     await waitFor(() => expect(header().getByRole('link', { name: 'Keep open · ₹299' })).toBeTruthy())
     expect(banner()?.textContent).toMatch(/^Shop stays open until 2 Oct/)
+  })
+
+  it('names the plan in the rail and on Settings from the demo context', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
+      data: { vendor_id: 'r1', business_name: 'Green Bowl Grocers', vendor_status: 'ACTIVE', approval_status: 'APPROVED',
+        onboarding: { status: 'COMPLETED', next_step: 11 }, subscription: { tier: 'FREE', plan_name: 'Free' } },
+    }))
+    storeProfile()
+    fakeHelper('paid')
+    const reads = vi.spyOn(liveBillingService, 'readSubscription')
+    renderShell('/vendor/settings')
+    await waitFor(() => expect(settingsPlan()).toBe('Free'))
+    expect(planChip()?.textContent).toBe('Free plan')
+    expect(reads).not.toHaveBeenCalled()
   })
 
   it('shows the display-only Free days seed while the helper is down', async () => {
@@ -358,6 +387,38 @@ describe('VendorShell under the live API', () => {
     expect(banner()?.textContent).toMatch(/^13 free days left/)
     expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
     expect(reads).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the plan in the rail and on Settings from the subscription read, not the context', async () => {
+    freeTierStore()
+    storeProfile()
+    stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+    renderShell('/vendor/settings', <LiveVendorPlan />)
+    await waitFor(() => expect(settingsPlan()).toBe('Mithra Social Starter'))
+    expect(planChip()?.textContent).toBe('Mithra Social Starter plan')
+  })
+
+  it('names no plan while the first read loads, then none for a shop that is not live', async () => {
+    freeTierStore()
+    storeProfile()
+    let resolve!: (read: LiveSubscriptionRead) => void
+    stubReads(() => new Promise((res) => { resolve = res }))
+    renderShell('/vendor/settings', <LiveVendorPlan />)
+    await waitFor(() => expect(settingsPlan()).toBe('Loading…'))
+    expect(planChip()).toBeNull()
+    await act(async () => { resolve({ kind: 'not-live' }) })
+    expect(settingsPlan()).toBe('Not set')
+    expect(planChip()).toBeNull()
+  })
+
+  it('names no plan after the read fails', async () => {
+    freeTierStore()
+    storeProfile()
+    const reads = stubReads(async () => { throw new ApiError('Billing is down for a moment.', 500, null, '/v1/vendors/r1/subscription', 'server') })
+    renderShell('/vendor/settings', <LiveVendorPlan />)
+    await waitFor(() => expect(reads).toHaveBeenCalled())
+    await waitFor(() => expect(settingsPlan()).toBe('Not set'))
+    expect(planChip()).toBeNull()
   })
 
   it('opens no Checkout from the chrome: its links only lead to Plan', async () => {

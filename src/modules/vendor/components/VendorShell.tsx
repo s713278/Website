@@ -14,6 +14,7 @@ import logoDarkMd from '@/assets/logo_dark_md.png'
 import { LiveHeaderButton, LiveShellBanner } from '@/modules/vendor/components/LiveBillingChrome'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
@@ -118,9 +119,9 @@ function BrandMark() {
 /**
  * The rail's foot: which plan the store is on, and the way out to the customer view.
  *
- * The chip is withheld rather than guessed at when the context carries no subscription —
- * a chip reading "Free plan" on a store whose plan never loaded is the one mistake this
- * corner can make.
+ * The chip is withheld rather than guessed at when no plan name has loaded — a chip
+ * reading "Free plan" on a store whose plan never loaded is the one mistake this corner
+ * can make. Demo reads its context's plan; the live API reads the subscription.
  */
 function RailFoot() {
   const { context, plan, storeState } = useVendorAccount()
@@ -129,12 +130,7 @@ function RailFoot() {
 
   return (
     <div className="mt-auto grid gap-2.5 border-t border-[var(--vc-edge)] px-2 pt-3">
-      {plan.name ? (
-        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
-          <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
-          {plan.name} plan
-        </span>
-      ) : null}
+      {isLiveApi() ? <LivePlanChip /> : plan.name ? <PlanChip name={plan.name} /> : null}
 
       {isOpen && identifier ? (
         <Link to={`/stores/${identifier}`}>
@@ -151,6 +147,26 @@ function RailFoot() {
       )}
     </div>
   )
+}
+
+function PlanChip({ name }: { name: string }) {
+  return (
+    <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
+      <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
+      {name} plan
+    </span>
+  )
+}
+
+/**
+ * The live API's chip names the plan from the subscription read the chrome shares, because the
+ * vendor context no longer carries it. It is withheld before go-live, while the first read loads
+ * and after it fails.
+ */
+function LivePlanChip() {
+  const { vendorId } = useVendorAccount()
+  const { planName } = useStartedLiveBilling(vendorId)
+  return planName ? <PlanChip name={planName} /> : null
 }
 
 /**

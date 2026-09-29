@@ -3,7 +3,7 @@ import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveMonthlyPlan, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
   liveStoppedSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
-import { LiveBillingUnreadableError, mapLiveBilling, mapLiveCheckout } from './live-billing'
+import { LiveBillingUnreadableError, mapLiveBilling, mapLiveCheckout, mapLivePlanName } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
 const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
@@ -45,6 +45,16 @@ describe('mapLiveBilling', () => {
       const cancelled = subscription({ status: 'CANCELLED', razorpay_subscription_id: 'sub_FakeTrial0003', razorpay_status: 'cancelled' })
       expect(mapLiveBilling(pending, livePlans, now).state).toBe('free_days')
       expect(mapLiveBilling(cancelled, livePlans, now).state).toBe('free_days')
+    })
+
+    it('reads absent fields as null, since dev leaves null fields out of the row', () => {
+      const { current_period_start, current_period_end, next_billing_at, ...sparse } = liveTrialSubscription({
+        status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakeTrial0005', razorpay_status: 'created',
+      })
+      expect([current_period_start, current_period_end, next_billing_at]).toEqual([null, null, null])
+      const read = { kind: 'subscription' as const, subscription: sparse }
+      expect(mapLiveBilling(read, livePlans, daysBeforeEnd(0.5))).toMatchObject({ state: 'three_days_left', daysLeft: 1 })
+      expect(mapLiveBilling(read, livePlans, new Date(trialEnd))).toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' })
     })
 
     it('ignores the backend days_remaining and display labels', () => {
@@ -327,6 +337,19 @@ describe('mapLiveBilling', () => {
       expect(() => trialEndsAt('2026-10-12T10:04:16.169028')).toThrow(LiveBillingUnreadableError)
       expect(() => trialEndsAt('2026-10-12 10:04:16Z')).toThrow(LiveBillingUnreadableError)
     })
+  })
+})
+
+describe('mapLivePlanName', () => {
+  it('names the plan on the subscription row, which subscribe switches to the paid plan (gap C)', () => {
+    expect(mapLivePlanName({ kind: 'subscription', subscription: liveTrialSubscription() })).toBe('Social Starter Trial')
+    expect(mapLivePlanName({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })).toBe('Mithra Social Starter')
+  })
+
+  it('has no name before go-live or when the row carries none', () => {
+    expect(mapLivePlanName({ kind: 'not-live' })).toBeNull()
+    expect(mapLivePlanName({ kind: 'subscription', subscription: liveTrialSubscription({ plan_name: ' ' }) })).toBeNull()
+    expect(mapLivePlanName({ kind: 'subscription', subscription: null })).toBeNull()
   })
 })
 
