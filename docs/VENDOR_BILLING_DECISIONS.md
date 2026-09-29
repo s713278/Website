@@ -4,7 +4,8 @@
 current Test Mode method scope clarified ·
 19 September 2026. UPI decided and the failure boundary moved to a halted collection ·
 24 September 2026; UPI on standby for a capable Razorpay account · 25 September 2026
-([UPI and collection retries](#upi-and-collection-retries--24-september-2026)).
+([UPI and collection retries](#upi-and-collection-retries--24-september-2026)). Live API billing on
+the published backend API agreed · 29 September 2026 ([Live API billing](#live-api-billing--29-september-2026)).
 This amends the 18 September decisions. Open edge-case policies are listed below; the development
 preview and production backend do not yet implement this model.
 
@@ -268,7 +269,8 @@ holds the hosted Test evidence.
   deployed demo site included, contain none of it and keep the simulated billing panel. Live mode
   keeps its safe "Billing unavailable" read, with no prototype. The deployed demo gets six-state
   billing only once Razorpay runs through the backend APIs. The seeded states have no backend
-  equivalent, and demo mode has no backend, so both need a decision at that point.
+  equivalent, and demo mode has no backend, so both need a decision at that point. The Live API
+  part was decided on 29 September 2026: see [Live API billing](#live-api-billing--29-september-2026).
 - **Only six states** appear on Plan and the dashboard. The demo vendor is always approved and
   active; the demo store-state switcher is removed. Live store-state screens are unchanged.
 
@@ -366,7 +368,8 @@ the currently supplied Test account redirected to Razorpay account onboarding an
 account therefore cannot offer UPI, and the cards-only implementation stays as it is. MithraDirect
 is expected to create its own Razorpay account with KYC completed and UPI enabled, and to supply
 its API key ID, key secret and monthly ₹299 plan ID. That account is used in Test first, then in
-Live.
+Live. The standby applies only to the local test server's account: Live API Checkout already uses
+MithraDirect's own account, which offers UPI ([Live API billing](#live-api-billing--29-september-2026)).
 
 **Switch-on checklist**, once that account exists:
 
@@ -392,3 +395,50 @@ Live.
    launch-approved. No production build has Razorpay billing yet: production keeps the simulated
    panel and live mode reads "Billing unavailable", so Live billing picks UPI up when it ships. Live
    keys belong to the Spring backend, never the browser or this repository.
+
+## Live API billing — 29 September 2026
+
+**Status:** agreed with the product owner on 29 September 2026; not yet implemented. It replaces the
+Live API's "Billing unavailable" read. The [agreed product rules](#agreed-product-rules) still
+apply. The contract gaps go to [API gaps](./API_GAPS.md#vendor-platform-billing), and the
+implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiring work.
+
+- **Scope.** With the Live API (`VITE_USE_API=true`), Plan, the banner and the header button show
+  the six billing states of the [prototype](#six-state-demo-plan-prototype--24-september-2026),
+  driven only by the published backend billing API. The Live API never uses the local test server.
+  Chips and sample lines stay in demo mode.
+- **Demo mode is frozen.** The local test server and the prototype stay as they are, with no new
+  features. The server is deleted once the backend covers what only it does today: keeping the
+  trial while AutoPay is on, cancelling before the first fee, setting AutoPay up again before the
+  paid days end, and treating a fee as paid only once it is captured.
+- **Source.** `GET /v1/vendors/{vendor_id}/subscription` is the billing read: state, trial dates,
+  paid period and AutoPay. The plans list supplies the plan and its price. The vendor context keeps
+  supplying plan limits and features; its trial and lifecycle fields are not used for billing. The
+  app counts free days itself from the trial end, rounded up, and MithraDirect owns all wording.
+- **Build on today's API.** The app reads today's responses and the corrected ones alike, so
+  backend fixes land without app changes. [API gaps](./API_GAPS.md#vendor-platform-billing) owns
+  each deviation.
+- **State rules.**
+  - A trial that ends without AutoPay shows **Shop closed** with free-days wording ("Free days are
+    over…"). It is a wording variant, not a seventh state.
+  - Trial AutoPay whose first fee is due but not yet confirmed keeps the shop open ("Shop is open ·
+    AutoPay on"), like a collection retry. A fee paid immediately after expiry keeps the shop closed,
+    with "Confirming payment…", until it is confirmed.
+  - Paid is shown only once a paid period exists.
+  - AutoPay that ends outside MithraDirect, for example at the bank, keeps the paid days: Stopped
+    until the paid-through date, then Shop closed.
+- **Shop wording.** Plan keeps saying that customers cannot see a lapsed shop. Backend enforcement
+  (MFPS-66) is a release blocker, so the wording is true in production.
+- **Actions.** Every action calls the backend now, even where a known backend gap makes it fail;
+  the vendor then sees a specific message. No action is hidden because of a gap.
+- **Payments you made** comes from the subscription history, without amounts until the backend
+  supplies them. The app never infers an amount.
+- **Payment methods.** Live API Checkout uses MithraDirect's own Razorpay account, which offers UPI,
+  so the [UPI standby](#upi-standby-and-switch-on) covers only the local test server's account.
+  Live API wording says "card or UPI" and "a small refundable charge". eMandate stays excluded; on
+  29 September the account still offered it, and it is being switched off.
+- **Release to production** waits for: cancelling trial AutoPay before the first fee (it currently
+  fails), the first fee falling exactly at the trial end (it was a day late), paying immediately
+  after the trial ends (it currently fails, so a lapsed vendor cannot pay), a 14-day trial in
+  production (the development backend uses 1 day on purpose) and backend shop enforcement
+  (MFPS-66). The app tolerates the other known deviations.
