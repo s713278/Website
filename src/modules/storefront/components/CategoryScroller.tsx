@@ -102,7 +102,7 @@ function CategoryTile({ category, active, onSelect, className }: CategoryTilePro
       )}
     >
       <CategoryCircle active={active}>
-        <CategoryIcon imagePath={category.imagePath} label={category.label} />
+        <CategoryIcon icon={category.icon} label={category.label} />
       </CategoryCircle>
       <span className={tileLabelClass(active)}>{category.label}</span>
     </button>

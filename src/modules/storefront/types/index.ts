@@ -51,6 +51,7 @@ export type StoreCategory = {
   label: string
   imagePath?: string
   categoryId?: number
+  icon?: string
 }
 
 export type StoreTheme = {

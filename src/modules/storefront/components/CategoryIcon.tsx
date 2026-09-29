@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 type CategoryIconProps = {
-  imagePath?: string
+  icon?: string
   label: string
   className?: string
 }
@@ -14,10 +14,10 @@ function categoryInitials(label: string): string {
   return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
 }
 
-export function CategoryIcon({ imagePath, label, className }: CategoryIconProps) {
+export function CategoryIcon({ icon, label, className }: CategoryIconProps) {
   const [failed, setFailed] = useState(false)
 
-  if (!imagePath || failed) {
+  if (!icon || failed) {
     return (
       <span
         className={cn(
@@ -35,12 +35,12 @@ export function CategoryIcon({ imagePath, label, className }: CategoryIconProps)
 
   return (
     <img
-      src={imagePath}
+      src={icon}
       alt=""
       title={label}
       loading="lazy"
       decoding="async"
-      className={cn('size-full object-cover', className)}
+      className={cn('size-[68%] object-contain', className)}
       onError={() => setFailed(true)}
     />
   )

@@ -118,8 +118,14 @@ function mapCategory(raw: Record<string, unknown>): StoreCategory | null {
   const label = String(raw.name ?? raw.label ?? '').trim()
   if (!label) return null
   const categoryId = asNumber(raw.id ?? raw.category_id)
+  const icon = httpUrl(raw.icon)
   const imagePath = httpUrl(raw.image_path) || httpUrl(raw.imagePath) || httpUrl(raw.image)
-  return { label, imagePath, ...(categoryId != null ? { categoryId } : {}) }
+  return {
+    label,
+    ...(icon ? { icon } : {}),
+    ...(imagePath ? { imagePath } : {}),
+    ...(categoryId != null ? { categoryId } : {}),
+  }
 }
 
 function asNumber(value: unknown): number | undefined {
