@@ -234,6 +234,12 @@ describe('mapLiveBilling', () => {
         expect(mapLiveBilling({ kind: 'subscription', subscription: { ...payingAgain, razorpay_status: 'active' } }, livePlans, afterPeriod))
           .toMatchObject({ state: 'confirming', ended: 'paid_days' })
       })
+
+      it('takes the read error path while P is still ahead, rather than call an open shop closed', () => {
+        const keepingOpen = livePaidSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakeKeepOpen0001', razorpay_status: 'authenticated' })
+        expect(() => mapLiveBilling({ kind: 'subscription', subscription: keepingOpen }, livePlans, new Date('2026-10-22T18:30:00Z')))
+          .toThrow(LiveBillingUnreadableError)
+      })
     })
 
     describe('row 10: Shop closed, free days over', () => {

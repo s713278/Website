@@ -132,7 +132,9 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   if (status === 'TRIAL_ACTIVE' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) return { state: 'collecting', shop: 'open', plan }
   // Row 8b, gap C: dev reports trial AutoPay as PAYMENT_PENDING, so after T it reads as a payment
   // being confirmed. Until C and D are fixed, trial AutoPay shows this for the day before its charge.
-  if (status === 'PAYMENT_PENDING' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) {
+  // A P still ahead matches neither row 10's nor row 11's wording, so it takes the read error path
+  // rather than call an open shop closed.
+  if (status === 'PAYMENT_PENDING' && autoPayAgreed && trialEndsAt && !beforeTrialEnd && (periodEnd === null || periodOver)) {
     return { state: 'confirming', shop: 'hidden', plan, ended: periodEnd === null ? 'free_days' : 'paid_days' }
   }
 
