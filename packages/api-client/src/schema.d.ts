@@ -391,7 +391,9 @@ export interface paths {
          *     2. Creates a Razorpay subscription via `external_plan_id`.
          *     3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing
          *        trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.
-         *     4. Returns `checkout_url` — open it in Razorpay Checkout / hosted page.
+         *     4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.
+         *        The key ID is public and may be used by the UI to initialise Razorpay Checkout;
+         *        no key secret or webhook secret is ever returned.
          *
          *     Idempotent: calling again while `PAYMENT_PENDING` returns the existing checkout
          *     URL — no duplicate Razorpay subscription is created.

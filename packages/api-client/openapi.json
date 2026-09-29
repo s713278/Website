@@ -1791,7 +1791,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "Subscribe to a paid plan",
-        "description": "Starts a paid subscription for the vendor:\n\n1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).\n2. Creates a Razorpay subscription via `external_plan_id`.\n3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing\n   trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.\n4. Returns `checkout_url` — open it in Razorpay Checkout / hosted page.\n\nIdempotent: calling again while `PAYMENT_PENDING` returns the existing checkout\nURL — no duplicate Razorpay subscription is created.\n\nActivation does NOT happen here; the signed Razorpay webhook flips status to\n`ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on\nthe same plan; `400` if the plan is not purchasable online; `404` if the vendor\nhas no subscription row (go live first).\n",
+        "description": "Starts a paid subscription for the vendor:\n\n1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).\n2. Creates a Razorpay subscription via `external_plan_id`.\n3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing\n   trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.\n4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.\n   The key ID is public and may be used by the UI to initialise Razorpay Checkout;\n   no key secret or webhook secret is ever returned.\n\nIdempotent: calling again while `PAYMENT_PENDING` returns the existing checkout\nURL — no duplicate Razorpay subscription is created.\n\nActivation does NOT happen here; the signed Razorpay webhook flips status to\n`ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on\nthe same plan; `400` if the plan is not purchasable online; `404` if the vendor\nhas no subscription row (go live first).\n",
         "operationId": "subscribe",
         "parameters": [
           {
@@ -15654,6 +15654,7 @@
             "status": "PAYMENT_PENDING",
             "trial_started_at": "2026-09-12T10:00:00Z",
             "trial_ends_at": "2026-09-26T10:00:00Z",
+            "razorpay_key_id": "rzp_test_example123",
             "razorpay_subscription_id": "sub_Qk0example123",
             "razorpay_status": "created",
             "checkout_url": "https://rzp.io/rzp/example",

@@ -77,5 +77,11 @@ export {
   updateSizePrice,
   vendorProductsService,
 } from './vendor-products.service'
+export {
+  liveBillingService,
+  type LiveBillingConfirmInput,
+  type LiveBillingRequestConfig,
+  type LiveSubscriptionRead,
+} from './live-billing.service'
 export { vendorOnboardingService } from './vendor-onboarding.service'
 export type { ReferenceRequestConfig } from './vendor-onboarding.service'
