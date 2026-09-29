@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveMonthlyPlan, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
-  liveStoppedSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveStoppedSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
-import { LiveBillingUnreadableError, mapLiveBilling } from './live-billing'
+import { LiveBillingUnreadableError, mapLiveBilling, mapLiveCheckout } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
 const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
@@ -327,5 +327,18 @@ describe('mapLiveBilling', () => {
       expect(() => trialEndsAt('2026-10-12T10:04:16.169028')).toThrow(LiveBillingUnreadableError)
       expect(() => trialEndsAt('2026-10-12 10:04:16Z')).toThrow(LiveBillingUnreadableError)
     })
+  })
+})
+
+describe('mapLiveCheckout', () => {
+  it('takes the key ID and subscription ID from a subscribe response, ignoring checkout_url', () => {
+    expect(mapLiveCheckout(liveSubscribeResponse())).toEqual({ keyId: 'rzp_test_FakeKey0001', subscriptionId: 'sub_FakeAutoPay0001' })
+  })
+
+  it('rejects a response without either ID, since Checkout cannot open without both', () => {
+    const message = 'Couldn’t start Razorpay Checkout. Try again in a moment.'
+    expect(() => mapLiveCheckout(liveSubscribeResponse({ razorpay_key_id: null }))).toThrow(message)
+    expect(() => mapLiveCheckout(liveSubscribeResponse({ razorpay_subscription_id: '' }))).toThrow(message)
+    expect(() => mapLiveCheckout(null)).toThrow(message)
   })
 })

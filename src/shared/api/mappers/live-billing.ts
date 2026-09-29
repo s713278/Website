@@ -156,3 +156,16 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
 
   throw new LiveBillingUnreadableError()
 }
+
+/** What Razorpay Checkout opens with, from a subscribe response. */
+export interface LiveCheckoutConfig { keyId: string; subscriptionId: string }
+
+/** Maps `POST …/subscription` to Checkout's key ID and subscription ID; `checkout_url` is ignored. */
+export function mapLiveCheckout(payload: unknown): LiveCheckoutConfig {
+  const response = payload !== null && typeof payload === 'object' ? payload as WireRecord : {}
+  const { razorpay_key_id: keyId, razorpay_subscription_id: subscriptionId } = response
+  if (typeof keyId !== 'string' || !keyId || typeof subscriptionId !== 'string' || !subscriptionId) {
+    throw new Error('Couldn’t start Razorpay Checkout. Try again in a moment.')
+  }
+  return { keyId, subscriptionId }
+}

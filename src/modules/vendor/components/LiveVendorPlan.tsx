@@ -1,12 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PrototypeCard } from '@/modules/vendor/lib/billing-prototype-card'
-import { liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
+import { liveBillingWording, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { cancelLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
-import { getErrorMessage, isApiError } from '@/shared/api'
+import { getErrorMessage, isApiError, liveBillingService, mapLiveCheckout, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Card } from '@/shared/components/ui'
 import { cn } from '@/shared/lib/utils'
+import { openSubscriptionCheckout, type SubscriptionCheckoutCallback } from '@/shared/payments/razorpay-checkout'
 
 const toneClass: Record<PrototypeCard['tone'], string> = {
   neutral: '',
@@ -28,6 +29,23 @@ function StateCard({ card, children }: { card: PrototypeCard; children?: ReactNo
 }
 
 const cancelFailed = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
+const confirmFailed = 'We couldn’t confirm this payment here. If money was taken, it will show once Razorpay confirms it.'
+/** The waits before each `confirm` retry. */
+const confirmRetryDelays = [5_000, 15_000, 30_000]
+const pollEvery = 5_000
+const pollFor = 90_000
+
+/** A `confirm` failure that may not have reached the backend: 502, 503 or the network. */
+const shouldRetryConfirm = (cause: unknown) => isApiError(cause) && (cause.status === 502 || cause.status === 503 || cause.kind === 'network')
+
+/** Resolves after `ms`, or at once when `signal` aborts. */
+function pause(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    const done = () => { window.clearTimeout(timer); resolve() }
+    const timer = window.setTimeout(done, ms)
+    signal.addEventListener('abort', done, { once: true })
+  })
+}
 const whatYouGet = ['Your own shop link', 'Customers order on WhatsApp', 'Share on Instagram and Facebook', 'Add products and prices', 'See all orders in one place']
 const ifYouDoNotPay = ['Customers cannot open your shop', 'New orders stop', 'You can still see old orders', 'You can pay again any time']
 
@@ -53,6 +71,12 @@ export function LiveVendorPlan() {
   const [actionError, setActionError] = useState<string | null>(null)
   /** Stop the plan's single confirm step is open. */
   const [confirmStop, setConfirmStop] = useState(false)
+  /**
+   * After Checkout, Plan holds the card's Checkout action and polls until a read changes the view.
+   * After 90 s it stops polling and the read decides the action again; the waiting line stays.
+   */
+  const [hold, setHold] = useState<{ from: LiveBillingView['state']; waiting: string; expired: boolean } | null>(null)
+  const polling = hold !== null && !hold.expired
 
   // The shared read drops a response for a previous vendor or session, so there is nothing to cancel here.
   useEffect(() => {
@@ -61,9 +85,24 @@ export function LiveVendorPlan() {
     setActing(false)
     setActionError(null)
     setConfirmStop(false)
+    setHold(null)
     void readLiveBilling(vendorId)
     return () => { current.controller.abort() }
   }, [vendorId, sessionUser])
+
+  useEffect(() => {
+    if (!polling) return
+    const poll = window.setInterval(() => void readLiveBilling(vendorId), pollEvery)
+    const cap = window.setTimeout(() => setHold((current) => current && { ...current, expired: true }), pollFor)
+    return () => {
+      window.clearInterval(poll)
+      window.clearTimeout(cap)
+    }
+  }, [polling, vendorId])
+
+  useEffect(() => {
+    if (hold && view && view.state !== hold.from) setHold(null)
+  }, [hold, view])
 
   /** Turn off AutoPay and Stop the plan: one call per click, never retried; a failure leaves the view. */
   async function cancel() {
@@ -84,23 +123,86 @@ export function LiveVendorPlan() {
     }
   }
 
+  /**
+   * Subscribe, Checkout, confirm, then the poll. Subscribe is never retried; a repeat while pending
+   * returns the same subscription, so trying again is safe. Closing Checkout changes nothing.
+   */
+  async function checkout(purpose: LiveCheckoutPurpose, from: LiveBillingView) {
+    const current = actions.current
+    if (!current || current.running) return
+    current.running = true
+    setActing(true)
+    setActionError(null)
+    const { signal } = current.controller
+    try {
+      const config = mapLiveCheckout(await liveBillingService.subscribe(vendorId, from.plan.code))
+      if (signal.aborted) return
+      const failure = { reason: null as string | null }
+      const result = await openSubscriptionCheckout(
+        { ...config, name: 'MithraDirect', description: from.plan.name },
+        { signal, onPaymentFailure: (reason) => { failure.reason = reason } },
+      )
+      if (result.status === 'dismissed') {
+        if (failure.reason) setActionError(purpose.failed(failure.reason))
+        return
+      }
+      setHold({ from: from.state, waiting: purpose.waiting, expired: false })
+      void confirm(result.callback, signal)
+    } catch (cause) {
+      if (!signal.aborted) setActionError(getErrorMessage(cause))
+    } finally {
+      current.running = false
+      if (!signal.aborted) setActing(false)
+    }
+  }
+
+  /** Sends Checkout's values to `confirm`. The payment may be taken whatever happens here, so the poll runs regardless. */
+  async function confirm(callback: SubscriptionCheckoutCallback, signal: AbortSignal) {
+    for (let retry = 0; ; retry += 1) {
+      try {
+        await liveBillingService.confirm(vendorId, callback)
+        return
+      } catch (cause) {
+        if (signal.aborted) return
+        if (shouldRetryConfirm(cause) && retry < confirmRetryDelays.length) {
+          await pause(confirmRetryDelays[retry], signal)
+          if (signal.aborted) return
+          continue
+        }
+        setActionError(isApiError(cause) && (cause.status === 400 || cause.status === 401) ? confirmFailed : getErrorMessage(cause))
+        return
+      }
+    }
+  }
+
   if (errorMessage) return <div className="grid gap-2 text-sm">
     <p role="alert" className="text-destructive">{errorMessage}</p>
     <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Try again</Button>
   </div>
   if (!view) return <p role="status">Reading shop plan…</p>
 
-  const { card, note, confirming, stopConfirmation } = liveBillingWording(view)
+  const { card, note, confirming, stopConfirmation, checkout: purpose } = liveBillingWording(view)
   const actionAlert = actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null
+  // A read that changed the view ends the hold; the effect above then clears it.
+  const held = hold && hold.from === view.state ? hold : null
   return <div className="grid gap-4">
     {note ? <Card className="p-5"><p>{note}</p></Card> : null}
     {card ? <>
       <StateCard card={card}>
+        {card.action && purpose ? <div className="grid gap-1">
+          <Button size="lg" fullWidth className="rounded-full" disabled={acting || polling} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
+          <p className="text-xs text-muted-foreground">{card.action.help}</p>
+          {actionAlert}
+        </div> : null}
         {view.state === 'autopay_on' ? <>
           <Button className="w-fit px-0" variant="link" disabled={acting} onClick={() => void cancel()}>Turn off AutoPay</Button>
           {actionAlert}
         </> : null}
       </StateCard>
+      {held ? <div className="grid gap-2 text-sm">
+        <p role="status">{held.waiting}</p>
+        {held.expired ? <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button> : null}
+      </div> : null}
       {/* Confirming offers no payment action; Check again only rereads the shared read. */}
       {confirming ? <div className="grid gap-2 text-sm">
         <p role="status">{confirming}</p>

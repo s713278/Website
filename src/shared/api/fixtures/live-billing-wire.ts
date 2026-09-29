@@ -164,3 +164,17 @@ export function liveTrialAutoPayCancelledSubscription(overrides: Record<string, 
     ...overrides,
   })
 }
+
+/**
+ * `POST /v1/vendors/{vendor_id}/subscription` during the free days: the Razorpay subscription to open
+ * in Checkout. A repeat while pending returns the same one. `checkout_url` is not used.
+ */
+export function liveSubscribeResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'PAYMENT_PENDING',
+    razorpay_key_id: 'rzp_test_FakeKey0001',
+    razorpay_subscription_id: 'sub_FakeAutoPay0001',
+    checkout_url: 'https://rzp.io/rzp/FakeCheckout0001',
+    ...overrides,
+  }
+}
