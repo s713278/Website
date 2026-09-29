@@ -533,7 +533,7 @@ describe('VendorPlanPage', () => {
         await wait()
       }
 
-      it('stops polling after 90 s, keeps the waiting line with Check again, and gives the action back while the read still offers it', async () => {
+      it('stops polling after 90 s but keeps the hold: the action stays off beside the waiting line and Check again until a settled read', async () => {
         const reads = stubReads(async () => trial())
         subscribe()
         open().mockResolvedValue(submitted())
@@ -545,15 +545,17 @@ describe('VendorPlanPage', () => {
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(19)
         expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(false)
+        expect(button().disabled).toBe(true)
         await wait(60_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(19)
+        expect(button().disabled).toBe(true)
 
+        // An unchanged read does not end the hold.
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
         await wait()
         expect(reads.readSubscription).toHaveBeenCalledTimes(20)
-        expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(false)
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(button().disabled).toBe(true)
 
         reads.readSubscription.mockResolvedValue(autoPayOn())
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
@@ -561,6 +563,96 @@ describe('VendorPlanPage', () => {
         expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+      })
+
+      it('keeps polling and holding when Free days turn into 3 days left, which still offers Set up AutoPay', async () => {
+        const reads = stubReads(async () => trial())
+        subscribe()
+        open().mockResolvedValue(submitted())
+        confirm().mockResolvedValue(null)
+        // 2 s before the count rounds up to 3: the first poll read lands at 3 days left.
+        vi.setSystemTime(daysBeforeEnd(3).getTime() - 2_000)
+        await setUpAutoPay()
+        expect(screen.getByText('Free days')).toBeTruthy()
+        expect(screen.getByText('4')).toBeTruthy()
+        await wait(5_000)
+        expect(screen.getByText('3')).toBeTruthy()
+        expect(screen.getByText(/^Set up AutoPay now/)).toBeTruthy()
+        expect(screen.getByText(waiting)).toBeTruthy()
+        expect(button().disabled).toBe(true)
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(button().disabled).toBe(true)
+
+        reads.readSubscription.mockResolvedValue(autoPayOn())
+        await wait(5_000)
+        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+        await wait(90_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(4)
+      })
+
+      it('keeps the hold after leaving Plan: back on Plan, the waiting line shows with Check again and the action off, with no poll', async () => {
+        const reads = stubReads(async () => trial())
+        subscribe()
+        open().mockResolvedValue(submitted())
+        confirm().mockResolvedValue(null)
+        await setUpAutoPay()
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        cleanup()
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        // Plan's mount read, which is unchanged.
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+        expect(button().disabled).toBe(true)
+        await wait(60_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(button().disabled).toBe(true)
+
+        reads.readSubscription.mockResolvedValue(autoPayOn())
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+        await wait()
+        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+      })
+
+      it('ends the hold at a settled mount read after leaving Plan', async () => {
+        const reads = stubReads(async () => trial())
+        subscribe()
+        open().mockResolvedValue(submitted())
+        confirm().mockResolvedValue(null)
+        await setUpAutoPay()
+        cleanup()
+        reads.readSubscription.mockResolvedValue(autoPayOn())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('AutoPay on — first ₹299 on 12 Oct')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+      })
+
+      it.each([
+        ['a reload, which starts a fresh store', () => resetLiveBilling()],
+        ['sign-out', () => { useAuthStore.getState().clearSession(); signIn('vendor-1') }],
+        ['a vendor change', () => { signIn('vendor-2'); signIn('vendor-1') }],
+      ])('ends the hold on %s', async (_, change) => {
+        stubReads(async () => trial())
+        subscribe()
+        open().mockResolvedValue(submitted())
+        confirm().mockResolvedValue(null)
+        await setUpAutoPay()
+        expect(screen.getByText(waiting)).toBeTruthy()
+        cleanup()
+        act(change)
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('13')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+        expect(button().disabled).toBe(false)
       })
 
       const badGateway = () => new ApiError('Bad gateway', 502, null, '/v1/vendors/vendor-1/subscription/confirm', 'server')
@@ -799,7 +891,7 @@ describe('VendorPlanPage', () => {
         await wait()
       }
 
-      it.each(stoppedRows)('keeps the shop open from row %s: subscribe, Checkout, confirm, then the poll until a read changes the view', async (_, eyebrow, stopped) => {
+      it.each(stoppedRows)('keeps the shop open from row %s: subscribe, Checkout, confirm, then the poll until a settled read', async (_, eyebrow, stopped) => {
         const reads = stubReads(async () => stopped())
         const subscribed = subscribe()
         const opened = open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
@@ -843,7 +935,7 @@ describe('VendorPlanPage', () => {
         ['11, Shop closed while paying again', 'Paid days are over.', () => read(liveHaltedSubscription({
           status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0002', razorpay_status: 'created',
         }))],
-      ])('pays ₹299 from row %s: subscribe, Checkout, confirm, then the poll until a read changes the view', async (_, shown, closed) => {
+      ])('pays ₹299 from row %s: subscribe, Checkout, confirm, then the poll until a settled read', async (_, shown, closed) => {
         const reads = stubReads(async () => closed())
         const subscribed = subscribe()
         const opened = open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
@@ -875,19 +967,64 @@ describe('VendorPlanPage', () => {
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
       })
 
-      it('ends the Pay ₹299 poll on a Confirming read, which offers no Pay button', async () => {
+      it('keeps the Pay ₹299 poll and hold through a Confirming read, showing only its status line and one Check again, until Paid', async () => {
         const reads = stubReads(async () => read(liveTrialSubscription()))
         subscribe()
         open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
         confirm().mockResolvedValue(null)
         await press(lapsed, pay)
+        // Row 8b: Shop closed · Confirming payment…
         reads.readSubscription.mockResolvedValue(read(liveTrialAutoPaySubscription()))
         await wait(5_000)
-        expect(screen.getByText(paymentWaiting)).toBeTruthy()
+        expect(screen.getAllByText(paymentWaiting)).toHaveLength(1)
         expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
         expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
-        await wait(90_000)
-        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        await wait(80_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(19)
+        await wait(60_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(19)
+        expect(screen.getAllByText(paymentWaiting)).toHaveLength(1)
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
+
+        reads.readSubscription.mockResolvedValue(paidAgain())
+        fireEvent.click(button('Check again'))
+        await wait()
+        expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 19 Dec. Next ₹299 is charged on 20 Dec.')).toBeTruthy()
+        expect(screen.queryByText(paymentWaiting)).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+      })
+
+      it.each([
+        ['Keep shop open, through Stopped turning into AutoPay off', inPaidDays, keepOpen, keepOpenWaiting, () => read(liveStoppedSubscription()),
+          () => read(liveCancelledPaidSubscription()), 'AutoPay off', () => read(liveActivatedSubscription()), 'AutoPay on.'],
+        ['Pay ₹299, through Payment failed turning into Shop closed while paying again (row 11)', lapsed, pay, paymentWaiting, () => read(liveHaltedSubscription()),
+          () => read(liveHaltedSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0002', razorpay_status: 'created' })),
+          'Paid days are over.', paidAgain, 'You paid ₹299 via Razorpay. Shop stays open until 19 Dec. Next ₹299 is charged on 20 Dec.'],
+      ])('holds %s, past the 90 s cap, until a settled read', async (_, now, action, waitingLine, before, after, shown, settled, settledText) => {
+        const reads = stubReads(async () => before())
+        subscribe()
+        open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
+        confirm().mockResolvedValue(null)
+        await press(now, action)
+        reads.readSubscription.mockResolvedValue(after())
+        await wait(5_000)
+        expect(screen.getByText(new RegExp(shown))).toBeTruthy()
+        expect(screen.getByText(waitingLine)).toBeTruthy()
+        expect(button(action).disabled).toBe(true)
+        await wait(85_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(19)
+        expect(screen.getByText(waitingLine)).toBeTruthy()
+        expect(button(action).disabled).toBe(true)
+        expect(button('Check again')).toBeTruthy()
+
+        reads.readSubscription.mockResolvedValue(settled())
+        fireEvent.click(button('Check again'))
+        await wait()
+        expect(screen.getByText(settledText)).toBeTruthy()
+        expect(screen.queryByText(waitingLine)).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
       })
 
       it.each(stoppedRows)('names the last paid day when Keep shop open is refused with a 409 from row %s, gap E, after one subscribe', async (_, eyebrow, stopped) => {

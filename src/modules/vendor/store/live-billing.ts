@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
+import { isSettledView } from '@/modules/vendor/lib/live-billing-wording'
 import { liveBillingService, mapLiveBilling, mapLivePlanName, mapLiveTrialStart, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
@@ -9,6 +10,7 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
  *
  * The read belongs to one vendor and one session. A session or vendor change clears it, and a
  * response that lands after that is dropped, so the next vendor on this browser never sees it.
+ * The confirmation hold lives beside it, in memory only, and is cleared with it.
  */
 export interface LiveBillingRead {
   /** The last view read. A failed reread keeps it, with its plan name, beside the error. */
@@ -20,14 +22,21 @@ export interface LiveBillingRead {
   /** The last read's failure, or `null` once a read lands. A 502, 503 or network failure here has run out of retries. */
   error: unknown
   reading: boolean
+  /**
+   * The confirmation hold's waiting line, or `null` when there is no hold. From Checkout's success
+   * until a settled read, Plan keeps the card's Checkout action off, so a payment that may still be
+   * in flight is never offered twice. It survives leaving Plan; a reload, sign-out or vendor change
+   * ends it.
+   */
+  hold: string | null
 }
 
 /** `plans` is the last plans response, so a cancel response can be mapped without reading it again. */
 interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown }
 
-const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, trialStartedAt: null, error: null, reading: false }
+const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, trialStartedAt: null, error: null, reading: false, hold: null }
 /** What a vendor sees before its first read lands. */
-const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, error: null, reading: true }
+const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, error: null, reading: true, hold: null }
 let snapshot = empty
 let generation = 0
 /** The read in flight; `waiting` while it waits to retry. */
@@ -36,10 +45,13 @@ const listeners = new Set<() => void>()
 /** The reread at the shown view's next T or P. */
 let boundaryTimer: number | undefined
 
-/** A new view sets the boundary timer again; a session or vendor change leaves none to set. */
+/**
+ * A new view sets the boundary timer again; a session or vendor change leaves none to set. A settled
+ * view ends the confirmation hold.
+ */
 function publish(next: Snapshot) {
   const viewChanged = next.view !== snapshot.view
-  snapshot = next
+  snapshot = next.hold !== null && next.view !== null && isSettledView(next.view) ? { ...next, hold: null } : next
   if (viewChanged) armBoundary()
   listeners.forEach((listener) => listener())
 }
@@ -66,7 +78,7 @@ export function readLiveBilling(vendorId: string): Promise<void> {
             liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
             liveBillingService.listPaidPlans({ signal: controller.signal }),
           ])
-          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), error: null, reading: false })
+          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), error: null, reading: false, hold: snapshot.hold })
           return
         } catch (error) {
           if (!current()) return
@@ -104,6 +116,14 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const view = mapLiveBilling(read, snapshot.plans, new Date())
   dropRead()
   publish({ ...snapshot, view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), error: null, reading: false })
+}
+
+/**
+ * Starts the confirmation hold once Checkout reports a payment, with the Checkout action's waiting
+ * line. Only a settled read ends it.
+ */
+export function holdLiveBilling(vendorId: string, waiting: string) {
+  if (snapshot.vendorId === vendorId) publish({ ...snapshot, hold: waiting })
 }
 
 /** Drops the read in flight, so neither its response nor its retries land. */

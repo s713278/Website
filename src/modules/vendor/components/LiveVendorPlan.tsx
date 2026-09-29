@@ -4,7 +4,7 @@ import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-bil
 import { liveBillingWording, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { LivePaymentsYouMade } from '@/modules/vendor/components/LivePaymentsYouMade'
-import { cancelLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
+import { cancelLiveBilling, holdLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
 import { getErrorMessage, isApiError, liveBillingService, mapLiveCheckout, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Card } from '@/shared/components/ui'
@@ -53,7 +53,7 @@ export function LiveVendorPlan() {
   const { vendorId } = useVendorAccount()
   // A new session clears the shared read, even for the same vendor, so Plan reads again.
   const sessionUser = useAuthStore((state) => state.user)
-  const { view, error, reading, trialStartedAt } = useLiveBilling(vendorId)
+  const { view, error, reading, trialStartedAt, hold } = useLiveBilling(vendorId)
   // The shared read retries an outage quietly, so one shown here has run out of retries.
   const errorMessage = useMemo(() => error ? isBriefOutage(error) ? notResponding : getErrorMessage(error) : null, [error])
 
@@ -64,11 +64,11 @@ export function LiveVendorPlan() {
   /** Stop the plan's single confirm step is open. */
   const [confirmStop, setConfirmStop] = useState(false)
   /**
-   * After Checkout, Plan holds the card's Checkout action and polls until a read changes the view.
-   * After 90 s it stops polling and the read decides the action again; the waiting line stays.
+   * After Checkout, Plan polls while the shared read's hold lasts, for up to 90 s. The hold outlives
+   * the poll and Plan; leaving Plan stops the poll, and it does not restart on return.
    */
-  const [hold, setHold] = useState<{ from: LiveBillingView['state']; waiting: string; expired: boolean } | null>(null)
-  const polling = hold !== null && !hold.expired
+  const [pollWindowOpen, setPollWindowOpen] = useState(false)
+  const polling = pollWindowOpen && hold !== null
   /** Successful `confirm` calls: each one rereads the history. A cancel's response is a new view, which does too. */
   const [confirmed, setConfirmed] = useState(0)
 
@@ -79,7 +79,7 @@ export function LiveVendorPlan() {
     setActing(false)
     setActionError(null)
     setConfirmStop(false)
-    setHold(null)
+    setPollWindowOpen(false)
     void readLiveBilling(vendorId)
     return () => { current.controller.abort() }
   }, [vendorId, sessionUser])
@@ -87,16 +87,12 @@ export function LiveVendorPlan() {
   useEffect(() => {
     if (!polling) return
     const poll = window.setInterval(() => void readLiveBilling(vendorId), pollEvery)
-    const cap = window.setTimeout(() => setHold((current) => current && { ...current, expired: true }), pollFor)
+    const cap = window.setTimeout(() => setPollWindowOpen(false), pollFor)
     return () => {
       window.clearInterval(poll)
       window.clearTimeout(cap)
     }
   }, [polling, vendorId])
-
-  useEffect(() => {
-    if (hold && view && view.state !== hold.from) setHold(null)
-  }, [hold, view])
 
   /** Turn off AutoPay and Stop the plan: one call per click, never retried; a failure leaves the view. */
   async function cancel(refused: string) {
@@ -141,7 +137,8 @@ export function LiveVendorPlan() {
         if (failure.reason) setActionError(purpose.failed(failure.reason))
         return
       }
-      setHold({ from: from.state, waiting: purpose.waiting, expired: false })
+      holdLiveBilling(vendorId, purpose.waiting)
+      setPollWindowOpen(true)
       void confirm(result.callback, signal)
     } catch (cause) {
       // Gap E: dev refuses Keep shop open with a 409 while the stopped plan's paid days last.
@@ -182,15 +179,13 @@ export function LiveVendorPlan() {
 
   const { card, note, confirming, stopConfirmation, checkout: purpose } = liveBillingWording(view)
   const actionAlert = actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null
-  // A read that changed the view ends the hold; the effect above then clears it.
-  const held = hold && hold.from === view.state ? hold : null
   return <div className="grid gap-4">
     {readAlert}
     {note ? <Card className="p-5"><p>{note}</p></Card> : null}
     {card ? <>
       <StateCard card={card}>
         {card.action && purpose ? <div className="grid gap-1">
-          <Button size="lg" fullWidth className="rounded-full" disabled={acting || polling} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
+          <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
           <p className="text-xs text-muted-foreground">{card.action.help}</p>
           {actionAlert}
         </div> : null}
@@ -199,9 +194,10 @@ export function LiveVendorPlan() {
           {actionAlert}
         </> : null}
       </StateCard>
-      {held ? <div className="grid gap-2 text-sm">
-        <p role="status">{held.waiting}</p>
-        {held.expired ? <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button> : null}
+      {/* A Confirming view's own status line is the waiting line, so it never shows twice. */}
+      {hold && !confirming ? <div className="grid gap-2 text-sm">
+        <p role="status">{hold}</p>
+        {!polling ? <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button> : null}
       </div> : null}
       {/* Confirming offers no payment action; Check again only rereads the shared read. */}
       {confirming ? <div className="grid gap-2 text-sm">

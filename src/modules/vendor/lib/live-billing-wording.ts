@@ -30,6 +30,17 @@ export interface LiveCheckoutPurpose {
   refused?: string
 }
 
+/**
+ * Whether a read after Checkout is settled: its view is not a Confirming view (its wording has a
+ * `confirming` line) and offers no Checkout action. Only a settled read ends the confirmation poll
+ * and hold; a changed view that still offers a Checkout action, such as Free days turning into
+ * 3 days left, does not.
+ */
+export function isSettledView(view: LiveBillingView): boolean {
+  const { confirming, checkout } = liveBillingWording(view)
+  return confirming === null && checkout === null
+}
+
 const rupees = (price: number) => `₹${new Intl.NumberFormat('en-IN').format(price)}`
 /** The exact moment in IST, such as "12 Oct, 3:34 pm". */
 const dateTime = (value: string) => new Intl.DateTimeFormat('en-IN', {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveBillingView } from '@/shared/api'
-import { liveBillingWording } from './live-billing-wording'
+import { isSettledView, liveBillingWording } from './live-billing-wording'
 
 const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
 /** 3:34 pm on 12 Oct in IST. */
@@ -250,5 +250,29 @@ describe('liveBillingWording', () => {
     expect(liveBillingWording({ state: 'not_live', plan })).toEqual({
       card: null, note: 'Free days start when your shop goes live.', confirming: null, stopConfirmation: null, checkout: null, banner: null, header: 'Shop plan',
     })
+  })
+})
+
+describe('isSettledView', () => {
+  const paidThrough = '2026-10-26T18:30:00.000Z'
+
+  it.each<[string, LiveBillingView]>([
+    ['Paid', { state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough }],
+    ['Collecting', { state: 'collecting', shop: 'open', plan }],
+    ['AutoPay on', { state: 'autopay_on', shop: 'open', plan, trialEndsAt, daysLeft: 13, firstChargeAt: trialEndsAt }],
+  ])('settles on %s, which is not Confirming and offers no Checkout action', (_, view) => {
+    expect(isSettledView(view)).toBe(true)
+  })
+
+  it.each<[string, LiveBillingView]>([
+    ['Confirming (row 8b)', { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }],
+    ['Free days', freeDays(13)],
+    ['3 days left', freeDays(3, 'three_days_left')],
+    ['Payment failed', { state: 'payment_failed', shop: 'hidden', plan }],
+    ['Shop closed', { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }],
+    ['Stopped', { state: 'stopped', shop: 'open', plan, paidThrough, daysLeft: 21 }],
+    ['AutoPay off', { state: 'autopay_off', shop: 'open', plan, paidThrough, daysLeft: 21 }],
+  ])('does not settle on %s', (_, view) => {
+    expect(isSettledView(view)).toBe(false)
   })
 })

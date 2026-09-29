@@ -13,9 +13,10 @@ import {
 } from '@/shared/api'
 import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
-  liveTrialAutoPayCancelledSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveSubscribeResponse, liveTrialAutoPayCancelledSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import * as checkout from '@/shared/payments/razorpay-checkout'
 import { VendorSettingsPage } from '../pages/VendorSettingsPage'
 import { LiveVendorPlan } from './LiveVendorPlan'
 import { VendorBillingPrototype } from './VendorBillingPrototype'
@@ -326,6 +327,29 @@ describe('VendorShell under the live API', () => {
     await act(async () => { respond(liveStoppedSubscription()) })
     expect(banner()?.textContent).toBe('Shop stays open until 12 Nov — then customers cannot see it. You can pay again any time with Razorpay.Keep open · ₹299')
     expect(header().getByRole('link', { name: 'Keep open · ₹299' })).toBeTruthy()
+  })
+
+  it('follows the read, not the confirmation hold: the header still says Pay ₹299 after leaving Plan, and Plan still holds on return', async () => {
+    const setUp = 'Set up AutoPay · ₹299 on 12 Oct'
+    freeTierStore()
+    stubReads(async () => trial())
+    vi.spyOn(liveBillingService, 'subscribe').mockResolvedValue(liveSubscribeResponse())
+    vi.spyOn(checkout, 'openSubscriptionCheckout').mockResolvedValue({ status: 'submitted', callback: {
+      razorpay_payment_id: 'pay_FakePayment0001', razorpay_subscription_id: 'sub_FakeAutoPay0001', razorpay_signature: 'fake_signature_0001',
+    } })
+    vi.spyOn(liveBillingService, 'confirm').mockResolvedValue(null)
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    fireEvent.click(await screen.findByRole('button', { name: setUp }))
+    expect(await screen.findByText('Confirming AutoPay…')).toBeTruthy()
+    expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    fireEvent.click(rail().getByRole('link', { name: 'Overview' }))
+    expect(await screen.findByText('Overview page')).toBeTruthy()
+    expect(banner()?.textContent).toMatch(/^13 free days left/)
+    expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    fireEvent.click(header().getByRole('link', { name: 'Pay ₹299' }))
+    expect(await screen.findByText('Confirming AutoPay…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: setUp }).disabled).toBe(true)
   })
 
   it('shows the confirming banner and the Shop plan header while a payment is confirmed', async () => {
