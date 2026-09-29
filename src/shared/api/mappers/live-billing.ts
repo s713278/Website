@@ -16,9 +16,9 @@ export type LiveBillingView =
   | { state: 'collecting'; shop: 'open'; plan: LiveBillingPlan }
   /** A paid period until `paidThrough` (P); `nextChargeAt` is `next_billing_at`, when there is one. */
   | { state: 'paid'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; nextChargeAt: string | null }
-  /** No more charges: the vendor stopped the plan, or AutoPay ended outside MithraDirect. Open until P. */
+  /** No more charges: the vendor stopped the plan, or AutoPay is off, whoever turned it off. Open until P. */
   | { state: 'stopped'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
-  | { state: 'autopay_ended'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
+  | { state: 'autopay_off'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
   /** Renewal failed after every retry. */
   | { state: 'payment_failed'; shop: 'hidden'; plan: LiveBillingPlan }
   /** The shop is hidden because paid days or free days are over. */
@@ -99,24 +99,27 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   // Row 2.
   if (status === 'PAST_DUE') return { state: 'collecting', shop: 'open', plan }
 
-  // Rows 3–5: a paid period that has not ended. At now ≥ P the same facts are row 6.
+  // Rows 3–5: a paid period that has not ended. At now ≥ P the same facts are rows 6 and 6′.
   if (periodEnd !== null) {
     // The flag must be a boolean: missing or null matches no row, so it takes the read error path.
     const cancelAtPeriodEnd = subscription.cancel_at_period_end
     const razorpayCancelled = subscription.razorpay_status === 'cancelled'
     const paid = status === 'ACTIVE' && cancelAtPeriodEnd === false && !razorpayCancelled
     const stopped = status === 'ACTIVE' && cancelAtPeriodEnd === true
-    const autoPayEnded = status === 'CANCELLED' || status === 'EXPIRED' || (status === 'ACTIVE' && razorpayCancelled && cancelAtPeriodEnd === false)
-    // Row 6.
-    if ((paid || stopped || autoPayEnded) && periodOver) return { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
+    const autoPayOff = status === 'CANCELLED' || status === 'EXPIRED' || (status === 'ACTIVE' && razorpayCancelled && cancelAtPeriodEnd === false)
+    // Row 6: a paid period that ends with AutoPay on is a renewal being collected, from P until the
+    // charge lands and the backend moves P on. Gap D: a charge later than P shows this for longer.
+    if (paid && periodOver) return { state: 'collecting', shop: 'open', plan }
+    // Row 6′: only a stopped plan or AutoPay off closes the shop when paid days end.
+    if ((stopped || autoPayOff) && periodOver) return { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
     // Row 3.
     if (paid) return { state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: instant(subscription.next_billing_at) }
     const daysLeft = daysUntil(periodEnd, now)
     // Row 4, gap F: dev keeps `next_billing_at` after a stop, so it is ignored.
     if (stopped) return { state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
-    // Row 5, gap H: AutoPay ended at the bank or at Razorpay. The paid days are kept, even when
-    // CANCELLED; that is a product rule.
-    if (autoPayEnded) return { state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
+    // Row 5, gap H: AutoPay is off. The paid days are kept, even when CANCELLED; that is a product
+    // rule. Gap A: a backend that cancels at once reports the vendor's own stop as CANCELLED too.
+    if (autoPayOff) return { state: 'autopay_off', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
   }
   // Row 3a, gap B: dev sets ACTIVE when Razorpay activates, before the fee is captured. ACTIVE
   // without a paid period is still being collected.
@@ -138,7 +141,7 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
     return { state: 'confirming', shop: 'hidden', plan, ended: periodEnd === null ? 'free_days' : 'paid_days' }
   }
 
-  // Row 9. A CANCELLED subscription with a paid period belongs to rows 5 and 6, which come first.
+  // Row 9. A CANCELLED subscription with a paid period belongs to rows 5 and 6′, which come first.
   const freeDaysStatus = status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING' || (status === 'CANCELLED' && periodEnd === null)
   if (freeDaysStatus && !autoPayAgreed && trialEndsAt && beforeTrialEnd) {
     const daysLeft = daysUntil(trialEndsAt, now)

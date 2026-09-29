@@ -31,7 +31,9 @@ function StateCard({ card, children }: { card: PrototypeCard; children?: ReactNo
 }
 
 const notResponding = 'MithraDirect isn’t responding. Try again in a minute.'
-const cancelFailed = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
+/** Gap A: what a cancel's 500 means, per action. */
+const turnOffFailed = 'Couldn’t turn off AutoPay right now. Try again later or contact support.'
+const stopFailed = 'Couldn’t stop the plan right now. Try again later or contact support.'
 const confirmFailed = 'We couldn’t confirm this payment here. If money was taken, it will show once Razorpay confirms it.'
 const pollEvery = 5_000
 const pollFor = 90_000
@@ -97,7 +99,7 @@ export function LiveVendorPlan() {
   }, [hold, view])
 
   /** Turn off AutoPay and Stop the plan: one call per click, never retried; a failure leaves the view. */
-  async function cancel() {
+  async function cancel(refused: string) {
     const current = actions.current
     if (!current || current.running) return
     current.running = true
@@ -107,8 +109,9 @@ export function LiveVendorPlan() {
       await cancelLiveBilling(vendorId)
       if (!current.controller.signal.aborted) setConfirmStop(false)
     } catch (cause) {
-      // Gap A: dev answers a cancel before the first charge with a 500.
-      if (!current.controller.signal.aborted) setActionError(isApiError(cause) && cause.status === 500 ? cancelFailed : getErrorMessage(cause))
+      // Gap A: dev answers a cancel before Razorpay's first cycle with a 500; after an early first
+      // fee, that is any stop before P.
+      if (!current.controller.signal.aborted) setActionError(isApiError(cause) && cause.status === 500 ? refused : getErrorMessage(cause))
     } finally {
       current.running = false
       if (!current.controller.signal.aborted) setActing(false)
@@ -192,7 +195,7 @@ export function LiveVendorPlan() {
           {actionAlert}
         </div> : null}
         {view.state === 'autopay_on' ? <>
-          <Button className="w-fit px-0" variant="link" disabled={acting} onClick={() => void cancel()}>Turn off AutoPay</Button>
+          <Button className="w-fit px-0" variant="link" disabled={acting} onClick={() => void cancel(turnOffFailed)}>Turn off AutoPay</Button>
           {actionAlert}
         </> : null}
       </StateCard>
@@ -219,7 +222,7 @@ export function LiveVendorPlan() {
         {confirmStop ? <>
           <p className="text-sm">{stopConfirmation}</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="danger" className="w-fit rounded-full" disabled={acting} onClick={() => void cancel()}>Yes, stop the plan</Button>
+            <Button variant="danger" className="w-fit rounded-full" disabled={acting} onClick={() => void cancel(stopFailed)}>Yes, stop the plan</Button>
             <Button variant="outline" className="w-fit rounded-full" disabled={acting} onClick={() => setConfirmStop(false)}>Keep the plan</Button>
           </div>
         </> : <>

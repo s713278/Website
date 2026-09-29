@@ -41,6 +41,7 @@ const shortDate = (value: string) => new Intl.DateTimeFormat('en-IN', { timeZone
 const lastPaidDay = (paidThrough: string) => shortDate(new Date(Date.parse(paidThrough) - 1).toISOString())
 const planLine = (plan: LiveBillingPlan) => `${plan.name} · ${rupees(plan.price)} / month`
 const freeDaysLead = (days: number) => `${days} free ${days === 1 ? 'day' : 'days'} left`
+const confirmingPayment = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
 
 export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
   if (view.state === 'not_live') return { card: null, note: 'Free days start when your shop goes live.', confirming: null, stopConfirmation: null, checkout: null, banner: null, header: 'Shop plan' }
@@ -65,25 +66,25 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
       banner: null, header: 'Shop plan',
     }
   }
-  if (view.state === 'stopped' || view.state === 'autopay_ended') {
+  if (view.state === 'stopped' || view.state === 'autopay_off') {
     const paidUntil = lastPaidDay(view.paidThrough)
     const keepOpen = `Keep open · ${price}`
-    const reason = view.state === 'stopped' ? 'You stopped the plan.' : `AutoPay was cancelled outside MithraDirect, so no more ${price} is charged.`
-    const paidDaysEnd = shortDate(view.paidThrough)
+    // AutoPay off is true whoever turned it off: the vendor, the bank or Razorpay.
+    const reason = view.state === 'stopped' ? 'You stopped the plan.' : `AutoPay is off, so no more ${price} is charged.`
     return {
       card: {
-        ...planCard, tone: 'warning', eyebrow: view.state === 'stopped' ? 'Plan stopped' : 'AutoPay ended', figure: { days: view.daysLeft },
+        ...planCard, tone: 'warning', eyebrow: view.state === 'stopped' ? 'Plan stopped' : 'AutoPay off', figure: { days: view.daysLeft },
         body: `${reason} Shop stays open until ${paidUntil}. Pay ${price} with Razorpay if you want to keep it after that.`,
         action: {
           label: `Keep shop open · ${price}`,
-          help: `Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; ${price} is charged on ${paidDaysEnd}, when paid days end.`,
+          help: `Opens Razorpay Checkout. Pay ${price} now by card or UPI. Your shop stays open for another month after ${paidUntil}, then AutoPay charges ${price} each month.`,
         },
       },
       note: null, confirming: null, stopConfirmation: null,
       checkout: {
-        waiting: 'Confirming AutoPay…',
-        failed: (failure) => `The payment did not go through (${failure}), so AutoPay is not set up again. Nothing changed; the plan is still stopped.`,
-        refused: `Couldn’t turn AutoPay back on right now. Your shop stays open until ${paidUntil}.`,
+        waiting: confirmingPayment,
+        failed: (failure) => `The payment did not go through (${failure}). Nothing changed; the plan is still stopped.`,
+        refused: `Couldn’t start the payment right now. Your shop stays open until ${paidUntil}.`,
       },
       banner: { tone: 'warning', lead: `Shop stays open until ${paidUntil}`, text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: keepOpen },
       header: keepOpen,
@@ -96,9 +97,9 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     const payAction = { label: `Pay ${price} with Razorpay`, help: 'Opens Razorpay Checkout. Pay by card or UPI.' }
     const lead = 'Shop is hidden from customers'
     const reopen = `Customers cannot see your shop. Pay ${price} with Razorpay to open it again.`
-    const confirmingPayment = `Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ${price}.`
+    const confirmingOpens = `${confirmingPayment} Your shop opens once Razorpay confirms the ${price}.`
     const payCheckout: LiveCheckoutPurpose = {
-      waiting: confirmingPayment,
+      waiting: confirmingOpens,
       failed: (reason) => `The payment did not go through (${reason}). Nothing changed; your shop is still hidden.`,
     }
     if (view.state === 'payment_failed') return {
@@ -111,7 +112,7 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     // Confirming offers no payment, so a second ₹299 cannot start while the first is confirmed.
     if (view.state === 'confirming') return {
       card: closedCard, note: null,
-      confirming: confirmingPayment,
+      confirming: confirmingOpens,
       stopConfirmation: null, checkout: null,
       banner: { tone: 'danger', lead, text: `your ${price} payment is being confirmed.`, action: 'Shop plan' },
       header: 'Shop plan',

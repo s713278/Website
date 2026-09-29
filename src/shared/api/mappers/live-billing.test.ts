@@ -125,7 +125,7 @@ describe('mapLiveBilling', () => {
     })
   })
 
-  describe('rows 3–5: a paid period', () => {
+  describe('rows 3–6′: a paid period', () => {
     const periodEnd = '2026-11-12T18:30:00.000Z'
     const paid = (overrides: Record<string, unknown> = {}) => ({ kind: 'subscription' as const, subscription: livePaidSubscription(overrides) })
     const stopped = (overrides: Record<string, unknown> = {}) => ({ kind: 'subscription' as const, subscription: liveStoppedSubscription(overrides) })
@@ -160,45 +160,100 @@ describe('mapLiveBilling', () => {
       expect(view).not.toHaveProperty('nextChargeAt')
     })
 
-    it('row 5, gap H: keeps today’s CANCELLED shape open until P as AutoPay ended, ignoring next_billing_at', () => {
+    it('row 5, gap H: keeps today’s CANCELLED shape open until P as AutoPay off, ignoring next_billing_at', () => {
       expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, now)).toEqual({
-        state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+        state: 'autopay_off', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
       })
     })
 
-    it('row 5: keeps a CANCELLED or EXPIRED shop open until P as AutoPay ended', () => {
+    it('row 5: keeps a CANCELLED or EXPIRED shop open until P as AutoPay off', () => {
       for (const status of ['CANCELLED', 'EXPIRED']) {
         expect(mapLiveBilling(paid({ status, razorpay_status: 'cancelled', next_billing_at: null }), livePlans, now)).toEqual({
-          state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+          state: 'autopay_off', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
         })
       }
     })
 
-    it('row 5: shows AutoPay ended for ACTIVE with Razorpay cancelled, the expected "AutoPay stopped by the bank or at Razorpay" response', () => {
+    it('row 5: shows AutoPay off for ACTIVE with Razorpay cancelled, the expected "AutoPay stopped by the bank or at Razorpay" response', () => {
       expect(mapLiveBilling(paid({ razorpay_status: 'cancelled', next_billing_at: null }), livePlans, now)).toEqual({
-        state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+        state: 'autopay_off', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
       })
     })
 
-    it('moves Paid to Shop closed, paid days over (row 6) at now = P', () => {
-      expect(mapLiveBilling(paid(), livePlans, new Date(Date.parse(periodEnd) - 1)).state).toBe('paid')
-      expect(mapLiveBilling(paid(), livePlans, new Date(periodEnd))).toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' })
+    describe('gap A: stopping the plan', () => {
+      it('the fixed shape (ACTIVE, cancel_at_period_end true, P kept) shows Stopped', () => {
+        expect(mapLiveBilling(stopped({ next_billing_at: null }), livePlans, now)).toEqual({
+          state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+        })
+      })
+
+      it('a backend that reports the vendor’s own stop as CANCELLED with P ahead shows AutoPay off', () => {
+        for (const cancelAtPeriodEnd of [false, true]) {
+          const cancelledAtOnce = paid({ status: 'CANCELLED', razorpay_status: 'cancelled', cancel_at_period_end: cancelAtPeriodEnd, cancelled_at: '2026-10-14T08:21:47.90412Z' })
+          expect(mapLiveBilling(cancelledAtOnce, livePlans, now)).toEqual({
+            state: 'autopay_off', shop: 'open', plan, paidThrough: periodEnd, daysLeft: 21,
+          })
+        }
+      })
     })
 
-    describe('row 6: the same facts at now ≥ P', () => {
+    it('gap E, the fixed shape: keeps the stopped read until the ₹299 is captured, then Paid for another month', () => {
+      expect(mapLiveBilling(stopped(), livePlans, now).state).toBe('stopped')
+      expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, now).state).toBe('autopay_off')
+      const kept = paid({
+        razorpay_subscription_id: 'sub_FakeKeepOpen0002', current_period_start: '2026-11-12T18:30Z', current_period_end: '2026-12-12T18:30Z', next_billing_at: '2026-12-12T18:30Z',
+      })
+      const nextPeriodEnd = '2026-12-12T18:30:00.000Z'
+      expect(mapLiveBilling(kept, livePlans, now)).toEqual({ state: 'paid', shop: 'open', plan, paidThrough: nextPeriodEnd, nextChargeAt: nextPeriodEnd })
+    })
+
+    describe('row 6: a renewal is being collected', () => {
+      const collecting = { state: 'collecting', shop: 'open', plan }
+
+      it('moves Paid to Collecting, not Shop closed, at now = P', () => {
+        expect(mapLiveBilling(paid(), livePlans, new Date(Date.parse(periodEnd) - 1)).state).toBe('paid')
+        expect(mapLiveBilling(paid(), livePlans, new Date(periodEnd))).toEqual(collecting)
+        expect(mapLiveBilling(paid(), livePlans, new Date('2026-11-20T10:00:00Z'))).toEqual(collecting)
+      })
+
+      it('gap D, today’s shape: shows next_billing_at as sent, then Collecting from P until the renewal lands', () => {
+        // Measured on 28 Sep: the first charge a day after T, a period ending at IST midnight, and
+        // the next ₹299 at P.
+        expect(mapLiveBilling(paid(), livePlans, now)).toMatchObject({ state: 'paid', nextChargeAt: periodEnd })
+        // A charge date after P, as the 24-hour offset gave, is shown as sent, not replaced by P.
+        expect(mapLiveBilling(paid({ next_billing_at: '2026-11-13T18:30Z' }), livePlans, now))
+          .toMatchObject({ state: 'paid', paidThrough: periodEnd, nextChargeAt: '2026-11-13T18:30:00.000Z' })
+        expect(mapLiveBilling(paid(), livePlans, new Date(Date.parse(periodEnd) + 6 * 60 * 1000))).toEqual(collecting)
+        const renewed = paid({
+          current_period_start: periodEnd, current_period_end: '2026-12-12T18:30Z', next_billing_at: '2026-12-12T18:30Z', updated_at: '2026-11-12T18:36:12.40117Z',
+        })
+        expect(mapLiveBilling(renewed, livePlans, new Date(Date.parse(periodEnd) + 7 * 60 * 1000)))
+          .toMatchObject({ state: 'paid', paidThrough: '2026-12-12T18:30:00.000Z' })
+      })
+
+      it('gap D, the fixed shape: the next ₹299 exactly at P, then Collecting from P until the renewal lands', () => {
+        const freeDaysEnd = '2026-10-12T10:04:16.169Z'
+        const monthAfter = '2026-11-12T10:04:16.169Z'
+        const early = paid({ current_period_start: freeDaysEnd, current_period_end: monthAfter, next_billing_at: monthAfter })
+        expect(mapLiveBilling(early, livePlans, new Date('2026-10-20T10:00:00Z')))
+          .toEqual({ state: 'paid', shop: 'open', plan, paidThrough: monthAfter, nextChargeAt: monthAfter })
+        expect(mapLiveBilling(early, livePlans, new Date(monthAfter))).toEqual(collecting)
+        expect(mapLiveBilling(early, livePlans, new Date(Date.parse(monthAfter) + 60 * 60 * 1000))).toEqual(collecting)
+      })
+    })
+
+    describe('row 6′: a stopped plan or AutoPay off at now ≥ P', () => {
       const later = new Date('2026-11-20T10:00:00Z')
       const closed = { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
 
-      it('closes the shop from row 3’s facts', () => {
-        expect(mapLiveBilling(paid(), livePlans, later)).toEqual(closed)
-      })
-
       it('closes the shop from row 4’s facts', () => {
+        expect(mapLiveBilling(stopped(), livePlans, new Date(Date.parse(periodEnd) - 1)).state).toBe('stopped')
         expect(mapLiveBilling(stopped(), livePlans, new Date(periodEnd))).toEqual(closed)
         expect(mapLiveBilling(stopped(), livePlans, later)).toEqual(closed)
       })
 
       it('closes the shop from row 5’s facts', () => {
+        expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, new Date(periodEnd))).toEqual(closed)
         expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, later)).toEqual(closed)
         expect(mapLiveBilling(paid({ status: 'EXPIRED', razorpay_status: 'cancelled', next_billing_at: null }), livePlans, later)).toEqual(closed)
         expect(mapLiveBilling(paid({ razorpay_status: 'cancelled', next_billing_at: null }), livePlans, new Date(periodEnd))).toEqual(closed)

@@ -133,9 +133,13 @@ describe('liveBillingWording', () => {
 
     const keepOpen = {
       label: 'Keep shop open · ₹299',
-      help: 'Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; ₹299 is charged on 27 Oct, when paid days end.',
+      help: 'Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your shop stays open for another month after 26 Oct, then AutoPay charges ₹299 each month.',
     }
-    const keepOpenCheckout = { waiting: 'Confirming AutoPay…', failed: expect.any(Function), refused: 'Couldn’t turn AutoPay back on right now. Your shop stays open until 26 Oct.' }
+    const keepOpenCheckout = {
+      waiting: 'Confirming payment… Card payments take about a minute; UPI can take a few hours.',
+      failed: expect.any(Function),
+      refused: 'Couldn’t start the payment right now. Your shop stays open until 26 Oct.',
+    }
 
     it('words Stopped with the days until P, Keep shop open, the warning banner and the Keep open header', () => {
       expect(liveBillingWording({ state: 'stopped', shop: 'open', plan, paidThrough, daysLeft: 21 })).toEqual({
@@ -150,11 +154,11 @@ describe('liveBillingWording', () => {
       })
     })
 
-    it('words AutoPay ended as Stopped, cancelled outside MithraDirect, with Keep shop open', () => {
-      expect(liveBillingWording({ state: 'autopay_ended', shop: 'open', plan, paidThrough, daysLeft: 21 })).toEqual({
+    it('words AutoPay off as Stopped, true whoever turned AutoPay off, with Keep shop open', () => {
+      expect(liveBillingWording({ state: 'autopay_off', shop: 'open', plan, paidThrough, daysLeft: 21 })).toEqual({
         card: {
-          tone: 'warning', eyebrow: 'AutoPay ended', figure: { days: 21 },
-          body: 'AutoPay was cancelled outside MithraDirect, so no more ₹299 is charged. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
+          tone: 'warning', eyebrow: 'AutoPay off', figure: { days: 21 },
+          body: 'AutoPay is off, so no more ₹299 is charged. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
           plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: keepOpen, autoPay: null,
         },
         note: null, confirming: null, stopConfirmation: null, checkout: keepOpenCheckout,
@@ -164,8 +168,10 @@ describe('liveBillingWording', () => {
     })
 
     it('words Keep shop open’s failed payment after Checkout closes', () => {
-      expect(liveBillingWording({ state: 'autopay_ended', shop: 'open', plan, paidThrough, daysLeft: 21 }).checkout?.failed('Your payment was declined by the bank.'))
-        .toBe('The payment did not go through (Your payment was declined by the bank.), so AutoPay is not set up again. Nothing changed; the plan is still stopped.')
+      for (const state of ['stopped', 'autopay_off'] as const) {
+        expect(liveBillingWording({ state, shop: 'open', plan, paidThrough, daysLeft: 21 }).checkout?.failed('Your payment was declined by the bank.'))
+          .toBe('The payment did not go through (Your payment was declined by the bank.). Nothing changed; the plan is still stopped.')
+      }
     })
 
     it('takes the ₹ amounts of Paid and Stopped from the plan price', () => {
@@ -177,7 +183,7 @@ describe('liveBillingWording', () => {
       expect(stopped.banner?.action).toBe('Keep open · ₹349')
       expect(stopped.header).toBe('Keep open · ₹349')
       expect(stopped.card?.action?.label).toBe('Keep shop open · ₹349')
-      expect(stopped.card?.action?.help).toContain('₹349 is charged on 27 Oct')
+      expect(stopped.card?.action?.help).toBe('Opens Razorpay Checkout. Pay ₹349 now by card or UPI. Your shop stays open for another month after 26 Oct, then AutoPay charges ₹349 each month.')
     })
   })
 

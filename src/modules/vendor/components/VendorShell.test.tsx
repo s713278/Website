@@ -251,14 +251,15 @@ describe('VendorShell under the live API', () => {
   })
 
   it.each([
-    ['stopped', liveStoppedSubscription],
-    ['AutoPay ended', liveCancelledPaidSubscription],
-  ])('shows the warning banner and Keep open · ₹299 when %s', async (_, subscription) => {
+    ['Plan stopped', liveStoppedSubscription],
+    ['AutoPay off', liveCancelledPaidSubscription],
+  ])('shows %s on Plan, the warning banner and Keep open · ₹299', async (eyebrow, subscription) => {
     vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
     freeTierStore()
     stubReads(async () => ({ kind: 'subscription', subscription: subscription() }))
-    renderShell('/vendor', <LiveVendorPlan />)
+    renderShell('/vendor/plan', <LiveVendorPlan />)
     await waitFor(() => expect(banner()?.textContent).toBe('Shop stays open until 12 Nov — then customers cannot see it. You can pay again any time with Razorpay.Keep open · ₹299'))
+    expect(screen.getByText(eyebrow)).toBeTruthy()
     expect(banner()!.className).toContain('amber')
     expect(within(banner()!).getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(header().getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
@@ -267,7 +268,8 @@ describe('VendorShell under the live API', () => {
 
   it.each([
     ['Payment failed', '2026-11-20T10:00:00Z', liveHaltedSubscription, 'last Razorpay payment did not go through. Pay ₹299 to open the shop again.'],
-    ['Shop closed, paid days', '2026-11-20T10:00:00Z', livePaidSubscription, 'pay ₹299 with Razorpay to open it again.'],
+    ['Shop closed, a stopped plan’s paid days', '2026-11-20T10:00:00Z', liveStoppedSubscription, 'pay ₹299 with Razorpay to open it again.'],
+    ['Shop closed, paid days with AutoPay off', '2026-11-20T10:00:00Z', liveCancelledPaidSubscription, 'pay ₹299 with Razorpay to open it again.'],
     ['Shop closed, free days', '2026-10-12T22:00:00Z', liveTrialSubscription, 'pay ₹299 with Razorpay to open it again.'],
   ])('shows the danger banner and Pay ₹299 in %s', async (_, now, subscription, text) => {
     vi.setSystemTime(new Date(now))
@@ -471,6 +473,26 @@ describe('VendorShell under the live API', () => {
       expect(banner()?.textContent).toBe('Shop is hidden from customers — pay ₹299 with Razorpay to open it again.Pay ₹299')
       expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
       expect(reads).toHaveBeenCalledTimes(2)
+    })
+
+    it('rereads once at P on Plan, so a paid shop reads Collecting there, in the banner and in the header', async () => {
+      const paidThrough = Date.parse('2026-11-12T18:30Z')
+      vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+      freeTierStore()
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+      renderShell('/vendor/plan', <LiveVendorPlan />)
+      await wait()
+      expect(screen.getByText('Paid')).toBeTruthy()
+      await wait(paidThrough - Date.now() - 1)
+      expect(reads).toHaveBeenCalledOnce()
+      await wait(1)
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('AutoPay on.')).toBeTruthy()
+      expect(screen.queryByText('Shop closed')).toBeNull()
+      expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
+      expect(banner()).toBeNull()
+      expect(planBanner()).toBeTruthy()
+      expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
     })
 
     it('keeps the last view in Plan, the banner and the header when a background reread fails, with the error line on Plan', async () => {
