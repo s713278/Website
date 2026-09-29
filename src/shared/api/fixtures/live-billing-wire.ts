@@ -84,6 +84,23 @@ export function liveEarlyFeeSubscription(overrides: Record<string, unknown> = {}
 }
 
 /**
+ * The early first fee captured, in the read gap K requests (not built on dev): ACTIVE, the paid month
+ * running from T to one month later, and the next ₹299 at its end.
+ */
+export function liveEarlyFeePaidSubscription(overrides: Record<string, unknown> = {}) {
+  return liveEarlyFeeSubscription({
+    ...paidPlanFields,
+    status: 'ACTIVE',
+    razorpay_status: 'active',
+    current_period_start: '2026-10-12T10:04:16.169028Z',
+    current_period_end: '2026-11-12T10:04:16.169028Z',
+    next_billing_at: '2026-11-12T10:04:16.169028Z',
+    updated_at: '2026-09-30T09:13:02.71845Z',
+    ...overrides,
+  })
+}
+
+/**
  * Razorpay has activated the subscription but not yet captured the ₹299 (gap B): ACTIVE with no paid
  * period and no next charge.
  */

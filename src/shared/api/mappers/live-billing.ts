@@ -14,8 +14,12 @@ export type LiveBillingView =
   | { state: 'free_days_confirming'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
   /** Razorpay is collecting the first fee or a renewal: open, with no dates. */
   | { state: 'collecting'; shop: 'open'; plan: LiveBillingPlan }
-  /** A paid period until `paidThrough` (P); `nextChargeAt` is `next_billing_at`, when there is one. */
-  | { state: 'paid'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; nextChargeAt: string | null }
+  /**
+   * A paid period until `paidThrough` (P); `nextChargeAt` is `next_billing_at`, when there is one.
+   * `trialEndsAt` is T while the free days last, after an early first fee (the free-days-kept
+   * variant), and `null` without T or once it has passed.
+   */
+  | { state: 'paid'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; nextChargeAt: string | null; trialEndsAt: string | null }
   /** No more charges: the vendor stopped the plan, or AutoPay is off, whoever turned it off. Open until P. */
   | { state: 'stopped'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
   | { state: 'autopay_off'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
@@ -112,8 +116,8 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
     if (paid && periodOver) return { state: 'collecting', shop: 'open', plan }
     // Row 6′: only a stopped plan or AutoPay off closes the shop when paid days end.
     if ((stopped || autoPayOff) && periodOver) return { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
-    // Row 3.
-    if (paid) return { state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: instant(subscription.next_billing_at) }
+    // Row 3. While now < T, the free days are kept after an early first fee (gap K).
+    if (paid) return { state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: instant(subscription.next_billing_at), trialEndsAt: beforeTrialEnd ? trialEndsAt : null }
     const daysLeft = daysUntil(periodEnd, now)
     // Row 4, gap F: dev keeps `next_billing_at` after a stop, so it is ignored.
     if (stopped) return { state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft }

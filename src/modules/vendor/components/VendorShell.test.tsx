@@ -12,7 +12,7 @@ import {
   type LiveSubscriptionRead, type PrototypeState,
 } from '@/shared/api'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveEarlyFeePaidSubscription, liveEarlyFeeSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
   liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -258,6 +258,61 @@ describe('VendorShell under the live API', () => {
     expect(banner()).toBeNull()
     expect(planBanner()).toBeTruthy()
     expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+  })
+
+  it('shows no billing banner and the Shop plan header while paid with the free days kept, so PlanBanner can show', async () => {
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: liveEarlyFeePaidSubscription() }))
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    expect(await screen.findByText(/^You paid ₹299 via Razorpay\. Your free days are kept/)).toBeTruthy()
+    expect(banner()).toBeNull()
+    expect(planBanner()).toBeTruthy()
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+  })
+
+  it('pays ₹299 with Razorpay from Free days, then polls through "Confirming payment…" and stops at Paid with the free days kept', async () => {
+    // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+    vi.useRealTimers()
+    vi.useFakeTimers()
+    vi.setSystemTime(daysBeforeEnd(12.5))
+    const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+    const waiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
+    freeTierStore()
+    // Gap K's requested reads: subscribed, then ₹299 paid but not recorded (row 7), then captured.
+    const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveEarlyFeeSubscription() }))
+    const subscribe = vi.spyOn(liveBillingService, 'subscribe').mockResolvedValue(liveSubscribeResponse({ status: 'TRIAL_ACTIVE', razorpay_subscription_id: 'sub_FakeEarlyFee0001' }))
+    const opened = vi.spyOn(checkout, 'openSubscriptionCheckout').mockResolvedValue({ status: 'submitted', callback: {
+      razorpay_payment_id: 'pay_FakeEarlyFee0001', razorpay_subscription_id: 'sub_FakeEarlyFee0001', razorpay_signature: 'fake_signature_0001',
+    } })
+    const confirm = vi.spyOn(liveBillingService, 'confirm').mockResolvedValue(null)
+    renderShell('/vendor/plan', <LiveVendorPlan />)
+    await wait()
+    expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }))
+    await wait()
+    expect(subscribe).toHaveBeenCalledOnce()
+    expect(opened).toHaveBeenCalledOnce()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(screen.getByText(waiting)).toBeTruthy()
+
+    reads.mockResolvedValue({ kind: 'subscription', subscription: liveEarlyFeeSubscription({ razorpay_status: 'authenticated' }) })
+    await wait(5_000)
+    expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+    expect(screen.getAllByText(waiting)).toHaveLength(1)
+    expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy()
+
+    reads.mockResolvedValue({ kind: 'subscription', subscription: liveEarlyFeePaidSubscription() })
+    await wait(5_000)
+    expect(screen.getByText('You paid ₹299 via Razorpay. Your free days are kept, so the shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.')).toBeTruthy()
+    expect(screen.queryByText(waiting)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+    expect(banner()).toBeNull()
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
+    // A settled read ends the poll.
+    const polled = reads.mock.calls.length
+    await wait(90_000)
+    expect(reads).toHaveBeenCalledTimes(polled)
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it.each([

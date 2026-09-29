@@ -115,7 +115,7 @@ describe('liveBillingWording', () => {
     const paidThrough = '2026-10-26T18:30:00.000Z'
 
     it('words Paid with the last paid day, the next charge, no action, no banner and the Shop plan header', () => {
-      expect(liveBillingWording({ state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough })).toEqual({
+      expect(liveBillingWording({ state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough, trialEndsAt: null })).toEqual({
         card: {
           tone: 'neutral', eyebrow: 'Paid', figure: { headline: 'Shop is open' },
           body: 'You paid ₹299 via Razorpay. Shop stays open until 26 Oct. Next ₹299 is charged on 27 Oct.',
@@ -127,13 +127,47 @@ describe('liveBillingWording', () => {
       })
     })
 
+    describe('Paid with the free days kept (row 3, now < T)', () => {
+      // After an early first fee: the paid month runs from T, 3:34 pm on 12 Oct IST, to one month later.
+      const monthAfter = '2026-11-12T10:04:16.169Z'
+      const kept = (nextChargeAt: string | null, price = plan.price): LiveBillingView =>
+        ({ state: 'paid', shop: 'open', plan: { ...plan, price }, paidThrough: monthAfter, nextChargeAt, trialEndsAt })
+      const keptBody = 'You paid ₹299 via Razorpay. Your free days are kept, so the shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.'
+
+      it('words the variant with Paid’s eyebrow and figure, no action, Stop the plan, no banner and the Shop plan header', () => {
+        expect(liveBillingWording(kept(monthAfter))).toEqual({
+          card: {
+            tone: 'neutral', eyebrow: 'Paid', figure: { headline: 'Shop is open' }, body: keptBody,
+            plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
+          },
+          note: null, confirming: null, checkout: null,
+          stopConfirmation: 'Stop the plan? No more ₹299 is charged. Your shop stays open until 12 Nov, then customers cannot see it.',
+          banner: null, header: 'Shop plan',
+        })
+      })
+
+      it('dates the next ₹299 on P whatever next_billing_at says (gap D), and when it is absent', () => {
+        expect(liveBillingWording(kept('2026-11-13T10:04:16.000Z')).card?.body).toBe(keptBody)
+        expect(liveBillingWording(kept(null)).card?.body).toBe(keptBody)
+      })
+
+      it('takes the ₹ amounts from the plan price', () => {
+        expect(liveBillingWording(kept(monthAfter, 349)).card?.body)
+          .toBe('You paid ₹349 via Razorpay. Your free days are kept, so the shop stays open until 12 Nov. Next ₹349 is charged on 12 Nov.')
+      })
+
+      it('settles, like the usual Paid', () => {
+        expect(isSettledView(kept(monthAfter))).toBe(true)
+      })
+    })
+
     it('leaves the next-charge sentence out of Paid without next_billing_at', () => {
-      expect(liveBillingWording({ state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: null }).card?.body)
+      expect(liveBillingWording({ state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: null, trialEndsAt: null }).card?.body)
         .toBe('You paid ₹299 via Razorpay. Shop stays open until 26 Oct.')
     })
 
     it('takes Stop the plan’s ₹ amount from the plan price', () => {
-      expect(liveBillingWording({ state: 'paid', shop: 'open', plan: { ...plan, price: 349 }, paidThrough, nextChargeAt: null }).stopConfirmation)
+      expect(liveBillingWording({ state: 'paid', shop: 'open', plan: { ...plan, price: 349 }, paidThrough, nextChargeAt: null, trialEndsAt: null }).stopConfirmation)
         .toBe('Stop the plan? No more ₹349 is charged. Your shop stays open until 26 Oct, then customers cannot see it.')
     })
 
@@ -182,7 +216,7 @@ describe('liveBillingWording', () => {
 
     it('takes the ₹ amounts of Paid and Stopped from the plan price', () => {
       const pricier = { ...plan, price: 349 }
-      expect(liveBillingWording({ state: 'paid', shop: 'open', plan: pricier, paidThrough, nextChargeAt: paidThrough }).card?.body)
+      expect(liveBillingWording({ state: 'paid', shop: 'open', plan: pricier, paidThrough, nextChargeAt: paidThrough, trialEndsAt: null }).card?.body)
         .toBe('You paid ₹349 via Razorpay. Shop stays open until 26 Oct. Next ₹349 is charged on 27 Oct.')
       const stopped = liveBillingWording({ state: 'stopped', shop: 'open', plan: pricier, paidThrough, daysLeft: 1 })
       expect(stopped.card?.body).toContain('Pay ₹349 with Razorpay')
@@ -263,7 +297,7 @@ describe('isSettledView', () => {
   const paidThrough = '2026-10-26T18:30:00.000Z'
 
   it.each<[string, LiveBillingView]>([
-    ['Paid', { state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough }],
+    ['Paid', { state: 'paid', shop: 'open', plan, paidThrough, nextChargeAt: paidThrough, trialEndsAt: null }],
     ['Collecting', { state: 'collecting', shop: 'open', plan }],
   ])('settles on %s, which is not Confirming and offers no Checkout action', (_, view) => {
     expect(isSettledView(view)).toBe(true)

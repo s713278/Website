@@ -65,14 +65,17 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
   }
 
   if (view.state === 'paid') {
+    const paidUntil = lastPaidDay(view.paidThrough)
     const nextCharge = view.nextChargeAt ? ` Next ${price} is charged on ${shortDate(view.nextChargeAt)}.` : ''
+    // The free days kept after an early first fee: the next ₹299 is dated P, which is never later
+    // than the real charge, whatever `next_billing_at` says (gap D).
+    const body = view.trialEndsAt
+      ? `You paid ${price} via Razorpay. Your free days are kept, so the shop stays open until ${paidUntil}. Next ${price} is charged on ${shortDate(view.paidThrough)}.`
+      : `You paid ${price} via Razorpay. Shop stays open until ${paidUntil}.${nextCharge}`
     return {
-      card: {
-        ...planCard, tone: 'neutral', eyebrow: 'Paid', figure: { headline: 'Shop is open' },
-        body: `You paid ${price} via Razorpay. Shop stays open until ${lastPaidDay(view.paidThrough)}.${nextCharge}`,
-      },
+      card: { ...planCard, tone: 'neutral', eyebrow: 'Paid', figure: { headline: 'Shop is open' }, body },
       note: null, confirming: null,
-      stopConfirmation: `Stop the plan? No more ${price} is charged. Your shop stays open until ${lastPaidDay(view.paidThrough)}, then customers cannot see it.`,
+      stopConfirmation: `Stop the plan? No more ${price} is charged. Your shop stays open until ${paidUntil}, then customers cannot see it.`,
       checkout: null,
       banner: null, header: 'Shop plan',
     }

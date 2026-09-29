@@ -11,7 +11,7 @@ import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveHistoryEvent, livePaidSubscription, livePlans, liveStoppedHistory, liveStoppedSubscription,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveEarlyFeePaidSubscription, liveHaltedSubscription, liveHistoryEvent, livePaidSubscription, livePlans, liveStoppedHistory, liveStoppedSubscription,
   liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -454,6 +454,91 @@ describe('VendorPlanPage', () => {
         expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
         await act(async () => { fail(gapA()) })
         expect(screen.queryByRole('alert')).toBeNull()
+      })
+    })
+
+    describe('Paid with the free days kept', () => {
+      /** Gap K's requested read once the early first fee is captured: the paid month runs from T to 12 Nov. */
+      const earlyPaid = (overrides: Record<string, unknown> = {}): LiveSubscriptionRead =>
+        ({ kind: 'subscription', subscription: liveEarlyFeePaidSubscription(overrides) })
+      const keptBody = 'You paid ₹299 via Razorpay. Your free days are kept, so the shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.'
+      const usualBody = 'You paid ₹299 via Razorpay. Shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.'
+      /** Lets pending promises and timers due within `ms` run. */
+      const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+
+      beforeEach(() => {
+        // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
+        vi.useRealTimers()
+        vi.useFakeTimers()
+        vi.setSystemTime(daysBeforeEnd(10))
+      })
+
+      it('shows Paid with the free days kept, the next ₹299 on P, the "Stop the plan" section and no "If you do not pay"', async () => {
+        // Gap D: a later next_billing_at does not move the date shown.
+        stubReads(async () => earlyPaid({ next_billing_at: '2026-11-13T10:04:16Z' }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText('Paid')).toBeTruthy()
+        expect(screen.getByText('Shop is open')).toBeTruthy()
+        expect(screen.getByText(keptBody)).toBeTruthy()
+        expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+        expect(screen.getByRole('region', { name: 'Stop the plan' })).toBeTruthy()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
+        fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
+        expect(screen.getByText('Stop the plan? No more ₹299 is charged. Your shop stays open until 12 Nov, then customers cannot see it.')).toBeTruthy()
+      })
+
+      it('rereads at T, so the card turns into the usual Paid wording at that moment, without a reload', async () => {
+        vi.setSystemTime(daysBeforeEnd(2.5))
+        const reads = stubReads(async () => earlyPaid())
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByText(keptBody)).toBeTruthy()
+        await wait(Date.parse(trialEnd) - Date.now() - 1)
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        expect(screen.getByText(keptBody)).toBeTruthy()
+        await wait(1)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(screen.getByText(usualBody)).toBeTruthy()
+        expect(screen.queryByText(keptBody)).toBeNull()
+        expect(screen.getByRole('region', { name: 'Stop the plan' })).toBeTruthy()
+      })
+
+      it.each([
+        ['Stopped, gap A’s fixed shape', { cancel_at_period_end: true, next_billing_at: null }, 'Plan stopped', 'You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.'],
+        ['AutoPay off, from a backend that cancels at once', { status: 'CANCELLED', razorpay_status: 'cancelled', cancelled_at: '2026-10-02T10:05:00.20417Z' }, 'AutoPay off', 'AutoPay is off, so no more ₹299 is charged. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.'],
+      ])('stops the plan from the variant to %s, keeping the free days and the paid month, with one cancel call and no reread', async (_, response, eyebrow, body) => {
+        const reads = stubReads(async () => earlyPaid())
+        const cancel = vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveEarlyFeePaidSubscription(response))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+        await wait()
+        expect(screen.getByText(eyebrow)).toBeTruthy()
+        expect(screen.getByText('41')).toBeTruthy()
+        expect(screen.getByText(body)).toBeTruthy()
+        expect(screen.queryByRole('region', { name: 'Stop the plan' })).toBeNull()
+        await wait(60_000)
+        expect(cancel).toHaveBeenCalledOnce()
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+      })
+
+      it('shows gap A’s message for a 500 from Stop the plan, after one call, and keeps the variant', async () => {
+        const reads = stubReads(async () => earlyPaid())
+        const cancel = vi.spyOn(liveBillingService, 'cancel')
+          .mockRejectedValue(new ApiError('Internal server error', 500, null, '/v1/vendors/vendor-1/subscription/cancel', 'server'))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+        await wait()
+        expect(screen.getByRole('alert').textContent).toBe('Couldn’t stop the plan right now. Try again later or contact support.')
+        expect(screen.getByText(keptBody)).toBeTruthy()
+        expect(screen.queryByText('Plan stopped')).toBeNull()
+        await wait(60_000)
+        expect(cancel).toHaveBeenCalledOnce()
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
       })
     })
 

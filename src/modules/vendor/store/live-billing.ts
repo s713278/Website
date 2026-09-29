@@ -155,11 +155,11 @@ useAuthStore.subscribe((state, previous) => {
 /** The longest delay a browser timer takes (about 24.8 days); a longer one runs at once. */
 const maxTimerDelay = 2 ** 31 - 1
 
-/** The view's T or P, while it is still ahead. */
+/** The view's next T or P still ahead. Paid with the free days kept carries both, and T comes first. */
 function nextBoundary(view: LiveBillingView | null): number | null {
-  const boundary = view && 'trialEndsAt' in view ? view.trialEndsAt : view && 'paidThrough' in view ? view.paidThrough : null
-  const at = boundary === null ? null : Date.parse(boundary)
-  return at !== null && at > Date.now() ? at : null
+  const boundaries = [view && 'trialEndsAt' in view ? view.trialEndsAt : null, view && 'paidThrough' in view ? view.paidThrough : null]
+  const ahead = boundaries.flatMap((boundary) => boundary === null ? [] : [Date.parse(boundary)]).filter((at) => at > Date.now())
+  return ahead.length > 0 ? Math.min(...ahead) : null
 }
 
 /**
