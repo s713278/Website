@@ -6,6 +6,8 @@ current Test Mode method scope clarified ·
 24 September 2026; UPI on standby for a capable Razorpay account · 25 September 2026
 ([UPI and collection retries](#upi-and-collection-retries--24-september-2026)). Live API billing on
 the published backend API agreed · 29 September 2026 ([Live API billing](#live-api-billing--29-september-2026)).
+The early first fee replaces AutoPay-only setup during the trial · 29 September 2026
+([Early first fee](#early-first-fee--29-september-2026)).
 This amends the 18 September decisions. Open edge-case policies are listed below; the development
 preview and production backend do not yet implement this model.
 
@@ -39,12 +41,15 @@ payment, cancellation/refund or retained-access rules. The handoff owns the exac
   must expose the missing entitlement information; the frontend displays it and available actions.
   Browser dates and existing incomplete vendor context are not entitlement authority.
 - A voluntary billing CTA is available from the beginning of the trial. During an active trial,
-  it sets up a Razorpay subscription with its paid start scheduled for the **original trial end**.
-  All remaining trial time is retained. The monthly platform fee is due after the trial, rather
-  than at setup; a method-specific authorisation/token transaction is a separate matter.
+  it collects the first monthly platform fee at once, the
+  [early first fee](#early-first-fee--29-september-2026), for a paid period that starts at the
+  **original trial end**. All remaining trial time is retained, and AutoPay collects the next fee
+  when that period ends. (Amended 29 September 2026; this previously set up a subscription whose
+  first fee was due at the trial end, with only an authorisation at setup.)
 - The CTA label is **Pay Now** in every payment/setup phase. Supporting text must explain the
-  phase: during trial, set up AutoPay with the first monthly fee scheduled for the trial-end date;
-  after expiry, collect the first fee now to activate paid membership. Explain any method-specific
+  phase: during trial, pay the first monthly fee now for a paid period that starts at the trial
+  end (amended 29 September 2026); after expiry, collect the first fee now to activate paid
+  membership. Explain any method-specific
   authorisation transaction separately. The label does not change the underlying payment timing.
   The development [six-state Plan prototype](#six-state-demo-plan-prototype--24-september-2026)
   replaces this label with state-specific ones; the diagnostic preview and production builds keep it.
@@ -67,7 +72,10 @@ payment, cancellation/refund or retained-access rules. The handoff owns the exac
   begins its own confirmed paid period.
 - Cancelling a subscription before the trial ends, before the first platform fee is collected,
   must stop that subscription's future collection while preserving the trial until its original
-  expiry. Cancellation neither consumes nor restarts trial time.
+  expiry. Cancellation neither consumes nor restarts trial time. Since the
+  [early first fee](#early-first-fee--29-september-2026) (29 September 2026), the first fee is
+  collected at setup, so no such subscription exists: stopping after an early first fee is a
+  cancellation during a paid period, which keeps the remaining trial and the paid period.
 - Cancelling during a paid billing period stops future renewal and retains service through the
   period already paid for. "Current month" means that paid billing period, not an assumed calendar
   month or a browser-calculated 30 days. In v1, ordinary cancellation gives **no automatic prorated
@@ -78,10 +86,12 @@ payment, cancellation/refund or retained-access rules. The handoff owns the exac
   If an in-flight debit still collects the next monthly fee, refund that unintended fee **in full**.
   Retain only the original trial/paid coverage; the unintended charge and a pending refund grant
   no additional period or grace. Refund completion must be tracked, with no instant-refund promise.
-- Vendors may set up AutoPay again before their retained trial or paid period ends. Preserve the
-  same expiry and schedule the next fee for that boundary; grant no fresh trial and collect no
-  duplicate fee for time already covered. Reconcile the old subscription before enabling a
-  replacement. This is permission to rejoin, not a promise that Razorpay cancellation is reversible.
+- Vendors may pay again before their retained paid period ends. The fee is collected at once and
+  pays for the period that starts at that boundary; AutoPay collects the next fee when it ends.
+  Grant no fresh trial and collect no duplicate fee for time already covered. Reconcile the old
+  subscription before enabling a replacement. This is permission to rejoin, not a promise that
+  Razorpay cancellation is reversible. (Amended 29 September 2026; this previously set AutoPay up
+  again with the next fee scheduled for that boundary.)
 - Offer only payment methods **proven by testing to meet the required timing rules** for the
   relevant signup phase. A method that cannot preserve the free trial or meet after-expiry payment
   requirements stays unavailable until resolved. Neither a generic provider capability list nor
@@ -132,10 +142,10 @@ Let `T` be the persisted trial expiry. These are intended product outcomes, not 
 | Situation | Billing behavior | Entitlement |
 |---|---|---|
 | Eligible store completes onboarding and approval | Grant the identity's trial without payment setup | Trial through `T` |
-| Vendor opens Checkout with 10 days left | Prepare future billing at `T`; explain authorisation separately from the monthly fee | All 10 remaining days retained |
-| Setup succeeds during trial | Reconcile the mandate; first monthly fee remains scheduled for `T` | Still trial; not paid membership |
-| Setup fails, is dismissed or remains unconfirmed | Reconcile any provider attempt; no new trial or automatic duplicate subscription | Original trial remains through `T` |
-| Trial expires without paid membership or an authorised subscription | Restrict service; offer immediate paid signup | Billing, account and existing-order fulfillment retained |
+| Vendor opens Checkout with 10 days left | Collect the first monthly fee now (the early first fee), for a paid period starting at `T` | All 10 remaining days retained |
+| Early first fee confirmed during trial | Confirm the fee and its covered period, from `T` to one billing month later; AutoPay collects the next fee when it ends | Trial through `T`, then paid membership for the confirmed period |
+| Early first fee fails, is dismissed or remains unconfirmed | Reconcile any provider attempt; no new trial or automatic duplicate subscription | Original trial remains through `T`; a fee still unconfirmed at `T` restricts service until it is confirmed |
+| Trial expires without paid membership | Restrict service; offer immediate paid signup | Billing, account and existing-order fulfillment retained |
 | Vendor signs up after expiry | Collect the first monthly fee through immediate-start Checkout | Restore paid service only after backend confirmation |
 | Scheduled first fee succeeds | Confirm the fee and its covered period | Paid membership for the confirmed period |
 | Scheduled first fee or renewal is pending or being retried at the access boundary | Let the provider keep collecting from the vendor's chosen method; show no retry message | Service continues unchanged through the collection retry period |
@@ -143,10 +153,14 @@ Let `T` be the persisted trial expiry. These are intended product outcomes, not 
 | Collection halts with every retry used (failed platform fee) | Cancel the halted subscription; offer immediate paid signup; no automatic second subscription | Full service stops with no grace; existing-order fulfillment remains |
 | Vendor pays after a halt | Collect the first monthly fee through immediate-start Checkout | A new paid period from confirmation; the unpaid retry days are forgiven, not billed |
 | Vendor cancels during the collection retry period | Confirm cancellation, which ends the retries | Coverage has already ended, so full service stops immediately |
-| Vendor cancels before `T`, with no monthly fee collected | Confirm cancellation of the future subscription; no fee should be collected at `T` | Original trial remains through `T` |
+| Vendor stops after an early first fee, before `T` | Stop renewal; no automatic prorated refund | Trial through `T` and the paid period through its end |
 | Vendor cancels during a paid period | Stop subsequent renewal; no automatic prorated refund | Service remains through the confirmed paid-through date |
 | Timely cancellation races the next monthly debit | Honour MithraDirect's receipt time and fully refund the unintended fee | Only the original trial/paid coverage remains; refund pending does not extend access |
-| Vendor changes their mind before retained access ends | Set up future billing again for that same boundary, after reconciling the old subscription | No new trial, lost covered time or duplicate fee |
+| Vendor changes their mind before paid access ends | Collect the next fee now for the period starting at that boundary, after reconciling the old subscription | No new trial, lost covered time or duplicate fee |
+
+Rows for the trial were amended on 29 September 2026 for the
+[early first fee](#early-first-fee--29-september-2026). They previously prepared a future-start
+subscription at `T` with only an authorisation at setup, and let the vendor cancel it before `T`.
 
 Provider timing is not a guarantee of entitlement. No grace applies once a scheduled first/renewal
 fee has failed, meaning collection halted; a pending or retrying one keeps service. The timely-cancellation refund policy is approved; its implementation and
@@ -159,7 +173,9 @@ completed, or equate a provider `active` status with confirmed paid coverage.
   during an independently granted platform trial; the provider's future-start interval covers
   only the time remaining when the vendor chooses setup.
 - The old rule that early payment forfeits remaining trial days is withdrawn. There is no approved
-  action to bring the monthly fee forward during the trial.
+  action to bring the monthly fee forward during the trial. (Amended 29 September 2026: the
+  [early first fee](#early-first-fee--29-september-2026) now brings the first fee forward without
+  forfeiting any trial days.)
 - Step 10 alone is no longer the trial-start anchor; completed onboarding **and approval** are
   required. Earlier wording used `ACTIVE` for approval; the contract uses `approval_status: APPROVED`
   separately from `vendor_status: ACTIVE`, reconfirmed by the 19 September public OpenAPI read.
@@ -400,7 +416,8 @@ MithraDirect's own account, which offers UPI ([Live API billing](#live-api-billi
 
 **Status:** agreed with the product owner on 29 September 2026; not yet implemented. It replaces the
 Live API's "Billing unavailable" read. The [agreed product rules](#agreed-product-rules) still
-apply. The contract gaps go to [API gaps](./API_GAPS.md#vendor-platform-billing), and the
+apply. The same day's [early first fee](#early-first-fee--29-september-2026) replaces this
+section's trial AutoPay state rule, its "small refundable charge" wording and its release list. The contract gaps go to [API gaps](./API_GAPS.md#vendor-platform-billing), and the
 implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiring work.
 
 - **Scope.** With the Live API (`VITE_USE_API=true`), Plan, the banner and the header button show
@@ -442,3 +459,52 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
   after the trial ends (it currently fails, so a lapsed vendor cannot pay), a 14-day trial in
   production (the development backend uses 1 day on purpose) and backend shop enforcement
   (MFPS-66). The app tolerates the other known deviations.
+
+## Early first fee — 29 September 2026
+
+**Status:** decided by the backend team on 29 September 2026; its consequences for the app were
+agreed with the product owner the same day. Not yet implemented in the app or the backend. It amends
+the [agreed product rules](#agreed-product-rules), the [approved lifecycle](#approved-lifecycle) and
+[Live API billing](#live-api-billing--29-september-2026). The contract change goes to
+[API gaps](./API_GAPS.md#vendor-platform-billing) and the implementation to the
+[architecture owner](./API_ARCHITECTURE.md), with the work.
+
+- **Paying during free days.** A vendor who pays during the trial pays the first ₹299 at once. Its
+  paid period starts at the trial end `T` and runs one billing month, to the paid-through date the
+  backend records. The same Checkout approves AutoPay, which collects the next ₹299 when that
+  period ends. All remaining trial time is kept.
+- **Withdrawn:** setting up AutoPay alone during the trial (a future-start subscription with a
+  small refundable authorisation now and the first ₹299 at `T`), and turning it off before `T`.
+- **Keep shop open** follows the same rule. A vendor who stopped the plan pays ₹299 at once for
+  the period after their paid-through date, and AutoPay collects the next ₹299 when it ends.
+- **After an early first fee** Plan shows Paid and says the free days are kept. Stop the plan is
+  offered; stopping keeps the remaining trial and the paid period, with no automatic refund.
+- **An unconfirmed early first fee** leaves the shop open, with "Confirming payment…", until `T`.
+  If it is still unconfirmed at `T`, the shop is hidden until it is confirmed, as for a fee paid
+  after expiry: a fee paid now has no collection retry period.
+- **A renewal due at the paid-through date** is being collected, not failed: Plan shows "Shop is
+  open · AutoPay on" until the backend reports the result. Only a stopped plan or ended AutoPay
+  closes the shop at that date.
+- **AutoPay ended outside Plan** reads "AutoPay off", with wording that is true whether the vendor
+  or the bank stopped it. A backend that reports the vendor's own stop as cancelled then shows no
+  false claim.
+- **No second payment while one is confirming.** After Checkout reports success, Plan offers no
+  payment action while it still shows that payment as being confirmed, including after its
+  90-second confirmation poll ends.
+- **Reading the backend.** The app reads today's responses and the corrected ones requested in
+  API gaps. A combination not yet seen on the development backend shows the read error until it
+  has been checked there.
+- **Demo mode** keeps the earlier trial AutoPay flow; it stays frozen.
+- **Release to production** waits for:
+  - the early first fee in the backend: one ₹299 at setup, a paid period from `T` to one billing
+    month later, the next ₹299 exactly then, and card and UPI tested with it;
+  - stopping after an early first fee, which fails today because cancel is refused before
+    Razorpay's first cycle;
+  - paying immediately after the trial ends, which currently fails;
+  - a 14-day trial in production;
+  - eMandate switched off on the Checkout account;
+  - backend shop enforcement (MFPS-66) that keeps the shop open while a renewal is collected and
+    through a paid period that AutoPay ending cut short, and hides it while an early first fee is
+    unconfirmed after `T`.
+
+  This replaces the Live API billing release list. The app tolerates the other known deviations.

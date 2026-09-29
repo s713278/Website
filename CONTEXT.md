@@ -195,10 +195,10 @@ A vendor's permission to collect recurring platform fees through a supported pay
 Authorisation alone does not establish that a platform fee has been paid.
 _Avoid_: paid membership, payment success
 
-**AutoPay setup during trial**:
-A vendor's voluntary authorisation of recurring platform fees beginning when their existing
-trial ends. It preserves all remaining trial time and is not payment of the first platform fee.
-_Avoid_: early paid conversion, start trial
+**Early first fee**:
+The first platform fee, paid during the trial. It pays for the first paid period, which starts
+when the trial ends, so no trial time is lost. AutoPay authorisation for later fees is given with it.
+_Avoid_: AutoPay setup during trial, prepayment, early paid conversion, start trial
 
 **Paid-through date**:
 The end of the platform membership period covered by confirmed platform fees. Cancelling
