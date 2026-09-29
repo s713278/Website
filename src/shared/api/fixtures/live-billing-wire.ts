@@ -121,3 +121,32 @@ export function liveCancelledPaidSubscription(overrides: Record<string, unknown>
     ...overrides,
   })
 }
+
+/**
+ * Pay ₹299 after the trial, as dev returns it today (gap I): PAYMENT_PENDING with the paid plan and
+ * a Razorpay subscription still `created`, no paid period and no next charge.
+ */
+export function livePayingAfterTrialSubscription(overrides: Record<string, unknown> = {}) {
+  return liveTrialSubscription({
+    ...paidPlanFields,
+    status: 'PAYMENT_PENDING',
+    razorpay_subscription_id: 'sub_FakePayNow0001',
+    razorpay_status: 'created',
+    updated_at: '2026-10-12T10:20:03.61527Z',
+    ...overrides,
+  })
+}
+
+/**
+ * Renewal failed after every retry: HALTED, keeping the last paid period. Not yet seen on dev; this
+ * is the backend brief's expected shape.
+ */
+export function liveHaltedSubscription(overrides: Record<string, unknown> = {}) {
+  return livePaidSubscription({
+    status: 'HALTED',
+    razorpay_status: 'cancelled',
+    next_billing_at: null,
+    updated_at: '2026-11-15T18:30:12.40731Z',
+    ...overrides,
+  })
+}

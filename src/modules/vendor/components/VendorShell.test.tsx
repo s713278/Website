@@ -12,8 +12,8 @@ import {
   type LiveSubscriptionRead, type PrototypeState,
 } from '@/shared/api'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription,
-  liveTrialSubscription,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription,
+  liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LiveVendorPlan } from './LiveVendorPlan'
@@ -232,6 +232,33 @@ describe('VendorShell under the live API', () => {
     expect(banner()!.className).toContain('amber')
     expect(within(banner()!).getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
     expect(header().getByRole('link', { name: 'Keep open · ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(planBanner()).toBeNull()
+  })
+
+  it.each([
+    ['Payment failed', '2026-11-20T10:00:00Z', liveHaltedSubscription, 'last Razorpay payment did not go through. Pay ₹299 to open the shop again.'],
+    ['Shop closed, paid days', '2026-11-20T10:00:00Z', livePaidSubscription, 'pay ₹299 with Razorpay to open it again.'],
+    ['Shop closed, free days', '2026-10-12T22:00:00Z', liveTrialSubscription, 'pay ₹299 with Razorpay to open it again.'],
+  ])('shows the danger banner and Pay ₹299 in %s', async (_, now, subscription, text) => {
+    vi.setSystemTime(new Date(now))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: subscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(banner()?.textContent).toBe(`Shop is hidden from customers — ${text}Pay ₹299`))
+    expect(banner()!.className).toContain('destructive')
+    expect(within(banner()!).getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(header().getByRole('link', { name: 'Pay ₹299' }).getAttribute('href')).toBe('/vendor/plan')
+    expect(planBanner()).toBeNull()
+  })
+
+  it('shows the confirming banner and the Shop plan header while a payment is confirmed', async () => {
+    vi.setSystemTime(daysBeforeEnd(-0.5))
+    freeTierStore()
+    stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+    renderShell('/vendor', <LiveVendorPlan />)
+    await waitFor(() => expect(banner()?.textContent).toBe('Shop is hidden from customers — your ₹299 payment is being confirmed.Shop plan'))
+    expect(banner()!.className).toContain('destructive')
+    expect(header().getByRole('link', { name: 'Shop plan' }).getAttribute('href')).toBe('/vendor/plan')
     expect(planBanner()).toBeNull()
   })
 

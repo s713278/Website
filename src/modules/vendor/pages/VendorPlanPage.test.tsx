@@ -11,7 +11,8 @@ import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
 import {
-  liveActivatedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
+  liveActivatedSubscription, liveHaltedSubscription, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription,
+  liveTrialSubscription,
 } from '@/shared/api/fixtures/live-billing-wire'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { resetDemoState } from '@/shared/api/fixtures/demo-state'
@@ -231,6 +232,49 @@ describe('VendorPlanPage', () => {
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
       expect(container.textContent).not.toMatch(/13 Nov|Next ₹299/)
       expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Payment failed with its hidden shop, "If you do not pay" and no action yet', async () => {
+      vi.setSystemTime(new Date('2026-11-20T10:00:00Z'))
+      stubReads(async () => ({ kind: 'subscription', subscription: liveHaltedSubscription() }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Payment failed')).toBeTruthy()
+      expect(screen.getByText('Shop is hidden')).toBeTruthy()
+      expect(screen.getByText('Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Shop closed once free days end without AutoPay, even while the status is still TRIAL_ACTIVE, gap J', async () => {
+      vi.setSystemTime(daysBeforeEnd(-0.5))
+      stubReads(async () => trial())
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Shop closed')).toBeTruthy()
+      expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('shows Confirming with no action but Check again, which rereads through the service, gap C', async () => {
+      vi.setSystemTime(daysBeforeEnd(-0.5))
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('Shop closed')).toBeTruthy()
+      expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      expect(screen.getByText('Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.')).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
+      expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
+
+      vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+      reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+      expect(await screen.findByText('Paid')).toBeTruthy()
+      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
+      expect(screen.queryAllByRole('button')).toEqual([])
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+      expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
     })
 
     it('shows only the note for a shop that is not live', async () => {

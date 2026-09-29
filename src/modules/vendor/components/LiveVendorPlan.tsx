@@ -54,11 +54,16 @@ export function LiveVendorPlan() {
   </div>
   if (!view) return <p role="status">Reading shop plan…</p>
 
-  const { card, note } = liveBillingWording(view)
+  const { card, note, confirming } = liveBillingWording(view)
   return <div className="grid gap-4">
     {note ? <Card className="p-5"><p>{note}</p></Card> : null}
     {card ? <>
       <StateCard card={card} />
+      {/* Confirming offers no payment action; Check again only rereads the shared read. */}
+      {confirming ? <div className="grid gap-2 text-sm">
+        <p role="status">{confirming}</p>
+        <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button>
+      </div> : null}
       <Section title="What you get">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">{whatYouGet.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section>

@@ -19,7 +19,16 @@ export type LiveBillingView =
   /** No more charges: the vendor stopped the plan, or AutoPay ended outside MithraDirect. Open until P. */
   | { state: 'stopped'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
   | { state: 'autopay_ended'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
+  /** Renewal failed after every retry. */
+  | { state: 'payment_failed'; shop: 'hidden'; plan: LiveBillingPlan }
+  /** The shop is hidden because paid days or free days are over. */
+  | { state: 'shop_closed'; shop: 'hidden'; plan: LiveBillingPlan; ended: LiveBillingEnded }
+  /** Shop closed while Razorpay confirms a payment; `ended` chooses the Shop closed wording. */
+  | { state: 'confirming'; shop: 'hidden'; plan: LiveBillingPlan; ended: LiveBillingEnded }
   | { state: 'not_live'; plan: LiveBillingPlan }
+
+/** What ran out before a shop closed: a paid period, or the free days. */
+export type LiveBillingEnded = 'paid_days' | 'free_days'
 
 /** A billing read that matches no mapping row. Plan shows it as a read error with Try again. */
 export class LiveBillingUnreadableError extends Error {
@@ -83,27 +92,31 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   const periodEnd = instant(subscription.current_period_end)
 
   const beforeTrialEnd = trialEndsAt !== null && now.getTime() < Date.parse(trialEndsAt)
+  const periodOver = periodEnd !== null && now.getTime() >= Date.parse(periodEnd)
 
+  // Row 1.
+  if (status === 'HALTED') return { state: 'payment_failed', shop: 'hidden', plan }
   // Row 2.
   if (status === 'PAST_DUE') return { state: 'collecting', shop: 'open', plan }
 
-  // Rows 3–5: a paid period that has not ended. At now ≥ P they stop matching (row 6).
-  if (periodEnd !== null && now.getTime() < Date.parse(periodEnd)) {
+  // Rows 3–5: a paid period that has not ended. At now ≥ P the same facts are row 6.
+  if (periodEnd !== null) {
     // The flag must be a boolean: missing or null matches no row, so it takes the read error path.
     const cancelAtPeriodEnd = subscription.cancel_at_period_end
     const razorpayCancelled = subscription.razorpay_status === 'cancelled'
+    const paid = status === 'ACTIVE' && cancelAtPeriodEnd === false && !razorpayCancelled
+    const stopped = status === 'ACTIVE' && cancelAtPeriodEnd === true
+    const autoPayEnded = status === 'CANCELLED' || status === 'EXPIRED' || (status === 'ACTIVE' && razorpayCancelled && cancelAtPeriodEnd === false)
+    // Row 6.
+    if ((paid || stopped || autoPayEnded) && periodOver) return { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
     // Row 3.
-    if (status === 'ACTIVE' && cancelAtPeriodEnd === false && !razorpayCancelled) {
-      return { state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: instant(subscription.next_billing_at) }
-    }
+    if (paid) return { state: 'paid', shop: 'open', plan, paidThrough: periodEnd, nextChargeAt: instant(subscription.next_billing_at) }
     const daysLeft = daysUntil(periodEnd, now)
     // Row 4, gap F: dev keeps `next_billing_at` after a stop, so it is ignored.
-    if (status === 'ACTIVE' && cancelAtPeriodEnd === true) return { state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
+    if (stopped) return { state: 'stopped', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
     // Row 5, gap H: AutoPay ended at the bank or at Razorpay. The paid days are kept, even when
     // CANCELLED; that is a product rule.
-    if (status === 'CANCELLED' || status === 'EXPIRED' || (status === 'ACTIVE' && razorpayCancelled && cancelAtPeriodEnd === false)) {
-      return { state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
-    }
+    if (autoPayEnded) return { state: 'autopay_ended', shop: 'open', plan, paidThrough: periodEnd, daysLeft }
   }
   // Row 3a, gap B: dev sets ACTIVE when Razorpay activates, before the fee is captured. ACTIVE
   // without a paid period is still being collected.
@@ -117,12 +130,26 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   }
   // Row 8, gap D: free days have ended and Razorpay has not charged yet. PAYMENT_PENDING here is row 8b.
   if (status === 'TRIAL_ACTIVE' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) return { state: 'collecting', shop: 'open', plan }
+  // Row 8b, gap C: dev reports trial AutoPay as PAYMENT_PENDING, so after T it reads as a payment
+  // being confirmed. Until C and D are fixed, trial AutoPay shows this for the day before its charge.
+  if (status === 'PAYMENT_PENDING' && autoPayAgreed && trialEndsAt && !beforeTrialEnd) {
+    return { state: 'confirming', shop: 'hidden', plan, ended: periodEnd === null ? 'free_days' : 'paid_days' }
+  }
 
   // Row 9. A CANCELLED subscription with a paid period belongs to rows 5 and 6, which come first.
   const freeDaysStatus = status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING' || (status === 'CANCELLED' && periodEnd === null)
   if (freeDaysStatus && !autoPayAgreed && trialEndsAt && beforeTrialEnd) {
     const daysLeft = daysUntil(trialEndsAt, now)
     return { state: daysLeft <= 3 ? 'three_days_left' : 'free_days', shop: 'open', plan, trialEndsAt, daysLeft }
+  }
+  // Row 10, gap J: dev keeps TRIAL_ACTIVE after T, so row 9's facts past T close the shop as well.
+  // Gap I's shape (PAYMENT_PENDING, `created`, no P, after T) lands here too.
+  if (status === 'TRIAL_EXPIRED' || (freeDaysStatus && !autoPayAgreed && trialEndsAt && !beforeTrialEnd && periodEnd === null)) {
+    return { state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' }
+  }
+  // Row 11: paying again after paid days, such as after a halt, until Razorpay has the payment.
+  if (status === 'PAYMENT_PENDING' && subscription.razorpay_status === 'created' && periodOver) {
+    return { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
   }
 
   throw new LiveBillingUnreadableError()

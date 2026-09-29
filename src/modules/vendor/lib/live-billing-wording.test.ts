@@ -16,7 +16,7 @@ describe('liveBillingWording', () => {
         body: 'Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.',
         plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
       },
-      note: null,
+      note: null, confirming: null,
       banner: { tone: 'neutral', lead: '13 free days left', text: 'after that, subscribe with Razorpay (₹299 / month) to keep the shop open.', action: 'Pay ₹299' },
       header: 'Pay ₹299',
     })
@@ -29,7 +29,7 @@ describe('liveBillingWording', () => {
         body: 'Set up AutoPay now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.',
         plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
       },
-      note: null,
+      note: null, confirming: null,
       banner: { tone: 'danger', lead: '3 free days left', text: 'set up AutoPay now so customers can still open your shop when free days end.', action: 'Pay ₹299' },
       header: 'Pay ₹299',
     })
@@ -56,7 +56,7 @@ describe('liveBillingWording', () => {
         body: 'Free days are unchanged. When they end, Razorpay charges ₹299 each month to keep the shop open.',
         plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: 'AutoPay on — first ₹299 on 12 Oct',
       },
-      note: null,
+      note: null, confirming: null,
       banner: { tone: 'neutral', lead: '13 free days left', text: 'AutoPay is on, so the first ₹299 is charged on 12 Oct.', action: 'Shop plan' },
       header: 'Shop plan',
     })
@@ -74,7 +74,7 @@ describe('liveBillingWording', () => {
         tone: 'neutral', eyebrow: 'Shop plan', figure: { headline: 'Shop is open' }, body: 'AutoPay on.',
         plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
       },
-      note: null, banner: null, header: 'Shop plan',
+      note: null, confirming: null, banner: null, header: 'Shop plan',
     })
   })
 
@@ -89,7 +89,7 @@ describe('liveBillingWording', () => {
           body: 'You paid ₹299 via Razorpay. Shop stays open until 26 Oct. Next ₹299 is charged on 27 Oct.',
           plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
         },
-        note: null, banner: null, header: 'Shop plan',
+        note: null, confirming: null, banner: null, header: 'Shop plan',
       })
     })
 
@@ -105,7 +105,7 @@ describe('liveBillingWording', () => {
           body: 'You stopped the plan. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
           plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
         },
-        note: null,
+        note: null, confirming: null,
         banner: { tone: 'warning', lead: 'Shop stays open until 26 Oct', text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: 'Keep open · ₹299' },
         header: 'Keep open · ₹299',
       })
@@ -118,7 +118,7 @@ describe('liveBillingWording', () => {
           body: 'AutoPay was cancelled outside MithraDirect, so no more ₹299 is charged. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
           plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
         },
-        note: null,
+        note: null, confirming: null,
         banner: { tone: 'warning', lead: 'Shop stays open until 26 Oct', text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: 'Keep open · ₹299' },
         header: 'Keep open · ₹299',
       })
@@ -135,9 +135,60 @@ describe('liveBillingWording', () => {
     })
   })
 
+  describe('lapsed shops', () => {
+    const hidden = { plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null, tone: 'danger', figure: { headline: 'Shop is hidden' } }
+    const closedBanner = { tone: 'danger', lead: 'Shop is hidden from customers', text: 'pay ₹299 with Razorpay to open it again.', action: 'Pay ₹299' }
+
+    it('words Payment failed with no action yet, the danger banner and the Pay header', () => {
+      expect(liveBillingWording({ state: 'payment_failed', shop: 'hidden', plan })).toEqual({
+        card: { ...hidden, eyebrow: 'Payment failed', body: 'Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.' },
+        note: null, confirming: null,
+        banner: { tone: 'danger', lead: 'Shop is hidden from customers', text: 'last Razorpay payment did not go through. Pay ₹299 to open the shop again.', action: 'Pay ₹299' },
+        header: 'Pay ₹299',
+      })
+    })
+
+    it('words Shop closed after paid days', () => {
+      expect(liveBillingWording({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' })).toEqual({
+        card: { ...hidden, eyebrow: 'Shop closed', body: 'Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
+        note: null, confirming: null, banner: closedBanner, header: 'Pay ₹299',
+      })
+    })
+
+    it('words Shop closed after free days', () => {
+      expect(liveBillingWording({ state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' })).toEqual({
+        card: { ...hidden, eyebrow: 'Shop closed', body: 'Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
+        note: null, confirming: null, banner: closedBanner, header: 'Pay ₹299',
+      })
+    })
+
+    it('words Confirming as the Shop closed card with the confirming status, its banner and the Shop plan header', () => {
+      const confirming = 'Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.'
+      expect(liveBillingWording({ state: 'confirming', shop: 'hidden', plan, ended: 'free_days' })).toEqual({
+        card: { ...hidden, eyebrow: 'Shop closed', body: 'Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
+        note: null, confirming,
+        banner: { tone: 'danger', lead: 'Shop is hidden from customers', text: 'your ₹299 payment is being confirmed.', action: 'Shop plan' },
+        header: 'Shop plan',
+      })
+      expect(liveBillingWording({ state: 'confirming', shop: 'hidden', plan, ended: 'paid_days' }).card?.body)
+        .toBe('Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')
+    })
+
+    it('takes the ₹ amounts of the lapsed states from the plan price', () => {
+      const pricier = { ...plan, price: 349 }
+      const failed = liveBillingWording({ state: 'payment_failed', shop: 'hidden', plan: pricier })
+      expect(failed.card?.body).toContain('Pay ₹349 with Razorpay')
+      expect(failed.banner?.text).toContain('Pay ₹349 to open')
+      expect(failed.header).toBe('Pay ₹349')
+      const confirming = liveBillingWording({ state: 'confirming', shop: 'hidden', plan: pricier, ended: 'paid_days' })
+      expect(confirming.confirming).toContain('confirms the ₹349.')
+      expect(confirming.banner?.text).toBe('your ₹349 payment is being confirmed.')
+    })
+  })
+
   it('gives a shop that is not live the note only, no banner and the Shop plan header', () => {
     expect(liveBillingWording({ state: 'not_live', plan })).toEqual({
-      card: null, note: 'Free days start when your shop goes live.', banner: null, header: 'Shop plan',
+      card: null, note: 'Free days start when your shop goes live.', confirming: null, banner: null, header: 'Shop plan',
     })
   })
 })

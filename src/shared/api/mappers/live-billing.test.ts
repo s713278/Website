@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  liveActivatedSubscription, liveCancelledPaidSubscription, liveMonthlyPlan, livePaidSubscription, livePlans, liveStoppedSubscription, liveTrialAutoPaySubscription,
-  liveTrialSubscription,
+  liveActivatedSubscription, liveCancelledPaidSubscription, liveHaltedSubscription, liveMonthlyPlan, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
+  liveStoppedSubscription, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
 import { LiveBillingUnreadableError, mapLiveBilling } from './live-billing'
 
@@ -28,8 +28,9 @@ describe('mapLiveBilling', () => {
       expect(mapLiveBilling(subscription(), livePlans, daysBeforeEnd(0.01))).toMatchObject({ state: 'three_days_left', daysLeft: 1 })
     })
 
-    it('stops matching at now = T', () => {
-      expect(() => mapLiveBilling(subscription(), livePlans, new Date(trialEnd))).toThrow(LiveBillingUnreadableError)
+    it('turns into Shop closed, free days over (row 10) at now = T', () => {
+      expect(mapLiveBilling(subscription(), livePlans, new Date(Date.parse(trialEnd) - 1)).state).toBe('three_days_left')
+      expect(mapLiveBilling(subscription(), livePlans, new Date(trialEnd))).toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' })
     })
 
     it('lands the expected "Trial, AutoPay off" and "Trial, AutoPay turned off" responses on Free days', () => {
@@ -108,8 +109,9 @@ describe('mapLiveBilling', () => {
       expect(mapLiveBilling(agreed, livePlans, new Date(trialEnd)).state).toBe('collecting')
     })
 
-    it('leaves PAYMENT_PENDING with AutoPay on after T to row 8b, not Collecting', () => {
-      expect(() => mapLiveBilling(autoPay(), livePlans, new Date(trialEnd))).toThrow(LiveBillingUnreadableError)
+    it('moves PAYMENT_PENDING with AutoPay on from row 7 to row 8b, not Collecting, at now = T', () => {
+      expect(mapLiveBilling(autoPay(), livePlans, new Date(Date.parse(trialEnd) - 1)).state).toBe('autopay_on')
+      expect(mapLiveBilling(autoPay(), livePlans, new Date(trialEnd)).state).toBe('confirming')
     })
   })
 
@@ -168,17 +170,101 @@ describe('mapLiveBilling', () => {
       })
     })
 
-    it('stops matching rows 3–5 at now = P', () => {
-      const atP = new Date(periodEnd)
+    it('moves Paid to Shop closed, paid days over (row 6) at now = P', () => {
       expect(mapLiveBilling(paid(), livePlans, new Date(Date.parse(periodEnd) - 1)).state).toBe('paid')
-      expect(() => mapLiveBilling(paid(), livePlans, atP)).toThrow(LiveBillingUnreadableError)
-      expect(() => mapLiveBilling(stopped(), livePlans, atP)).toThrow(LiveBillingUnreadableError)
-      expect(() => mapLiveBilling(paid({ status: 'CANCELLED', razorpay_status: 'cancelled' }), livePlans, atP)).toThrow(LiveBillingUnreadableError)
-      expect(() => mapLiveBilling(paid({ razorpay_status: 'cancelled' }), livePlans, atP)).toThrow(LiveBillingUnreadableError)
+      expect(mapLiveBilling(paid(), livePlans, new Date(periodEnd))).toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' })
+    })
+
+    describe('row 6: the same facts at now ≥ P', () => {
+      const later = new Date('2026-11-20T10:00:00Z')
+      const closed = { state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }
+
+      it('closes the shop from row 3’s facts', () => {
+        expect(mapLiveBilling(paid(), livePlans, later)).toEqual(closed)
+      })
+
+      it('closes the shop from row 4’s facts', () => {
+        expect(mapLiveBilling(stopped(), livePlans, new Date(periodEnd))).toEqual(closed)
+        expect(mapLiveBilling(stopped(), livePlans, later)).toEqual(closed)
+      })
+
+      it('closes the shop from row 5’s facts', () => {
+        expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, later)).toEqual(closed)
+        expect(mapLiveBilling(paid({ status: 'EXPIRED', razorpay_status: 'cancelled', next_billing_at: null }), livePlans, later)).toEqual(closed)
+        expect(mapLiveBilling(paid({ razorpay_status: 'cancelled', next_billing_at: null }), livePlans, new Date(periodEnd))).toEqual(closed)
+      })
+
+      it('lands the expected "Paid period over, no AutoPay" response on Shop closed, paid days over', () => {
+        for (const cancelAtPeriodEnd of [true, false]) {
+          const over = paid({ status: 'CANCELLED', razorpay_status: 'cancelled', next_billing_at: null, cancel_at_period_end: cancelAtPeriodEnd })
+          expect(mapLiveBilling(over, livePlans, later)).toEqual(closed)
+        }
+      })
     })
 
     it('counts one day left in the last day before P', () => {
       expect(mapLiveBilling(stopped(), livePlans, daysBeforePeriodEnd(0.01))).toMatchObject({ state: 'stopped', daysLeft: 1 })
+    })
+  })
+
+  describe('lapsed shops', () => {
+    const periodEnd = '2026-11-12T18:30:00.000Z'
+    const afterPeriod = new Date('2026-11-20T10:00:00Z')
+    const afterTrial = daysBeforeEnd(-0.5)
+
+    it('row 1: shows Payment failed for HALTED, the expected "Renewal failed" response', () => {
+      expect(mapLiveBilling({ kind: 'subscription', subscription: liveHaltedSubscription() }, livePlans, afterPeriod))
+        .toEqual({ state: 'payment_failed', shop: 'hidden', plan })
+    })
+
+    it('row 1: HALTED alone decides, even before P', () => {
+      expect(mapLiveBilling({ kind: 'subscription', subscription: liveHaltedSubscription() }, livePlans, new Date(Date.parse(periodEnd) - 1)))
+        .toMatchObject({ state: 'payment_failed' })
+    })
+
+    describe('row 8b: Confirming', () => {
+      it('confirms today’s gap C+D shape (PAYMENT_PENDING, authenticated) after T, in free-days wording without P', () => {
+        expect(mapLiveBilling(autoPay(), livePlans, afterTrial)).toEqual({ state: 'confirming', shop: 'hidden', plan, ended: 'free_days' })
+      })
+
+      it('confirms in paid wording with P, such as a payment after a halt', () => {
+        const payingAgain = liveHaltedSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0001', razorpay_status: 'authenticated' })
+        expect(mapLiveBilling({ kind: 'subscription', subscription: payingAgain }, livePlans, afterPeriod))
+          .toEqual({ state: 'confirming', shop: 'hidden', plan, ended: 'paid_days' })
+        expect(mapLiveBilling({ kind: 'subscription', subscription: { ...payingAgain, razorpay_status: 'active' } }, livePlans, afterPeriod))
+          .toMatchObject({ state: 'confirming', ended: 'paid_days' })
+      })
+    })
+
+    describe('row 10: Shop closed, free days over', () => {
+      const closed = { state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' }
+
+      it('closes the shop for TRIAL_EXPIRED, the expected "Trial ended, not paid" response', () => {
+        expect(mapLiveBilling(subscription({ status: 'TRIAL_EXPIRED' }), livePlans, afterTrial)).toEqual(closed)
+        const cancelled = subscription({ status: 'TRIAL_EXPIRED', razorpay_subscription_id: 'sub_FakeTrial0006', razorpay_status: 'cancelled' })
+        expect(mapLiveBilling(cancelled, livePlans, afterTrial)).toEqual(closed)
+      })
+
+      it('closes the shop for today’s gap J shape: TRIAL_ACTIVE after T with no P', () => {
+        expect(mapLiveBilling(subscription(), livePlans, afterTrial)).toEqual(closed)
+        const turnedOff = subscription({ razorpay_subscription_id: 'sub_FakeTrial0007', razorpay_status: 'cancelled' })
+        expect(mapLiveBilling(turnedOff, livePlans, afterTrial)).toEqual(closed)
+      })
+
+      it('closes the shop for today’s gap I shape, the expected "Paying now after the trial" response', () => {
+        expect(mapLiveBilling({ kind: 'subscription', subscription: livePayingAfterTrialSubscription() }, livePlans, afterTrial)).toEqual(closed)
+      })
+
+      it('closes the shop for a CANCELLED checkout with no P after T', () => {
+        const cancelled = subscription({ status: 'CANCELLED', razorpay_subscription_id: 'sub_FakeTrial0003', razorpay_status: 'cancelled' })
+        expect(mapLiveBilling(cancelled, livePlans, afterTrial)).toEqual(closed)
+      })
+    })
+
+    it('row 11: closes the shop in paid wording for PAYMENT_PENDING, created, with P in the past', () => {
+      const payingAgain = liveHaltedSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0002', razorpay_status: 'created' })
+      expect(mapLiveBilling({ kind: 'subscription', subscription: payingAgain }, livePlans, afterPeriod))
+        .toEqual({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' })
     })
   })
 
