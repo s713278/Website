@@ -149,7 +149,9 @@ export function LiveVendorPlan() {
       setHold({ from: from.state, waiting: purpose.waiting, expired: false })
       void confirm(result.callback, signal)
     } catch (cause) {
-      if (!signal.aborted) setActionError(getErrorMessage(cause))
+      // Gap E: dev refuses Keep shop open with a 409 while the stopped plan's paid days last.
+      // Gap I: paying after the trial fails with a 500, whose backend copy getErrorMessage shows.
+      if (!signal.aborted) setActionError(isApiError(cause) && cause.status === 409 && purpose.refused ? purpose.refused : getErrorMessage(cause))
     } finally {
       current.running = false
       if (!signal.aborted) setActing(false)

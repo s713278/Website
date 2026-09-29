@@ -13,6 +13,11 @@ const setUpAutoPay = {
   help: 'Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; the first ₹299 is charged on 12 Oct, when free days end.',
 }
 const setUpAutoPayCheckout = { waiting: 'Confirming AutoPay…', failed: expect.any(Function) }
+const payNow = { label: 'Pay ₹299 with Razorpay', help: 'Opens Razorpay Checkout. Pay by card or UPI.' }
+const payNowCheckout = {
+  waiting: 'Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.',
+  failed: expect.any(Function),
+}
 
 describe('liveBillingWording', () => {
   it('words Free days with the exact end in IST', () => {
@@ -126,30 +131,41 @@ describe('liveBillingWording', () => {
         .toBe('Stop the plan? No more ₹349 is charged. Your shop stays open until 26 Oct, then customers cannot see it.')
     })
 
-    it('words Stopped with the days until P, the warning banner and the Keep open header', () => {
+    const keepOpen = {
+      label: 'Keep shop open · ₹299',
+      help: 'Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; ₹299 is charged on 27 Oct, when paid days end.',
+    }
+    const keepOpenCheckout = { waiting: 'Confirming AutoPay…', failed: expect.any(Function), refused: 'Couldn’t turn AutoPay back on right now. Your shop stays open until 26 Oct.' }
+
+    it('words Stopped with the days until P, Keep shop open, the warning banner and the Keep open header', () => {
       expect(liveBillingWording({ state: 'stopped', shop: 'open', plan, paidThrough, daysLeft: 21 })).toEqual({
         card: {
           tone: 'warning', eyebrow: 'Plan stopped', figure: { days: 21 },
           body: 'You stopped the plan. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
-          plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
+          plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: keepOpen, autoPay: null,
         },
-        note: null, confirming: null, stopConfirmation: null, checkout: null,
+        note: null, confirming: null, stopConfirmation: null, checkout: keepOpenCheckout,
         banner: { tone: 'warning', lead: 'Shop stays open until 26 Oct', text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: 'Keep open · ₹299' },
         header: 'Keep open · ₹299',
       })
     })
 
-    it('words AutoPay ended as Stopped, cancelled outside MithraDirect', () => {
+    it('words AutoPay ended as Stopped, cancelled outside MithraDirect, with Keep shop open', () => {
       expect(liveBillingWording({ state: 'autopay_ended', shop: 'open', plan, paidThrough, daysLeft: 21 })).toEqual({
         card: {
           tone: 'warning', eyebrow: 'AutoPay ended', figure: { days: 21 },
           body: 'AutoPay was cancelled outside MithraDirect, so no more ₹299 is charged. Shop stays open until 26 Oct. Pay ₹299 with Razorpay if you want to keep it after that.',
-          plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null,
+          plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: keepOpen, autoPay: null,
         },
-        note: null, confirming: null, stopConfirmation: null, checkout: null,
+        note: null, confirming: null, stopConfirmation: null, checkout: keepOpenCheckout,
         banner: { tone: 'warning', lead: 'Shop stays open until 26 Oct', text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: 'Keep open · ₹299' },
         header: 'Keep open · ₹299',
       })
+    })
+
+    it('words Keep shop open’s failed payment after Checkout closes', () => {
+      expect(liveBillingWording({ state: 'autopay_ended', shop: 'open', plan, paidThrough, daysLeft: 21 }).checkout?.failed('Your payment was declined by the bank.'))
+        .toBe('The payment did not go through (Your payment was declined by the bank.), so AutoPay is not set up again. Nothing changed; the plan is still stopped.')
     })
 
     it('takes the ₹ amounts of Paid and Stopped from the plan price', () => {
@@ -160,17 +176,19 @@ describe('liveBillingWording', () => {
       expect(stopped.card?.body).toContain('Pay ₹349 with Razorpay')
       expect(stopped.banner?.action).toBe('Keep open · ₹349')
       expect(stopped.header).toBe('Keep open · ₹349')
+      expect(stopped.card?.action?.label).toBe('Keep shop open · ₹349')
+      expect(stopped.card?.action?.help).toContain('₹349 is charged on 27 Oct')
     })
   })
 
   describe('lapsed shops', () => {
-    const hidden = { plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: null, autoPay: null, tone: 'danger', figure: { headline: 'Shop is hidden' } }
+    const hidden = { plan: 'Mithra Social Starter · ₹299 / month', sample: null, action: payNow, autoPay: null, tone: 'danger', figure: { headline: 'Shop is hidden' } }
     const closedBanner = { tone: 'danger', lead: 'Shop is hidden from customers', text: 'pay ₹299 with Razorpay to open it again.', action: 'Pay ₹299' }
 
-    it('words Payment failed with no action yet, the danger banner and the Pay header', () => {
+    it('words Payment failed with Pay ₹299, the danger banner and the Pay header', () => {
       expect(liveBillingWording({ state: 'payment_failed', shop: 'hidden', plan })).toEqual({
         card: { ...hidden, eyebrow: 'Payment failed', body: 'Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.' },
-        note: null, confirming: null, stopConfirmation: null, checkout: null,
+        note: null, confirming: null, stopConfirmation: null, checkout: payNowCheckout,
         banner: { tone: 'danger', lead: 'Shop is hidden from customers', text: 'last Razorpay payment did not go through. Pay ₹299 to open the shop again.', action: 'Pay ₹299' },
         header: 'Pay ₹299',
       })
@@ -179,21 +197,21 @@ describe('liveBillingWording', () => {
     it('words Shop closed after paid days', () => {
       expect(liveBillingWording({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' })).toEqual({
         card: { ...hidden, eyebrow: 'Shop closed', body: 'Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
-        note: null, confirming: null, stopConfirmation: null, checkout: null, banner: closedBanner, header: 'Pay ₹299',
+        note: null, confirming: null, stopConfirmation: null, checkout: payNowCheckout, banner: closedBanner, header: 'Pay ₹299',
       })
     })
 
     it('words Shop closed after free days', () => {
       expect(liveBillingWording({ state: 'shop_closed', shop: 'hidden', plan, ended: 'free_days' })).toEqual({
         card: { ...hidden, eyebrow: 'Shop closed', body: 'Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
-        note: null, confirming: null, stopConfirmation: null, checkout: null, banner: closedBanner, header: 'Pay ₹299',
+        note: null, confirming: null, stopConfirmation: null, checkout: payNowCheckout, banner: closedBanner, header: 'Pay ₹299',
       })
     })
 
     it('words Confirming as the Shop closed card with the confirming status, its banner and the Shop plan header', () => {
       const confirming = 'Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.'
       expect(liveBillingWording({ state: 'confirming', shop: 'hidden', plan, ended: 'free_days' })).toEqual({
-        card: { ...hidden, eyebrow: 'Shop closed', body: 'Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
+        card: { ...hidden, action: null, eyebrow: 'Shop closed', body: 'Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.' },
         note: null, confirming, stopConfirmation: null, checkout: null,
         banner: { tone: 'danger', lead: 'Shop is hidden from customers', text: 'your ₹299 payment is being confirmed.', action: 'Shop plan' },
         header: 'Shop plan',
@@ -202,12 +220,20 @@ describe('liveBillingWording', () => {
         .toBe('Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')
     })
 
+    it('words Pay ₹299’s failed payment after Checkout closes, with no gap E message', () => {
+      const checkout = liveBillingWording({ state: 'shop_closed', shop: 'hidden', plan, ended: 'paid_days' }).checkout
+      expect(checkout?.failed('Your payment was declined by the bank.'))
+        .toBe('The payment did not go through (Your payment was declined by the bank.). Nothing changed; your shop is still hidden.')
+      expect(checkout?.refused).toBeUndefined()
+    })
+
     it('takes the ₹ amounts of the lapsed states from the plan price', () => {
       const pricier = { ...plan, price: 349 }
       const failed = liveBillingWording({ state: 'payment_failed', shop: 'hidden', plan: pricier })
       expect(failed.card?.body).toContain('Pay ₹349 with Razorpay')
       expect(failed.banner?.text).toContain('Pay ₹349 to open')
       expect(failed.header).toBe('Pay ₹349')
+      expect(failed.card?.action?.label).toBe('Pay ₹349 with Razorpay')
       const confirming = liveBillingWording({ state: 'confirming', shop: 'hidden', plan: pricier, ended: 'paid_days' })
       expect(confirming.confirming).toContain('confirms the ₹349.')
       expect(confirming.banner?.text).toBe('your ₹349 payment is being confirmed.')

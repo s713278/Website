@@ -26,6 +26,8 @@ export interface LiveCheckoutPurpose {
   waiting: string
   /** Checkout closed after a failed payment attempt, with Razorpay's reason. */
   failed: (reason: string) => string
+  /** Gap E: what subscribe's 409 means while the plan is stopped; absent where a 409 has no known cause. */
+  refused?: string
 }
 
 const rupees = (price: number) => `₹${new Intl.NumberFormat('en-IN').format(price)}`
@@ -67,12 +69,22 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     const paidUntil = lastPaidDay(view.paidThrough)
     const keepOpen = `Keep open · ${price}`
     const reason = view.state === 'stopped' ? 'You stopped the plan.' : `AutoPay was cancelled outside MithraDirect, so no more ${price} is charged.`
+    const paidDaysEnd = shortDate(view.paidThrough)
     return {
       card: {
         ...planCard, tone: 'warning', eyebrow: view.state === 'stopped' ? 'Plan stopped' : 'AutoPay ended', figure: { days: view.daysLeft },
         body: `${reason} Shop stays open until ${paidUntil}. Pay ${price} with Razorpay if you want to keep it after that.`,
+        action: {
+          label: `Keep shop open · ${price}`,
+          help: `Opens Razorpay Checkout. Approve AutoPay by card or UPI with a small refundable charge now; ${price} is charged on ${paidDaysEnd}, when paid days end.`,
+        },
       },
-      note: null, confirming: null, stopConfirmation: null, checkout: null,
+      note: null, confirming: null, stopConfirmation: null,
+      checkout: {
+        waiting: 'Confirming AutoPay…',
+        failed: (failure) => `The payment did not go through (${failure}), so AutoPay is not set up again. Nothing changed; the plan is still stopped.`,
+        refused: `Couldn’t turn AutoPay back on right now. Your shop stays open until ${paidUntil}.`,
+      },
       banner: { tone: 'warning', lead: `Shop stays open until ${paidUntil}`, text: 'then customers cannot see it. You can pay again any time with Razorpay.', action: keepOpen },
       header: keepOpen,
     }
@@ -81,11 +93,17 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
   const payNow = `Pay ${price}`
   if (view.state === 'payment_failed' || view.state === 'shop_closed' || view.state === 'confirming') {
     const hidden = { ...planCard, tone: 'danger' as const, figure: { headline: 'Shop is hidden' } }
+    const payAction = { label: `Pay ${price} with Razorpay`, help: 'Opens Razorpay Checkout. Pay by card or UPI.' }
     const lead = 'Shop is hidden from customers'
     const reopen = `Customers cannot see your shop. Pay ${price} with Razorpay to open it again.`
+    const confirmingPayment = `Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ${price}.`
+    const payCheckout: LiveCheckoutPurpose = {
+      waiting: confirmingPayment,
+      failed: (reason) => `The payment did not go through (${reason}). Nothing changed; your shop is still hidden.`,
+    }
     if (view.state === 'payment_failed') return {
-      card: { ...hidden, eyebrow: 'Payment failed', body: `${reopen} Old orders are still here.` },
-      note: null, confirming: null, stopConfirmation: null, checkout: null,
+      card: { ...hidden, action: payAction, eyebrow: 'Payment failed', body: `${reopen} Old orders are still here.` },
+      note: null, confirming: null, stopConfirmation: null, checkout: payCheckout,
       banner: { tone: 'danger', lead, text: `last Razorpay payment did not go through. Pay ${price} to open the shop again.`, action: payNow },
       header: payNow,
     }
@@ -93,13 +111,13 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     // Confirming offers no payment, so a second ₹299 cannot start while the first is confirmed.
     if (view.state === 'confirming') return {
       card: closedCard, note: null,
-      confirming: `Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ${price}.`,
+      confirming: confirmingPayment,
       stopConfirmation: null, checkout: null,
       banner: { tone: 'danger', lead, text: `your ${price} payment is being confirmed.`, action: 'Shop plan' },
       header: 'Shop plan',
     }
     return {
-      card: closedCard, note: null, confirming: null, stopConfirmation: null, checkout: null,
+      card: { ...closedCard, action: payAction }, note: null, confirming: null, stopConfirmation: null, checkout: payCheckout,
       banner: { tone: 'danger', lead, text: `pay ${price} with Razorpay to open it again.`, action: payNow },
       header: payNow,
     }
