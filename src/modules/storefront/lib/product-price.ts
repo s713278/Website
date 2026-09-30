@@ -1,6 +1,11 @@
 import type { Product } from '@/modules/storefront/types'
 import { formatCurrency } from '@/shared/lib/utils'
 
+/** True when `list_price` is the MRP and should render as strikethrough. */
+export function hasStrikethroughPrice(salePrice: number, listPrice?: number): listPrice is number {
+  return listPrice != null && Number.isFinite(listPrice) && listPrice > salePrice
+}
+
 function priceBounds(product: Product): { min: number; max: number } {
   if (product.variants?.length) {
     const prices = product.variants.map((variant) => variant.price)

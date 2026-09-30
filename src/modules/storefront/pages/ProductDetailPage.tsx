@@ -18,14 +18,16 @@ export function ProductDetailPage() {
   const navigate = useNavigate()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
 
-  const { store, loading: storeLoading, error: storeError, wrapperRef } = useStorePage(storeId)
+  const { store, loading: storeLoading, error: storeError, wrapperRef } = useStorePage(
+    storeId,
+    { network: 'cache-first' },
+  )
 
   const [product, setProduct] = useState<Product | null>(null)
   const [productLoading, setProductLoading] = useState(true)
   const [productError, setProductError] = useState('')
 
   useEffect(() => {
-    if (storeLoading) return
     if (store && isStoreClosedForSubscription(store.subscriptionStatus)) {
       setProduct(null)
       setProductError('')
@@ -62,7 +64,7 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [productId, skuId, store, storeLoading])
+  }, [productId, skuId, store])
 
   const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
   const loading = shopClosed ? storeLoading : storeLoading || productLoading

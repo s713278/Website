@@ -164,4 +164,21 @@ describe('resumePathAfterLogin', () => {
     const dual: User = { ...vendor, role: 'customer', roles: ['customer', 'vendor'] }
     expect(resumePathAfterLogin(dual, null, resolveOnboardingEntry(state('INACTIVE', 'PENDING')))).toBe('/onboarding')
   })
+
+  it('returns a customer to the shop after login, not the cart page', () => {
+    const customer: User = {
+      id: '1',
+      phone: '9999999999',
+      name: 'Pat',
+      email: '',
+      role: 'customer',
+      roles: ['customer'],
+      vendors: [],
+    }
+    expect(resumePathAfterLogin(customer, '/stores/273/cart')).toBe('/stores/273')
+    expect(resumePathAfterLogin(customer, '/stores/273')).toBe('/stores/273')
+    expect(resumePathAfterLogin(customer, '/stores/273/products/12')).toBe('/stores/273/products/12')
+    expect(resumePathAfterLogin(customer, '/cart')).toBe('/')
+    expect(resumePathAfterLogin(customer, null)).toBe('/')
+  })
 })

@@ -1,9 +1,29 @@
 import { getStoreById } from '@/modules/storefront/data/catalog'
 import { findProductForCartLine } from '@/modules/storefront/lib/cart-utils'
 import type { Product } from '@/modules/storefront/types'
+import { formatDeliveryEstimate } from '@/shared/api/mappers/storefront-checkout'
 import type { CustomerOrder, CustomerOrderItem } from '@/shared/api/services/orders.service'
 
+function dateFromIso(iso: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [year, month, day] = iso.split('-').map(Number)
+    return new Date(year!, month! - 1, day)
+  }
+  return new Date(iso)
+}
+
+/** `Sun, 27 Sept, 2026` — order-details receipt style. */
+export function formatOrderDay(iso: string) {
+  const date = dateFromIso(iso)
+  const weekday = new Intl.DateTimeFormat('en-IN', { weekday: 'short' }).format(date)
+  const day = new Intl.DateTimeFormat('en-IN', { day: 'numeric' }).format(date)
+  const month = new Intl.DateTimeFormat('en-IN', { month: 'short' }).format(date)
+  const year = new Intl.DateTimeFormat('en-IN', { year: 'numeric' }).format(date)
+  return `${weekday}, ${day} ${month}, ${year}`
+}
+
 export function formatOrderDate(iso: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatOrderDay(iso)
   return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -14,27 +34,54 @@ export function formatOrderDate(iso: string) {
   }).format(new Date(iso))
 }
 
-export function formatDeliveryWindow(placedAt: string) {
-  const start = new Date(placedAt)
-  start.setDate(start.getDate() + 2)
-  const end = new Date(placedAt)
-  end.setDate(end.getDate() + 4)
-  const fmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-  return `${fmt.format(start)} – ${fmt.format(end)}`
+export function deliveryMethodLabel(method?: string) {
+  if (!method) return ''
+  const key = method.toUpperCase()
+  if (key === 'HOME_DELIVERY') return 'Home delivery'
+  if (key === 'STORE_PICKUP') return 'Store pickup'
+  return method.replaceAll('_', ' ')
+}
+
+export const DELIVERY_ESTIMATE_NOTE = 'May arrive a little earlier or later.'
+
+export function deliveryEstimateFromNotes(notes?: string) {
+  const match = notes?.match(/Estimated delivery:\s*([^·\n]+)/i)
+  const label = match?.[1]?.trim()
+  return label || ''
+}
+
+/** Range from checkout notes, else a single known delivery_date — never a made-up window. */
+export function orderArrivalLabel(order: Pick<CustomerOrder, 'notes' | 'deliveryDate'>) {
+  return (
+    deliveryEstimateFromNotes(order.notes) ||
+    (order.deliveryDate ? formatDeliveryEstimate([order.deliveryDate]) : '')
+  )
+}
+
+export function paymentNotesWithoutEstimate(notes?: string) {
+  if (!notes) return ''
+  return notes.replace(/Estimated delivery:\s*[^·\n]+(?:\s*·\s*)?/i, '').trim()
+}
+
+export function paymentStatusLabel(status?: string) {
+  if (!status) return ''
+  const key = status.toUpperCase()
+  if (key === 'DUE') return 'Payment due'
+  if (key === 'PAID') return 'Paid'
+  return status.replaceAll('_', ' ')
 }
 
 export function orderStatusLabel(status: string) {
   const labels: Record<string, string> = {
     placed: 'Placed',
+    scheduled: 'Scheduled',
+    pending: 'Placed',
     preparing: 'Preparing',
     on_the_way: 'On the way',
     delivered: 'Delivered',
   }
-  return labels[status] ?? status.replaceAll('_', ' ')
-}
-
-export function isPastOrder(status: string) {
-  return status === 'delivered'
+  const key = status.toLowerCase()
+  return labels[key] ?? status.replaceAll('_', ' ')
 }
 
 function findProductByItemName(products: Product[], itemName: string) {
@@ -65,6 +112,24 @@ export function orderPrimaryImage(order: CustomerOrder): string | undefined {
   return resolveOrderItemImage(order, first)
 }
 
+/** MRP line total when `list_price` is higher than what was paid. */
+export function lineMrpTotal(item: CustomerOrderItem): number | undefined {
+  if (item.listPrice == null) return undefined
+  const paid = item.lineTotal ?? (item.unitPrice ?? 0) * item.qty
+  const mrp = item.listPrice * item.qty
+  return mrp > paid ? mrp : undefined
+}
+
+/** Order MRP from `order_amount.gross_amount` or item list prices. */
+export function orderMrpTotal(order: CustomerOrder): number | undefined {
+  if (order.bill && order.bill.grossAmount > order.total) return order.bill.grossAmount
+  const fromItems = order.items.reduce((sum, item) => {
+    if (item.listPrice == null) return sum
+    return sum + item.listPrice * item.qty
+  }, 0)
+  return fromItems > order.total ? fromItems : undefined
+}
+
 export function orderItemsSummary(items: CustomerOrderItem[]) {
   const qty = items.reduce((sum, item) => sum + item.qty, 0)
   const first = items[0]
@@ -72,6 +137,6 @@ export function orderItemsSummary(items: CustomerOrderItem[]) {
   return {
     qty,
     title: first?.name.replace(/\s*\([^)]+\)$/, '').trim() ?? 'Order items',
-    unit: unitMatch?.[1] ?? '',
+    unit: first?.size ?? unitMatch?.[1] ?? '',
   }
 }

@@ -31,7 +31,7 @@ import { SearchField } from '@/shared/components'
 import { useSearchQueryParam } from '@/shared/hooks/useSearchQueryParam'
 import { isLiveApi } from '@/shared/api'
 import { isSearchActive, isSearchTooShort, searchUiMinChars } from '@/shared/lib/search-query'
-import { hydrateVendorCart } from '../lib/cart-actions'
+import { syncVendorCart } from '../lib/cart-actions'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -41,7 +41,7 @@ const SEARCH_DEBOUNCE_MS = 250
 export function StoreDetailPage() {
   const { storeId = 'r1' } = useParams()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  const { store, loading, error, wrapperRef } = useStorePage(storeId)
+  const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
 
   return (
     <StorePageStates
@@ -121,17 +121,20 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   }, [query, searchRequested])
 
   const user = useAuthStore((s) => s.user)
-  const hasLocalLines = useCartStore((s) => s.lines.some((line) => line.storeId === store.id))
   const hydratedRef = useRef(false)
+  const hydratedUserId = useRef(user?.id)
 
-  // Cold start once — never re-hydrate just because the user cleared the last item.
+  // Once per identity — server cart replaces leftover local names from the last session.
   useEffect(() => {
+    if (hydratedUserId.current !== user?.id) {
+      hydratedRef.current = false
+      hydratedUserId.current = user?.id
+    }
     if (user?.role !== 'customer') return
     if (hydratedRef.current) return
     hydratedRef.current = true
-    if (hasLocalLines) return
-    void hydrateVendorCart(store.id, store.name, store.products).catch(() => {})
-  }, [store.id, store.name, store.products, user?.id, user?.role, hasLocalLines])
+    void syncVendorCart(store.id, store.name, listCachedStoreProducts(store.id)).catch(() => {})
+  }, [store.id, store.name, user?.id, user?.role])
 
   function selectCategory(next: CategoryFilter) {
     setCategoryFilter(resolveCategoryFilter(categories, next))

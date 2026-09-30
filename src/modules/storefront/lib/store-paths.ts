@@ -40,7 +40,21 @@ export function locationMapPath(
   return `${storePath(storeId)}/location${query ? `?${query}` : ''}`
 }
 
+export function storeOrdersPath(storeId: string) {
+  return `${storePath(storeId)}/orders`
+}
+
+/** History, detail, and success — these pages must not fetch storefront or cart. */
+export function isStoreOrdersPath(path: string | undefined): boolean {
+  if (!path) return false
+  return /^\/stores\/[^/]+\/orders(?:\/|$)/.test(path.split('?')[0] ?? '')
+}
+
+export function storeOrderPath(storeId: string, orderId: string) {
+  return `${storeOrdersPath(storeId)}/${orderId}`
+}
+
 export function storeOrderSuccessPath(storeId: string, orderId: string) {
-  return `${storePath(storeId)}/orders/${orderId}/success`
+  return `${storeOrderPath(storeId, orderId)}/success`
 }
 

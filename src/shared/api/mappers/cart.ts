@@ -25,6 +25,12 @@ function asNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function asOptionalNumber(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
 function httpUrl(value: unknown): string | undefined {
   return typeof value === 'string' && /^https?:\/\//.test(value.trim()) ? value.trim() : undefined
 }
@@ -50,6 +56,7 @@ function mapLine(raw: unknown, storeId: string, storeName: string): CartLine | n
   const cartItemId = asString(item.cart_item_id)
   if (!skuId) return null
   const imageUrl = httpUrl(item.image_path) || httpUrl(item.image_url) || httpUrl(item.image)
+  const listPrice = asOptionalNumber(item.list_price)
 
   return {
     itemId: skuId,
@@ -59,7 +66,7 @@ function mapLine(raw: unknown, storeId: string, storeName: string): CartLine | n
     price: asNumber(item.unit_price),
     qty: Math.max(1, Math.floor(asNumber(item.quantity, 1))),
     lineTotal: asNumber(item.line_total, asNumber(item.unit_price) * asNumber(item.quantity, 1)),
-    listPrice: asNumber(item.list_price, asNumber(item.unit_price)),
+    ...(listPrice != null ? { listPrice } : {}),
     discount: asNumber(item.discount),
     cartItemId: cartItemId ?? undefined,
     skuId,

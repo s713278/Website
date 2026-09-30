@@ -22,12 +22,14 @@ export function customerLoginLink(
   from: string,
   shop?: { name?: string; logoUrl?: string },
 ): { to: string; state: CustomerLoginState } {
+  const shopName = shop?.name?.trim()
+  const shopLogoUrl = shop?.logoUrl?.trim()
   return {
     to: loginPathForRole('customer'),
     state: {
       from,
-      shopName: shop?.name,
-      shopLogoUrl: shop?.logoUrl,
+      ...(shopName ? { shopName } : {}),
+      ...(shopLogoUrl ? { shopLogoUrl } : {}),
     },
   }
 }

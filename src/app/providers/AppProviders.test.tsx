@@ -9,6 +9,7 @@ import { authService } from '@/shared/api'
 // deliberately does not export the store: no screen may know where the record is kept.
 import { readPaidOrders, recordPaidOrder } from '@/shared/api/services/paid-orders-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { CART_STORAGE_KEY, useCartStore } from '@/modules/storefront/store/cart-store'
 import { AppProviders } from './AppProviders'
 
 /**
@@ -65,5 +66,30 @@ describe('sign-out cleanup', () => {
 
     signIn()
     expect([...readPaidOrders('262')]).toEqual(['1931'])
+  })
+
+  it('clears the customer cart persist and session caches on logout', async () => {
+    const signOut = vi.spyOn(authService, 'signOut').mockResolvedValue(undefined)
+    render(<AppProviders>{null}</AppProviders>)
+    signIn()
+    useCartStore.getState().addPendingLine({
+      vendorId: '91',
+      storeName: 'Shop',
+      productId: '12',
+      skuId: '101',
+      qty: 1,
+      name: 'Pickle',
+      label: '250 g',
+      price: 180,
+      returnTo: '/stores/91',
+    })
+    expect(useCartStore.getState().lines).toHaveLength(1)
+
+    await useAuthStore.getState().logout()
+
+    expect(signOut).toHaveBeenCalled()
+    expect(useCartStore.getState().lines).toEqual([])
+    expect(localStorage.getItem(CART_STORAGE_KEY)).toBeNull()
+    expect(useAuthStore.getState().user).toBeNull()
   })
 })

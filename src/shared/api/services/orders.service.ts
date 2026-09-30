@@ -1,11 +1,14 @@
 import type { CartLine } from '@/modules/storefront/types'
 import { reverseGeocode as lookupAreaFromCoords } from '@/shared/lib/customer-location'
-import { apiGet, apiPatch, apiPost, unwrapData } from '../client'
+import { apiGet, apiPatch, apiPost } from '../client'
 import { isLiveApi } from '../mode'
 import {
   asNumericId,
+  CUSTOMER_ORDER_HISTORY_PAGE_SIZE,
   extractAddressId,
   mapCreateOrderFromCartBody,
+  mapCustomerOrderDetail,
+  mapCustomerOrderHistoryPage,
   mapNameAndAddressRequest,
   mapPlacedOrder,
   parseLocationParts,
@@ -17,6 +20,21 @@ export type CustomerOrderItem = {
   qty: number
   itemId?: string
   imageUrl?: string
+  size?: string
+  unitPrice?: number
+  listPrice?: number
+  lineTotal?: number
+  discount?: number
+}
+
+export type CustomerOrderBill = {
+  itemsCount: number
+  grossAmount: number
+  discount: number
+  deliveryCharges: number
+  serviceCharge: number
+  taxAmount: number
+  amount: number
 }
 
 export type CustomerOrder = {
@@ -28,6 +46,14 @@ export type CustomerOrder = {
   placedAt: string
   items: CustomerOrderItem[]
   addressId?: number
+  paymentStatus?: string
+  deliveryDate?: string
+  deliveryMethod?: string
+  notes?: string
+  customerName?: string
+  customerMobile?: string
+  addressLine?: string
+  bill?: CustomerOrderBill
 }
 
 export type PlaceOrderInput = {
@@ -194,45 +220,114 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   }
 }
 
-export async function listMyOrders(userId?: string): Promise<CustomerOrder[]> {
+export type CustomerOrderHistoryPage = {
+  orders: CustomerOrder[]
+  pageNumber: number
+  pageSize: number
+  totalElements: number | null
+  totalPages: number | null
+  lastPage: boolean
+}
+
+function emptyHistoryPage(page = 0, size = CUSTOMER_ORDER_HISTORY_PAGE_SIZE): CustomerOrderHistoryPage {
+  return {
+    orders: [],
+    pageNumber: page,
+    pageSize: size,
+    totalElements: 0,
+    totalPages: 0,
+    lastPage: true,
+  }
+}
+
+function demoHistoryPage(page: number, size: number): CustomerOrderHistoryPage {
+  const all = readDemoOrders().map((order) => ({
+    ...order,
+    storeName:
+      order.storeName ||
+      (order as { restaurantName?: string }).restaurantName ||
+      'Store',
+  }))
+  const start = Math.max(0, page) * size
+  const orders = all.slice(start, start + size)
+  return {
+    orders,
+    pageNumber: page,
+    pageSize: size,
+    totalElements: all.length,
+    totalPages: Math.max(1, Math.ceil(all.length / size) || 1),
+    lastPage: start + orders.length >= all.length,
+  }
+}
+
+const historyPageByKey = new Map<string, Promise<CustomerOrderHistoryPage>>()
+
+/** One page of GET /v1/users/{id}/orders/history/paged (`page` + `size`). */
+export async function listMyOrdersPage(
+  userId?: string,
+  page = 0,
+  size = CUSTOMER_ORDER_HISTORY_PAGE_SIZE,
+): Promise<CustomerOrderHistoryPage> {
+  const pageNumber = Math.max(0, Math.floor(page))
+  const pageSize = Math.max(1, Math.floor(size))
+
   if (!isLiveApi()) {
     await new Promise((r) => setTimeout(r, 200))
-    return readDemoOrders().map((order) => ({
-      ...order,
-      storeName:
-        order.storeName ||
-        (order as { restaurantName?: string }).restaurantName ||
-        'Store',
-    }))
+    return demoHistoryPage(pageNumber, pageSize)
   }
 
-  if (!userId) return []
-  const res = await apiGet<ApiEnvelope<unknown>>(`/v1/users/${userId}/orders/history`)
-  const data = unwrapData(res)
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { content?: unknown[] })?.content)
-      ? (data as { content: unknown[] }).content
-      : []
+  if (!userId) return emptyHistoryPage(pageNumber, pageSize)
 
-  return list
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      storeName: String(item.vendor_name ?? item.storeName ?? item.restaurantName ?? 'Store'),
-      total: Number(item.total ?? 0),
-      status: String(item.status ?? 'placed'),
-      placedAt: String(item.created_at ?? item.placedAt ?? new Date().toISOString()),
-      items: Array.isArray(item.items)
-        ? (item.items as Array<Record<string, unknown>>).map((line) => ({
-            name: String(line.name ?? line.product_name ?? 'Item'),
-            qty: Number(line.qty ?? line.quantity ?? 1),
-          }))
-        : [],
-    }))
+  const key = `${userId}:${pageNumber}:${pageSize}`
+  const existing = historyPageByKey.get(key)
+  if (existing) return existing
+
+  const pending = apiGet<ApiEnvelope<unknown>>(`/v1/users/${userId}/orders/history/paged`, {
+    params: { page: pageNumber, size: pageSize },
+  })
+    .then(mapCustomerOrderHistoryPage)
+    .finally(() => {
+      historyPageByKey.delete(key)
+    })
+  historyPageByKey.set(key, pending)
+  return pending
+}
+
+export async function listMyOrders(userId?: string): Promise<CustomerOrder[]> {
+  const snap = await listMyOrdersPage(userId, 0)
+  return snap.orders
+}
+
+const detailByKey = new Map<string, Promise<CustomerOrder | null>>()
+
+export async function getMyOrder(
+  userId: string | undefined,
+  orderId: string,
+): Promise<CustomerOrder | null> {
+  if (!isLiveApi()) {
+    return readDemoOrders().find((order) => order.id === orderId) ?? null
+  }
+
+  const uid = asNumericId(userId)
+  const oid = asNumericId(orderId)
+  if (!uid || !oid) return null
+
+  const key = `${uid}:${oid}`
+  const existing = detailByKey.get(key)
+  if (existing) return existing
+
+  const pending = apiGet<ApiEnvelope<unknown>>(`/v1/users/${uid}/orders/${oid}`)
+    .then(mapCustomerOrderDetail)
+    .finally(() => {
+      detailByKey.delete(key)
+    })
+  detailByKey.set(key, pending)
+  return pending
 }
 
 export const ordersService = {
   placeOrder,
   listMyOrders,
+  listMyOrdersPage,
+  getMyOrder,
 }

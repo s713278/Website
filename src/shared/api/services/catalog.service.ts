@@ -76,9 +76,7 @@ export async function listStores(query?: string, location?: CustomerLocation): P
 
 function mapKeywordVendor(raw: Record<string, unknown>): Store | null {
   const category = Array.isArray(raw.category)
-    ? raw.category
-        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .join(', ')
+    ? raw.category.filter((item): item is string => typeof item === 'string' && item.trim() !== '').join(', ')
     : raw.category
   const store = mapVendorToStore({ ...raw, category })
   return store.id ? store : null
@@ -297,13 +295,10 @@ export async function listStoreProducts(
   return sliceProductPage(filtered, pageNumber, pageSize)
 }
 
-/** GET /v1/vendors/{vendor_id}/storefront — chrome only (products load via listStoreProducts). */
-export async function getStore(storeId: string): Promise<Store | null> {
-  if (!isLiveApi()) {
-    await delay()
-    return getStoreById(storeId) ?? null
-  }
+const STOREFRONT_RETAIN_MS = 1500
+const storefrontById = new Map<string, Promise<Store | null>>()
 
+async function loadLiveStore(storeId: string): Promise<Store | null> {
   const vendorId = await resolveLiveVendorId(storeId)
   if (!vendorId) return null
 
@@ -316,6 +311,25 @@ export async function getStore(storeId: string): Promise<Store | null> {
     products: [],
   })
   return store.id ? store : null
+}
+
+/** GET /v1/vendors/{vendor_id}/storefront — chrome only (products load via listStoreProducts). */
+export async function getStore(storeId: string): Promise<Store | null> {
+  if (!isLiveApi()) {
+    await delay()
+    return getStoreById(storeId) ?? null
+  }
+
+  const existing = storefrontById.get(storeId)
+  if (existing) return existing
+
+  const pending = loadLiveStore(storeId).finally(() => {
+    globalThis.setTimeout(() => {
+      if (storefrontById.get(storeId) === pending) storefrontById.delete(storeId)
+    }, STOREFRONT_RETAIN_MS)
+  })
+  storefrontById.set(storeId, pending)
+  return pending
 }
 
 /**

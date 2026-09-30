@@ -1,18 +1,26 @@
 /**
  * UI entry for cart mutations.
  * - Customer → cart-actions (API / demo)
- * - Guest → pending + login
+ * - Guest → pending + login, then back to the shop (not the cart)
  * - Errors → backend `user_message` (401 → login)
  */
 import type { NavigateFunction } from 'react-router-dom'
-import { loginPathForRole } from '@/app/router/role-home'
+import { getCachedStore } from '@/modules/storefront/hooks/useStorePage'
+import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import {
   addToVendorCart,
   cartActionErrorMessage,
   setVendorCartQty,
 } from '@/modules/storefront/lib/cart-actions'
+import { isMissingVendorCartError } from '@/modules/storefront/lib/cart-errors'
+import {
+  beginCartWrite,
+  cartWriteKey,
+  cartWriteKeyFromItemId,
+  endCartWrite,
+} from '@/modules/storefront/lib/cart-write-pending'
 import { savePendingCartAdd } from '@/modules/storefront/lib/pending-cart-add'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
+import { storeIdFromPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, ProductVariant } from '@/modules/storefront/types'
 import { isApiError } from '@/shared/api'
@@ -27,29 +35,39 @@ function isUnauthorized(error: unknown): boolean {
 }
 
 function isCartNotFound(error: unknown): boolean {
-  if (!isApiError(error)) return false
-  if (error.status === 404) return true
-  const body = error.body
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return false
-  const record = body as Record<string, unknown>
-  if (String(record.reason_code ?? '') === '404' || String(record.status ?? '') === '404') {
-    return true
+  return isMissingVendorCartError(error)
+}
+
+function shopForLogin(storeId: string, storeName?: string) {
+  const cached = getCachedStore(storeId)
+  return {
+    name: storeName || cached?.name,
+    logoUrl: cached?.theme?.logoImage,
   }
-  return /cart not found/i.test(`${record.failure_reason ?? ''} ${record.user_message ?? ''}`)
+}
+
+function goCustomerLogin(
+  navigate: NavigateFunction,
+  from: string,
+  storeId: string,
+  storeName?: string,
+  replace = true,
+) {
+  const login = customerLoginLink(from, shopForLogin(storeId, storeName))
+  navigate(login.to, { replace, state: login.state })
 }
 
 export function redirectCartUnauthorized(
   error: unknown,
   navigate: NavigateFunction,
   from: string,
+  storeId?: string,
+  storeName?: string,
 ): boolean {
   if (!isUnauthorized(error)) return false
-  navigate(loginPathForRole('customer'), { replace: true, state: { from } })
+  const shopId = storeId || storeIdFromPath(from) || ''
+  goCustomerLogin(navigate, from, shopId, storeName)
   return true
-}
-
-function goLogin(navigate: NavigateFunction, from: string) {
-  navigate(loginPathForRole('customer'), { replace: true, state: { from } })
 }
 
 function showError(onError: ((message: string) => void) | undefined, error: unknown) {
@@ -64,9 +82,10 @@ function onMutationError(
   navigate: NavigateFunction,
   from: string,
   onError?: (message: string) => void,
+  storeName?: string,
 ): false {
   if (isUnauthorized(error)) {
-    goLogin(navigate, from)
+    goCustomerLogin(navigate, from, storeId, storeName)
     return false
   }
   if (isCartNotFound(error)) {
@@ -112,7 +131,7 @@ export async function requestAddToCart({
   onError,
 }: AddArgs): Promise<boolean> {
   const amount = Math.max(1, qty)
-  const from = returnTo ?? storeCartPath(storeId)
+  const from = returnTo ?? storePath(storeId)
 
   if (!canShopAsCustomer(user)) {
     savePendingCartAdd({
@@ -126,10 +145,12 @@ export async function requestAddToCart({
       price: variant.price,
       returnTo: from,
     })
-    navigate(loginPathForRole('customer'), { state: { from, shopName: storeName } })
+    goCustomerLogin(navigate, from, storeId, storeName, false)
     return false
   }
 
+  const writeKey = cartWriteKey(storeId, product.id, variant.id)
+  beginCartWrite(writeKey)
   try {
     await addToVendorCart({
       vendorId: storeId,
@@ -140,7 +161,9 @@ export async function requestAddToCart({
     })
     return true
   } catch (error) {
-    return onMutationError(error, storeId, navigate, from, onError)
+    return onMutationError(error, storeId, navigate, from, onError, storeName)
+  } finally {
+    endCartWrite(writeKey)
   }
 }
 
@@ -155,17 +178,21 @@ export async function requestSetCartQty({
   returnTo,
   onError,
 }: SetQtyArgs): Promise<boolean> {
-  const from = returnTo ?? storeCartPath(storeId)
+  const from = returnTo ?? storePath(storeId)
 
   if (!canShopAsCustomer(user)) {
-    goLogin(navigate, from)
+    goCustomerLogin(navigate, from, storeId, storeName)
     return false
   }
 
+  const writeKey = cartWriteKeyFromItemId(storeId, itemId)
+  beginCartWrite(writeKey)
   try {
     await setVendorCartQty(storeId, itemId, qty, storeName, products)
     return true
   } catch (error) {
-    return onMutationError(error, storeId, navigate, from, onError)
+    return onMutationError(error, storeId, navigate, from, onError, storeName)
+  } finally {
+    endCartWrite(writeKey)
   }
 }

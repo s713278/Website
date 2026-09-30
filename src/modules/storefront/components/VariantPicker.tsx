@@ -1,7 +1,9 @@
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   duplicateVariantUnits,
   formatVariantLabel,
+  variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { ProductVariant } from '@/modules/storefront/types'
 
@@ -12,6 +14,7 @@ type VariantPickerProps = {
   label?: string
   tone?: 'soft' | 'solid'
   className?: string
+  isPending?: (variantId: string) => boolean
 }
 
 /** Pack size selector — PDP (and any full list). */
@@ -22,6 +25,7 @@ export function VariantPicker({
   label = 'Size',
   tone = 'soft',
   className,
+  isPending,
 }: VariantPickerProps) {
   const dupes = duplicateVariantUnits(variants)
 
@@ -30,15 +34,18 @@ export function VariantPicker({
       {label ? <p className="mb-2 text-sm font-semibold text-slate-800">{label}</p> : null}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Choose pack size">
         {variants.map((variant) => {
-          const active = selectedId === variant.id
+          const key = variantSelectKey(variant)
+          const active = selectedId === key || selectedId === variant.id
+          const pending = isPending?.(variant.id) ?? false
           return (
             <button
-              key={variant.id}
+              key={key}
               type="button"
-              onClick={() => onSelect(variant.id)}
+              onClick={() => onSelect(key)}
               aria-pressed={active}
+              aria-busy={pending}
               className={cn(
-                'min-h-10 rounded-full border px-4 py-2 text-sm font-semibold transition duration-150',
+                'inline-flex min-h-10 items-center justify-center gap-1 rounded-full border px-4 py-2 text-sm font-semibold transition duration-150',
                 tone === 'solid'
                   ? active
                     ? 'border-[var(--store-theme,var(--md-green-800))] bg-[var(--store-theme,var(--md-green-800))] text-white'
@@ -50,6 +57,7 @@ export function VariantPicker({
               )}
             >
               {formatVariantLabel(variant, dupes.has(variant.unit || variant.id))}
+              {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             </button>
           )
         })}

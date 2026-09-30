@@ -22,6 +22,11 @@
   var PLAN_PRICE = 299;
 
   var orderFilter = 'all';
+  var orderPage = 0;
+  var ORDERS_PAGE_SIZE = 5;
+  var expandedOrders = {};
+  var openOrderId = null;
+  var confirmingCancel = false;
   var state = {
     store: null,
     orders: [],
@@ -191,25 +196,57 @@
     return release;
   }
 
+  function productName(products, index, fallback) {
+    var product = products[index];
+    return product && product.name ? product.name : fallback;
+  }
+
+  function productPrice(products, index, fallback) {
+    var product = products[index];
+    if (product && D && typeof D.minPrice === 'function') {
+      var priced = Number(D.minPrice(product));
+      if (priced) return priced;
+    }
+    if (product && product.variants && product.variants[0]) {
+      var variantPrice = Number(product.variants[0].price);
+      if (variantPrice) return variantPrice;
+    }
+    return fallback;
+  }
+
+  function orderLine(name, qty, unit) {
+    return { name: name, qty: qty, amount: unit * qty };
+  }
+
+  function orderAmount(lines) {
+    return lines.reduce(function (sum, line) {
+      return sum + line.amount;
+    }, 0);
+  }
+
   function sampleOrders(store) {
-    var name = (store.settings && store.settings.storeName) || 'Store';
-    var products = store.products || [];
-    var first = products[0];
-    var itemLabel = first && first.name ? first.name : 'Combo pack';
-    var price =
-      first && D && typeof D.minPrice === 'function'
-        ? D.minPrice(first)
-        : first && first.variants && first.variants[0]
-          ? Number(first.variants[0].price) || 249
-          : 249;
+    var products = (store && store.products) || [];
+    var first = productName(products, 0, 'Combo pack');
+    var second = productName(products, 1, 'Filter coffee');
+    var third = productName(products, 2, 'Banana chips');
+    var firstPrice = productPrice(products, 0, 249);
+    var secondPrice = productPrice(products, 1, 80);
+    var thirdPrice = productPrice(products, 2, 120);
+    var single = [orderLine(first, 1, firstPrice)];
+    var basket = [
+      orderLine(first, 1, firstPrice),
+      orderLine(second, 2, secondPrice),
+      orderLine(third, 1, thirdPrice)
+    ];
+    var pair = [orderLine(first, 2, firstPrice), orderLine(second, 1, secondPrice)];
 
     return [
       {
         id: 'ORD-1042',
         customer: 'Ananya R.',
         phone: '98XXXX3210',
-        items: itemLabel + ' × 1',
-        amount: price,
+        lines: single,
+        amount: orderAmount(single),
         status: 'new',
         when: 'Just now'
       },
@@ -217,8 +254,8 @@
         id: 'ORD-1041',
         customer: 'Ravi K.',
         phone: '99XXXX8844',
-        items: '2 items',
-        amount: Math.round(price * 1.6),
+        lines: basket,
+        amount: orderAmount(basket),
         status: 'confirmed',
         when: '25 min ago'
       },
@@ -226,8 +263,8 @@
         id: 'ORD-1038',
         customer: 'Sneha M.',
         phone: '97XXXX1122',
-        items: itemLabel + ' × 2',
-        amount: Math.round(price * 2),
+        lines: pair,
+        amount: orderAmount(pair),
         status: 'out',
         when: 'Today'
       },
@@ -235,46 +272,136 @@
         id: 'ORD-1031',
         customer: 'Karthik P.',
         phone: '96XXXX5566',
-        items: 'Gift pack',
-        amount: Math.round(price * 1.2),
+        lines: [orderLine('Gift pack', 1, Math.round(firstPrice * 1.2))],
+        amount: Math.round(firstPrice * 1.2),
         status: 'delivered',
         when: 'Yesterday'
       }
-    ];
+    ].concat(
+      [
+        ['ORD-1028', 'Meera S.', '95XXXX2201', 'new', '1 hr ago', 'single'],
+        ['ORD-1024', 'Arun V.', '94XXXX7781', 'confirmed', '2 hr ago', 'basket'],
+        ['ORD-1019', 'Divya T.', '93XXXX4410', 'out', 'Today', 'pair'],
+        ['ORD-1015', 'Vikram J.', '92XXXX9033', 'delivered', 'Yesterday', 'single'],
+        ['ORD-1011', 'Priya N.', '91XXXX6620', 'cancelled', 'Yesterday', 'single'],
+        ['ORD-1008', 'Kiran D.', '90XXXX1188', 'new', 'Today', 'pair'],
+        ['ORD-1004', 'Lakshmi A.', '89XXXX3344', 'confirmed', 'Yesterday', 'basket'],
+        ['ORD-0998', 'Naveen B.', '88XXXX7755', 'new', '2 days ago', 'single'],
+        ['ORD-0994', 'Farah Q.', '87XXXX2290', 'delivered', '2 days ago', 'pair'],
+        ['ORD-0990', 'Imran H.', '86XXXX6612', 'out', '3 days ago', 'single'],
+        ['ORD-0986', 'Swathi C.', '85XXXX4409', 'new', '3 days ago', 'basket'],
+        ['ORD-0982', 'Rohit G.', '84XXXX1177', 'new', '3 days ago', 'single']
+      ].map(function (row) {
+        var lines = row[5] === 'basket' ? basket : row[5] === 'pair' ? pair : single;
+        return {
+          id: row[0],
+          customer: row[1],
+          phone: row[2],
+          lines: lines,
+          amount: orderAmount(lines),
+          status: row[3],
+          when: row[4]
+        };
+      })
+    );
   }
 
   function statusClass(status) {
     if (status === 'new') return 'dash-status--new';
     if (status === 'confirmed') return 'dash-status--confirmed';
     if (status === 'out') return 'dash-status--out';
+    if (status === 'cancelled') return 'dash-status--cancelled';
     return 'dash-status--delivered';
   }
 
   function statusLabel(status) {
+    if (status === 'new') return 'New';
+    if (status === 'confirmed') return 'Confirmed';
     if (status === 'out') return 'Out for delivery';
+    if (status === 'delivered') return 'Delivered';
+    if (status === 'cancelled') return 'Cancelled';
     return status;
   }
 
+  function nextStep(status) {
+    if (status === 'new') return { status: 'confirmed', label: 'Confirm' };
+    if (status === 'confirmed') return { status: 'out', label: 'Out for delivery' };
+    if (status === 'out') return { status: 'delivered', label: 'Mark delivered' };
+    return null;
+  }
+
+  function canCancel(status) {
+    return status !== 'delivered' && status !== 'cancelled';
+  }
+
+  function lineLabel(line) {
+    return line.name + ' × ' + line.qty;
+  }
+
+  function formatInr(amount) {
+    return '₹' + Number(amount).toLocaleString('en-IN');
+  }
+
+  function findOrder(id) {
+    var found = null;
+    state.orders.forEach(function (order) {
+      if (order.id === id) found = order;
+    });
+    return found;
+  }
+
+  function itemsSummaryHtml(order, expandable) {
+    var lines = order.lines || [];
+    if (!lines.length) return '';
+    if (lines.length === 1) {
+      return (
+        '<div class="dash-order-items"><div class="dash-order-item">' +
+        escapeHtml(lineLabel(lines[0])) +
+        '</div></div>'
+      );
+    }
+    if (!expandable) {
+      return '<div class="dash-order-items"><div class="dash-muted">' + lines.length + ' items</div></div>';
+    }
+    var open = !!expandedOrders[order.id];
+    var html = '<div class="dash-order-items">';
+    var visible = open ? lines : lines.slice(0, 1);
+    visible.forEach(function (line) {
+      html += '<div class="dash-order-item">' + escapeHtml(lineLabel(line)) + '</div>';
+    });
+    html +=
+      '<button type="button" class="dash-order-more" data-toggle-items="' +
+      escapeHtml(order.id) +
+      '" aria-expanded="' +
+      (open ? 'true' : 'false') +
+      '">' +
+      (open ? 'Show less' : '+ ' + (lines.length - 1) + ' more') +
+      '</button></div>';
+    return html;
+  }
+
   function orderRowHtml(o, withAction) {
+    var step = nextStep(o.status);
     return (
       '<tr data-order-id="' +
       escapeHtml(o.id) +
       '">' +
-      '<td><strong>' +
+      '<td><button type="button" class="dash-order-id" data-open-order="' +
       escapeHtml(o.id) +
-      '</strong><div class="dash-muted">' +
+      '">' +
+      escapeHtml(o.id) +
+      '</button><div class="dash-muted">' +
       escapeHtml(o.when) +
-      '</div></td>' +
+      '</div>' +
+      itemsSummaryHtml(o, withAction) +
+      '</td>' +
       '<td>' +
       escapeHtml(o.customer) +
       '<div class="dash-muted">' +
       escapeHtml(o.phone) +
       '</div></td>' +
-      (withAction
-        ? '<td>' + escapeHtml(o.items) + '</td>'
-        : '') +
-      '<td>₹' +
-      escapeHtml(String(o.amount)) +
+      '<td>' +
+      escapeHtml(formatInr(o.amount)) +
       '</td>' +
       '<td><span class="dash-status ' +
       statusClass(o.status) +
@@ -282,9 +409,15 @@
       escapeHtml(statusLabel(o.status)) +
       '</span></td>' +
       (withAction
-        ? '<td><button type="button" class="dash-order-action" data-advance-order="' +
-          escapeHtml(o.id) +
-          '">Update</button></td>'
+        ? '<td>' +
+          (step
+            ? '<button type="button" class="btn btn-secondary btn-sm dash-order-next" data-advance-order="' +
+              escapeHtml(o.id) +
+              '">' +
+              escapeHtml(step.label) +
+              '</button>'
+            : '<span class="dash-muted">—</span>') +
+          '</td>'
         : '') +
       '</tr>'
     );
@@ -297,19 +430,63 @@
     });
   }
 
+  function orderPageCount(list) {
+    if (!list.length) return 0;
+    return Math.ceil(list.length / ORDERS_PAGE_SIZE);
+  }
+
+  function ordersOnPage(list) {
+    var pages = orderPageCount(list);
+    if (pages === 0) {
+      orderPage = 0;
+      return [];
+    }
+    if (orderPage > pages - 1) orderPage = pages - 1;
+    if (orderPage < 0) orderPage = 0;
+    var start = orderPage * ORDERS_PAGE_SIZE;
+    return list.slice(start, start + ORDERS_PAGE_SIZE);
+  }
+
+  function renderOrderPager(list) {
+    var pager = qs('orders-pager');
+    var status = qs('orders-page-status');
+    var prev = qs('orders-page-prev');
+    var next = qs('orders-page-next');
+    if (!pager) return;
+    var pages = orderPageCount(list);
+    if (pages <= 1) {
+      pager.hidden = true;
+      if (status) status.textContent = '';
+      return;
+    }
+    pager.hidden = false;
+    if (status) status.textContent = 'Page ' + (orderPage + 1) + ' of ' + pages;
+    if (prev) prev.disabled = orderPage === 0;
+    if (next) next.disabled = orderPage >= pages - 1;
+  }
+
+  function goToOrderPage(nextPage) {
+    orderPage = nextPage;
+    renderOrders();
+    var table = qs('orders-table');
+    if (table && table.scrollIntoView) table.scrollIntoView({ block: 'nearest' });
+  }
+
   function renderOrders() {
     var list = filteredOrders();
+    var page = ordersOnPage(list);
     var body = qs('orders-body');
     var empty = qs('orders-empty');
     var overviewBody = qs('overview-orders-body');
     var overviewEmpty = qs('overview-orders-empty');
 
     if (body) {
-      body.innerHTML = list.map(function (o) {
+      body.innerHTML = page.map(function (o) {
         return orderRowHtml(o, true);
       }).join('');
     }
     if (empty) empty.hidden = list.length > 0;
+    renderOrderPager(list);
 
     if (overviewBody) {
       var recent = state.orders.slice(0, 3);
@@ -338,22 +515,156 @@
     if (qs('metric-sales')) qs('metric-sales').textContent = '₹' + sales.toLocaleString('en-IN');
     if (qs('metric-pending')) qs('metric-pending').textContent = String(pending);
 
-    body &&
-      body.querySelectorAll('[data-advance-order]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          advanceOrder(btn.getAttribute('data-advance-order'));
-        });
+    bindOrderControls(body);
+    bindOrderControls(overviewBody);
+    renderOrderSheet();
+  }
+
+  function bindOrderControls(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-advance-order]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        advanceOrder(btn.getAttribute('data-advance-order'));
       });
+    });
+    root.querySelectorAll('[data-toggle-items]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-toggle-items');
+        expandedOrders[id] = !expandedOrders[id];
+        renderOrders();
+      });
+    });
+    root.querySelectorAll('[data-open-order]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openOrderSheet(btn.getAttribute('data-open-order'));
+      });
+    });
   }
 
   function advanceOrder(id) {
-    var flow = ['new', 'confirmed', 'out', 'delivered'];
-    state.orders.forEach(function (o) {
-      if (o.id !== id) return;
-      var i = flow.indexOf(o.status);
-      if (i >= 0 && i < flow.length - 1) o.status = flow[i + 1];
-    });
+    var order = findOrder(id);
+    var step = order && nextStep(order.status);
+    if (!step) return;
+    order.status = step.status;
+    confirmingCancel = false;
     renderOrders();
+  }
+
+  function cancelOrder(id) {
+    var order = findOrder(id);
+    if (!order || !canCancel(order.status)) return;
+    order.status = 'cancelled';
+    confirmingCancel = false;
+    renderOrders();
+  }
+
+  function openOrderSheet(id) {
+    if (openOrderId !== id) confirmingCancel = false;
+    openOrderId = id;
+    var sheet = qs('dash-order-sheet');
+    if (sheet) sheet.hidden = false;
+    document.body.classList.add('dash-order-open');
+    renderOrderSheet();
+    var closeBtn = qs('dash-order-sheet-close');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeOrderSheet() {
+    openOrderId = null;
+    confirmingCancel = false;
+    var sheet = qs('dash-order-sheet');
+    if (sheet) sheet.hidden = true;
+    document.body.classList.remove('dash-order-open');
+  }
+
+  function renderOrderSheet() {
+    if (!openOrderId) return;
+    var order = findOrder(openOrderId);
+    if (!order) {
+      closeOrderSheet();
+      return;
+    }
+    var kicker = qs('dash-order-sheet-kicker');
+    var title = qs('dash-order-sheet-title');
+    var body = qs('dash-order-sheet-body');
+    if (kicker) kicker.textContent = order.when;
+    if (title) title.textContent = order.id;
+    if (!body) return;
+
+    var step = nextStep(order.status);
+    var lines = (order.lines || [])
+      .map(function (line) {
+        return (
+          '<li><strong>' +
+          escapeHtml(lineLabel(line)) +
+          '</strong><span class="dash-order-line-price">' +
+          escapeHtml(formatInr(line.amount)) +
+          '</span></li>'
+        );
+      })
+      .join('');
+
+    var actions = '<div class="dash-order-sheet-actions">';
+    if (step) {
+      actions +=
+        '<button type="button" class="btn btn-primary" data-advance-order="' +
+        escapeHtml(order.id) +
+        '">' +
+        escapeHtml(step.label) +
+        '</button>';
+    }
+    if (canCancel(order.status)) {
+      if (confirmingCancel) {
+        actions +=
+          '<p class="dash-order-cancel-note">Cancel this order? The customer is told it was cancelled. This cannot be undone.</p>' +
+          '<button type="button" class="btn btn-secondary dash-order-cancel-confirm" data-confirm-cancel="' +
+          escapeHtml(order.id) +
+          '">Cancel order</button>' +
+          '<button type="button" class="btn btn-secondary" data-keep-order="true">Keep order</button>';
+      } else {
+        actions +=
+          '<button type="button" class="dash-order-cancel" data-ask-cancel="true">Cancel order</button>';
+      }
+    }
+    actions += '</div>';
+
+    body.innerHTML =
+      '<p class="dash-order-sheet-customer"><strong>' +
+      escapeHtml(order.customer) +
+      '</strong><span class="dash-muted"> · ' +
+      escapeHtml(order.phone) +
+      '</span></p>' +
+      '<p class="dash-order-sheet-status"><span class="dash-status ' +
+      statusClass(order.status) +
+      '">' +
+      escapeHtml(statusLabel(order.status)) +
+      '</span></p>' +
+      '<ul class="dash-order-lines">' +
+      lines +
+      '</ul>' +
+      '<p class="dash-order-total"><span>Total</span><strong>' +
+      escapeHtml(formatInr(order.amount)) +
+      '</strong></p>' +
+      actions;
+
+    bindOrderControls(body);
+    body.querySelectorAll('[data-ask-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        confirmingCancel = true;
+        renderOrderSheet();
+      });
+    });
+    body.querySelectorAll('[data-keep-order]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        confirmingCancel = false;
+        renderOrderSheet();
+      });
+    });
+    body.querySelectorAll('[data-confirm-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        cancelOrder(btn.getAttribute('data-confirm-cancel'));
+      });
+    });
   }
 
   function renderProducts() {
@@ -984,18 +1295,41 @@
     var payBackdrop = qs('dash-pay-backdrop');
     if (payCancel) payCancel.addEventListener('click', closePaySheet);
     if (payBackdrop) payBackdrop.addEventListener('click', closePaySheet);
+    var orderSheetClose = qs('dash-order-sheet-close');
+    var orderSheetBackdrop = qs('dash-order-sheet-backdrop');
+    if (orderSheetClose) orderSheetClose.addEventListener('click', closeOrderSheet);
+    if (orderSheetBackdrop) orderSheetBackdrop.addEventListener('click', closeOrderSheet);
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closePaySheet();
+      if (e.key !== 'Escape') return;
+      if (openOrderId) {
+        closeOrderSheet();
+        return;
+      }
+      closePaySheet();
     });
     document.querySelectorAll('[data-order-filter]').forEach(function (chip) {
       chip.addEventListener('click', function () {
         orderFilter = chip.getAttribute('data-order-filter') || 'all';
+        orderPage = 0;
         document.querySelectorAll('[data-order-filter]').forEach(function (c) {
           c.classList.toggle('is-active', c === chip);
         });
         renderOrders();
       });
     });
+    var orderPagePrev = qs('orders-page-prev');
+    var orderPageNext = qs('orders-page-next');
+    if (orderPagePrev) {
+      orderPagePrev.addEventListener('click', function () {
+        if (orderPage > 0) goToOrderPage(orderPage - 1);
+      });
+    }
+    if (orderPageNext) {
+      orderPageNext.addEventListener('click', function () {
+        var pages = orderPageCount(filteredOrders());
+        if (orderPage < pages - 1) goToOrderPage(orderPage + 1);
+      });
+    }
 
     var menuBtn = qs('dash-menu-btn');
     if (menuBtn) menuBtn.addEventListener('click', openMobileNav);

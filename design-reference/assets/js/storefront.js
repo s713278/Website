@@ -497,6 +497,98 @@
       .join('');
   }
 
+  function mapsHref(address) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
+  }
+
+  function socialIcon(id) {
+    if (id === 'facebook') {
+      return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z"/></svg>';
+    }
+    if (id === 'youtube') {
+      return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg>';
+    }
+    if (id === 'google') {
+      return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 11.2v2.9h4.6c-.2 1.2-1.4 3.5-4.6 3.5A5.4 5.4 0 1112 7.4c1.5 0 2.6.6 3.2 1.2l2.2-2.1A8.7 8.7 0 0012 3.4 8.6 8.6 0 103.4 12 8.6 8.6 0 0012 20.6c5 0 8.3-3.5 8.3-8.4 0-.6 0-1-.1-1.4H12z"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>';
+  }
+
+  function renderContact(draft) {
+    var section = document.getElementById('store-contact');
+    var grid = document.getElementById('store-contact-grid');
+    var social = document.getElementById('store-social');
+    var socialLinks = document.getElementById('store-social-links');
+    if (!section || !grid) return;
+
+    var settings = draft.settings || {};
+    var address = String(settings.address || settings.location || '').trim();
+    var support = String(settings.supportWhatsapp || settings.whatsapp || draft.phone || '').trim();
+    var name = settings.storeName || 'this shop';
+    var cards = '';
+
+    if (address) {
+      cards +=
+        '<a class="store-contact-card" id="store-contact-address" href="' +
+        escapeHtml(mapsHref(address)) +
+        '" target="_blank" rel="noopener">' +
+        '<span class="store-contact-kicker">Find us</span>' +
+        '<strong>' +
+        escapeHtml(address) +
+        '</strong>' +
+        '<span class="store-contact-action">Open in Maps</span></a>';
+    }
+
+    if (support && D && D.whatsappLink) {
+      cards +=
+        '<a class="store-contact-card" id="store-contact-wa" href="' +
+        escapeHtml(D.whatsappLink(support, 'Hi, I need help from ' + name)) +
+        '" target="_blank" rel="noopener">' +
+        '<span class="store-contact-kicker">Support</span>' +
+        '<strong>WhatsApp us</strong>' +
+        '<span class="store-contact-action">Message for help</span></a>';
+    }
+
+    grid.innerHTML = cards;
+
+    var links = [
+      { id: 'instagram', label: 'Instagram', href: settings.instagramUrl },
+      { id: 'facebook', label: 'Facebook', href: settings.facebookUrl },
+      { id: 'youtube', label: 'YouTube', href: settings.youtubeUrl },
+      { id: 'google', label: 'Google reviews', href: settings.googleUrl }
+    ].filter(function (item) {
+      return String(item.href || '').trim();
+    });
+
+    if (social && socialLinks) {
+      social.classList.toggle('hidden', links.length === 0);
+      socialLinks.innerHTML = links
+        .map(function (item) {
+          return (
+            '<a class="store-social-link" href="' +
+            escapeHtml(item.href) +
+            '" target="_blank" rel="noopener">' +
+            socialIcon(item.id) +
+            '<span>' +
+            escapeHtml(item.label) +
+            '</span></a>'
+          );
+        })
+        .join('');
+    }
+
+    var visible = !!(cards || links.length);
+    section.classList.toggle('hidden', !visible);
+    var topContact = document.querySelector('.demo-topbar [data-nav="contact"]');
+    if (topContact) topContact.hidden = !visible;
+    var heroContact = document.getElementById('store-location');
+    if (heroContact) {
+      var place = String(settings.location || '').trim();
+      heroContact.textContent = place;
+      heroContact.hidden = !visible || !place;
+    }
+  }
+
   function renderHome() {
     var draft = state.draft;
     var hero = document.getElementById('store-hero');
@@ -504,7 +596,7 @@
     document.getElementById('store-name').textContent = draft.settings.storeName;
     document.getElementById('store-tagline').textContent =
       draft.settings.tagline || 'Made with love, delivered to your home';
-    document.getElementById('store-location').textContent = draft.settings.location || '';
+    renderContact(draft);
     syncHomeAddressUI();
 
     var bannerImg = document.getElementById('store-banner-img');
@@ -1284,9 +1376,10 @@
     });
 
     document.querySelectorAll('[data-nav]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (e) {
         openDrawer(false);
         var v = btn.getAttribute('data-nav');
+        if (v === 'contact') e.preventDefault();
         if (v === 'menu') {
           state.activeCategory = 'all';
           showView('menu');
@@ -1295,6 +1388,13 @@
         } else if (v === 'cart') {
           showView('cart');
           renderCart();
+        } else if (v === 'contact') {
+          showView('home');
+          var contact = document.getElementById('store-contact');
+          if (contact) contact.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          try {
+            history.replaceState(null, '', '#store-contact');
+          } catch (err) {}
         } else if (v === 'home') {
           showView('home');
         }
@@ -1576,6 +1676,11 @@
       showView('menu', { replace: true });
       renderMenuRail();
       renderMenuProducts();
+    }
+    if ((location.hash || '') === '#store-contact') {
+      showView('home', { replace: true });
+      var contact = document.getElementById('store-contact');
+      if (contact) contact.scrollIntoView({ block: 'start' });
     }
 
     // Expose for debugging / future integrations

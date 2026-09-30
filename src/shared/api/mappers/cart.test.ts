@@ -42,7 +42,6 @@ describe('mapCartPayload', () => {
         price: 4.99,
         qty: 2,
         lineTotal: 9.98,
-        listPrice: 4.99,
         discount: 0,
         cartItemId: '99',
         skuId: '101',
@@ -51,5 +50,43 @@ describe('mapCartPayload', () => {
     ])
     expect(snap.summary.grandTotal).toBe(9.98)
     expect(snap.summary.totalQuantity).toBe(2)
+  })
+
+  it('keeps list_price as MRP when it is higher than unit_price', () => {
+    const snap = mapCartPayload(
+      {
+        cart_id: 1,
+        vendor_id: 273,
+        items: [
+          {
+            cart_item_id: 10,
+            sku_id: 4153,
+            sku_name: 'Mixed Vegetable Pickle',
+            quantity: 3,
+            unit_price: 245,
+            list_price: 250,
+            line_total: 735,
+            discount: 5,
+          },
+        ],
+        cart_summary: {
+          items_total: 735,
+          delivery_charges: 0,
+          discount: 15,
+          service_charge: 0,
+          grand_total: 720,
+          items_count: 1,
+          total_quantity: 3,
+        },
+      },
+      'Shop',
+    )
+
+    expect(snap.lines[0]).toMatchObject({
+      price: 245,
+      listPrice: 250,
+      qty: 3,
+      lineTotal: 735,
+    })
   })
 })
