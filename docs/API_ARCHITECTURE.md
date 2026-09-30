@@ -492,7 +492,7 @@ Razorpay's reason.
   Once nothing shows the read, a read waiting to retry gives up, and the next mount reads afresh.
 - A failed read keeps the last view: Plan shows the error line above it, and the chrome keeps its
   banner and header. Until a view lands, including after a failed first read, the header says
-  "Shop plan" and neither the billing banner nor `PlanBanner` shows.
+  "Shop plan" and neither the billing banner nor the Free plan banner shows.
 
 **Writes.**
 
@@ -537,11 +537,11 @@ without a payment, because the development backend records some twice
 shows, in rupees, only when an event carries one; the app never infers it.
 
 **Chrome.** `LiveShellBanner` shows the view's billing banner on every vendor page, Plan included.
-With no billing banner, the shell's `PlanBanner` shows instead, under its own conditions (an open
-store whose context plan code is `FREE`). The code comes from the context's `subscription` block,
-which the flat context no longer sends, so in the Live API `PlanBanner` does not show today.
-`LiveHeaderButton` replaces the plan pill with the view's
-header label. Both only link to Plan.
+Below it, `LivePlanBanner` shows "Free plan active — share your shop link…" to an open store until
+T, from the shared read's `trialEndsAt` (the subscription's `trial_ends_at`, kept after subscribe),
+so it stays after an early first fee and goes at T's reread. Demo's `PlanBanner` (an open store on
+the `FREE` plan) is not used, since the Live API has no free plan. `LiveHeaderButton` replaces the
+plan pill with the view's header label. Both billing elements only link to Plan.
 
 **Session-bound.** The read belongs to one vendor and one session. A change of the auth store's
 user (sign-in, sign-out or a vendor switch) resets it, drops any response still on its way, and

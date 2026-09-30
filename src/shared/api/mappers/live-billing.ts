@@ -190,6 +190,18 @@ export function mapLiveTrialStart(read: LiveSubscriptionRead): string | null {
   }
 }
 
+/**
+ * When the free days end: `trial_ends_at` from `GET …/subscription`, which stays on the row after
+ * subscribe, or `null` before go-live or without a readable one.
+ */
+export function mapLiveTrialEnd(read: LiveSubscriptionRead): string | null {
+  try {
+    return instant(subscriptionRecord(read)?.trial_ends_at)
+  } catch {
+    return null
+  }
+}
+
 /** One row of "Payments you made". `amount` is in rupees, and only when the event sent one. */
 export interface LiveBillingHistoryRow { title: string; at: string; amount: number | null }
 

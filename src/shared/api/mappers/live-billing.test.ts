@@ -3,7 +3,7 @@ import {
   liveActivatedSubscription, liveCancelledPaidSubscription, liveEarlyFeePaidSubscription, liveEarlyFeeSubscription, liveHaltedSubscription, liveHistoryEvent, liveMonthlyPlan, liveStoppedHistory, livePaidSubscription, livePayingAfterTrialSubscription, livePlans,
   liveStoppedSubscription, liveSubscribeResponse, liveTrialAutoPaySubscription, liveTrialSubscription,
 } from '../fixtures/live-billing-wire'
-import { LiveBillingUnreadableError, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLivePlanName, mapLiveTrialStart } from './live-billing'
+import { LiveBillingUnreadableError, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
 const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
@@ -603,5 +603,15 @@ describe('mapLiveTrialStart', () => {
     expect(mapLiveTrialStart({ kind: 'not-live' })).toBeNull()
     expect(mapLiveTrialStart(subscription({ trial_started_at: undefined }))).toBeNull()
     expect(mapLiveTrialStart(subscription({ trial_started_at: '28 Sep' }))).toBeNull()
+  })
+})
+
+describe('mapLiveTrialEnd', () => {
+  it('reads trial_ends_at, which stays on the row after subscribe, and null before go-live or when it is missing or unreadable', () => {
+    expect(mapLiveTrialEnd(subscription())).toBe(trialEnd)
+    expect(mapLiveTrialEnd(earlyPaid())).toBe(trialEnd)
+    expect(mapLiveTrialEnd({ kind: 'not-live' })).toBeNull()
+    expect(mapLiveTrialEnd(subscription({ trial_ends_at: undefined }))).toBeNull()
+    expect(mapLiveTrialEnd(subscription({ trial_ends_at: '12 Oct' }))).toBeNull()
   })
 })

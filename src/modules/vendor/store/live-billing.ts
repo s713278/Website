@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
 import { isSettledView } from '@/modules/vendor/lib/live-billing-wording'
-import { liveBillingService, mapLiveBilling, mapLivePlanName, mapLiveTrialStart, type LiveBillingView } from '@/shared/api'
+import { liveBillingService, mapLiveBilling, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /**
@@ -19,6 +19,8 @@ export interface LiveBillingRead {
   planName: string | null
   /** When the free days started, for Plan's "Payments you made". */
   trialStartedAt: string | null
+  /** When the free days end, for the shell's Free plan banner. */
+  trialEndsAt: string | null
   /** The last read's failure, or `null` once a read lands. A 502, 503 or network failure here has run out of retries. */
   error: unknown
   reading: boolean
@@ -34,9 +36,9 @@ export interface LiveBillingRead {
 /** `plans` is the last plans response, so a cancel response can be mapped without reading it again. */
 interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown }
 
-const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, trialStartedAt: null, error: null, reading: false, hold: null }
+const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: false, hold: null }
 /** What a vendor sees before its first read lands. */
-const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, error: null, reading: true, hold: null }
+const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: true, hold: null }
 let snapshot = empty
 let generation = 0
 /** The read in flight; `waiting` while it waits to retry. */
@@ -78,7 +80,7 @@ export function readLiveBilling(vendorId: string): Promise<void> {
             liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
             liveBillingService.listPaidPlans({ signal: controller.signal }),
           ])
-          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), error: null, reading: false, hold: snapshot.hold })
+          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false, hold: snapshot.hold })
           return
         } catch (error) {
           if (!current()) return
@@ -115,7 +117,7 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const read = { kind: 'subscription', subscription } as const
   const view = mapLiveBilling(read, snapshot.plans, new Date())
   dropRead()
-  publish({ ...snapshot, view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), error: null, reading: false })
+  publish({ ...snapshot, view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false })
 }
 
 /**

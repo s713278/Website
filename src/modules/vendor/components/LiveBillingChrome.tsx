@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BillingStateBanner } from '@/modules/vendor/components/BillingStateBanner'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
@@ -21,14 +20,10 @@ function useLiveBillingChrome(): LiveBillingWording | null {
   return view ? liveBillingWording(view) : null
 }
 
-/**
- * The state's banner under the console's top bar. `planBanner` shows instead only once the read
- * has landed with no billing banner to show.
- */
-export function LiveShellBanner({ planBanner }: { planBanner: ReactNode }) {
-  const wording = useLiveBillingChrome()
-  if (!wording) return null
-  return wording.banner ? <BillingStateBanner banner={wording.banner} className="mx-[var(--vc-gutter)] mt-4" /> : planBanner
+/** The state's banner under the console's top bar, once the read has landed with one to show. */
+export function LiveShellBanner() {
+  const banner = useLiveBillingChrome()?.banner
+  return banner ? <BillingStateBanner banner={banner} className="mx-[var(--vc-gutter)] mt-4" /> : null
 }
 
 /** The top bar's Plan button, labelled for the state: "Pay ₹299", "Keep open · ₹299" or "Shop plan". */

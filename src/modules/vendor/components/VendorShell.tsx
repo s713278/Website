@@ -179,14 +179,29 @@ function LivePlanChip() {
 function PlanBanner() {
   const { plan, storeState } = useVendorAccount()
   if (storeState !== 'OPEN' || plan.code !== 'FREE' || !plan.name) return null
+  return <ShareLinkBanner lead={`${plan.name} plan active`} />
+}
 
+/**
+ * The live API's plan banner. It has no free plan, so the banner follows the free days instead:
+ * an open store sees it until T, from the subscription read, even after paying early. It sits
+ * below the billing banner rather than replacing it.
+ */
+function LivePlanBanner() {
+  const { vendorId, storeState } = useVendorAccount()
+  const { trialEndsAt } = useStartedLiveBilling(vendorId)
+  if (storeState !== 'OPEN' || !trialEndsAt || Date.now() >= Date.parse(trialEndsAt)) return null
+  return <ShareLinkBanner lead="Free plan active" />
+}
+
+function ShareLinkBanner({ lead }: { lead: string }) {
   return (
     <div
       role="status"
       className="mx-[var(--vc-gutter)] mt-4 flex flex-wrap items-center justify-between gap-2.5 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[image:var(--vc-banner)] px-4 py-3 text-sm text-slate-700"
     >
       <p>
-        <strong className="font-semibold">{plan.name} plan active</strong> — share your shop link
+        <strong className="font-semibold">{lead}</strong> — share your shop link
         to get your first WhatsApp orders.
       </p>
       <Link
@@ -204,7 +219,7 @@ function PlanBanner() {
  *
  * They read the prototype state Plan shares, and link to Plan rather than opening Checkout. A
  * production build drops the import entirely and keeps the plan pill and `PlanBanner`; the live API
- * has its own billing chrome.
+ * has its own billing chrome and `LivePlanBanner`.
  */
 const prototypeChrome = import.meta.env.DEV ? () => import('@/modules/vendor/components/BillingPrototypeChrome') : null
 const PrototypeShellBanner = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeShellBanner })))
@@ -341,7 +356,10 @@ function VendorChrome() {
         </header>
 
         {live ? (
-          <LiveShellBanner planBanner={<PlanBanner />} />
+          <>
+            <LiveShellBanner />
+            <LivePlanBanner />
+          </>
         ) : PrototypeShellBanner ? (
           <Suspense fallback={null}>
             <PrototypeShellBanner />
