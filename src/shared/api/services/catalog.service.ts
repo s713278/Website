@@ -76,7 +76,7 @@ export async function listStores(query?: string, location?: CustomerLocation): P
 
 function mapKeywordVendor(raw: Record<string, unknown>): Store | null {
   const category = Array.isArray(raw.category)
-    ? raw.category.filter((item): item is string => typeof item === 'string' && item.trim()).join(', ')
+    ? raw.category.filter((item): item is string => typeof item === 'string' && item.trim() !== '').join(', ')
     : raw.category
   const store = mapVendorToStore({ ...raw, category })
   return store.id ? store : null

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { DemoStoreStateKey, VendorContext } from '@/shared/api'
+import type { VendorContext } from '@/shared/api'
 import type { StoreState, VendorPlan } from '@/modules/vendor/types/dashboard'
 
 /**
@@ -14,20 +14,11 @@ export type VendorAccount = {
   context: VendorContext
   storeState: StoreState
   plan: VendorPlan
+  contextStale: boolean
+  /** Bypass the retained context after billing or another account change. */
+  refreshContext: () => Promise<VendorContext>
   /** Re-read the account after something that changes it. */
   reload: () => void
-  /**
-   * Demo-mode store-state switching, `null` under a live API.
-   *
-   * No probe account exists in `REJECTED` or `SUSPENDED`, and creating one would mean an
-   * administrator acting against a real store. Without this, two of the five state screens
-   * could be built but never seen. It writes the two context fields and lets
-   * `deriveStoreState` derive the rest, so it can only produce states the backend could.
-   */
-  demo: {
-    storeState: DemoStoreStateKey
-    select: (key: DemoStoreStateKey) => void
-  } | null
 }
 
 export const VendorAccountContext = createContext<VendorAccount | null>(null)

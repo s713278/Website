@@ -301,6 +301,12 @@ export type VendorSubscriptionUsage = {
 
 export type VendorContext = {
   vendorId: string
+  /** Existing envelopes may omit the offset; billing validates it before use. */
+  serverTime?: string | null
+  /** Proposed subscription addition, kept raw for strict billing-only validation. */
+  billing?: unknown
+  /** Ordinary hydration is lenient; billing needs to know whether capabilities were supplied. */
+  billingCapabilitiesValid?: boolean
   businessName: string | null
   storeIdentifier: string | null
   vendorStatus: string | null
@@ -331,10 +337,8 @@ export type VendorContext = {
     monthlyPrice: number | null
     yearlyPrice: number | null
     /**
-     * Absent from every deployed response measured so far — the deployed backend models
-     * no trial, returning `tier: FREE` with `trial_days: 0` and no end date. Mapped so a
-     * countdown appears the day the backend starts sending one; never substituted with a
-     * locally computed deadline.
+     * The backend's persisted trial expiry: `trial_ends_at`, or `trial.ends_at` in the
+     * 24 September lifecycle shape. Never substituted with a locally computed deadline.
      */
     trialEndsAt: string | null
     trialDays: number | null
@@ -384,11 +388,21 @@ export function mapVendorContext(payload: unknown): VendorContext {
 
   const onboarding = isRecord(data.onboarding) ? data.onboarding : {}
   const subscription = isRecord(data.subscription) ? data.subscription : {}
-  const limits = isRecord(subscription.limits) ? subscription.limits : {}
+  // Since 29 September the context is flat: `limits` sit at the top level and there is no
+  // `subscription` block. The nested shape stays for the demo seed and older payloads.
+  const limits = isRecord(data.limits) ? data.limits : isRecord(subscription.limits) ? subscription.limits : {}
   const usage = isRecord(subscription.usage) ? subscription.usage : {}
+  // The 24 September lifecycle shape moves plan and trial facts into nested objects and renames
+  // `eligible_features`; read either shape until the backend confirms which one is final.
+  const plan = isRecord(subscription.plan) ? subscription.plan : {}
+  const trial = isRecord(subscription.trial) ? subscription.trial : {}
+  const features = Array.isArray(data.eligible_features) ? data.eligible_features : data.features
 
   return {
     vendorId: String(vendorId),
+    serverTime: lenientString(payload.timestamp),
+    billing: subscription.billing ?? null,
+    billingCapabilitiesValid: Array.isArray(features) && features.every((feature) => typeof feature === 'string' && !!feature.trim()),
     businessName: lenientString(data.business_name),
     storeIdentifier: lenientString(data.store_identifier),
     vendorStatus: lenientString(data.vendor_status),
@@ -401,18 +415,18 @@ export function mapVendorContext(payload: unknown): VendorContext {
     },
     subscription: {
       tier: lenientString(subscription.tier),
-      planName: lenientString(subscription.plan_name),
+      planName: lenientString(subscription.plan_name) ?? lenientString(plan.plan_name),
       status: lenientString(subscription.status),
-      currency: lenientString(subscription.currency),
+      currency: lenientString(subscription.currency) ?? lenientString(plan.currency),
       monthlyPrice: lenientNumber(subscription.monthly_price),
       yearlyPrice: lenientNumber(subscription.yearly_price),
-      trialEndsAt: lenientString(subscription.trial_ends_at),
-      trialDays: lenientInteger(subscription.trial_days),
+      trialEndsAt: lenientString(subscription.trial_ends_at) ?? lenientString(trial.ends_at),
+      trialDays: lenientInteger(subscription.trial_days) ?? lenientInteger(trial.days_total),
       limits: {
         maxCategories: lenientInteger(limits.max_categories),
         maxProducts: lenientInteger(limits.max_products),
         maxSkus: lenientInteger(limits.max_skus),
-        maxImages: lenientInteger(limits.max_images),
+        maxImages: lenientInteger(limits.max_images_per_product) ?? lenientInteger(limits.max_images),
       },
       usage: {
         categories: lenientInteger(usage.categories),
@@ -421,7 +435,7 @@ export function mapVendorContext(payload: unknown): VendorContext {
         images: lenientInteger(usage.images),
       },
     },
-    eligibleFeatures: lenientStringList(data.eligible_features),
+    eligibleFeatures: lenientStringList(features),
   }
 }
 

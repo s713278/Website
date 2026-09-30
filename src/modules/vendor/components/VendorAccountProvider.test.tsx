@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
-  demoService,
+  configureApiClient,
   mapVendorContext,
   vendorOnboardingService,
   vendorOrdersService,
@@ -16,12 +17,11 @@ import {
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { VendorAccountProvider } from './VendorAccountProvider'
+import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
+import type { VendorContext } from '@/shared/api'
 
 beforeEach(() => {
   invalidateVendorContext()
-  vi.spyOn(demoService, 'isDemo').mockReturnValue(false)
-  vi.spyOn(demoService, 'storeStateKey').mockReturnValue('OPEN')
-  vi.spyOn(demoService, 'select').mockImplementation(() => {})
   vi.stubEnv('DEV', false)
   vi.spyOn(vendorOrdersService, 'list').mockResolvedValue({
     orders: [], page: 0, totalPages: 0, totalElements: 0, lastPage: true,
@@ -46,16 +46,33 @@ afterEach(() => {
   useAuthStore.getState().clearSession()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+  resetBillingPrototypeState()
 })
 
 function AccountReading() {
-  const { context, demo } = useVendorAccount()
-  return (
-    <>
-      <output aria-label="Account approval">{context.approvalStatus}</output>
-      {demo ? <button onClick={() => demo.select('UNDER_REVIEW')}>Show under review</button> : null}
-    </>
-  )
+  const { context } = useVendorAccount()
+  return <output aria-label="Account approval">{context.approvalStatus}</output>
+}
+
+function BillingAccountReading() {
+  const { vendorId, context, plan, contextStale, refreshContext } = useVendorAccount()
+  return <>
+    <output aria-label="Selected vendor">{vendorId}</output>
+    <output aria-label="Current plan">{plan.name}</output>
+    <output aria-label="Current features">{context.eligibleFeatures.join(',')}</output>
+    <output aria-label="Current usage">{plan.usage.products}</output>
+    <output aria-label="Context stale">{contextStale ? 'yes' : 'no'}</output>
+    <button onClick={() => { void refreshContext?.().catch(() => {}) }}>Refresh account</button>
+  </>
+}
+
+function billingContext(vendorId: string, revision: number, name: string, products: number): VendorContext {
+  const base = mapVendorContext(fixtures.contexts.trial_active)
+  return { ...base, vendorId, billing: { revision },
+    subscription: { ...base.subscription, planName: name, usage: { ...base.subscription.usage, products } },
+    eligibleFeatures: [name],
+  }
 }
 
 function renderContext(vendorStatus: string, approvalStatus: string, nextStep: number) {
@@ -98,15 +115,22 @@ describe('VendorAccountProvider store state', () => {
     expect(screen.queryByRole('link', { name: 'Continue setup' })).toBeNull()
   })
 
-  it('keeps the demo under-review screen reachable when the selection changes', async () => {
-    vi.spyOn(demoService, 'isDemo').mockReturnValue(true)
-    renderContext('ACTIVE', 'PENDING', 10)
+  it('opens the seeded demo store as approved and active, with no store-state switch', async () => {
+    vi.stubEnv('VITE_USE_API', 'false')
+    configureApiClient({ useApi: false })
+    // Overview's DEV plan card reads the local helper; keep it off the network, as if the helper were down.
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    render(
+      <MemoryRouter>
+        <VendorAccountProvider>
+          <AccountReading />
+          <VendorOverviewPage />
+        </VendorAccountProvider>
+      </MemoryRouter>,
+    )
+
     expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show under review' }))
-
-    expect(screen.getByRole('heading', { name: 'Awaiting approval' })).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'What needs doing' })).toBeNull()
+    expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
   })
 
   it.each([1, 5, 7, 10])('offers setup for an active approved store still at step %i', async (nextStep) => {
@@ -126,5 +150,56 @@ describe('VendorAccountProvider store state', () => {
     expect(screen.getByRole('link', { name: 'Continue setup' }).getAttribute('href')).toBe('/onboarding')
     expect(vendorOrdersService.list).not.toHaveBeenCalled()
     expect(vendorService.getInsights).not.toHaveBeenCalled()
+  })
+})
+
+describe('VendorAccountProvider billing refresh', () => {
+  it('bypasses a retained read and updates plan, usage and features from one accepted context', async () => {
+    const first = billingContext('test-vendor', 1, 'First', 2)
+    const second = billingContext('test-vendor', 2, 'Second', 7)
+    let resolveSecond!: (context: VendorContext) => void
+    const read = vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockResolvedValueOnce(first)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+    render(<MemoryRouter><VendorAccountProvider><BillingAccountReading /></VendorAccountProvider></MemoryRouter>)
+    await waitFor(() => expect(screen.getByLabelText('Current plan').textContent).toBe('First'))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh account' }))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+    expect(screen.getByLabelText('Current plan').textContent).toBe('First')
+    resolveSecond(second)
+    await waitFor(() => expect(screen.getByLabelText('Current plan').textContent).toBe('Second'))
+    expect(screen.getByLabelText('Current usage').textContent).toBe('7')
+    expect(screen.getByLabelText('Current features').textContent).toBe('Second')
+    expect(screen.getByLabelText('Context stale').textContent).toBe('no')
+  })
+
+  it('rejects a lower revision without replacing its plan and features', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockResolvedValueOnce(billingContext('test-vendor', 3, 'Newer', 7))
+      .mockResolvedValueOnce(billingContext('test-vendor', 2, 'Older', 1))
+    render(<MemoryRouter><VendorAccountProvider><BillingAccountReading /></VendorAccountProvider></MemoryRouter>)
+    await waitFor(() => expect(screen.getByLabelText('Current plan').textContent).toBe('Newer'))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh account' }))
+    await waitFor(() => expect(screen.getByLabelText('Context stale').textContent).toBe('yes'))
+    expect(screen.getByLabelText('Current plan').textContent).toBe('Newer')
+    expect(screen.getByLabelText('Current usage').textContent).toBe('7')
+    expect(screen.getByLabelText('Current features').textContent).toBe('Newer')
+  })
+
+  it('ignores the first vendor’s late context after selecting a second vendor', async () => {
+    useAuthStore.getState().applySession({ token: 'test-token', refreshToken: null,
+      user: { id: 'test-user', name: 'Test Vendor', email: 'vendor@example.test', role: 'vendor', roles: ['vendor'],
+        vendors: [{ vendorId: 'test-vendor' }, { vendorId: 'second_vendor' }], vendorId: 'test-vendor' } })
+    let resolveFirst!: (context: VendorContext) => void
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockImplementation((id) =>
+      id === 'test-vendor' ? new Promise((resolve) => { resolveFirst = resolve })
+        : Promise.resolve(billingContext('second_vendor', 1, 'Second vendor', 4)))
+    render(<MemoryRouter><VendorAccountProvider><BillingAccountReading /></VendorAccountProvider></MemoryRouter>)
+    await waitFor(() => expect(resolveFirst).toBeTypeOf('function'))
+    useAuthStore.getState().selectVendor('second_vendor')
+    await waitFor(() => expect(screen.getByLabelText('Current plan').textContent).toBe('Second vendor'))
+    resolveFirst(billingContext('test-vendor', 9, 'Wrong vendor', 99))
+    await waitFor(() => expect(screen.getByLabelText('Selected vendor').textContent).toBe('second_vendor'))
+    expect(screen.queryByText('Wrong vendor')).toBeNull()
   })
 })

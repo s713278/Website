@@ -29,6 +29,7 @@ export type {
   StorefrontCategory,
 } from './storefront';
 export { subscriptionsService } from './subscriptions';
+export { vendorBillingService } from './billing';
 export { courierService, imagesService, platformService, pricesService } from './platform';
 export { socialService } from './social';
 export { adminService } from './admin';

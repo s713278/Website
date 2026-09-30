@@ -6,7 +6,8 @@ verification baseline; both link here instead of restating it.
 
 ## Tiers
 
-One runner, one command. `npm run test` runs everything.
+`npm run test` runs all application Vitest tiers. The local billing helper has a separate Node HTTP
+test command because it binds a loopback socket and reopens a durable store.
 
 | Tier | Environment | Files | Covers |
 |------|-------------|-------|--------|
@@ -14,6 +15,34 @@ One runner, one command. `npm run test` runs everything.
 | Component | jsdom (opt-in per file) | `src/**/*.test.tsx` | React effect lifecycle: what a page fetches, when it refetches, and what it does with the response |
 
 There is **no end-to-end runner**. Full-journey behaviour is still verified by running the app.
+
+## Local billing helper HTTP test
+
+`npm run test:billing-helper` drives the helper through real loopback HTTP requests with a temporary
+store, closes it, then opens a new instance against the same file. It checks vendor isolation,
+original boundaries, intent/association persistence and rejection of live or missing
+configuration. Test subscription preparation runs against an injected fake provider client:
+schedule and plan inspection, replay/reload convergence, timeout reconciliation after restart,
+uncertain-creation holds and concurrent-request conflicts. Verification tests cover signature
+vectors, including tampered, foreign-secret and incomplete callbacks. They also cover wrong
+ownership, plan, amount or billing period, token versus first-fee evidence, duplicate and late
+callbacks, readback without a callback after restart, and failed provider reads. Renewal tests
+cover the paid scenario's own anchored subscription, accelerated success, pending, failed and
+retried charges on the original cycle, duplicate, shifted and stale invoice reads, unknown statuses,
+revocation, post-fee provider statuses and an accelerated trial charge. They also restart the
+helper on the same store file to show the renewal anchor survives. Cancellation tests cover a trial
+immediate stop, a paid cycle-end stop, a lapsed-coverage immediate stop, duplicate and reloaded
+requests, timeout and rejection with restart, stale `active` reads, foreign-owner refusal and
+external revocation. Their fake provider refuses a cycle-end stop before the first paid cycle, as
+Razorpay does. Replacement tests reopen the store and show no second chargeable object is prepared
+while the old one may still collect. Reset tests cover a scenario with no objects, future-start,
+authorised and fee-confirmed objects, mixed closed and unconfirmed objects, a lost cancellation
+response, provider read failures and rejections, unowned and uncertain creations, duplicate
+confirmations, restart while pending and late callbacks or replayed keys from a reset generation,
+including on the ledger intent and association routes.
+Their fake provider can also accept a stop that a read does not yet show. No test reaches
+Razorpay. It is separate from the Vitest app tiers. A sandbox that forbids loopback
+listening will report `EPERM`; run it in an environment that permits local sockets.
 
 ## Choosing a tier
 

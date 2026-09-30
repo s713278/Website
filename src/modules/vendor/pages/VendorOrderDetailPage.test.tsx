@@ -59,7 +59,8 @@ function account(): VendorAccount {
       usage: { categories: 1, products: 1, skus: 1, images: 0 },
     },
     reload: () => {},
-    demo: null,
+    contextStale: false,
+    refreshContext: async () => { throw new Error('Context refresh is outside this test.') },
   }
 }
 

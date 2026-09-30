@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import type { VendorStoreProfile } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, vendorService } from '@/shared/api'
+import { getErrorMessage, isLiveApi, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Spinner } from '@/shared/components'
 
@@ -40,7 +41,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
  * Until then the panel's one control sends the vendor to the wizard that *can* change these
  * — the same "Edit setup" the shared design puts here.
  */
-function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; planName: string }) {
+function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; planName: ReactNode }) {
   return (
     <DashboardPanel
       title="Store settings"
@@ -72,6 +73,17 @@ function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; pla
       </p>
     </DashboardPanel>
   )
+}
+
+/**
+ * The live API's plan name, from the subscription read the console chrome shares: the vendor
+ * context no longer carries the plan. "Not set" only once the read has landed without one.
+ */
+function LivePlanName() {
+  const { vendorId } = useVendorAccount()
+  const { view, planName, error } = useStartedLiveBilling(vendorId)
+  if (planName) return planName
+  return view || error ? 'Not set' : 'Loading…'
 }
 
 /**
@@ -151,7 +163,7 @@ export function VendorSettingsPage() {
       {loading ? <Spinner label="Loading your details…" /> : null}
 
       {!loading && profile ? (
-        <StoreSettings profile={profile} planName={plan.name ?? plan.code ?? 'Not set'} />
+        <StoreSettings profile={profile} planName={isLiveApi() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />
       ) : null}
 
       {/*

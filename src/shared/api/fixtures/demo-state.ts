@@ -27,53 +27,20 @@ import {
 
 type Row = Record<string, unknown>
 
-/** The five states `deriveStoreState` can produce, as the two fields it derives them from. */
-export type DemoStoreStateKey = 'SETTING_UP' | 'UNDER_REVIEW' | 'OPEN' | 'REJECTED' | 'SUSPENDED'
-
-export type DemoStoreStateOverride = {
-  vendorStatus: string
-  approvalStatus: string
-}
-
-/**
- * The switcher writes these two fields and lets `deriveStoreState` run, rather than
- * setting a `StoreState` directly. Setting the outcome would make the switcher a second
- * source of truth, free to display a combination the real derivation could never produce.
- */
-const STORE_STATES: Record<DemoStoreStateKey, DemoStoreStateOverride> = {
-  SETTING_UP: { vendorStatus: 'INACTIVE', approvalStatus: 'PENDING' },
-  UNDER_REVIEW: { vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' },
-  OPEN: { vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
-  REJECTED: { vendorStatus: 'ACTIVE', approvalStatus: 'REJECTED' },
-  SUSPENDED: { vendorStatus: 'SUSPENDED', approvalStatus: 'APPROVED' },
-}
-
-export const DEMO_STORE_STATE_KEYS = Object.keys(STORE_STATES) as DemoStoreStateKey[]
-
-/** The two fields a given key derives from. Pure, so the switcher can be tested directly. */
-export function storeStateFieldsFor(key: DemoStoreStateKey): DemoStoreStateOverride {
-  return STORE_STATES[key]
-}
-
-/**
- * Resume step shown by the switcher's synthetic setting-up scenario.
- *
- * The context seed remains a truthful completed account (`next_step: 11`). Only the
- * setting-up walkthrough needs a visible resume point, and Step 10 is the last real setup
- * screen. This value labels that screen; it is never read by `deriveStoreState`.
- */
-export function storeStateResumeStepFor(key: DemoStoreStateKey): number | null {
-  return key === 'SETTING_UP' ? 10 : null
-}
+type DemoBillingPhase = 'trial_active' | 'setup_pending' | 'setup_confirmed' | 'setup_failed'
+  | 'cancel_requested' | 'cancel_confirmed' | 'cancel_failed' | 'replacement_prepared'
 
 type DemoState = {
   orders: Row[]
   subscriptions: Row[]
   sizes: Row[]
   profile: Row
-  storeState: DemoStoreStateKey
   /** Set to make the next demo read reject, so error handling is demonstrable. */
   failNextRead: boolean
+  billingPhases: Map<string, DemoBillingPhase>
+  billingCancelRequestedAt: Map<string, string>
+  billingRevisions: Map<string, number>
+  trialEndsAt: string
 }
 
 function seed(): DemoState {
@@ -82,12 +49,60 @@ function seed(): DemoState {
     subscriptions: DEMO_VENDOR_SUBSCRIPTIONS.map((row) => ({ ...row })),
     sizes: DEMO_VENDOR_SIZES.map((row) => ({ ...row })),
     profile: { ...DEMO_VENDOR_PROFILE },
-    storeState: 'OPEN',
     failNextRead: false,
+    billingPhases: new Map(),
+    billingCancelRequestedAt: new Map(),
+    billingRevisions: new Map(),
+    trialEndsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
   }
 }
 
 let state = seed()
+
+/** Simulated billing lives with the demo context, never in auth or production account state. */
+export function demoBillingContextFields(vendorId: string) {
+  const phase = state.billingPhases.get(vendorId) ?? 'trial_active'
+  const pending = phase === 'setup_pending'
+  const failed = phase === 'setup_failed'
+  const cancelConfirmed = phase === 'cancel_confirmed'
+  // A prepared replacement is the current agreement; the old agreement's cancellation no longer describes it.
+  const revoked = cancelConfirmed || phase === 'replacement_prepared'
+  // A requested or failed cancellation leaves the confirmed agreement collecting until confirmation.
+  const collecting = phase === 'setup_confirmed' || phase === 'cancel_requested' || phase === 'cancel_failed'
+  const requestedAt = state.billingCancelRequestedAt.get(vendorId) ?? null
+  return {
+    subscription: {
+      tier: 'PLATFORM_MONTHLY', plan_name: 'MithraDirect monthly', monthly_price: 299,
+      trial_days: 14,
+      trial_ends_at: state.trialEndsAt,
+      billing: {
+        revision: state.billingRevisions.get(vendorId) ?? 1,
+        trial_status: 'active', trial_days_remaining: 10,
+        autopay_status: pending ? 'pending' : collecting ? 'confirmed' : failed ? 'failed' : revoked ? 'revoked' : 'not_configured',
+        payment_status: 'none', paid_through: null,
+        next_charge_at: pending || collecting ? state.trialEndsAt : null,
+        access_status: 'TRIAL', store_visible: true,
+        // Only a confirmed agreement has simulated collection to cancel.
+        available_actions: phase === 'setup_confirmed' ? ['cancel'] : pending || collecting ? [] : ['setup_autopay'],
+        cancellation: phase === 'cancel_requested' || phase === 'cancel_failed' || cancelConfirmed ? {
+          status: phase === 'cancel_requested' ? 'requested' : cancelConfirmed ? 'confirmed' : 'failed',
+          requested_at: requestedAt,
+          effective_at: cancelConfirmed ? requestedAt : null,
+        } : null,
+        refund: null,
+        notice: pending ? 'Simulated AutoPay confirmation is pending. Your original trial expiry still applies.'
+          : failed ? 'Simulated AutoPay setup failed. Trial access keeps its original expiry.'
+            : phase === 'cancel_failed' ? 'Simulated cancellation is not confirmed, so AutoPay may still collect the first fee. Refresh billing status before trying again.' : null,
+      },
+    },
+  }
+}
+
+export function setDemoBillingPhase(vendorId: string, phase: DemoBillingPhase): void {
+  if (phase === 'cancel_requested') state.billingCancelRequestedAt.set(vendorId, new Date().toISOString())
+  state.billingPhases.set(vendorId, phase)
+  state.billingRevisions.set(vendorId, (state.billingRevisions.get(vendorId) ?? 1) + 1)
+}
 
 export function resetDemoState() {
   state = seed()
@@ -107,18 +122,6 @@ export function demoSizes(): Row[] {
 
 export function demoProfile(): Row {
   return state.profile
-}
-
-export function demoStoreStateOverride(): DemoStoreStateOverride {
-  return STORE_STATES[state.storeState]
-}
-
-export function demoStoreStateKey(): DemoStoreStateKey {
-  return state.storeState
-}
-
-export function setDemoStoreState(key: DemoStoreStateKey) {
-  state.storeState = key
 }
 
 /**

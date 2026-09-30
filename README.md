@@ -20,9 +20,16 @@ through an OpenAPI/Axios integration.
 |---------|--------|-------------------|
 | Marketing | `src/modules/marketing` | `/` |
 | Customer storefront | `src/modules/storefront` | `/stores`, `/cart`, `/checkout`, `/orders` |
-| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
+| Vendor tools | `src/modules/vendor` | `/vendor`, `/vendor/plan`, `/vendor/orders`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` |
 | Vendor onboarding | `src/modules/vendor` | `/onboarding`, `/onboarding/preview/:draftSlug` |
 | Authentication | `src/shared/auth` | `/login`, `/vendor/login`, `/register` (redirect) |
+| Development billing preview | `src/modules/vendor` | `/dev/vendor-billing` (development only) |
+
+The [vendor billing preview](./docs/VENDOR_BILLING_PREVIEW.md) opens Razorpay Test Mode subscription
+Checkout independently of the backend billing API. Its trial/access scenarios are fixtures;
+it does not add production billing or access restrictions. Those scenarios predate the
+[approved hybrid trial](./docs/VENDOR_BILLING_DECISIONS.md); the preview record identifies the
+remaining implementation differences.
 
 ## Stack
 
@@ -51,7 +58,8 @@ Exact resolved versions are recorded in `package-lock.json`.
 
 ## Prerequisites
 
-- Node.js 20.19 or newer; Node 22 LTS is recommended.
+- Node.js 20.19 or newer; Node 22 LTS is recommended. The local billing helper needs Node 22.18 or
+  newer, because it loads a TypeScript fixture directly.
 - npm 10 or newer.
 
 The repository uses `package-lock.json`. The committed `pnpm-workspace.yaml` is currently unused.
@@ -78,6 +86,29 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_API_BASE_URL` | `https://subscriptionapp-wgf8.onrender.com/api` | API base before operation paths such as `/v1/auth/request-otp` |
 | `VITE_APP_ENV` | `development` | Reserved environment label; currently typed but not consumed by application logic |
 | `VITE_PUBLIC_SITE_URL` | `https://mithradirect.com` | Origin customers open. Vendor shop links, the shareable QR, and the WhatsApp share are built from it |
+| `VITE_RAZORPAY_TEST_KEY_ID` | unset | Optional public `rzp_test_…` key for the development billing preview; never a secret |
+| `VITE_RAZORPAY_TEST_SUBSCRIPTION_ID` | unset | Optional immediate-start Test subscription ID for that preview |
+| `VITE_RAZORPAY_TEST_FUTURE_SUBSCRIPTION_ID` | unset | Optional separate future-start Test subscription ID for the legacy AutoPay setup fixture |
+
+For the local Plan Test showcase, run `npm run dev:billing-helper` in a separate terminal with
+`RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET` and `RAZORPAY_TEST_PLAN_ID` (the supplied
+monthly Test plan) set in that terminal's environment. Only `rzp_test_` keys are accepted. The
+helper listens on `127.0.0.1:4179`; Vite proxies its local HTTP interface during development.
+Its scenario store defaults to the ignored local file `vendor-billing-test-store.local`;
+`VENDOR_BILLING_TEST_STORE` may point to another locally excluded path. Keep Test credentials out of `VITE_*` variables and repository files.
+With the helper running, demo mode in development (`VITE_USE_API=false`, `npm run dev`) shows a
+six-state prototype on `/vendor/plan`: Free days, 3 days left, Paid, Payment failed, Stopped and
+Shop closed. Choosing a different state at the bottom of Plan seeds it under the helper vendor key
+`r1-prototype`, after cancelling that key's earlier Test subscriptions. Each payment action opens
+hosted Razorpay Test Checkout through the helper, and stopping or turning off AutoPay also goes
+through it. The helper verifies the callback signature server-side, and the state changes only
+after a Razorpay Test read or acceptance confirms the result; the seeded Paid sample stops locally. Without the helper, the
+states still display, but their actions are disabled. Live mode and production builds have no
+prototype. The [decision record](./docs/VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
+owns the states, and the
+[dated evidence](./docs/VENDOR_BILLING_PREVIEW.md#six-state-prototype-evidence--24-september-2026)
+records which Test card and hosted Checkout steps work for this account. Never reset or reuse the
+helper vendor `r1`, which is kept for a renewal-recovery check.
 
 `VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
 must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment
@@ -102,6 +133,8 @@ with fallback coordinates.
 | `npm run lint` | Run ESLint over `src` |
 | `npm run test` | Run all Vitest logic and component tiers once |
 | `npm run test:watch` | Run Vitest in watch mode |
+| `npm run dev:billing-helper` | Run the loopback-only local Plan Test helper |
+| `npm run test:billing-helper` | Test its HTTP persistence and restart behavior |
 | `npm run build` | Type-check and create `dist/` |
 | `npm run preview` | Serve an existing production build |
 | `npm run fetch:openapi` | Fetch backend Swagger into `packages/api-client/openapi.json` |
@@ -232,6 +265,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
+| `/vendor/plan` | Vendor platform billing; the Live API reads the backend billing API, and demo mode is simulated |
 | `/vendor/orders`, `/vendor/orders/subscriptions`, `/vendor/orders/:orderId`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` | Protected vendor dashboard, in its own shell outside the customer chrome |
 
 ## Documentation
@@ -243,6 +277,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | [docs/adr/](./docs/adr/) | Accepted decisions, their trade-offs, and removal conditions |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
+| [docs/VENDOR_BILLING_BACKEND_HANDOFF.md](./docs/VENDOR_BILLING_BACKEND_HANDOFF.md) | Superseded vendor-context billing proposal, kept for history; demo mode's mock responses still follow it |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |

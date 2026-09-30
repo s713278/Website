@@ -47,6 +47,10 @@ import { useDeliveryAddressStore } from '@/shared/store/delivery-address-store'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
 
+const EMPTY_DELIVERY_SLOTS: StorefrontCheckoutOptions['deliverySlots'] = []
+const EMPTY_PAYMENT_OPTIONS: StorefrontCheckoutOptions['paymentOptions'] = []
+const EMPTY_DELIVERY_METHODS: StorefrontCheckoutOptions['deliveryMethods'] = []
+
 type CheckoutViewProps = {
   store: Store
   lines: CartLine[]
@@ -87,9 +91,9 @@ export function CheckoutView({
   const phone = user?.phone ?? ''
   const { selected, pickerProps, openChange, openMap } = useDeliveryLocation(store.id)
 
-  const deliverySlots = checkoutOptions?.deliverySlots ?? []
-  const paymentOptions = checkoutOptions?.paymentOptions ?? []
-  const deliveryMethods = checkoutOptions?.deliveryMethods ?? []
+  const deliverySlots = checkoutOptions?.deliverySlots ?? EMPTY_DELIVERY_SLOTS
+  const paymentOptions = checkoutOptions?.paymentOptions ?? EMPTY_PAYMENT_OPTIONS
+  const deliveryMethods = checkoutOptions?.deliveryMethods ?? EMPTY_DELIVERY_METHODS
   const estimateDates = checkoutOptions?.availableDeliveryDates ?? []
   const estimateLabel = formatDeliveryEstimate(estimateDates)
   const consentTitle = checkoutOptions?.consentTitle

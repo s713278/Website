@@ -14,6 +14,7 @@
 
 import {
   consumeDemoFailure,
+  demoBillingContextFields,
   demoOrders,
   demoProfile,
   demoSizes,
@@ -70,7 +71,10 @@ export type DemoSubscriptionQuery = { status?: string }
 /** The completed vendor context, in the same envelope and field names as the live read. */
 export function demoVendorContext(vendorId: string | number) {
   consumeDemoFailure()
-  return envelope({ ...DEMO_VENDOR_CONTEXT, vendor_id: String(vendorId) })
+  const { subscription } = demoBillingContextFields(String(vendorId))
+  return envelope({ ...DEMO_VENDOR_CONTEXT, vendor_id: String(vendorId),
+    subscription: { ...DEMO_VENDOR_CONTEXT.subscription, ...subscription },
+  })
 }
 
 /** One page of subscription rows, narrowed by the same status parameter as live. */

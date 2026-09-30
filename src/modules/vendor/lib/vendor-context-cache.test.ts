@@ -3,6 +3,7 @@ import type { VendorContext } from '@/shared/api'
 import { invalidateVendorOnboardingState } from './onboarding-state-cache'
 import {
   invalidateVendorContext,
+  contextSnapshotMayReplace,
   loadVendorContext,
   peekVendorContext,
 } from './vendor-context-cache'
@@ -131,5 +132,25 @@ describe('loadVendorContext', () => {
     void loadVendorContext('96', () => new Promise<VendorContext>((res) => { resolve = res }))
     expect(peekVendorContext('96')).toBeNull()
     resolve(contextFor('96'))
+  })
+
+  it('rejects a lower billing revision with its associated plan and features', async () => {
+    const newer = { ...contextFor('96'), billing: { revision: 4 }, eligibleFeatures: ['CATALOG'],
+      subscription: { ...contextFor('96').subscription, planName: 'Paid' } }
+    const older = { ...contextFor('96'), billing: { revision: 3 }, eligibleFeatures: ['VIEW'],
+      subscription: { ...contextFor('96').subscription, planName: 'Free' } }
+    await loadVendorContext('96', async () => newer)
+    invalidateVendorContext('96')
+    await expect(loadVendorContext('96', async () => older)).rejects.toThrow(/older/)
+    expect(contextSnapshotMayReplace(newer, older)).toBe(false)
+    expect(newer.subscription.planName).toBe('Paid')
+    expect(newer.eligibleFeatures).toEqual(['CATALOG'])
+  })
+
+  it('keeps billing revision comparisons vendor scoped', async () => {
+    await loadVendorContext('96', async () => ({ ...contextFor('96'), billing: { revision: 9 } }))
+    await expect(loadVendorContext('97', async () => ({ ...contextFor('97'), billing: { revision: 1 } })))
+      .resolves.toMatchObject({ vendorId: '97', billing: { revision: 1 } })
+    expect(contextSnapshotMayReplace(contextFor('96'), contextFor('97'))).toBe(false)
   })
 })

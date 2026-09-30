@@ -204,6 +204,72 @@ describe('mapVendorContext', () => {
     expect(context.subscription.limits.maxCategories).toBe(10)
     expect(context.eligibleFeatures).toEqual(['DASHBOARD', 'CATALOG'])
   })
+
+  it('reads plan, trial and features from the nested lifecycle shape', () => {
+    const context = mapVendorContext({
+      data: {
+        vendor_id: 273,
+        vendor_status: 'ACTIVE',
+        approval_status: 'APPROVED',
+        onboarding: { status: 'COMPLETED', description: 'Onboarding completed' },
+        subscription: {
+          lifecycle_status: 'TRIAL_ACTIVE',
+          trial: { started_at: '2026-09-24T03:16:30.397Z', ends_at: '2026-10-08T03:16:30.397Z', days_total: 14 },
+          plan: { plan_code: 'SOCIAL_STARTER_TRIAL', plan_name: 'Social Starter Trial', currency: 'INR' },
+        },
+        features: ['STOREFRONT', 'ORDERS'],
+      },
+    })
+
+    expect(context.subscription).toMatchObject({
+      tier: null,
+      planName: 'Social Starter Trial',
+      currency: 'INR',
+      trialEndsAt: '2026-10-08T03:16:30.397Z',
+      trialDays: 14,
+    })
+    expect(context.eligibleFeatures).toEqual(['STOREFRONT', 'ORDERS'])
+    expect(context.billingCapabilitiesValid).toBe(true)
+  })
+
+  it('reads limits from the flat context, which has no subscription block', () => {
+    const context = mapVendorContext({
+      success: true,
+      data: {
+        vendor_id: 9001,
+        vendor_status: 'ACTIVE',
+        approval_status: 'APPROVED',
+        onboarding: { status: 'IN_PROGRESS', next_step: 6 },
+        features: ['STOREFRONT', 'ORDERS'],
+        limits: {
+          max_skus: 250,
+          max_products: 100,
+          max_categories: 10,
+          max_images_per_product: 10,
+          max_staff_users: 2,
+        },
+      },
+    })
+
+    expect(context.subscription.limits).toEqual({
+      maxCategories: 10,
+      maxProducts: 100,
+      maxSkus: 250,
+      maxImages: 10,
+    })
+  })
+
+  it('prefers the top-level limits over a nested subscription block', () => {
+    const context = mapVendorContext({
+      data: {
+        vendor_id: 9002,
+        limits: { max_categories: 10 },
+        subscription: { limits: { max_categories: 2, max_products: 50 } },
+      },
+    })
+
+    expect(context.subscription.limits).toMatchObject({ maxCategories: 10, maxProducts: null })
+  })
 })
 
 describe('mapVendorProfile', () => {

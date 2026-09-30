@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   ClipboardList,
   Gauge,
@@ -11,9 +11,11 @@ import {
 } from 'lucide-react'
 import { NavLink, Link, Outlet, useLocation } from 'react-router-dom'
 import logoDarkMd from '@/assets/logo_dark_md.png'
+import { LiveHeaderButton, LiveShellBanner } from '@/modules/vendor/components/LiveBillingChrome'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { demoService } from '@/shared/api'
+import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
+import { isLiveApi } from '@/shared/api'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
@@ -117,9 +119,9 @@ function BrandMark() {
 /**
  * The rail's foot: which plan the store is on, and the way out to the customer view.
  *
- * The chip is withheld rather than guessed at when the context carries no subscription —
- * a chip reading "Free plan" on a store whose plan never loaded is the one mistake this
- * corner can make.
+ * The chip is withheld rather than guessed at when no plan name has loaded — a chip
+ * reading "Free plan" on a store whose plan never loaded is the one mistake this corner
+ * can make. Demo reads its context's plan; the live API reads the subscription.
  */
 function RailFoot() {
   const { context, plan, storeState } = useVendorAccount()
@@ -128,12 +130,7 @@ function RailFoot() {
 
   return (
     <div className="mt-auto grid gap-2.5 border-t border-[var(--vc-edge)] px-2 pt-3">
-      {plan.name ? (
-        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
-          <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
-          {plan.name} plan
-        </span>
-      ) : null}
+      {isLiveApi() ? <LivePlanChip /> : plan.name ? <PlanChip name={plan.name} /> : null}
 
       {isOpen && identifier ? (
         <Link to={`/stores/${identifier}`}>
@@ -152,6 +149,26 @@ function RailFoot() {
   )
 }
 
+function PlanChip({ name }: { name: string }) {
+  return (
+    <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
+      <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
+      {name} plan
+    </span>
+  )
+}
+
+/**
+ * The live API's chip names the plan from the subscription read the chrome shares, because the
+ * vendor context no longer carries it. It is withheld before go-live, while the first read loads
+ * and after it fails.
+ */
+function LivePlanChip() {
+  const { vendorId } = useVendorAccount()
+  const { planName } = useStartedLiveBilling(vendorId)
+  return planName ? <PlanChip name={planName} /> : null
+}
+
 /**
  * The plan banner, under the top bar on every surface.
  *
@@ -162,14 +179,29 @@ function RailFoot() {
 function PlanBanner() {
   const { plan, storeState } = useVendorAccount()
   if (storeState !== 'OPEN' || plan.code !== 'FREE' || !plan.name) return null
+  return <ShareLinkBanner lead={`${plan.name} plan active`} />
+}
 
+/**
+ * The live API's plan banner. It has no free plan, so the banner follows the free days instead:
+ * an open store sees it until T, from the subscription read, even after paying early. It sits
+ * below the billing banner rather than replacing it.
+ */
+function LivePlanBanner() {
+  const { vendorId, storeState } = useVendorAccount()
+  const { trialEndsAt } = useStartedLiveBilling(vendorId)
+  if (storeState !== 'OPEN' || !trialEndsAt || Date.now() >= Date.parse(trialEndsAt)) return null
+  return <ShareLinkBanner lead="Free plan active" />
+}
+
+function ShareLinkBanner({ lead }: { lead: string }) {
   return (
     <div
       role="status"
       className="mx-[var(--vc-gutter)] mt-4 flex flex-wrap items-center justify-between gap-2.5 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[image:var(--vc-banner)] px-4 py-3 text-sm text-slate-700"
     >
       <p>
-        <strong className="font-semibold">{plan.name} plan active</strong> — share your shop link
+        <strong className="font-semibold">{lead}</strong> — share your shop link
         to get your first WhatsApp orders.
       </p>
       <Link
@@ -182,56 +214,16 @@ function PlanBanner() {
   )
 }
 
-const DEMO_STATE_LABELS: Record<string, string> = {
-  SETTING_UP: 'Setting up',
-  UNDER_REVIEW: 'Under review',
-  OPEN: 'Open',
-  REJECTED: 'Rejected',
-  SUSPENDED: 'Suspended',
-}
-
 /**
- * Demo-only store-state switcher.
+ * The six-state Plan prototype's banner and header button: local development in demo mode only.
  *
- * Two of the five states — rejected and suspended — cannot be reached on a test account
- * without an administrator acting against a real store, so without this the screens for
- * them could be built and never seen. Absent entirely under a live API: it changes nothing
- * there, and a dead control on a real dashboard invites a support question.
- *
- * It writes the two fields `deriveStoreState` reads, so it cannot show a combination the
- * backend could not produce.
- *
- * It sits in the main column rather than the rail because the rail is hidden below `lg`,
- * and a walkthrough given on a phone needs the switcher as much as one given on a laptop.
+ * They read the prototype state Plan shares, and link to Plan rather than opening Checkout. A
+ * production build drops the import entirely and keeps the plan pill and `PlanBanner`; the live API
+ * has its own billing chrome and `LivePlanBanner`.
  */
-function DemoStateSwitcher() {
-  const { demo } = useVendorAccount()
-  if (!demo) return null
-
-  return (
-    <div className="mt-8 rounded-[var(--vc-radius)] border border-dashed border-[var(--vc-edge)] bg-[var(--vc-panel)] p-4">
-      <p className="text-sm font-semibold text-slate-700">Demo: store state</p>
-      <p className="mt-0.5 text-xs text-[var(--md-muted)]">Not shown on a live account.</p>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {demoService.storeStateKeys.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => demo.select(key)}
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs transition',
-              demo.storeState === key
-                ? 'border-[var(--vc-tint-line)] bg-[var(--vc-tint)] font-medium text-[var(--vc-tint-ink)]'
-                : 'border-[var(--vc-edge)] text-slate-600 hover:bg-slate-50',
-            )}
-          >
-            {DEMO_STATE_LABELS[key] ?? key}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
+const prototypeChrome = import.meta.env.DEV ? () => import('@/modules/vendor/components/BillingPrototypeChrome') : null
+const PrototypeShellBanner = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeShellBanner })))
+const PrototypeHeaderButton = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeHeaderButton })))
 
 /**
  * The console frame.
@@ -249,6 +241,7 @@ function VendorChrome() {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
   const title = pageTitle(pathname)
+  const live = isLiveApi()
 
   // Arriving somewhere is what closing the drawer means, so the route is what closes it —
   // not each link having to remember to.
@@ -343,21 +336,40 @@ function VendorChrome() {
               The reference's top-right pill points at marketing pricing and says "Upgrade".
               Neither is available here: `GET /v1/api/subscription-plans` answers 403 on a
               vendor token and pricing is undecided, so every tier but the current one would
-              be invented. The pill keeps its place and says where it actually goes.
+              be invented. The pill keeps its place and says where it actually goes. With the
+              live API it names the billing state's next step instead, and still links to Plan.
             */}
-            <Link to="/vendor/plan">
-              <Button size="sm" className="rounded-full">
-                Your plan
-              </Button>
-            </Link>
+            {live ? (
+              <LiveHeaderButton />
+            ) : PrototypeHeaderButton ? (
+              <Suspense fallback={null}>
+                <PrototypeHeaderButton />
+              </Suspense>
+            ) : (
+              <Link to="/vendor/plan">
+                <Button size="sm" className="rounded-full">
+                  Your plan
+                </Button>
+              </Link>
+            )}
           </div>
         </header>
 
-        <PlanBanner />
+        {live ? (
+          <>
+            <LiveShellBanner />
+            <LivePlanBanner />
+          </>
+        ) : PrototypeShellBanner ? (
+          <Suspense fallback={null}>
+            <PrototypeShellBanner />
+          </Suspense>
+        ) : (
+          <PlanBanner />
+        )}
 
         <main className="flex-1 px-[var(--vc-gutter)] pt-4 pb-6">
           <Outlet />
-          <DemoStateSwitcher />
         </main>
       </div>
 

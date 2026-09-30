@@ -2,22 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorProductsService } from '@/shared/api'
 import { Badge, Button, Input, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
-
-/** Sizes arrive flat; a vendor thinks in products, so they are grouped back up. */
-function groupByProduct(sizes: VendorSize[]) {
-  const groups = new Map<string, { name: string; sizes: VendorSize[] }>()
-  for (const size of sizes) {
-    const key = size.productId ?? `sku-${size.skuId}`
-    const group = groups.get(key) ?? { name: size.name, sizes: [] }
-    group.sizes.push(size)
-    groups.set(key, group)
-  }
-  return [...groups.entries()].map(([id, group]) => ({ id, ...group }))
-}
 
 /**
  * The cheapest way in to a product, as the shared design writes it: "From ₹189".

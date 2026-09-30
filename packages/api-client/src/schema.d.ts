@@ -360,6 +360,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current subscription
+         * @description Returns the vendor's single current subscription row (trial or paid), including:
+         *
+         *     - `status`: TRIAL_ACTIVE | TRIAL_EXPIRED | PAYMENT_PENDING | ACTIVE | PAST_DUE |
+         *       HALTED | CANCELLED | EXPIRED
+         *     - Trial fields (populated when the vendor started on the free trial)
+         *     - Razorpay identifiers (`razorpay_subscription_id`, `razorpay_status`)
+         *     - `checkout_url` while PAYMENT_PENDING, so the UI can resume checkout
+         *     - Billing period (`current_period_*`, `next_billing_at`) once ACTIVE
+         *     - Cancellation state (`cancel_at_period_end`, `cancelled_at`)
+         *
+         *     Prices are in **paise**. `404` if the vendor has never started a trial.
+         */
+        get: operations["getCurrentSubscription"];
+        put?: never;
+        /**
+         * Subscribe to a paid plan
+         * @description Starts a paid subscription for the vendor:
+         *
+         *     1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).
+         *     2. Creates a Razorpay subscription via `external_plan_id`.
+         *     3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing
+         *        trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.
+         *     4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.
+         *        The key ID is public and may be used by the UI to initialise Razorpay Checkout;
+         *        no key secret or webhook secret is ever returned.
+         *
+         *     Idempotent: calling again while `PAYMENT_PENDING` returns the existing checkout
+         *     URL — no duplicate Razorpay subscription is created.
+         *
+         *     Activation does NOT happen here; the signed Razorpay webhook flips status to
+         *     `ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on
+         *     the same plan; `400` if the plan is not purchasable online; `404` if the vendor
+         *     has no subscription row (go live first).
+         */
+        post: operations["subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/subscription/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Razorpay checkout
+         * @description Verifies the three values Razorpay Checkout returns to the browser after payment:
+         *
+         *     - `razorpay_subscription_id` — must equal the id returned by the subscribe call
+         *     - `razorpay_payment_id` — the payment attempt id from the Checkout handler
+         *     - `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`
+         *
+         *     On success the payment authorization is recorded in history; status stays
+         *     `PAYMENT_PENDING` until the Razorpay webhook activates the subscription — the
+         *     UI should poll `GET /vendors/{id}/subscription` for `ACTIVE`.
+         *     Returns `401` on signature mismatch and `400` on subscription mismatch.
+         */
+        post: operations["confirmPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/subscription/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel paid subscription
+         * @description Cancels the vendor's paid subscription at Razorpay with `cancel_at_cycle_end`:
+         *
+         *     - ACTIVE / PAST_DUE → `cancel_at_period_end = true`; access continues until
+         *       `current_period_end`, then the `subscription.cancelled` webhook sets CANCELLED.
+         *     - PAYMENT_PENDING → cancelled immediately (status becomes CANCELLED).
+         *
+         *     `400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.
+         */
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/subs": {
         parameters: {
             query?: never;
@@ -576,9 +681,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Go live
+         * Go live and start trial
          * @description Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,
          *     and set the vendor status to ACTIVE. Admin approval may still be required.
+         *
+         *     On success, the vendor is enrolled in the configured default platform trial plan
+         *     (e.g. Social Starter Trial, 14 days). No Razorpay subscription is created at this
+         *     step. Repeated calls are idempotent and will not reset or extend the trial.
          */
         post: operations["goLive"];
         delete?: never;
@@ -967,7 +1076,7 @@ export interface paths {
         };
         /**
          * Fetch All Categories
-         * @description API accessed by  Admin/Customer_Care roles
+         * @description API accessed by  Admin/Customer_Care roles. Each returned category now includes the `icon` field.
          */
         get: operations["getCategories"];
         put?: never;
@@ -1742,6 +1851,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/subscription/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get subscription history
+         * @description Returns the append-only lifecycle timeline for the vendor's subscription —
+         *     trial start, checkout creation, payment authorization, activation, renewals,
+         *     payment failures and cancellation — newest first, capped at 100 entries.
+         *
+         *     Each entry carries `event_type`, `previous_status`/`new_status`, and the
+         *     Razorpay subscription/payment ids involved. Empty list if no events yet.
+         */
+        get: operations["getHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/subs/{sub_id}": {
         parameters: {
             query?: never;
@@ -1871,7 +2005,14 @@ export interface paths {
         };
         /**
          * Get vendor dashboard context
-         * @description Returns onboarding, subscription tier, usage, and eligible features.
+         * @description Returns the vendor's onboarding state and current subscription context.
+         *
+         *     The `subscription` object reflects the vendor's current lifecycle state
+         *     (e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted
+         *     trial dates, storefront/dashboard access flags, the active plan's features and
+         *     limits, and a list of available paid plans with UI-driven allowed actions.
+         *
+         *     Trial expiry is evaluated at request time; no background job is required.
          */
         get: operations["getVendorContext"];
         put?: never;
@@ -1934,7 +2075,7 @@ export interface paths {
         };
         /**
          * Get vendor storefront
-         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
+         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories (with icon), products, trust strip and share link.
          *     <br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).
          */
         get: operations["getStorefront"];
@@ -2227,6 +2368,33 @@ export interface paths {
          * @description This API is for fetching the list of users and accessed with authentication token only.
          */
         get: operations["getUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/subscription-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available paid plans
+         * @description Returns every active, purchasable platform plan from the internal catalogue
+         *     (`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.
+         *     Results are cached; the internal trial plan is never included.
+         *
+         *     Each plan includes `plan_id`, `plan_code`, price fields in **paise**
+         *     (`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,
+         *     `features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).
+         *     The UI submits `plan_code` (or `external_plan_id`) to the subscribe endpoint.
+         */
+        get: operations["listPaidPlans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2572,7 +2740,7 @@ export interface paths {
         };
         /**
          * Fetch products by category_id
-         * @description API accessed by Admin/Customer_Care role only
+         * @description API accessed by Admin/Customer_Care role only. Each returned product now includes the `icon` field.
          */
         get: operations["getProductsByCategory"];
         put?: never;
@@ -3368,6 +3536,29 @@ export interface components {
             object?: string;
             entry?: components["schemas"]["Entry"][];
         };
+        /** @description Request to subscribe the vendor to a paid platform plan. */
+        VendorSubscriptionSubscribeRequest: {
+            /**
+             * @description Platform plan code from GET /v1/subscription-plans
+             * @example MITHRA_SOCIAL_STARTER_MONTHLY
+             */
+            plan_code: string;
+        };
+        /** @description Razorpay Checkout confirmation payload returned to the vendor's browser. */
+        VendorSubscriptionConfirmRequest: {
+            /**
+             * @description Razorpay payment id
+             * @example pay_Qk0example123
+             */
+            razorpay_payment_id: string;
+            /**
+             * @description Razorpay subscription id
+             * @example sub_Qk0example123
+             */
+            razorpay_subscription_id: string;
+            /** @description Checkout signature generated by Razorpay */
+            razorpay_signature: string;
+        };
         VendorCreateSubscriptionRequest: {
             /**
              * Format: int32
@@ -4105,6 +4296,11 @@ export interface components {
             image_path?: string;
             /** @example A category dedicated to Milk products, offering a wide range of high-quality items for everyday use. */
             description?: string;
+            /**
+             * @description Category icon
+             * @example dairy-icon
+             */
+            icon?: string;
         };
         OTPVerificationRequest: {
             /**
@@ -5990,6 +6186,180 @@ export interface operations {
             };
         };
     };
+    getCurrentSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current subscription */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Selected platform plan code */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorSubscriptionSubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Checkout created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Invalid or non-purchasable plan */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description An active subscription already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    confirmPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Checkout values returned by Razorpay to the vendor's browser */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorSubscriptionConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Payment signature verified; subscription pending webhook activation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Payment signature verification failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation scheduled or applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description No cancellable paid subscription */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     fetchSubsByVendorId: {
         parameters: {
             query?: {
@@ -7075,13 +7445,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Categories returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };
@@ -8638,6 +9008,29 @@ export interface operations {
             };
         };
     };
+    getHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     fetchSubsById: {
         parameters: {
             query?: never;
@@ -9294,6 +9687,26 @@ export interface operations {
             };
         };
     };
+    listPaidPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active paid plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     getAllAccounts: {
         parameters: {
             query?: never;
@@ -9934,13 +10347,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Products returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };

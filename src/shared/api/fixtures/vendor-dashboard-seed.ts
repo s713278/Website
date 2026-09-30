@@ -344,9 +344,8 @@ export const DEMO_VENDOR_SIZES: Record<string, unknown>[] = [
 /**
  * The vendor context that mounts the console in demo mode.
  *
- * This is the deployed wire shape, including the measured Free-plan block. The store-state
- * switcher replaces `vendor_status` and `approval_status` only at the derivation boundary;
- * this seed stays a coherent, completed account like the live context read.
+ * This is the deployed wire shape, including the measured Free-plan block: a coherent,
+ * completed, approved and active account like the live context read.
  */
 export const DEMO_VENDOR_CONTEXT = {
   vendor_id: 'r1',

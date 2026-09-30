@@ -82,6 +82,10 @@
       "description": "APIS for creating,managing vendor profiles,catalogue. These API can be accessed by VENDOR or ADMIN role only.\n"
     },
     {
+      "name": "21. Vendor Billing API",
+      "description": "MithraDirect platform subscription plans and Razorpay-backed vendor billing."
+    },
+    {
       "name": "04. Customer Order API",
       "description": "APIs for viewing and managing system generated orders."
     },
@@ -1723,6 +1727,339 @@
         }
       }
     },
+    "/v1/vendors/{vendor_id}/subscription": {
+      "get": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "Get current subscription",
+        "description": "Returns the vendor's single current subscription row (trial or paid), including:\n\n- `status`: TRIAL_ACTIVE | TRIAL_EXPIRED | PAYMENT_PENDING | ACTIVE | PAST_DUE |\n  HALTED | CANCELLED | EXPIRED\n- Trial fields (populated when the vendor started on the free trial)\n- Razorpay identifiers (`razorpay_subscription_id`, `razorpay_status`)\n- `checkout_url` while PAYMENT_PENDING, so the UI can resume checkout\n- Billing period (`current_period_*`, `next_billing_at`) once ACTIVE\n- Cancellation state (`cancel_at_period_end`, `cancelled_at`)\n\nPrices are in **paise**. `404` if the vendor has never started a trial.\n",
+        "operationId": "getCurrentSubscription",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Current subscription": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Current_Success"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Not_Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "Subscribe to a paid plan",
+        "description": "Starts a paid subscription for the vendor:\n\n1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).\n2. Creates a Razorpay subscription via `external_plan_id`.\n3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing\n   trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.\n4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.\n   The key ID is public and may be used by the UI to initialise Razorpay Checkout;\n   no key secret or webhook secret is ever returned.\n\nIdempotent: calling again while `PAYMENT_PENDING` returns the existing checkout\nURL — no duplicate Razorpay subscription is created.\n\nActivation does NOT happen here; the signed Razorpay webhook flips status to\n`ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on\nthe same plan; `400` if the plan is not purchasable online; `404` if the vendor\nhas no subscription row (go live first).\n",
+        "operationId": "subscribe",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "requestBody": {
+          "description": "Selected platform plan code",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorSubscriptionSubscribeRequest"
+              },
+              "examples": {
+                "Monthly plan": {
+                  "$ref": "#/components/examples/Req_Vendor_Subscription_Subscribe"
+                },
+                "Yearly plan": {
+                  "$ref": "#/components/examples/Req_Vendor_Subscription_Subscribe_Yearly"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Checkout created": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Create_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or non-purchasable plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Invalid plan": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Bad_Request"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Not_Found"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An active subscription already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Conflict": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Conflict"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/vendors/{vendor_id}/subscription/confirm": {
+      "post": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "Confirm Razorpay checkout",
+        "description": "Verifies the three values Razorpay Checkout returns to the browser after payment:\n\n- `razorpay_subscription_id` — must equal the id returned by the subscribe call\n- `razorpay_payment_id` — the payment attempt id from the Checkout handler\n- `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`\n\nOn success the payment authorization is recorded in history; status stays\n`PAYMENT_PENDING` until the Razorpay webhook activates the subscription — the\nUI should poll `GET /vendors/{id}/subscription` for `ACTIVE`.\nReturns `401` on signature mismatch and `400` on subscription mismatch.\n",
+        "operationId": "confirmPayment",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "requestBody": {
+          "description": "Checkout values returned by Razorpay to the vendor's browser",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorSubscriptionConfirmRequest"
+              },
+              "examples": {
+                "Checkout confirmation": {
+                  "$ref": "#/components/examples/Req_Vendor_Subscription_Confirm"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Payment signature verified; subscription pending webhook activation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Current subscription": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Current_Success"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Payment signature verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Verification failed": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Not_Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/vendors/{vendor_id}/subscription/cancel": {
+      "post": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "Cancel paid subscription",
+        "description": "Cancels the vendor's paid subscription at Razorpay with `cancel_at_cycle_end`:\n\n- ACTIVE / PAST_DUE → `cancel_at_period_end = true`; access continues until\n  `current_period_end`, then the `subscription.cancelled` webhook sets CANCELLED.\n- PAYMENT_PENDING → cancelled immediately (status becomes CANCELLED).\n\n`400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.\n",
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled or applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Current subscription": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Current_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No cancellable paid subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not cancellable": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Bad_Request"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Not_Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
     "/v1/vendors/{vendor_id}/subs": {
       "get": {
         "tags": [
@@ -2671,8 +3008,8 @@
         "tags": [
           "07. Vendor Profile API"
         ],
-        "summary": "Go live",
-        "description": "Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,\nand set the vendor status to ACTIVE. Admin approval may still be required.\n",
+        "summary": "Go live and start trial",
+        "description": "Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,\nand set the vendor status to ACTIVE. Admin approval may still be required.\n\nOn success, the vendor is enrolled in the configured default platform trial plan\n(e.g. Social Starter Trial, 14 days). No Razorpay subscription is created at this\nstep. Repeated calls are idempotent and will not reset or extend the trial.\n",
         "operationId": "goLive",
         "parameters": [
           {
@@ -4465,7 +4802,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Fetch All Categories",
-        "description": "API accessed by  Admin/Customer_Care roles",
+        "description": "API accessed by  Admin/Customer_Care roles. Each returned category now includes the `icon` field.",
         "operationId": "getCategories",
         "parameters": [
           {
@@ -4518,11 +4855,11 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Categories returned successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/PaginationResponse"
                 }
               }
             }
@@ -7418,6 +7755,51 @@
         ]
       }
     },
+    "/v1/vendors/{vendor_id}/subscription/history": {
+      "get": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "Get subscription history",
+        "description": "Returns the append-only lifecycle timeline for the vendor's subscription —\ntrial start, checkout creation, payment authorization, activation, renewals,\npayment failures and cancellation — newest first, capped at 100 entries.\n\nEach entry carries `event_type`, `previous_status`/`new_status`, and the\nRazorpay subscription/payment ids involved. Empty list if no events yet.\n",
+        "operationId": "getHistory",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 91
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "History": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_History_Success"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
     "/v1/vendors/{vendor_id}/subs/{sub_id}": {
       "get": {
         "tags": [
@@ -7723,7 +8105,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Get vendor dashboard context",
-        "description": "Returns onboarding, subscription tier, usage, and eligible features.",
+        "description": "Returns the vendor's onboarding state and current subscription context.\n\nThe `subscription` object reflects the vendor's current lifecycle state\n(e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted\ntrial dates, storefront/dashboard access flags, the active plan's features and\nlimits, and a list of available paid plans with UI-driven allowed actions.\n\nTrial expiry is evaluated at request time; no background job is required.\n",
         "operationId": "getVendorContext",
         "parameters": [
           {
@@ -7908,7 +8290,7 @@
           "20. Vendor Storefront API"
         ],
         "summary": "Get vendor storefront",
-        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.\n<br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).",
+        "description": "Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories (with icon), products, trust strip and share link.\n<br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).",
         "operationId": "getStorefront",
         "parameters": [
           {
@@ -8821,6 +9203,38 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/APIResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/subscription-plans": {
+      "get": {
+        "tags": [
+          "21. Vendor Billing API"
+        ],
+        "summary": "List available paid plans",
+        "description": "Returns every active, purchasable platform plan from the internal catalogue\n(`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.\nResults are cached; the internal trial plan is never included.\n\nEach plan includes `plan_id`, `plan_code`, price fields in **paise**\n(`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,\n`features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).\nThe UI submits `plan_code` (or `external_plan_id`) to the subscribe endpoint.\n",
+        "operationId": "listPaidPlans",
+        "responses": {
+          "200": {
+            "description": "Active paid plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Plans": {
+                    "$ref": "#/components/examples/Resp_Subscription_Plans_Success"
+                  }
                 }
               }
             }
@@ -9876,7 +10290,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Fetch products by category_id",
-        "description": "API accessed by Admin/Customer_Care role only",
+        "description": "API accessed by Admin/Customer_Care role only. Each returned product now includes the `icon` field.",
         "operationId": "getProductsByCategory",
         "parameters": [
           {
@@ -9929,11 +10343,11 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Products returned successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/PaginationResponse"
                 }
               }
             }
@@ -11385,6 +11799,49 @@
           }
         }
       },
+      "VendorSubscriptionSubscribeRequest": {
+        "type": "object",
+        "description": "Request to subscribe the vendor to a paid platform plan.",
+        "properties": {
+          "plan_code": {
+            "type": "string",
+            "description": "Platform plan code from GET /v1/subscription-plans",
+            "example": "MITHRA_SOCIAL_STARTER_MONTHLY",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "plan_code"
+        ]
+      },
+      "VendorSubscriptionConfirmRequest": {
+        "type": "object",
+        "description": "Razorpay Checkout confirmation payload returned to the vendor's browser.",
+        "properties": {
+          "razorpay_payment_id": {
+            "type": "string",
+            "description": "Razorpay payment id",
+            "example": "pay_Qk0example123",
+            "minLength": 1
+          },
+          "razorpay_subscription_id": {
+            "type": "string",
+            "description": "Razorpay subscription id",
+            "example": "sub_Qk0example123",
+            "minLength": 1
+          },
+          "razorpay_signature": {
+            "type": "string",
+            "description": "Checkout signature generated by Razorpay",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "razorpay_payment_id",
+          "razorpay_signature",
+          "razorpay_subscription_id"
+        ]
+      },
       "VendorCreateSubscriptionRequest": {
         "type": "object",
         "properties": {
@@ -12729,6 +13186,11 @@
           "description": {
             "type": "string",
             "example": "A category dedicated to Milk products, offering a wide range of high-quality items for everyday use."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Category icon",
+            "example": "dairy-icon"
           }
         },
         "required": [
@@ -14813,6 +15275,342 @@
       }
     },
     "examples": {
+      "Resp_OTP_Auth_Failed_1": {
+        "value": {
+          "success": false,
+          "status": 401,
+          "timestamp": "2024-10-22T09:09:04.6311632",
+          "failure_reason": "OTP is already expired!!",
+          "user_message": "User authentication failed!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Request_OTP_Success": {
+        "value": {
+          "timestamp": "2026-08-13T10:16:45.987654321",
+          "success": true,
+          "status": 200,
+          "data": {
+            "user_id": 3052,
+            "mobile_verified": true
+          }
+        }
+      },
+      "Req_Verify_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": 1111111111,
+          "reg_source": "android"
+        }
+      },
+      "Req_Vendor_Subscription_Subscribe_Yearly": {
+        "value": {
+          "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY"
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_1": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T07:50:13.7165159",
+          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_3": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T18:55:41.5212978",
+          "failure_reason": "No defined subscription plans found for skuId :10003 with frequency: CUSTOM",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Invalid_Business_Type": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-14T10:15:30.123456789",
+          "failure_reason": "Invalid business type",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_2": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T07:50:13.7165159",
+          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Req_Create_Sku_Item_No_Subscription": {
+        "value": {
+          "product_id": 118,
+          "sku_type": "ITEM",
+          "subscription_eligible": false,
+          "is_active": true,
+          "store_pickup": true,
+          "home_delivery": true,
+          "price_list": [
+            {
+              "measurement_type": "VOLUME",
+              "unit": "L",
+              "quantity_value": 1,
+              "effective_date": "2025-01-01",
+              "list_price": 100,
+              "sale_price": 90,
+              "shipping_price": 0
+            }
+          ]
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_5": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2024-11-21T18:56:46.0982331",
+          "failure_reason": "[Delivery date is required for ONE_TIME frequency]",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Success": {
+        "value": {
+          "success": true,
+          "message": "Subscription created successfully",
+          "data": {
+            "subscription_id": 2053,
+            "next_delivery_date": "2024-11-24"
+          }
+        }
+      },
+      "Res_Sub_OneTime_With_Fixed_Failed_4": {
+        "value": {
+          "success": false,
+          "status": 409,
+          "timestamp": "2024-11-21T09:19:31.3623991",
+          "failure_reason": "Subscription already existed for sku id : 10004",
+          "user_message": "Data already existed in system.",
+          "api_details": []
+        }
+      },
+      "Resp_SignIn_Invalid_Credentials": {
+        "value": {
+          "success": false,
+          "status": 401,
+          "timestamp": "2024-10-19T06:36:32.7372589",
+          "failure_reason": "Bad credentials",
+          "user_message": "User authentication failed!!",
+          "api_details": []
+        }
+      },
+      "Req_Sub_OneTime_With_Fixed": {
+        "value": {
+          "quantity": 2,
+          "frequency": "ONE_TIME",
+          "sku_id": 10003,
+          "price_id": 4,
+          "delivery_date": "2024-11-22"
+        }
+      },
+      "Resp_Vendor_Update_Business_Type_Success": {
+        "value": {
+          "success": true,
+          "message": "Vendor business type updated successfully",
+          "data": null
+        }
+      },
+      "Resp_Vendor_Subscription_Not_Found": {
+        "value": {
+          "success": false,
+          "status": "404",
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "failure_reason": "Vendor subscription not found",
+          "user_message": "No data found!!",
+          "api_details": [],
+          "reason_code": "404"
+        }
+      },
+      "Resp_Subscription_Plans_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:00:00.000000",
+          "success": true,
+          "status": 200,
+          "data": [
+            {
+              "plan_id": 2,
+              "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+              "plan_name": "Mithra Social Starter",
+              "description": "Everything small vendors need to sell online",
+              "features": [
+                "STOREFRONT",
+                "ORDERS",
+                "CUSTOMERS",
+                "CATALOG",
+                "NOTIFICATIONS"
+              ],
+              "limits": {
+                "max_products": 100,
+                "max_images_per_product": 10,
+                "max_staff_users": 2
+              },
+              "billing_cycle": "MONTHLY",
+              "currency": "INR",
+              "sale_price": 29900,
+              "list_price": 59900,
+              "external_plan_id": "plan_Qk0example1"
+            },
+            {
+              "plan_id": 3,
+              "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY",
+              "plan_name": "Mithra Social Starter (Yearly)",
+              "description": "Yearly billing with best value",
+              "features": [
+                "STOREFRONT",
+                "ORDERS",
+                "CUSTOMERS",
+                "CATALOG",
+                "NOTIFICATIONS"
+              ],
+              "limits": {
+                "max_products": 100,
+                "max_images_per_product": 10,
+                "max_staff_users": 2
+              },
+              "billing_cycle": "YEARLY",
+              "currency": "INR",
+              "sale_price": 299900,
+              "list_price": 599900,
+              "external_plan_id": "plan_Qk0example2"
+            }
+          ]
+        }
+      },
+      "Res_Create_Subscription": {
+        "value": {
+          "success": true,
+          "message": "Subscription created successfully",
+          "data": {
+            "subscription_id": 2302,
+            "next_delivery_date": "2024-11-27"
+          }
+        }
+      },
+      "Req_Create_Sku_Service": {
+        "value": {
+          "product_id": 2,
+          "sku_type": "SERVICE",
+          "subscription_eligible": false,
+          "is_active": true,
+          "price_list": [
+            {
+              "measurement_type": "PER_PERSON",
+              "unit": "Single",
+              "quantity_value": 1,
+              "effective_date": "2025-02-03",
+              "list_price": 300,
+              "sale_price": 250,
+              "valid_days": 30,
+              "no_of_services": 1
+            }
+          ],
+          "eligible_sub_plans": []
+        }
+      },
+      "Req_Create_Sku_Item_With_Fixed": {
+        "value": {
+          "product_id": 1,
+          "sku_type": "ITEM",
+          "subscription_eligible": true,
+          "is_active": true,
+          "store_pickup": true,
+          "home_delivery": true,
+          "price_list": [
+            {
+              "measurement_type": "WEIGHT",
+              "unit": "kg",
+              "quantity_value": 2,
+              "effective_date": "2025-02-03",
+              "list_price": 100,
+              "sale_price": 90,
+              "shipping_price": 0
+            }
+          ],
+          "eligible_sub_plans": [
+            {
+              "sub_plan_id": 1,
+              "sub_frequency": "ONE_TIME",
+              "delivery_mode": "FIXED",
+              "eligible_delivery_days": {
+                "delivery_days": [
+                  "SUNDAY",
+                  "WEDNESDAY"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "Req_User_Request_OTP": {
+        "value": {
+          "country_code": "+91",
+          "mobile_number": "9000000001",
+          "reg_platform": "Android",
+          "user_role": "USER"
+        }
+      },
+      "Resp_Vendor_Context_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-08-14T17:10:00.123456789",
+          "failure_reason": "Vendor not found",
+          "user_message": "Resource not found.",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Subscription_Current_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:10:00.000000",
+          "success": true,
+          "status": 200,
+          "data": {
+            "subscription_id": 25,
+            "vendor_id": 91,
+            "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+            "plan_name": "Mithra Social Starter",
+            "billing_cycle": "MONTHLY",
+            "currency": "INR",
+            "sale_price": 29900,
+            "status": "ACTIVE",
+            "trial_started_at": "2026-09-12T10:00:00Z",
+            "trial_ends_at": "2026-09-26T10:00:00Z",
+            "razorpay_subscription_id": "sub_Qk0example123",
+            "razorpay_status": "active",
+            "current_period_start": "2026-09-26T10:00:00Z",
+            "current_period_end": "2026-10-26T10:00:00Z",
+            "next_billing_at": "2026-10-26T10:00:00Z",
+            "cancel_at_period_end": false,
+            "created_at": "2026-09-12T10:00:00Z",
+            "updated_at": "2026-09-26T10:05:00Z"
+          }
+        }
+      },
+      "Resp_Create_Product_Duplicate": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-08-23T23:30:00.123456789",
+          "failure_reason": "Product already exists!!!",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
       "Resp_Create_Category_Success": {
         "value": {
           "timestamp": "2026-08-23T23:20:00.123456789",
@@ -14822,16 +15620,6 @@
             "id": 15,
             "message": "Category created successfully."
           }
-        }
-      },
-      "Resp_OTP_Auth_Failed_1": {
-        "value": {
-          "success": false,
-          "status": 401,
-          "timestamp": "2024-10-22T09:09:04.6311632",
-          "failure_reason": "OTP is already expired!!",
-          "user_message": "User authentication failed!!",
-          "api_details": []
         }
       },
       "Resp_Create_Product_Success": {
@@ -14845,14 +15633,34 @@
           }
         }
       },
-      "Resp_Vendor_Request_OTP_Success": {
+      "Req_Vendor_Subscription_Subscribe": {
         "value": {
-          "timestamp": "2026-08-13T10:16:45.987654321",
+          "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY"
+        }
+      },
+      "Resp_Vendor_Subscription_Create_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:05:00.000000",
           "success": true,
           "status": 200,
           "data": {
-            "user_id": 3052,
-            "mobile_verified": true
+            "subscription_id": 25,
+            "vendor_id": 91,
+            "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+            "plan_name": "Mithra Social Starter",
+            "billing_cycle": "MONTHLY",
+            "currency": "INR",
+            "sale_price": 29900,
+            "status": "PAYMENT_PENDING",
+            "trial_started_at": "2026-09-12T10:00:00Z",
+            "trial_ends_at": "2026-09-26T10:00:00Z",
+            "razorpay_key_id": "rzp_test_example123",
+            "razorpay_subscription_id": "sub_Qk0example123",
+            "razorpay_status": "created",
+            "checkout_url": "https://rzp.io/rzp/example",
+            "cancel_at_period_end": false,
+            "created_at": "2026-09-12T10:00:00Z",
+            "updated_at": "2026-09-26T10:05:00Z"
           }
         }
       },
@@ -14908,11 +15716,22 @@
           }
         }
       },
-      "Req_Verify_OTP": {
+      "Req_Vendor_Subscription_Confirm": {
         "value": {
-          "country_code": "+91",
-          "mobile_number": 1111111111,
-          "reg_source": "android"
+          "razorpay_payment_id": "pay_Qk0example123",
+          "razorpay_subscription_id": "sub_Qk0example123",
+          "razorpay_signature": "9ef4d0f0e5f4a8f3e3e8f5b2f1c9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7"
+        }
+      },
+      "Resp_Vendor_Subscription_Unauthorized": {
+        "value": {
+          "success": false,
+          "status": "401",
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "failure_reason": "Payment verification failed",
+          "user_message": "User authentication failed!!",
+          "api_details": [],
+          "reason_code": "401"
         }
       },
       "Resp_Create_Category_Validation_Error": {
@@ -14935,14 +15754,15 @@
           "api_details": []
         }
       },
-      "Res_Sub_OneTime_With_Fixed_Failed_1": {
+      "Resp_Vendor_Subscription_Conflict": {
         "value": {
           "success": false,
-          "status": 400,
-          "timestamp": "2024-11-21T07:50:13.7165159",
-          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
-          "user_message": "Please check the request and try again!!",
-          "api_details": []
+          "status": "409",
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "failure_reason": "An active subscription already exists.",
+          "user_message": "Already you have active subscription on your profile.",
+          "api_details": [],
+          "reason_code": "409"
         }
       },
       "Req_Delivery_Address_Success": {
@@ -14953,26 +15773,6 @@
           "data": "Address updated successfully."
         }
       },
-      "Res_Sub_OneTime_With_Fixed_Failed_3": {
-        "value": {
-          "success": false,
-          "status": 400,
-          "timestamp": "2024-11-21T18:55:41.5212978",
-          "failure_reason": "No defined subscription plans found for skuId :10003 with frequency: CUSTOM",
-          "user_message": "Please check the request and try again!!",
-          "api_details": []
-        }
-      },
-      "Resp_Vendor_Update_Business_Type_Invalid_Business_Type": {
-        "value": {
-          "success": false,
-          "status": 400,
-          "timestamp": "2026-08-14T10:15:30.123456789",
-          "failure_reason": "Invalid business type",
-          "user_message": "Please check the request and try again!!",
-          "api_details": []
-        }
-      },
       "Resp_Vendor_Context_Forbidden": {
         "value": {
           "success": false,
@@ -14981,57 +15781,6 @@
           "failure_reason": "Unauthorized access to vendor #91",
           "user_message": "You are not authorized to access this vendor.",
           "api_details": []
-        }
-      },
-      "Res_Sub_OneTime_With_Fixed_Failed_2": {
-        "value": {
-          "success": false,
-          "status": 400,
-          "timestamp": "2024-11-21T07:50:13.7165159",
-          "failure_reason": "Selected delivery date is not available for this vendor. Please select [WEDNESDAY, SUNDAY]",
-          "user_message": "Please check the request and try again!!",
-          "api_details": []
-        }
-      },
-      "Req_Create_Sku_Item_No_Subscription": {
-        "value": {
-          "product_id": 118,
-          "sku_type": "ITEM",
-          "subscription_eligible": false,
-          "is_active": true,
-          "store_pickup": true,
-          "home_delivery": true,
-          "price_list": [
-            {
-              "measurement_type": "VOLUME",
-              "unit": "L",
-              "quantity_value": 1,
-              "effective_date": "2025-01-01",
-              "list_price": 100,
-              "sale_price": 90,
-              "shipping_price": 0
-            }
-          ]
-        }
-      },
-      "Res_Sub_OneTime_With_Fixed_Failed_5": {
-        "value": {
-          "success": false,
-          "status": 400,
-          "timestamp": "2024-11-21T18:56:46.0982331",
-          "failure_reason": "[Delivery date is required for ONE_TIME frequency]",
-          "user_message": "Please check the request and try again!!",
-          "api_details": []
-        }
-      },
-      "Res_Sub_OneTime_With_Fixed_Success": {
-        "value": {
-          "success": true,
-          "message": "Subscription created successfully",
-          "data": {
-            "subscription_id": 2053,
-            "next_delivery_date": "2024-11-24"
-          }
         }
       },
       "Resp_SignUp_Duplicate": {
@@ -15059,41 +15808,12 @@
           }
         }
       },
-      "Res_Sub_OneTime_With_Fixed_Failed_4": {
-        "value": {
-          "success": false,
-          "status": 409,
-          "timestamp": "2024-11-21T09:19:31.3623991",
-          "failure_reason": "Subscription already existed for sku id : 10004",
-          "user_message": "Data already existed in system.",
-          "api_details": []
-        }
-      },
       "Req_Vendor_Update_Business_Type": {
         "value": {
           "business_type": "Agriculture",
           "business_name": "SK Organic Store",
           "owner_name": "SK Owner",
           "contact_person": "SK Contact"
-        }
-      },
-      "Resp_SignIn_Invalid_Credentials": {
-        "value": {
-          "success": false,
-          "status": 401,
-          "timestamp": "2024-10-19T06:36:32.7372589",
-          "failure_reason": "Bad credentials",
-          "user_message": "User authentication failed!!",
-          "api_details": []
-        }
-      },
-      "Req_Sub_OneTime_With_Fixed": {
-        "value": {
-          "quantity": 2,
-          "frequency": "ONE_TIME",
-          "sku_id": 10003,
-          "price_id": 4,
-          "delivery_date": "2024-11-22"
         }
       },
       "Resp_Vendor_Update_Business_Type_Validation_Error": {
@@ -15104,13 +15824,6 @@
           "failure_reason": "Business type is required.",
           "user_message": "Please check the request and try again!!",
           "api_details": []
-        }
-      },
-      "Resp_Vendor_Update_Business_Type_Success": {
-        "value": {
-          "success": true,
-          "message": "Vendor business type updated successfully",
-          "data": null
         }
       },
       "Req_Create_Category_Minimal": {
@@ -15137,33 +15850,63 @@
               "description": "Step 2 is completed"
             },
             "subscription": {
-              "tier": "SILVER",
-              "plan_name": "Silver",
-              "status": "TRIAL",
-              "trial_ends_at": "2026-08-28T17:10:00.123456789",
-              "monthly_price": 999,
-              "yearly_price": 9999,
-              "currency": "INR",
-              "trial_days": 14,
-              "limits": {
-                "max_categories": 10,
-                "max_products": 50,
-                "max_skus": 100,
-                "max_images": 50
+              "lifecycle_status": "TRIAL_ACTIVE",
+              "display_status": "Free trial",
+              "trial": {
+                "started_at": "2026-09-07T17:10:00.123456789",
+                "ends_at": "2026-09-21T17:10:00.123456789",
+                "days_total": 14,
+                "days_remaining": 0,
+                "expired": false
               },
-              "usage": {
-                "categories": 2,
-                "products": 5,
-                "skus": 12,
-                "images": 3
-              }
+              "plan": {
+                "plan_code": "SOCIAL_STARTER_TRIAL",
+                "plan_name": "Social Starter Trial",
+                "description": "14-day free trial for new vendors",
+                "features": [
+                  "STOREFRONT",
+                  "ORDERS",
+                  "CUSTOMERS",
+                  "CATALOG",
+                  "NOTIFICATIONS"
+                ],
+                "limits": {
+                  "max_products": 100,
+                  "max_images_per_product": 10,
+                  "max_staff_users": 2
+                },
+                "billing_cycle": "TRIAL",
+                "currency": "INR",
+                "sale_price": 0
+              },
+              "available_paid_plans": [
+                {
+                  "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+                  "plan_name": "Mithra Social Starter",
+                  "billing_cycle": "MONTHLY",
+                  "currency": "INR",
+                  "sale_price": 29900,
+                  "list_price": 59900,
+                  "discount": 30000
+                },
+                {
+                  "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY",
+                  "plan_name": "Mithra Social Starter (Yearly)",
+                  "billing_cycle": "YEARLY",
+                  "currency": "INR",
+                  "sale_price": 299900,
+                  "list_price": 599900,
+                  "discount": 300000
+                }
+              ],
+              "updated_at": "2026-09-21T17:10:00.123456789"
             },
-            "eligible_features": [
-              "DASHBOARD",
-              "VIEW",
+            "features": [
+              "STOREFRONT",
+              "ORDERS",
+              "CUSTOMERS",
               "CATALOG",
-              "PRICES",
-              "ORDERS"
+              "NOTIFICATIONS"
             ]
           }
         }
@@ -15174,6 +15917,37 @@
           "mobile_number": "9000000002",
           "reg_platform": "Web",
           "user_role": "VENDOR"
+        }
+      },
+      "Resp_Vendor_Subscription_History_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:15:00.000000",
+          "success": true,
+          "status": 200,
+          "data": [
+            {
+              "event_type": "SUBSCRIPTION_ACTIVATED",
+              "previous_status": "PAYMENT_PENDING",
+              "new_status": "ACTIVE",
+              "external_subscription_id": "sub_Qk0example123",
+              "external_payment_id": "pay_Qk0example123",
+              "event_at": "2026-09-26T10:08:00Z"
+            },
+            {
+              "event_type": "PAYMENT_AUTHORIZED",
+              "new_status": "PAYMENT_PENDING",
+              "external_subscription_id": "sub_Qk0example123",
+              "external_payment_id": "pay_Qk0example123",
+              "event_at": "2026-09-26T10:07:00Z"
+            },
+            {
+              "event_type": "CHECKOUT_CREATED",
+              "previous_status": "TRIAL_ACTIVE",
+              "new_status": "PAYMENT_PENDING",
+              "external_subscription_id": "sub_Qk0example123",
+              "event_at": "2026-09-26T10:05:00Z"
+            }
+          ]
         }
       },
       "Resp_Create_Category_Duplicate": {
@@ -15214,41 +15988,10 @@
           "business_type": "Home Foods"
         }
       },
-      "Res_Create_Subscription": {
-        "value": {
-          "success": true,
-          "message": "Subscription created successfully",
-          "data": {
-            "subscription_id": 2302,
-            "next_delivery_date": "2024-11-27"
-          }
-        }
-      },
       "Req_Create_Product_Minimal": {
         "value": {
           "name": "Whole Milk 1L",
           "measurement_unit_id": 1
-        }
-      },
-      "Req_Create_Sku_Service": {
-        "value": {
-          "product_id": 2,
-          "sku_type": "SERVICE",
-          "subscription_eligible": false,
-          "is_active": true,
-          "price_list": [
-            {
-              "measurement_type": "PER_PERSON",
-              "unit": "Single",
-              "quantity_value": 1,
-              "effective_date": "2025-02-03",
-              "list_price": 300,
-              "sale_price": 250,
-              "valid_days": 30,
-              "no_of_services": 1
-            }
-          ],
-          "eligible_sub_plans": []
         }
       },
       "Resp_Authentication_Failed": {
@@ -15261,46 +16004,23 @@
           "api_details": []
         }
       },
-      "Req_Create_Sku_Item_With_Fixed": {
+      "Resp_Vendor_Subscription_Bad_Request": {
         "value": {
-          "product_id": 1,
-          "sku_type": "ITEM",
-          "subscription_eligible": true,
-          "is_active": true,
-          "store_pickup": true,
-          "home_delivery": true,
-          "price_list": [
-            {
-              "measurement_type": "WEIGHT",
-              "unit": "kg",
-              "quantity_value": 2,
-              "effective_date": "2025-02-03",
-              "list_price": 100,
-              "sale_price": 90,
-              "shipping_price": 0
-            }
-          ],
-          "eligible_sub_plans": [
-            {
-              "sub_plan_id": 1,
-              "sub_frequency": "ONE_TIME",
-              "delivery_mode": "FIXED",
-              "eligible_delivery_days": {
-                "delivery_days": [
-                  "SUNDAY",
-                  "WEDNESDAY"
-                ]
-              }
-            }
-          ]
+          "success": false,
+          "status": "400",
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "failure_reason": "Plan is not purchasable via online payment",
+          "user_message": "Please check the input request and try again.",
+          "api_details": [],
+          "reason_code": "400"
         }
       },
-      "Req_User_Request_OTP": {
+      "Resp_Razorpay_Webhook_Success": {
         "value": {
-          "country_code": "+91",
-          "mobile_number": "9000000001",
-          "reg_platform": "Android",
-          "user_role": "USER"
+          "timestamp": "2026-09-26T10:25:00.000000",
+          "success": true,
+          "status": 200,
+          "data": "EVENT_RECEIVED"
         }
       },
       "Req_Update_Sku_Info": {
@@ -15312,16 +16032,6 @@
           "quantity_value": 250,
           "unit": "g",
           "is_active": true
-        }
-      },
-      "Resp_Vendor_Context_Not_Found": {
-        "value": {
-          "success": false,
-          "status": 404,
-          "timestamp": "2026-08-14T17:10:00.123456789",
-          "failure_reason": "Vendor not found",
-          "user_message": "Resource not found.",
-          "api_details": []
         }
       },
       "Resp_User_Request_OTP_Success": {
@@ -15342,16 +16052,6 @@
           "timestamp": "2026-08-23T23:30:00.123456789",
           "failure_reason": "Category not found with categoryId: 999",
           "user_message": "Resource not found.",
-          "api_details": []
-        }
-      },
-      "Resp_Create_Product_Duplicate": {
-        "value": {
-          "success": false,
-          "status": 400,
-          "timestamp": "2026-08-23T23:30:00.123456789",
-          "failure_reason": "Product already exists!!!",
-          "user_message": "Please check the request and try again!!",
           "api_details": []
         }
       },

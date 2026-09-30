@@ -16,5 +16,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      '/__local_vendor_billing_test': {
+        target: 'http://127.0.0.1:4179',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__local_vendor_billing_test/, ''),
+      },
+    },
   },
 })
