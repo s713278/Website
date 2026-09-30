@@ -388,7 +388,9 @@ export function mapVendorContext(payload: unknown): VendorContext {
 
   const onboarding = isRecord(data.onboarding) ? data.onboarding : {}
   const subscription = isRecord(data.subscription) ? data.subscription : {}
-  const limits = isRecord(subscription.limits) ? subscription.limits : {}
+  // Since 29 September the context is flat: `limits` sit at the top level and there is no
+  // `subscription` block. The nested shape stays for the demo seed and older payloads.
+  const limits = isRecord(data.limits) ? data.limits : isRecord(subscription.limits) ? subscription.limits : {}
   const usage = isRecord(subscription.usage) ? subscription.usage : {}
   // The 24 September lifecycle shape moves plan and trial facts into nested objects and renames
   // `eligible_features`; read either shape until the backend confirms which one is final.
@@ -424,7 +426,7 @@ export function mapVendorContext(payload: unknown): VendorContext {
         maxCategories: lenientInteger(limits.max_categories),
         maxProducts: lenientInteger(limits.max_products),
         maxSkus: lenientInteger(limits.max_skus),
-        maxImages: lenientInteger(limits.max_images),
+        maxImages: lenientInteger(limits.max_images_per_product) ?? lenientInteger(limits.max_images),
       },
       usage: {
         categories: lenientInteger(usage.categories),

@@ -160,8 +160,8 @@ backend**, so it is a cache of what the browser was told at login, not proof of 
 Backend authorization remains the real boundary; route guards are UX only.
 
 The vendor onboarding wizard does confirm itself against
-`GET /v1/vendors/{vendor_id}/context` for subscription limits. A general server-backed
-session restoration needs a typed profile/session payload — `/v1/auth/profile` currently
+`GET /v1/vendors/{vendor_id}/context` for plan limits (its top-level `limits`). A general
+server-backed session restoration needs a typed profile/session payload — `/v1/auth/profile` currently
 returns plain text and cannot serve it.
 
 ## Interim XSS posture (important)

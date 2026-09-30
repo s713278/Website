@@ -566,7 +566,8 @@ nor the unfiltered vendor SKU search returned it. The product-detail read expose
 Creation's response is not mapped to IDs by the app service, so this leaves an inactive create
 unconfirmable through the current reconciliation path. Backend should provide an owner-only read
 including inactive sizes and document created IDs in the response. Do not report such a save as
-confirmed or infer a SKU ID. Plan-limit checks include the usage omitted from the list.
+confirmed or infer a SKU ID. Plan-limit checks include the usage omitted from the list only when
+the context sends `subscription.usage`; the flat context of 29 September 2026 does not.
 
 The revised PATCH promises to preserve omitted fields, including features. A September 2026 live
 probe against both an approved and a pending completed vendor still found two deployed failures:

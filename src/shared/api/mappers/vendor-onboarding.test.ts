@@ -231,6 +231,45 @@ describe('mapVendorContext', () => {
     expect(context.eligibleFeatures).toEqual(['STOREFRONT', 'ORDERS'])
     expect(context.billingCapabilitiesValid).toBe(true)
   })
+
+  it('reads limits from the flat context, which has no subscription block', () => {
+    const context = mapVendorContext({
+      success: true,
+      data: {
+        vendor_id: 9001,
+        vendor_status: 'ACTIVE',
+        approval_status: 'APPROVED',
+        onboarding: { status: 'IN_PROGRESS', next_step: 6 },
+        features: ['STOREFRONT', 'ORDERS'],
+        limits: {
+          max_skus: 250,
+          max_products: 100,
+          max_categories: 10,
+          max_images_per_product: 10,
+          max_staff_users: 2,
+        },
+      },
+    })
+
+    expect(context.subscription.limits).toEqual({
+      maxCategories: 10,
+      maxProducts: 100,
+      maxSkus: 250,
+      maxImages: 10,
+    })
+  })
+
+  it('prefers the top-level limits over a nested subscription block', () => {
+    const context = mapVendorContext({
+      data: {
+        vendor_id: 9002,
+        limits: { max_categories: 10 },
+        subscription: { limits: { max_categories: 2, max_products: 50 } },
+      },
+    })
+
+    expect(context.subscription.limits).toMatchObject({ maxCategories: 10, maxProducts: null })
+  })
 })
 
 describe('mapVendorProfile', () => {

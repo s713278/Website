@@ -6,7 +6,7 @@ import type {
 
 export const ONBOARDING_DRAFT_VERSION = 4 as const
 export const ONBOARDING_CONFIG = {
-  /** Fallback only. The real limit comes from vendor context subscription limits. */
+  /** Fallback only. The real limit comes from the vendor context's `limits`. */
   maxCategories: 2,
   /**
    * Fallbacks only, used when the vendor context omits a live product/size limit (and in

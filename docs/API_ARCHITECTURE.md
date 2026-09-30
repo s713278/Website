@@ -275,9 +275,11 @@ sizes only when the account's real approval status is approved (`APPROVED`; curr
 wire values are accepted for compatibility); pending vendors keep a
 read-only step. Previously saved sizes remain locked after submission. The controls and Continue
 handler use the same approval-aware rule, and saving validates new size details, duplicates and
-the projected account total against `subscription.limits.max_skus`. The total includes any
-`subscription.usage.skus` missing from the SKU list, so unlisted inactive sizes still consume
-capacity. That count survives subsequent additions in the same visit. It does not demand pricing
+the projected account total against the context's `limits.max_skus` (top level since the flat
+context of 29 September 2026; the demo seed's nested `subscription.limits` is still read). When
+the context sends `subscription.usage.skus`, any usage missing from the SKU list is added, so
+unlisted inactive sizes still consume capacity; the flat context sends no usage, so in Live API
+that count is zero. That count survives subsequent additions in the same visit. It does not demand pricing
 for unrelated products already on a submitted account. Completed approved stores also offer a
 Sizes shortcut from Step 10. Unfinished accounts retain the normal editable setup flow; their
 entry decision is documented in [SESSION.md](./SESSION.md#where-a-session-lands).
