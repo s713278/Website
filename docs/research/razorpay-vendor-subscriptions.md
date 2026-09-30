@@ -306,8 +306,8 @@ UPI AutoPay subscription is unverified (checked 24 September 2026).
 [Test UPI details](https://razorpay.com/docs/payments/payments/test-upi-details/).
 
 **Approved launch rule:** offer only methods proven by testing to meet the required timing for the
-relevant phase. Cards are offered; UPI is decided but on standby, with its launch check in the
-[decision record](../VENDOR_BILLING_DECISIONS.md#upi-standby-and-switch-on).
+relevant phase. Cards and UPI are decided, with UPI's accounts and launch evidence in the
+[decision record](../VENDOR_BILLING_DECISIONS.md#upi-accounts-and-launch-evidence).
 Before offering eMandate, establish a configuration that preserves the promised
 no-platform-fee trial and the required after-expiry payment behavior. Earlier holiday debits would
 conflict with the approved policy. Treat an unsupported timing promise as a launch-method gap.

@@ -26,7 +26,7 @@ through an OpenAPI/Axios integration.
 | Development billing preview | `src/modules/vendor` | `/dev/vendor-billing` (development only) |
 
 The [vendor billing preview](./docs/VENDOR_BILLING_PREVIEW.md) opens Razorpay Test Mode subscription
-Checkout independently of the missing billing backend. Its trial/access scenarios are fixtures;
+Checkout independently of the backend billing API. Its trial/access scenarios are fixtures;
 it does not add production billing or access restrictions. Those scenarios predate the
 [approved hybrid trial](./docs/VENDOR_BILLING_DECISIONS.md); the preview record identifies the
 remaining implementation differences.
@@ -265,7 +265,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | `/onboarding/preview/:draftSlug` | Same-browser, non-public storefront preview restored from the safe local draft |
 | `/checkout`, `/orders` | Protected customer flows |
 | `/vendor` | Protected vendor dashboard |
-| `/vendor/plan` | Vendor platform billing status; demo mode is simulated, while live billing awaits backend integration |
+| `/vendor/plan` | Vendor platform billing; the Live API reads the backend billing API, and demo mode is simulated |
 | `/vendor/orders`, `/vendor/orders/subscriptions`, `/vendor/orders/:orderId`, `/vendor/products`, `/vendor/storefront`, `/vendor/settings` | Protected vendor dashboard, in its own shell outside the customer chrome |
 
 ## Documentation
@@ -277,7 +277,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | [docs/adr/](./docs/adr/) | Accepted decisions, their trade-offs, and removal conditions |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
-| [docs/VENDOR_BILLING_BACKEND_HANDOFF.md](./docs/VENDOR_BILLING_BACKEND_HANDOFF.md) | Vendor billing backend data/operation requirements and authorised mock responses for development |
+| [docs/VENDOR_BILLING_BACKEND_HANDOFF.md](./docs/VENDOR_BILLING_BACKEND_HANDOFF.md) | Superseded vendor-context billing proposal, kept for history; demo mode's mock responses still follow it |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |

@@ -3,7 +3,8 @@
 **Status:** hybrid trial, cancellation/refund, retry recovery and launch-method rules accepted;
 current Test Mode method scope clarified ·
 19 September 2026. UPI decided and the failure boundary moved to a halted collection ·
-24 September 2026; UPI on standby for a capable Razorpay account · 25 September 2026
+24 September 2026; UPI on standby for a capable Razorpay account · 25 September 2026, withdrawn
+because MithraDirect's account offers UPI · 30 September 2026
 ([UPI and collection retries](#upi-and-collection-retries--24-september-2026)). Live API billing on
 the published backend API agreed · 29 September 2026 ([Live API billing](#live-api-billing--29-september-2026)).
 The early first fee replaces AutoPay-only setup during the trial · 29 September 2026
@@ -26,6 +27,8 @@ commercial decisions stay open; mock values are not new commercial policy.
 The follow-up context alignment uses the existing vendor context API for all billing status and
 keeps only the minimal missing fields. This reduces the transport proposal, without changing trial,
 payment, cancellation/refund or retained-access rules. The handoff owns the exact additions.
+*(Superseded on 29 September 2026: the backend published its own billing API, which the Live API
+reads; see [Live API billing](#live-api-billing--29-september-2026).)*
 
 ## Agreed product rules
 
@@ -95,15 +98,16 @@ payment, cancellation/refund or retained-access rules. The handoff owns the exac
 - Offer only payment methods **proven by testing to meet the required timing rules** for the
   relevant signup phase. A method that cannot preserve the free trial or meet after-expiry payment
   requirements stays unavailable until resolved. Neither a generic provider capability list nor
-  one successful card test establishes that every method is ready for launch. Cards are offered.
-  UPI is decided but on standby; its account prerequisite and launch evidence are in
-  [UPI: standby and switch-on](#upi-standby-and-switch-on).
+  one successful card test establishes that every method is ready for launch. Cards and UPI are
+  decided; which account offers which methods is in
+  [UPI: accounts and launch evidence](#upi-accounts-and-launch-evidence).
 
 ## Current Test Mode method scope
 
 The 19 September review is for **Test Mode development**, using the supplied Test credentials and
-₹299 monthly plan. Cards are in use; UPI is decided but on standby until an account that can enable
-it is available. Production bank acceptance for other methods remains deferred.
+₹299 monthly plan. That account, which the local test server uses, offers cards only; Live API
+Checkout uses MithraDirect's own account, which offers UPI too. Production bank acceptance for other
+methods remains deferred.
 The launch-method rule above is a later release gate, not a requirement to test every method before
 implementing the hybrid panel. The existing card Checkout observation is a starting point; future
 authorisation and the hybrid lifecycle still need their own Test evidence.
@@ -117,7 +121,7 @@ agreed behaviour. This is a scope decision, not a claim that Razorpay lacks eMan
 [Razorpay Subscriptions FAQ](https://razorpay.com/docs/payments/subscriptions/faqs/?preferred-country=IN).
 
 Configure the Test account through **Subscriptions → Settings**, with cards enabled and eMandate
-disabled (UPI too, once the account allows it), then check the methods actually offered by hosted Checkout. Razorpay documents these
+disabled (UPI enabled too, on an account that allows it), then check the methods actually offered by hosted Checkout. Razorpay documents these
 controls, including disabling eMandate; no custom method selector is required. This documentation
 review has not changed the account configuration.
 [Subscription settings](https://razorpay.com/docs/payments/subscriptions/settings/?preferred-country=IN).
@@ -127,8 +131,9 @@ only through a later scope decision with evidence that its timing meets the prod
 supplied plan can be reused; consumed subscriptions cannot serve as fresh-signup fixtures. The
 [preview record](./VENDOR_BILLING_PREVIEW.md#test-object-inspection) owns the observed object history.
 
-**UPI is decided (24 September 2026)**, superseding the same day's earlier deferral, and on standby
-since 25 September until an account can enable it ([switch-on](#upi-standby-and-switch-on)). Its debits can
+**UPI is decided (24 September 2026)**, superseding the same day's earlier deferral. Its standby
+from 25 September covered only an account that could not enable it, and was withdrawn on
+30 September ([accounts](#upi-accounts-and-launch-evidence)). Its debits can
 complete by 9 PM IST on the scheduled date and potentially T+1 with retries
 ([method timing](./research/razorpay-vendor-subscriptions.md#payment-methods-and-authorisation-charges)).
 That conflicted with the old no-grace boundary; the product owner resolved it by moving the failure
@@ -193,7 +198,7 @@ Recommendations in this table are **not approved defaults**. Unanswered choices 
 | Decision | Unresolved question / recommendation |
 |---|---|
 | Other refunds | Discretionary refunds, errors outside the cancellation-race case and access following those refunds remain open. A full Test refund of a confirmed first ₹299 currently leaves the prototype Paid and "verified" ([evidence](./VENDOR_BILLING_PREVIEW.md#prototype-evaluation-and-fixes--24-september-2026)). Ordinary cancellation has no automatic proration; timely cancellation racing a debit requires a full refund with only original coverage retained. |
-| Payment-method evidence | Cards are offered; UPI is decided but on standby for a capable account; eMandate is removed. UPI's launch check is in [UPI: standby and switch-on](#upi-standby-and-switch-on) and is unobserved. Card future authorisation, immediate signup, renewal success, a failed renewal debit and cancellation were observed in Test Mode on 23 September 2026 ([Plan evidence](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)); renewal recovery is unobserved, so that evidence remains open, but it no longer gates UPI. Production method timing is a later release gate. Do not silently shift `T` or shorten the trial. |
+| Payment-method evidence | Cards and UPI are offered in Live API Checkout; the local test server's account offers cards only; eMandate is removed. UPI's launch evidence is in [UPI: accounts and launch evidence](#upi-accounts-and-launch-evidence) and is unobserved. Card future authorisation, immediate signup, renewal success, a failed renewal debit and cancellation were observed in Test Mode on 23 September 2026 ([Plan evidence](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)); renewal recovery is unobserved, so that evidence remains open, but it no longer gates UPI. Production method timing is a later release gate. Do not silently shift `T` or shorten the trial. |
 | Lifecycle completion | Pause/resume and the end of the finite production schedule still need decisions. A pause made at Razorpay is not shown: Plan keeps naming the next ₹299 ([evidence](./VENDOR_BILLING_PREVIEW.md#prototype-evaluation-and-fixes--24-september-2026)). Successful retries keep the original billing anchor. The finite Test Mode count is not a production duration decision. |
 | Reminders | Decide channels, delivery times/timezone and offsets. Distinguish an action-needed setup reminder from notice of an already-scheduled debit, and from a cancellation/no-renewal notice. |
 | Production commercial terms | Production taxes/invoicing, subscription duration and refund handling need decisions separate from the ₹299 Test Mode total. |
@@ -283,7 +288,8 @@ holds the hosted Test evidence.
 
 - **Scope.** Local development and demo mode (`VITE_USE_API=false`) only. Production builds, the
   deployed demo site included, contain none of it and keep the simulated billing panel. Live mode
-  keeps its safe "Billing unavailable" read, with no prototype. The deployed demo gets six-state
+  has no prototype; its "Billing unavailable" read was replaced by
+  [Live API billing](#live-api-billing--29-september-2026). The deployed demo gets six-state
   billing only once Razorpay runs through the backend APIs. The seeded states have no backend
   equivalent, and demo mode has no backend, so both need a decision at that point. The Live API
   part was decided on 29 September 2026: see [Live API billing](#live-api-billing--29-september-2026).
@@ -301,7 +307,8 @@ holds the hosted Test evidence.
 
 - **Labels.** These button labels replace the "Pay Now in every phase" rule on the prototype.
   Supporting text still explains timing: "Opens Razorpay Checkout…", and for AutoPay the refundable
-  ₹5 charge now and the first-fee date. The help text names card payment only, because UPI is deferred.
+  ₹5 charge now and the first-fee date. The help text names card payment only, because the local
+  test server's account offers cards only.
 - **Real Test Checkout only.** Every action runs hosted Razorpay Test Checkout through the local
   helper; there is no simulated fallback. A failed or dismissed Checkout leaves the state unchanged,
   with an inline notice. Nothing changes until the helper has verified the callback and read the
@@ -340,13 +347,13 @@ holds the hosted Test evidence.
 implemented for cards in the local helper, the six-state prototype and the simulated panel
 (25 September 2026); production enforcement remains Spring work. It amends the
 [agreed product rules](#agreed-product-rules) and supersedes the same day's UPI deferral.
-**UPI is on standby (25 September 2026):**
-it is decided, but waits for a Razorpay account that can enable it, as described
-[below](#upi-standby-and-switch-on).
+**UPI's standby (25 September 2026) is withdrawn (30 September 2026):** it covered only the local
+test server's account, and Live API Checkout uses MithraDirect's account, which offers UPI
+([below](#upi-accounts-and-launch-evidence)).
 
 ### Collection retries (every method)
 
-These rules apply to cards now and to UPI once it is switched on.
+These rules apply to cards and UPI.
 
 - **The failure boundary is a halted collection.** A scheduled first fee or renewal that is pending
   or being retried is in its collection retry period, and service continues unchanged. Razorpay
@@ -373,21 +380,24 @@ These rules apply to cards now and to UPI once it is switched on.
   a Test-accelerated halt before paid-through keeps the paid days and ends AutoPay (Stopped). The
   [architecture owner](./API_ARCHITECTURE.md#six-state-plan-prototype) describes it.
 
-### UPI: standby and switch-on
+### UPI: accounts and launch evidence
 
 **Product decision:** every MithraDirect platform-fee Checkout offers UPI alongside cards: trial
 AutoPay setup, "Pay ₹299" and "Keep shop open". Hosted Checkout offers the same methods everywhere;
 there is no per-action method selector. eMandate stays excluded.
 
-**Why it is on standby.** On 25 September 2026, enabling UPI under **Subscriptions → Settings** on
-the currently supplied Test account redirected to Razorpay account onboarding and video KYC. That
-account therefore cannot offer UPI, and the cards-only implementation stays as it is. MithraDirect
-is expected to create its own Razorpay account with KYC completed and UPI enabled, and to supply
-its API key ID, key secret and monthly ₹299 plan ID. That account is used in Test first, then in
-Live. The standby applies only to the local test server's account: Live API Checkout already uses
-MithraDirect's own account, which offers UPI ([Live API billing](#live-api-billing--29-september-2026)).
+**Accounts.** On 25 September 2026, enabling UPI under **Subscriptions → Settings** on the
+supplied Test account redirected to Razorpay account onboarding and video KYC. That account, which
+the local test server uses, therefore offers cards only, and its cards-only implementation stays as
+it is: demo mode is frozen, and scripted test runs pay by card. UPI was put on standby for a
+UPI-capable account. That standby is **withdrawn (30 September 2026)**: Live API Checkout uses
+MithraDirect's own Razorpay account, which offers UPI
+([Live API billing](#live-api-billing--29-september-2026)).
 
-**Switch-on checklist**, once that account exists:
+**Switch-on checklist (withdrawn 30 September 2026).** It planned moving the local test server to a
+UPI-capable account, which no longer happens, so steps 1–3 do not apply. UPI's launch evidence with
+the early first fee is a [release blocker](./API_GAPS.md#production-release-blockers). Kept for
+history:
 
 1. **Account.** In the new account's Test mode, confirm UPI and cards are enabled and eMandate is
    disabled under Subscriptions → Settings, and create or confirm the monthly ₹299 plan.
@@ -408,14 +418,14 @@ MithraDirect's own account, which offers UPI ([Live API billing](#live-api-billi
    Test Mode; if Test cannot run them, one small real-money Live check (set up, charge, cancel,
    refund) replaces it. Card renewal recovery does not gate UPI.
 5. **Live.** Enable UPI in the same account's Live Subscriptions Settings, and treat UPI as
-   launch-approved. No production build has Razorpay billing yet: production keeps the simulated
-   panel and live mode reads "Billing unavailable", so Live billing picks UPI up when it ships. Live
-   keys belong to the Spring backend, never the browser or this repository.
+   launch-approved. Live API billing now uses MithraDirect's account, which offers UPI. Live keys
+   belong to the Spring backend, never the browser or this repository.
 
 ## Live API billing — 29 September 2026
 
-**Status:** agreed with the product owner on 29 September 2026; not yet implemented. It replaces the
-Live API's "Billing unavailable" read. The [agreed product rules](#agreed-product-rules) still
+**Status:** agreed with the product owner on 29 September 2026, and implemented in the app on 29–30
+September 2026. It replaced the Live API's "Billing unavailable" read. The
+[agreed product rules](#agreed-product-rules) still
 apply. The same day's [early first fee](#early-first-fee--29-september-2026) replaces this
 section's trial AutoPay state rule, its "small refundable charge" wording and its release list. The contract gaps go to [API gaps](./API_GAPS.md#vendor-platform-billing), and the
 implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiring work.
@@ -430,7 +440,9 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
   paid days end, and treating a fee as paid only once it is captured.
 - **Source.** `GET /v1/vendors/{vendor_id}/subscription` is the billing read: state, trial dates,
   paid period and AutoPay. The plans list supplies the plan and its price. The vendor context keeps
-  supplying plan limits and features; its trial and lifecycle fields are not used for billing. The
+  supplying plan limits and features only. Since 29 September 2026 it is flat (top-level `features`
+  and `limits`) and has no trial or lifecycle fields; the Live API's rail chip and Settings take the
+  plan name from the subscription read. The
   app counts free days itself from the trial end, rounded up, and MithraDirect owns all wording.
 - **Build on today's API.** The app reads today's responses and the corrected ones alike, so
   backend fixes land without app changes. [API gaps](./API_GAPS.md#vendor-platform-billing) owns
@@ -440,7 +452,8 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
     over…"). It is a wording variant, not a seventh state.
   - Trial AutoPay whose first fee is due but not yet confirmed keeps the shop open ("Shop is open ·
     AutoPay on"), like a collection retry. A fee paid immediately after expiry keeps the shop closed,
-    with "Confirming payment…", until it is confirmed.
+    with "Confirming payment…", until it is confirmed. *(The trial AutoPay part is replaced by the
+    [early first fee](#early-first-fee--29-september-2026); only demo mode keeps trial AutoPay.)*
   - Paid is shown only once a paid period exists.
   - AutoPay that ends outside MithraDirect, for example at the bank, keeps the paid days: Stopped
     until the paid-through date, then Shop closed.
@@ -450,8 +463,8 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
   the vendor then sees a specific message. No action is hidden because of a gap.
 - **Payments you made** comes from the subscription history, without amounts until the backend
   supplies them. The app never infers an amount.
-- **Payment methods.** Live API Checkout uses MithraDirect's own Razorpay account, which offers UPI,
-  so the [UPI standby](#upi-standby-and-switch-on) covers only the local test server's account.
+- **Payment methods.** Live API Checkout uses MithraDirect's own Razorpay account, which offers UPI
+  ([accounts](#upi-accounts-and-launch-evidence)).
   Live API wording says "card or UPI" and "a small refundable charge". eMandate stays excluded; on
   29 September the account still offered it, and it is being switched off.
 - **Release to production** waits for: cancelling trial AutoPay before the first fee (it currently
@@ -463,7 +476,9 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
 ## Early first fee — 29 September 2026
 
 **Status:** decided by the backend team on 29 September 2026; its consequences for the app were
-agreed with the product owner the same day. Not yet implemented in the app or the backend. It amends
+agreed with the product owner the same day. Implemented in the app on 30 September 2026, building
+to the read requested from the backend; not yet built in the backend (gap K in
+[API gaps](./API_GAPS.md#billing-gaps-ak)). It amends
 the [agreed product rules](#agreed-product-rules), the [approved lifecycle](#approved-lifecycle) and
 [Live API billing](#live-api-billing--29-september-2026). The contract change goes to
 [API gaps](./API_GAPS.md#vendor-platform-billing) and the implementation to the

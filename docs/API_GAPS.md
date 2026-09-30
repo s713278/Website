@@ -394,13 +394,13 @@ payment schedule and obtain the vendor's explicit agreement before a replacement
 Payment methods must be validated for the required dates: a future `start_at` alone does not
 guarantee the exact debit/confirmation time for every method.
 
-Cards are offered, UPI is decided but on standby, and eMandate is excluded; the
-[decision record](./VENDOR_BILLING_DECISIONS.md#upi-standby-and-switch-on) owns the rationale, the
-account prerequisite and UPI's launch check. The current Test implementation is cards-only.
-Use the existing account's Subscriptions settings and verify the hosted method set, immediate
-signup and future-start authorisation. No custom method selector or all-method matrix is needed
-for this iteration. Existing Test observations do not establish production bank behavior. Before
-production launch, validate the intended methods' timing and enforce that set in Checkout.
+Cards and UPI are offered, and eMandate is excluded; the
+[decision record](./VENDOR_BILLING_DECISIONS.md#upi-accounts-and-launch-evidence) owns the
+rationale and which account offers which methods. Use the account's Subscriptions settings and
+verify the hosted method set, immediate signup and future-start authorisation. No custom method
+selector or all-method matrix is needed for this iteration. Existing Test observations do not
+establish production bank behavior. Before production launch, validate the intended methods'
+timing and enforce that set in Checkout.
 
 Backend should schedule the proposed three-days-left and last-day reminders from the persisted
 expiry, with idempotent delivery. Suppress payment-needed wording once an early ₹299 is paid,

@@ -188,6 +188,7 @@ One object per backend domain, all thin wrappers over the primitives above.
 | `storefront.ts` | `storefrontService` | Public storefront payload by numeric ID or string identifier, paginated storefront products, and delivery-eligibility check (all `skipAuth`). Exports the `Storefront*` types. |
 | `subscriptions.ts` | `subscriptionsService` | Vendor subscriptions, SKU-level plans, platform plans. |
 | `platform.ts` | `platformService`, `imagesService`, `pricesService`, `courierService` | FAQs, authenticated measurement list/detail reads, SKU pricing, vendor image upload, courier admin. |
+| `billing.ts` | `vendorBillingService` | Vendor platform billing: the subscription read, subscribe, `confirm`, cancel and history under `/v1/vendors/{vendorId}/subscription`, and the paid plans list `GET /v1/subscription-plans`. See [Live API billing](#vendor-platform-billing-live-api). |
 | `social.ts` | `socialService` | Social OAuth connect/callback, profile/media sync. |
 | `admin.ts` | `adminService` | Bulk catalog/vendor import, catalog summary/delete. |
 | `legacy.ts` | flat functions | Back-compat wrappers (`getVendor`, `getCart`, `createOrderFromCart`, `loadVendorStorefront`, …). Also re-declares `VendorStorefront`/`StorefrontProduct`/`DeliveryEligibility` types that overlap `schema.d.ts` — treat those as convenience, not source of truth. |
@@ -221,6 +222,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `setItemQty`, `removeItem` | Service returns empty snapshots/no-ops; cart orchestration mutates Zustand locally | `/v1/vendors/{vendorId}/cart/*`, mapped by `mapCartPayload`; called by storefront `cart-actions.ts` |
+| `live-billing.service.ts` | `liveBillingService` | None: Live API only. `VendorPlanPage` routes demo mode to the prototype or the billing panel | The package's `vendorBillingService`; see [Live API billing](#vendor-platform-billing-live-api) |
 | `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Wire-shaped vendor-context fixture mounts the console; setup references still come only from the explicitly selected sample catalog | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
 
 In Live API mode, the onboarding service reads the platform catalog and uses vendor-scoped account
@@ -400,22 +402,169 @@ chooses only between fetching and returning a fixture. `fixtures/vendor-dashboar
 every fixture through the real mapper, so a fixture that stops matching the wire shape fails a
 test instead of drifting into a parallel reality.
 
-#### Vendor platform billing preview
+#### Vendor platform billing: Live API
 
 Vendor-to-MithraDirect fees are separate from customer recurring deliveries. The existing
 `vendorSubscriptionsService` and `/v1/api/subscription-plans` delivery-plan master are not a payment
-gateway or platform-fee API. No Spring Boot billing calls are implemented in this phase.
+gateway or platform-fee API. With `isLiveApi()`, Plan, the billing banner, the header button, the
+rail's plan chip and Settings' Plan row read the published backend billing API. The
+[decision record](./VENDOR_BILLING_DECISIONS.md#live-api-billing--29-september-2026) owns the
+product rules and the billing states, as amended by the
+[early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026).
+[API gaps](./API_GAPS.md#vendor-platform-billing) owns where the backend falls short
+([gaps A–K](./API_GAPS.md#billing-gaps-ak), including gap K, the early first fee) and the
+[production release blockers](./API_GAPS.md#production-release-blockers). Code comments tag each
+gap the app copes with.
+
+| Concern | Owner | Boundary |
+|---|---|---|
+| Backend wrappers | `packages/api-client/src/services/billing.ts` (`vendorBillingService`) | Six operations: the subscription read, subscribe, `confirm`, cancel, history and the paid plans list. Request bodies are typed from the schema; responses are the generic envelope, so shape safety comes from the mappers |
+| Live billing service | `src/shared/api/services/live-billing.service.ts` (`liveBillingService`) | One exported object, the test seam. Unwraps each envelope through `assertApiSuccess` and returns payloads unmapped. The read's 404 becomes `not-live`; every other failure keeps its `ApiError` |
+| Subscription and history mappers | `src/shared/api/mappers/live-billing.ts` | `mapLiveBilling` (the billing view), `mapLivePlanName`, `mapLiveTrialStart`, `mapLiveBillingHistory` and `mapLiveCheckout`. A read that matches no state throws `LiveBillingUnreadableError` |
+| Wording | `src/modules/vendor/lib/live-billing-wording.ts` | Pure: each view's card, note, Confirming line, Stop the plan confirmation, Checkout purpose (waiting, failed and refused lines), banner and header label. Every ₹ amount comes from the plan price. `isSettledView` defines a settled read |
+| Shared read store | `src/modules/vendor/store/live-billing.ts` | `useLiveBilling`, `useStartedLiveBilling`, `readLiveBilling`, `cancelLiveBilling`, `holdLiveBilling` and `resetLiveBilling`: the read, its refresh and retries, the cancel response and the confirmation hold |
+| Retry timing | `src/modules/vendor/lib/live-billing-retry.ts` | `retryDelays` (5, 15 and 30 s), `isBriefOutage` (502, 503 or network) and `pause`, shared by the read and `confirm` |
+| Live Plan | `src/modules/vendor/components/LiveVendorPlan.tsx`, `LivePaymentsYouMade.tsx` | The card, its actions, the Checkout sequence, the poll and "Payments you made" |
+| Live chrome | `src/modules/vendor/components/LiveBillingChrome.tsx`; `VendorShell.tsx`'s `LivePlanChip`; `VendorSettingsPage.tsx`'s `LivePlanName` | Banner and header button from the wording, both linking to Plan; the rail chip and Settings show the plan name from the shared read |
+| Checkout | `src/shared/payments/razorpay-checkout.ts` (`openSubscriptionCheckout`) | Reused unchanged: the key ID and subscription ID come from subscribe's response |
+
+`VendorPlanPage` routes by mode: the Live API gets `LiveVendorPlan`; demo mode gets the
+[six-state prototype](#six-state-plan-prototype) in development and the billing panel in a
+production build. Pages and components import billing only from `@/shared/api`. Tests spy on
+`liveBillingService` and use the wire-shaped responses in
+`src/shared/api/fixtures/live-billing-wire.ts`.
+
+**Sources.**
+
+- **One shared read** covers `GET /v1/vendors/{vendor_id}/subscription` and
+  `GET /v1/subscription-plans`, requested together; if either fails, the whole read fails. It feeds
+  Plan, the banner, the header button, the rail chip and Settings, so they cannot disagree. It holds
+  the billing view, the subscription's `plan_name` and its `trial_started_at`.
+- **The plan** is the list's `billing_cycle: MONTHLY` entry: its name, `plan_code` for subscribe and
+  `sale_price`, which the app reads as rupees. There is no conversion; the OpenAPI examples'
+  paise are a backend documentation bug ([gap G](./API_GAPS.md#billing-gaps-ak)). No monthly entry takes the
+  read error path.
+- **History** (`GET …/subscription/history`) is read only by Plan, apart from the shared read.
+- **The vendor context** supplies features and limits only. In the Live API, the rail chip and
+  Settings' Plan row take the plan name from the shared read (`mapLivePlanName` through
+  `useStartedLiveBilling`); demo mode reads its context. Billing reads nothing from the context.
+- **Mapping.** The backend's statuses and dates decide the view; the browser clock only compares
+  them with now. The first matching rule wins. Absent fields read as null, except that a paid period
+  without a boolean `cancel_at_period_end` takes the read error path. Unknown fields are ignored, and timestamps need a timezone but not seconds. Days left are counted from
+  `trial_ends_at` or the paid-through date, rounded up; the backend's `days_remaining` and display
+  labels are ignored. Before go-live (404) Plan shows only a note.
+
+**Views.** `LiveBillingView` has Free days, 3 days left, Free days Confirming, Collecting, Paid,
+Stopped, AutoPay off, Payment failed, Shop closed, Confirming and not live. Shop closed and
+Confirming say whether free days or paid days ended. Paid carries `trialEndsAt` while its free days
+last after an early first fee (otherwise `null`); the wording then says the free days are kept and
+dates the next ₹299 on the paid-through date. The Confirming views are Free days Confirming and
+Confirming; they offer no payment action, and Plan shows their status line with **Check again**.
+
+**Actions.** Only Plan opens Checkout, and only one action runs at a time.
+
+- **Pay ₹299 with Razorpay** in Free days and 3 days left is the early first fee: one Checkout for
+  ₹299 now, with the free days kept. The backend decides what Checkout charges
+  ([gap K](./API_GAPS.md#billing-gaps-ak)). Set up AutoPay and Turn off AutoPay are not Live API behavior.
+- **Pay ₹299 with Razorpay** in Payment failed and Shop closed pays for a new period now.
+- **Keep shop open** in Stopped and AutoPay off pays ₹299 now for the month after the paid-through
+  date.
+- **Stop the plan** in Paid, including while free days are kept, asks once and then calls cancel.
+- The header and banner label these "Pay ₹299", "Keep open · ₹299" or "Shop plan".
+
+A Checkout action runs subscribe, Checkout, then `confirm` with Checkout's values, then a poll.
+Subscribe is never retried; a repeat while pending returns the same subscription. A dismissed
+Checkout changes nothing; one closed after a failed attempt shows the purpose's failure line with
+Razorpay's reason.
+
+**Refresh and retries.**
+
+- A read already in flight for the vendor is joined. Plan rereads on mount; the chrome, rail and
+  Settings start a read only when none is loaded.
+- While anything shows the read, one window focus listener and one boundary timer keep it current.
+  The timer rereads at the view's earliest future T or P; Paid with free days kept carries both.
+  A delay beyond the browser's longest timer (2³¹−1 ms, about 24.8 days) is re-armed in steps. Day
+  counts move only on a reread.
+- A 502, 503 or network failure is retried quietly 5, 15 and 30 s apart, then shows "MithraDirect
+  isn’t responding. Try again in a minute." with Try again. Other failures use `getErrorMessage`.
+  Once nothing shows the read, a read waiting to retry gives up, and the next mount reads afresh.
+- A failed read keeps the last view: Plan shows the error line above it, and the chrome keeps its
+  banner and header. Until a view lands, including after a failed first read, the header says
+  "Shop plan" and neither the billing banner nor `PlanBanner` shows.
+
+**Writes.**
+
+- Writes are never retried automatically, except `confirm`: a 502, 503 or network failure is retried
+  5, 15 and 30 s apart. A 400 or 401 shows "We couldn’t confirm this payment here…". The poll runs
+  whatever `confirm` does, because the payment may have been taken. Leaving Plan stops the retries.
+- Cancel's response is the subscription. It replaces the shared view directly, with no reread, and
+  drops any read in flight. It is published even after Plan unmounts, so the chrome stays true; a
+  late answer changes none of Plan's own state.
+- Gap-specific messages appear only after the real failure. Cancel's 500
+  ([gap A](./API_GAPS.md#billing-gaps-ak)) and subscribe's 409 from Stopped or AutoPay off
+  ([gap E](./API_GAPS.md#billing-gaps-ak)) have their own lines. Subscribe's 500 after the trial
+  ([gap I](./API_GAPS.md#billing-gaps-ak)) shows the backend's copy through `getErrorMessage`.
+
+**The confirmation hold** (early first fee).
+
+- When Checkout reports success, `holdLiveBilling` stores the action's waiting line in the shared
+  read store: "Confirming payment… Card payments take about a minute; UPI can take a few hours.",
+  with "Your shop opens once Razorpay confirms the ₹299." added on a hidden shop. While the hold
+  lasts, the card's Checkout action is off.
+- The hold lives in memory, per vendor and session, and is never persisted. It ends on a settled
+  read, a reload, sign-out or a vendor change. It survives leaving Plan; back on Plan, the waiting
+  line shows with **Check again**.
+- A **settled read** is one that is neither a Confirming view nor offering a Checkout action
+  (`isSettledView`). A changed view that still offers a payment, such as Free days turning into
+  3 days left, does not end the hold.
+- Plan polls every 5 s for up to 90 s while the hold lasts, including through Confirming views.
+  Leaving Plan stops the poll, and it does not restart on return. After 90 s the waiting line stays
+  with **Check again**. While the view is a Confirming view, its own status line is the waiting
+  line, so it never shows twice.
+- The chrome follows the read, not the hold.
+
+**Payments you made.** `LivePaymentsYouMade` reads the history when the shared read lands or fails
+(each new view object, a cancel response included), after each successful `confirm`, and on its own
+Try again. A newer reason drops the history read in flight. Its failure, or an unreadable shown
+event, stays in its section with Try again, beside any last rows. `mapLiveBillingHistory` lists
+events newest first and shows each once per type and payment ID, or per type and subscription ID
+without a payment, because the development backend records some twice
+([gap G](./API_GAPS.md#billing-gaps-ak)). The titles are "Payment received", "AutoPay set up",
+"Plan stopped" (a cancellation requested while paid) or "AutoPay turned off" (during free days), "AutoPay ended" (skipped after a Plan stop on that subscription), and
+"Free days started" from the shared read's `trialStartedAt`. Other events are ignored. An amount
+shows, in rupees, only when an event carries one; the app never infers it.
+
+**Chrome.** `LiveShellBanner` shows the view's billing banner on every vendor page, Plan included.
+With no billing banner, the shell's `PlanBanner` shows instead, under its own conditions (an open
+store whose context plan code is `FREE`). The code comes from the context's `subscription` block,
+which the flat context no longer sends, so in the Live API `PlanBanner` does not show today.
+`LiveHeaderButton` replaces the plan pill with the view's
+header label. Both only link to Plan.
+
+**Session-bound.** The read belongs to one vendor and one session. A change of the auth store's
+user (sign-in, sign-out or a vendor switch) resets it, drops any response still on its way, and
+ends the hold, so the next vendor on that browser never sees another vendor's billing.
+
+**Demo stays separate.** Demo mode keeps the earlier trial AutoPay flow (Set up AutoPay, AutoPay on,
+Turn off AutoPay). Demo mode, the six-state prototype, the local test server and the development
+preview are frozen: they get no Live API behavior, and the Live API never calls the local test
+server. Their implementation is described below.
+
+#### Vendor platform billing preview
+
+This section and the [six-state prototype](#six-state-plan-prototype) describe demo mode and the
+development preview only; the [Live API](#vendor-platform-billing-live-api) does not use them.
 
 | Concern | Owner | Boundary |
 |---|---|---|
 | Official script, subscription Checkout inputs, browser callback/failure/dismissal, teardown | `src/shared/payments/razorpay-checkout.ts` | No trial, pricing, eligibility, signature secret or access rules |
 | App-facing status/configuration/verification submission contract | `src/shared/api/services/vendor-billing.service.ts` | Proposed four-operation interface and separate trial, authorisation, fee, cancellation and refund facts; not a generated HTTP contract |
-| Proposed wire mapper and fixture service | `src/shared/api/mappers/vendor-billing.ts`, `src/shared/api/services/vendor-billing-fixture.service.ts` | Existing context mapper feeds every supplied scenario; mock acknowledgements and explicit reconciliation stay in memory |
-| Shared context selection and refresh | `src/shared/api/services/vendor-billing-context.service.ts`, `src/modules/vendor/components/VendorAccountProvider.tsx`, `src/modules/vendor/lib/vendor-context-cache.ts` | Demo/live selection follows `isLiveApi()`; billing reads and simulated writes refresh one vendor-scoped context |
+| Proposed wire mapper and fixture service | `src/shared/api/mappers/vendor-billing.ts`, `src/shared/api/services/vendor-billing-fixture.service.ts` | Existing context mapper feeds every supplied scenario; mock acknowledgements and explicit reconciliation stay in memory. Demo and preview only |
+| Shared context selection and refresh | `src/shared/api/services/vendor-billing-context.service.ts`, `src/modules/vendor/components/VendorAccountProvider.tsx`, `src/modules/vendor/lib/vendor-context-cache.ts` | Demo mode only: the production demo build's billing panel. Billing reads and simulated writes refresh one vendor-scoped context |
 | Explicit development implementation | `src/shared/api/services/vendor-billing-preview.service.ts` | Test keys and inspected subscription schedule; real callbacks only become pending |
 | Billing and trial presentation | `src/modules/vendor/components/VendorBillingPanel.tsx` | Renders service-provided access, trial, authorisation and payment independently |
 | Development route and scenario controls | `src/modules/vendor/pages/VendorBillingPreviewPage.tsx` | DEV-only lazy route `/dev/vendor-billing`, outside auth and vendor-context gates |
-| Plan page | `src/modules/vendor/pages/VendorPlanPage.tsx` | Billing panel from the selected auth vendor, without usage against limits; in development demo mode it lazy-loads the six-state prototype instead |
+| Plan page | `src/modules/vendor/pages/VendorPlanPage.tsx` | In a production demo build, the billing panel from the selected auth vendor, without usage against limits; in development demo mode it lazy-loads the six-state prototype instead. The Live API gets the [Live Plan](#vendor-platform-billing-live-api) |
 | Local Plan Test helper | `scripts/vendor-billing-test-helper.mjs`, `src/shared/api/services/vendor-billing-local-test.service.ts` | Loopback development HTTP, locally excluded scenario ledger, server-side Razorpay Test subscription creation/inspection, callback signature verification, provider readback and cancellation; no Spring call. The prototype's only transport |
 | Six-state prototype seeds | `src/shared/api/fixtures/billing-prototype.ts` | One seed and event definition, imported by the app and loaded directly by the helper |
 | Prototype state read and view model | `src/modules/vendor/hooks/use-billing-prototype.ts`, `src/modules/vendor/lib/billing-prototype-card.ts` | One shared helper read for Plan and the shell; card, banner, header and history derived once; no Checkout code |
@@ -601,24 +750,26 @@ service past that boundary until collection halts; a failed (halted) fee grants 
 fulfillment while hiding the store and blocking new operations after access expires.
 Successful retries restore only the remaining original cycle. The decision record owns full
 refunds for debits despite timely cancellation and no automatic proration for ordinary
-cancellation; backend reconciliation must preserve those distinctions. Current development uses
-Test cards; eMandate is excluded and UPI deferred under the
+cancellation; backend reconciliation must preserve those distinctions. The local test server's Test
+account offers cards only; Live API Checkout uses MithraDirect's own account, which offers card and
+UPI. eMandate is excluded under the
 [method scope](./VENDOR_BILLING_DECISIONS.md#current-test-mode-method-scope). Production method
 timing remains a later release gate. Live API mode selects the backend, not Razorpay Live Mode.
 
-Backend integration stage: backend defines the [missing contract](./API_GAPS.md#vendor-platform-billing), then fetch
-OpenAPI and regenerate declarations. Add typed wrappers in `packages/api-client/src/services/`,
-map responses in `src/shared/api/mappers/`, and use the existing authenticated transport. The
-app-facing four-operation service now carries cancellation/refund progress, schedule/paid-period
-data and authoritative action availability in proposed types. The Checkout adapter continues to
-own only provider/browser interaction. Verify real response shapes and affected journeys before
-connecting `/vendor/plan` to backend billing or claiming real access enforcement.
+The backend published its own billing API instead of the proposed contract, and the Live API
+uses it through separate wrappers, service and mappers
+([Live API billing](#vendor-platform-billing-live-api)). The app-facing four-operation service,
+with its proposed cancellation/refund progress, schedule/paid-period data and action availability,
+serves demo mode and the preview only. The Checkout adapter still owns only provider/browser
+interaction.
 
 **Authorised mock contract, 19 September:** the user permits fabricated missing backend data for
 development and tests. The [meeting handoff](./VENDOR_BILLING_BACKEND_HANDOFF.md) and its JSON dataset
 now follow the supplied vendor context envelope and snake_case fields, adding only the minimal
 `subscription.billing` block and populating existing fee/trial data. Reuse the existing context
-read; no new billing-status endpoint is needed. The billing mapper, mock/demo service, panel and
+read; no new billing-status endpoint is needed. *(Withdrawn for the Live API on 29 September 2026:
+the backend published its own billing API, and the context no longer carries a `subscription`
+block. The mock contract still feeds demo mode.)* The billing mapper, mock/demo service, panel and
 mock-backed `/vendor/plan` wiring may proceed before the extension ships. Keep proposed types in the app layer;
 actual package HTTP wrappers/generated declarations still follow the published backend contract.
 This is a scoped temporary exception to requiring measured wire-shaped demo fixtures.
@@ -636,12 +787,10 @@ for another read without calculating access. Submission/cancellation write ackno
 no entitlement. The context service accepts injected acknowledgement functions for isolated
 submit/cancellation refresh tests; no backend cancellation write is connected yet.
 
-The preview injects a mock-backed service explicitly using the existing panel seam. The plan page
-uses a demo context service when `isLiveApi()` is false and a backend context service otherwise;
-live billing remains unavailable with retry and usage intact until authenticated backend integration,
-even if a proposed billing block appears before its writes are connected. Backend errors never
-produce mock success. Simulated transitions stay in vendor-keyed demo memory and make no real
-auth/vendor/order writes.
+The preview injects a mock-backed service explicitly using the existing panel seam. In a
+production demo build the plan page uses the demo context service; the Live API uses the
+[Live Plan](#vendor-platform-billing-live-api) instead of the panel. Simulated transitions stay in
+vendor-keyed demo memory and make no real auth/vendor/order writes.
 The simulated Plan and fixture paths now keep a preparation key for one logical request, including
 a lost response, and reject reuse for a different vendor or action. The panel compares the prepared
 amount, currency and first collection instant with the displayed values; a null collection date
@@ -690,13 +839,13 @@ supplies. When the finite Test schedule has ended, the panel shows the notice an
 and offers only the actions the status lists. Replacing a fixture never touches provider state.
 Stamp provenance in the service: mock/demo (simulated Checkout and outcomes), preview (real Test
 Checkout with unverified callback), local_test (helper-prepared Test Checkout, helper-verified
-provider facts marked separately and simulated access), backend (real server status). Fake provider IDs cannot reach
-Checkout. Production live mode shows billing unavailable until an actual integration exists.
+provider facts marked separately and simulated access). The type still lists `backend`, but no
+service produces it: the Live API does not use this service. Fake provider IDs cannot reach
+Checkout.
 
-**Removal condition:** once the backend publishes OpenAPI and safe verified examples, regenerate,
-implement wrappers, align the mapper and replace fabricated wire fixtures with scrubbed real
-responses. Keep the lifecycle tests and explicit demo support. Backend integration remains in
-Razorpay Test Mode for this iteration; production activation is separate work.
+**Removal condition:** met for the Live API, which has its own wrappers, mappers and wire-shaped
+test fixtures ([Live API billing](#vendor-platform-billing-live-api)). The proposed mapper and
+fabricated fixtures stay for frozen demo mode, with their lifecycle tests.
 
 The earlier preview asked vendors to forfeit trial days and demonstrated setup as a trial
 prerequisite; that behavior has been removed. Its dated provider evidence remains

@@ -10,7 +10,8 @@ Test Mode Checkout path, whose callback remains unverified.
 
 The fixture statuses are labelled **Simulated billing** and grant no real entitlement. No backend
 billing write, provider cancellation, real refund or expiry enforcement is shipped by this preview.
-`/vendor/plan` has separate demo billing and safe unavailable live billing; see the
+`/vendor/plan` has separate demo billing, and the Live API reads the backend billing API
+([Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api)); see the
 [architecture owner](./API_ARCHITECTURE.md#vendor-platform-billing-preview). Fixture cancellation
 and race-refund progress are simulated presentation only. After a real Test callback, the preview
 refuses cancellation rather than pretend it cancelled a Razorpay object. The historical 18
@@ -51,8 +52,8 @@ edge cases and two fixes.
 The preview supplies fabricated entitlement and schedule facts. The backend has not granted a
 real trial, verified a provider callback, enforced expiry, or supplied cancellation and refund
 progress; the displayed cancellation and refund progress comes from fixtures. Its status controls
-demonstrate presentation only; the remaining lifecycle and live integration are owned by later
-tickets.
+demonstrate presentation only. The Live API's integration is separate and does not use the
+preview ([Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api)).
 
 ## Run it
 
@@ -152,9 +153,10 @@ require the backend. See the validation record below for subsequent results.
 - [Agreed scope and product rules](./VENDOR_BILLING_DECISIONS.md).
 - [Official-source research, reviewed 19 September 2026](./research/razorpay-vendor-subscriptions.md):
   lifecycle, method restrictions, signature formulas, reminders, charges, timing and test limits.
-- [Backend implementation requirements](./API_GAPS.md#vendor-platform-billing): proposed data and
-  operations, ownership, verification, enforcement, and acceptance cases.
-- [Module boundaries and migration](./API_ARCHITECTURE.md#vendor-platform-billing-preview).
+- [Backend gaps and requirements](./API_GAPS.md#vendor-platform-billing): where the published
+  billing API falls short, verification, enforcement, and acceptance cases.
+- Module boundaries: [Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api) and
+  [the preview](./API_ARCHITECTURE.md#vendor-platform-billing-preview).
 
 ## Plan Test Mode evidence — 23 September 2026
 
