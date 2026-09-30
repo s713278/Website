@@ -32,7 +32,6 @@ import {
   storeCartPath,
   storeOrderSuccessPath,
   storePath,
-  storeSearchPath,
 } from '@/modules/storefront/lib/store-paths'
 import {
   buildWhatsAppOrderMessage,
@@ -231,16 +230,7 @@ export function CheckoutView({
 
   return (
     <>
-      <StorefrontHeader
-        storeName={store.name}
-        logoUrl={store.theme?.logoImage}
-        cartCount={cartCount}
-        cartHref={storeCartPath(store.id)}
-        searchOpen={false}
-        onToggleSearch={() => navigate(storeSearchPath(store.id))}
-        pageTitle="Checkout"
-        onBack={onBack}
-      />
+      <StorefrontHeader store={store} cartCount={cartCount} />
 
       {checkoutUnavailable ? (
         <main className="store-shell-inner flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">

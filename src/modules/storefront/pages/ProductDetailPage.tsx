@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { ProductDetailPanel } from '@/modules/storefront/components/ProductDetailPanel'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
-import { storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
+import { storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product } from '@/modules/storefront/types'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
@@ -15,7 +15,6 @@ export function ProductDetailPage() {
   const [searchParams] = useSearchParams()
   const skuId = searchParams.get('sku')?.trim() ?? ''
 
-  const navigate = useNavigate()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
 
   const { store, loading: storeLoading, error: storeError, wrapperRef } = useStorePage(
@@ -88,8 +87,6 @@ export function ProductDetailPage() {
           store={store}
           product={product}
           cartCount={itemCount}
-          onBack={() => navigate(storePath(store.id))}
-          onSearch={() => navigate(storeSearchPath(store.id))}
         />
       ) : null}
     </StorePageStates>

@@ -138,7 +138,6 @@ function CartForStore({ storeId }: { storeId: string }) {
               }),
             )
           }}
-          onBack={() => navigate(storePath(store.id))}
         />
       ) : null}
     </StorePageStates>

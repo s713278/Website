@@ -97,6 +97,7 @@ export type Store = {
   heroImage?: string
   offer?: string
   phone?: string
+  supportWhatsapp?: string
   theme?: StoreTheme
   categories?: StoreCategory[]
   products: Product[]

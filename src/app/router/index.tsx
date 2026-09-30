@@ -13,6 +13,7 @@ import { OrderDetailPage } from '@/modules/storefront/pages/OrderDetailPage'
 import { OrderSuccessPage } from '@/modules/storefront/pages/OrderSuccessPage'
 import { OrdersPage } from '@/modules/storefront/pages/OrdersPage'
 import { ProductDetailPage } from '@/modules/storefront/pages/ProductDetailPage'
+import { StoreContactPage } from '@/modules/storefront/pages/StoreContactPage'
 import { StoreDetailPage } from '@/modules/storefront/pages/StoreDetailPage'
 import { StoreListPage } from '@/modules/storefront/pages/StoreListPage'
 import { LoginPage } from '@/shared/auth/pages/LoginPage'
@@ -124,6 +125,7 @@ export function AppRouter() {
 
         <Route element={<StorefrontLayout />}>
           <Route path="stores/:storeId" element={<StoreDetailPage />} />
+          <Route path="stores/:storeId/contact" element={<StoreContactPage />} />
           <Route path="stores/:storeId/products/:productId" element={<ProductDetailPage />} />
           <Route path="stores/:storeId/cart" element={<CartPage />} />
           <Route path="stores/:storeId/location" element={<LocationMapPage />} />

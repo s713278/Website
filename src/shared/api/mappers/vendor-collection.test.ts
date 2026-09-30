@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapCategories, vendorCollectionRows } from './vendor'
+import { mapCategories, mapVendorToStore, vendorCollectionRows } from './vendor'
 
 /**
  * Vendor collection endpoints answer in two different shapes, and the dashboard read the
@@ -49,6 +49,21 @@ describe('vendorCollectionRows', () => {
     expect(vendorCollectionRows(null)).toEqual([])
     expect(vendorCollectionRows('nope')).toEqual([])
     expect(vendorCollectionRows(undefined)).toEqual([])
+  })
+})
+
+describe('mapVendorToStore contact fields', () => {
+  it('maps documented WhatsApp numbers and location', () => {
+    const store = mapVendorToStore({
+      vendor_id: 91,
+      business_name: "Geeta's Kitchen",
+      business_location: 'Hyderabad, Telangana',
+      order_whatsapp_number: '+919912149049',
+      support_whatsapp_number: '+919900000000',
+    })
+    expect(store.location).toBe('Hyderabad, Telangana')
+    expect(store.phone).toBe('+919912149049')
+    expect(store.supportWhatsapp).toBe('+919900000000')
   })
 })
 

@@ -7,6 +7,7 @@ export function StorePageFooter({ store }: { store: Store }) {
       storeName={store.name}
       logoUrl={store.theme?.logoImage}
       tagline={store.tagline ?? store.category}
+      location={store.location}
     />
   )
 }

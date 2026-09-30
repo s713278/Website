@@ -24,7 +24,6 @@ import {
   type CategoryFilter,
 } from '@/modules/storefront/lib/catalog-filters'
 import { listCachedStoreProducts } from '@/modules/storefront/lib/product-catalog-cache'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Store } from '@/modules/storefront/types'
 import { SearchField } from '@/shared/components'
@@ -150,7 +149,6 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
       { id: 'home', el: homeRef.current },
       { id: 'categories', el: categoriesRef.current },
       { id: 'products', el: productsRef.current },
-      { id: 'contact', el: document.getElementById('store-contact') },
     ],
     [store.id, browseOpen],
   )
@@ -192,19 +190,12 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
     if (id === 'home') window.scrollTo({ top: 0, behavior: 'smooth' })
     if (id === 'categories') categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (id === 'products') scrollToProducts()
-    if (id === 'contact') document.getElementById('store-contact')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   function openBrowse(next: CategoryFilter = ALL_CATEGORY) {
     selectCategory(next)
     setBrowseOpen(true)
   }
-
-  const browseTitle = searching
-    ? 'Search results'
-    : searchOpen
-      ? 'Search'
-      : categoryLabel(categories, categoryFilter)
 
   const showHomeViewAll =
     !browseOpen &&
@@ -213,19 +204,13 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   return (
     <>
       <StorefrontHeader
-        storeName={store.name}
-        logoUrl={store.theme?.logoImage}
+        store={store}
         cartCount={itemCount}
-        cartHref={storeCartPath(store.id)}
         activeNav={browseOpen ? 'categories' : activeNav}
         searchOpen={searchOpen}
         onToggleSearch={handleToggleSearch}
         onNavClick={handleNav}
-        onOpenMenu={() =>
-          browseOpen ? exitBrowse(true) : categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-        pageTitle={browseOpen ? browseTitle : undefined}
-        onBack={browseOpen ? () => exitBrowse(true) : undefined}
+        onBrowseMenu={() => (browseOpen ? exitBrowse(true) : openBrowse(ALL_CATEGORY))}
       />
 
       {searchOpen ? (
@@ -275,7 +260,6 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               searching={searching}
               searchTooShort={searchTooShort}
               onCategoryChange={selectCategory}
-              totalElements={searching ? skuSearch.items.length : products.totalElements}
               hasMore={searching ? false : !products.lastPage}
               loading={searching ? skuSearch.loading : products.loading}
               loadingMore={!searching && products.loadingMore}

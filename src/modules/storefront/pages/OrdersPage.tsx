@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { ShieldCheck, ShoppingBag } from 'lucide-react'
 import { OrderCard } from '@/modules/storefront/components/OrderCard'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
@@ -11,7 +11,7 @@ import {
 } from '@/modules/storefront/lib/orders-history'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
-import { storeCartPath, storeOrdersPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
+import { storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -29,9 +29,8 @@ export function OrdersPage() {
 }
 
 function StoreOrders({ storeId }: { storeId: string }) {
-  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-only' })
+  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const [orders, setOrders] = useState<CustomerOrder[]>([])
   const [apiPage, setApiPage] = useState(0)
   const [lastPage, setLastPage] = useState(true)
@@ -128,6 +127,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
   const visible = orders
 
   const shopName = store?.name ?? visible[0]?.storeName ?? 'this shop'
+  const itemCount = useCartStore((s) => s.itemCount(storeId))
   const signedIn = canShopAsCustomer(user)
   const login = customerLoginLink(storeOrdersPath(storeId), {
     name: store?.name ?? shopName,
@@ -136,28 +136,20 @@ function StoreOrders({ storeId }: { storeId: string }) {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader
-        storeName={store?.name ?? shopName}
-        logoUrl={store?.theme?.logoImage}
-        cartHref={storeCartPath(storeId)}
-        searchOpen={false}
-        onToggleSearch={() => navigate(storeSearchPath(storeId))}
-        pageTitle="My orders"
-        onBack={() => navigate(storePath(storeId))}
-      />
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} cartCount={itemCount} />
 
-      <main className="store-shell-inner flex-1 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-8">
+      <main className="store-shell-inner flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-5">
         <div className="mx-auto w-full max-w-3xl">
-          <header className="mb-5 sm:mb-6">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] text-[var(--store-theme,var(--md-green-700))] sm:size-11">
+          <header className="mb-3.5">
+            <div className="flex items-start gap-2.5">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] text-[var(--store-theme,var(--md-green-700))]">
                 <ShoppingBag className="size-5" strokeWidth={2} aria-hidden />
               </span>
               <div className="min-w-0">
-                <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
                   Your orders
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">Track orders from {shopName}</p>
+                <p className="mt-0.5 text-sm text-slate-500">Track orders from {shopName}</p>
               </div>
             </div>
           </header>
@@ -189,7 +181,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
               }
             />
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               {visible.map((order) => (
                 <OrderCard key={order.id} order={order} storeId={storeId} />
               ))}
@@ -213,9 +205,9 @@ function StoreOrders({ storeId }: { storeId: string }) {
           )}
 
           {visible.length > 0 ? (
-            <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] px-4 py-3.5 ring-1 ring-[var(--store-theme-muted,rgba(16,185,129,0.22))] sm:mt-8 sm:items-center sm:gap-4 sm:px-5 sm:py-4">
-              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-[var(--store-theme,var(--md-green-700))] shadow-sm sm:size-10">
-                <ShieldCheck className="size-5" strokeWidth={2} aria-hidden />
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] px-3.5 py-3 ring-1 ring-[var(--store-theme-muted,rgba(16,185,129,0.22))] sm:items-center sm:px-4">
+              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[var(--store-theme,var(--md-green-700))] shadow-sm">
+                <ShieldCheck className="size-4" strokeWidth={2} aria-hidden />
               </span>
               <div className="min-w-0">
                 <p className="font-semibold text-slate-900">Safe. Secure. Reliable.</p>

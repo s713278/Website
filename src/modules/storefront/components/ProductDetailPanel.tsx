@@ -11,7 +11,6 @@ import { VariantPicker } from './VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
 import { useProductVariantCartState } from '@/modules/storefront/lib/cart-write-pending'
 import { getProductImages, hasMultipleVariants } from '@/modules/storefront/lib/product-variants'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, Store } from '@/modules/storefront/types'
 import { Button } from '@/shared/components'
@@ -21,8 +20,6 @@ type ProductDetailPanelProps = {
   store: Store
   product: Product
   cartCount: number
-  onBack: () => void
-  onSearch: () => void
 }
 
 /**
@@ -33,8 +30,6 @@ export function ProductDetailPanel({
   store,
   product,
   cartCount,
-  onBack,
-  onSearch,
 }: ProductDetailPanelProps) {
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const images = useMemo(() => getProductImages(product), [product])
@@ -46,16 +41,7 @@ export function ProductDetailPanel({
 
   return (
     <>
-      <StorefrontHeader
-        storeName={store.name}
-        logoUrl={store.theme?.logoImage}
-        cartCount={cartCount}
-        cartHref={storeCartPath(store.id)}
-        searchOpen={false}
-        onToggleSearch={onSearch}
-        pageTitle={product.name}
-        onBack={onBack}
-      />
+      <StorefrontHeader store={store} cartCount={cartCount} />
 
       <main
         className={`store-shell-inner flex-1 overflow-visible py-4 sm:py-5${

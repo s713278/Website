@@ -17,7 +17,7 @@ import {
   priceDetailsFromSummary,
   storeCartLines,
 } from '@/modules/storefront/lib/cart-utils'
-import { storeCartPath, storeCheckoutPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
+import { storeCheckoutPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -31,7 +31,6 @@ type StoreCartViewProps = {
   cartCount: number
   onSetQty: (itemId: string, qty: number) => void
   onRemove: (itemId: string) => void
-  onBack: () => void
   /** Lines waiting on qty +/- API. */
   pendingQtyIds?: ReadonlySet<string>
   /** Lines waiting on remove (X) API. */
@@ -44,7 +43,6 @@ export function StoreCartView({
   cartCount,
   onSetQty,
   onRemove,
-  onBack,
   pendingQtyIds,
   removingIds,
 }: StoreCartViewProps) {
@@ -75,16 +73,7 @@ export function StoreCartView({
 
   return (
     <>
-      <StorefrontHeader
-        storeName={store.name}
-        logoUrl={store.theme?.logoImage}
-        cartCount={cartCount}
-        cartHref={storeCartPath(store.id)}
-        searchOpen={false}
-        onToggleSearch={() => navigate(storeSearchPath(store.id))}
-        pageTitle="Cart"
-        onBack={onBack}
-      />
+      <StorefrontHeader store={store} cartCount={cartCount} />
 
       <main
         className={cn(
