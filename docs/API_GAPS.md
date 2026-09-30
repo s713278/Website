@@ -94,6 +94,23 @@ Verified on dev with fresh test vendors, a real Razorpay Test Checkout and a das
 now", 28–30 September 2026. Each gap says how the Live API copes until it is fixed; the app reads
 today's responses and the corrected ones alike, so a fix needs no app change.
 
+The table summarises each gap; the entries below it carry the evidence and the full required
+change. "Blocker" refers to the [production release blockers](#production-release-blockers).
+
+| Gap | Problem | Cost if unfixed | Recommended fix | Blocker |
+|---|---|---|---|---|
+| A | Stopping after an early first fee returns `500` | A vendor who paid early cannot stop the plan until the paid month ends, so the next ₹299 is charged | Cancel at Razorpay immediately; report `ACTIVE` with `cancel_at_period_end: true` until `current_period_end`; a 4xx with the reason when refused | Yes |
+| B | `ACTIVE` before the ₹299 is captured | A charge that fails, or whose webhook is lost, leaves an unpaid vendor `ACTIVE` | Move to `ACTIVE` on `subscription.charged` only | No |
+| C | Subscribing alone moves the trial to `PAYMENT_PENDING` with the paid plan | A vendor who closes Checkout unpaid stays `PAYMENT_PENDING` for good, and is named on the paid plan | Keep `TRIAL_ACTIVE` until the ₹299 is captured; cancel a still-`created` subscription at trial end | No |
+| D | The next ₹299's date is unconfirmed | A charge after `current_period_end` gives a free day and shifts every renewal; the shop reads Collecting meanwhile | `start_at` = the new `current_period_end`; confirm with a Razorpay read | Yes |
+| E | Keep shop open returns `409` while the plan is stopped | A stopped vendor cannot restart before the paid days end, so the shop closes first | Charge ₹299 now; the new month starts at the old `current_period_end` | No |
+| F | `next_billing_at` is kept after a stop | The read names a charge that will not happen | Null while `cancel_at_period_end` is true | No |
+| G | Minor: duplicate history rows, no amounts, timestamp without offset, brief `502`s, OpenAPI doc bugs, `confirm` history only | History shows no amounts; a lost `confirm` drops its history row | Webhook-written history with `amount` in rupees, idempotent `confirm`, an offset on `timestamp` | No |
+| H | A Razorpay-side cancel reads `CANCELLED` while the paid month remains | Enforcement keyed on status would hide a paid shop up to a month early | MFPS-66 keeps a `CANCELLED` shop with a future `current_period_end` open | Via MFPS-66 |
+| I | Paying after the trial fails | A vendor whose free days ended has no way to pay | After the trial, an immediate-start subscription that collects ₹299 at once | Yes |
+| J | The status stays `TRIAL_ACTIVE` after `trial_ends_at` | The status contradicts the dates; anything reading the status alone sees a trial | `TRIAL_EXPIRED` at `trial_ends_at`, on server time | No |
+| K | The early first fee is not built | Paying in the free days sets up AutoPay only (₹5 now, ₹299 at trial end); the shop is hidden after the trial end until Razorpay charges | One ₹299 now, a paid month from `trial_ends_at`, `start_at` = `current_period_end` | Yes |
+
 - **A. Stopping after an early first fee returns `500`.**
   - Evidence: cancel returned `500` "Unable to cancel the subscription at this time." for a
     subscription Razorpay held as `authenticated` (card approved) and for one still `created`
@@ -302,8 +319,8 @@ provider fields and restrictions. At minimum:
    Handle duplicates, out-of-order events and callback/webhook races without extending a paid period
    twice or resurrecting an obsolete subscription. Persist events before acknowledging them and
    reconcile delayed/missing callbacks with provider reads/jobs.
-5. Preserve the trial through its original expiry, including after successful optional setup or
-   pre-start cancellation. Establish paid membership from confirmed platform-fee coverage. A fee
+5. Preserve the trial through its original expiry, including after an early first fee or a stop
+   after it. Establish paid membership from confirmed platform-fee coverage. A fee
    charged earlier than the promised date is a discrepancy to reconcile, not permission to
    forfeit trial days. *(Superseded by the
    [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026).)* After
@@ -386,8 +403,8 @@ for this iteration. Existing Test observations do not establish production bank 
 production launch, validate the intended methods' timing and enforce that set in Checkout.
 
 Backend should schedule the proposed three-days-left and last-day reminders from the persisted
-expiry, with idempotent delivery. Suppress setup-needed wording after confirmed AutoPay setup;
-scheduled-debit and cancelled/no-renewal messages require their own approved rules. Exact delivery
+expiry, with idempotent delivery. Suppress payment-needed wording once an early ₹299 is paid,
+including while it is being confirmed; scheduled-debit and cancelled/no-renewal messages require their own approved rules. Exact delivery
 times, timezone, offsets and channels (in-app/WhatsApp/email/SMS) need approval. Provider lifecycle
 and pre-debit notices do not establish these MithraDirect trial reminders. The preview only
 displays example reminder states and sends no notifications.
