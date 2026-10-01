@@ -12,7 +12,6 @@ import {
   StorePageStates,
   StorefrontHeader,
 } from '@/modules/storefront/components'
-import { useStoreScrollNav } from '@/modules/storefront/hooks/useStoreScrollNav'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import { useStoreProducts } from '@/modules/storefront/hooks/useStoreProducts'
 import { useStoreSkuSearch } from '@/modules/storefront/hooks/useStoreSkuSearch'
@@ -76,9 +75,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(ALL_CATEGORY)
   const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()) || searchRequested)
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
-  const homeRef = useRef<HTMLDivElement>(null)
   const productsRef = useRef<HTMLElement>(null)
-  const categoriesRef = useRef<HTMLDivElement>(null)
 
   const homePageSize = 6
   const browsePageSize = 10
@@ -144,52 +141,30 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
     if (resolved !== categoryFilter) setCategoryFilter(resolved)
   }, [categories, categoryFilter])
 
-  const activeNav = useStoreScrollNav(
-    () => [
-      { id: 'home', el: homeRef.current },
-      { id: 'categories', el: categoriesRef.current },
-      { id: 'products', el: productsRef.current },
-    ],
-    [store.id, browseOpen],
-  )
-
   useEffect(() => {
     if (browseOpen) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [browseOpen])
-
-  function exitBrowse(scrollHome = false) {
-    setBrowseOpen(false)
-    setSearchOpen(false)
-    setSearchDraft('')
-    setQuery('')
-    if (scrollHome) categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   function scrollToProducts() {
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  function closeSearch() {
+    setSearchOpen(false)
+    setBrowseOpen(false)
+    setCategoryFilter(ALL_CATEGORY)
+    setSearchDraft('')
+    setQuery('')
+  }
+
   function handleToggleSearch() {
     if (searchOpen) {
-      if (!searchDraft.trim() && !query.trim()) setBrowseOpen(false)
-      setSearchOpen(false)
-      setSearchDraft('')
-      setQuery('')
+      closeSearch()
       return
     }
     setCategoryFilter(ALL_CATEGORY)
     setBrowseOpen(true)
     setSearchOpen(true)
-  }
-
-  function handleNav(id: string) {
-    if (browseOpen) {
-      exitBrowse()
-      return
-    }
-    if (id === 'home') window.scrollTo({ top: 0, behavior: 'smooth' })
-    if (id === 'categories') categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    if (id === 'products') scrollToProducts()
   }
 
   function openBrowse(next: CategoryFilter = ALL_CATEGORY) {
@@ -206,11 +181,8 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
       <StorefrontHeader
         store={store}
         cartCount={itemCount}
-        activeNav={browseOpen ? 'categories' : activeNav}
         searchOpen={searchOpen}
         onToggleSearch={handleToggleSearch}
-        onNavClick={handleNav}
-        onBrowseMenu={() => (browseOpen ? exitBrowse(true) : openBrowse(ALL_CATEGORY))}
       />
 
       {searchOpen ? (
@@ -268,7 +240,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
           )
         ) : (
           <>
-            <div ref={homeRef} data-nav-section="home" className="flex flex-col gap-5 sm:gap-6">
+            <div className="flex flex-col gap-5 sm:gap-6">
               <OfferBanner
                 title={store.name}
                 tagline={store.tagline}
@@ -287,7 +259,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               ) : null}
             </div>
 
-            <div ref={categoriesRef} data-nav-section="categories">
+            <div>
               <CategoryScroller
                 categories={categories}
                 activeFilter={categoryFilter}
@@ -301,7 +273,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               />
             </div>
 
-            <section ref={productsRef} data-nav-section="products">
+            <section ref={productsRef}>
               {products.error && products.items.length === 0 && !products.loading ? (
                 <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-5 text-sm text-red-700">
                   <p className="font-medium">{products.error}</p>

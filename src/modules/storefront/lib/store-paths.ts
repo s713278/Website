@@ -2,7 +2,6 @@ export function storePath(storeId: string) {
   return `/stores/${storeId}`
 }
 
-/** Contact us page — same pattern as Track Order (`/orders`). */
 export function storeContactPath(storeId: string) {
   return `${storePath(storeId)}/contact`
 }
@@ -10,14 +9,6 @@ export function storeContactPath(storeId: string) {
 export function isStoreContactPath(path: string | undefined): boolean {
   if (!path) return false
   return /^\/stores\/[^/]+\/contact\/?$/.test(path.split('?')[0] ?? '')
-}
-
-/** Shop-header underline: Contact us / Track Order win; Home only on the shop itself. */
-export function storefrontActiveNav(path: string | undefined, fallback = 'home'): string {
-  if (isStoreContactPath(path)) return 'contact'
-  if (isStoreOrdersPath(path)) return 'orders'
-  if (isStoreHomePath(path)) return fallback
-  return ''
 }
 
 /** Shop catalog home — `/stores/273`. Search query still counts as home. */
@@ -92,12 +83,6 @@ export function locationMapPath(
 
 export function storeOrdersPath(storeId: string) {
   return `${storePath(storeId)}/orders`
-}
-
-/** History, detail, and success under `/stores/:id/orders`. */
-export function isStoreOrdersPath(path: string | undefined): boolean {
-  if (!path) return false
-  return /^\/stores\/[^/]+\/orders(?:\/|$)/.test(path.split('?')[0] ?? '')
 }
 
 export function storeOrderPath(storeId: string, orderId: string) {

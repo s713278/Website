@@ -42,7 +42,6 @@ export function CategoryBrowseSection({
   className,
 }: CategoryBrowseSectionProps) {
   const showSkeleton = loading && products.length === 0 && !searching
-  const resultCount = products.length
   const q = query.trim()
 
   return (
@@ -53,19 +52,6 @@ export function CategoryBrowseSection({
         onSelect={onCategoryChange}
         showAllOption
       />
-
-      {searching && !searchTooShort && !showSkeleton && resultCount > 0 ? (
-        <p className="break-words text-sm text-slate-600">
-          <span className="font-semibold text-slate-900">{resultCount}</span>
-          {resultCount === 1 ? ' result' : ' results'}
-          {q ? (
-            <>
-              {' '}
-              for <span className="font-medium break-all text-slate-800">“{q}”</span>
-            </>
-          ) : null}
-        </p>
-      ) : null}
 
       <ProductGrid
         storeId={storeId}
