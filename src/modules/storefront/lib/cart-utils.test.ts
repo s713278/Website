@@ -3,6 +3,7 @@ import {
   cartSkuIdsForProduct,
   enrichCartLinesWithCatalog,
   findProductForCartLine,
+  priceDetailsFromSummary,
 } from '@/modules/storefront/lib/cart-utils'
 import type { CartLine, Product } from '@/modules/storefront/types'
 
@@ -346,5 +347,22 @@ describe('enrichCartLinesWithCatalog', () => {
       skuId: '1895',
     })
     expect(product?.name).toBe('Butter Cookies')
+  })
+})
+
+describe('priceDetailsFromSummary', () => {
+  it('uses unique line count, not summed quantity', () => {
+    const details = priceDetailsFromSummary({
+      itemsTotal: 820,
+      deliveryCharges: 0,
+      discount: 0,
+      serviceCharge: 0,
+      grandTotal: 820,
+      itemsCount: 2,
+      totalQuantity: 5,
+    })
+    expect(details.itemCount).toBe(2)
+    expect(details.lineCount).toBe(2)
+    expect(details.total).toBe(820)
   })
 })

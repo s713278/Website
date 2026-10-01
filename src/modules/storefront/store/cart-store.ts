@@ -202,19 +202,17 @@ export const useCartStore = create<CartState>()(
         set({ lines: [], summaries: {} })
       },
 
+      /** Unique SKU lines (Blinkit/Meesho), not summed quantity. */
       itemCount(storeId) {
-        if (storeId) {
-          const summary = get().summaries?.[storeId]
-          if (summary) return summary.totalQuantity
-          return get()
-            .lines.filter((line) => line.storeId === storeId)
-            .reduce((sum, line) => sum + line.qty, 0)
-        }
-        const summaries = Object.values(get().summaries ?? {})
-        if (summaries.length > 0) {
-          return summaries.reduce((sum, entry) => sum + entry.totalQuantity, 0)
-        }
-        return get().lines.reduce((sum, line) => sum + line.qty, 0)
+        const lines = get().lines.filter(
+          (line) => line.qty > 0 && (!storeId || line.storeId === storeId),
+        )
+        if (lines.length > 0) return lines.length
+        if (storeId) return get().summaries?.[storeId]?.itemsCount ?? 0
+        return Object.values(get().summaries ?? {}).reduce(
+          (sum, entry) => sum + entry.itemsCount,
+          0,
+        )
       },
 
       subtotal(storeId) {

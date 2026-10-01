@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { vendorCollectionRows } from './vendor'
+import { mapCategories, mapVendorToStore, vendorCollectionRows } from './vendor'
 
 /**
  * Vendor collection endpoints answer in two different shapes, and the dashboard read the
@@ -49,5 +49,58 @@ describe('vendorCollectionRows', () => {
     expect(vendorCollectionRows(null)).toEqual([])
     expect(vendorCollectionRows('nope')).toEqual([])
     expect(vendorCollectionRows(undefined)).toEqual([])
+  })
+})
+
+describe('mapVendorToStore contact fields', () => {
+  it('maps documented WhatsApp numbers and location', () => {
+    const store = mapVendorToStore({
+      vendor_id: 91,
+      business_name: "Geeta's Kitchen",
+      business_location: 'Hyderabad, Telangana',
+      order_whatsapp_number: '+919912149049',
+      support_whatsapp_number: '+919900000000',
+    })
+    expect(store.location).toBe('Hyderabad, Telangana')
+    expect(store.phone).toBe('+919912149049')
+    expect(store.supportWhatsapp).toBe('+919900000000')
+  })
+})
+
+describe('mapCategories', () => {
+  it('uses icon for the chip and keeps image_path off the icon field', () => {
+    expect(
+      mapCategories([
+        {
+          id: 152,
+          name: 'Pickles',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-pickles/mango-pickle.webp',
+          icon: 'https://img.icons8.com/external-isometric-vectorslab/68/external-Jam-Bottle-china-new-year-isometric-vectorslab-3.png',
+        },
+        {
+          id: 153,
+          name: 'Spice Powders',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-spice-powders/karam-podi.webp',
+          icon: 'https://img.icons8.com/3d-fluency/94/chili-pepper.png',
+        },
+      ]),
+    ).toEqual([
+      {
+        label: 'Pickles',
+        categoryId: 152,
+        icon: 'https://img.icons8.com/external-isometric-vectorslab/68/external-Jam-Bottle-china-new-year-isometric-vectorslab-3.png',
+        imagePath:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-pickles/mango-pickle.webp',
+      },
+      {
+        label: 'Spice Powders',
+        categoryId: 153,
+        icon: 'https://img.icons8.com/3d-fluency/94/chili-pepper.png',
+        imagePath:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-spice-powders/karam-podi.webp',
+      },
+    ])
   })
 })

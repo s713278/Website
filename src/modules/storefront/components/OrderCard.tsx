@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import type { CustomerOrder } from '@/shared/api'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import {
-  DELIVERY_ESTIMATE_NOTE,
   orderArrivalLabel,
   orderItemsSummary,
   orderMrpTotal,
@@ -26,18 +25,18 @@ export function OrderCard({ order, storeId }: OrderCardProps) {
   const estimate = orderArrivalLabel(order)
 
   return (
-    <article className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_10px_rgba(15,23,42,0.05)] ring-1 ring-slate-100">
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
+    <article className="rounded-xl bg-white p-3.5 ring-1 ring-slate-100 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-medium text-slate-500">Order #{order.id}</p>
         <StatusBadge status={order.status} />
       </div>
 
-      <div className="flex gap-3 px-4 py-3 sm:px-5">
-        <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-slate-50 ring-1 ring-slate-100 sm:size-16">
+      <div className="mt-2.5 flex gap-3">
+        <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-100 sm:size-14">
           {imageUrl ? (
             <img src={imageUrl} alt="" className="size-full object-cover" loading="lazy" />
           ) : (
-            <div className="flex size-full items-center justify-center text-xl">🛒</div>
+            <div className="flex size-full items-center justify-center text-lg">🛒</div>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -51,26 +50,23 @@ export function OrderCard({ order, storeId }: OrderCardProps) {
             price={order.total}
             listPrice={orderMrpTotal(order)}
             size="sm"
-            className="mt-1.5"
+            className="mt-1"
           />
         </div>
       </div>
 
       {estimate ? (
-        <div className="px-4 sm:px-5">
-          <p className="text-xs font-medium text-slate-700">Estimated delivery: {estimate}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p>
-        </div>
+        <p className="mt-2 text-xs font-medium leading-snug text-slate-700">
+          Estimated delivery: {estimate}
+        </p>
       ) : null}
 
-      <div className="px-4 py-3 sm:px-5">
-        <Link
-          to={detailHref}
-          className="inline-flex min-h-10 items-center text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
-        >
-          View details
-        </Link>
-      </div>
+      <Link
+        to={detailHref}
+        className="mt-1.5 inline-flex min-h-8 items-center text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+      >
+        View details
+      </Link>
     </article>
   )
 }
@@ -80,7 +76,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold',
         delivered
           ? 'bg-slate-100 text-slate-600'
           : 'bg-[var(--store-theme-soft,#ecfdf5)] text-[var(--store-theme,var(--md-green-700))]',

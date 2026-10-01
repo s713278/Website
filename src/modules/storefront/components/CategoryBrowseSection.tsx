@@ -18,7 +18,6 @@ type CategoryBrowseSectionProps = {
   /** True when user typed 1 character — show hint, keep catalog visible. */
   searchTooShort?: boolean
   onCategoryChange: (filter: CategoryFilter) => void
-  totalElements?: number
   hasMore?: boolean
   loadingMore?: boolean
   loading?: boolean
@@ -36,7 +35,6 @@ export function CategoryBrowseSection({
   searching = false,
   searchTooShort = false,
   onCategoryChange,
-  totalElements,
   hasMore = false,
   loadingMore = false,
   loading = false,
@@ -44,7 +42,6 @@ export function CategoryBrowseSection({
   className,
 }: CategoryBrowseSectionProps) {
   const showSkeleton = loading && products.length === 0 && !searching
-  const count = searching ? products.length : (totalElements ?? products.length)
   const q = query.trim()
 
   return (
@@ -55,29 +52,6 @@ export function CategoryBrowseSection({
         onSelect={onCategoryChange}
         showAllOption
       />
-
-      {!searchTooShort && !showSkeleton && count > 0 ? (
-        <p className="break-words text-sm text-slate-600">
-          {searching ? (
-            <>
-              <span className="font-semibold text-slate-900">{count}</span>
-              {count === 1 ? ' result' : ' results'}
-              {q ? (
-                <>
-                  {' '}
-                  for{' '}
-                  <span className="font-medium break-all text-slate-800">“{q}”</span>
-                </>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <span className="font-semibold text-slate-900">{count}</span>
-              {count === 1 ? ' product' : ' products'}
-            </>
-          )}
-        </p>
-      ) : null}
 
       <ProductGrid
         storeId={storeId}

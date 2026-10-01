@@ -51,6 +51,7 @@ export type StoreCategory = {
   label: string
   imagePath?: string
   categoryId?: number
+  icon?: string
 }
 
 export type StoreTheme = {
@@ -96,6 +97,7 @@ export type Store = {
   heroImage?: string
   offer?: string
   phone?: string
+  supportWhatsapp?: string
   theme?: StoreTheme
   categories?: StoreCategory[]
   products: Product[]

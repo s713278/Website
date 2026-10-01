@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { ArrowRight, CreditCard, Home, ImageIcon, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
@@ -16,7 +16,8 @@ import {
 } from '@/modules/storefront/lib/order-display'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
-import { storeCartPath, storeOrderPath, storeOrdersPath, storePath, storeSearchPath } from '@/modules/storefront/lib/store-paths'
+import { storeOrderPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, EmptyState, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -24,9 +25,8 @@ import { cn } from '@/lib/utils'
 
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
-  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-only' })
+  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [orderError, setOrderError] = useState('')
@@ -64,6 +64,8 @@ export function OrderDetailPage() {
     }
   }, [orderId, storeId, user])
 
+  const itemCount = useCartStore((s) => s.itemCount(storeId))
+
   if (!storeId || !orderId) return <Navigate to="/orders" replace />
 
   const shopName = store?.name ?? order?.storeName ?? 'Order details'
@@ -75,15 +77,7 @@ export function OrderDetailPage() {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader
-        storeName={shopName}
-        logoUrl={store?.theme?.logoImage}
-        cartHref={storeCartPath(storeId)}
-        searchOpen={false}
-        onToggleSearch={() => navigate(storeSearchPath(storeId))}
-        pageTitle="Order details"
-        onBack={() => navigate(storeOrdersPath(storeId))}
-      />
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} cartCount={itemCount} />
 
       <main className="store-shell-inner flex-1 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-6">
         <div className="mx-auto w-full max-w-lg space-y-3">

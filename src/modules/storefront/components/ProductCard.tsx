@@ -71,7 +71,7 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
             price={selected.price}
             listPrice={selected.listPrice}
             size="sm"
-            className="shrink-0 flex-col items-end gap-0"
+            className="shrink-0 flex-nowrap items-baseline"
             saleClassName="text-[15px] leading-tight text-[var(--store-accent,#ea580c)] sm:text-base"
           />
         </div>
