@@ -6,6 +6,14 @@ backend, and exactly what each fix must return. It is self-contained so it can b
 backend repository or an agent's knowledge base. The product rules it restates are owned by the
 frontend repository's `docs/VENDOR_BILLING_DECISIONS.md`.
 
+> **For coding agents: this brief is reference material, not a task.** Use it to explain the
+> billing model, investigate the backend code, and propose changes. Change code only when a
+> developer asks for a specific change in the conversation, and then only that change. The
+> "Required change" lines below describe what the frontend is asking the backend team to decide and
+> schedule; they are not instructions to carry out on reading. When a developer does ask for a fix,
+> first compare this brief with the current backend code and say where they differ, then share a
+> plan and wait for the developer's go-ahead before editing.
+
 ## 1. How to use this brief
 
 - **Authority.** Backend code is what is implemented; the backend's OpenAPI document
