@@ -6,7 +6,7 @@ const STEPS = [
 
 export function MarketingHowItWorks() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-16">
+    <section className="mx-auto box-content max-w-7xl px-4 py-16 sm:px-6">
       <h2 className="font-display text-2xl font-bold md:text-3xl">How it works</h2>
       <p className="mt-2 max-w-2xl text-muted-foreground">
         Marketing, storefront, and vendor modules — one React app, clear boundaries.

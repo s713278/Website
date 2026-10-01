@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { loginPathForRole } from '@/app/router/role-home'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
 import logoDarkMd from '@/assets/logo_dark_md.png'
 import { StoreBrandLogo } from '@/modules/storefront/components/StoreBrandLogo'
@@ -244,7 +245,18 @@ export function OtpLoginForm({
         </Link>
       </header>
 
-      <main className="relative z-10 mx-auto flex max-w-md flex-col px-4 pb-16 pt-4">{card}</main>
+      <main className="relative z-10 mx-auto flex max-w-md flex-col px-4 pb-16 pt-4">
+        {card}
+        {/* Phone step only: leaving mid-OTP would abandon a code that was already sent. */}
+        {isVendor && step === 'phone' ? (
+          <p className="mt-5 text-center text-sm text-[var(--md-muted)]">
+            Not a vendor?{' '}
+            <Link to={loginPathForRole('customer')} className="font-semibold text-[var(--md-green-700)] hover:underline">
+              Log in as a customer
+            </Link>
+          </p>
+        ) : null}
+      </main>
     </div>
   )
 }

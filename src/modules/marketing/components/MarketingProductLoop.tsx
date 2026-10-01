@@ -31,7 +31,7 @@ export function MarketingProductLoop() {
       aria-label="Product demo path"
       id="how-it-works"
     >
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto box-content flex max-w-7xl flex-col gap-4 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
         <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
           See the product loop
         </p>

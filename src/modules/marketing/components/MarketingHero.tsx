@@ -105,7 +105,7 @@ export function MarketingHero() {
         }}
       />
 
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 md:grid-cols-[1.05fr_0.95fr] md:gap-10 md:py-20">
+      <div className="mx-auto box-content grid max-w-7xl items-center gap-12 px-4 py-14 sm:px-6 md:grid-cols-[1.05fr_0.95fr] md:gap-10 md:py-20">
         <div>
           <h1 className="font-display text-4xl font-extrabold leading-[1.12] tracking-tight text-slate-900 md:text-5xl lg:text-[3.25rem]">
             Launch your{' '}
