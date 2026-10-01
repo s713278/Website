@@ -1,21 +1,27 @@
 # Razorpay research: vendor platform subscriptions
 
 Research date: **18 September 2026; hybrid/cancellation review 19 September 2026**.
+**Amended 29 September 2026** for the [early first fee](../VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026): paying during the trial now charges the first ₹299 at
+once as an upfront add-on, with the subscription's `start_at` one billing month after the trial end.
+Passages describing optional AutoPay with the first fee at the trial end are marked as withdrawn.
+The Razorpay calls behind the early first fee were **verified on a Razorpay Test account on
+30 September 2026**; the [backend billing brief](../VENDOR_BILLING_BACKEND_BRIEF.md#7-razorpay-recipes-and-verified-facts) records them.
 Sources: current official Razorpay documentation, including
 its Markdown pages where the HTML/browser reader could not load the content. Scope: registered
 vendors paying MithraDirect for their store's platform membership. Customer purchases, vendor
 settlements, and customer-to-vendor payments are outside this work.
 
-This is research and a backend handoff input. The [billing decision record](../VENDOR_BILLING_DECISIONS.md)
+This is research and an input to the backend brief. The [billing decision record](../VENDOR_BILLING_DECISIONS.md)
 owns the approved hybrid and cancellation rules; their inclusion here does not mean production
-billing exists. [API gaps](../API_GAPS.md) owns missing backend capabilities;
+billing exists. The [backend billing brief](../VENDOR_BILLING_BACKEND_BRIEF.md) owns missing backend capabilities;
 [API architecture](../API_ARCHITECTURE.md) owns implementation boundaries.
 
 ## Evidence and product inputs
 
-- **Product requirements:** one INR plan at ₹299/month in Test Mode; one eligible 14-day platform
-  trial after completed onboarding and successful approval; optional AutoPay setup preserves the
-  original expiry and schedules the first monthly fee for that date. After expiry, explicit signup
+- **Product requirements:** one INR plan at ₹299/month; one eligible 14-day platform
+  trial after completed onboarding and successful approval; paying during the trial collects the
+  first monthly fee at once for a paid period starting at the original expiry (the early first fee;
+  until 29 September 2026, optional AutoPay setup scheduled the first fee for that date). After expiry, explicit signup
   collects the first fee upfront. Trial/paid coverage survives ordinary cancellation until its
   existing end. The user supplied Test plan `plan_TcleJ0esLkwUPM`, named
   `MITHRADIRECT_MONTHLY_PLATFORM_FEE`. The discussed `total_count: 12` is a test setting only.
@@ -25,7 +31,8 @@ billing exists. [API gaps](../API_GAPS.md) owns missing backend capabilities;
   they are proposed application behavior, not existing endpoints or Razorpay guarantees.
 - **Actually tested in this research:** official documentation retrieval only. No Checkout payment,
   signature, webhook, recurring debit, cancellation or schedule update was executed by the research
-  task. Implementation tests and later manual observations must be recorded separately.
+  task. Implementation tests and later manual observations must be recorded separately. The
+  30 September 2026 Test-account verification of the early first fee is in the [backend billing brief](../VENDOR_BILLING_BACKEND_BRIEF.md#7-razorpay-recipes-and-verified-facts).
 
 ## Checkout contract
 
@@ -84,13 +91,13 @@ Retries default to enabled; web Checkout does **not** support `retry.max_count`.
 | Vendor closes Checkout | Show dismissed/unconfirmed. Closing a modal does not prove that an asynchronous payment failed. |
 | Handler returns callback fields | Submit verification, show confirmation pending, and refresh authoritative billing status. |
 | Verification request fails or times out | Preserve existing entitlement and provide status refresh; do not start a second subscription automatically. |
-| Backend confirms AutoPay setup during trial | Show the scheduled first fee; preserve the original platform trial and do not mark the monthly fee paid. |
-| Backend confirms first ₹299 membership payment | Record paid coverage for the confirmed period. A fee collected before the promised trial end is a discrepancy to reconcile, not a reason to forfeit trial days. |
+| Backend confirms the early first fee during trial | Show paid coverage from the trial end to one billing month later, with the remaining trial days kept, and the next ₹299 at that period's end. (Until 29 September 2026: show the scheduled first fee and do not mark the monthly fee paid.) |
+| Backend confirms first ₹299 membership payment after expiry | Record paid coverage for the confirmed period. |
 
 Guard against repeated clicks, stale callbacks after navigation/account changes, and a dismiss
 event overwriting a success callback. Browser failure/dismissal must never revoke an otherwise
-valid trial. If an attempt remains unconfirmed past the original trial expiry, access is determined
-by backend policy; the browser cannot extend the trial.
+valid trial. If an attempt remains unconfirmed past the original trial expiry, the shop is hidden
+until the backend confirms it (decided 29 September 2026); the browser cannot extend the trial.
 
 ## Verification and access authority
 
@@ -108,7 +115,10 @@ Keep the secret off the frontend.
 combination. `subscription.activated` indicates a lifecycle transition; `subscription.charged`
 indicates a successful charge. The charged payload includes payment amount, currency, capture
 status and invoice linkage. Therefore an authenticated mandate or lifecycle label alone cannot
-establish that the vendor paid the monthly platform fee.
+establish that the vendor paid the monthly platform fee. For an upfront add-on with a future start
+(the early first fee), the subscription stays `authenticated` with `paid_count` 0 until its start, so
+the paid evidence is the captured payment on the add-on invoice, not `subscription.charged`
+(verified on Razorpay Test, 30 September 2026).
 [Subscription event definitions](https://razorpay.com/docs/payments/subscriptions/subscribe-to-webhooks/),
 [subscription webhook payloads](https://razorpay.com/docs/webhooks/subscriptions/).
 
@@ -116,7 +126,7 @@ establish that the vendor paid the monthly platform fee.
 validate the returned ID against that attempt; verify the signature; retrieve/reconcile the
 provider subscription, payment and invoice; check mode, plan, currency, amount and relationship.
 Grant paid access only for the confirmed first membership charge of 29900 paise INR for the chosen
-store, not a refundable token authorisation. Apply entitlement changes atomically and idempotently.
+store (the API itself reports rupees, `sale_price: 299`), not a refundable token authorisation. Apply entitlement changes atomically and idempotently.
 Keep the original trial record unchanged across authorisation, cancellation and recovery. A valid
 signature authenticates the callback; it does not implement eligibility or entitlement policy.
 
@@ -141,8 +151,10 @@ selects Razorpay-managed communication. `addons` introduces an upfront charge.
 [Create subscription API](https://razorpay.com/docs/api/payments/subscriptions/create-subscription/).
 
 Razorpay documents its trial as the interval between authentication and a future subscription
-start. An upfront add-on can still charge during that interval; a no-platform-fee trial should
-not accidentally add one. Cancellation before the start is possible.
+start. An upfront add-on charges at authentication, before that start. The early first fee uses
+exactly one: a ₹299 add-on with `start_at` one billing month after the trial end, so Razorpay's
+first automatic charge is the second month (verified on Razorpay Test, 30 September 2026).
+Cancellation before the start is possible, but only immediately.
 [Creating a subscription trial](https://razorpay.com/docs/payments/subscriptions/create/).
 
 For a future-start subscription without an add-on, successful authentication produces
@@ -153,13 +165,17 @@ subscription expires if its configured start passes; an expired subscription can
 
 ### Approved hybrid: independent trial with optional future billing
 
+**Amended 29 September 2026** by the [early first fee](../VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026). The trial row of the table below now prepares an
+upfront ₹299 add-on with `start_at` one billing month after the trial end, and Checkout completion
+pays the first month; the original wording is kept for history.
+
 MithraDirect grants the eligible identity's trial when onboarding is completed **and** genuine
 approval is recorded. No provider object, Checkout or mandate is required then. When the vendor
 voluntarily chooses **Pay Now**, the backend selects the schedule using its original trial record:
 
 | Backend entitlement at setup | Intended provider preparation | Meaning of Checkout completion |
 |---|---|---|
-| Trial still active | Future `start_at` equal to the persisted trial expiry; no upfront platform-fee add-on | Authorisation for future fees; trial expiry stays unchanged |
+| Trial still active | *Withdrawn 29 September 2026:* future `start_at` equal to the persisted trial expiry; no upfront platform-fee add-on. *Now:* an upfront ₹299 add-on; `start_at` = trial expiry + one billing month | *Withdrawn:* authorisation for future fees. *Now:* the first month (trial expiry to one month later) is paid; trial expiry stays unchanged |
 | Trial expired | Immediate-start subscription, after reconciling any existing attempt | First monthly fee must be confirmed before paid access |
 
 For example, setup with ten days left covers only those remaining ten days before the paid start.
@@ -167,8 +183,9 @@ It neither discards them nor creates another fourteen-day trial. The provider's 
 authorisation to billing and MithraDirect's full entitlement have different start events. Failure,
 dismissal and cancellation do not change the platform's original trial dates.
 
-The CTA remains **Pay Now** by explicit product decision. Explain the first monthly fee date during
-trial and immediate collection after expiry; separate authorisation/token activity from the fee.
+The CTA remained **Pay Now** by explicit product decision; the Live API and the development
+prototype now use state-specific labels ("Pay ₹299 with Razorpay", "Keep shop open"). Explain
+when the paid month starts during the trial and immediate collection after expiry.
 The checked-in approval enum discrepancy is documented in [API gaps](../API_GAPS.md#vendor-platform-billing).
 
 **Backend recommendation:** prepare and reconcile schedules with server time. A Checkout opened
@@ -191,7 +208,10 @@ Concurrent operations can also be rejected; fetch state before deciding how to r
 
 **Application of the approved policy:** cancel a pre-start subscription immediately and preserve
 the independently granted trial; schedule the end of paid renewal while retaining confirmed
-paid-through coverage. Store cancellation progress separately from access and provider lifecycle
+paid-through coverage. After an early first fee the subscription is pre-start at Razorpay
+(`authenticated`) yet already paid for its first month: only an immediate cancel works, and
+MithraDirect keeps the trial and the paid month itself (verified on Razorpay Test, 30 September
+2026: the paid ₹299 invoice stays paid). Store cancellation progress separately from access and provider lifecycle
 status. An accepted request, a scheduled stop and a terminal cancellation are distinct observations.
 Ordinary cancellation retains paid coverage without an automatic prorated refund in v1. Provider
 cancellation does not itself request or confirm a refund.
@@ -200,8 +220,11 @@ cancellation does not itself request or confirm a refund.
 trial/paid boundary but an in-flight debit still collected the next fee, refund that fee in full.
 The backend receipt time governs eligibility even when provider confirmation comes later. Retain
 only the original coverage; a pending refund grants no extra period. This is a product obligation,
-not a provider rollback or instant-refund guarantee. Refund execution and recovery remain untested
-backend requirements in [API gaps](../API_GAPS.md#cancellation-and-concurrent-operations).
+not a provider rollback or instant-refund guarantee. Refunds are paid from the merchant's Razorpay balance, and
+Razorpay's fee on the refunded payment is not reversed (Razorpay docs; a full refund refused for a
+balance shortfall was observed on Razorpay Test, 30 September 2026). Refund recovery remains a backend requirement in the
+[backend billing brief](../VENDOR_BILLING_BACKEND_BRIEF.md#cancellation-and-concurrent-operations).
+Whether stopping after an early first fee, before the trial end, earns a refund is undecided.
 
 Cancelled subscriptions cannot restart; expired unauthenticated subscriptions cannot be reused.
 [Subscription states](https://razorpay.com/docs/payments/subscriptions/states/).
@@ -217,7 +240,9 @@ policy. Do not announce that all future debits are stopped while provider confir
 
 ### Recovery and schedule changes
 
-Rejoining before retained trial/paid coverage ends is approved. Replacement must preserve that
+Rejoining before retained trial/paid coverage ends is approved. Since 29 September 2026 it charges
+₹299 at once for the period starting at that boundary (an upfront add-on with `start_at` one month
+later), after cancelling the old subscription immediately. Replacement must preserve that
 boundary and cannot leave two subscriptions able to charge for the same store. A cancelled mandate
 must not be represented as restored. Cancellation uncertainty
 blocks making a replacement chargeable; pending status must remain visible and recoverable.
@@ -239,7 +264,8 @@ every payment method offered for one-time payments is available for recurring pa
 
 | Method | Evidence for initial authorisation | Practical implication |
 |---|---|---|
-| Cards, future start without upfront fee | Test guide documents a ₹5 authorisation that is refunded. | The monthly ₹299 fee has not been paid. Verify account behavior before promising refund timing. |
+| Cards, future start without upfront fee | Test guide documents a ₹5 authorisation that is refunded. | The monthly ₹299 fee has not been paid. Verify account behavior before promising refund timing. Withdrawn for the trial on 29 September 2026. |
+| Cards, future start with an upfront ₹299 add-on | Hosted Checkout said "a payment of ₹299 will be charged now"; no ₹5 (verified on Razorpay Test, 30 September 2026). | The early first fee. UPI with an upfront amount is unverified and shows only when the total is under ₹15,000. |
 | UPI AutoPay | Subscription FAQ describes a refundable ₹5 token validation payment for a card or UPI ID. Razorpay's separate AutoPay product page advertises ₹1 registration. | There is a product/account-specific discrepancy; do not hardcode a universal ₹5 or ₹1 promise. Confirm the selected Checkout flow. |
 | eMandate | Recurring Payments eMandate FAQ describes possible ₹1/₹2 bank validation deductions refunded in 3–5 bank working days. | This is method-level guidance from the lower-level product, not proof of the exact Subscriptions Checkout amount; confirm the account/bank behavior. |
 | Immediate start | The Test guide charges the plan amount in its immediate-start example. | Await confirmation of the first real membership charge, separately from authorisation. |
@@ -259,7 +285,7 @@ launch. Use cautious, method-specific authorisation copy. Do not promise that no
 debited during optional setup, and do not collect card, UPI PIN or bank credentials in MithraDirect UI.
 
 UPI mandate authorisation is documented as real-time, while subsequent debits can complete by
-9 PM IST on the scheduled date and potentially T+1 with retries. eMandate registration and payment
+9 PM IST on the scheduled date and potentially the next day with retries. eMandate registration and payment
 cannot happen the same day, and bank confirmation can lag. Reviewed documentation establishes no
 universal minimum lead time guaranteeing setup minutes before expiry. A provider `start_at` is a
 schedule, not a guarantee of cash confirmation at that instant.
@@ -287,12 +313,14 @@ descriptions. Those notices are about a debit, not a guarantee of product trial 
 **Recommendation:** schedule MithraDirect reminders from the authoritative expiry, with proposed
 offsets such as 3 days left and the last day still awaiting approval. Store delivery/deduplication
 state and return in-app status. Distinguish setup needed, confirmed future billing and cancelled
-renewal; suppress requests to set up AutoPay when it is already confirmed. Channels and delivery
+renewal; suppress payment-needed wording once an early first fee is paid, including while it is
+being confirmed. Channels and delivery
 times remain product decisions. A trial without a mandate has no provider debit notice to rely on.
 
-Cards and UPI document an initial scheduled attempt plus retries on T+1, T+2 and T+3, then
+Cards and UPI document an initial scheduled attempt plus retries on each of the three days after
+the debit date, then
 `halted` if unsuccessful; recovery preserves the subsequent billing schedule. eMandate retries
-wait for bank confirmation; documented holiday handling can move debit to T−1 or T−3. Manual
+wait for bank confirmation; documented holiday handling can move a debit one or three days earlier. Manual
 charging of domestic cards is not supported by the retries guide. A `halted` subscription still
 raises invoices but does not charge them; it returns to `active` if the customer changes the card,
 though the FAQ also says UPI-authorised subscriptions cannot be updated.
@@ -308,8 +336,9 @@ UPI AutoPay subscription is unverified (checked 24 September 2026).
 **Approved launch rule:** offer only methods proven by testing to meet the required timing for the
 relevant phase. Cards and UPI are decided, with UPI's accounts and launch evidence in the
 [decision record](../VENDOR_BILLING_DECISIONS.md#upi-accounts-and-launch-evidence).
-Before offering eMandate, establish a configuration that preserves the promised
-no-platform-fee trial and the required after-expiry payment behavior. Earlier holiday debits would
+eMandate is excluded; MithraDirect's Checkout account still offered it on 30 September 2026 and
+must switch it off before release. Before reconsidering it, establish a configuration that meets
+the early first fee's "₹299 now" and the exact next charge date. Earlier holiday debits would
 conflict with the approved policy. Treat an unsupported timing promise as a launch-method gap.
 Since 24 September 2026, a scheduled fee that is pending or being retried keeps service; only a
 `halted` collection is a failure that stops it, with no grace after that. A fee paid immediately
@@ -355,17 +384,19 @@ billing cycle during the current one.
 | Check | Required observation | Status for this research |
 |---|---|---|
 | Official Checkout opens | Correct Test merchant, subscription and expected amount/schedule | Not executed |
-| Successful immediate signup | Callback captured; backend confirms linked captured first ₹299 membership charge | Not executed; backend absent |
+| Successful immediate signup | Callback captured; backend confirms linked captured first ₹299 membership charge | Not executed here; the backend billing API now exists (see the backend billing brief) |
 | Failed attempt then retry | Failure shown; later success remains possible; no duplicate creation | Not executed |
 | Dismissal and reload | No local access grant; authoritative status can be refreshed | Not executed |
 | Future authorisation | Confirmed mandate shown separately from first paid membership | Not executed |
 | Trial grant and clock | Completed onboarding plus genuine approval grants one trial without Checkout; delayed approval consumes no days | Policy approved; backend pending |
-| Optional setup during trial | Original expiry preserved, including ten days remaining; first monthly fee scheduled for that expiry | Policy approved; backend pending |
-| Cancellation before first fee | Provider subscription cancelled, no first monthly fee, original trial retained | Policy approved; not executed |
+| Optional setup during trial | Original expiry preserved, including ten days remaining; first monthly fee scheduled for that expiry | Withdrawn 29 September 2026 |
+| Cancellation before first fee | Provider subscription cancelled, no first monthly fee, original trial retained | Withdrawn 29 September 2026 |
+| Early first fee | One ₹299 now; paid period from the trial end; `start_at` one month after it; trial retained | Razorpay side verified on Test, 30 September 2026 (card); backend pending |
+| Stop after an early first fee | Immediate Razorpay cancel; paid ₹299 kept; trial and paid month retained | Razorpay side verified on Test, 30 September 2026; backend pending |
 | Cancellation during a paid period | No subsequent renewal, access retained to confirmed paid-through date | Policy approved; not executed |
 | Setup/cancellation boundary races | No duplicate chargeable subscriptions, lost charges, false cancellation confirmation or trial reset | Backend pending |
 | Debit despite timely cancellation | Full refund based on backend receipt time, original coverage retained, duplicate/failed refund recovery tracked | Policy approved; not executed |
-| Successful scheduled-charge retry | Access resumes only for the remaining original cycle; renewal date unchanged | Policy approved; not executed |
+| Successful scheduled-charge retry | Service continued through the retries; renewal date unchanged | Policy approved; not executed |
 | External mandate revocation | Provider/bank cancellation reconciles to billing actions without erasing retained trial/paid coverage | Not executed |
 | Webhook reconciliation | Signature failures rejected; duplicates/out-of-order delivery safe | Backend pending |
 | Simulated renewal | Charged/pending/halted/cancelled outcomes reflected from authoritative state | Backend pending |

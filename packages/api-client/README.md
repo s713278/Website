@@ -35,7 +35,7 @@ Run those two commands separately until the root `sync:api` script stops delegat
 | Account History | Done | `usersService.accountHistory` / `accountHistoryPaged` |
 | Vendor onboarding operations | Wrapped, integration gated | `vendorsService.updateBusinessType` / `getContext` / `saveStorefront` / `goLive` |
 | Public storefront identifier | Done | `storefrontService.get(identifier)` |
-| Vendor platform billing | Wrapped, not yet wired to UI | `vendorBillingService.getSubscription` / `subscribe` / `confirm` / `cancel` / `getHistory` / `listPaidPlans` |
+| Vendor platform billing | Done (Live API Plan, chrome and history via `liveBillingService`) | `vendorBillingService.getSubscription` / `subscribe` / `confirm` / `cancel` / `getHistory` / `listPaidPlans` |
 
 Gaps / workarounds: `docs/API_GAPS.md`.
 

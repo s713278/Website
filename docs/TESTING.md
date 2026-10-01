@@ -18,6 +18,7 @@ There is **no end-to-end runner**. Full-journey behaviour is still verified by r
 
 ## Local billing helper HTTP test
 
+The helper is the local test server behind the frozen, demo-only Plan prototype.
 `npm run test:billing-helper` drives the helper through real loopback HTTP requests with a temporary
 store, closes it, then opens a new instance against the same file. It checks vendor isolation,
 original boundaries, intent/association persistence and rejection of live or missing
