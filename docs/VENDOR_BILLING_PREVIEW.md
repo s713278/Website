@@ -1,7 +1,14 @@
 # Vendor billing development preview
 
-The development route now demonstrates the [approved hybrid trial](./VENDOR_BILLING_DECISIONS.md)
-with the [proposed wire-shaped contexts](./examples/vendor-billing/mock-responses.json). An eligible
+> **Frozen, demo only.** Since 29 September 2026 demo mode, this preview, the six-state prototype
+> and the local test server are frozen with the trial AutoPay flow described below (Set up AutoPay,
+> Turn off AutoPay, a ₹5 authorisation, a future-start Keep shop open). The Live API follows the
+> [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) instead: paying during the trial charges ₹299 at once. Nothing here describes Live API
+> behavior.
+
+The development route demonstrates the [hybrid trial](./VENDOR_BILLING_DECISIONS.md) as approved
+on 19–24 September 2026, with the [mock dataset](./VENDOR_BILLING_MOCK_DATASET.md)'s
+[wire-shaped contexts](./examples/vendor-billing/mock-responses.json). An eligible
 vendor's trial is already active without Checkout. **Pay Now** during trial optionally prepares
 AutoPay for the original expiry; a separate method authorisation amount is disclosed when supplied.
 A simulated acknowledgement remains pending until the explicit **Simulate confirmation** action.
@@ -24,7 +31,7 @@ Since 24 September, demo Plan in development no longer offers **Show a sample bi
 Paid, Payment failed, Stopped, Shop closed). Its chips are seeded through the local helper under
 its own vendor key, and choosing a chip runs the guarded reset before selecting. In Free days and
 3 days left, **Set up AutoPay** opens hosted Test Checkout for a future-start subscription at the
-trial end. Only after helper verification and a provider read does Plan show AutoPay on; the
+trial end (demo only; the Live API charges ₹299 now instead). Only after helper verification and a provider read does Plan show AutoPay on; the
 state and free days stay unchanged. **Turn off AutoPay** cancels through the helper. In Payment
 failed and Shop closed, **Pay ₹299 with Razorpay** opens hosted Test Checkout for an immediate-start
 subscription. Plan shows "Confirming payment…" until a provider read shows the fee captured. Then
@@ -40,7 +47,9 @@ Every demo vendor page in development shows the current state's banner and a hea
 ₹299", "Keep open · ₹299" or "Shop plan"), Overview included. Both read the state Plan shows and
 only link to Plan, so Checkout opens nowhere else. They are messages only: the storefront and orders
 are not gated. The demo "store state" switcher and its fixture states are removed; the demo store
-is always approved and active. Live mode and production demo builds are unchanged. The
+is always approved and active. As of 24 September, Live API and production demo builds were
+unchanged; the Live API's own chrome is described in
+[Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api). The
 [decision record](./VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
 owns the six states. The 23 September and first 24 September Plan evidence below describes the
 earlier controls; the [six-state evidence](#six-state-prototype-evidence--24-september-2026) records
@@ -54,6 +63,10 @@ real trial, verified a provider callback, enforced expiry, or supplied cancellat
 progress; the displayed cancellation and refund progress comes from fixtures. Its status controls
 demonstrate presentation only. The Live API's integration is separate and does not use the
 preview ([Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api)).
+
+The biggest difference since 29 September 2026: the approved model is the [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) (₹299 at once during
+the trial, for the month that starts at the trial end), while the preview and prototype keep the
+withdrawn AutoPay-only trial setup.
 
 ## Run it
 
@@ -148,13 +161,13 @@ require the backend. See the validation record below for subsequent results.
 - Live-key input is refused. Secrets, new subscription creation, callback verification, status
   reconciliation and webhooks belong on the backend. There is no browser-to-provider REST call.
 
-## Handoff and pending decisions
+## Related decisions
 
-- [Agreed scope and product rules](./VENDOR_BILLING_DECISIONS.md).
+- [Agreed scope and product rules](./VENDOR_BILLING_DECISIONS.md), including the [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026).
 - [Official-source research, reviewed 19 September 2026](./research/razorpay-vendor-subscriptions.md):
   lifecycle, method restrictions, signature formulas, reminders, charges, timing and test limits.
-- [Backend gaps and requirements](./API_GAPS.md#vendor-platform-billing): where the published
-  billing API falls short, verification, enforcement, and acceptance cases.
+- [Backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md): where the published billing API
+  falls short, verification, enforcement, and acceptance cases.
 - Module boundaries: [Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api) and
   [the preview](./API_ARCHITECTURE.md#vendor-platform-billing-preview).
 
@@ -343,7 +356,7 @@ billing panel.
 ### Reproduce
 
 1. Run the helper as in the [README](../README.md#environment-variables), with a locally excluded store.
-2. Open `/vendor/plan`, choose **Use local Razorpay Test Mode**, then choose one scenario per
+2. *(Historical: this control was removed on 24 September.)* Open `/vendor/plan`, choose **Use local Razorpay Test Mode**, then choose one scenario per
    journey. Since the 24 September helper fix, a load reads provider status without a manual
    **Refresh billing status**.
 3. Pay with the Visa test card and the Checkout steps above.
@@ -629,7 +642,8 @@ Test key, standing in for a change made outside Plan. *Induced* is a deliberate 
 
 - **Pause at Razorpay** (*CLI/app*): after a real Paid subscription was paused, the helper reported
   authorisation pending, and Plan still named the next ₹299 on 24 Oct. A paused subscription is not
-  charged. The backend proposal's `autopay_status` has no paused value.
+  charged. The withdrawn 24 September context proposal's `autopay_status` had no paused value;
+  pause/resume is an open decision.
 - **Stop after pause and resume** (*CLI/provider*): Razorpay accepted a cycle-end stop on the
   paused subscription. After resume it read `active`, with `charge_at` 23 Oct and no visible
   scheduled change, so whether the stop survives cannot be read before that date. The object was
@@ -709,7 +723,7 @@ due 24 Oct 18:30Z. Choosing any chip cancels it.
 ## Validation record
 
 **Historical evidence from 18 September 2026, before the hybrid migration.** The results below
-establish the earlier immediate-start Test Checkout path only; they do not verify the current
+establish the earlier immediate-start Test Checkout path only; they do not verify demo's
 future-start setup or any real billing entitlement.
 
 On 18 September 2026: `npm run typecheck` passed; `npm run lint` passed with two existing
@@ -740,7 +754,7 @@ Failure/retry assertions are automated simulations, not claimed live provider re
 payment, provider cancellation or schedule change was performed.
 
 Provider verification, webhooks, recurring debits, real refunds, all launch payment methods, and
-production billing/access journeys remain unverified until the backend is available. The approved
-hybrid's trial preservation, optional setup, no-grace expiry, cancellation and rejoining have not
-been exercised by this preview. Test card tokens expire after three days; follow the
+production billing/access journeys remain unverified until the backend is available. The 19 September
+hybrid's trial preservation, optional setup, no-grace expiry, cancellation and rejoining (since
+amended; see the [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026)) have not been exercised by this preview. Test card tokens expire after three days; follow the
 research's simulated-renewal procedure rather than waiting 14 days with the same token.

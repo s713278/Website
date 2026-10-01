@@ -27,9 +27,10 @@ through an OpenAPI/Axios integration.
 
 The [vendor billing preview](./docs/VENDOR_BILLING_PREVIEW.md) opens Razorpay Test Mode subscription
 Checkout independently of the backend billing API. Its trial/access scenarios are fixtures;
-it does not add production billing or access restrictions. Those scenarios predate the
-[approved hybrid trial](./docs/VENDOR_BILLING_DECISIONS.md); the preview record identifies the
-remaining implementation differences.
+it does not add production billing or access restrictions. The preview is frozen (demo only) and
+keeps the pre-29 September trial AutoPay flow; the Live API follows the
+[early first fee](./docs/VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026). The
+preview record identifies the remaining differences.
 
 ## Stack
 
@@ -90,7 +91,7 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_RAZORPAY_TEST_SUBSCRIPTION_ID` | unset | Optional immediate-start Test subscription ID for that preview |
 | `VITE_RAZORPAY_TEST_FUTURE_SUBSCRIPTION_ID` | unset | Optional separate future-start Test subscription ID for the legacy AutoPay setup fixture |
 
-For the local Plan Test showcase, run `npm run dev:billing-helper` in a separate terminal with
+For the local Plan Test showcase, run the billing helper (the local test server), `npm run dev:billing-helper`, in a separate terminal with
 `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET` and `RAZORPAY_TEST_PLAN_ID` (the supplied
 monthly Test plan) set in that terminal's environment. Only `rzp_test_` keys are accepted. The
 helper listens on `127.0.0.1:4179`; Vite proxies its local HTTP interface during development.
@@ -103,8 +104,9 @@ Shop closed. Choosing a different state at the bottom of Plan seeds it under the
 hosted Razorpay Test Checkout through the helper, and stopping or turning off AutoPay also goes
 through it. The helper verifies the callback signature server-side, and the state changes only
 after a Razorpay Test read or acceptance confirms the result; the seeded Paid sample stops locally. Without the helper, the
-states still display, but their actions are disabled. Live mode and production builds have no
-prototype. The [decision record](./docs/VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
+states still display, but their actions are disabled. The prototype is frozen with the old trial
+AutoPay flow; the Live API and production builds have no prototype, and Live API billing is
+described in [the architecture owner](./docs/API_ARCHITECTURE.md#vendor-platform-billing-live-api). The [decision record](./docs/VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
 owns the states, and the
 [dated evidence](./docs/VENDOR_BILLING_PREVIEW.md#six-state-prototype-evidence--24-september-2026)
 records which Test card and hosted Checkout steps work for this account. Never reset or reuse the
@@ -273,11 +275,13 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | Document | Purpose |
 |----------|---------|
 | [AGENTS.md](./AGENTS.md) | Shared working method, repository guardrails, and verification baseline |
-| [CONTEXT.md](./CONTEXT.md) | Product domain glossary for platform, vendor, draft, and storefront concepts |
+| [CONTEXT.md](./CONTEXT.md) | Product domain glossary for platform, vendor, draft, storefront and vendor platform billing concepts |
 | [docs/adr/](./docs/adr/) | Accepted decisions, their trade-offs, and removal conditions |
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
-| [docs/VENDOR_BILLING_BACKEND_HANDOFF.md](./docs/VENDOR_BILLING_BACKEND_HANDOFF.md) | Superseded vendor-context billing proposal, kept for history; demo mode's mock responses still follow it |
+| [docs/VENDOR_BILLING_DECISIONS.md](./docs/VENDOR_BILLING_DECISIONS.md) | Vendor platform billing product rules and dated decisions |
+| [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md) | Self-contained backend brief: billing contract, gaps A–K, release blockers and Razorpay recipes |
+| [docs/VENDOR_BILLING_MOCK_DATASET.md](./docs/VENDOR_BILLING_MOCK_DATASET.md) | Demo-mode billing mock dataset (frozen); not the Live API contract |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |
 | [packages/api-client/README.md](./packages/api-client/README.md) | Local API-package workflow |

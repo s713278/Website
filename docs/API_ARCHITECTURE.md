@@ -79,6 +79,7 @@ packages/api-client/
     services/               # one file per backend domain, built on client/
       auth.ts  vendors.ts  catalog.ts  cart.ts  orders.ts  users.ts
       storefront.ts  subscriptions.ts  platform.ts  social.ts  admin.ts
+      billing.ts            #   vendor platform billing (Live API)
       legacy.ts             #   flat back-compat wrappers
       index.ts
     index.ts                # package entry — re-exports schema + client + services
@@ -94,14 +95,17 @@ src/shared/api/
   useApiError.ts            # small error-state hook for pages
   fixtures/
     vendor-dashboard.ts     # demo payloads in backend WIRE shape, not view models
+    live-billing-wire.ts    # Live API billing test responses in wire shape
   mappers/
     vendor.ts               # vendor wire payload → app view-model
     vendor-dashboard.ts     # vendor dashboard wire payloads → dashboard view-models
     vendor-onboarding.ts    # strict setup reference/account mapping + request mappers
+    live-billing.ts         # Live API subscription read → billing view
   services/                 # the demo/live service layer
     auth.service.ts  catalog.service.ts  cart.service.ts  orders.service.ts
     vendor.service.ts  vendor-orders.service.ts  vendor-products.service.ts
     vendor-onboarding.service.ts # public references + live setup account reads/writes
+    live-billing.service.ts # Live API billing reads and writes
     index.ts
   client.ts   errors.ts   tokens.ts   types.ts    # ← thin re-export shims only
 ```
@@ -456,14 +460,15 @@ product rules and the billing states, as amended by the
 [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026).
 [API gaps](./API_GAPS.md#vendor-platform-billing) owns where the backend falls short
 ([gaps A–K](./API_GAPS.md#billing-gaps-ak), including gap K, the early first fee) and the
-[production release blockers](./API_GAPS.md#production-release-blockers). Code comments tag each
+[production release blockers](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers), which the
+[backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns with each gap's detail. Code comments tag each
 gap the app copes with.
 
 | Concern | Owner | Boundary |
 |---|---|---|
 | Backend wrappers | `packages/api-client/src/services/billing.ts` (`vendorBillingService`) | Six operations: the subscription read, subscribe, `confirm`, cancel, history and the paid plans list. Request bodies are typed from the schema; responses are the generic envelope, so shape safety comes from the mappers |
 | Live billing service | `src/shared/api/services/live-billing.service.ts` (`liveBillingService`) | One exported object, the test seam. Unwraps each envelope through `assertApiSuccess` and returns payloads unmapped. The read's 404 becomes `not-live`; every other failure keeps its `ApiError` |
-| Subscription and history mappers | `src/shared/api/mappers/live-billing.ts` | `mapLiveBilling` (the billing view), `mapLivePlanName`, `mapLiveTrialStart`, `mapLiveBillingHistory` and `mapLiveCheckout`. A read that matches no state throws `LiveBillingUnreadableError` |
+| Subscription and history mappers | `src/shared/api/mappers/live-billing.ts` | `mapLiveBilling` (the billing view), `mapLivePlanName`, `mapLiveTrialStart`, `mapLiveTrialEnd`, `mapLiveBillingHistory` and `mapLiveCheckout`. A read that matches no state throws `LiveBillingUnreadableError` |
 | Wording | `src/modules/vendor/lib/live-billing-wording.ts` | Pure: each view's card, note, Confirming line, Stop the plan confirmation, Checkout purpose (waiting, failed and refused lines), banner and header label. Every ₹ amount comes from the plan price. `isSettledView` defines a settled read |
 | Shared read store | `src/modules/vendor/store/live-billing.ts` | `useLiveBilling`, `useStartedLiveBilling`, `readLiveBilling`, `cancelLiveBilling`, `holdLiveBilling` and `resetLiveBilling`: the read, its refresh and retries, the cancel response and the confirmation hold |
 | Retry timing | `src/modules/vendor/lib/live-billing-retry.ts` | `retryDelays` (5, 15 and 30 s), `isBriefOutage` (502, 503 or network) and `pause`, shared by the read and `confirm` |
@@ -482,7 +487,7 @@ production build. Pages and components import billing only from `@/shared/api`. 
 - **One shared read** covers `GET /v1/vendors/{vendor_id}/subscription` and
   `GET /v1/subscription-plans`, requested together; if either fails, the whole read fails. It feeds
   Plan, the banner, the header button, the rail chip and Settings, so they cannot disagree. It holds
-  the billing view, the subscription's `plan_name` and its `trial_started_at`.
+  the billing view, the subscription's `plan_name`, its `trial_started_at` and its `trial_ends_at`.
 - **The plan** is the list's `billing_cycle: MONTHLY` entry: its name, `plan_code` for subscribe and
   `sale_price`, which the app reads as rupees. There is no conversion; the OpenAPI examples'
   paise are a backend documentation bug ([gap G](./API_GAPS.md#billing-gaps-ak)). No monthly entry takes the
@@ -492,8 +497,8 @@ production build. Pages and components import billing only from `@/shared/api`. 
   Settings' Plan row take the plan name from the shared read (`mapLivePlanName` through
   `useStartedLiveBilling`); demo mode reads its context. Billing reads nothing from the context.
 - **Mapping.** The backend's statuses and dates decide the view; the browser clock only compares
-  them with now. The first matching rule wins. Absent fields read as null, except that a paid period
-  without a boolean `cancel_at_period_end` takes the read error path. Unknown fields are ignored, and timestamps need a timezone but not seconds. Days left are counted from
+  them with now. The first matching rule wins. Absent fields read as null, except that an `ACTIVE` paid
+  period without a boolean `cancel_at_period_end` takes the read error path. Unknown fields are ignored, and timestamps need a timezone but not seconds. Days left are counted from
   `trial_ends_at` or the paid-through date, rounded up; the backend's `days_remaining` and display
   labels are ignored. Before go-live (404) Plan shows only a note.
 
@@ -516,7 +521,8 @@ Confirming; they offer no payment action, and Plan shows their status line with 
 - The header and banner label these "Pay ₹299", "Keep open · ₹299" or "Shop plan".
 
 A Checkout action runs subscribe, Checkout, then `confirm` with Checkout's values, then a poll.
-Subscribe is never retried; a repeat while pending returns the same subscription. A dismissed
+Subscribe is never retried; a repeat while pending returns the same subscription (after the trial
+end, that reuse is [gap I](./API_GAPS.md#billing-gaps-ak)). A dismissed
 Checkout changes nothing; one closed after a failed attempt shows the purpose's failure line with
 Razorpay's reason.
 
@@ -546,7 +552,9 @@ Razorpay's reason.
 - Gap-specific messages appear only after the real failure. Cancel's 500
   ([gap A](./API_GAPS.md#billing-gaps-ak)) and subscribe's 409 from Stopped or AutoPay off
   ([gap E](./API_GAPS.md#billing-gaps-ak)) have their own lines. Subscribe's 500 after the trial
-  ([gap I](./API_GAPS.md#billing-gaps-ak)) shows the backend's copy through `getErrorMessage`.
+  ([gap I](./API_GAPS.md#billing-gaps-ak)) shows the backend's copy through `getErrorMessage`. Since
+  30 September dev can instead return 200 with the free-days subscription, and Checkout then opens
+  blank, which the app cannot detect.
 
 **The confirmation hold** (early first fee).
 
@@ -573,7 +581,8 @@ event, stays in its section with Try again, beside any last rows. `mapLiveBillin
 events newest first and shows each once per type and payment ID, or per type and subscription ID
 without a payment, because the development backend records some twice
 ([gap G](./API_GAPS.md#billing-gaps-ak)). The titles are "Payment received", "AutoPay set up",
-"Plan stopped" (a cancellation requested while paid) or "AutoPay turned off" (during free days), "AutoPay ended" (skipped after a Plan stop on that subscription), and
+"Plan stopped" (a cancellation requested while `ACTIVE`) or "AutoPay turned off" (one requested while
+not `ACTIVE`, such as a legacy AutoPay-only subscription on dev), "AutoPay ended" (skipped after a Plan stop on that subscription), and
 "Free days started" from the shared read's `trialStartedAt`. Other events are ignored. An amount
 shows, in rupees, only when an event carries one; the app never infers it.
 
@@ -786,18 +795,21 @@ uses genuine onboarding and approval for pending reasons, and rejects invalid bi
 timezone-free billing dates without breaking ordinary context hydration. The backend still owns
 any real entitlement and after-expiry fee confirmation.
 
-Trial entitlement, mandate authorisation, confirmed paid coverage, provider lifecycle,
-cancellation and refund progress are distinct. Cancellation retains the original trial or paid period;
-rejoining can set up billing again at the same boundary. A scheduled fee still being collected keeps
+In the preview and demo (frozen with the trial AutoPay flow): trial entitlement, mandate
+authorisation, confirmed paid coverage, provider lifecycle, cancellation and refund progress are
+distinct. Cancellation retains the original trial or paid period; rejoining can set up billing again
+at the same boundary (the Live API instead charges ₹299 at once, under the
+[early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026)). A scheduled fee still being collected keeps
 service past that boundary until collection halts; a failed (halted) fee grants no grace. Server capabilities must retain billing/account and existing-order
 fulfillment while hiding the store and blocking new operations after access expires.
-Successful retries restore only the remaining original cycle. The decision record owns full
+A successful retry keeps the original cycle. The decision record owns full
 refunds for debits despite timely cancellation and no automatic proration for ordinary
 cancellation; backend reconciliation must preserve those distinctions. The local test server's Test
 account offers cards only; Live API Checkout uses MithraDirect's own account, which offers card and
 UPI. eMandate is excluded under the
-[method scope](./VENDOR_BILLING_DECISIONS.md#current-test-mode-method-scope). Production method
-timing remains a later release gate. Live API mode selects the backend, not Razorpay Live Mode.
+[method scope](./VENDOR_BILLING_DECISIONS.md#current-test-mode-method-scope), yet MithraDirect's
+account still offered it on 30 September; switching it off and testing card and UPI with the early
+first fee are [release blockers](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers). Live API mode selects the backend, not Razorpay Live Mode.
 
 The backend published its own billing API instead of the proposed contract, and the Live API
 uses it through separate wrappers, service and mappers
@@ -807,13 +819,13 @@ serves demo mode and the preview only. The Checkout adapter still owns only prov
 interaction.
 
 **Authorised mock contract, 19 September:** the user permits fabricated missing backend data for
-development and tests. The [meeting handoff](./VENDOR_BILLING_BACKEND_HANDOFF.md) and its JSON dataset
+development and tests. The [mock dataset](./VENDOR_BILLING_MOCK_DATASET.md) and its JSON file
 now follow the supplied vendor context envelope and snake_case fields, adding only the minimal
 `subscription.billing` block and populating existing fee/trial data. Reuse the existing context
 read; no new billing-status endpoint is needed. *(Withdrawn for the Live API on 29 September 2026:
 the backend published its own billing API, and the context no longer carries a `subscription`
 block. The mock contract still feeds demo mode.)* The billing mapper, mock/demo service, panel and
-mock-backed `/vendor/plan` wiring may proceed before the extension ships. Keep proposed types in the app layer;
+mock-backed `/vendor/plan` wiring use it; the extension itself will not ship. Keep proposed types in the app layer;
 actual package HTTP wrappers/generated declarations still follow the published backend contract.
 This is a scoped temporary exception to requiring measured wire-shaped demo fixtures.
 
@@ -828,7 +840,7 @@ revisions reject older whole snapshots, including their plan and features. A fai
 the last confirmed billing snapshot stale and blocks mutations. A server-time boundary timer asks
 for another read without calculating access. Submission/cancellation write acknowledgements carry
 no entitlement. The context service accepts injected acknowledgement functions for isolated
-submit/cancellation refresh tests; no backend cancellation write is connected yet.
+submit/cancellation refresh tests; the demo context service connects no backend cancellation write (the Live API's cancel is wired, above).
 
 The preview injects a mock-backed service explicitly using the existing panel seam. In a
 production demo build the plan page uses the demo context service; the Live API uses the

@@ -77,6 +77,7 @@ Read the relevant owner before changing its area; load additional documents as t
 | An architectural or domain decision | Relevant [docs/adr/](./docs/adr/) entries — decisions, trade-offs, and removal conditions |
 | API calls, transport, mapping, or demo/live behavior | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) |
 | A missing contract capability or temporary exception | [docs/API_GAPS.md](./docs/API_GAPS.md) |
+| Vendor platform billing | Product rules: [docs/VENDOR_BILLING_DECISIONS.md](./docs/VENDOR_BILLING_DECISIONS.md); backend contract, gaps and Razorpay setup: [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md) |
 | Authentication, roles, route gates, or session-owned state | [docs/SESSION.md](./docs/SESSION.md) — current lifecycle and separately marked target model |
 | Adding or changing tests | [docs/TESTING.md](./docs/TESTING.md) — tiers, writing rules, and runner limits |
 | API package commands or exports | [packages/api-client/README.md](./packages/api-client/README.md) |

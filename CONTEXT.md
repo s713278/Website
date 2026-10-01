@@ -2,7 +2,7 @@
 
 A hyperlocal marketplace where independent vendors run their own storefront and nearby
 customers order from it. This glossary defines the language of the catalog, vendor setup,
-store discovery, and store operations.
+store discovery, store operations, and vendor platform billing.
 
 ## Language
 
@@ -170,7 +170,8 @@ _Avoid_: subscription, tier, package
 
 **Billing state**:
 Whether a vendor's plan is paid, trialling, or lapsed. Distinct from store state: an open
-store may be unbilled, and a paid-up store may still be awaiting approval.
+store may be unbilled, and a paid-up store may still be awaiting approval. Once the backend
+enforces billing, a lapsed store is hidden from customers even while its store state is open.
 _Avoid_: subscription status, account status, plan status
 
 ### Vendor platform billing
@@ -187,7 +188,7 @@ _Avoid_: order payment, delivery subscription charge
 
 **Trial entitlement**:
 A time-limited right to use the platform without paying the platform fee. It is separate
-from permission to collect future payments.
+from permission to collect future payments. Shown to vendors as *free days*.
 _Avoid_: free plan, payment authorisation
 
 **AutoPay authorisation**:
@@ -218,5 +219,6 @@ _Avoid_: grace period, payment failed, overdue
 
 **Failed platform fee**:
 A scheduled platform fee that can no longer be collected because every collection attempt
-has been used up. Only this, not a pending or retrying fee, restricts the vendor's service.
+has been used up. Among scheduled fees, only this restricts the vendor's service; a pending or
+retrying one does not.
 _Avoid_: missed payment, declined attempt, membership cancellation
