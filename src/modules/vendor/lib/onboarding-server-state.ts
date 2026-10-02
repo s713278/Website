@@ -1,11 +1,14 @@
+import { vendorOnboardingService } from '@/shared/api'
 import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
 import {
   invalidateVendorOnboardingState,
   isCurrentEntry,
+  peekVendorAccountContext,
   readEntry,
   writeEntry,
   type CacheEntry,
 } from './onboarding-state-cache'
+import { loadVendorContext } from './vendor-context-cache'
 
 /**
  * One read of the vendor's account, shared by everything that needs it.
@@ -48,4 +51,23 @@ export function loadVendorOnboardingState(
     })
 
   return entry.promise
+}
+
+/**
+ * The vendor context alone: status, approval, store identifier and setup progress.
+ *
+ * For a caller that only needs to know where the store stands, like the marketing header.
+ * `loadVendorOnboardingState` settles when the slowest of its profile, catalog, checkout and
+ * measurement reads does, which on dev is seconds after the context itself. This is one
+ * request, filed in the dashboard's context cache so that opening the dashboard next finds it
+ * already loaded. A context an earlier read already resolved is returned without a request.
+ */
+export async function loadVendorAccountContext(
+  vendorId: string,
+): Promise<Pick<ServerOnboardingState, 'context'>> {
+  const known = peekVendorAccountContext(vendorId)
+  if (known) return { context: known }
+
+  const context = await loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
+  return { context }
 }

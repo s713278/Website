@@ -86,6 +86,35 @@
   --sidebar-ring: oklch(0.596 0.145 163.2);
 }
 
+/* Marketing layout. The header, landing sections and footer share one gutter and one measure,
+   so the logo and the last action sit on the same edges as the content below. The content is
+   capped at 1248px: wider screens grow the margins, not the line length. */
+:root {
+  --marketing-gutter: 1.25rem;
+  --marketing-measure: 78rem;
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --marketing-gutter: 2rem;
+  }
+}
+
+@media (min-width: 80rem) {
+  :root {
+    --marketing-gutter: 3rem;
+  }
+}
+
+@utility marketing-gutter {
+  padding-inline: var(--marketing-gutter);
+}
+
+@utility marketing-measure {
+  margin-inline: auto;
+  max-width: var(--marketing-measure);
+}
+
 @layer components {
   /* The bay the shop takes shape in: phone above, a short count below. */
   .onboarding-preview-stage {
@@ -219,6 +248,196 @@
   @media (prefers-reduced-motion: reduce) {
     .md-pop-in {
       animation: none;
+    }
+  }
+
+  /* Side by side, the hero has to fit under the header. The phone (about 560px) is the tallest
+     thing in it, so it scales with the window's height. `zoom` rather than a transform: it
+     changes the layout box, so the section follows it. Below 1280px the steps are coarse.
+     From 1280px each step is the largest size that still fits at its height (header and
+     padding included), so the phone stays as large as the screen allows; the 1344px floor keeps
+     it from crowding the headline. */
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 765px) {
+    .md-hero-scale {
+      zoom: 0.9;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 710px) {
+    .md-hero-scale {
+      zoom: 0.8;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 655px) {
+    .md-hero-scale {
+      zoom: 0.7;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 600px) {
+    .md-hero-scale {
+      zoom: 0.62;
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .md-hero-scale {
+      zoom: 0.62;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 560px) {
+    .md-hero-scale {
+      zoom: 0.7;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 600px) {
+    .md-hero-scale {
+      zoom: 0.78;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 640px) {
+    .md-hero-scale {
+      zoom: 0.85;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 680px) {
+    .md-hero-scale {
+      zoom: 0.91;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 720px) {
+    .md-hero-scale {
+      zoom: 0.97;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 740px) {
+    .md-hero-scale {
+      zoom: 1;
+    }
+  }
+
+  @media (min-width: 84rem) and (min-height: 780px) {
+    .md-hero-scale {
+      zoom: 1.07;
+    }
+  }
+
+  @media (min-width: 84rem) and (min-height: 800px) {
+    .md-hero-scale {
+      zoom: 1.1;
+    }
+  }
+
+  /* The hero's one moment: the phone settles, then an order lands on it. */
+  .md-hero-rise {
+    animation: md-hero-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* The order feed: toasts stack downward, newest on top, each older one smaller and paler until
+     the fourth is invisible and gets dropped. The slot (data-slot) is the only thing that changes
+     as orders arrive, so the move is a transform/opacity transition. The entry animation fills
+     backwards only, otherwise it would pin the toast and block those transitions. */
+  .md-order-toast {
+    --md-order-pitch: 60px;
+    transform-origin: 50% 0;
+    transform: translateY(calc(var(--slot, 0) * var(--md-order-pitch)))
+      scale(calc(1 - var(--slot, 0) * 0.05));
+    transition:
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.6s ease;
+    animation: md-order-in 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+    will-change: transform, opacity;
+  }
+
+  .md-order-toast[data-slot='0'] { --slot: 0; opacity: 1; }
+  .md-order-toast[data-slot='1'] { --slot: 1; opacity: 0.65; }
+  .md-order-toast[data-slot='2'] { --slot: 2; opacity: 0.35; }
+  .md-order-toast[data-slot='3'] { --slot: 3; opacity: 0; }
+
+  /* On a phone there is no room beside the preview, so the stack collapses to one pill: older
+     toasts crossfade out in place instead of cascading down over the storefront. */
+  @media (max-width: 39.999rem) {
+    .md-order-toast {
+      --md-order-pitch: 0px;
+    }
+
+    .md-order-toast:not([data-slot='0']) {
+      opacity: 0;
+    }
+  }
+
+  @keyframes md-order-in {
+    from {
+      opacity: 0;
+      transform: translateY(-14px) scale(0.95);
+    }
+  }
+
+  /* The cart badge on the phone pulses as each order lands. */
+  .md-order-badge {
+    animation: md-order-bump 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s backwards;
+  }
+
+  @keyframes md-order-bump {
+    from {
+      transform: scale(1.6);
+    }
+  }
+
+  @keyframes md-hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* The hero's colour field: a mint wash pooled bottom-left and a warm cream one bottom-right,
+     blending through the middle. Each is oversized and drifts a few percent on a long loop, so
+     the field breathes without any visible shape moving. Transform only, no blur filter. */
+  .md-hero-glow {
+    position: absolute;
+    inset: -12%;
+    will-change: transform;
+  }
+
+  .md-hero-glow-a {
+    animation: md-hero-drift-a 30s ease-in-out infinite alternate;
+  }
+
+  .md-hero-glow-b {
+    animation: md-hero-drift-b 38s ease-in-out infinite alternate;
+  }
+
+  @keyframes md-hero-drift-a {
+    to {
+      transform: translate3d(7%, -5%, 0) scale(1.08);
+    }
+  }
+
+  @keyframes md-hero-drift-b {
+    to {
+      transform: translate3d(-7%, -4%, 0) scale(1.1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .md-hero-rise,
+    .md-order-toast,
+    .md-order-badge,
+    .md-hero-glow {
+      animation: none;
+      transition: none;
     }
   }
 

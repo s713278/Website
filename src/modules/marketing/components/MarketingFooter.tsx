@@ -1,6 +1,6 @@
 import { Camera, Mail, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import logoDarkMd from '@/assets/logo_dark_md.png'
+import logoLightMd from '@/assets/logo_light_md.png'
 import { Button, ShadcnInput } from '@/shared/components'
 
 const footerGroups = [
@@ -26,17 +26,17 @@ const footerGroups = [
 
 export function MarketingFooter() {
   return (
-    <footer className="bg-slate-950 px-4 py-14 text-slate-300 sm:px-6">
-      <div className="mx-auto max-w-7xl">
+    <footer className="marketing-gutter bg-slate-950 py-14 text-slate-300 sm:py-16">
+      <div className="marketing-measure">
         <div className="grid gap-10 md:grid-cols-2 xl:grid-cols-[1.35fr_0.85fr_0.85fr_1.15fr]">
           <div>
             <Link
               to="/"
               aria-label="MithraDirect home"
-              className="inline-block rounded-xl bg-white px-3 py-2"
+              className="inline-block py-2"
             >
               <img
-                src={logoDarkMd}
+                src={logoLightMd}
                 alt="MithraDirect — Shop Local, Support Local, Grow Together"
                 className="h-12 w-auto"
               />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vendorProductsService } from '@/shared/api'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
@@ -132,6 +132,30 @@ describe('VendorProductsPage', () => {
     expect(screen.queryByText('Stale Rice')).toBeNull()
   })
 
+  it('keeps one product open at a time', async () => {
+    vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([size('Rice'), size('Dal')])
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const rice = screen.getByRole('button', { name: /Rice/ })
+    const dal = screen.getByRole('button', { name: /Dal/ })
+    expect(rice.getAttribute('aria-expanded')).toBe('false')
+    expect(dal.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(rice)
+    expect(rice.getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.click(dal)
+    expect(dal.getAttribute('aria-expanded')).toBe('true')
+    expect(rice.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(dal)
+    expect(dal.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('offers no price control for a size with no price record', async () => {
     // The write is addressed to the price id; without one there is nowhere to send it.
     const priceless: VendorSize = { ...size('Loose Grain'), priceId: null }
@@ -141,6 +165,7 @@ describe('VendorProductsPage', () => {
     await act(async () => {
       await Promise.resolve()
     })
+    fireEvent.click(screen.getByRole('button', { name: /Loose Grain/ }))
 
     expect(screen.getByText('No price record')).toBeTruthy()
     expect(screen.queryByText('Edit price')).toBeNull()

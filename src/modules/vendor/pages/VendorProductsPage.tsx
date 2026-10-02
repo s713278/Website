@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { ChevronDownIcon } from 'lucide-react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
@@ -105,6 +106,9 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
  * One product: what it is called, how many sizes it comes in, what it starts at — and,
  * opened up beneath that, each of those sizes and its price.
  *
+ * The page keeps one product open at a time. Closed sizes stay mounted, so a price edit
+ * left half-typed survives opening another product.
+ *
  * The reference shows only the summary line, because its catalog is a demo fixture nobody
  * can edit. Repricing is real here and it happens per size, so the sizes stay on the row
  * rather than behind a screen a vendor has to find.
@@ -112,34 +116,51 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
 function ProductGroup({
   name,
   sizes,
+  open,
+  onToggle,
   onSaved,
 }: {
   name: string
   sizes: VendorSize[]
+  open: boolean
+  onToggle: () => void
   onSaved: () => void
 }) {
   const from = fromPrice(sizes)
+  const sizesId = useId()
 
   return (
     <li className="overflow-hidden rounded-lg border border-[var(--vc-edge)] bg-slate-50/70">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3">
-        <div className="min-w-0">
-          <p className="font-display font-semibold">{name}</p>
-          <p className="vc-num mt-0.5 text-xs text-[var(--md-muted)]">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={sizesId}
+        className="flex w-full flex-wrap items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-100/70"
+      >
+        <span className="min-w-0">
+          <span className="block font-display font-semibold">{name}</span>
+          <span className="vc-num mt-0.5 block text-xs text-[var(--md-muted)]">
             {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
-          </p>
-        </div>
-        {from ? (
-          <p className="vc-num font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</p>
-        ) : null}
-      </div>
+          </span>
+        </span>
+        <span className="flex items-center gap-3">
+          {from ? (
+            <span className="vc-num font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</span>
+          ) : null}
+          <ChevronDownIcon
+            className={`size-4 shrink-0 text-[var(--md-muted)] transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        </span>
+      </button>
 
       {/*
         Size, then price, then the control — three columns rather than a left-stacked
         block, because a vendor checking their prices is comparing one size against the
         next and a ragged price column defeats that.
       */}
-      <ul className="vc-rows border-t border-[var(--vc-rule)] bg-white">
+      <ul id={sizesId} hidden={!open} className="vc-rows border-t border-[var(--vc-rule)] bg-white">
         {sizes.map((size) => (
           <li
             key={size.skuId}
@@ -165,12 +186,16 @@ function ProductGroup({
   )
 }
 
+const PRODUCTS_PER_PAGE = 5
+
 export function VendorProductsPage() {
   const { vendorId } = useVendorAccount()
   const [sizes, setSizes] = useState<VendorSize[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
+  const [openProductId, setOpenProductId] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
@@ -201,6 +226,9 @@ export function VendorProductsPage() {
   if (loading) return <Spinner label="Loading products…" />
 
   const groups = groupByProduct(sizes)
+  const totalPages = Math.max(1, Math.ceil(groups.length / PRODUCTS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages - 1)
+  const visible = groups.slice(currentPage * PRODUCTS_PER_PAGE, (currentPage + 1) * PRODUCTS_PER_PAGE)
 
   return (
     <DashboardPanel
@@ -224,16 +252,37 @@ export function VendorProductsPage() {
         </p>
       ) : (
         <ul className="grid gap-2.5">
-          {groups.map((group) => (
+          {visible.map((group) => (
             <ProductGroup
               key={group.id}
               name={group.name}
               sizes={group.sizes}
+              open={openProductId === group.id}
+              onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
               onSaved={reload}
             />
           ))}
         </ul>
       )}
+
+      {totalPages > 1 ? (
+        <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+          <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+            Previous
+          </Button>
+          <span className="vc-num text-sm text-[var(--md-muted)]">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={currentPage >= totalPages - 1}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      ) : null}
     </DashboardPanel>
   )
 }
