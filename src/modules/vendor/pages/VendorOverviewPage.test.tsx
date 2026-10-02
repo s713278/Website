@@ -128,7 +128,7 @@ function order(
 }
 
 function pageOf(orders: VendorOrderSummary[], lastPage = true): VendorOrderPage {
-  return { orders, page: 0, totalPages: 1, totalElements: orders.length, lastPage }
+  return { orders, page: 0, totalPages: lastPage ? 1 : 2, totalElements: orders.length, lastPage }
 }
 
 function insights(ordersByStatus: VendorInsights['ordersByStatus']): VendorInsights {
@@ -155,8 +155,8 @@ describe('VendorOverviewPage work queue', () => {
     await settle()
 
     expect(screen.queryByText('Nothing waiting')).toBeNull()
-    expect(screen.getByText(/Only the first page of this window is shown/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Open Orders' }).getAttribute('href')).toBe('/vendor/orders')
+    expect(screen.getByText('More orders to check')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeTruthy()
   })
 
   it('declares the queue empty when the complete window has no open orders', async () => {
@@ -167,7 +167,7 @@ describe('VendorOverviewPage work queue', () => {
     await settle()
 
     expect(screen.getByText('Nothing waiting')).toBeTruthy()
-    expect(screen.queryByText(/Only the first page/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
   })
 
   it('asks for a window that reaches a week back and two days forward', async () => {
@@ -182,6 +182,7 @@ describe('VendorOverviewPage work queue', () => {
 
     expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith('vendor-1', {
+      page: 0,
       startDate: '2026-08-30',
       endDate: '2026-09-08',
     })

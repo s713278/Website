@@ -268,6 +268,13 @@ The same invalidation also drops the dashboard's narrower context cache, so retu
 cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
 response belonging to an entry that has already been invalidated.
 
+The marketing header decides its vendor actions from the context alone. Off `/onboarding` it calls
+`loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the narrower cache so the
+dashboard opens on it, or no request when either cache already holds a resolved context (the
+dashboard's is preferred). Waiting on the full read there held the actions back until the slowest of
+its reads settled, however little the decision used them. On `/onboarding` the header shares the
+wizard's full read instead of asking for the context a second time.
+
 #### Vendor setup sizes (Step 6)
 
 After setup is submitted, categories and products remain open for additions. Step 6 allows new

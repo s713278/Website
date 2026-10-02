@@ -1,5 +1,6 @@
+import type { VendorContext } from '@/shared/api'
 import type { ServerOnboardingState } from './onboarding-resume'
-import { invalidateVendorContext } from './vendor-context-cache'
+import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
 
 /**
  * The cache itself, with no runtime dependency on what fills it.
@@ -36,6 +37,14 @@ export function isCurrentEntry(vendorId: string, entry: CacheEntry): boolean {
 /** The already-resolved state, or `null` if it has not arrived yet. Never fetches. */
 export function peekVendorOnboardingState(vendorId: string): ServerOnboardingState | null {
   return entries.get(vendorId)?.resolved ?? null
+}
+
+/**
+ * The vendor context from whichever account read has already resolved, in the order the
+ * dashboard prefers: its own narrower cache, then the wizard's. Never fetches.
+ */
+export function peekVendorAccountContext(vendorId: string): VendorContext | null {
+  return peekVendorContext(vendorId) ?? peekVendorOnboardingState(vendorId)?.context ?? null
 }
 
 /**

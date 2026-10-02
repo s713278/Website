@@ -225,15 +225,15 @@ function SectionShell({
   id?: string
 }) {
   return (
-    <section id={id} className={`scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 ${className}`}>
-      <div className="mx-auto max-w-7xl">{children}</div>
+    <section id={id} className={`scroll-mt-24 marketing-gutter py-16 sm:py-24 ${className}`}>
+      <div className="marketing-measure">{children}</div>
     </section>
   )
 }
 
 export function TrustedBySection() {
   return (
-    <SectionShell className="bg-white !py-12 sm:!py-14">
+    <SectionShell className="bg-white !py-14 sm:!py-16">
       <p className="text-center text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-600 sm:text-sm">
         Trusted by thousands of local sellers
       </p>
@@ -600,7 +600,7 @@ export function ExploreStoresSection() {
   }
 
   return (
-    <section className="relative isolate overflow-hidden scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
+    <section className="relative isolate overflow-hidden scroll-mt-24 marketing-gutter py-16 sm:py-24">
       <div
         className="pointer-events-none absolute inset-0 -z-10"
         aria-hidden
@@ -609,7 +609,7 @@ export function ExploreStoresSection() {
             'radial-gradient(90% 60% at 50% -10%, #ecfdf5, transparent 60%), linear-gradient(#f8fafc, #ffffff)',
         }}
       />
-      <div className="mx-auto max-w-7xl">
+      <div className="marketing-measure">
         <header className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600 sm:text-sm">
             Stores near you
@@ -850,7 +850,7 @@ export function ExploreStoresSection() {
           </div>
         ) : null}
         {!storesLoading && !storesError && stores.length ? (
-          <div className="-mx-4 mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+          <div className="-mx-(--marketing-gutter) mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-(--marketing-gutter) pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
             {stores.map((store) => (
               <LandingStoreCard key={store.id} store={store} />
             ))}
@@ -1001,9 +1001,7 @@ export function PricingSection() {
             key={plan.id}
             className={cn(
               'relative flex flex-col rounded-3xl bg-white p-7',
-              plan.featured
-                ? 'border-2 border-emerald-500 shadow-xl shadow-emerald-100'
-                : 'border border-slate-200',
+              plan.featured ? 'border-2 border-emerald-500 shadow-xl shadow-emerald-100' : 'border border-slate-200',
               !plan.available && 'opacity-90',
             )}
           >
@@ -1027,9 +1025,7 @@ export function PricingSection() {
               <span className="pb-1 text-sm text-slate-500">/month</span>
             </p>
             <p className="mt-1 text-xs text-slate-500">before taxes</p>
-            <p className="my-7 flex-1 text-sm leading-6 text-slate-600">
-              Best for {plan.bestFor.toLowerCase()}.
-            </p>
+            <p className="my-7 flex-1 text-sm leading-6 text-slate-600">Best for {plan.bestFor.toLowerCase()}.</p>
             {plan.available && plan.to ? (
               <Link
                 to={plan.to}
@@ -1044,8 +1040,8 @@ export function PricingSection() {
             )}
           </article>
         ))}
-      </div>
-      <div className="mt-14 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      </div>{' '}
+      <div className="relative mt-14 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] border-collapse text-left">
           <caption className="sr-only">Feature comparison across MithraDirect plans</caption>
           <thead>
@@ -1098,8 +1094,8 @@ export function PricingSection() {
 
 export function InvitationSection() {
   return (
-    <section className="bg-white px-4 py-14 sm:px-6 sm:py-16">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-600 px-6 py-12 text-center text-white sm:px-12">
+    <section className="marketing-gutter bg-white py-16 sm:py-20">
+      <div className="marketing-measure overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-600 px-6 py-12 text-center text-white sm:px-12">
         <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
           Ready to Grow Your Business?
         </h2>

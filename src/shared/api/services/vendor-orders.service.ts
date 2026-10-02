@@ -20,8 +20,8 @@ import { isLiveApi } from '../mode'
 import { demoDelay } from './demo-delay'
 import { forgetPaidOrders, readPaidOrders, recordPaidOrder } from './paid-orders-store'
 
-/** The page size `GET /v1/vendors/{id}/orders/` serves; the list pages through it. */
-const PAGE_SIZE = 20
+/** Orders shown per page on Overview and Orders; the list pages through them. */
+const PAGE_SIZE = 5
 
 export type VendorOrderQuery = {
   page?: number

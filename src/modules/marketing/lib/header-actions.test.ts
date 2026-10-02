@@ -72,8 +72,15 @@ describe('resolveHeaderActions', () => {
   })
 
   describe('live vendor', () => {
-    it('shows nothing while the account read is in flight', () => {
-      expect(resolveHeaderActions(live({ account: { status: 'loading' } }))).toEqual([])
+    it('offers Dashboard while the account read is in flight, never leaving a vendor without a way in', () => {
+      expect(resolveHeaderActions(live({ account: { status: 'loading' } }))).toEqual([DASHBOARD])
+    })
+
+    it('offers the very button an approved store ends up with, so that case does not change', () => {
+      const whileLoading = resolveHeaderActions(live({ account: { status: 'loading' } }))
+      const approved = resolveHeaderActions(live())
+
+      expect(approved.at(-1)).toEqual(whileLoading[0])
     })
 
     it('offers no Log out to a vendor whose store is submitted', () => {
@@ -137,6 +144,10 @@ describe('resolveHeaderActions', () => {
 
   describe('on /onboarding', () => {
     const onboarding = { pathname: '/onboarding' }
+
+    it('offers nothing while the account read is in flight, as the wizard owns the page', () => {
+      expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'loading' } }))).toEqual([])
+    })
 
     it('hides Continue setup, which would link to the current page, but keeps Log out', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SETTING_UP }))).toEqual([LOG_OUT])

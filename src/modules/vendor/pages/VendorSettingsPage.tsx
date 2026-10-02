@@ -158,7 +158,7 @@ export function VendorSettingsPage() {
   }, [vendorId])
 
   return (
-    <div className="grid max-w-3xl gap-4">
+    <div className="grid gap-4">
       {error ? <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p> : null}
       {loading ? <Spinner label="Loading your details…" /> : null}
 

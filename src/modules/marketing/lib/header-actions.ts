@@ -47,6 +47,7 @@ const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
 const VENDOR_HOME_HREF = homePathForRole('vendor')
 
 const LOG_OUT: HeaderAction = { label: 'Log out', emphasis: 'secondary' }
+const DASHBOARD: HeaderAction = { label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
   { label: 'Log in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
@@ -87,10 +88,16 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   if (!input.user?.roles.includes('vendor')) return SIGNED_OUT
 
   const store = submittedStore(input)
-  if (store === undefined) return []
+  const onOnboarding = isOnboardingPath(input.pathname)
+
+  // The account has not answered yet, and a vendor must never be left with no way in.
+  // Dashboard suits every state: it opens the setup prompt for an unfinished store and the
+  // status for a pending one. It is also the button an approved store ends up with, so that
+  // case does not change when the read lands. On the wizard the vendor is already on the page
+  // that owns what happens next, so nothing is offered until the account is known.
+  if (store === undefined) return onOnboarding ? [] : [DASHBOARD]
 
   // These two link to the wizard, which is where the vendor already is on /onboarding.
-  const onOnboarding = isOnboardingPath(input.pathname)
   const toOnboarding = (label: 'Continue setup' | 'Check status'): HeaderAction[] =>
     onOnboarding ? [] : [{ label, to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }]
 
@@ -105,6 +112,6 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   if (store.storeIdentifier) {
     actions.push({ label: 'Store', to: `/stores/${store.storeIdentifier}`, emphasis: 'secondary' })
   }
-  actions.push({ label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' })
+  actions.push(DASHBOARD)
   return actions
 }

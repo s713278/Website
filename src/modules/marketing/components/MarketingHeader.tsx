@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
 import logoDarkMd from '@/assets/logo_dark_md.png'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -18,7 +18,6 @@ const ConfirmDialog = lazy(() =>
 const NAV = [
   { label: 'About Us', href: '#about' },
   { label: 'Search Stores', to: '/stores' },
-  { label: 'Store Demo', to: '/stores' },
   { label: 'Features', href: '#features' },
   { label: 'Pricing', href: '#pricing' },
 ] as const
@@ -52,7 +51,7 @@ function HeaderActionButton({
       variant={primary ? 'primary' : 'outline'}
       fullWidth={mobile}
       className={cn(
-        'h-10 rounded-[10px] px-5 font-medium',
+        'h-10 rounded-full px-5 font-medium',
         // The default outline border is #e2e8f0, which vanishes on the white header.
         !primary && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
       )}
@@ -86,17 +85,38 @@ export function MarketingHeader() {
   const logout = useAuthStore((state) => state.logout)
   const [confirmingLogOut, setConfirmingLogOut] = useState(false)
 
+  // On the landing page the hero runs underneath the header, so at the top of the page the
+  // header lets its background through. Once the page scrolls (or the menu opens over it) it
+  // goes back to the solid bar every other page uses.
+  const onHome = useLocation().pathname === '/'
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    if (!onHome) return
+    const update = () => setScrolled(window.scrollY > 8)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [onHome])
+  const clear = onHome && !scrolled && !open
+
   return (
-    <header className="sticky top-0 z-40 border-b border-emerald-100/70 bg-white/95 backdrop-blur">
-      {/* Same gutter and 7xl measure as the landing sections' `SectionShell` (padding outside the
-          max-width box), so the logo and the last action sit on the same edges as the content. */}
-      <div className="px-4 sm:px-6">
-        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between gap-6">
+    <header
+      className={cn(
+        'sticky top-0 z-40 border-b transition-[background-color,border-color] duration-300',
+        clear ? 'border-transparent bg-transparent' : 'border-emerald-100/70 bg-white/95 backdrop-blur',
+      )}
+    >
+      {/* Same gutter and measure as the landing sections (padding outside the max-width box), so
+          the logo and the last action sit on the same edges as the content. The links and both
+          actions need about 1050px, more than the 960px a 1024 viewport leaves, so the menu
+          button takes over until `xl`. */}
+      <div className="marketing-gutter">
+        <div className="marketing-measure flex h-20 items-center justify-between gap-6 xl:h-[5.5rem]">
           {/* Logo and links read as one group; the actions stand apart on the right. */}
           <div className="flex items-center gap-10">
             <BrandMark />
 
-            <nav className="hidden items-center gap-6 text-sm font-medium text-slate-700 lg:flex">
+            <nav className="hidden items-center gap-6 text-sm font-medium text-slate-700 xl:flex">
               {NAV.map((item) =>
                 'to' in item ? (
                   <Link key={item.label} to={item.to} className="hover:text-emerald-700">
@@ -139,7 +159,7 @@ export function MarketingHeader() {
             </nav>
           </div>
 
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-3 xl:flex">
             {actions.map((action) => (
               <HeaderActionButton
                 key={action.label}
@@ -151,7 +171,7 @@ export function MarketingHeader() {
 
           <button
             type="button"
-            className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 xl:hidden"
             aria-label={open ? 'Close menu' : 'Open menu'}
             onClick={() => setOpen((v) => !v)}
           >
@@ -160,8 +180,8 @@ export function MarketingHeader() {
         </div>
       </div>
 
-      <div className={cn('border-t border-slate-100 bg-white px-4 py-4 sm:px-6 lg:hidden', !open && 'hidden')}>
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm font-medium text-slate-700">
+      <div className={cn('marketing-gutter border-t border-slate-100 bg-white py-4 xl:hidden', !open && 'hidden')}>
+        <div className="marketing-measure flex flex-col gap-3 text-sm font-medium text-slate-700">
           {NAV.map((item) =>
             'to' in item ? (
               <Link key={item.label} to={item.to} onClick={() => setOpen(false)}>

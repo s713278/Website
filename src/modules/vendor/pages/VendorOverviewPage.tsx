@@ -14,7 +14,7 @@ import {
 import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Spinner } from '@/shared/components'
+import { Button, Spinner } from '@/shared/components'
 
 /**
  * One figure and what it counts, as the shared design draws it: the label small and
@@ -148,6 +148,7 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
   const [result, setResult] = useState<VendorOrderPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -156,6 +157,7 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
 
     void vendorOrdersService
       .list(vendorId, {
+        page,
         startDate: queueWindow.startDate,
         endDate: queueWindow.endDate,
       })
@@ -172,7 +174,7 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
     return () => {
       cancelled = true
     }
-  }, [vendorId, queueWindow])
+  }, [vendorId, queueWindow, page])
 
   const queue = result ? selectWorkQueue(result.orders) : []
 
@@ -231,15 +233,18 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
         />
       ) : null}
 
-      {/* A locally empty page says nothing about unfinished orders on later pages. */}
-      {!loading && !error && result && !result.lastPage ? (
-        <p className="mt-3 max-w-[68ch] text-sm text-[var(--md-muted)]">
-          Only the first page of this window is shown.{' '}
-          <Link to="/vendor/orders" className="font-medium hover:underline">
-            Open Orders
-          </Link>{' '}
-          to see the rest.
-        </p>
+      {result && result.totalPages > 1 ? (
+        <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+          <Button size="sm" variant="secondary" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>
+            Previous
+          </Button>
+          <span className="vc-num text-sm text-[var(--md-muted)]">
+            Page {result.page + 1} of {result.totalPages}
+          </span>
+          <Button size="sm" variant="secondary" disabled={result.lastPage || loading} onClick={() => setPage(page + 1)}>
+            Next
+          </Button>
+        </div>
       ) : null}
     </DashboardPanel>
   )
