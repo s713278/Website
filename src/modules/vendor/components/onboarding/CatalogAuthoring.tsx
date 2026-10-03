@@ -90,7 +90,7 @@ export function AuthorCategoryForm({ onAdded }: { onAdded: () => void }) {
           disabled={atLimit}
           onClick={() => setOpen(true)}
         >
-          <PlusIcon /> Add a platform category
+          <PlusIcon /> Add Category
         </Button>
         {atLimit ? (
           <span className="text-xs text-[var(--ob-ink-soft)]">
@@ -243,7 +243,7 @@ export function AuthorProductForm({
             setOpen(true)
           }}
         >
-          <PlusIcon /> Add a platform product
+          <PlusIcon /> Add Product
         </Button>
         {atLimit ? (
           <span className="text-xs text-[var(--ob-ink-soft)]">
