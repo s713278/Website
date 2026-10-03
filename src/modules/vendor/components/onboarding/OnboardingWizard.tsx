@@ -33,10 +33,14 @@ import { maskPhone } from '../../lib/onboarding-adapter'
 import {
   isLivePersistedStep,
   persistStep,
+  resumedCatalogFingerprints,
   stepErrorField,
+  stepSaveFingerprint,
+  stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
+import { loadVendorContext } from '../../lib/vendor-context-cache'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -168,6 +172,11 @@ export function OnboardingWizard() {
   // How the last measurement read settled. Setting it is also what re-renders the wizard
   // once the catalog lands, since the store fields it fills are not subscribed to here.
   const [measurementOutcome, setMeasurementOutcome] = useState<'loaded' | 'failed' | null>(null)
+  // Steps 4-9 whose draft is known to match the account, as `stepSaveFingerprint` values.
+  // A Continue on a matching step skips the save and the reads it makes. Anything not
+  // vouched for by a save (or, for catalog steps, a resume) in this visit is absent, so it
+  // saves as before.
+  const savedStepRef = useRef<Partial<Record<OnboardingStep, string>>>({})
   const [contextError, setContextError] = useState<string | null>(null)
   // A session is what Steps 1-2 exist to produce, so having one closes them. The floor
   // is owned by the access module rather than computed here, because it is a statement
@@ -224,6 +233,7 @@ export function OnboardingWizard() {
    * overwrite edits the vendor has made and not yet saved.
    */
   useLayoutEffect(() => {
+    savedStepRef.current = {}
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setProductLimit(null)
@@ -287,6 +297,7 @@ export function OnboardingWizard() {
         paymentDetails: resumePaymentDetails(server.checkout, current.runtime.paymentDetails),
         orderWhatsapp: resumed.orderWhatsapp,
       })
+      savedStepRef.current = resumedCatalogFingerprints(resumed.draft, resumed.furthestVisitedStep)
     }
 
     // Sign-in or the header may have resolved this already. Applying it here rather than
@@ -615,8 +626,12 @@ export function OnboardingWizard() {
       if (!requestIsCurrent(controller, 10)) return
       try {
         // Submission activates the vendor but approval is a separate admin step, so the
-        // real state is read back rather than assumed.
-        const context = await vendorOnboardingService.getVendorContext(access.vendorId)
+        // real state is read back rather than assumed — through the shared context cache,
+        // so the dashboard this leads to reuses it instead of reading it again.
+        const context = await loadVendorContext(
+          access.vendorId,
+          (id) => vendorOnboardingService.getVendorContext(id),
+        )
         if (!requestIsCurrent(controller, 10)) return
         setStoreSubmission({
           storeIdentifier: context.storeIdentifier,
@@ -687,10 +702,13 @@ export function OnboardingWizard() {
     if (liveApi && stepUsesMeasurementCatalog((step + 1) as OnboardingStep)) {
       loadPlatformMeasurements().catch(() => {})
     }
+    const fingerprint = stepSaveFingerprint(step, draft, runtime)
+    const unchanged = fingerprint !== null && savedStepRef.current[step] === fingerprint
     const shouldPersist =
       writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
-      access.state === 'ready'
+      access.state === 'ready' &&
+      !unchanged
 
     if (shouldPersist && access.state === 'ready') {
       const controller = beginRequest()
@@ -708,8 +726,14 @@ export function OnboardingWizard() {
         // This step is now on the account, so a cached read from before it is stale.
         invalidateVendorOnboardingState(access.vendorId)
         if (!persistenceIsCurrent()) return
+        // Read after the save: minting authored entries rewrites their ids in the draft.
+        const latest = useOnboardingStore.getState()
+        const saved = stepSaveFingerprint(step, latest.draft, latest.runtime)
+        if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
         setStatusMessage(null)
       } catch (error) {
+        // Part of the step may have landed, so it no longer matches anything known.
+        for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
         if (!persistenceIsCurrent()) return
         setStatusMessage(null)
         // A failed write is never reported as local success.
@@ -729,7 +753,7 @@ export function OnboardingWizard() {
     // `syncedWithAccount` must reflect whether this step actually reached the account.
     // Demo and sample mode skip the write, and claiming otherwise lets the next account
     // read overwrite work the vendor can still see on screen.
-    completeStep(step, (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist })
+    completeStep(step, (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
   }
 
   const handleContinue = async () => {

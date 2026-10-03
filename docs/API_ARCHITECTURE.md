@@ -279,7 +279,9 @@ so the wizard, the header on `/onboarding`, and sign-in's prefetch share one fan
 are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
 The same invalidation also drops the dashboard's narrower context cache, so returning from setup
 cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
-response belonging to an entry that has already been invalidated.
+response belonging to an entry that has already been invalidated. Submission's read-back of the
+context after go-live goes through the dashboard's context cache, so opening the dashboard next
+reuses it rather than reading the context again.
 
 The marketing header decides its vendor actions from the context alone. Off `/onboarding` it calls
 `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the narrower cache so the
@@ -335,14 +337,29 @@ the SKU ID and its subscriptions. A missing price record blocks repricing before
 partial failure stays visible; retry reads current account values and writes only remaining changes.
 
 After creation, the account is reread and saved IDs replace the local draft IDs without replacing
-the draft's other fields. Repeated saves also recognise an identical size whose successful create
-did not return an ID. Matching uses product, quantity, and unit, never a stale product-derived name.
+the draft's other fields. The create response names the new SKU IDs only inside a human-readable
+message, with no price IDs, so the reread stays ("Structured SKU create response" in
+[API_GAPS.md](./API_GAPS.md#still-open)). Repeated saves also recognise an identical size whose
+successful create did not return an ID. Matching uses product, quantity, and unit, never a stale product-derived name.
 Conflicting new drafts must reload instead of taking over an existing size. The wizard records
 returned identities only while the initiating session and step remain current.
 
 The final read must confirm every new size before Step 6 succeeds. If a successful response leaves
 a size missing, the wizard retains the confirmed IDs and shows a save error. A failed batch may
 have saved some sizes; retry reads the account again and groups only the remaining creates.
+
+Continue on Steps 4-6 skips the save, and with it the account reads that precede and follow each
+write, while the step's catalog matches what this visit last saved or resumed. The comparison
+covers that step and every earlier catalog step, plus the catalog source, so an upstream change
+makes a later step save again. A resume vouches only for the steps before the one it opens on.
+A failed save, local edits that outrank the account on entry, or a change of vendor leave the step
+unvouched, so it saves as before.
+
+Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
+the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the
+storefront plus business-details writes for Step 9. These steps are vouched for only by a save in
+this visit, never by a resume, because the account's stored checkout options and storefront need
+not match the payload a resumed draft would send.
 
 Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Step 6
 has no fulfillment controls; old drafts can still carry those flags, which the PATCH contract

@@ -44,6 +44,80 @@ export function writesReachAccount(catalogSource: CatalogSource): boolean {
   return isLiveApi() && catalogSource === 'account'
 }
 
+/**
+ * What a Continue on catalog Steps 4-6 would reconcile with the account: the catalog up to
+ * and including that step, with its source. `null` for every other step.
+ *
+ * Saving those steps reads the account first (and Step 6 again after creating sizes), so a
+ * Continue on a step the vendor did not change still cost two to three reads for no write.
+ * The wizard records this after each save and resume and skips the save while it matches.
+ * Earlier steps are included because they decide what a later step writes to, so a change
+ * anywhere upstream makes the later step save again.
+ */
+export function catalogFingerprint(step: OnboardingStep, draft: VendorOnboardingDraftV1): string | null {
+  if (step < 4 || step > 6) return null
+  return JSON.stringify({
+    source: draft.catalogSource,
+    categories: draft.categories,
+    products: step >= 5 ? draft.products : null,
+    skus: step >= 6 ? draft.skus : null,
+  })
+}
+
+/**
+ * Fingerprints for the catalog steps a resumed draft took in full from the account.
+ *
+ * Only the steps before the one it opens on: the resume's cumulative reads always cover
+ * those, while the opening step itself may not have been read at all.
+ */
+export function resumedCatalogFingerprints(
+  draft: VendorOnboardingDraftV1,
+  furthestVisitedStep: OnboardingStep,
+): Partial<Record<OnboardingStep, string>> {
+  const fingerprints: Partial<Record<OnboardingStep, string>> = {}
+  for (const step of [4, 5, 6] as const) {
+    const fingerprint = catalogFingerprint(step, draft)
+    if (step < furthestVisitedStep && fingerprint) fingerprints[step] = fingerprint
+  }
+  return fingerprints
+}
+
+/**
+ * What a Continue on any step would write, for the wizard's skip-unchanged check: the
+ * catalog fingerprint on Steps 4-6, and the exact request bodies on Steps 7-9. `null` where
+ * no save is skipped.
+ *
+ * Steps 7-9 are whole-record PUT/PATCH writes, so resending an identical body changes
+ * nothing. Steps 7 and 8 send one shared payload and so share one fingerprint (see
+ * `stepsSavedTogether`).
+ */
+export function stepSaveFingerprint(
+  step: OnboardingStep,
+  draft: VendorOnboardingDraftV1,
+  runtime: OnboardingRuntimeState,
+): string | null {
+  if (step === 7 || step === 8) {
+    return JSON.stringify({
+      source: draft.catalogSource,
+      delivery: toDeliveryInput(draft),
+      payments: toPaymentInput(draft, runtime),
+    })
+  }
+  if (step === 9) {
+    return JSON.stringify({
+      source: draft.catalogSource,
+      storefront: toStorefrontInput(draft, runtime),
+      business: toBusinessDetailsInput(draft),
+    })
+  }
+  return catalogFingerprint(step, draft)
+}
+
+/** Steps whose Continue sends the same write, so one save vouches for all of them. */
+export function stepsSavedTogether(step: OnboardingStep): OnboardingStep[] {
+  return step === 7 || step === 8 ? [7, 8] : [step]
+}
+
 /** Field to focus when a save for this step fails. */
 export function stepErrorField(step: OnboardingStep): string {
   if (step === 3) return 'business-type'
@@ -144,6 +218,22 @@ function toPaymentInput(
       isDefault: option.isDefault,
     })),
     details: runtime.paymentDetails,
+  }
+}
+
+/**
+ * owner_name and contact_person have no home in the storefront config, so Step 9 sends
+ * them on the business-type record where the contract defines them. `null` until a
+ * business type is chosen, since that write needs one.
+ */
+function toBusinessDetailsInput(draft: VendorOnboardingDraftV1) {
+  const businessType = draft.business.businessType
+  if (!businessType) return null
+  return {
+    businessType: businessType.name,
+    businessName: draft.storefront.storeName,
+    ownerName: draft.business.ownerName,
+    contactPerson: draft.business.contactPerson,
   }
 }
 
@@ -630,8 +720,9 @@ export async function persistSkus(
   }
 
   // Report the account's current SKU identity so cumulative size capacity stays right for
-  // the rest of the visit. A create returns no id (the wrapper discards it), so the set is
-  // re-read once writes have landed; when nothing changed, the entry read already had it.
+  // the rest of the visit. A create names its ids only in a message string and returns no
+  // price ids (docs/API_GAPS.md), so the set is re-read once writes have landed; when nothing
+  // changed, the entry read already had it.
   // Sizes can be deleted, so this replaces rather than grows the retained set.
   assertOwner()
   const finalSkus = plan.creates.length || plan.deletes.length
@@ -706,16 +797,7 @@ export async function persistStep(
 
   if (step === 9) {
     await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, runtime))
-    // owner_name and contact_person have no home in the storefront config, so they
-    // ride along on the business-type record where the contract defines them.
-    const businessType = draft.business.businessType
-    if (businessType) {
-      await vendorOnboardingService.saveBusinessType(vendorId, {
-        businessType: businessType.name,
-        businessName: draft.storefront.storeName,
-        ownerName: draft.business.ownerName,
-        contactPerson: draft.business.contactPerson,
-      })
-    }
+    const businessDetails = toBusinessDetailsInput(draft)
+    if (businessDetails) await vendorOnboardingService.saveBusinessType(vendorId, businessDetails)
   }
 }
