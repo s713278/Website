@@ -11,7 +11,7 @@ export function LocationMapPage() {
   const { storeId = 'r1' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const cartCount = useCartStore((s) => s.itemCount(storeId))
   const addresses = useDeliveryAddressStore((s) => s.addresses)
   const addAddress = useDeliveryAddressStore((s) => s.addAddress)
@@ -35,7 +35,7 @@ export function LocationMapPage() {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} cartCount={cartCount} />
+      <StorefrontHeader store={store} storeId={storeId} storeLoading={loading} cartCount={cartCount} />
       <LocationMap
         initial={editing}
         confirmLabel={editing ? 'Update location' : 'Confirm location'}

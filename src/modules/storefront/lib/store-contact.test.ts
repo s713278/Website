@@ -5,10 +5,8 @@ import {
   hasStoreContactFacts,
   mapsEmbedUrl,
   mapsSearchUrl,
-  orderWhatsappHref,
   storeContactHeaderProps,
   supportHelpMessage,
-  supportWhatsappHref,
   supportWhatsappNumber,
 } from './store-contact'
 
@@ -37,16 +35,36 @@ describe('findUsAddress', () => {
 })
 
 describe('mapsSearchUrl', () => {
-  it('builds a Google Maps search for the shop address', () => {
-    expect(mapsSearchUrl('12 MG Road, Hyderabad')).toBe(
+  it('opens the coordinates and leaves the address off the map link', () => {
+    expect(
+      mapsSearchUrl({
+        label: 'MIG 3-973/L, Miyapur, Hyderabad, Telangana, 500049, India',
+        latitude: '17.510041',
+        longitude: '78.365615',
+      }),
+    ).toBe('https://www.google.com/maps/search/?api=1&query=17.510041%2C78.365615')
+  })
+
+  it('searches the address when coordinates are missing', () => {
+    expect(mapsSearchUrl({ label: '12 MG Road, Hyderabad' })).toBe(
       'https://www.google.com/maps/search/?api=1&query=12%20MG%20Road%2C%20Hyderabad',
     )
   })
 })
 
 describe('mapsEmbedUrl', () => {
-  it('embeds a Google Maps search for the same shop address', () => {
-    expect(mapsEmbedUrl('12 MG Road, Hyderabad')).toBe(
+  it('embeds the coordinates and leaves the address off the map link', () => {
+    expect(
+      mapsEmbedUrl({
+        label: 'MIG 3-973/L, Miyapur, Hyderabad, Telangana, 500049, India',
+        latitude: '17.510041',
+        longitude: '78.365615',
+      }),
+    ).toBe('https://maps.google.com/maps?q=17.510041%2C78.365615&z=17&output=embed')
+  })
+
+  it('embeds an address search when coordinates are missing', () => {
+    expect(mapsEmbedUrl({ label: '12 MG Road, Hyderabad' })).toBe(
       'https://maps.google.com/maps?q=12%20MG%20Road%2C%20Hyderabad&z=15&output=embed',
     )
   })
@@ -63,24 +81,8 @@ describe('support WhatsApp', () => {
     expect(supportWhatsappNumber(shop({ phone: '+919912149049' }))).toBe('+919912149049')
   })
 
-  it('prefills a help message, not an order message', () => {
-    const message = supportHelpMessage("Geeta's Kitchen")
-    expect(message).toBe("Hi, I need help from Geeta's Kitchen")
-    expect(supportWhatsappHref(shop({ phone: '+919912149049' }))).toBe(
-      `https://wa.me/919912149049?text=${encodeURIComponent(message)}`,
-    )
-  })
-})
-
-describe('order WhatsApp', () => {
-  it('opens an order message on the order number', () => {
-    expect(orderWhatsappHref(shop({ phone: '+919912149049' }))).toBe(
-      `https://wa.me/919912149049?text=${encodeURIComponent("Hi, I would like to order from Geeta's Kitchen")}`,
-    )
-  })
-
-  it('does not use the support number for the header order link', () => {
-    expect(orderWhatsappHref(shop({ supportWhatsapp: '+919900000000' }))).toBeUndefined()
+  it('prefills a help message', () => {
+    expect(supportHelpMessage("Geeta's Kitchen")).toBe("Hi, I need help from Geeta's Kitchen")
   })
 })
 

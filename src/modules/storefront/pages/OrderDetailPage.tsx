@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
   const user = useAuthStore((s) => s.user)
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading: storeLoading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [orderError, setOrderError] = useState('')
@@ -77,7 +77,7 @@ export function OrderDetailPage() {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} cartCount={itemCount} />
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} storeLoading={storeLoading} cartCount={itemCount} />
 
       <main className="store-shell-inner flex-1 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-6">
         <div className="mx-auto w-full max-w-lg space-y-3">

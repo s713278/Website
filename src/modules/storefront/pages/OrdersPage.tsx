@@ -30,7 +30,7 @@ export function OrdersPage() {
 
 function StoreOrders({ storeId }: { storeId: string }) {
   const user = useAuthStore((s) => s.user)
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading: storeLoading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const [orders, setOrders] = useState<CustomerOrder[]>([])
   const [apiPage, setApiPage] = useState(0)
   const [lastPage, setLastPage] = useState(true)
@@ -136,7 +136,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} cartCount={itemCount} />
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} storeLoading={storeLoading} cartCount={itemCount} />
 
       <main className="store-shell-inner flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-5">
         <div className="mx-auto w-full max-w-3xl">

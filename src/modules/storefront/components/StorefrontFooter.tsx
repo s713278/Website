@@ -43,7 +43,7 @@ export function StorefrontFooter({
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-800">{storeName}</p>
-              <p className="truncate text-[11px] text-slate-500">{tagline}</p>
+              {tagline ? <p className="truncate text-[11px] text-slate-500">{tagline}</p> : null}
             </div>
           </div>
 

@@ -9,6 +9,7 @@ import {
   storeBackFallback,
   storeCartPath,
   storeOrdersPath,
+  storeContactPath,
   storePath,
   storeSearchPath,
 } from '@/modules/storefront/lib/store-paths'
@@ -24,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
-import { WhatsAppIcon } from './WhatsAppIcon'
 
 type StorefrontHeaderProps = {
   store?: Store | null
@@ -32,6 +32,7 @@ type StorefrontHeaderProps = {
   storeId?: string
   /** Fallback name while the shop record is still loading. */
   storeName?: string
+  storeLoading?: boolean
   cartCount?: number
   searchOpen?: boolean
   /** Shop home only. Other pages open the shop search. */
@@ -135,7 +136,6 @@ function HeaderActions({
   storeId,
   storeName,
   logoUrl,
-  orderWhatsappHref,
 }: {
   searchOpen: boolean
   onToggleSearch: () => void
@@ -144,7 +144,6 @@ function HeaderActions({
   storeId?: string | null
   storeName?: string
   logoUrl?: string
-  orderWhatsappHref?: string
 }) {
   const user = useAuthStore((s) => s.user)
   const badge = visibleCartCount(user, cartCount)
@@ -171,19 +170,6 @@ function HeaderActions({
       >
         <Search className="size-[1.125rem]" strokeWidth={1.75} />
       </button>
-
-      {orderWhatsappHref ? (
-        <a
-          href={orderWhatsappHref}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex size-11 items-center justify-center rounded-full text-[#25D366] transition hover:bg-emerald-50"
-          aria-label="Order on WhatsApp"
-          title="Order on WhatsApp"
-        >
-          <WhatsAppIcon className="size-6" />
-        </a>
-      ) : null}
 
       <AccountControl
         loginTo={login.to}
@@ -213,6 +199,7 @@ export function StorefrontHeader({
   store,
   storeId: storeIdProp,
   storeName: storeNameProp,
+  storeLoading = false,
   cartCount = 0,
   searchOpen = false,
   onToggleSearch,
@@ -225,7 +212,9 @@ export function StorefrontHeader({
   const cartHref = shopId ? storeCartPath(shopId) : '/cart'
   const shopHref = shopId ? storePath(shopId) : '/'
   const contactActive = isStoreContactPath(location.pathname)
-  const { contactHref, orderWhatsappHref } = storeContactHeaderProps(store)
+  const { contactHref } = storeContactHeaderProps(store)
+  const publishedContactHref =
+    contactHref ?? (shopId && isLiveApi() ? storeContactPath(shopId) : undefined)
   const backTo = storeBackFallback(`${location.pathname}${location.search}`)
 
   const handleSearch =
@@ -260,13 +249,16 @@ export function StorefrontHeader({
             <StoreBrandLogo
               storeName={storeName}
               logoUrl={logoUrl}
+              pending={storeLoading && !logoUrl}
               variant="full"
               className="[&_p:first-child]:text-sm [&_p:first-child]:sm:text-base"
             />
           </Link>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 lg:gap-6">
-            {contactHref ? <ContactUsLink href={contactHref} active={contactActive} /> : null}
+            {publishedContactHref ? (
+              <ContactUsLink href={publishedContactHref} active={contactActive} />
+            ) : null}
             <HeaderActions
               searchOpen={searchOpen}
               onToggleSearch={handleSearch}
@@ -275,7 +267,6 @@ export function StorefrontHeader({
               storeId={shopId}
               storeName={storeName}
               logoUrl={logoUrl}
-              orderWhatsappHref={orderWhatsappHref}
             />
           </div>
         </div>
