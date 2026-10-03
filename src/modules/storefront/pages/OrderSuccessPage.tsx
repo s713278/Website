@@ -18,7 +18,7 @@ export function OrderSuccessPage() {
   const { storeId = '', orderId = '' } = useParams()
   const location = useLocation()
   const state = (location.state as SuccessState | null) ?? {}
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const itemCount = useCartStore((s) => s.itemCount(storeId))
   const clearVendor = useCartStore((s) => s.clearVendor)
 
@@ -35,7 +35,7 @@ export function OrderSuccessPage() {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} storeName={storeName} cartCount={itemCount} />
+      <StorefrontHeader store={store} storeId={storeId} storeName={storeName} storeLoading={loading} cartCount={itemCount} />
 
       <main className="store-shell-inner flex-1 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-10 lg:py-14">
         <div className="mx-auto w-full max-w-md text-center sm:max-w-lg sm:rounded-3xl sm:border sm:border-slate-100 sm:bg-white sm:px-8 sm:py-10 sm:shadow-sm">

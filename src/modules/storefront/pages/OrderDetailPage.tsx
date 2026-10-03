@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowRight, CreditCard, Home, ImageIcon, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils'
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
   const user = useAuthStore((s) => s.user)
-  const { store, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading: storeLoading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [orderError, setOrderError] = useState('')
@@ -77,7 +78,7 @@ export function OrderDetailPage() {
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} cartCount={itemCount} />
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} storeLoading={storeLoading} cartCount={itemCount} />
 
       <main className="store-shell-inner flex-1 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-6">
         <div className="mx-auto w-full max-w-lg space-y-3">
@@ -186,15 +187,11 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
             const imageUrl = resolveOrderItemImage(order, item)
             return (
               <li key={`${item.itemId ?? item.name}-${index}`} className="flex gap-3">
-                <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-slate-50 ring-1 ring-slate-100 sm:size-[3.75rem]">
-                  {imageUrl ? (
-                    <img src={imageUrl} alt="" className="size-full object-cover" />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-slate-300">
-                      <ImageIcon className="size-5" aria-hidden />
-                    </div>
-                  )}
-                </div>
+                <ProductImage
+                  src={imageUrl}
+                  alt=""
+                  className="size-14 shrink-0 rounded-xl ring-1 ring-slate-100 sm:size-[3.75rem]"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-900">{item.name}</p>
                   {item.size ? <p className="mt-0.5 text-xs text-slate-500">{item.size}</p> : null}

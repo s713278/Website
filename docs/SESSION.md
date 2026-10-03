@@ -36,8 +36,8 @@ into a session by `applySession()`.
 
 | Field | Meaning |
 |-------|---------|
-| `role` | Active audience for this session. Always one of `roles`. |
-| `roles` | Every role the backend verified. `hasRole()` and `ProtectedRoute` consult this, never `role` — the same number opens both login forms, so the screen a vendor happened to use must not decide what they may reach. |
+| `role` | Active session. The login screen that was used: customer or vendor. Shop cart, orders, and checkout follow this. `/vendor` and onboarding follow this. The other role on the same phone is not entered until that screen is used. |
+| `roles` | Every role the backend verified for the phone. This is not a second login. |
 | `vendors` | Vendor memberships from the response `vendors[]`. |
 | `vendorId` | Set **only** when there is exactly one membership, whichever login form was used — memberships come from the backend, not from the requested role. Several memberships require an explicit `selectVendor()` choice; the first entry is never taken silently. |
 
@@ -102,10 +102,9 @@ Route guards wait for `isHydrated`, so they never act on a half-restored session
 
 `resolveLandingPath(user, from)` decides, and sign-in **awaits it before navigating**.
 
-It reads the verified roles, not the form that was used. A vendor signing in through the customer
-page still owns a store, so sending them to `/cart` would strand a half-finished setup with no route
-back to it. An explicit customer destination in `from` still wins, so a vendor heading to checkout is
-not dragged into store setup.
+It follows the login screen. A customer OTP stays on the shop (`from`, otherwise `/`). A vendor OTP
+goes to `/vendor` when setup is already submitted, and to `/onboarding` when it is not. The same
+phone can hold both roles on the server, but one OTP does not open both sides.
 
 For a vendor it then reads the account — one cached, resume-step-sized hydration shared with the
 wizard — and routes on completed setup and submission. An active store with

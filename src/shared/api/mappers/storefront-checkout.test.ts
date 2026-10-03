@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  deliveryFeeForCheckout,
   formatDeliveryEstimate,
   mapStorefrontCheckoutOptions,
 } from './storefront-checkout'
@@ -53,6 +54,7 @@ describe('mapStorefrontCheckoutOptions', () => {
     expect(mapped?.paymentOptions).toEqual([
       { id: '76', label: 'Cash on delivery', type: 'CASH_ON_DELIVERY', isDefault: true },
     ])
+    expect(mapped?.shippingStrategyType).toBe('ORDER_AMOUNT_THRESHOLD')
     expect(mapped?.shipping).toEqual({
       deliveryCharge: 30,
       freeDeliveryThreshold: 0,
@@ -106,6 +108,61 @@ describe('mapStorefrontCheckoutOptions', () => {
       '6 PM - 9 PM',
       '9 PM - 12 AM',
     ])
+  })
+})
+
+describe('deliveryFeeForCheckout', () => {
+  const strategy = 'ORDER_AMOUNT_THRESHOLD'
+  const quoted = { deliveryCharge: 100, freeDeliveryThreshold: 500 }
+  const freeFromZero = { deliveryCharge: 100, freeDeliveryThreshold: 0 }
+
+  it('uses delivery_charge until the subtotal reaches free_delivery_threshold', () => {
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 499,
+        method: 'HOME_DELIVERY',
+        strategy,
+        shipping: quoted,
+      }),
+    ).toBe(100)
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 500,
+        method: 'HOME_DELIVERY',
+        strategy,
+        shipping: quoted,
+      }),
+    ).toBe(0)
+  })
+
+  it('keeps delivery_charge when free_delivery_threshold is 0', () => {
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 30,
+        method: 'HOME_DELIVERY',
+        strategy,
+        shipping: freeFromZero,
+      }),
+    ).toBe(100)
+  })
+
+  it('does not invent a fee for pickup or a strategy it cannot price', () => {
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 30,
+        method: 'STORE_PICKUP',
+        strategy,
+        shipping: quoted,
+      }),
+    ).toBeNull()
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 30,
+        method: 'HOME_DELIVERY',
+        strategy: 'WEIGHT_BASED',
+        shipping: quoted,
+      }),
+    ).toBeNull()
   })
 })
 

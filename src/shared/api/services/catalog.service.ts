@@ -14,6 +14,7 @@ import {
   type StorefrontCheckoutOptions,
 } from '../mappers/storefront-checkout'
 import { mapPdpSkuDetail, mapStorefrontProductPage } from '../mappers/storefront-products'
+import { mapStorefrontContact, type StoreContact } from '../mappers/storefront-contact'
 import { isLiveApi } from '../mode'
 import { ALL_CATEGORY, parseCategoryFilter, productMatchesCategory, type CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
 import { isSearchApiReady, matchesSearchQuery } from '@/shared/lib/search-query'
@@ -387,6 +388,16 @@ export async function getStoreCheckoutOptions(
   }
 }
 
+/** GET /v1/vendors/{identifier}/storefront/contact-us */
+export async function getStoreContact(storeId: string): Promise<StoreContact | null> {
+  if (!isLiveApi()) return null
+
+  const vendorId = await resolveLiveVendorId(storeId)
+  if (!vendorId) return null
+  const res = await storefrontService.getContact(vendorId)
+  return mapStorefrontContact(unwrapData(res))
+}
+
 /** GET /v1/vendors/products/{product_id}/skus/{sku_id} — PDP (mithrauserapp fetchSkuDetails). */
 export async function getProductSkuDetail(
   productId: string | number,
@@ -420,6 +431,7 @@ export const catalogService = {
   searchStoresByKeyword,
   searchStoreSkus,
   getStore,
+  getStoreContact,
   getStoreCheckoutOptions,
   listStoreProducts,
   getProductSkuDetail,

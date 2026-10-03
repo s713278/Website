@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 
 type ProductGalleryProps = {
   images: string[]
@@ -14,22 +15,23 @@ export function ProductGallery({ images, alt, className }: ProductGalleryProps) 
 
   if (!active) {
     return (
-      <div
+      <ProductImage
+        alt={alt}
         className={cn(
-          'mx-auto flex aspect-[4/3] w-full max-w-[280px] items-center justify-center rounded-xl bg-slate-100 text-sm font-medium text-slate-400 sm:max-w-[300px]',
+          'mx-auto aspect-[4/3] w-full max-w-[280px] rounded-xl sm:max-w-[300px]',
           className,
         )}
-      >
-        No image
-      </div>
+      />
     )
   }
 
   return (
     <div className={cn('mx-auto w-full max-w-[300px] lg:mx-0', className)}>
-      <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
-        <img src={active} alt={alt} className="aspect-[4/3] w-full object-cover" />
-      </div>
+      <ProductImage
+        src={active}
+        alt={alt}
+        className="aspect-[4/3] w-full rounded-xl border border-slate-100 shadow-sm"
+      />
 
       {images.length > 1 ? (
         <div className="mt-2.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -47,7 +49,7 @@ export function ProductGallery({ images, alt, className }: ProductGalleryProps) 
               aria-label={`View image ${index + 1}`}
               aria-pressed={index === activeIndex}
             >
-              <img src={image} alt="" className="size-full object-cover" loading="lazy" />
+              <ProductImage src={image} alt="" className="size-full" />
             </button>
           ))}
         </div>

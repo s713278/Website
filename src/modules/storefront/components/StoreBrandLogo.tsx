@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 type StoreBrandLogoProps = {
   storeName: string
   logoUrl?: string
-  /** compact = icon + one line; full = icon + wordmark */
-  variant?: 'compact' | 'full'
+   pending?: boolean
+    variant?: 'compact' | 'full'
   className?: string
 }
 
@@ -13,6 +13,7 @@ type StoreBrandLogoProps = {
 export function StoreBrandLogo({
   storeName,
   logoUrl,
+  pending = false,
   variant = 'full',
   className,
 }: StoreBrandLogoProps) {
@@ -23,6 +24,11 @@ export function StoreBrandLogo({
           src={logoUrl}
           alt=""
           className="size-9 shrink-0 rounded-lg object-contain p-0.5 ring-1 ring-slate-200/80 sm:size-10 sm:rounded-[10px]"
+        />
+      ) : pending ? (
+        <span
+          className="inline-flex size-9 shrink-0 rounded-lg bg-slate-100 sm:size-10 sm:rounded-[10px]"
+          aria-hidden
         />
       ) : (
         <span

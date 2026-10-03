@@ -6,6 +6,7 @@
  */
 import type { NavigateFunction } from 'react-router-dom'
 import { getCachedStore } from '@/modules/storefront/hooks/useStorePage'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import {
   addToVendorCart,
@@ -26,9 +27,7 @@ import type { Product, ProductVariant } from '@/modules/storefront/types'
 import { isApiError } from '@/shared/api'
 import type { User } from '@/shared/types'
 
-export function canShopAsCustomer(user: User | null | undefined): boolean {
-  return user?.role === 'customer'
-}
+export { canShopAsCustomer }
 
 function isUnauthorized(error: unknown): boolean {
   return isApiError(error) && (error.status === 401 || error.kind === 'unauthorized')

@@ -1,14 +1,40 @@
 import type { Store } from '@/modules/storefront/types'
 import { storeContactPath } from '@/modules/storefront/lib/store-paths'
-import { whatsappHref } from '@/modules/storefront/lib/whatsapp-order'
 
-export function mapsSearchUrl(address: string) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+export type MapPoint = {
+  /** Street, area, city, state, and PIN, in that order. */
+  label?: string
+  latitude?: string
+  longitude?: string
 }
 
-/** Preview iframe for the same shop address — no invented coordinates. */
-export function mapsEmbedUrl(address: string) {
-  return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`
+function mapPin(point: MapPoint): string | undefined {
+  if (!point.latitude || !point.longitude) return undefined
+  const latitude = Number(point.latitude)
+  const longitude = Number(point.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return undefined
+  return `${point.latitude},${point.longitude}`
+}
+
+/**
+ * Pin is the coordinates, same as Swiggy, Zomato, and Meesho.
+ * The written address stays on the card. Searching that text in Google Maps
+ * returns nearby lookalikes instead of this point.
+ */
+export function mapsSearchUrl(point: MapPoint): string | undefined {
+  const pin = mapPin(point)
+  if (pin) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pin)}`
+  const label = point.label?.trim()
+  if (!label) return undefined
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`
+}
+
+/** Preview iframe for the same pin. */
+export function mapsEmbedUrl(point: MapPoint): string | undefined {
+  const pin = mapPin(point)
+  const query = pin || point.label?.trim()
+  if (!query) return undefined
+  return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=${pin ? 17 : 15}&output=embed`
 }
 
 /** Find us uses `business_location` — never the customer delivery pin. */
@@ -28,33 +54,15 @@ export function supportHelpMessage(shopName: string) {
   return `Hi, I need help from ${shopName}`
 }
 
-export function orderWhatsappMessage(shopName: string) {
-  return `Hi, I would like to order from ${shopName}`
-}
-
 export function hasStoreContactFacts(store: Store): boolean {
   return Boolean(findUsAddress(store) || supportWhatsappNumber(store))
 }
 
-export function supportWhatsappHref(store: Pick<Store, 'name' | 'supportWhatsapp' | 'phone'>): string | undefined {
-  const phone = supportWhatsappNumber(store)
-  if (!phone) return undefined
-  return whatsappHref(phone, supportHelpMessage(store.name))
-}
-
-export function orderWhatsappHref(store: Pick<Store, 'name' | 'phone'>): string | undefined {
-  const phone = store.phone?.trim()
-  if (!phone) return undefined
-  return whatsappHref(phone, orderWhatsappMessage(store.name))
-}
-
 export function storeContactHeaderProps(store: Store | null | undefined): {
   contactHref?: string
-  orderWhatsappHref?: string
 } {
   if (!store) return {}
   return {
     contactHref: hasStoreContactFacts(store) ? storeContactPath(store.id) : undefined,
-    orderWhatsappHref: orderWhatsappHref(store),
   }
 }

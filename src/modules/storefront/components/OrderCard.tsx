@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { CustomerOrder } from '@/shared/api'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import {
   orderArrivalLabel,
@@ -32,13 +33,7 @@ export function OrderCard({ order, storeId }: OrderCardProps) {
       </div>
 
       <div className="mt-2.5 flex gap-3">
-        <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-100 sm:size-14">
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="size-full object-cover" loading="lazy" />
-          ) : (
-            <div className="flex size-full items-center justify-center text-lg">🛒</div>
-          )}
-        </div>
+        <ProductImage src={imageUrl} alt="" className="size-12 shrink-0 rounded-lg ring-1 ring-slate-100 sm:size-14" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{summary.title}</p>
           <p className="mt-0.5 text-xs text-slate-500">

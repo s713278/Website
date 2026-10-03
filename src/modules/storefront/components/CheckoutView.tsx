@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Banknote,
   CalendarDays,
@@ -7,28 +7,27 @@ import {
   ChevronRight,
   CreditCard,
   MapPin,
-  Package,
-  Pencil,
   ShieldCheck,
   ShoppingBag,
   Store as StoreIcon,
   Truck,
 } from 'lucide-react'
 import {
+  deliveryFeeForCheckout,
   formatDeliveryEstimate,
   getErrorMessage,
   ordersService,
   type StorefrontCheckoutOptions,
   type StorefrontCheckoutPayment,
 } from '@/shared/api'
-import { DeliveryAddressPicker } from '@/shared/components/DeliveryAddressPicker'
-import { useDeliveryLocation } from '@/shared/hooks/useDeliveryLocation'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { StorefrontMobileActionBar } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import { lineAmount, priceDetailsFromSummary } from '@/modules/storefront/lib/cart-utils'
 import { DELIVERY_ESTIMATE_NOTE } from '@/modules/storefront/lib/order-display'
 import {
+  locationMapPath,
   storeCartPath,
   storeOrderSuccessPath,
   storePath,
@@ -42,13 +41,18 @@ import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-
 import type { CartLine, Store } from '@/modules/storefront/types'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
-import { useDeliveryAddressStore } from '@/shared/store/delivery-address-store'
+import {
+  getSelectedAddress,
+  useDeliveryAddressStore,
+} from '@/shared/store/delivery-address-store'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
 
 const EMPTY_DELIVERY_SLOTS: StorefrontCheckoutOptions['deliverySlots'] = []
 const EMPTY_PAYMENT_OPTIONS: StorefrontCheckoutOptions['paymentOptions'] = []
 const EMPTY_DELIVERY_METHODS: StorefrontCheckoutOptions['deliveryMethods'] = []
+const ADDRESS_NOTE =
+  'Check address and items — then we’ll send this order to the shop on WhatsApp.'
 
 type CheckoutViewProps = {
   store: Store
@@ -78,17 +82,19 @@ export function CheckoutView({
   onBack,
 }: CheckoutViewProps) {
   const navigate = useNavigate()
+  const { pathname, search } = useLocation()
   const storedSummary = useCartStore((s) => s.summaries?.[store.id])
   const summary = useMemo(
     () => storedSummary ?? summaryFromLines(lines),
     [storedSummary, lines],
   )
-  // Totals come from cart API summary — do not recompute delivery from checkout_options.
-  const totals = priceDetailsFromSummary(summary)
 
   const user = useAuthStore((s) => s.user)
   const phone = user?.phone ?? ''
-  const { selected, pickerProps, openChange, openMap } = useDeliveryLocation(store.id)
+  const addresses = useDeliveryAddressStore((s) => s.addresses)
+  const selectedId = useDeliveryAddressStore((s) => s.selectedId)
+  const updateAddress = useDeliveryAddressStore((s) => s.updateAddress)
+  const selected = getSelectedAddress(addresses, selectedId)
 
   const deliverySlots = checkoutOptions?.deliverySlots ?? EMPTY_DELIVERY_SLOTS
   const paymentOptions = checkoutOptions?.paymentOptions ?? EMPTY_PAYMENT_OPTIONS
@@ -107,6 +113,9 @@ export function CheckoutView({
   const [consentAccepted, setConsentAccepted] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [error, setError] = useState('')
+  const [editingAddress, setEditingAddress] = useState(false)
+  const [addressDraft, setAddressDraft] = useState('')
+  const [addressError, setAddressError] = useState('')
 
   useEffect(() => {
     if (!deliverySlots.some((slot) => slot.id === deliverySlot) && deliverySlots[0]) {
@@ -128,21 +137,85 @@ export function CheckoutView({
   const slotLabel = estimateLabel || selectedSlot?.label || 'Delivery'
   const deliveryMethod = deliveryMethods[0] ?? 'HOME_DELIVERY'
   const deliveryDate = estimateDates[0] ?? selectedSlot?.date ?? ''
+  // Item totals stay on the cart summary. The delivery line comes from checkout_options
+  // shipping_config, which the cart payload does not include.
+  const totals = useMemo(() => {
+    const base = priceDetailsFromSummary(summary)
+    const quoted = deliveryFeeForCheckout({
+      subtotal: base.subtotal,
+      method: deliveryMethod,
+      strategy: checkoutOptions?.shippingStrategyType,
+      shipping: checkoutOptions?.shipping,
+    })
+    if (quoted == null) return base
+    return {
+      ...base,
+      delivery: quoted,
+      total: base.total - base.delivery + quoted,
+    }
+  }, [summary, deliveryMethod, checkoutOptions?.shipping, checkoutOptions?.shippingStrategyType])
 
   const selectedPayment = paymentOptions.find((option) => option.id === payment)
   const selectedPaymentLabel = selectedPayment?.label ?? 'Payment'
 
   const canPlace =
     Boolean(selected) &&
+    !editingAddress &&
     Boolean(estimateLabel || deliverySlot || deliverySlots.length === 0) &&
     Boolean(payment || paymentOptions.length === 0) &&
     (!requiresConsent || consentAccepted) &&
     !placing
 
-  async function placeOrderOnWhatsApp() {
+  function openAddressMap(editId?: string) {
+    navigate(locationMapPath(store.id, { from: `${pathname}${search}`, editId }))
+  }
+
+  function startAddressEdit() {
+    setAddressDraft(selected?.location ?? '')
+    setAddressError('')
+    setEditingAddress(true)
+  }
+
+  function cancelAddressEdit() {
+    setEditingAddress(false)
+    setAddressError('')
+  }
+
+  function saveAddressEdit() {
+    const location = addressDraft.trim()
+    if (location.length < 8) {
+      setAddressError('Please enter your area and city so the shop can find your location.')
+      return
+    }
+
     if (!selected) {
-      setError('Add a delivery location to continue.')
-      openMap()
+      openAddressMap()
+      return
+    }
+
+    updateAddress(selected.id, {
+      location,
+      lat: selected.lat,
+      lng: selected.lng,
+      city: selected.city,
+      country: selected.country,
+      zipCode: selected.zipCode,
+      backendAddressId: selected.backendAddressId,
+    })
+
+    setEditingAddress(false)
+    setAddressError('')
+    setError('')
+  }
+
+  async function placeOrderOnWhatsApp() {
+    if (editingAddress) {
+      setError('Save your delivery address to continue.')
+      return
+    }
+    if (!selected) {
+      setError('Add a delivery address to continue.')
+      openAddressMap()
       return
     }
     if (requiresConsent && !consentAccepted) {
@@ -277,11 +350,23 @@ export function CheckoutView({
           >
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
               <section className="space-y-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.04)] sm:p-7">
-                <CheckoutSection icon={MapPin} title="Delivery address">
-                  {selected ? (
-                    <div className="flex items-center gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-4 py-3.5">
+                <CheckoutSection icon={MapPin} title="Delivery address" hint={ADDRESS_NOTE}>
+                  {editingAddress ? (
+                    <AddressEditor
+                      value={addressDraft}
+                      error={addressError}
+                      onChange={(value) => {
+                        setAddressDraft(value)
+                        if (addressError) setAddressError('')
+                      }}
+                      onCancel={cancelAddressEdit}
+                      onSave={saveAddressEdit}
+                      onChooseOnMap={() => openAddressMap(selected?.id)}
+                    />
+                  ) : selected ? (
+                    <div className="flex items-start gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-4 py-3.5">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-slate-900">
+                        <p className="whitespace-pre-wrap text-sm font-bold text-slate-900">
                           {selected.location}
                         </p>
                         {deliveryMethods.length > 0 ? (
@@ -292,23 +377,21 @@ export function CheckoutView({
                       </div>
                       <button
                         type="button"
-                        onClick={openChange}
-                        className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+                        onClick={startAddressEdit}
+                        className="inline-flex shrink-0 items-center text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
                       >
-                        <Pencil className="size-3.5" aria-hidden />
-                        Change
-                        <ChevronRight className="size-4" aria-hidden />
+                        Edit
                       </button>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center">
-                      <p className="text-sm text-slate-600">Add your address</p>
+                      <p className="text-sm text-slate-600">Add your delivery address</p>
                       <Button
                         type="button"
                         className="mt-4 rounded-xl bg-[var(--store-theme,var(--md-green-800))] px-6 text-white hover:opacity-90"
-                        onClick={() => openMap()}
+                        onClick={() => openAddressMap()}
                       >
-                        Add location
+                        Add address
                       </Button>
                     </div>
                   )}
@@ -385,18 +468,13 @@ export function CheckoutView({
 
                   <div className="mt-5 divide-y divide-slate-100">
                     {lines.map((line) => {
-                      const imageUrl = line.imageUrl
                       return (
                         <div key={line.itemId} className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
-                          <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt="" className="size-full object-cover" />
-                            ) : (
-                              <div className="flex size-full items-center justify-center text-slate-400">
-                                <Package className="size-5" aria-hidden />
-                              </div>
-                            )}
-                          </div>
+                          <ProductImage
+                            src={line.imageUrl}
+                            alt=""
+                            className="size-14 shrink-0 rounded-xl"
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="line-clamp-2 text-sm font-semibold text-slate-900">
                               {line.name}
@@ -541,8 +619,6 @@ export function CheckoutView({
               <ChevronRight className="size-4 shrink-0" aria-hidden />
             </Button>
           </StorefrontMobileActionBar>
-
-          <DeliveryAddressPicker {...pickerProps} />
         </>
       )}
     </>
@@ -659,6 +735,69 @@ function RadioMark({ checked }: { checked: boolean }) {
   )
 }
 
+function AddressEditor({
+  value,
+  error,
+  onChange,
+  onCancel,
+  onSave,
+  onChooseOnMap,
+}: {
+  value: string
+  error: string
+  onChange: (value: string) => void
+  onCancel: () => void
+  onSave: () => void
+  onChooseOnMap: () => void
+}) {
+  return (
+    <div>
+      <textarea
+        id="checkout-address"
+        rows={3}
+        value={value}
+        autoFocus
+        aria-label="Delivery address"
+        placeholder="Flat / Street, Area, City, PIN"
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--store-theme,var(--md-green-600))] focus:ring-2 focus:ring-[var(--store-theme-soft,rgba(16,185,129,0.45))]"
+      />
+      {error ? (
+        <p className="mt-2 text-sm text-[var(--md-danger)]" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onChooseOnMap}
+          className="inline-flex h-11 items-center gap-1.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+        >
+          <MapPin className="size-3.5" aria-hidden />
+          Choose on map
+        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-full border-slate-200 px-5 text-slate-800"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-full bg-[var(--store-theme,var(--md-green-800))] px-5 text-white hover:opacity-90"
+            onClick={onSave}
+          >
+            Save address
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ConsentRow({
   title,
   text,
@@ -671,28 +810,32 @@ function ConsentRow({
   onChange: (next: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 border-t border-slate-100 pt-5 sm:pl-[3.75rem]">
-      <span
-        className={cn(
-          'mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-[5px] border-2',
-          checked
-            ? 'border-[var(--store-theme,var(--md-green-600))] bg-[var(--store-theme,var(--md-green-600))] text-white'
-            : 'border-slate-300 bg-white',
-        )}
-      >
-        {checked ? <Check className="size-3" strokeWidth={3} aria-hidden /> : null}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="sr-only"
-      />
-      <span className="min-w-0 text-sm leading-relaxed text-slate-600">
-        <span className="font-semibold text-slate-900">{title}</span>
-        {text ? <span className="mt-0.5 block">{text}</span> : null}
-      </span>
-    </label>
+    <div className="border-t border-slate-100 pt-5">
+      <label className="flex cursor-pointer gap-3.5 sm:gap-4">
+        <span className="flex size-11 shrink-0 justify-end">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onChange(event.target.checked)}
+            className="sr-only"
+          />
+          <span
+            className={cn(
+              'mt-0.5 inline-flex size-5 items-center justify-center rounded-[5px] border-2',
+              checked
+                ? 'border-[var(--store-theme,var(--md-green-600))] bg-[var(--store-theme,var(--md-green-600))] text-white'
+                : 'border-slate-300 bg-white',
+            )}
+          >
+            {checked ? <Check className="size-3" strokeWidth={3} aria-hidden /> : null}
+          </span>
+        </span>
+        <span className="min-w-0 flex-1 text-sm leading-relaxed text-slate-600">
+          <span className="block font-semibold text-slate-900">{title}</span>
+          {text ? <span className="mt-0.5 block">{text}</span> : null}
+        </span>
+      </label>
+    </div>
   )
 }
 

@@ -46,10 +46,9 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
     return <Navigate to={loginPathForRole(intended)} replace state={{ from: location.pathname }} />
   }
 
-  // `roles` is what the backend verified; `role` is only the audience picked at login.
-  // Guarding on the latter locks a vendor out of their own store setup for having used
-  // the customer form, and loops against any redirect that sends them back to it.
-  if (roles && !roles.some((role) => user.roles.includes(role))) {
+  // The active login decides the session. A customer OTP must not open /vendor, and a
+  // vendor OTP must not open customer orders, even when the same phone has both roles.
+  if (roles && !roles.includes(user.role)) {
     const needed = roles[0]
     return <Navigate to={loginPathForRole(needed)} replace state={{ from: location.pathname }} />
   }

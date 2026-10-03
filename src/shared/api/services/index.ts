@@ -28,6 +28,7 @@ export {
 export {
   catalogService,
   getStore,
+  getStoreContact,
   getStoreCheckoutOptions,
   listLandingStores,
   listStoreProducts,
@@ -37,7 +38,10 @@ export {
   getProductSkuDetail,
 } from './catalog.service'
 export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../mappers/storefront-checkout'
+export { hasStoreContactContent } from '../mappers/storefront-contact'
+export type { StoreContact, StoreContactAddress, StoreContactLink } from '../mappers/storefront-contact'
 export {
+  deliveryFeeForCheckout,
   formatCheckoutDateLabel,
   formatDeliveryEstimate,
 } from '../mappers/storefront-checkout'

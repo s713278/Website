@@ -13,6 +13,7 @@ import {
   redirectCartUnauthorized,
   requestSetCartQty,
 } from '@/modules/storefront/lib/request-add-to-cart'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
@@ -80,7 +81,7 @@ function CartForStore({ storeId }: { storeId: string }) {
       hydratedRef.current = false
       hydratedUserId.current = user?.id
     }
-    if (!store || user?.role !== 'customer') return
+    if (!store || !canShopAsCustomer(user)) return
     if (storeClosed) return
     if (hydratedRef.current) return
     hydratedRef.current = true
@@ -88,7 +89,7 @@ function CartForStore({ storeId }: { storeId: string }) {
       if (redirectCartUnauthorized(error, navigate, fromPath, store.id, store.name)) return
       window.alert(cartActionErrorMessage(error))
     })
-  }, [store, storeClosed, user?.id, user?.role, navigate, fromPath])
+  }, [store, storeClosed, user, navigate, fromPath])
 
   return (
     <StorePageStates

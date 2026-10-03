@@ -21,6 +21,15 @@ export function homePathForUser(user: User) {
 }
 
 /**
+ * Shop cart, add, checkout, and orders.
+ * The active login is the audience. A vendor login for the same phone is a different
+ * session and must not shop until the customer screen is used.
+ */
+export function canShopAsCustomer(user: User | null | undefined): boolean {
+  return user?.role === 'customer'
+}
+
+/**
  * Where a vendor lands, given what their account actually holds.
  *
  * A vendor who has already submitted their store has no unfinished setup, so sending
@@ -37,11 +46,9 @@ export function vendorLandingPath(entry: OnboardingEntry | null) {
 /**
  * Where a session lands after signing in.
  *
- * Keyed on the roles the backend verified, not the screen that was used. The same phone
- * number opens both login forms, so a vendor who signs in through the customer one still
- * has a store: sending them to the cart strands a half-finished setup with no route back
- * to it. An explicit customer destination still wins, so a vendor who was heading to
- * checkout is not dragged into store setup instead.
+ * The login screen chooses the session. A customer login stays on the shop, even when
+ * the same phone also has a vendor role. A vendor login stays on vendor setup or the
+ * dashboard. The two sides do not share one landing.
  *
  * `entry` carries the vendor's account state when the caller has already resolved it,
  * so a submitted store is not routed into setup only to be bounced out again.
@@ -71,5 +78,5 @@ export function resumePathAfterLogin(
     return customerResumePath(from)
   }
 
-  return user.roles.includes('vendor') ? vendorLandingPath(entry ?? null) : '/'
+  return '/'
 }

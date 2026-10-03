@@ -1,5 +1,4 @@
-import { loginPathForRole } from '@/app/router/role-home'
-import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
+import { canShopAsCustomer, loginPathForRole } from '@/app/router/role-home'
 import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { isLiveApi } from '@/shared/api'
 import type { User } from '@/shared/types'
@@ -40,8 +39,8 @@ export function linkFromNavTarget(target: CartNavTarget): { to: string; state?: 
 }
 
 /**
- * Live + logged out → customer login (resume cart after OTP).
- * Demo / signed-in customer → cart route.
+ * Live customer session → cart. Anyone else (guest or vendor session) → customer login.
+ * A vendor login is not a customer session, even for the same phone.
  */
 export function cartNavTarget(
   user: User | null | undefined,
@@ -57,7 +56,7 @@ export function cartNavTarget(
   return cartPath
 }
 
-/** Live guests must not see leftover local cart badges. */
+/** Live guests and vendor sessions must not see the customer cart badge. */
 export function visibleCartCount(
   user: User | null | undefined,
   count: number,
