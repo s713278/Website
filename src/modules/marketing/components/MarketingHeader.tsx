@@ -6,7 +6,7 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 import { useHeaderActions } from '../hooks/useHeaderActions'
-import type { HeaderAction } from '../lib/header-actions'
+import { isOnboardingPath, type HeaderAction } from '../lib/header-actions'
 
 // Only a vendor with unfinished setup can open it, so it stays out of the first bundle.
 const ConfirmDialog = lazy(() =>
@@ -46,6 +46,7 @@ function HeaderActionButton({
   onLogOut: () => void
 }) {
   const primary = action.emphasis === 'primary'
+  const { pathname } = useLocation()
   const button = (
     <Button
       variant={primary ? 'primary' : 'outline'}
@@ -69,8 +70,14 @@ function HeaderActionButton({
     </Button>
   )
   if (action.label === 'Log out') return button
+  // From the wizard, Dashboard is where the vendor goes next, so it replaces the page.
+  const sameTab = action.label === 'Dashboard' && isOnboardingPath(pathname)
   return (
-    <Link to={action.to} onClick={onNavigate}>
+    <Link
+      to={action.to}
+      {...(sameTab ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+      onClick={onNavigate}
+    >
       {button}
     </Link>
   )

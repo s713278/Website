@@ -55,7 +55,7 @@ const SIGNED_OUT: HeaderAction[] = [
 ]
 
 /** React Router matches `/onboarding/` too, so a trailing slash is still this page. */
-function isOnboardingPath(pathname: string): boolean {
+export function isOnboardingPath(pathname: string): boolean {
   return pathname.replace(/\/+$/, '') === VENDOR_ONBOARDING_HREF
 }
 
