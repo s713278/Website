@@ -24,6 +24,8 @@ export type StorefrontCheckoutOptions = {
   paymentOptions: StorefrontCheckoutPayment[]
   availableDeliveryDates: string[]
   schedulingStrategy: string | null
+  /** `delivery_options.shipping_strategy_type` from checkout_options. */
+  shippingStrategyType: string | null
   shipping: {
     deliveryCharge: number | null
     freeDeliveryThreshold: number | null
@@ -100,6 +102,29 @@ export function formatCheckoutDateLabel(isoDate: string): string {
   })
 }
 
+/**
+ * Delivery line from checkout_options `shipping_config`.
+  */
+export function deliveryFeeForCheckout(input: {
+  subtotal: number
+  method?: string | null
+  strategy?: string | null
+  shipping?: StorefrontCheckoutOptions['shipping'] | null
+}): number | null {
+  if (input.method?.trim().toUpperCase() !== 'HOME_DELIVERY') return null
+
+  const charge = Number(input.shipping?.deliveryCharge)
+  if (!Number.isFinite(charge)) return null
+
+  const strategy = input.strategy?.trim().toUpperCase()
+
+  if (strategy === 'ORDER_AMOUNT_THRESHOLD') {
+    const threshold = Number(input.shipping?.freeDeliveryThreshold ?? 0)
+    if (threshold > 0 && input.subtotal >= threshold) return 0
+    return charge
+  }
+    return charge
+}
 /**
  * Eligible-date window for customers — first to last, not a picked day.
  * `['2026-09-26','2026-09-27','2026-09-28']` → `26–28 Sept`.
@@ -178,6 +203,7 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
     paymentOptions,
     availableDeliveryDates,
     schedulingStrategy: asString(delivery.scheduling_strategy)?.toUpperCase() ?? null,
+    shippingStrategyType: asString(delivery.shipping_strategy_type)?.toUpperCase() ?? null,
     shipping: {
       deliveryCharge: asNumber(shipping.delivery_charge ?? shipping.charge),
       freeDeliveryThreshold: asNumber(shipping.free_delivery_threshold),

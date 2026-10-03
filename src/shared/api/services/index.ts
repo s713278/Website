@@ -41,6 +41,7 @@ export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../ma
 export { hasStoreContactContent } from '../mappers/storefront-contact'
 export type { StoreContact, StoreContactAddress, StoreContactLink } from '../mappers/storefront-contact'
 export {
+  deliveryFeeForCheckout,
   formatCheckoutDateLabel,
   formatDeliveryEstimate,
 } from '../mappers/storefront-checkout'
