@@ -17,6 +17,6 @@ export type OnboardingEntry = { kind: 'submitted' } | { kind: 'resume' }
  * backend's `next_step` is authoritative and resource-derivation is a last resort.
  * The wizard decides where to open; this decides only which route to land on.
  */
-export function resolveOnboardingEntry(state: ServerOnboardingState): OnboardingEntry {
+export function resolveOnboardingEntry(state: Pick<ServerOnboardingState, 'context'>): OnboardingEntry {
   return isStoreSubmitted(state) ? { kind: 'submitted' } : { kind: 'resume' }
 }

@@ -240,10 +240,11 @@ mode is blocked at Continue because its synthetic IDs cannot reach an account.
 #### Vendor setup account hydration
 
 `loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
-snapshot for both post-sign-in routing and the setup wizard. It starts the three reads every vendor
-needs together: vendor context, vendor profile, and the business-type catalog. As soon as context
-reveals the backend resume step, it starts only the cumulative account reads needed to reconstruct
-that step and every earlier one:
+snapshot for the setup wizard. It starts the three reads every vendor needs together: vendor context,
+vendor profile, and the business-type catalog. A caller that has just read the context passes it in,
+and the snapshot reuses it instead of requesting it again. As soon as context reveals the backend
+resume step, it starts only the cumulative account reads needed to reconstruct that step and every
+earlier one:
 
 | Resume step | Additional account reads |
 |---|---|
@@ -265,8 +266,8 @@ fallback is computed from real data rather than an intentionally partial snapsho
 rejects hydration; the other reads retain the existing optional behavior and become empty/default
 snapshot fields when unavailable.
 
-`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor.
-Sign-in and the wizard therefore share the same fan-out rather than issuing it twice. Failed loads
+`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor,
+so the wizard, the header on `/onboarding`, and sign-in's prefetch share one fan-out. Failed loads
 are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
 The same invalidation also drops the dashboard's narrower context cache, so returning from setup
 cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
@@ -278,6 +279,13 @@ dashboard opens on it, or no request when either cache already holds a resolved 
 dashboard's is preferred). Waiting on the full read there held the actions back until the slowest of
 its reads settled, however little the decision used them. On `/onboarding` the header shares the
 wizard's full read instead of asking for the context a second time.
+
+Post-sign-in routing (`resolveLandingPath`) decides from the context the same way, through
+`loadVendorAccountContext` or a resolved context in either cache. A submitted store therefore lands
+on `/vendor` after one request, instead of waiting on the complete read set the dashboard never
+uses. Only when the destination is `/onboarding` does sign-in start `loadVendorOnboardingState`,
+seeded with that context and not awaited, so the setup reads overlap navigation and the wizard's
+route chunk. A failed prefetch is evicted as usual and the wizard retries it.
 
 #### Vendor setup sizes (Step 6)
 

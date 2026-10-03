@@ -107,11 +107,14 @@ export function measurementCatalogsForResume(measurements: MeasurementCatalog | 
 export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
+  knownContext?: VendorContext,
 ): Promise<ServerOnboardingState> {
   // Start all three universal reads before awaiting context. The dependent fan-out can
   // then begin as soon as context reveals the resume step, without waiting for either
-  // of the other universal reads to finish.
-  const contextPromise = vendorOnboardingService.getVendorContext(vendorId, config)
+  // of the other universal reads to finish. A context the caller just read is reused.
+  const contextPromise = knownContext
+    ? Promise.resolve(knownContext)
+    : vendorOnboardingService.getVendorContext(vendorId, config)
   const profilePromise = optional(vendorOnboardingService.getVendorProfile(vendorId, config))
   // One page covers the catalog (30 types); needed to turn the profile's display
   // string back into the reference object Step 3 stores.

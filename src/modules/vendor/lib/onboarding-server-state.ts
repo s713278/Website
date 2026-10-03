@@ -1,4 +1,4 @@
-import { vendorOnboardingService } from '@/shared/api'
+import { vendorOnboardingService, type VendorContext } from '@/shared/api'
 import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
 import {
   invalidateVendorOnboardingState,
@@ -27,14 +27,21 @@ import { loadVendorContext } from './vendor-context-cache'
 export { peekVendorOnboardingState } from './onboarding-state-cache'
 export { invalidateVendorOnboardingState }
 
+/**
+ * `context` is a vendor context the caller has only just read, such as sign-in's; the
+ * snapshot then reuses it instead of requesting it a second time.
+ */
 export function loadVendorOnboardingState(
   vendorId: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; context?: VendorContext } = {},
 ): Promise<ServerOnboardingState> {
   const existing = readEntry(vendorId)
   if (existing && !options.force) return existing.promise
 
-  const entry: CacheEntry = { resolved: null, promise: loadServerOnboardingState(vendorId) }
+  const entry: CacheEntry = {
+    resolved: null,
+    promise: loadServerOnboardingState(vendorId, {}, options.context),
+  }
   writeEntry(vendorId, entry)
 
   // Chained after the entry exists so the callbacks can compare against it by identity:
