@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Loader2, Package, ShoppingBag, X } from 'lucide-react'
+import { ArrowRight, Loader2, ShoppingBag, X } from 'lucide-react'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
@@ -209,18 +210,11 @@ function CartLineRow({
   const unitPrice = lineUnitPrice(line)
   const total = lineAmount(line)
   const busy = qtyPending || removing
-  const imageUrl = line.imageUrl
 
   return (
     <li className="flex gap-3 py-4">
-      <div className="size-[4.15rem] shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 sm:size-[4.5rem]">
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="size-full object-cover" />
-        ) : (
-          <div className="flex size-full items-center justify-center text-slate-400">
-            <Package className="size-6" aria-hidden />
-          </div>
-        )}
+      <div className="size-[4.15rem] shrink-0 sm:size-[4.5rem]">
+        <ProductImage src={line.imageUrl} alt="" className="size-full rounded-xl border border-slate-100" />
       </div>
 
       <div className="min-w-0 flex-1">

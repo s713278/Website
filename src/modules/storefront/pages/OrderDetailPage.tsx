@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowRight, CreditCard, Home, ImageIcon, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
@@ -186,15 +187,11 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
             const imageUrl = resolveOrderItemImage(order, item)
             return (
               <li key={`${item.itemId ?? item.name}-${index}`} className="flex gap-3">
-                <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-slate-50 ring-1 ring-slate-100 sm:size-[3.75rem]">
-                  {imageUrl ? (
-                    <img src={imageUrl} alt="" className="size-full object-cover" />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-slate-300">
-                      <ImageIcon className="size-5" aria-hidden />
-                    </div>
-                  )}
-                </div>
+                <ProductImage
+                  src={imageUrl}
+                  alt=""
+                  className="size-14 shrink-0 rounded-xl ring-1 ring-slate-100 sm:size-[3.75rem]"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-900">{item.name}</p>
                   {item.size ? <p className="mt-0.5 text-xs text-slate-500">{item.size}</p> : null}

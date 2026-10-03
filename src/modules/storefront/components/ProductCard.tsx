@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Package } from 'lucide-react'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { cn } from '@/lib/utils'
 import { CardVariantPicker } from '@/modules/storefront/components/CardVariantPicker'
 import { ProductCartControl } from '@/modules/storefront/components/ProductCartControl'
@@ -36,18 +36,12 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
     >
       <div className="relative aspect-[5/4] overflow-hidden bg-slate-50">
         <Link to={productHref} className="block size-full">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="size-full object-cover transition duration-300 group-hover:scale-[1.03]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center text-slate-300">
-              <Package className="size-12" strokeWidth={1.25} aria-hidden />
-            </div>
-          )}
+          <ProductImage
+            src={product.imageUrl}
+            alt={product.name}
+            className="size-full"
+            imgClassName="transition duration-300 group-hover:scale-[1.03]"
+          />
         </Link>
 
         <ProductCartControl

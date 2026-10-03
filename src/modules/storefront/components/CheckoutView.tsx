@@ -7,7 +7,6 @@ import {
   ChevronRight,
   CreditCard,
   MapPin,
-  Package,
   Pencil,
   ShieldCheck,
   ShoppingBag,
@@ -23,6 +22,7 @@ import {
 } from '@/shared/api'
 import { DeliveryAddressPicker } from '@/shared/components/DeliveryAddressPicker'
 import { useDeliveryLocation } from '@/shared/hooks/useDeliveryLocation'
+import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { StorefrontMobileActionBar } from '@/modules/storefront/components/StorefrontMobileActionBar'
@@ -385,18 +385,13 @@ export function CheckoutView({
 
                   <div className="mt-5 divide-y divide-slate-100">
                     {lines.map((line) => {
-                      const imageUrl = line.imageUrl
                       return (
                         <div key={line.itemId} className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
-                          <div className="size-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt="" className="size-full object-cover" />
-                            ) : (
-                              <div className="flex size-full items-center justify-center text-slate-400">
-                                <Package className="size-5" aria-hidden />
-                              </div>
-                            )}
-                          </div>
+                          <ProductImage
+                            src={line.imageUrl}
+                            alt=""
+                            className="size-14 shrink-0 rounded-xl"
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="line-clamp-2 text-sm font-semibold text-slate-900">
                               {line.name}
