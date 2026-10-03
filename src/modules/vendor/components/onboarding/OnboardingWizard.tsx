@@ -10,15 +10,18 @@ import {
   StoreIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { authService, getErrorMessage, isLiveApi, vendorOnboardingService } from '@/shared/api'
+import { authService, getErrorMessage, isLiveApi, vendorOnboardingService, type MeasurementCatalog } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
+import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
 import {
   buildResumeDraft,
   isStoreSubmitted,
+  loadPlatformMeasurements,
   resumePaymentDetails,
+  stepUsesMeasurementCatalog,
   type ServerOnboardingState,
 } from '../../lib/onboarding-resume'
 import {
@@ -162,6 +165,9 @@ export function OnboardingWizard() {
   // The wizard must not paint an interactive step before the account has been read:
   // Step 3 would flash and then jump to wherever the resume actually lands.
   const [accountState, setAccountState] = useState<'idle' | 'loading' | 'ready'>('idle')
+  // How the last measurement read settled. Setting it is also what re-renders the wizard
+  // once the catalog lands, since the store fields it fills are not subscribed to here.
+  const [measurementOutcome, setMeasurementOutcome] = useState<'loaded' | 'failed' | null>(null)
   const [contextError, setContextError] = useState<string | null>(null)
   // A session is what Steps 1-2 exist to produce, so having one closes them. The floor
   // is owned by the access module rather than computed here, because it is a statement
@@ -283,8 +289,9 @@ export function OnboardingWizard() {
       })
     }
 
-    // Sign-in resolved this already. Applying it here rather than waiting on the promise
-    // keeps the very first paint correct, instead of one frame of the un-hydrated draft.
+    // Sign-in or the header may have resolved this already. Applying it here rather than
+    // waiting on the promise keeps the very first paint correct, instead of one frame of the
+    // un-hydrated draft.
     const cached = peekVendorOnboardingState(access.vendorId)
     if (cached) {
       apply(cached)
@@ -316,6 +323,50 @@ export function OnboardingWizard() {
       ignore = true
     }
   }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, setProductMeasurementCatalog, applyResumedDraft])
+
+  /**
+   * The measurement catalog, read when the vendor reaches a step that uses it.
+   *
+   * The account read above includes it only for a vendor who enters on Step 5 or later.
+   * One who enters on Steps 3-4 would otherwise pay for a list and a detail read per
+   * measurement on screens that never show one, or reach Step 5 still on sample units.
+   */
+  const needsMeasurements =
+    liveApi && access.state === 'ready' && accountState === 'ready' && stepUsesMeasurementCatalog(currentStep)
+  // Derived during render, not set by the effect below: a flag that flipped one effect late
+  // let the step mount on its first frame, start its own catalog read, and then be torn down
+  // (aborting that read) and remounted to send it again once the measurements landed.
+  const measurementsPending =
+    needsMeasurements && measurementOutcome !== 'failed' && peekMeasurementCatalog() === null
+  useEffect(() => {
+    if (!needsMeasurements) return
+    const apply = (catalog: MeasurementCatalog) => {
+      setMeasurementCatalog(catalog)
+      setProductMeasurementCatalog(catalog)
+    }
+    const known = peekMeasurementCatalog()
+    if (known) {
+      apply(known)
+      return
+    }
+
+    let ignore = false
+    loadPlatformMeasurements().then(
+      (catalog) => {
+        if (ignore) return
+        apply(catalog)
+        setMeasurementOutcome('loaded')
+      },
+      () => {
+        // Same fallback as a failed account read: sample units for sizes, no product
+        // measurement metadata.
+        if (!ignore) setMeasurementOutcome('failed')
+      },
+    )
+    return () => {
+      ignore = true
+    }
+  }, [needsMeasurements, setMeasurementCatalog, setProductMeasurementCatalog])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -631,6 +682,11 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues)
 
     const step = draft.currentStep
+    // Started alongside this step's save, so the next step's catalog is usually ready when it
+    // opens. A failure is dropped from the cache and the step's own read retries it.
+    if (liveApi && stepUsesMeasurementCatalog((step + 1) as OnboardingStep)) {
+      loadPlatformMeasurements().catch(() => {})
+    }
     const shouldPersist =
       writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
@@ -884,18 +940,23 @@ export function OnboardingWizard() {
                         >
                         {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                        {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {measurementsPending && catalogUnlocked ? (
+                          <p className="flex items-center gap-2 text-sm text-[var(--ob-ink-soft)]">
+                            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" /> Loading measurements…
+                          </p>
+                        ) : null}
+                        {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed && !measurementsPending ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
                           <StepNotice message={currentStep === 3
                             ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
                             : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
                           />
                         ) : null}
-                        {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
+                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                         {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                        {currentStep === 10 && catalogUnlocked ? <ReviewStep onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
+                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </fieldset>
                       </div>
                     </div>
@@ -906,7 +967,7 @@ export function OnboardingWizard() {
                   <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
+                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || measurementsPending} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
                   </div>
                 </div> : null}

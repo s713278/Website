@@ -240,11 +240,13 @@ mode is blocked at Continue because its synthetic IDs cannot reach an account.
 #### Vendor setup account hydration
 
 `loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
-snapshot for the setup wizard. It starts the three reads every vendor needs together: vendor context,
-vendor profile, and the business-type catalog. A caller that has just read the context passes it in,
-and the snapshot reuses it instead of requesting it again. As soon as context reveals the backend
-resume step, it starts only the cumulative account reads needed to reconstruct that step and every
-earlier one:
+snapshot for the setup wizard. It starts the two reads every vendor needs together: vendor context
+and vendor profile. A caller that has just read the context passes it in, and the snapshot reuses it
+instead of requesting it again. The business-type catalog (one 100-item page) is read only once the
+profile shows a saved business type, because it exists to map that saved name back to the reference
+Step 3 stores; a vendor who has not chosen one, like every new vendor on Step 3, skips it, and Step 3
+lists its own page. As soon as context reveals the backend resume step, it starts only the cumulative
+account reads needed to reconstruct that step and every earlier one:
 
 | Resume step | Additional account reads |
 |---|---|
@@ -257,8 +259,14 @@ earlier one:
 Measurements mean one authenticated `GET /v1/measurements/` followed by one authenticated
 `GET /v1/measurements/{id}` per list row. Detail calls fan out together and enrich the list because
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
-The entire measurement read starts with the Products-step fan-out and is never one of the three
-universal reads.
+The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
+successful read per session: a later resume, or a return to setup after a saved step invalidates the
+vendor's snapshot, reuses it without a request, and only sign-out drops it. The snapshot asks for it
+from the Products step on (Step 5 shows product measurements and saved sizes are rebuilt against it)
+and otherwise carries an already-read catalog. A vendor who enters on Steps 3-4 gets it when the
+wizard reaches a step that uses it (5, 6 or 10). The read starts alongside the previous step's save,
+and the step shows "Loading measurements…" with Continue disabled until it settles. A failed read
+keeps the sample-unit fallback, as a failed snapshot read does.
 
 Submitted vendors load the complete read set so earlier setup remains reviewable. If context omits
 `onboarding.next_step`, the loader also chooses the complete set so the resource-derived resume

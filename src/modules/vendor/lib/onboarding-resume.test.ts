@@ -144,8 +144,8 @@ const SUBMITTED_CONTEXT = context({
 
 describe('accountReadsForResumeStep', () => {
   it.each([
-    [3, ['measurements']],
-    [4, ['categories', 'measurements']],
+    [3, []],
+    [4, ['categories']],
     [5, ['categories', 'products', 'measurements']],
     [6, ['categories', 'products', 'measurements', 'skus']],
     [7, ['categories', 'products', 'measurements', 'skus', 'checkout']],

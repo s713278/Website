@@ -1,5 +1,6 @@
 import type { VendorContext } from '@/shared/api'
 import type { ServerOnboardingState } from './onboarding-resume'
+import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
 import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
 
 /**
@@ -52,10 +53,14 @@ export function peekVendorAccountContext(vendorId: string): VendorContext | null
  *
  * Call after any write that changes what a resume would produce — every persisted step
  * and go-live — and on sign-out, where one vendor's store details must not outlive their
- * session.
+ * session. The platform measurement catalog is no vendor's data and no write changes it,
+ * so only the sign-out form (no `vendorId`) drops it.
  */
 export function invalidateVendorOnboardingState(vendorId?: string): void {
   if (vendorId) entries.delete(vendorId)
-  else entries.clear()
+  else {
+    entries.clear()
+    invalidateMeasurementCatalog()
+  }
   invalidateVendorContext(vendorId)
 }
