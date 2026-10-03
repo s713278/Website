@@ -32,6 +32,7 @@ import { isSearchActive, isSearchTooShort, searchUiMinChars } from '@/shared/lib
 import { syncVendorCart } from '../lib/cart-actions'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -126,11 +127,11 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
       hydratedRef.current = false
       hydratedUserId.current = user?.id
     }
-    if (user?.role !== 'customer') return
+    if (!canShopAsCustomer(user)) return
     if (hydratedRef.current) return
     hydratedRef.current = true
     void syncVendorCart(store.id, store.name, listCachedStoreProducts(store.id)).catch(() => {})
-  }, [store.id, store.name, user?.id, user?.role])
+  }, [store.id, store.name, user])
 
   function selectCategory(next: CategoryFilter) {
     setCategoryFilter(resolveCategoryFilter(categories, next))

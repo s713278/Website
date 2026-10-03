@@ -4,6 +4,7 @@ import { CheckoutView } from '@/modules/storefront/components/CheckoutView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
 import { getCachedStore, useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { syncVendorCart } from '@/modules/storefront/lib/cart-actions'
 import { storeCartPath, storeCheckoutPath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
@@ -31,14 +32,15 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
   const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const cartHydrated = useRef(false)
   const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
+  const shopper = canShopAsCustomer(user)
   const [checkoutOptions, setCheckoutOptions] = useState<StorefrontCheckoutOptions | null>(null)
   const [optionsLoading, setOptionsLoading] = useState(true)
   const [checkoutUnavailable, setCheckoutUnavailable] = useState(false)
   const storeLines = lines.filter((line) => line.storeId === storeId)
-  const [cartReady, setCartReady] = useState(() => storeLines.length > 0 || user?.role !== 'customer')
+  const [cartReady, setCartReady] = useState(() => storeLines.length > 0 || !shopper)
 
   useEffect(() => {
-    if (cartHydrated.current || user?.role !== 'customer') return
+    if (cartHydrated.current || !canShopAsCustomer(user)) return
     if (storeLines.length > 0) {
       setCartReady(true)
       return
@@ -49,7 +51,7 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
         /* empty cart still redirects below */
       })
       .finally(() => setCartReady(true))
-  }, [store?.name, storeId, storeLines.length, user?.role])
+  }, [store?.name, storeId, storeLines.length, user])
 
   useEffect(() => {
     let cancelled = false

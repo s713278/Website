@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, ChevronLeft, LogOut, Search, ShoppingCart, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { storeContactHeaderProps } from '@/modules/storefront/lib/store-contact'
 import {
@@ -74,7 +74,7 @@ function AccountControl({
   const from = `${location.pathname}${location.search}`
   const signInState = { ...loginState, from }
 
-  if (!user) {
+  if (!canShopAsCustomer(user)) {
     return (
       <Link
         to={loginTo}
@@ -153,7 +153,7 @@ function HeaderActions({
   const cartLink = linkFromNavTarget(
     canShopAsCustomer(user) || !isLiveApi()
       ? cartHref
-      : { pathname: login.to, state: login.state },
+      : { pathname: login.to, state: { ...login.state, from: cartHref } },
   )
 
   return (

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Loader2, ShoppingBag, X } from 'lucide-react'
+import { canShopAsCustomer } from '@/app/router/role-home'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
@@ -61,7 +62,7 @@ export function StoreCartView({
 
   function handleCheckout() {
     const checkoutPath = storeCheckoutPath(store.id)
-    if (user?.role === 'customer') {
+    if (canShopAsCustomer(user)) {
       navigate(checkoutPath)
       return
     }
