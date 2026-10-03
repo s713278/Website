@@ -61,17 +61,22 @@ function ProductCountTile({ vendorId }: { vendorId: string }) {
     setCount(null)
     setFailed(false)
 
-    void vendorProductsService
-      .listSizes(vendorId, controller.signal)
-      .then((sizes) => {
-        if (!cancelled) setCount(groupByProduct(sizes).length)
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true)
-      })
+    // Started a tick late for the same reason as the reads in `Metrics` and `WorkQueue`.
+    // Here it also keeps StrictMode's throwaway mount from starting a read only to abort it.
+    const start = window.setTimeout(() => {
+      void vendorProductsService
+        .listSizes(vendorId, controller.signal)
+        .then((sizes) => {
+          if (!cancelled) setCount(groupByProduct(sizes).length)
+        })
+        .catch(() => {
+          if (!cancelled) setFailed(true)
+        })
+    }, 0)
 
     return () => {
       cancelled = true
+      window.clearTimeout(start)
       controller.abort()
     }
   }, [vendorId])
@@ -89,20 +94,26 @@ function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
     setLoading(true)
     setError('')
 
-    void vendorService
-      .getInsights(userId)
-      .then((data) => {
-        if (!cancelled) setInsights(data)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load your order counts'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    // Started a tick after mount, so StrictMode's development mount-unmount-remount clears
+    // the first timer before it fires and the read is sent once. This request cannot be
+    // aborted, so without the delay the throwaway mount's copy would still go out.
+    const start = window.setTimeout(() => {
+      void vendorService
+        .getInsights(userId)
+        .then((data) => {
+          if (!cancelled) setInsights(data)
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(getErrorMessage(err, 'Could not load your order counts'))
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 0)
 
     return () => {
       cancelled = true
+      window.clearTimeout(start)
     }
   }, [userId])
 
@@ -155,24 +166,28 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
     setLoading(true)
     setError('')
 
-    void vendorOrdersService
-      .list(vendorId, {
-        page,
-        startDate: queueWindow.startDate,
-        endDate: queueWindow.endDate,
-      })
-      .then((data) => {
-        if (!cancelled) setResult(data)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load what needs doing'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    // Started a tick late for the same reason as the read in `Metrics`.
+    const start = window.setTimeout(() => {
+      void vendorOrdersService
+        .list(vendorId, {
+          page,
+          startDate: queueWindow.startDate,
+          endDate: queueWindow.endDate,
+        })
+        .then((data) => {
+          if (!cancelled) setResult(data)
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(getErrorMessage(err, 'Could not load what needs doing'))
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 0)
 
     return () => {
       cancelled = true
+      window.clearTimeout(start)
     }
   }, [vendorId, queueWindow, page])
 

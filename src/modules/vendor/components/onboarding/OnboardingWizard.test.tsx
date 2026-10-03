@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { mapVendorContext, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
+import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
 import { invalidateVendorOnboardingState } from '../../lib/onboarding-state-cache'
+import { loadVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { OnboardingWizard } from './OnboardingWizard'
 
@@ -66,7 +68,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1) {
+function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false) {
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
       vendor_id: 91, vendor_status: 'ACTIVE', approval_status: approvalStatus,
@@ -76,7 +78,8 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
       subscription: { limits: { max_categories: 3, max_products: 10, max_skus: maxSkus }, usage: { skus: skuUsage } },
     },
   }))
-  render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
+  const wizard = <MemoryRouter><OnboardingWizard /></MemoryRouter>
+  render(strict ? <StrictMode>{wizard}</StrictMode> : wizard)
 }
 
 async function openSizes() {
@@ -233,5 +236,124 @@ describe('onboarding account hydration and size permissions', () => {
 
     await waitFor(() => expect(screen.getAllByText('Could not create size').length).toBeGreaterThan(0))
     expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+  })
+})
+
+describe('measurement catalog reads', () => {
+  const emptyPage = { items: [], pageNumber: 0, pageSize: 12, totalPages: 0, totalElements: 0, lastPage: true }
+
+  // StrictMode as well: development double-runs the loading effect, which must still share one read.
+  it.each([false, true])('makes none on Steps 3-4 and one on reaching Step 5, kept for the session (StrictMode: %s)', async (strict) => {
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue(emptyPage)
+    const productList = vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(emptyPage)
+    let answer!: (catalog: MeasurementCatalog) => void
+    const getMeasurements = vi.spyOn(vendorOnboardingService, 'getMeasurements')
+      .mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    renderAccount('PENDING', 4, 2, 1, strict)
+
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    expect(getMeasurements).not.toHaveBeenCalled()
+
+    // The vendor has finished Step 4 and moves on.
+    act(() => {
+      useOnboardingStore.setState({ furthestVisitedStep: 5 })
+      useOnboardingStore.getState().goToStep(5)
+    })
+    expect(await screen.findByText('Loading measurements…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue' }).matches(':disabled')).toBe(true)
+    // Step 5 stays unmounted until the catalog lands, so its own list is not started early,
+    // torn down and sent again.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(productList).not.toHaveBeenCalled()
+
+    await act(async () => answer(SAMPLE_MEASUREMENT_CATALOG))
+    await waitFor(() => expect(screen.queryByText('Loading measurements…')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Continue' }).matches(':disabled')).toBe(false)
+    expect(useOnboardingStore.getState().productMeasurementCatalog).toBe(SAMPLE_MEASUREMENT_CATALOG)
+    // At most once: the list cache is module-level, so a test that ran earlier may have filled it.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Step 5,.*You are here/ })).toBeTruthy())
+    expect(productList.mock.calls.length).toBeLessThanOrEqual(1)
+
+    act(() => useOnboardingStore.getState().goToStep(4))
+    act(() => useOnboardingStore.getState().goToStep(5))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    expect(getMeasurements).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Continue on an unchanged catalog step', () => {
+  it('advances without re-reading or writing the account, and saves again once something changes', async () => {
+    renderAccount('APPROVED', 7)
+    await openSizes()
+    const products = vi.mocked(vendorOnboardingService.getVendorProducts)
+    const skus = vi.mocked(vendorOnboardingService.getVendorSkus)
+    const productReads = products.mock.calls.length
+    const skuReads = skus.mock.calls.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+
+    expect(products.mock.calls.length).toBe(productReads)
+    expect(skus.mock.calls.length).toBe(skuReads)
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.updateSku).not.toHaveBeenCalled()
+
+    await openSizes()
+    fireEvent.click(screen.getByRole('button', { name: 'Add another size' }))
+    fillNewSize()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(vendorOnboardingService.createSkus).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('Continue on unchanged checkout settings', () => {
+  it('sends the shared Step 7-8 payload once, and again only after it changes', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('APPROVED', 7)
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    expect(save).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    expect(save).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /cash on delivery/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 9,.*You are here/ })
+    expect(save).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('submitting the store for review', () => {
+  it('reads the submitted context back once and shares it with the dashboard', async () => {
+    renderAccount('APPROVED', 10)
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    act(() => {
+      const store = useOnboardingStore.getState()
+      store.updateDraft((draft) => ({
+        ...draft,
+        payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
+        storefront: { ...draft.storefront, businessLocation: 'Test Road' },
+      }))
+      store.updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+    const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
+    const context = vi.mocked(vendorOnboardingService.getVendorContext)
+    const readsBefore = context.mock.calls.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
+    await waitFor(() => expect(goLive).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(context.mock.calls.length).toBe(readsBefore + 1))
+
+    // The dashboard's provider reads through the same cache, so opening it costs nothing.
+    const shared = await loadVendorContext('91', vendorOnboardingService.getVendorContext)
+    expect(shared.approvalStatus).toBe('APPROVED')
+    expect(context.mock.calls.length).toBe(readsBefore + 1)
   })
 })

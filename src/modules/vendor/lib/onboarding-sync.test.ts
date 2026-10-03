@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getHttp, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { User } from '@/shared/types'
-import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { useOnboardingStore } from '../store/onboarding-store'
 import type {
   DraftCategory,
@@ -13,11 +13,15 @@ import type {
 import { PENDING_ID_BASE } from './onboarding-pending-id'
 import {
   applyCreatedEntry,
+  catalogFingerprint,
   categoriesToAssign,
   planCatalogCreates,
   planSkuWrites,
   persistProducts,
   persistSkus,
+  resumedCatalogFingerprints,
+  stepSaveFingerprint,
+  stepsSavedTogether,
 } from './onboarding-sync'
 
 /** platform product id -> vendor product id */
@@ -810,5 +814,96 @@ describe('applyCreatedEntry', () => {
     const next = applyCreatedEntry(draft, { kind: 'category', pendingId: PENDING_ID_BASE, platformId: 5001 })
     expect(next.categories.map((c) => c.id)).toEqual([5001, PENDING_ID_BASE - 1])
     expect(next.categories[1].pending).toBe(true)
+  })
+})
+
+describe('catalogFingerprint', () => {
+  function catalogDraft(): VendorOnboardingDraftV1 {
+    return {
+      ...createEmptyOnboardingDraft(),
+      catalogSource: 'account',
+      categories: [{ id: 10, name: 'Juices', businessTypeId: 7 } as DraftCategory],
+      products: [product(31)],
+      skus: [draft({ id: 'server-sku-4001', productId: 31 })],
+    }
+  }
+
+  it('covers only the catalog steps', () => {
+    expect(catalogFingerprint(3, catalogDraft())).toBeNull()
+    expect(catalogFingerprint(7, catalogDraft())).toBeNull()
+    expect(catalogFingerprint(4, catalogDraft())).not.toBeNull()
+  })
+
+  it('matches for an identical catalog', () => {
+    expect(catalogFingerprint(6, catalogDraft())).toBe(catalogFingerprint(6, catalogDraft()))
+  })
+
+  it('changes for a step and every later one when that step’s data changes, never earlier', () => {
+    const before = catalogDraft()
+    const repriced = { ...before, skus: [draft({ id: 'server-sku-4001', productId: 31, salePrice: 150 })] }
+    expect(catalogFingerprint(6, repriced)).not.toBe(catalogFingerprint(6, before))
+    expect(catalogFingerprint(5, repriced)).toBe(catalogFingerprint(5, before))
+
+    const regrouped = { ...before, categories: [...before.categories, { id: 11, name: 'Tea', businessTypeId: 7 } as DraftCategory] }
+    for (const step of [4, 5, 6] as const) {
+      expect(catalogFingerprint(step, regrouped)).not.toBe(catalogFingerprint(step, before))
+    }
+  })
+
+  it('treats the same catalog from another source as different', () => {
+    const sample = { ...catalogDraft(), catalogSource: 'sample' as const }
+    expect(catalogFingerprint(4, sample)).not.toBe(catalogFingerprint(4, catalogDraft()))
+  })
+})
+
+describe('resumedCatalogFingerprints', () => {
+  it('vouches only for steps the resume read in full — the ones before where it opens', () => {
+    const resumed = { ...createEmptyOnboardingDraft(), catalogSource: 'account' as const }
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 4))).toEqual([])
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 5))).toEqual(['4'])
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 7))).toEqual(['4', '5', '6'])
+    expect(resumedCatalogFingerprints(resumed, 10)[6]).toBe(catalogFingerprint(6, resumed))
+  })
+})
+
+describe('stepSaveFingerprint', () => {
+  const runtime = createEmptyRuntimeState()
+  const settingsDraft = (): VendorOnboardingDraftV1 => {
+    const empty = createEmptyOnboardingDraft()
+    return {
+      ...empty,
+      catalogSource: 'account',
+      business: { ...empty.business, businessType: { id: 7, name: 'Beverages', icon: null, displayOrder: null } },
+    }
+  }
+
+  it('is the catalog fingerprint on Steps 4-6 and absent before them and on Step 10', () => {
+    const d = settingsDraft()
+    expect(stepSaveFingerprint(5, d, runtime)).toBe(catalogFingerprint(5, d))
+    expect(stepSaveFingerprint(3, d, runtime)).toBeNull()
+    expect(stepSaveFingerprint(10, d, runtime)).toBeNull()
+  })
+
+  it('gives Steps 7 and 8 one fingerprint, because they send one payload', () => {
+    const d = settingsDraft()
+    expect(stepSaveFingerprint(7, d, runtime)).not.toBeNull()
+    expect(stepSaveFingerprint(7, d, runtime)).toBe(stepSaveFingerprint(8, d, runtime))
+    expect(stepsSavedTogether(7)).toEqual([7, 8])
+    expect(stepsSavedTogether(8)).toEqual([7, 8])
+    expect(stepsSavedTogether(9)).toEqual([9])
+  })
+
+  it('changes when anything in a step’s request body changes, including runtime-only details', () => {
+    const before = settingsDraft()
+    const shipping = { ...before, delivery: { ...before.delivery, shipping: { ...before.delivery.shipping, charge: 40 } } }
+    expect(stepSaveFingerprint(8, shipping, runtime)).not.toBe(stepSaveFingerprint(8, before, runtime))
+    expect(stepSaveFingerprint(9, shipping, runtime)).toBe(stepSaveFingerprint(9, before, runtime))
+
+    const whatsapp = { ...runtime, orderWhatsapp: '9000000000' }
+    expect(stepSaveFingerprint(9, before, whatsapp)).not.toBe(stepSaveFingerprint(9, before, runtime))
+
+    // Owner and contact ride on the business-type write that Step 9 also sends.
+    const owner = { ...before, business: { ...before.business, ownerName: 'Someone Else' } }
+    expect(stepSaveFingerprint(9, owner, runtime)).not.toBe(stepSaveFingerprint(9, before, runtime))
   })
 })

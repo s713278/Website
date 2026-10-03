@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -94,21 +95,29 @@ function accountFor(storeState: StoreState): VendorAccount {
   }
 }
 
-function renderFor(storeState: StoreState = 'OPEN') {
-  return render(
+function renderFor(storeState: StoreState = 'OPEN', strict = false) {
+  const page = (
     <MemoryRouter>
       <VendorAccountContext.Provider value={accountFor(storeState)}>
         <VendorOverviewPage />
       </VendorAccountContext.Provider>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
+  return render(strict ? <StrictMode>{page}</StrictMode> : page)
 }
 
+/**
+ * Lets the page's reads start and their answers land. Each read begins one tick after its
+ * component mounts, and the product tile mounts only once the counts arrive — two rounds.
+ */
 async function settle() {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
+  for (let round = 0; round < 2; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
 }
 
 function order(
@@ -348,5 +357,23 @@ describe('VendorOverviewPage store state', () => {
 
     expect(screen.getByText('Store suspended')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
+  })
+})
+
+describe('VendorOverviewPage under StrictMode', () => {
+  // Development mounts, unmounts and remounts every component once. Each read must still
+  // reach the network once, not once per mount.
+  it('asks for counts, the queue and the catalog once each', async () => {
+    const list = stubQueue([])
+    const getInsights = stubInsights({ SCHEDULED: 1 })
+    const listSizes = vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([])
+
+    renderFor('OPEN', true)
+    await settle()
+
+    expect(getInsights).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(listSizes).toHaveBeenCalledTimes(1)
+    expect(listSizes.mock.calls[0][1]?.aborted).toBe(false)
   })
 })

@@ -15,6 +15,7 @@ import {
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
+import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
 import { accountSkuId } from './onboarding-sku-id'
 import { measurementFromProduct, reconcileUnitForMeasurement } from './onboarding-measurement'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
@@ -70,12 +71,23 @@ export type OnboardingAccountRead =
 const ACCOUNT_READ_START_STEP: readonly [OnboardingAccountRead, OnboardingStep][] = [
   ['categories', 4],
   ['products', 5],
-  // Step 5 needs authoritative unit metadata even when the vendor enters earlier and
-  // advances without another account refresh.
-  ['measurements', 3],
+  // Step 5 shows each product's measurement, and saved sizes are rebuilt against it. A
+  // vendor who enters earlier gets it on reaching a step that uses it, through
+  // `loadPlatformMeasurements`, instead of paying for it on Steps 3-4.
+  ['measurements', 5],
   ['skus', 6],
   ['checkout', 7],
 ]
+
+/** Steps whose screen or validation reads the measurement catalog: products, sizes, review. */
+export function stepUsesMeasurementCatalog(step: OnboardingStep): boolean {
+  return step === 5 || step === 6 || step === 10
+}
+
+/** The platform measurement catalog, read at most once per session. */
+export function loadPlatformMeasurements(): Promise<MeasurementCatalog> {
+  return loadMeasurementCatalog(() => vendorOnboardingService.getMeasurements())
+}
 
 /** Server resources needed to rebuild saved work and continue from the resume step. */
 export function accountReadsForResumeStep(step: OnboardingStep): OnboardingAccountRead[] {
@@ -107,18 +119,24 @@ export function measurementCatalogsForResume(measurements: MeasurementCatalog | 
 export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
+  knownContext?: VendorContext,
 ): Promise<ServerOnboardingState> {
-  // Start all three universal reads before awaiting context. The dependent fan-out can
-  // then begin as soon as context reveals the resume step, without waiting for either
-  // of the other universal reads to finish.
-  const contextPromise = vendorOnboardingService.getVendorContext(vendorId, config)
+  // Start both universal reads before awaiting context. The dependent fan-out can then
+  // begin as soon as context reveals the resume step, without waiting for the profile.
+  // A context the caller just read is reused.
+  const contextPromise = knownContext
+    ? Promise.resolve(knownContext)
+    : vendorOnboardingService.getVendorContext(vendorId, config)
   const profilePromise = optional(vendorOnboardingService.getVendorProfile(vendorId, config))
-  // One page covers the catalog (30 types); needed to turn the profile's display
-  // string back into the reference object Step 3 stores.
-  const businessTypesPromise = optional(vendorOnboardingService.getBusinessTypes(
-    { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
-    config,
-  ))
+  // One page covers the catalog (30 types); needed only to turn a saved business type's
+  // display string back into the reference object Step 3 stores. A vendor who has not
+  // chosen one yet, like every new vendor on Step 3, skips it: the step lists its own page.
+  const businessTypesPromise = profilePromise.then((profile) => savedBusinessType(profile)
+    ? optional(vendorOnboardingService.getBusinessTypes(
+        { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
+        config,
+      ))
+    : null)
 
   // Deliberately not optional. Context decides liveness, limits and whether a resume
   // happens at all, so losing it is a real failure the vendor has to be told about —
@@ -152,9 +170,11 @@ export async function loadServerOnboardingState(
     // Authoritative units for Step 6. A dead read falls back to the sample catalog,
     // which mirrors the backend shape, so a size still opens with real units rather
     // than an empty dropdown.
+    // A catalog this session already read is reused at any step, so the snapshot never
+    // replaces real units with the sample fallback.
     reads.has('measurements')
-      ? optional(vendorOnboardingService.getMeasurements(config))
-      : null,
+      ? optional(loadPlatformMeasurements())
+      : peekMeasurementCatalog(),
   ])
 
   return {
@@ -169,9 +189,14 @@ export async function loadServerOnboardingState(
   }
 }
 
+/** The profile's business type, or `null` while the vendor has not chosen one. */
+function savedBusinessType(profile: VendorProfile | null): string | null {
+  const type = profile?.businessType?.trim()
+  return type && type !== UNSET_BUSINESS_TYPE ? type : null
+}
+
 export function hasBusinessType(state: ServerOnboardingState): boolean {
-  const type = state.profile?.businessType?.trim()
-  return Boolean(type) && type !== UNSET_BUSINESS_TYPE
+  return savedBusinessType(state.profile) !== null
 }
 
 /** Every assigned product carries at least one SKU. */
@@ -273,8 +298,8 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
 }
 
 function businessTypeReference(state: ServerOnboardingState): BusinessTypeReference | null {
-  const name = state.profile?.businessType?.trim()
-  if (!name || name === UNSET_BUSINESS_TYPE) return null
+  const name = savedBusinessType(state.profile)
+  if (!name) return null
   return state.businessTypes.find((item) => item.name === name) ?? null
 }
 

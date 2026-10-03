@@ -106,8 +106,9 @@ It follows the login screen. A customer OTP stays on the shop (`from`, otherwise
 goes to `/vendor` when setup is already submitted, and to `/onboarding` when it is not. The same
 phone can hold both roles on the server, but one OTP does not open both sides.
 
-For a vendor it then reads the account — one cached, resume-step-sized hydration shared with the
-wizard — and routes on completed setup and submission. An active store with
+For a vendor it then reads the vendor context alone — one cached request, or none when a context is
+already resolved — and routes on completed setup and submission. Only a vendor headed into setup also
+starts the wizard's hydration, without awaiting it. An active store with
 `onboarding.next_step: 11` goes to `/vendor`; steps 1–10 go to `/onboarding` even if the store
 is active and approved. If the pointer is absent or invalid, `onboarding.status: COMPLETED`
 establishes completion; activation alone is a legacy fallback only when onboarding status is
