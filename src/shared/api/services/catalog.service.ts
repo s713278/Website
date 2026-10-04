@@ -1,4 +1,4 @@
-import { storefrontService, unwrapData, vendorsService } from '@mithra/api-client'
+import { isApiError, storefrontService, unwrapData, vendorsService } from '@mithra/api-client'
 import { getStoreById, STORES } from '@/modules/storefront/data/catalog'
 import type { Product, ProductPage, Store } from '@/modules/storefront/types'
 import {
@@ -13,7 +13,11 @@ import {
   mapStorefrontCheckoutOptions,
   type StorefrontCheckoutOptions,
 } from '../mappers/storefront-checkout'
-import { mapPdpSkuDetail, mapStorefrontProductPage } from '../mappers/storefront-products'
+import {
+  mapPdpSkuDetail,
+  mapStorefrontProductDetail,
+  mapStorefrontProductPage,
+} from '../mappers/storefront-products'
 import { mapStorefrontContact, type StoreContact } from '../mappers/storefront-contact'
 import { isLiveApi } from '../mode'
 import { ALL_CATEGORY, parseCategoryFilter, productMatchesCategory, type CategoryFilter } from '@/modules/storefront/lib/catalog-filters'
@@ -398,6 +402,51 @@ export async function getStoreContact(storeId: string): Promise<StoreContact | n
   return mapStorefrontContact(unwrapData(res))
 }
 
+const storefrontProductByKey = new Map<string, Promise<Product | null>>()
+
+async function loadStorefrontProduct(
+  storeId: string,
+  productId: string | number,
+): Promise<Product | null> {
+  if (!isLiveApi()) {
+    await delay()
+    const id = String(productId)
+    const inStore = getStoreById(storeId)?.products.find((product) => product.id === id)
+    if (inStore) return inStore
+    for (const store of STORES) {
+      const product = store.products.find((item) => item.id === id)
+      if (product) return product
+    }
+    return null
+  }
+
+  const vendorId = await resolveLiveVendorId(storeId)
+  if (!vendorId || !String(productId).trim()) return null
+
+  try {
+    const res = await storefrontService.getProduct(vendorId, productId)
+    return mapStorefrontProductDetail(res)
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) return null
+    throw error
+  }
+}
+
+export function getStorefrontProduct(
+  storeId: string,
+  productId: string | number,
+): Promise<Product | null> {
+  const key = `${storeId}:${String(productId)}`
+  const existing = storefrontProductByKey.get(key)
+  if (existing) return existing
+
+  const pending = loadStorefrontProduct(storeId, productId).finally(() => {
+    if (storefrontProductByKey.get(key) === pending) storefrontProductByKey.delete(key)
+  })
+  storefrontProductByKey.set(key, pending)
+  return pending
+}
+
 /** GET /v1/vendors/products/{product_id}/skus/{sku_id} — PDP (mithrauserapp fetchSkuDetails). */
 export async function getProductSkuDetail(
   productId: string | number,
@@ -434,5 +483,6 @@ export const catalogService = {
   getStoreContact,
   getStoreCheckoutOptions,
   listStoreProducts,
+  getStorefrontProduct,
   getProductSkuDetail,
 }

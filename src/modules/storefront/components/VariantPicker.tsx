@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   duplicateVariantUnits,
@@ -14,7 +13,6 @@ type VariantPickerProps = {
   label?: string
   tone?: 'soft' | 'solid'
   className?: string
-  isPending?: (variantId: string) => boolean
 }
 
 /** Pack size selector — PDP (and any full list). */
@@ -25,7 +23,6 @@ export function VariantPicker({
   label = 'Size',
   tone = 'soft',
   className,
-  isPending,
 }: VariantPickerProps) {
   const dupes = duplicateVariantUnits(variants)
 
@@ -36,14 +33,12 @@ export function VariantPicker({
         {variants.map((variant) => {
           const key = variantSelectKey(variant)
           const active = selectedId === key || selectedId === variant.id
-          const pending = isPending?.(variant.id) ?? false
           return (
             <button
               key={key}
               type="button"
               onClick={() => onSelect(key)}
               aria-pressed={active}
-              aria-busy={pending}
               className={cn(
                 'inline-flex min-h-10 items-center justify-center gap-1 rounded-full border px-4 py-2 text-sm font-semibold transition duration-150',
                 tone === 'solid'
@@ -57,7 +52,6 @@ export function VariantPicker({
               )}
             >
               {formatVariantLabel(variant, dupes.has(variant.unit || variant.id))}
-              {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             </button>
           )
         })}

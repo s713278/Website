@@ -9,7 +9,7 @@ import { StorePageFooter } from './StorePageFooter'
 import { StorefrontHeader } from './StorefrontHeader'
 import { VariantPicker } from './VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
-import { useProductVariantCartState } from '@/modules/storefront/lib/cart-write-pending'
+import { formatStorefrontPriceSummary } from '@/modules/storefront/lib/product-price'
 import { getProductImages, hasMultipleVariants } from '@/modules/storefront/lib/product-variants'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, Store } from '@/modules/storefront/types'
@@ -20,21 +20,28 @@ type ProductDetailPanelProps = {
   store: Store
   product: Product
   cartCount: number
+  /** Size from the catalog link. Falls back to default_sku_id. */
+  preferredSkuId?: string
 }
 
 /**
- * PDP from live SKU detail only — no marketing placeholders.
+ * PDP from the storefront product payload — no marketing placeholders.
  * Cart = ProductCartControl (same as cards).
  */
 export function ProductDetailPanel({
   store,
   product,
   cartCount,
+  preferredSkuId,
 }: ProductDetailPanelProps) {
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const images = useMemo(() => getProductImages(product), [product])
-  const { variants, selected, selectedId, setSelectedId } = useSelectedVariant(product, store.id)
-  const { isPending } = useProductVariantCartState(store.id, product.id)
+  const { variants, selected, selectedId, setSelectedId } = useSelectedVariant(
+    product,
+    store.id,
+    preferredSkuId,
+  )
+  const priceSummary = formatStorefrontPriceSummary(product)
 
   // Live PDP: API `is_active` → product.inStock / variant.active
   const inStock = selected.active !== false && product.inStock !== false
@@ -95,7 +102,14 @@ export function ProductDetailPanel({
             </div>
 
             <div className="mt-4">
-              <ProductPrice price={selected.price} listPrice={selected.listPrice} size="lg" />
+              <ProductPrice
+                price={selected.price}
+                listPrice={selected.onSale ? selected.listPrice : undefined}
+                size="lg"
+              />
+              {priceSummary ? (
+                <p className="mt-1 text-sm text-slate-500">{priceSummary}</p>
+              ) : null}
             </div>
 
             {store.trustStrip && store.trustStrip.length > 0 ? (
@@ -121,7 +135,6 @@ export function ProductDetailPanel({
                 variants={variants}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                isPending={isPending}
                 label="Select Pack Size"
                 tone="solid"
                 className="mt-5"

@@ -246,7 +246,22 @@ export function mapStorefrontProductPage(payload: unknown): ProductPage {
     lastPage,
   }
 }
+export function mapStorefrontProductDetail(payload: unknown): Product | null {
+  const root = asRecord(payload)
+  if (!root) return null
+  const nested = asRecord(root.data)
+  const raw =
+    nested && (nested.vendor_product_id != null || nested.product_id != null || Array.isArray(nested.variants))
+      ? nested
+      : root
+  if (Array.isArray(raw.result) || raw.page_number != null || raw.page_size != null) return null
 
+  const mapped = mapStorefrontProduct(raw)
+  if (!mapped) return null
+  const variantRows = Array.isArray(raw.variants) ? raw.variants : []
+  if (variantRows.length > 0 && !mapped.variants?.length) return null
+  return mapped
+}
 
 /**
  * GET /v1/vendors/products/{product_id}/skus/{sku_id} → Product.

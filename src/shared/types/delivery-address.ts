@@ -6,6 +6,12 @@ export type DeliveryAddress = {
   city?: string
   country?: string
   zipCode?: string
+  state?: string
+  district?: string
+  address1?: string
+  address2?: string
+  recipientName?: string
+  contactNumber?: string
   backendAddressId?: number
 }
 

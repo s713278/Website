@@ -429,7 +429,7 @@ Each storefront page owns its HTTP calls:
 |------|-----------|
 | Store list | nearby stores / keyword search |
 | Store home | storefront + products (+ cart once if signed in) |
-| Product detail | SKU detail; storefront only on cache miss |
+| Product detail | `GET /v1/vendors/{identifier}/storefront/products/{product_id}`; storefront chrome on cache miss |
 | Cart | cart; storefront only on cache miss |
 | Checkout | checkout_options; storefront on cache miss; cart only if no local lines |
 | Location / success / orders | none for chrome (memory cache) |
@@ -1061,7 +1061,9 @@ Following `catalogService.getStore('42')` in live mode:
 9. **Page** sets state and renders.
 
 Products load separately through `catalogService.listStoreProducts`, which calls the package's
-paginated `/v1/vendors/{vendorId}/storefront/products` wrapper and maps the result.
+paginated `/v1/vendors/{vendorId}/storefront/products` wrapper and maps the result. The product
+detail page calls `storefrontService.getProduct`, which is one product object and its variants,
+not that page envelope.
 
 ---
 

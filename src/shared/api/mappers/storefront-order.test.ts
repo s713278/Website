@@ -93,6 +93,37 @@ describe('mapNameAndAddressRequest', () => {
     })
   })
 
+  it('sends the checkout form street, locality, and district instead of the whole pin label', () => {
+    expect(
+      mapNameAndAddressRequest({
+        name: 'Aneri',
+        location: 'Road No 27F, Miyapur, Hyderabad, Ranga Reddy, Telangana 500049',
+        address1: 'Road No 27F',
+        address2: 'Miyapur',
+        city: 'Hyderabad',
+        district: 'Ranga Reddy',
+        state: 'Telangana',
+        zipCode: '500049',
+        country: 'India',
+        lat: 17.49,
+        lng: 78.39,
+      }),
+    ).toEqual({
+      name: 'Aneri',
+      address: {
+        address1: 'Road No 27F',
+        address2: 'Miyapur',
+        city: 'Hyderabad',
+        district: 'Ranga Reddy',
+        state: 'Telangana',
+        zipCode: '500049',
+        country: 'India',
+        latitude: '17.49',
+        longitude: '78.39',
+      },
+    })
+  })
+
   it('rejects a pin that is missing city, pincode, or coordinates', () => {
     expect(() =>
       mapNameAndAddressRequest({
@@ -262,6 +293,31 @@ describe('mapCustomerOrder', () => {
         },
       ],
     })
+  })
+
+  it('joins the saved checkout address instead of showing only address1', () => {
+    const mapped = mapCustomerOrderDetail({
+      data: {
+        order_id: 1974,
+        vendor_id: 273,
+        customer_name: 'Anjali',
+        customer_mobile: '9898989898',
+        delivery_address: {
+          address: {
+            address1: '501',
+            address2: 'Rudraksh residency',
+            city: 'Vadodara',
+            district: 'Vadodara',
+            state: 'Gujarat',
+            zipCode: '390001',
+            country: 'India',
+          },
+        },
+      },
+    })
+
+    expect(mapped?.addressLine).toBe('501, Rudraksh residency, Vadodara, Gujarat 390001')
+    expect(mapped?.customerName).toBe('Anjali')
   })
 
   it('maps history rows from result or a flat list', () => {

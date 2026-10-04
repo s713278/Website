@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   CreditCard,
+  Loader2,
   MapPin,
   ShieldCheck,
   ShoppingBag,
@@ -13,9 +14,11 @@ import {
   Truck,
 } from 'lucide-react'
 import {
+  apiGet,
   deliveryFeeForCheckout,
   formatDeliveryEstimate,
   getErrorMessage,
+  isLiveApi,
   ordersService,
   type StorefrontCheckoutOptions,
   type StorefrontCheckoutPayment,
@@ -25,7 +28,13 @@ import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
 import { StorefrontMobileActionBar } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import { lineAmount, priceDetailsFromSummary } from '@/modules/storefront/lib/cart-utils'
-import { DELIVERY_ESTIMATE_NOTE } from '@/modules/storefront/lib/order-display'
+import {
+  checkoutAddressError,
+  checkoutAddressFormFromPin,
+  customerNameFromProfile,
+  formatCheckoutAddress,
+  type CheckoutAddressForm,
+} from '@/modules/storefront/lib/checkout-address-form'
 import {
   locationMapPath,
   storeCartPath,
@@ -34,8 +43,9 @@ import {
 } from '@/modules/storefront/lib/store-paths'
 import {
   buildWhatsAppOrderMessage,
-  saveWhatsAppOrderDraft,
-  whatsappHref,
+  openWhatsAppChat,
+  reserveWhatsAppWindow,
+  whatsappSendHref,
 } from '@/modules/storefront/lib/whatsapp-order'
 import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
@@ -51,8 +61,8 @@ import { cn } from '@/lib/utils'
 const EMPTY_DELIVERY_SLOTS: StorefrontCheckoutOptions['deliverySlots'] = []
 const EMPTY_PAYMENT_OPTIONS: StorefrontCheckoutOptions['paymentOptions'] = []
 const EMPTY_DELIVERY_METHODS: StorefrontCheckoutOptions['deliveryMethods'] = []
-const ADDRESS_NOTE =
-  'Check address and items — then we’ll send this order to the shop on WhatsApp.'
+const ADDRESS_NOTE = 'Check address and items for delivery to the following address.'
+const PLACE_ORDER_LABEL = 'Create Order & Send On WhatsApp'
 
 type CheckoutViewProps = {
   store: Store
@@ -71,6 +81,29 @@ function deliveryMethodLabel(method: string) {
 
 function paymentIcon(type: StorefrontCheckoutPayment['type'] | undefined) {
   return type === 'CASH_ON_DELIVERY' ? Banknote : CreditCard
+}
+
+function checkoutCustomerName(recipient?: string, sessionName?: string) {
+  for (const value of [recipient, sessionName]) {
+    const name = value?.trim() ?? ''
+    if (name && name !== 'User' && name !== 'Vendor') return name
+  }
+  return undefined
+}
+
+function paymentNote(
+  option: { type?: string | null; label?: string | null },
+  storeName: string,
+) {
+  const type = option.type?.trim().toUpperCase()
+  const label = option.label?.trim().toUpperCase() ?? ''
+  if (type === 'CASH_ON_DELIVERY' || label.includes('CASH')) {
+    return `Pay ${storeName} when you receive your order.`
+  }
+  if (type === 'ONLINE' || type === 'UPI' || label.includes('UPI')) {
+    return `Pay ${storeName} directly using any UPI app, like PhonePe, Google Pay, etc.`
+  }
+  return undefined
 }
 
 export function CheckoutView({
@@ -114,7 +147,7 @@ export function CheckoutView({
   const [placing, setPlacing] = useState(false)
   const [error, setError] = useState('')
   const [editingAddress, setEditingAddress] = useState(false)
-  const [addressDraft, setAddressDraft] = useState('')
+  const [addressForm, setAddressForm] = useState<CheckoutAddressForm | null>(null)
   const [addressError, setAddressError] = useState('')
 
   useEffect(() => {
@@ -134,7 +167,6 @@ export function CheckoutView({
   }, [consentTitle, consentText])
 
   const selectedSlot = deliverySlots.find((slot) => slot.id === deliverySlot)
-  const slotLabel = estimateLabel || selectedSlot?.label || 'Delivery'
   const deliveryMethod = deliveryMethods[0] ?? 'HOME_DELIVERY'
   const deliveryDate = estimateDates[0] ?? selectedSlot?.date ?? ''
   // Item totals stay on the cart summary. The delivery line comes from checkout_options
@@ -171,39 +203,80 @@ export function CheckoutView({
   }
 
   function startAddressEdit() {
-    setAddressDraft(selected?.location ?? '')
-    setAddressError('')
-    setEditingAddress(true)
-  }
-
-  function cancelAddressEdit() {
-    setEditingAddress(false)
-    setAddressError('')
-  }
-
-  function saveAddressEdit() {
-    const location = addressDraft.trim()
-    if (location.length < 8) {
-      setAddressError('Please enter your area and city so the shop can find your location.')
-      return
-    }
-
     if (!selected) {
       openAddressMap()
       return
     }
+    const draft = checkoutAddressFormFromPin({
+      userName: user?.name,
+      userPhone: phone,
+      location: selected.location,
+      city: selected.city,
+      state: selected.state,
+      zipCode: selected.zipCode,
+      recipientName: selected.recipientName,
+      contactNumber: selected.contactNumber,
+      address1: selected.address1,
+      address2: selected.address2,
+      district: selected.district,
+    })
+    setAddressForm(draft)
+    setAddressError('')
+    setEditingAddress(true)
+    if (!draft.name && user?.id) fillNameFromProfile(user.id)
+  }
+
+  function fillNameFromProfile(userId: string) {
+    if (!isLiveApi()) return
+    void apiGet<unknown>(`/v1/users/${userId}`)
+      .then((payload) => {
+        const name = customerNameFromProfile(payload)
+        if (!name) return
+        setAddressForm((current) =>
+          current && !current.name.trim() ? { ...current, name } : current,
+        )
+      })
+      .catch(() => {
+        /* The form stays editable when the profile name cannot be read. */
+      })
+  }
+
+  function cancelAddressEdit() {
+    setEditingAddress(false)
+    setAddressForm(null)
+    setAddressError('')
+  }
+
+  function saveAddressEdit() {
+    if (!addressForm || !selected) {
+      openAddressMap()
+      return
+    }
+
+    const problem = checkoutAddressError(addressForm)
+    if (problem) {
+      setAddressError(problem)
+      return
+    }
 
     updateAddress(selected.id, {
-      location,
+      location: formatCheckoutAddress(addressForm),
       lat: selected.lat,
       lng: selected.lng,
-      city: selected.city,
-      country: selected.country,
-      zipCode: selected.zipCode,
+      city: addressForm.city.trim(),
+      country: selected.country || 'India',
+      zipCode: addressForm.zipCode.trim(),
+      state: addressForm.state.trim(),
+      district: addressForm.district.trim() || undefined,
+      address1: addressForm.address1.trim(),
+      address2: addressForm.address2.trim() || undefined,
+      recipientName: addressForm.name.trim(),
+      contactNumber: addressForm.contactNumber.trim(),
       backendAddressId: selected.backendAddressId,
     })
 
     setEditingAddress(false)
+    setAddressForm(null)
     setAddressError('')
     setError('')
   }
@@ -223,6 +296,9 @@ export function CheckoutView({
       return
     }
 
+    const themeColor =
+      document.querySelector('[data-store-theme]')?.getAttribute('data-store-theme') ?? undefined
+    const whatsappWindow = reserveWhatsAppWindow(themeColor ?? undefined)
     setPlacing(true)
     setError('')
     try {
@@ -230,9 +306,8 @@ export function CheckoutView({
         storeId: store.id,
         storeName: store.name,
         address: selected.location,
-        phone,
+        phone: selected.contactNumber || phone,
         note: [
-          estimateLabel ? `Estimated delivery: ${estimateLabel}` : null,
           selectedSlot ? `Slot: ${selectedSlot.label}` : null,
           `Payment: ${selectedPaymentLabel}`,
         ]
@@ -242,13 +317,17 @@ export function CheckoutView({
         deliveryFee: totals.delivery,
         total: totals.total,
         userId: user?.id,
-        userName: user?.name,
+        userName: selected.recipientName || user?.name,
         addressId: selected.backendAddressId ?? selected.id,
         lat: selected.lat,
         lng: selected.lng,
         city: selected.city,
         country: selected.country,
         zipCode: selected.zipCode,
+        address1: selected.address1,
+        address2: selected.address2,
+        district: selected.district,
+        state: selected.state,
         deliveryMethod,
         deliveryDate,
         orderTimingType: checkoutOptions?.schedulingStrategy,
@@ -264,6 +343,12 @@ export function CheckoutView({
           city: selected.city,
           country: selected.country,
           zipCode: selected.zipCode,
+          state: selected.state,
+          district: selected.district,
+          address1: selected.address1,
+          address2: selected.address2,
+          recipientName: selected.recipientName,
+          contactNumber: selected.contactNumber,
           backendAddressId: order.addressId,
         })
       }
@@ -271,30 +356,34 @@ export function CheckoutView({
       const message = buildWhatsAppOrderMessage({
         orderId: order.id,
         storeName: store.name,
+        customerName: checkoutCustomerName(selected.recipientName, user?.name),
         location: selected.location,
-        phone,
+        phone: selected.contactNumber || phone,
+        address1: selected.address1,
+        address2: selected.address2,
+        city: selected.city,
+        district: selected.district,
+        state: selected.state,
+        zipCode: selected.zipCode,
         lines,
         subtotal: totals.subtotal,
         deliveryFee: totals.delivery,
         packagingFee: totals.packaging,
+        discount: totals.discount,
+        serviceFee: totals.service,
         total: totals.total,
-        deliverySlot: slotLabel,
         paymentLabel: selectedPaymentLabel,
       })
 
-      saveWhatsAppOrderDraft(order.id, message)
-      const waLink = whatsappHref(store.phone ?? '', message)
+      const waLink = whatsappSendHref(store.phone ?? '', message)
+      openWhatsAppChat(waLink, whatsappWindow)
 
       navigate(storeOrderSuccessPath(store.id, order.id), {
         replace: true,
-        state: {
-          storeName: store.name,
-          deliverySlot: slotLabel,
-          whatsappMessage: message,
-          whatsappHref: waLink,
-        },
+        state: { storeName: store.name },
       })
     } catch (err) {
+      whatsappWindow?.close()
       setError(getErrorMessage(err, 'Could not place order'))
     } finally {
       setPlacing(false)
@@ -351,12 +440,12 @@ export function CheckoutView({
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
               <section className="space-y-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.04)] sm:p-7">
                 <CheckoutSection icon={MapPin} title="Delivery address" hint={ADDRESS_NOTE}>
-                  {editingAddress ? (
+                  {editingAddress && addressForm ? (
                     <AddressEditor
-                      value={addressDraft}
+                      value={addressForm}
                       error={addressError}
-                      onChange={(value) => {
-                        setAddressDraft(value)
+                      onChange={(next) => {
+                        setAddressForm(next)
                         if (addressError) setAddressError('')
                       }}
                       onCancel={cancelAddressEdit}
@@ -366,7 +455,18 @@ export function CheckoutView({
                   ) : selected ? (
                     <div className="flex items-start gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-4 py-3.5">
                       <div className="min-w-0 flex-1">
-                        <p className="whitespace-pre-wrap text-sm font-bold text-slate-900">
+                        {selected.recipientName ? (
+                          <p className="text-sm font-bold text-slate-900">{selected.recipientName}</p>
+                        ) : null}
+                        {selected.contactNumber ? (
+                          <p className="text-xs text-slate-600">+91 {selected.contactNumber}</p>
+                        ) : null}
+                        <p
+                          className={cn(
+                            'whitespace-pre-wrap text-sm text-slate-900',
+                            selected.recipientName ? 'mt-1' : 'font-bold',
+                          )}
+                        >
                           {selected.location}
                         </p>
                         {deliveryMethods.length > 0 ? (
@@ -380,7 +480,7 @@ export function CheckoutView({
                         onClick={startAddressEdit}
                         className="inline-flex shrink-0 items-center text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
                       >
-                        Edit
+                        Edit address
                       </button>
                     </div>
                   ) : (
@@ -396,15 +496,6 @@ export function CheckoutView({
                     </div>
                   )}
                 </CheckoutSection>
-
-                {estimateLabel ? (
-                  <CheckoutSection title="Estimated delivery" icon={CalendarDays}>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3.5">
-                      <p className="text-sm font-bold text-slate-900">{estimateLabel}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p>
-                    </div>
-                  </CheckoutSection>
-                ) : null}
 
                 {deliverySlots.length > 0 ? (
                   <CheckoutSection title="Delivery time" icon={CalendarDays}>
@@ -436,6 +527,7 @@ export function CheckoutView({
                             onChange={() => setPayment(option.id)}
                             name="payment-method"
                             title={option.label}
+                            subtitle={paymentNote(option, store.name)}
                             icon={Icon}
                           />
                         )
@@ -522,21 +614,13 @@ export function CheckoutView({
                     </p>
                   </div>
 
-                  {estimateLabel || selectedPaymentLabel ? (
+                  {selectedPayment ? (
                     <p className="mt-4 flex items-start gap-2 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.1))] px-3.5 py-2.5 text-xs leading-relaxed text-slate-600">
                       <ShieldCheck
                         className="mt-0.5 size-3.5 shrink-0 text-[var(--store-theme,var(--md-green-700))]"
                         aria-hidden
                       />
-                      <span>
-                        {estimateLabel ? (
-                          <>
-                            Estimated <span className="font-medium text-slate-700">{estimateLabel}</span>
-                          </>
-                        ) : null}
-                        {estimateLabel && selectedPaymentLabel ? ' · ' : null}
-                        {selectedPaymentLabel}
-                      </span>
+                      <span>{selectedPaymentLabel}</span>
                     </p>
                   ) : null}
                 </div>
@@ -555,7 +639,7 @@ export function CheckoutView({
                   type="button"
                   fullWidth
                   size="lg"
-                  className="hidden h-auto min-h-12 justify-between rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
+                  className="hidden h-12 justify-center gap-3 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
                   disabled={!canPlace}
                   onClick={() => void placeOrderOnWhatsApp()}
                 >
@@ -608,15 +692,11 @@ export function CheckoutView({
               type="button"
               fullWidth
               size="lg"
-              className="h-auto min-h-12 justify-center gap-2 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              className="h-12 justify-center gap-3 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
               disabled={!canPlace}
               onClick={() => void placeOrderOnWhatsApp()}
             >
-              <ShieldCheck className="size-4 shrink-0" aria-hidden />
-              <span className="min-w-0 text-sm font-semibold">
-                {placing ? 'Creating order…' : 'Create order'}
-              </span>
-              <ChevronRight className="size-4 shrink-0" aria-hidden />
+              <PlaceOrderCta placing={placing} amount={placeOrderAmount} />
             </Button>
           </StorefrontMobileActionBar>
         </>
@@ -628,13 +708,15 @@ export function CheckoutView({
 function PlaceOrderCta({ placing, amount }: { placing: boolean; amount: string | null }) {
   return (
     <>
-      <ShieldCheck className="size-4 shrink-0" aria-hidden />
-      <span className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
-        <span className="min-w-0 truncate text-sm font-semibold">
-          {placing ? 'Creating order…' : 'Create order'}
-        </span>
-        {amount ? <span className="shrink-0 text-sm font-bold tabular-nums">{amount}</span> : null}
+      {placing ? (
+        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+      ) : (
+        <ShieldCheck className="size-4 shrink-0" aria-hidden />
+      )}
+      <span className="whitespace-nowrap text-sm font-semibold">
+        {placing ? 'Creating order…' : PLACE_ORDER_LABEL}
       </span>
+      {amount ? <span className="whitespace-nowrap text-sm font-bold tabular-nums">{amount}</span> : null}
       <ChevronRight className="size-4 shrink-0" aria-hidden />
     </>
   )
@@ -735,6 +817,23 @@ function RadioMark({ checked }: { checked: boolean }) {
   )
 }
 
+const ADDRESS_FIELDS: Array<{
+  key: keyof CheckoutAddressForm
+  label: string
+  autoComplete: string
+  inputMode?: 'numeric' | 'text'
+  wide?: boolean
+}> = [
+  { key: 'name', label: 'Name', autoComplete: 'name', wide: true },
+  { key: 'contactNumber', label: 'Contact number', autoComplete: 'tel', inputMode: 'numeric', wide: true },
+  { key: 'address1', label: 'Address 1 / street', autoComplete: 'address-line1', wide: true },
+  { key: 'address2', label: 'Address 2 / locality', autoComplete: 'address-line2', wide: true },
+  { key: 'city', label: 'City', autoComplete: 'address-level2' },
+  { key: 'district', label: 'District', autoComplete: 'off' },
+  { key: 'state', label: 'State', autoComplete: 'address-level1' },
+  { key: 'zipCode', label: 'ZIP code / pincode', autoComplete: 'postal-code', inputMode: 'numeric' },
+]
+
 function AddressEditor({
   value,
   error,
@@ -743,25 +842,31 @@ function AddressEditor({
   onSave,
   onChooseOnMap,
 }: {
-  value: string
+  value: CheckoutAddressForm
   error: string
-  onChange: (value: string) => void
+  onChange: (value: CheckoutAddressForm) => void
   onCancel: () => void
   onSave: () => void
   onChooseOnMap: () => void
 }) {
   return (
     <div>
-      <textarea
-        id="checkout-address"
-        rows={3}
-        value={value}
-        autoFocus
-        aria-label="Delivery address"
-        placeholder="Flat / Street, Area, City, PIN"
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--store-theme,var(--md-green-600))] focus:ring-2 focus:ring-[var(--store-theme-soft,rgba(16,185,129,0.45))]"
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {ADDRESS_FIELDS.map((field) => (
+          <label key={field.key} className={cn('block', field.wide && 'sm:col-span-2')}>
+            <span className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}</span>
+            <input
+              value={value[field.key]}
+              autoFocus={field.key === 'name'}
+              autoComplete={field.autoComplete}
+              inputMode={field.inputMode ?? 'text'}
+              aria-label={field.label}
+              onChange={(event) => onChange({ ...value, [field.key]: event.target.value })}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--store-theme,var(--md-green-600))] focus:ring-2 focus:ring-[var(--store-theme-soft,rgba(16,185,129,0.45))]"
+            />
+          </label>
+        ))}
+      </div>
       {error ? (
         <p className="mt-2 text-sm text-[var(--md-danger)]" role="alert">
           {error}

@@ -49,6 +49,12 @@ export const storefrontService = {
       { params, skipAuth: true },
     ),
 
+   getProduct: (identifier: number | string, productId: number | string) =>
+    apiGet<ApiEnvelope>(
+      `/v1/vendors/${encodeURIComponent(identifier)}/storefront/products/${encodeURIComponent(productId)}`,
+      { skipAuth: true },
+    ),
+
    getContact: (identifier: number | string) =>
     apiGet<ApiEnvelope>(
       `/v1/vendors/${encodeURIComponent(identifier)}/storefront/contact-us`,

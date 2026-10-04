@@ -8,7 +8,7 @@ import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product } from '@/modules/storefront/types'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
-import { getErrorMessage, getProductSkuDetail } from '@/shared/api'
+import { getErrorMessage, getStorefrontProduct, isApiError } from '@/shared/api'
 
 export function ProductDetailPage() {
   const { storeId = '', productId = '' } = useParams()
@@ -21,21 +21,22 @@ export function ProductDetailPage() {
     storeId,
     { network: 'cache-first' },
   )
+  const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
 
   const [product, setProduct] = useState<Product | null>(null)
   const [productLoading, setProductLoading] = useState(true)
   const [productError, setProductError] = useState('')
 
   useEffect(() => {
-    if (store && isStoreClosedForSubscription(store.subscriptionStatus)) {
+    if (shopClosed) {
       setProduct(null)
       setProductError('')
       setProductLoading(false)
       return
     }
-    if (!productId || !skuId) {
+    if (!storeId || !productId) {
       setProduct(null)
-      setProductError(productId ? 'Missing pack size (sku).' : 'Missing product.')
+      setProductError('Missing product.')
       setProductLoading(false)
       return
     }
@@ -44,17 +45,19 @@ export function ProductDetailPage() {
     setProductLoading(true)
     setProductError('')
 
-    void getProductSkuDetail(productId, skuId)
+    void getStorefrontProduct(storeId, productId)
       .then((data) => {
         if (cancelled) return
         setProduct(data)
-        if (!data) setProductError('Product not found')
       })
       .catch((err) => {
-        if (!cancelled) {
-          setProduct(null)
-          setProductError(getErrorMessage(err, 'Could not load product.'))
+        if (cancelled) return
+        setProduct(null)
+        if (isApiError(err) && err.status === 401) {
+          setProductError('This product cannot be loaded right now.')
+          return
         }
+        setProductError(getErrorMessage(err, 'Could not load product.'))
       })
       .finally(() => {
         if (!cancelled) setProductLoading(false)
@@ -63,9 +66,7 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [productId, skuId, store])
-
-  const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
+  }, [storeId, productId, shopClosed])
   const loading = shopClosed ? storeLoading : storeLoading || productLoading
   const error = shopClosed ? storeError : storeError || productError
 
@@ -76,8 +77,8 @@ export function ProductDetailPage() {
       error={error}
       ready={shopClosed || Boolean(store && product)}
       loadingLabel="Loading product…"
-      emptyTitle="Product not found"
-      emptyDescription="This item may no longer be available."
+      emptyTitle="Product unavailable"
+      emptyDescription="This product is not available."
       backHref={storePath(storeId)}
     >
       {shopClosed && store ? (
@@ -87,6 +88,7 @@ export function ProductDetailPage() {
           store={store}
           product={product}
           cartCount={itemCount}
+          preferredSkuId={skuId || undefined}
         />
       ) : null}
     </StorePageStates>
