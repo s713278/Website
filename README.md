@@ -169,7 +169,7 @@ Workers Builds settings for this repository:
 | Root directory | `/` |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
-| Production branch | `integration` |
+| Production branch | `cloudfare_changes` |
 
 The `name` in `wrangler.jsonc` must match the Worker name in the Cloudflare project. Set the same
 `VITE_USE_API`, `VITE_API_BASE_URL`, and `VITE_PUBLIC_SITE_URL` values used on Vercel as build
