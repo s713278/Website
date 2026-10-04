@@ -6,7 +6,6 @@ import {
   Check,
   ChevronRight,
   CreditCard,
-  Loader2,
   MapPin,
   ShieldCheck,
   ShoppingBag,
@@ -296,9 +295,7 @@ export function CheckoutView({
       return
     }
 
-    const themeColor =
-      document.querySelector('[data-store-theme]')?.getAttribute('data-store-theme') ?? undefined
-    const whatsappWindow = reserveWhatsAppWindow(themeColor ?? undefined)
+    const whatsappWindow = reserveWhatsAppWindow()
     setPlacing(true)
     setError('')
     try {
@@ -380,7 +377,11 @@ export function CheckoutView({
 
       navigate(storeOrderSuccessPath(store.id, order.id), {
         replace: true,
-        state: { storeName: store.name },
+        state: {
+          storeName: store.name,
+          whatsappMessage: message,
+          whatsappHref: waLink,
+        },
       })
     } catch (err) {
       whatsappWindow?.close()
@@ -389,8 +390,6 @@ export function CheckoutView({
       setPlacing(false)
     }
   }
-
-  const placeOrderAmount = placing ? null : formatCurrency(totals.total)
 
   const itemLabel = `${totals.itemCount} ${totals.itemCount === 1 ? 'item' : 'items'} in your cart`
 
@@ -639,11 +638,11 @@ export function CheckoutView({
                   type="button"
                   fullWidth
                   size="lg"
-                  className="hidden h-12 justify-center gap-3 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
+                  className="hidden h-auto min-h-12 justify-between rounded-full bg-[var(--store-theme,var(--md-green-700))] px-5 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50 lg:inline-flex"
                   disabled={!canPlace}
                   onClick={() => void placeOrderOnWhatsApp()}
                 >
-                  <PlaceOrderCta placing={placing} amount={placeOrderAmount} />
+                  <PlaceOrderCta placing={placing} />
                 </Button>
 
                 {requiresConsent ? (
@@ -692,11 +691,15 @@ export function CheckoutView({
               type="button"
               fullWidth
               size="lg"
-              className="h-12 justify-center gap-3 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              className="h-auto min-h-12 justify-center gap-2 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 py-2.5 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
               disabled={!canPlace}
               onClick={() => void placeOrderOnWhatsApp()}
             >
-              <PlaceOrderCta placing={placing} amount={placeOrderAmount} />
+              <ShieldCheck className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 text-balance text-center text-sm font-semibold leading-snug">
+                {placing ? 'Creating order…' : PLACE_ORDER_LABEL}
+              </span>
+              <ChevronRight className="size-4 shrink-0" aria-hidden />
             </Button>
           </StorefrontMobileActionBar>
         </>
@@ -705,18 +708,13 @@ export function CheckoutView({
   )
 }
 
-function PlaceOrderCta({ placing, amount }: { placing: boolean; amount: string | null }) {
+function PlaceOrderCta({ placing }: { placing: boolean }) {
   return (
     <>
-      {placing ? (
-        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
-      ) : (
-        <ShieldCheck className="size-4 shrink-0" aria-hidden />
-      )}
-      <span className="whitespace-nowrap text-sm font-semibold">
+      <ShieldCheck className="size-4 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 text-left text-sm font-semibold leading-snug">
         {placing ? 'Creating order…' : PLACE_ORDER_LABEL}
       </span>
-      {amount ? <span className="whitespace-nowrap text-sm font-bold tabular-nums">{amount}</span> : null}
       <ChevronRight className="size-4 shrink-0" aria-hidden />
     </>
   )
