@@ -62,15 +62,3 @@ export function useCartWritePending(storeId: string, productId: string, variantI
   const snapshot = useSyncExternalStore(subscribeCartWrites, getCartWriteSnapshot, getCartWriteSnapshot)
   return cartWriteIsPending(snapshot, storeId, productId, variantId)
 }
-
-export function useCartWriteSnapshot() {
-  return useSyncExternalStore(subscribeCartWrites, getCartWriteSnapshot, getCartWriteSnapshot)
-}
-
-/** Which SKU write is still in flight. */
-export function useProductVariantCartState(storeId: string, productId: string) {
-  const snapshot = useCartWriteSnapshot()
-  return {
-    isPending: (variantId: string) => cartWriteIsPending(snapshot, storeId, productId, variantId),
-  }
-}

@@ -1,5 +1,108 @@
 import { describe, expect, it } from 'vitest'
-import { mapStorefrontProductPage } from './storefront-products'
+import { mapStorefrontProductDetail, mapStorefrontProductPage } from './storefront-products'
+
+const amlaProduct = {
+  success: true,
+  status: '200',
+  vendor_product_id: 418,
+  product_name: 'Amla Pickle',
+  category_id: 152,
+  category_name: 'Pickles',
+  product_image_path: 'https://cdn.example.com/Original_Amla_Pickle.webp',
+  product_description: 'Tangy amla',
+  active: true,
+  min_sale_price: 245,
+  max_sale_price: 450,
+  starting_at: 245,
+  default_sku_id: 4153,
+  variants_count: 3,
+  variants: [
+    {
+      sku_id: 4153,
+      quantity_value: 500,
+      unit: 'gr',
+      sku_type: 'ITEM',
+      active: true,
+      price_id: 962,
+      list_price: 250,
+      sale_price: 245,
+      discount: 5,
+      on_sale: true,
+    },
+    {
+      sku_id: 4152,
+      quantity_value: 1,
+      unit: 'KG',
+      active: true,
+      list_price: 500,
+      sale_price: 450,
+      on_sale: false,
+    },
+    {
+      sku_id: 9999,
+      quantity_value: 5,
+      unit: 'KG',
+      active: false,
+      sale_price: 900,
+    },
+  ],
+}
+
+describe('mapStorefrontProductDetail', () => {
+  it('maps one product and its active variants, with the default sku priced', () => {
+    const product = mapStorefrontProductDetail(amlaProduct)
+
+    expect(product).toMatchObject({
+      id: '418',
+      name: 'Amla Pickle',
+      description: 'Tangy amla',
+      category: 'Pickles',
+      categoryId: 152,
+      imageUrl: 'https://cdn.example.com/Original_Amla_Pickle.webp',
+      price: 245,
+      minPrice: 245,
+      maxPrice: 450,
+      startingAt: 245,
+      defaultVariantId: '4153',
+      variantsCount: 3,
+    })
+    expect(product?.variants?.map((variant) => [variant.id, variant.unit])).toEqual([
+      ['4153', '500 gr'],
+      ['4152', '1 KG'],
+    ])
+    expect(product?.variants?.[0]).toMatchObject({
+      price: 245,
+      listPrice: 250,
+      onSale: true,
+      discount: 5,
+    })
+  })
+
+  it('reads the same product when it is nested under data', () => {
+    const product = mapStorefrontProductDetail({ success: true, data: amlaProduct })
+    expect(product?.id).toBe('418')
+    expect(product?.variants).toHaveLength(2)
+  })
+
+  it('does not treat a paginated listing as one product', () => {
+    expect(
+      mapStorefrontProductDetail({
+        result: [amlaProduct],
+        page_number: 0,
+        page_size: 10,
+      }),
+    ).toBeNull()
+  })
+
+  it('is unavailable when every variant is inactive', () => {
+    expect(
+      mapStorefrontProductDetail({
+        ...amlaProduct,
+        variants: amlaProduct.variants.map((variant) => ({ ...variant, active: false })),
+      }),
+    ).toBeNull()
+  })
+})
 
 describe('mapStorefrontProductPage SKU search rows', () => {
   it('maps live Amla pickle 1 KG and 2 KG as different SKUs', () => {

@@ -54,6 +54,26 @@ function asNumber(value: unknown): number | null {
   return null
 }
 
+/** `shipping_config` is an object, and some responses send that object as a JSON string. */
+function shippingConfig(value: unknown): Record<string, unknown> {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return asRecord(JSON.parse(value)) ?? {}
+    } catch {
+      return {}
+    }
+  }
+  return asRecord(value) ?? {}
+}
+
+function firstNumber(record: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = asNumber(record[key])
+    if (value != null) return value
+  }
+  return null
+}
+
 function paymentLabel(type: StorefrontCheckoutPayment['type']): string {
   if (type === 'CASH_ON_DELIVERY') return 'Cash on Delivery'
   if (type === 'PRE_PAID') return 'Pre-paid'
@@ -113,17 +133,19 @@ export function deliveryFeeForCheckout(input: {
 }): number | null {
   if (input.method?.trim().toUpperCase() !== 'HOME_DELIVERY') return null
 
-  const charge = Number(input.shipping?.deliveryCharge)
-  if (!Number.isFinite(charge)) return null
+  const charge = input.shipping?.deliveryCharge
+  if (charge == null || !Number.isFinite(charge)) return null
 
   const strategy = input.strategy?.trim().toUpperCase()
 
   if (strategy === 'ORDER_AMOUNT_THRESHOLD') {
-    const threshold = Number(input.shipping?.freeDeliveryThreshold ?? 0)
+    const threshold = input.shipping?.freeDeliveryThreshold ?? 0
     if (threshold > 0 && input.subtotal >= threshold) return 0
     return charge
   }
-    return charge
+
+   if (strategy === 'WEIGHT_BASED' || strategy === 'ZIPCODE_TIERED') return null
+  return charge
 }
 /**
  * Eligible-date window for customers — first to last, not a picked day.
@@ -158,7 +180,7 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
   const data = asRecord(root.data) ?? root
 
   const delivery = asRecord(data.delivery_options) ?? {}
-  const shipping = asRecord(delivery.shipping_config) ?? {}
+  const shipping = shippingConfig(delivery.shipping_config)
 
   const methodsRaw = Array.isArray(data.delivery_methods) ? data.delivery_methods : []
   const deliveryMethods = methodsRaw
@@ -205,8 +227,19 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
     schedulingStrategy: asString(delivery.scheduling_strategy)?.toUpperCase() ?? null,
     shippingStrategyType: asString(delivery.shipping_strategy_type)?.toUpperCase() ?? null,
     shipping: {
-      deliveryCharge: asNumber(shipping.delivery_charge ?? shipping.charge),
-      freeDeliveryThreshold: asNumber(shipping.free_delivery_threshold),
+      deliveryCharge: firstNumber(
+        shipping,
+        'delivery_charge',
+        'deliveryCharge',
+        'charge',
+        'default_charge',
+        'defaultCharge',
+      ),
+      freeDeliveryThreshold: firstNumber(
+        shipping,
+        'free_delivery_threshold',
+        'freeDeliveryThreshold',
+      ),
     },
     consentTitle: asString(data.customer_consent_title),
     consentText: asString(data.customer_consent_text),

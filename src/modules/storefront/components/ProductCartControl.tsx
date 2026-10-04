@@ -127,7 +127,7 @@ export function ProductCartControl({
         disabled={busy}
         onClick={handleAdd}
         className={cn(
-          'inline-flex h-9 min-h-9 min-w-[4.75rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-150 hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] active:scale-95 disabled:pointer-events-none',
+          'inline-flex h-9 min-h-9 min-w-[4.75rem] items-center justify-center gap-0.5 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--store-theme,var(--md-green-700))] shadow-sm transition duration-150 hover:bg-[var(--store-theme,var(--md-green-600))] hover:text-white active:scale-95 disabled:pointer-events-none',
           className,
         )}
         aria-label={aria}
@@ -135,7 +135,7 @@ export function ProductCartControl({
       >
         {busy ? (
           <Loader2
-            className="size-3.5 animate-spin text-[var(--store-theme,var(--md-green-700))]"
+            className="size-3.5 animate-spin"
             aria-hidden
           />
         ) : (

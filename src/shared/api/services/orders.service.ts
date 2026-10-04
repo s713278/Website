@@ -73,6 +73,10 @@ export type PlaceOrderInput = {
   city?: string | null
   country?: string | null
   zipCode?: string | null
+  address1?: string | null
+  address2?: string | null
+  district?: string | null
+  state?: string | null
   deliveryMethod?: string | null
   deliveryDate?: string | null
   orderTimingType?: string | null
@@ -134,21 +138,25 @@ async function fillCheckoutAddress(input: PlaceOrderInput) {
     city,
     country,
     zipCode,
+    address1: input.address1,
+    address2: input.address2,
+    district: input.district,
+    state: input.state,
   }
 }
 
-async function resolveAddressId(input: PlaceOrderInput): Promise<number | null> {
-  const existing = asNumericId(input.addressId)
-  if (existing) return existing
+function hasCheckoutPin(input: PlaceOrderInput) {
+  return (
+    Boolean(input.address.trim()) &&
+    input.lat != null &&
+    input.lng != null &&
+    Number.isFinite(input.lat) &&
+    Number.isFinite(input.lng)
+  )
+}
 
-  const userId = asNumericId(input.userId)
-  if (!userId) return null
-
+async function saveCheckoutAddress(userId: number, input: PlaceOrderInput) {
   const path = `/v1/users/${userId}`
-  const profile = await apiGet<ApiEnvelope<unknown>>(path)
-  const fromProfile = extractAddressId(profile)
-  if (fromProfile) return fromProfile
-
   const filled = await fillCheckoutAddress(input)
   const saved = await apiPatch<ApiEnvelope<unknown>>(
     path,
@@ -157,9 +165,30 @@ async function resolveAddressId(input: PlaceOrderInput): Promise<number | null> 
   )
   const fromSave = extractAddressId(saved)
   if (fromSave) return fromSave
-
   const refreshed = await apiGet<ApiEnvelope<unknown>>(path)
   return extractAddressId(refreshed)
+}
+
+async function resolveAddressId(input: PlaceOrderInput): Promise<number | null> {
+  const userId = asNumericId(input.userId)
+  if (!userId) return null
+
+  // Write the pin just confirmed. Reusing an older profile id keeps a previous
+  // city on the order, such as Mirdoddi, Telangana.
+  if (hasCheckoutPin(input)) {
+    const savedId = await saveCheckoutAddress(userId, input)
+    if (savedId) return savedId
+  }
+
+  const existing = asNumericId(input.addressId)
+  if (existing) return existing
+
+  const profile = await apiGet<ApiEnvelope<unknown>>(`/v1/users/${userId}`)
+  const fromProfile = extractAddressId(profile)
+  if (fromProfile) return fromProfile
+
+  if (hasCheckoutPin(input)) return null
+  return saveCheckoutAddress(userId, input)
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder> {

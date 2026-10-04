@@ -4,6 +4,7 @@ import {
   cartSkuId,
   parseCartLineId,
   resolveOwnedVariant,
+  selectInitialVariant,
   variantIdFromCartLine,
 } from '@/modules/storefront/lib/product-variants'
 import type { Product, ProductVariant } from '@/modules/storefront/types'
@@ -25,6 +26,30 @@ const amla1kg: ProductVariant = {
   onSale: false,
   skuType: 'ITEM',
 }
+
+describe('selectInitialVariant', () => {
+  const product: Product = {
+    id: '418',
+    name: 'Amla Pickle',
+    description: '',
+    price: 245,
+    veg: true,
+    defaultVariantId: '4153',
+    variants: [
+      { id: '4153', unit: '500 gr', price: 245, onSale: true, skuType: 'ITEM' },
+      { id: '4152', unit: '1 KG', price: 450, onSale: false, skuType: 'ITEM' },
+    ],
+  }
+
+  it('starts on default_sku_id', () => {
+    expect(selectInitialVariant(product).id).toBe('4153')
+  })
+
+  it('keeps a catalog size when that sku is on the product', () => {
+    expect(selectInitialVariant(product, '4152').id).toBe('4152')
+    expect(selectInitialVariant(product, 'missing').id).toBe('4153')
+  })
+})
 
 describe('parseCartLineId', () => {
   it('splits product and sku from one place', () => {

@@ -155,6 +155,26 @@ npm --prefix packages/api-client run typecheck
 `npm run sync:api` currently invokes `pnpm` inside the local package. Until that script is fixed,
 run `fetch:openapi` and `generate:api` separately.
 
+## Cloudflare
+
+`wrangler.jsonc` publishes the Vite `dist/` directory as a Worker static asset, and
+`not_found_handling` sends unknown paths to `index.html` (the same job as the `vercel.json` rewrite).
+`pnpm-workspace.yaml` is still present, so Wrangler only deploys when that config file is in the
+project root. Without it, `npx wrangler deploy` stops at the workspace root.
+
+Workers Builds settings for this repository:
+
+| Setting | Value |
+|---------|--------|
+| Root directory | `/` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Production branch | `cloudfare_changes` |
+
+The `name` in `wrangler.jsonc` must match the Worker name in the Cloudflare project. Set the same
+`VITE_USE_API`, `VITE_API_BASE_URL`, and `VITE_PUBLIC_SITE_URL` values used on Vercel as build
+environment variables. Vite inlines them at build time.
+
 ## Contributing
 
 Start with [AGENTS.md](./AGENTS.md) for the shared working method, change boundaries, and
@@ -183,6 +203,7 @@ outcome, decisions, and remaining work so the next session can resume from the c
 │           ├── client/       # Axios, config, errors, tokens, refresh
 │           └── services/     # Handwritten backend-domain wrappers
 ├── public/                   # Static Vite assets
+├── wrangler.jsonc            # Cloudflare Worker static-asset deploy
 └── src/
     ├── app/                  # Providers, layouts, router
     ├── components/ui/        # shadcn primitives
