@@ -17,6 +17,7 @@ import { canShopAsCustomer } from '@/app/router/role-home'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { catalogService, type StorefrontCheckoutOptions } from '@/shared/api'
 import { Button } from '@/shared/components'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
@@ -46,6 +47,7 @@ function CartForStore({ storeId }: { storeId: string }) {
   const hydratedUserId = useRef(user?.id)
   const [pendingQtyIds, setPendingQtyIds] = useState(() => new Set<string>())
   const [removingIds, setRemovingIds] = useState(() => new Set<string>())
+  const [checkoutOptions, setCheckoutOptions] = useState<StorefrontCheckoutOptions | null>(null)
   const fromPath = `${location.pathname}${location.search}`
 
   function markSet(setter: typeof setPendingQtyIds, itemId: string, pending: boolean) {
@@ -91,6 +93,21 @@ function CartForStore({ storeId }: { storeId: string }) {
     })
   }, [store, storeClosed, user, navigate, fromPath])
 
+  useEffect(() => {
+    let cancelled = false
+    void catalogService
+      .getStoreCheckoutOptions(storeId)
+      .then((options) => {
+        if (!cancelled) setCheckoutOptions(options)
+      })
+      .catch(() => {
+        if (!cancelled) setCheckoutOptions(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [storeId])
+
   return (
     <StorePageStates
       wrapperRef={wrapperRef}
@@ -111,6 +128,7 @@ function CartForStore({ storeId }: { storeId: string }) {
           cartCount={itemCount}
           pendingQtyIds={pendingQtyIds}
           removingIds={removingIds}
+          checkoutOptions={checkoutOptions}
           onSetQty={(itemId, qty) => {
             void runQtyAction(itemId, () =>
               requestSetCartQty({

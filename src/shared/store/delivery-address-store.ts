@@ -50,6 +50,12 @@ export const useDeliveryAddressStore = create<State>()(
                   city: input.city,
                   country: input.country,
                   zipCode: input.zipCode,
+                  state: input.state,
+                  district: input.district,
+                  address1: input.address1,
+                  address2: input.address2,
+                  recipientName: input.recipientName,
+                  contactNumber: input.contactNumber,
                   backendAddressId: input.backendAddressId,
                 }
               : address,

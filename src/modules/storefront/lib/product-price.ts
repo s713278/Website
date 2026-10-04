@@ -22,6 +22,13 @@ export function hasDistinctPriceRange(product: Product): boolean {
   return min !== max
 }
 
+export function formatStorefrontPriceSummary(product: Product): string | null {
+  const start = product.startingAt ?? product.minPrice
+  const end = product.maxPrice
+  if (start == null || end == null || end <= start) return null
+  return `${formatCurrency(start)} – ${formatCurrency(end)}`
+}
+
 /** Card price: single amount, or min – max when the API sends a range. */
 export function formatProductPriceRange(product: Product): string {
   const { min, max } = priceBounds(product)

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { VariantSelectSheet } from '@/modules/storefront/components/VariantSelectSheet'
 import {
@@ -17,8 +16,6 @@ type CardVariantPickerProps = {
   selectedId: string
   onSelect: (id: string) => void
   className?: string
-  /** True while that pack size is still writing to the cart. */
-  isPending?: (variantId: string) => boolean
 }
 
 export function CardVariantPicker({
@@ -26,7 +23,6 @@ export function CardVariantPicker({
   selectedId,
   onSelect,
   className,
-  isPending,
 }: CardVariantPickerProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const preview = variants.slice(0, PREVIEW_LIMIT)
@@ -52,14 +48,12 @@ export function CardVariantPicker({
         {chips.map((variant) => {
           const key = variantSelectKey(variant)
           const active = selectedId === key || selectedId === variant.id
-          const pending = isPending?.(variant.id) ?? false
           return (
             <button
               key={key}
               type="button"
               onClick={() => onSelect(key)}
               aria-pressed={active}
-              aria-busy={pending}
               className={cn(
                 'inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-2 text-[11px] font-semibold transition',
                 active
@@ -68,7 +62,6 @@ export function CardVariantPicker({
               )}
             >
               {formatVariantLabel(variant, dupes.has(variant.unit || variant.id))}
-              {pending ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
             </button>
           )
         })}

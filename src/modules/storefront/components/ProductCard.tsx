@@ -5,7 +5,6 @@ import { CardVariantPicker } from '@/modules/storefront/components/CardVariantPi
 import { ProductCartControl } from '@/modules/storefront/components/ProductCartControl'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
-import { useProductVariantCartState } from '@/modules/storefront/lib/cart-write-pending'
 import { storeProductPath } from '@/modules/storefront/lib/store-paths'
 import type { Product } from '@/modules/storefront/types'
 type ProductCardProps = {
@@ -21,7 +20,6 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
     storeId,
   )
   const productHref = storeProductPath(storeId, product.id, selected.id)
-  const { isPending } = useProductVariantCartState(storeId, product.id)
 
   return (
     <article
@@ -75,7 +73,6 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
             variants={variants}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            isPending={isPending}
             className="mt-2.5"
           />
         ) : null}

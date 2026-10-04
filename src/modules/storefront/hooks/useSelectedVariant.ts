@@ -4,6 +4,7 @@ import {
   getDefaultVariant,
   getProductVariants,
   hasMultipleVariants,
+  selectInitialVariant,
   variantSelectKey,
 } from '@/modules/storefront/lib/product-variants'
 import type { Product } from '@/modules/storefront/types'
@@ -19,9 +20,9 @@ function variantSignature(product: Product) {
  * Starts on the catalog default. Only the size chip changes it — never the cart —
  * so Add posts the SKU the customer highlighted.
  */
-export function useSelectedVariant(product: Product, _storeId?: string) {
+export function useSelectedVariant(product: Product, _storeId?: string, preferredSkuId?: string) {
   const variants = getProductVariants(product)
-  const catalogDefault = getDefaultVariant(product)
+  const catalogDefault = selectInitialVariant(product, preferredSkuId)
   const signature = variantSignature(product)
 
   const [selectedKey, setSelectedKey] = useState(() => variantSelectKey(catalogDefault))
@@ -29,7 +30,7 @@ export function useSelectedVariant(product: Product, _storeId?: string) {
 
   useEffect(() => {
     const list = getProductVariants(product)
-    const fallback = variantSelectKey(getDefaultVariant(product))
+    const fallback = variantSelectKey(selectInitialVariant(product, preferredSkuId))
     if (productIdRef.current !== product.id) {
       productIdRef.current = product.id
       setSelectedKey(fallback)
@@ -39,7 +40,7 @@ export function useSelectedVariant(product: Product, _storeId?: string) {
       if (findVariantBySelection(list, prev)) return prev
       return fallback
     })
-  }, [signature, product])
+  }, [signature, product, preferredSkuId])
 
   const selected = findVariantBySelection(variants, selectedKey) ?? getDefaultVariant(product)
 
