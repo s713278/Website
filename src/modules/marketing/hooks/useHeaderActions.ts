@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
 import { peekVendorAccountContext } from '@/modules/vendor/lib/onboarding-state-cache'
+import { useVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -31,6 +32,8 @@ export function useHeaderActions(): HeaderAction[] {
 
   const [read, setRead] = useState<{ vendorId: string; result: HeaderAccountRead } | null>(null)
   const [submission, setSubmission] = useState<StoreSubmission | null>(null)
+  // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
+  const hint = useVendorHeaderHint(vendorId)
 
   useEffect(() => {
     if (!readsAccount) return
@@ -85,6 +88,12 @@ export function useHeaderActions(): HeaderAction[] {
   let account: HeaderAccountRead = { status: 'loading' }
   if (cached) account = { status: 'ready', state: { context: cached } }
   else if (read?.vendorId === vendorId) account = read.result
+  // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
+  // The last-known record stands in until this session's read lands, and stays if it fails.
+  // It only selects links; the read still runs and corrects it.
+  if (readsAccount && hint && account.status !== 'ready') {
+    account = { status: 'ready', state: { context: hint } }
+  }
 
   return resolveHeaderActions({ user, live, account, submission, pathname })
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { clearVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import { clearCustomerSessionCaches } from '@/modules/storefront/lib/customer-session-cache'
 import { configureApiClient, onCredentialsRefused, setApiErrorLogger } from '@/shared/api'
 import { onExplicitSignOut, useAuthStore } from '@/shared/auth/store/auth-store'
@@ -15,6 +16,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // Cached account reads are one vendor's store details and must not outlive their
   // session — the next sign-in on this browser may be someone else.
   useEffect(() => onExplicitSignOut(() => invalidateVendorOnboardingState()), [])
+
+  // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
+  // The persisted last-known record is the same vendor's state, so it goes with them.
+  useEffect(() => onExplicitSignOut(clearVendorHeaderHint), [])
 
   // Server cart belongs to the signed-in customer — drop persist, pending add, and
   // storefront session caches so the next login cannot reuse this identity's cart.

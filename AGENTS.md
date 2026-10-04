@@ -209,6 +209,9 @@ Update the session document with the implementation, not in advance of it.
 - The Zustand cart (`md-cart`) persists vendor-scoped lines and summaries. Preserve its live API
   orchestration and local demo path; [cart behavior](./docs/API_ARCHITECTURE.md#storefront-cart) owns the details.
 - `openapi-fetch` is declared by the API package but currently unused.
+- `TEMP(vendor-header-hint)` persists the vendor's last-known account state for the marketing header.
+  A caching-layer migration (e.g. TanStack Query) must first remove it per
+  [docs/SESSION.md](./docs/SESSION.md#temporary-vendor-header-hint--tempvendor-header-hint).
 
 ## UI and design reference
 

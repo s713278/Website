@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { clearVendorHeaderHint, rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import {
   configureApiClient,
   mapVendorContext,
@@ -98,6 +99,9 @@ beforeEach(() => {
   vi.stubEnv('VITE_USE_API', 'true')
   configureApiClient({ useApi: true })
   invalidateVendorOnboardingState()
+  // Every accepted read writes the remembered hint, which would otherwise carry one test's
+  // account into the next test's first paint.
+  clearVendorHeaderHint()
   useAuthStore.getState().applySession({
     token: 'test-token',
     refreshToken: null,
@@ -112,6 +116,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   invalidateVendorOnboardingState()
+  clearVendorHeaderHint()
   useAuthStore.getState().clearSession()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -214,5 +219,89 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       expect(shownActions()).toEqual([])
     })
+  })
+
+  // TEMP(vendor-header-hint): the remembered account state paints the first frame until the
+  // live read lands, and the live read still wins once it does.
+  describe('with a remembered account state', () => {
+    it.each([
+      ['an approved store', APPROVED, ['Store', 'Dashboard']],
+      ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
+      ['unfinished setup', SETTING_UP, ['Log out', 'Continue setup']],
+    ] as const)('paints %s on the first frame while the read is pending', (_name, context, expected) => {
+      rememberVendorHeaderHint(context)
+      vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+      holdSetupReads()
+
+      renderHeader()
+
+      expect(shownActions()).toEqual(expected)
+    })
+
+    it('corrects itself when the live read disagrees', async () => {
+      rememberVendorHeaderHint(APPROVED)
+      const read = deferred<VendorContext>()
+      vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
+      holdSetupReads()
+      renderHeader()
+      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+
+      read.resolve(SETTING_UP)
+
+      await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
+    })
+
+    it('keeps the remembered actions when the live read fails', async () => {
+      rememberVendorHeaderHint(APPROVED)
+      const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
+      holdSetupReads()
+
+      renderHeader()
+
+      await waitFor(() => expect(getContext).toHaveBeenCalled())
+      // Lets the rejection reach the header and its state update render.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+    })
+
+    it('ignores a state remembered for another vendor', () => {
+      rememberVendorHeaderHint({ ...APPROVED, vendorId: 'another-vendor' })
+      vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+      holdSetupReads()
+
+      renderHeader()
+
+      expect(shownActions()).toEqual(['Dashboard'])
+    })
+
+    it('paints the remembered actions on /onboarding and stays there', () => {
+      rememberVendorHeaderHint(APPROVED)
+      vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+      holdSetupReads()
+      const seen: string[] = []
+      function LocationProbe() {
+        seen.push(useLocation().pathname)
+        return null
+      }
+
+      render(
+        <MemoryRouter initialEntries={['/onboarding']}>
+          <MarketingHeader />
+          <LocationProbe />
+        </MemoryRouter>,
+      )
+
+      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+      expect(new Set(seen)).toEqual(new Set(['/onboarding']))
+    })
+  })
+
+  it('falls back to Log out and Continue setup when the read fails and nothing is remembered', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
+    holdSetupReads()
+
+    renderHeader()
+
+    await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
   })
 })

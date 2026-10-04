@@ -157,6 +157,50 @@ writes until the same vendor verifies again. A draft read under the wrong identi
 disclosure and a write hazard, because Continue would submit the previous vendor's details to the
 account signed in now.
 
+The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: an explicit sign-out
+clears it, and the ownership check covers every other path — the header ignores a record whose
+`vendorId` is not the signed-in vendor's.
+
+### Temporary: vendor header hint — TEMP(vendor-header-hint)
+
+**Purpose.** The marketing header picks its vendor buttons from the live vendor context read. Until
+that read lands it showed a Dashboard placeholder, which then flipped to Continue setup for
+unfinished vendors. A persisted Zustand store (`md-vendor-header-hint`) now remembers the last
+accepted read — `{ vendorId, vendorStatus, approvalStatus, storeIdentifier, onboarding: { status,
+description, nextStep } }` — so the first frame already shows the right buttons. The live read
+still runs and corrects it.
+
+- **Written** by the cache layer whenever a read is accepted: `loadVendorContext` and
+  `loadVendorOnboardingState`.
+- **Read** only by the marketing header, including on `/onboarding`. Precedence: resolved memory
+  cache, then this session's ready read, then the record (while the read is loading or after it
+  failed), then the previous fallback (loading → Dashboard, blank on `/onboarding`; failed → Log out
+  + Continue setup). It only selects links; it never navigates. The wizard and route gates never
+  read it. Demo mode makes no account read, so it is unaffected.
+- **Cleared** by `onExplicitSignOut` in `AppProviders.tsx`. Involuntary session loss keeps it; the
+  `vendorId` ownership check stops it applying to another vendor.
+- **Accepted risk:** an out-of-date record (for example, a store suspended elsewhere) can show a
+  wrong button for about 1–4 s until the read lands.
+
+Files:
+
+- `src/modules/vendor/store/vendor-header-hint-store.ts` and `vendor-header-hint-store.test.ts`
+- `src/modules/vendor/lib/vendor-context-cache.ts` and its test
+- `src/modules/vendor/lib/onboarding-server-state.ts` and its test
+- `src/modules/marketing/hooks/useHeaderActions.ts`
+- `src/app/providers/AppProviders.tsx`
+- `src/modules/marketing/components/MarketingHeader.test.tsx`
+
+**Removal** — required before any caching layer (Zustand + TanStack Query) starts:
+
+1. Delete `vendor-header-hint-store.ts` and its test.
+2. Remove the two write calls in `vendor-context-cache.ts` and `onboarding-server-state.ts`.
+3. Remove the record fallback from `useHeaderActions.ts` and the `onExplicitSignOut` registration
+   from `AppProviders.tsx`.
+4. Update `MarketingHeader.test.tsx` to the remaining behavior.
+5. Delete this subsection, the session-owned note above it, and the `AGENTS.md` bullet.
+6. `grep -rn "TEMP(vendor-header-hint)" src docs AGENTS.md` must return nothing.
+
 ## Known limitation: persisted identity is not server-confirmed
 
 `md-auth` persists the user (including `roles`, `vendors` and `vendorId`) in `localStorage`,
