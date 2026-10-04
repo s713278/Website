@@ -183,7 +183,8 @@ export function LiveVendorPlan() {
     {card ? <>
       <StateCard card={card}>
         {card.action && purpose ? <div className="grid gap-1">
-          <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
+          {/* TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md. Plan rereads on open, and no server guarantee against a second subscribe is known, so Checkout waits for the read. */}
+          <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null || reading} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
           <p className="text-xs text-muted-foreground">{card.action.help}</p>
           {actionAlert}
         </div> : null}

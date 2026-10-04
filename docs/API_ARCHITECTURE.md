@@ -526,9 +526,9 @@ production build. Pages and components import billing only from `@/shared/api`. 
 **Sources.**
 
 - **One shared read** covers `GET /v1/vendors/{vendor_id}/subscription` and
-  `GET /v1/subscription-plans`, requested together; if either fails, the whole read fails. It feeds
-  Plan, the banner, the header button, the rail chip and Settings, so they cannot disagree. It holds
-  the billing view, the subscription's `plan_name`, its `trial_started_at` and its `trial_ends_at`.
+  `GET /v1/subscription-plans` (requested once per page load, see below); if either fails, the whole
+  read fails. It feeds Plan, the banner, the header button, the rail chip and Settings, so they
+  cannot disagree. It holds the billing view, the subscription's `plan_name`, its `trial_started_at` and its `trial_ends_at`.
 - **The plan** is the list's `billing_cycle: MONTHLY` entry: its name, `plan_code` for subscribe and
   `sale_price`, which the app reads as rupees. There is no conversion; the OpenAPI examples'
   paise are a backend documentation bug ([gap G](./API_GAPS.md#billing-gaps-ak)). No monthly entry takes the
@@ -569,15 +569,30 @@ Razorpay's reason.
 
 **Refresh and retries.**
 
-- A read already in flight for the vendor is joined. Plan rereads on mount; the chrome, rail and
-  Settings start a read only when none is loaded.
+- `TEMP(vendor-billing-reads)`: this behavior stands in for a query cache;
+  [VENDOR_BILLING_READS_TARGET.md](./VENDOR_BILLING_READS_TARGET.md) owns the target, request counts
+  and removal.
+- A read already in flight for the vendor is joined. The chrome, rail and Settings start a read
+  only when none is loaded, so client navigation sends nothing.
+- Plan rereads on mount, and its Checkout action is off while any read runs, so Checkout is
+  offered only from a read that has just landed.
+- The plans list is requested once per page load and kept in memory, never persisted; rereads
+  reuse it. A failed plans request is dropped, so the next read requests it again. Sign-out and a
+  vendor switch keep it (it holds no vendor data).
 - While anything shows the read, one window focus listener and one boundary timer keep it current.
+  Focus rereads only when the last good read is 15 minutes old or more, the last read failed, a
+  confirmation hold is active, the view is a Confirming view, or another tab signalled a change.
   The timer rereads at the view's earliest future T or P; Paid with free days kept carries both.
   A delay beyond the browser's longest timer (2³¹−1 ms, about 24.8 days) is re-armed in steps. Day
   counts move only on a reread.
 - A 502, 503 or network failure is retried quietly 5, 15 and 30 s apart, then shows "MithraDirect
   isn’t responding. Try again in a minute." with Try again. Other failures use `getErrorMessage`.
   Once nothing shows the read, a read waiting to retry gives up, and the next mount reads afresh.
+- Tabs share changes through the `md-vendor-billing` `BroadcastChannel`, carrying `{ vendorId }`
+  only. The channel is open only while something shows the read (always the case on Plan). A tab
+  posts on a confirmation hold, a successful cancel and a read that ends a hold; a receiving tab
+  marks that vendor's read stale, even if a read is in flight, so its next focus rereads. Without
+  `BroadcastChannel`, tabs fall back to the 15-minute gate.
 - A failed read keeps the last view: Plan shows the error line above it, and the chrome keeps its
   banner and header. Until a view lands, including after a failed first read, the header says
   "Shop plan" and neither the billing banner nor the Free plan banner shows.
@@ -615,9 +630,11 @@ Razorpay's reason.
   line, so it never shows twice.
 - The chrome follows the read, not the hold.
 
-**Payments you made.** `LivePaymentsYouMade` reads the history when the shared read lands or fails
-(each new view object, a cancel response included), after each successful `confirm`, and on its own
-Try again. A newer reason drops the history read in flight. Its failure, or an unreadable shown
+**Payments you made.** `LivePaymentsYouMade` reads the history when the shared read lands from a
+subscription response whose content changed since the last good history read (a cancel response
+included), after each successful `confirm`, and on its own Try again; otherwise it shows the kept
+rows at once, so reopening Plan on an unchanged subscription sends no history request
+(`TEMP(vendor-billing-reads)`). A newer reason drops the history read in flight. Its failure, or an unreadable shown
 event, stays in its section with Try again, beside any last rows. `mapLiveBillingHistory` lists
 events newest first and shows each once per type and payment ID, or per type and subscription ID
 without a payment, because the development backend records some twice

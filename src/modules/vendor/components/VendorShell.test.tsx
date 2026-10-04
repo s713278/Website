@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
-import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
+import { holdLiveBilling, resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, prototypeSeed, vendorOnboardingService, vendorService,
   type LiveSubscriptionRead, type PrototypeState,
@@ -93,6 +93,7 @@ afterEach(() => {
   useAuthStore.getState().clearSession()
   resetBillingPrototypeState()
   resetLiveBilling()
+  resetLiveBillingPlansForTests()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -489,15 +490,43 @@ describe('VendorShell under the live API', () => {
     /** Lets pending promises and timers due within `ms` run. */
     const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
     const focus = () => act(async () => { window.dispatchEvent(new Event('focus')) })
+    /** How long a good read stays fresh: focus before then sends nothing. */
+    const freshFor = 15 * 60 * 1000
+    const plans = () => vi.mocked(liveBillingService.listPaidPlans)
+
+    /** Another tab's billing channel: what it posts reaches this tab's open channels of the same name. */
+    class FakeChannel {
+      static open = new Set<FakeChannel>()
+      onmessage: ((event: MessageEvent) => void) | null = null
+      readonly name: string
+      constructor(name: string) { this.name = name; FakeChannel.open.add(this) }
+      postMessage(data: unknown) {
+        FakeChannel.open.forEach((channel) => { if (channel !== this && channel.name === this.name) channel.onmessage?.(new MessageEvent('message', { data })) })
+      }
+      close() { FakeChannel.open.delete(this) }
+    }
+    const otherTab = (vendorId: string) => act(async () => {
+      const channel = new FakeChannel('md-vendor-billing')
+      channel.postMessage({ vendorId })
+      channel.close()
+    })
+    /** What this tab posts on the billing channel, as another tab would receive it. */
+    const listen = () => {
+      const posted: unknown[] = []
+      new FakeChannel('md-vendor-billing').onmessage = (event) => { posted.push(event.data) }
+      return posted
+    }
 
     beforeEach(() => {
       // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
       vi.useRealTimers()
       vi.useFakeTimers()
       vi.setSystemTime(daysBeforeEnd(12.5))
+      FakeChannel.open.clear()
+      vi.stubGlobal('BroadcastChannel', FakeChannel)
     })
 
-    it('rereads once on window focus on a page other than Plan, and the chrome follows', async () => {
+    it('rereads once on window focus on a page other than Plan once the read is 15 minutes old, and the chrome follows', async () => {
       const reads = stubReads(async () => trial())
       renderShell('/vendor/orders', <LiveVendorPlan />)
       await wait()
@@ -505,9 +534,167 @@ describe('VendorShell under the live API', () => {
       reads.mockImplementation(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
       await focus()
       await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      await wait(freshFor - 1)
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      await wait(1)
+      await focus()
+      await wait()
       expect(banner()).toBeNull()
       expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy()
       expect(reads).toHaveBeenCalledTimes(2)
+      expect(plans()).toHaveBeenCalledOnce()
+    })
+
+    it('rereads on focus at once after a failed read', async () => {
+      const reads = stubReads(async () => { throw new ApiError('Billing is down for a moment.', 500, null, '/v1/vendors/r1/subscription', 'server') })
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      reads.mockImplementation(async () => trial())
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+    })
+
+    it('rereads on focus at once while the view is confirming a payment', async () => {
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(plans()).toHaveBeenCalledOnce()
+    })
+
+    it('rereads on focus at once while the confirmation hold lasts', async () => {
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      act(() => { holdLiveBilling('r1', 'Waiting for Razorpay…') })
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(plans()).toHaveBeenCalledOnce()
+    })
+
+    it('reads the plans list once across focus and T rereads', async () => {
+      vi.setSystemTime(daysBeforeEnd(2.5))
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      await wait(freshFor)
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      await wait(Date.parse(trialEnd) - Date.now())
+      expect(reads).toHaveBeenCalledTimes(3)
+      expect(plans()).toHaveBeenCalledOnce()
+    })
+
+    it('reads the plans list again after it fails, and then not again', async () => {
+      const reads = stubReads(async () => trial())
+      plans().mockRejectedValueOnce(new ApiError('Plans are unavailable.', 500, null, '/v1/subscription-plans', 'server'))
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(header().getByRole('link', { name: 'Shop plan' })).toBeTruthy()
+      await focus()
+      await wait()
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      expect(plans()).toHaveBeenCalledTimes(2)
+      await wait(freshFor)
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(3)
+      expect(plans()).toHaveBeenCalledTimes(2)
+    })
+
+    it('rereads on the next focus after another tab signals a change for this vendor, but not for another vendor', async () => {
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      await otherTab('r2')
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      await otherTab('r1')
+      await wait()
+      // The signal alone sends nothing; the next focus rereads.
+      expect(reads).toHaveBeenCalledOnce()
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(plans()).toHaveBeenCalledOnce()
+    })
+
+    it('tells other tabs when the confirmation hold starts and when a settled read ends it', async () => {
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveEarlyFeeSubscription() }))
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      const posted = listen()
+      act(() => { holdLiveBilling('r1', 'Waiting for Razorpay…') })
+      expect(posted).toEqual([{ vendorId: 'r1' }])
+      reads.mockResolvedValue({ kind: 'subscription', subscription: liveEarlyFeePaidSubscription() })
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+      expect(posted).toEqual([{ vendorId: 'r1' }, { vendorId: 'r1' }])
+    })
+
+    it('tells other tabs after Stop the plan succeeds, and its response counts as a fresh read on focus', async () => {
+      vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+      const reads = stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
+      vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveStoppedSubscription())
+      renderShell('/vendor/plan', <LiveVendorPlan />)
+      await wait()
+      // The read is no longer fresh, so only the cancel response can make it so.
+      await wait(freshFor)
+      const posted = listen()
+      fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+      await wait()
+      expect(screen.getByText('Plan stopped')).toBeTruthy()
+      expect(posted).toEqual([{ vendorId: 'r1' }])
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+    })
+
+    it('rereads on the next focus when another tab signals while a read is in flight', async () => {
+      let resolve!: (read: LiveSubscriptionRead) => void
+      const reads = stubReads(() => new Promise((res) => { resolve = res }))
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      expect(reads).toHaveBeenCalledOnce()
+      await otherTab('r1')
+      await act(async () => { resolve(trial()) })
+      await wait()
+      expect(header().getByRole('link', { name: 'Pay ₹299' })).toBeTruthy()
+      reads.mockImplementation(async () => trial())
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(2)
+    })
+
+    it('rereads on no focus after sign-out, however old the read', async () => {
+      const reads = stubReads(async () => trial())
+      renderShell('/vendor/orders', <LiveVendorPlan />)
+      await wait()
+      act(() => { useAuthStore.getState().clearSession() })
+      await wait()
+      const signedOut = reads.mock.calls.length
+      await wait(freshFor)
+      await focus()
+      await wait()
+      expect(reads).toHaveBeenCalledTimes(signedOut)
     })
 
     it('rereads once at T on a page other than Plan, so the chrome shows the shop hidden at that moment', async () => {
@@ -553,6 +740,7 @@ describe('VendorShell under the live API', () => {
       const warning = banner()?.textContent
       expect(warning).toMatch(/^3 free days left — pay ₹299 now/)
       reads.mockImplementation(async () => { throw new ApiError('Something went wrong on our side. Please try again later.', 503, null, '/v1/vendors/r1/subscription', 'server') })
+      await wait(freshFor)
       await focus()
       await wait(50_000)
       expect(reads).toHaveBeenCalledTimes(5)

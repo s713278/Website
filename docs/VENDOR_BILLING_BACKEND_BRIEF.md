@@ -563,7 +563,8 @@ without a `MONTHLY` entry or a non-positive `sale_price`. A `404` reads as "not 
   up to 90 s. Subscribe is never retried automatically. `confirm` is retried on 502, 503 or a
   network failure at 5, 15 and 30 s. While a payment is confirming, the app offers no second payment.
 - **Stop the plan:** cancel. Its response (the row) replaces the view directly.
-- **Rereads:** on page load, window focus, at T and at P, and after brief outages (5, 15, 30 s).
+- **Rereads:** on page load, Plan open, T, P, brief outages (5, 15, 30 s) and a gated window focus;
+  [billing reads](./VENDOR_BILLING_READS_TARGET.md) owns the details.
 
 ## 9. Standing backend requirements
 

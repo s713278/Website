@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { relativeDay } from '@/modules/vendor/lib/billing-prototype-card'
-import { getErrorMessage, liveBillingService, mapLiveBillingHistory, type LiveBillingView } from '@/shared/api'
+import { keptLiveHistory, readLiveHistory } from '@/modules/vendor/store/live-billing'
+import { getErrorMessage, mapLiveBillingHistory, type LiveBillingView } from '@/shared/api'
 import { Button } from '@/shared/components/ui'
 
 interface LivePaymentsYouMadeProps {
   vendorId: string
-  /** The shared read's view: each one that lands rereads the history, a cancel response included. */
+  /** The shared read's view: one from a changed subscription response rereads the history, a cancel response included. */
   view: LiveBillingView
   /** The shared read is in flight; the history waits for it to land. */
   reading: boolean
@@ -19,20 +20,37 @@ interface LivePaymentsYouMadeProps {
  * a failure here shows only in this section. A failed reread keeps the last rows beside the error.
  */
 export function LivePaymentsYouMade({ vendorId, view, reading, trialStartedAt, writes }: LivePaymentsYouMadeProps) {
-  const [history, setHistory] = useState<{ events: unknown } | null>(null)
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md. The kept history shows at once.
+  const [history, setHistory] = useState<{ events: unknown } | null>(() => {
+    const kept = keptLiveHistory(vendorId)
+    return kept === undefined ? null : { events: kept }
+  })
   const [error, setError] = useState<unknown>(null)
   const [loading, setLoading] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+  /** The write and Try again counts the last good history read covers; a newer one forces a reread. */
+  const covered = useRef({ writes, attempt })
 
-  // Rereads whenever the shared read lands or fails, after a write, and on Try again. A newer
-  // reason drops the read in flight.
+  // Rereads when the shared read lands from a changed subscription response, after a write, and on
+  // Try again; otherwise the kept history stands. A newer reason drops the read in flight.
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
   useEffect(() => {
     if (reading) return
+    const forced = writes !== covered.current.writes || attempt !== covered.current.attempt
+    const kept = forced ? undefined : keptLiveHistory(vendorId)
+    if (kept !== undefined) {
+      setHistory((last) => last?.events === kept ? last : { events: kept })
+      setError(null)
+      setLoading(false)
+      return
+    }
     const controller = new AbortController()
     setLoading(true)
-    liveBillingService.readHistory(vendorId, { signal: controller.signal }).then(
+    readLiveHistory(vendorId, controller.signal).then(
       (events) => {
         if (controller.signal.aborted) return
+        covered.current = { writes, attempt }
         setHistory({ events })
         setError(null)
         setLoading(false)
