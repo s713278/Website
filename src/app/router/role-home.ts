@@ -25,7 +25,9 @@ export function homePathForUser(user: User) {
  * The active login is the audience. A vendor login for the same phone is a different
  * session and must not shop until the customer screen is used.
  */
-export function canShopAsCustomer(user: User | null | undefined): boolean {
+export function canShopAsCustomer(
+  user: User | null | undefined,
+): user is User & { role: 'customer' } {
   return user?.role === 'customer'
 }
 

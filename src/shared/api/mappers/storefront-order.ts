@@ -108,6 +108,10 @@ export type CheckoutAddressDraft = {
   city?: string | null
   country?: string | null
   zipCode?: string | null
+  address1?: string | null
+  address2?: string | null
+  district?: string | null
+  state?: string | null
 }
 
 export type ParsedLocationParts = {
@@ -147,11 +151,13 @@ export function mapNameAndAddressRequest(input: CheckoutAddressDraft): {
   address: Record<string, string>
 } {
   const parsed = parseLocationParts(input.location)
-  const address1 = input.location.trim()
+  const address1 = asString(input.address1) ?? input.location.trim()
+  const address2 = asString(input.address2)
+  const district = asString(input.district)
   const city = asString(input.city) ?? parsed.city
   const country = asString(input.country) ?? parsed.country ?? 'India'
   const zipCode = asString(input.zipCode) ?? parsed.zipCode
-  const state = parsed.state
+  const state = asString(input.state) ?? parsed.state
   const lat = input.lat
   const lng = input.lng
 
@@ -178,6 +184,8 @@ export function mapNameAndAddressRequest(input: CheckoutAddressDraft): {
     latitude: String(lat),
     longitude: String(lng),
   }
+  if (address2) address.address2 = address2
+  if (district) address.district = district
   if (state) address.state = state
 
   const name = asString(input.name)
@@ -371,17 +379,33 @@ function mapCustomerOrderItem(raw: unknown): MappedCustomerOrder['items'][number
   }
 }
 
+function alreadyListed(covered: string, value: string) {
+  return covered.toLowerCase().includes(value.trim().toLowerCase())
+}
+
+/** Street, locality, city, district, state, and ZIP. Skip a part already written into address1. */
 function mapDeliveryAddressLine(data: Record<string, unknown>): string | undefined {
   const block = asRecord(data.delivery_address)
   const addr = asRecord(block?.address) ?? block
   if (!addr) return undefined
-  const line = asString(addr.address1)
-  if (line) return line
-  return (
-    [asString(addr.city), asString(addr.state), asString(addr.zipCode), asString(addr.country)]
-      .filter(Boolean)
-      .join(', ') || undefined
-  )
+
+  const parts: string[] = []
+  const add = (value: string | null) => {
+    const text = value?.trim()
+    if (!text || alreadyListed(parts.join(', '), text)) return
+    parts.push(text)
+  }
+
+  add(asString(addr.address1 ?? addr.address_1))
+  add(asString(addr.address2 ?? addr.address_2))
+  add(asString(addr.city))
+  add(asString(addr.district))
+  add(asString(addr.state))
+
+  const zipCode = asString(addr.zipCode ?? addr.zip_code ?? addr.pincode)
+  const line = parts.join(', ')
+  if (zipCode && !alreadyListed(line, zipCode)) return line ? `${line} ${zipCode}` : zipCode
+  return line || undefined
 }
 
 function mapOrderBill(raw: Record<string, unknown> | null) {

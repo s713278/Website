@@ -36,6 +36,7 @@ export {
   searchStoresByKeyword,
   searchStoreSkus,
   getProductSkuDetail,
+  getStorefrontProduct,
 } from './catalog.service'
 export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../mappers/storefront-checkout'
 export { hasStoreContactContent } from '../mappers/storefront-contact'

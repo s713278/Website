@@ -94,6 +94,39 @@ describe('mapStorefrontCheckoutOptions', () => {
     expect(mapped?.shipping.deliveryCharge).toBe(30)
   })
 
+  it('reads camelCase order-amount delivery rules', () => {
+    const mapped = mapStorefrontCheckoutOptions({
+      data: {
+        delivery_methods: ['HOME_DELIVERY'],
+        delivery_options: {
+          shipping_strategy_type: 'ORDER_AMOUNT_THRESHOLD',
+          shipping_config: '{"deliveryCharge":100,"freeDeliveryThreshold":500}',
+        },
+      },
+    })
+
+    expect(mapped?.shipping).toEqual({
+      deliveryCharge: 100,
+      freeDeliveryThreshold: 500,
+    })
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 499,
+        method: 'HOME_DELIVERY',
+        strategy: mapped?.shippingStrategyType,
+        shipping: mapped?.shipping,
+      }),
+    ).toBe(100)
+    expect(
+      deliveryFeeForCheckout({
+        subtotal: 500,
+        method: 'HOME_DELIVERY',
+        strategy: mapped?.shippingStrategyType,
+        shipping: mapped?.shipping,
+      }),
+    ).toBe(0)
+  })
+
   it('prefers delivery_slots time windows when present', () => {
     const mapped = mapStorefrontCheckoutOptions({
       data: {

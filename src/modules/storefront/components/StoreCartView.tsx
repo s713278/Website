@@ -22,6 +22,7 @@ import {
 import { storeCheckoutPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { summaryFromLines, useCartStore } from '@/modules/storefront/store/cart-store'
 import type { CartLine, Store } from '@/modules/storefront/types'
+import { deliveryFeeForCheckout, type StorefrontCheckoutOptions } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, QuantityStepper } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -37,6 +38,7 @@ type StoreCartViewProps = {
   pendingQtyIds?: ReadonlySet<string>
   /** Lines waiting on remove (X) API. */
   removingIds?: ReadonlySet<string>
+  checkoutOptions?: StorefrontCheckoutOptions | null
 }
 
 export function StoreCartView({
@@ -47,6 +49,7 @@ export function StoreCartView({
   onRemove,
   pendingQtyIds,
   removingIds,
+  checkoutOptions = null,
 }: StoreCartViewProps) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
@@ -57,7 +60,22 @@ export function StoreCartView({
     () => storedSummary ?? summaryFromLines(storeLines),
     [storedSummary, storeLines],
   )
-  const totals = priceDetailsFromSummary(summary)
+  const totals = useMemo(() => {
+    const base = priceDetailsFromSummary(summary)
+    const quoted = deliveryFeeForCheckout({
+      subtotal: base.subtotal,
+      method: checkoutOptions?.deliveryMethods[0] ?? 'HOME_DELIVERY',
+      strategy: checkoutOptions?.shippingStrategyType,
+      shipping: checkoutOptions?.shipping,
+    })
+    if (quoted == null) return base
+    return {
+      ...base,
+      delivery: quoted,
+      total: base.total - base.delivery + quoted,
+    }
+  }, [summary, checkoutOptions])
+  const showDelivery = totals.delivery > 0 || checkoutOptions?.shipping.deliveryCharge != null
   const itemCount = totals.itemCount
 
   function handleCheckout() {
@@ -123,10 +141,19 @@ export function StoreCartView({
                     </dt>
                     <dd className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</dd>
                   </div>
-                  {totals.delivery > 0 ? (
+                  {showDelivery ? (
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-600">Delivery</dt>
-                      <dd className="font-semibold text-slate-900">{formatCurrency(totals.delivery)}</dd>
+                      <dd
+                        className={cn(
+                          'font-semibold',
+                          totals.delivery === 0
+                            ? 'text-[var(--store-theme,var(--md-green-700))]'
+                            : 'text-slate-900',
+                        )}
+                      >
+                        {totals.delivery > 0 ? formatCurrency(totals.delivery) : 'Free'}
+                      </dd>
                     </div>
                   ) : null}
                   {totals.discount > 0 ? (

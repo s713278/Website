@@ -16,6 +16,15 @@ export function getProductVariants(product: Product): ProductVariant[] {
   ]
 }
 
+export function selectInitialVariant(product: Product, preferredSkuId?: string): ProductVariant {
+  const variants = getProductVariants(product)
+  if (preferredSkuId) {
+    const match = variants.find((variant) => variant.id === preferredSkuId)
+    if (match) return match
+  }
+  return getDefaultVariant(product)
+}
+
 export function getDefaultVariant(product: Product): ProductVariant {
   const variants = getProductVariants(product)
   if (product.defaultVariantId) {
