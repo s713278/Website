@@ -112,7 +112,7 @@ export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) 
             if (digit) event.currentTarget.select()
           }}
           className={cn(
-            'ob-numeric size-14 rounded-xl border bg-[var(--ob-sheet)] text-center font-display text-2xl font-bold text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] sm:size-16 focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]',
+            'ob-numeric size-14 rounded-xl border bg-[var(--ob-sheet)] text-center text-2xl font-semibold text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] sm:size-16 focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]',
             invalid ? 'border-destructive' : 'border-[var(--ob-line)]',
           )}
         />
