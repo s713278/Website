@@ -171,7 +171,8 @@ The refusal takes effect the moment the assigning write succeeds, not only after
 account catalog is read on entry and then grown by each successful write; the write itself is the
 evidence, so a vendor who returns to the step during the same visit is refused there too. Earlier,
 the entry read was the only source, so same-visit deselection was allowed and quietly discarded.
-Both steps also carry a notice before anything is saved, saying a saved choice cannot be removed.
+Both steps also show a note beside Continue, the button that saves, saying a saved choice cannot be
+removed.
 Neither the notice nor the refusal appears in demo mode or on the sample catalog, where nothing
 reaches an account.
 

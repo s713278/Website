@@ -616,3 +616,54 @@ describe('submitting the store for review', () => {
     expect(context.mock.calls.length).toBe(readsBefore + 1)
   })
 })
+
+describe('step messages', () => {
+  const saveNote = (text: string) => {
+    const note = screen.getByText(text)
+    // In the footer beside Continue, not in the scrolling step a vendor may never scroll through.
+    expect(document.getElementById('onboarding-form-scroll')!.contains(note)).toBe(false)
+    return note
+  }
+
+  it('shows what saving a catalog step cannot undo beside Continue, only while it reaches the account', async () => {
+    renderAccount('APPROVED', 7)
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 4,/ }))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    saveNote('Saved categories can’t be removed here.')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 5,/ }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    saveNote('Saved products can only be made inactive.')
+
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, catalogSource: 'sample' })))
+    expect(screen.queryByText('Saved products can only be made inactive.')).toBeNull()
+  })
+
+  it('notes that store details are saved but not shown until approval', async () => {
+    renderAccount('APPROVED', 9)
+    await screen.findByRole('button', { name: /Step 9,.*You are here/ })
+    saveNote('Saved now, but shown here only after approval.')
+  })
+
+  it('drops the store details note once the store is submitted and Step 9 is read-only', async () => {
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByRole('button', { name: /Step 9,.*You are here/ })
+    expect(screen.queryByText('Saved now, but shown here only after approval.')).toBeNull()
+  })
+
+  it('carries the size limit on the usage line rather than a separate notice', async () => {
+    renderAccount('APPROVED', 11, 1, 1)
+    await openSizes()
+    const usage = screen.getByText(/1 of 1 sizes used/)
+    expect(usage.textContent).toContain('You’ve reached your plan’s limit, counting sizes already saved to your store.')
+    expect(screen.queryByText(/You've reached your plan's limit of 1 sizes/)).toBeNull()
+  })
+
+  it('keeps step guidance in the description instead of a notice', async () => {
+    renderAccount('APPROVED', 8)
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    expect(screen.getByText('Choose how customers pay, and pick one default.')).toBeTruthy()
+    expect(screen.queryByText('Choose accepted methods and one default.')).toBeNull()
+  })
+})

@@ -292,16 +292,24 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   description: string
   /** A phrase within `description` to set in bold. */
   emphasis?: string
+  /**
+   * What Continue's save does that the vendor cannot take back here. The wizard shows it
+   * beside Continue, and only while that Continue writes to the account.
+   */
+  saveNote?: string
 }> = [
   { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Enter the number customers can use to contact you.' },
   { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code sent to WhatsApp.' },
   { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the option that best matches what you sell. Can’t find yours? Choose Others.', emphasis: 'Others' },
-  { step: 4, short: 'Categories', title: 'Pick Categories', description: 'Choose up to {categoryLimit} — start small, add more later from your dashboard.' },
-  { step: 5, short: 'Products', title: 'Pick Products', description: 'Choose the products you sell.' },
-  { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product.' },
+  { step: 4, short: 'Categories', title: 'Pick Categories', description: 'Choose up to {categoryLimit} — start small, add more later from your dashboard.', saveNote: 'Saved categories can’t be removed here.' },
+  { step: 5, short: 'Products', title: 'Pick Products', description: 'Choose the products you sell.', saveNote: 'Saved products can only be made inactive.' },
+  { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product. Add another only for a different pack.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how customers receive orders.' },
-  { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay.' },
-  { step: 9, short: 'Store', title: 'Add your store details', description: 'Add the details customers need.' },
+  { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay, and pick one default.' },
+  // Step 9 is the only step that cannot be read back: the storefront read 404s until an
+  // admin approves the store. The note stops a returning vendor concluding their branding
+  // was never saved. See docs/API_GAPS.md.
+  { step: 9, short: 'Store', title: 'Add your store details', description: 'Add the details customers need.', saveNote: 'Saved now, but shown here only after approval.' },
   { step: 10, short: 'Review', title: 'Review your store', description: 'Check your store before submitting.' },
 ]
 

@@ -19,7 +19,6 @@ import {
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
 import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
-import { writesReachAccount } from '../../lib/onboarding-sync'
 import { StepNotice } from './AccessNotice'
 import {
   selectCatalogPolicy,
@@ -29,7 +28,7 @@ import {
   useOnboardingStore,
 } from '../../store/onboarding-store'
 import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
-import { AuthorCategoryForm, AuthorProductForm, PermanenceNotice } from './CatalogAuthoring'
+import { AuthorCategoryForm, AuthorProductForm } from './CatalogAuthoring'
 import { CatalogError, CatalogLoading, CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
@@ -395,7 +394,6 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      {writesReachAccount(draft.catalogSource) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
       <div>
         <FieldLabel htmlFor="category-search">Search category</FieldLabel>
@@ -729,7 +727,6 @@ function MeasurementChips({ measurement, units }: { measurement: string | null; 
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const categories = useOnboardingStore((state) => state.draft.categories)
-  const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
   const productLimit = useOnboardingStore(selectProductLimit)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const liveApi = isLiveApi()
@@ -745,7 +742,6 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
 
   return (
     <div className="space-y-4">
-      {writesReachAccount(catalogSource) ? <PermanenceNotice kind="products" /> : null}
       {productLimitReached ? (
         <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
       ) : null}

@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   DatabaseIcon,
   EyeIcon,
+  InfoIcon,
   LockKeyholeIcon,
   Loader2Icon,
   RotateCcwIcon,
@@ -56,7 +57,7 @@ import {
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice, OnboardingStatus, StepNotice, StepRestrictionNotice } from './AccessNotice'
+import { AccessNotice, OnboardingStatus, StepNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpStep, PhoneStep } from './IdentitySteps'
@@ -883,6 +884,11 @@ export function OnboardingWizard() {
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
   const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
+  // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
+  // catalog source, and once the store is submitted it is read-only and saves nothing.
+  const saveNote = !stepMeta.saveNote || !catalogUnlocked ? null
+    : currentStep === 9 ? (liveApi && !storeIsSubmitted ? stepMeta.saveNote : null)
+      : writesReachAccount(catalogSource) ? stepMeta.saveNote : null
   // A submitted store needs no further setup whatever the local draft says:
   // `storeSubmission` comes from the account, so "Complete setup" has nothing to do.
   const setupNeedsNoFurtherAction =
@@ -1014,7 +1020,7 @@ export function OnboardingWizard() {
                         {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} /> : null}
                         {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} onResend={resendOtp} onChangePhone={changeOtpPhone} /> : null}
                         {catalogUnlocked && storeIsSubmitted && currentStep === 6 && !storeIsApproved ? (
-                          <div className="mb-4"><StepRestrictionNotice>Sizes and prices unlock after approval.</StepRestrictionNotice></div>
+                          <div className="mb-4"><StepNotice tone="info" message="Sizes and prices unlock after approval." /></div>
                         ) : null}
                         {catalogUnlocked && currentStep >= 3 && contextError ? (
                           <div className="mb-4"><StepNotice message={contextError} /></div>
@@ -1059,7 +1065,13 @@ export function OnboardingWizard() {
                 </div>
 
                 {currentStep >= 3 ? <div className="-mx-1 shrink-0 overflow-hidden px-1 [scrollbar-gutter:stable]">
-                  <div className="flex w-full items-center justify-end gap-3 border-t border-[var(--ob-line)] py-3">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-[var(--ob-line)] py-3">
+                    {saveNote ? (
+                      <p className="flex min-w-0 basis-full items-center gap-1.5 text-xs leading-5 text-[var(--ob-ink-soft)] sm:mr-auto sm:basis-0 sm:grow">
+                        <InfoIcon className="size-3.5 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
+                        <span>{saveNote}</span>
+                      </p>
+                    ) : null}
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
                       {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || measurementsPending} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}

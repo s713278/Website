@@ -18,7 +18,6 @@ import {
   UploadIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isLiveApi } from '@/shared/api'
 import { Button, Input } from '@/shared/components/ui'
 import { storefrontUrl } from '@/shared/lib/store-link'
 import { ACCENT_PRESETS, FONT_PRESETS, PRIMARY_PRESETS } from '@/shared/lib/theme'
@@ -30,7 +29,6 @@ import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { StoreSharePanels } from '../StoreSharePanels'
-import { StepNotice } from './AccessNotice'
 import {
   selectCategoryLimit,
   selectProductLimit,
@@ -218,17 +216,6 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div>
-      {/*
-        Step 9 is written to the account like every other step, but it is the only one
-        that cannot be read back: the storefront read 404s until an admin approves the
-        store. Saying so here stops a returning vendor concluding their branding was
-        never saved. See docs/API_GAPS.md.
-      */}
-      {isLiveApi() ? (
-        <div className="mb-6">
-          <StepNotice message="These details are saved, but cannot be read back until approval. Check them before continuing." />
-        </div>
-      ) : null}
       <StepSection id="store-basics" title="Store basics">
         <div className="grid gap-4 @min-[32rem]:grid-cols-2">
           <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />

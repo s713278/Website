@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { InfoIcon, PlusIcon } from 'lucide-react'
+import { PlusIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import { cn } from '@/lib/utils'
 import { measurementLabel } from '../../lib/onboarding-measurement'
@@ -8,23 +8,7 @@ import {
   selectProductLimitReached,
   useOnboardingStore,
 } from '../../store/onboarding-store'
-import { Hint, fieldShell } from './StepPrimitives'
-
-type PermanenceNoticeKind = 'categories' | 'products'
-
-/** Explain an account write while the vendor can still choose not to make it. */
-export function PermanenceNotice({ kind }: { kind: PermanenceNoticeKind }) {
-  const message = {
-    categories: 'Saved categories cannot be removed here. Choose only what your store sells.',
-    products: 'Saved products cannot be removed here. You can make a product inactive later.',
-  } satisfies Record<PermanenceNoticeKind, string>
-
-  return (
-    <Hint icon={<InfoIcon className="size-4" />}>
-      {message[kind]}
-    </Hint>
-  )
-}
+import { fieldShell } from './StepPrimitives'
 
 /**
  * One name field and one button, always in view, as in the design reference. The step

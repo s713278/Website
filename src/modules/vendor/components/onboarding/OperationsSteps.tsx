@@ -5,7 +5,6 @@ import {
   PlusIcon,
   SmartphoneIcon,
   Trash2Icon,
-  WalletCardsIcon,
   XIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -38,7 +37,6 @@ import {
   unitsForMeasurement,
   type MeasurementCatalog,
 } from '../../lib/onboarding-measurement'
-import { StepNotice } from './AccessNotice'
 import { CategoryPanel, FieldError, Hint, StepSection } from './StepPrimitives'
 
 const WEEKDAYS: Array<{ value: Weekday; label: string }> = [
@@ -556,16 +554,13 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div className="space-y-5">
-      <Hint className="mb-5">
-        Add one size and price for each product. Add another only for a different pack.
-      </Hint>
-      {skuLimitReached ? (
-        <StepNotice message={`You've reached your plan's limit of ${skuLimit} sizes, counting those already saved to your store.`} />
-      ) : null}
       {/* Step-wide size issues (the plan limit, a failed save) have no single input, so the
           usage line carries them and is the focus target for field `skus`. */}
       <div id="skus" aria-describedby={issues.some((item) => item.field === 'skus') ? 'skus-error' : undefined}>
-        <p className="text-sm text-[var(--ob-ink-soft)]">{projectedSkus} of {skuLimit} sizes used</p>
+        <p className={cn('text-sm', skuLimitReached ? 'font-medium text-amber-800 dark:text-amber-200' : 'text-[var(--ob-ink-soft)]')}>
+          {projectedSkus} of {skuLimit} sizes used
+          {skuLimitReached ? <> · You’ve reached your plan’s limit, counting sizes already saved to your store.</> : null}
+        </p>
         <FieldError issues={issues} field="skus" />
       </div>
       <div>
@@ -822,9 +817,6 @@ export function PaymentStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div className="space-y-5">
-      <Hint icon={<WalletCardsIcon className="size-4 text-[var(--ob-brand)]" />}>
-        Choose accepted methods and one default.
-      </Hint>
       <div id="payment-options" aria-describedby={paymentOptionsError ? 'payment-options-error' : undefined} className="space-y-3">
         {draft.payments.map((payment) => {
           const label = PAYMENT_LABELS[payment.type]
