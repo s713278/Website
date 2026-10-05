@@ -2226,6 +2226,13 @@ body.addr-gate-open {
   line-height: 1.45;
 }
 
+.address-card .addr-name {
+  margin: 0 0 0.15rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111827;
+}
+
 .address-card .phone {
   font-size: 0.75rem;
   color: var(--store-muted);
@@ -2233,21 +2240,109 @@ body.addr-gate-open {
 }
 
 .address-edit {
-  margin-top: 0.35rem;
+  margin-top: 0.15rem;
+  padding: 0.15rem 0 0;
+  border: 0;
+  background: transparent;
 }
 
-.address-edit-input {
-  width: 100%;
-  min-height: 4.5rem;
+.address-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem 0.7rem;
+}
+
+.address-edit-grid .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.address-edit-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  line-height: 1.2;
+}
+
+.address-edit-wide {
+  grid-column: 1 / -1;
+}
+
+.address-edit-grid .field {
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.8rem;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.address-edit-grid textarea.field {
+  min-height: 4.25rem;
   resize: vertical;
-  margin-bottom: 0.65rem;
+  line-height: 1.45;
+  padding-top: 0.65rem;
+}
+
+.address-edit .req {
+  color: #ef4444;
+  font-size: 0.85em;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  border: 0;
+}
+
+.address-map {
+  margin-top: 0.75rem;
+}
+
+.address-map .address-edit-caption {
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.address-map-pin {
+  min-height: 2.75rem;
+}
+
+.address-map-status {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--md-green-dark, #047857);
+}
+
+.address-edit-error {
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #dc2626;
 }
 
 .address-edit-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
   justify-content: flex-end;
+  margin-top: 0.9rem;
+}
+
+.address-edit-actions .btn-outline,
+.address-edit-actions .btn-primary-store.is-inline {
+  min-height: 2.75rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
 }
 
 .btn-primary-store.is-inline {

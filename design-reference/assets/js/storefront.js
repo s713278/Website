@@ -22,6 +22,8 @@
     coupon: '',
     customer: { phone: '', name: '', loggedIn: false },
     address: '',
+    addressDetails: null,
+    addressMapPinned: false,
     addressId: 'home',
     deliveryMethod: 'homeDelivery',
     orderId: '',
@@ -90,6 +92,7 @@
       };
     }
     if (s && s.address) state.address = s.address;
+    if (s && s.addressDetails) state.addressDetails = s.addressDetails;
   }
 
   function saveSession() {
@@ -97,7 +100,8 @@
       phone: state.customer.phone,
       name: state.customer.name,
       loggedIn: state.customer.loggedIn,
-      address: state.address
+      address: state.address,
+      addressDetails: state.addressDetails
     });
   }
 
@@ -1050,6 +1054,146 @@
     return selected;
   }
 
+  function emptyAddressDetails() {
+    return {
+      name: '',
+      contactNumber: '',
+      address1: '',
+      address2: '',
+      city: '',
+      district: '',
+      state: '',
+      zipCode: ''
+    };
+  }
+
+  function usableCustomerName(name) {
+    var text = String(name || '').trim();
+    if (!text || text === 'Guest' || text === 'User' || text === 'Vendor') return '';
+    return text;
+  }
+
+  function contactDigits(value) {
+    var raw = String(value || '').replace(/\D/g, '');
+    if (raw.length >= 10) return raw.slice(-10);
+    return raw;
+  }
+
+  function formatAddressDetails(form) {
+    var street = [form.address1, form.address2]
+      .map(function (value) {
+        return String(value || '')
+          .replace(/\s*\n+\s*/g, ', ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+    var area = [form.city, form.district, form.state]
+      .map(function (value) {
+        return String(value || '').trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+    var pin = String(form.zipCode || '').trim();
+    return [street, [area, pin].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  }
+
+  function addressFormFromState() {
+    var saved = state.addressDetails || emptyAddressDetails();
+    var form = {
+      name: usableCustomerName(saved.name) || usableCustomerName(state.customer.name),
+      contactNumber: contactDigits(saved.contactNumber) || contactDigits(state.customer.phone),
+      address1: String(saved.address1 || '').trim(),
+      address2: String(saved.address2 || '').trim(),
+      city: String(saved.city || '').trim(),
+      district: String(saved.district || '').trim(),
+      state: String(saved.state || '').trim(),
+      zipCode: String(saved.zipCode || '').replace(/\D/g, '').slice(0, 6)
+    };
+    if (!form.address1 && !form.address2 && !form.city && state.address) {
+      form.address1 = state.address;
+    }
+    return form;
+  }
+
+  var ADDRESS_EDIT_FIELDS = [
+    ['checkout-addr-name', 'name'],
+    ['checkout-addr-contact', 'contactNumber'],
+    ['checkout-addr-city', 'city'],
+    ['checkout-addr-district', 'district'],
+    ['checkout-addr-state', 'state'],
+    ['checkout-addr-zip', 'zipCode']
+  ];
+
+  function savedAddressText(form) {
+    return [form.address1, form.address2]
+      .map(function (value) {
+        return String(value || '').trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function readAddressEditForm() {
+    var form = emptyAddressDetails();
+    ADDRESS_EDIT_FIELDS.forEach(function (pair) {
+      var input = document.getElementById(pair[0]);
+      form[pair[1]] = input ? String(input.value || '').trim() : '';
+    });
+    var address = document.getElementById('checkout-addr-text');
+    form.address1 = address ? String(address.value || '').trim() : '';
+    form.address2 = '';
+    form.contactNumber = contactDigits(form.contactNumber);
+    form.zipCode = form.zipCode.replace(/\D/g, '').slice(0, 6);
+    return form;
+  }
+
+  function mapEnabled() {
+    var edit = document.getElementById('checkout-address-edit');
+    return !!(edit && edit.getAttribute('data-map-enabled') === 'true');
+  }
+
+  function addressEditError(form) {
+    if (!form.name) return 'Enter the name for this delivery.';
+    if (!/^\d{10}$/.test(form.contactNumber)) return 'Enter a 10-digit phone number.';
+    if (!String(form.address1 || '').replace(/\s+/g, '')) return 'Enter the address.';
+    if (!form.city) return 'Enter the city.';
+    if (!form.district) return 'Enter the district.';
+    if (!form.state) return 'Enter the state.';
+    if (!/^\d{6}$/.test(form.zipCode)) return 'Enter a 6-digit ZIP code.';
+    if (mapEnabled() && !state.addressMapPinned) return 'Pin this address on Google Map.';
+    return '';
+  }
+
+  function showAddressEditError(message) {
+    var err = document.getElementById('checkout-addr-error');
+    if (!err) return;
+    err.textContent = message || '';
+    err.classList.toggle('hidden', !message);
+  }
+
+  function fillAddressEditForm() {
+    var form = addressFormFromState();
+    ADDRESS_EDIT_FIELDS.forEach(function (pair) {
+      var input = document.getElementById(pair[0]);
+      if (input) input.value = form[pair[1]] || '';
+    });
+    var address = document.getElementById('checkout-addr-text');
+    if (address) address.value = savedAddressText(form);
+    state.addressMapPinned = !!(state.addressDetails && state.addressDetails.mapPinned);
+    syncAddressMap();
+    showAddressEditError('');
+  }
+
+  function syncAddressMap() {
+    var map = document.getElementById('checkout-addr-map');
+    var status = document.getElementById('checkout-addr-map-status');
+    var enabled = mapEnabled();
+    if (map) map.hidden = !enabled;
+    if (status) status.hidden = !(enabled && state.addressMapPinned);
+  }
+
   function setAddressEditMode(on) {
     var card = document.getElementById('checkout-addresses');
     var edit = document.getElementById('checkout-address-edit');
@@ -1058,16 +1202,26 @@
     if (edit) edit.classList.toggle('hidden', !on);
     if (editBtn) editBtn.classList.toggle('hidden', !!on);
     if (on) {
-      var input = document.getElementById('checkout-addr-input');
-      if (input) {
-        input.value = state.address || '';
-        input.focus();
-      }
+      fillAddressEditForm();
+      var nameInput = document.getElementById('checkout-addr-name');
+      if (nameInput) nameInput.focus();
+    } else {
+      showAddressEditError('');
     }
   }
 
-  function saveEditedAddress(line) {
-    if (!commitDeliveryAddress(line)) return false;
+  function saveEditedAddress() {
+    var form = readAddressEditForm();
+    var message = addressEditError(form);
+    if (message) {
+      showAddressEditError(message);
+      return false;
+    }
+    form.mapPinned = mapEnabled() && !!state.addressMapPinned;
+    state.addressDetails = form;
+    state.customer.name = form.name;
+    state.customer.phone = form.contactNumber;
+    if (!commitDeliveryAddress(formatAddressDetails(form))) return false;
     setAddressEditMode(false);
     renderCheckout();
     return true;
@@ -1078,21 +1232,30 @@
     state.address = state.address || selected.line || '';
 
     var labelEl = document.getElementById('checkout-addr-label');
+    var nameEl = document.getElementById('checkout-addr-recipient');
     var lineEl = document.getElementById('checkout-addr-line');
     var phoneEl = document.getElementById('checkout-addr-phone');
+    var recipient = usableCustomerName(
+      (state.addressDetails && state.addressDetails.name) || state.customer.name
+    );
+    var contact = contactDigits(
+      (state.addressDetails && state.addressDetails.contactNumber) || state.customer.phone
+    );
     if (labelEl) labelEl.textContent = selected.label || 'Delivery';
+    if (nameEl) {
+      nameEl.textContent = recipient;
+      nameEl.hidden = !recipient;
+    }
     if (lineEl) lineEl.textContent = state.address || 'No address yet — tap Edit to add one.';
     if (phoneEl) {
-      phoneEl.textContent = state.customer.phone
-        ? '+91 ' + state.customer.phone
-        : '';
-      phoneEl.hidden = !state.customer.phone;
+      phoneEl.textContent = contact ? '+91 ' + contact : '';
+      phoneEl.hidden = !contact;
     }
     var note = document.querySelector('#view-checkout .checkout-confirm-note');
     if (note) {
       note.textContent = hasDeliveryAddress()
-        ? 'Check address and items — then we’ll send this order to the shop on WhatsApp.'
-        : 'Add a delivery address, then send this order to the shop on WhatsApp.';
+        ? 'Check address and items — delivery will be done here.'
+        : 'Add the address — delivery will be done here.';
     }
     setAddressEditMode(false);
 
@@ -1538,8 +1701,15 @@
     var saveAddrBtn = document.getElementById('btn-save-address');
     if (saveAddrBtn) {
       saveAddrBtn.addEventListener('click', function () {
-        var input = document.getElementById('checkout-addr-input');
-        saveEditedAddress(input ? input.value : '');
+        saveEditedAddress();
+      });
+    }
+    var pinMapBtn = document.getElementById('btn-pin-map');
+    if (pinMapBtn) {
+      pinMapBtn.addEventListener('click', function () {
+        state.addressMapPinned = true;
+        syncAddressMap();
+        showAddressEditError('');
       });
     }
     var cancelAddrBtn = document.getElementById('btn-cancel-address');
@@ -1652,6 +1822,7 @@
 
     state.draft = draft;
     state.address = '';
+    state.addressDetails = null;
     state.activeCategory = 'all';
 
     if (D.applyStoreBrand) {
