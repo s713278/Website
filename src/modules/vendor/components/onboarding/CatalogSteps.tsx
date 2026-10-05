@@ -326,12 +326,28 @@ export function BusinessStep({ issues, onUseSample }: Omit<CatalogStepProps, 'co
   )
 }
 
+/** How long a refused tap's note stays up. It answers one tap, so it must not outstay it. */
+const REFUSAL_NOTE_MS = 4000
+
+/** A note that clears itself, counted from the latest time it was shown. */
+function useRefusalNote() {
+  const [note, setNote] = useState<string | null>(null)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  const show = (next: string | null) => {
+    window.clearTimeout(timer.current)
+    setNote(next)
+    if (next) timer.current = window.setTimeout(() => setNote(null), REFUSAL_NOTE_MS)
+  }
+  return [note, show] as const
+}
+
 export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const [search, setSearch] = useState('')
-  const [blocked, setBlocked] = useState<string | null>(null)
+  const [blocked, setBlocked] = useRefusalNote()
   // The limit gates the projected account total — draft plus what the account already
   // holds — so a business-type change cannot reopen a fresh allowance on a full account.
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
@@ -353,7 +369,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     if (!choice.chosen && categoryLimitReached) return
     if (choice.chosen && isCategoryAssigned(category.id)) {
       setBlocked(
-        `${category.name} is already saved to your store. Categories cannot be removed here yet — contact support if you need it taken off.`,
+        `${category.name} is saved, so it can’t be removed here.`,
       )
       return
     }
@@ -394,7 +410,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      {blocked ? <StepNotice message={blocked} /> : null}
+      {blocked ? <StepNotice tone="info" message={blocked} /> : null}
       <div>
         <FieldLabel htmlFor="category-search">Search category</FieldLabel>
         <div className="relative">
@@ -485,9 +501,8 @@ function ProductCategoryPicker({
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const references = useProductReferences(draft.catalogSource, categoryId)
   const [search, setSearch] = useState('')
-  const [blocked, setBlocked] = useState<string | null>(null)
+  const [blocked, setBlocked] = useRefusalNote()
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
-  const productLimit = useOnboardingStore(selectProductLimit)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
@@ -503,16 +518,12 @@ function ProductCategoryPicker({
     const choice = catalogChoiceState(draft.products, product.id)
     if (choice.chosen && isProductAssigned(product.id)) {
       setBlocked(
-        `${product.name} is already saved to your store. Products cannot be removed here yet — contact support if you need it taken off. You can set it inactive on the next step instead.`,
+        `${product.name} is saved, so it can’t be removed here. You can set it inactive in the next step.`,
       )
       return
     }
-    if (!choice.chosen && productLimitReached) {
-      setBlocked(
-        `You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`,
-      )
-      return
-    }
+    // The step states the limit above every category, so a refused pick adds no second copy.
+    if (!choice.chosen && productLimitReached) return
     setBlocked(null)
     const applyProductChoice = () => {
       if (choice.pending) {
@@ -583,7 +594,7 @@ function ProductCategoryPicker({
             />
           </div>
         ) : null}
-        {blocked ? <StepNotice message={blocked} /> : null}
+        {blocked ? <StepNotice tone="info" message={blocked} /> : null}
         {references.loading ? <CatalogLoading count={6} cardClassName="h-36 @min-[30rem]:h-32" className={choiceGrid} /> : null}
         {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
         {!references.loading && !references.error && !items.length ? (

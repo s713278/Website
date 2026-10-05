@@ -1,4 +1,4 @@
-import { BuildingIcon, CheckCircle2Icon, CircleAlertIcon, ClockIcon, DatabaseIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CheckCircle2Icon, CircleAlertIcon, ClockIcon, DatabaseIcon, InfoIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -113,7 +113,7 @@ export function StepNotice({
   /** `info` for a state that holds the step back by design; `warning` for a problem. */
   tone?: 'info' | 'warning'
 }) {
-  const Icon = tone === 'info' ? ClockIcon : CircleAlertIcon
+  const Icon = tone === 'info' ? InfoIcon : CircleAlertIcon
   return (
     <div
       role={tone === 'info' ? 'status' : undefined}
