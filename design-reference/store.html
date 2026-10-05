@@ -233,15 +233,50 @@
                                 <h3>Delivering here</h3>
                                 <button type="button" class="link-btn" id="btn-edit-address" data-cta="edit_address">Edit</button>
                             </div>
-                            <p class="checkout-confirm-note">Check address and items — then we’ll send this order to the shop on WhatsApp.</p>
+                            <p class="checkout-confirm-note">Check address and items — delivery will be done here.</p>
                             <div class="address-card is-confirmed" id="checkout-addresses" data-api-field="delivery.address">
                                 <p class="tag" id="checkout-addr-label">Home</p>
+                                <p class="addr-name" id="checkout-addr-recipient" hidden></p>
                                 <p class="addr-line" id="checkout-addr-line">—</p>
                                 <p class="phone" id="checkout-addr-phone"></p>
                             </div>
-                            <div class="address-edit hidden" id="checkout-address-edit">
-                                <label class="field-label" for="checkout-addr-input">Delivery address</label>
-                                <textarea class="field address-edit-input" id="checkout-addr-input" rows="3" placeholder="Flat / Street, Area, City, PIN"></textarea>
+                            <div class="address-edit hidden" id="checkout-address-edit" data-map-enabled="false">
+                                <div class="address-edit-grid">
+                                    <label class="field-label" for="checkout-addr-name">
+                                        <span class="address-edit-caption">Name <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-name" name="name" autocomplete="name" required aria-required="true">
+                                    </label>
+                                    <label class="field-label" for="checkout-addr-contact">
+                                        <span class="address-edit-caption">Phone number <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-contact" name="contact_number" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="10-digit mobile" required aria-required="true">
+                                    </label>
+                                    <label class="field-label address-edit-wide" for="checkout-addr-text">
+                                        <span class="address-edit-caption">Address <abbr class="req" title="Required">*</abbr></span>
+                                        <textarea class="field" id="checkout-addr-text" name="address" rows="2" autocomplete="street-address" placeholder="House, street, locality" required aria-required="true"></textarea>
+                                    </label>
+                                    <label class="field-label" for="checkout-addr-city">
+                                        <span class="address-edit-caption">City <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-city" name="city" autocomplete="address-level2" required aria-required="true">
+                                    </label>
+                                    <label class="field-label" for="checkout-addr-district">
+                                        <span class="address-edit-caption">District <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-district" name="district" required aria-required="true">
+                                    </label>
+                                    <label class="field-label" for="checkout-addr-state">
+                                        <span class="address-edit-caption">State <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-state" name="state" autocomplete="address-level1" required aria-required="true">
+                                    </label>
+                                    <label class="field-label" for="checkout-addr-zip">
+                                        <span class="address-edit-caption">ZIP code <abbr class="req" title="Required">*</abbr></span>
+                                        <input class="field" id="checkout-addr-zip" name="zipcode" inputmode="numeric" maxlength="6" autocomplete="postal-code" placeholder="6-digit PIN" required aria-required="true">
+                                    </label>
+                                </div>
+                                <div class="address-map" id="checkout-addr-map" hidden>
+                                    <p class="address-edit-caption" id="checkout-addr-map-label">Google Map <abbr class="req" title="Required">*</abbr></p>
+                                    <button type="button" class="btn-outline address-map-pin" id="btn-pin-map">Pin on Google Map</button>
+                                    <p class="address-map-status" id="checkout-addr-map-status" hidden>Location pinned</p>
+                                </div>
+                                <p class="address-edit-error hidden" id="checkout-addr-error" role="alert"></p>
                                 <div class="address-edit-actions">
                                     <button type="button" class="btn-outline" id="btn-cancel-address">Cancel</button>
                                     <button type="button" class="btn-primary-store is-inline" id="btn-save-address">Save address</button>
