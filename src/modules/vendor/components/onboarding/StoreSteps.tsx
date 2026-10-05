@@ -138,7 +138,7 @@ function Disclosure({
 }) {
   return (
     <details className="group mt-6 border-t border-[var(--ob-line)]" open={open}>
-      <summary className="-mx-2 flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-2 py-4 font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)] outline-none transition-colors hover:text-[var(--ob-brand)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
+      <summary className="-mx-1 flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 py-4 font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)] outline-none transition-colors hover:text-[var(--ob-brand)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
         <span className="flex items-center gap-2.5">{icon}{title}</span>
         <ChevronDownIcon className="size-4 shrink-0 text-[var(--ob-ink-soft)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>

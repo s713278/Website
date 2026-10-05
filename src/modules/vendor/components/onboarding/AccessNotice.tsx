@@ -143,7 +143,7 @@ export function OnboardingStatus({
   const { Icon, iconClassName } = status
 
   return (
-    <div role="status" className="mx-auto flex w-full max-w-[54rem] items-center gap-2 px-4 py-2 text-xs leading-5 text-[var(--ob-ink-soft)] sm:px-6 min-[900px]:px-8">
+    <div role="status" className="flex w-full items-center gap-2 py-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
       <Icon className={`size-3.5 shrink-0 ${iconClassName}`} aria-hidden="true" />
       <p><span className="font-semibold text-[var(--ob-ink)]">{status.label}</span><span aria-hidden="true"> · </span>{status.detail}</p>
     </div>

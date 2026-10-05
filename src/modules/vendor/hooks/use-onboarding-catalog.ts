@@ -392,20 +392,20 @@ export function useCategoryReferences(
         return {
           items: [],
           pageNumber: 0,
-          pageSize: 12,
+          pageSize: ONBOARDING_CONFIG.categoryPageSize,
           totalElements: 0,
           totalPages: 0,
           lastPage: true,
         }
       }
       if (mode === 'sample') {
-        return getSampleCategories(businessTypeId, pageNumber, 12)
+        return getSampleCategories(businessTypeId, pageNumber, ONBOARDING_CONFIG.categoryPageSize)
       }
       return vendorOnboardingService.getCategories(
         {
           business_type_id: businessTypeId,
           pageNumber,
-          pageSize: 12,
+          pageSize: ONBOARDING_CONFIG.categoryPageSize,
           sortBy: 'id',
           sortOrder: 'ASC',
         },

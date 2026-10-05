@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, type ReactNode, type ToggleEvent } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   BanknoteIcon,
-  ChevronRightIcon,
   LandmarkIcon,
   PlusIcon,
   SmartphoneIcon,
@@ -36,12 +35,11 @@ import {
   measurementFromProduct,
   productMeasurementSummary,
   reconcileSkuToProductMeasurement,
-  unitOptionsForMeasurement,
   unitsForMeasurement,
   type MeasurementCatalog,
 } from '../../lib/onboarding-measurement'
 import { StepNotice } from './AccessNotice'
-import { FieldError, Hint, StepSection } from './StepPrimitives'
+import { CategoryPanel, FieldError, Hint, StepSection } from './StepPrimitives'
 
 const WEEKDAYS: Array<{ value: Weekday; label: string }> = [
   { value: 'MONDAY', label: 'Mon' },
@@ -142,14 +140,14 @@ function SkuStatusSwitch({
       disabled={disabled}
       onClick={() => onChange?.(!active)}
       className={cn(
-        'relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
+        'relative h-7 w-12 shrink-0 rounded-full transition-colors max-[30rem]:h-6 max-[30rem]:w-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
         active ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700',
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
-          'absolute top-1 size-5 rounded-full bg-white shadow-sm transition-[left,right] dark:bg-slate-100',
+          'absolute top-1 size-5 rounded-full bg-white max-[30rem]:size-4 shadow-sm transition-[left,right] dark:bg-slate-100',
           active ? 'right-1' : 'left-1',
         )}
       />
@@ -182,7 +180,7 @@ function SkuRemoveButton({
       disabled={disabled || inert}
       onClick={onClick}
       className={cn(
-        'grid size-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand)] disabled:cursor-not-allowed',
+        'grid size-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand)] disabled:cursor-not-allowed max-[30rem]:w-7',
         active && !disabled
           ? 'text-red-500 hover:text-red-600 dark:hover:text-red-300'
           : 'text-slate-400 dark:text-slate-500',
@@ -200,10 +198,13 @@ function SkuRemoveButton({
  * line up even though each is its own grid.
  */
 const SKU_ROW_GRID =
-  'grid grid-cols-[minmax(3.4rem,.7fr)_minmax(3.6rem,.7fr)_minmax(4rem,.9fr)_minmax(4rem,.9fr)_auto_auto] items-center gap-1.5 max-[30rem]:grid-cols-[minmax(3.2rem,1fr)_minmax(3.4rem,.9fr)_minmax(3.6rem,1fr)_minmax(3.6rem,1fr)_auto_auto] max-[30rem]:gap-1'
+  'grid grid-cols-[minmax(3.4rem,.7fr)_minmax(3.6rem,.7fr)_minmax(4rem,.9fr)_minmax(4rem,.9fr)_auto_auto] items-center gap-1.5 max-[30rem]:grid-cols-[minmax(2.5rem,.8fr)_minmax(3rem,.9fr)_minmax(2.9rem,1fr)_minmax(2.9rem,1fr)_auto_auto] max-[30rem]:gap-1'
 
 const skuFieldClass =
   'h-9 w-full min-w-0 rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-2 text-[0.8rem] text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--ob-pending)] focus:border-[var(--ob-brand)] focus:ring-2 focus:ring-[var(--ob-brand-soft)] aria-invalid:border-destructive max-[30rem]:px-1.5 max-[30rem]:text-xs'
+
+/** Phone widths hide the number spinners; the inputs are too narrow to spare their width. */
+const skuNumberClass = cn(skuFieldClass, 'max-[30rem]:[appearance:textfield] max-[30rem]:[&::-webkit-inner-spin-button]:appearance-none max-[30rem]:[&::-webkit-outer-spin-button]:appearance-none')
 
 /** The fields of a size row, in column order. Each error renders directly below its own input. */
 const SKU_FIELDS = [
@@ -222,8 +223,8 @@ function SkuHeaderRow() {
       <span>Unit</span>
       <span>MRP</span>
       <span>Discounted price</span>
-      <span className="w-12 text-center">On</span>
-      <span className="w-9" />
+      <span className="w-12 text-center max-[30rem]:w-10">On</span>
+      <span className="w-9 max-[30rem]:w-7" />
     </div>
   )
 }
@@ -242,56 +243,6 @@ function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
       <SkuStatusSwitch heading={heading} active={sku.active} disabled />
       <SkuRemoveButton heading={heading} active={sku.active} disabled />
     </div>
-  )
-}
-
-/**
- * Step 6's category panel, after the design reference's `.ob-cat-panel`: a left chevron
- * disc, the name and product count, and a count pill, with a thin brand outline while open.
- * Kept local so Step 5's shared `AccordionPanel` is unchanged; the native `<details>` stays,
- * because the wizard opens the panel holding a focused field through `closest('details')`.
- */
-function SkuCategoryPanel({
-  id,
-  open,
-  onToggle,
-  name,
-  meta,
-  count,
-  children,
-}: {
-  id: string
-  open: boolean
-  onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
-  name: string
-  meta: string
-  count: number
-  children: ReactNode
-}) {
-  return (
-    <details
-      id={id}
-      open={open}
-      onToggle={onToggle}
-      className="group overflow-hidden rounded-2xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] shadow-xs transition-[border-color,box-shadow] open:border-[color-mix(in_srgb,var(--ob-brand)_35%,var(--ob-line))] open:shadow-[0_0_0_1px_color-mix(in_srgb,var(--ob-brand)_18%,transparent)] motion-reduce:transition-none"
-    >
-      <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-2.5 px-3.5 py-3 outline-none transition-colors hover:bg-[var(--ob-brand-soft)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ob-brand)] motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
-        <span
-          aria-hidden="true"
-          className="inline-flex size-[1.35rem] shrink-0 items-center justify-center rounded-full bg-[var(--ob-brand-soft)] text-[var(--ob-brand)] transition-transform group-open:rotate-90 group-open:bg-[var(--ob-brand)] group-open:text-white motion-reduce:transition-none"
-        >
-          <ChevronRightIcon className="size-3.5" strokeWidth={2.6} />
-        </span>
-        <div className="min-w-0">
-          <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)]">{name}</h3>
-          <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">{meta}</p>
-        </div>
-        <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-bold text-[var(--ob-ink-soft)] group-open:bg-[var(--ob-brand-soft)] group-open:text-[color-mix(in_srgb,var(--ob-brand)_80%,var(--ob-ink))]">
-          {count}
-        </span>
-      </summary>
-      <div className="border-t border-[var(--ob-line-soft)] px-3 pt-3 pb-3.5">{children}</div>
-    </details>
   )
 }
 
@@ -449,7 +400,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     const fieldError = (key: (typeof SKU_FIELDS)[number]['key']) => {
       const message = issueFor(key)
       return message ? (
-        <p id={`${inputId(key)}-error`} className="mt-1 text-xs font-medium break-words text-destructive">{message}</p>
+        <p id={`${inputId(key)}-error`} className="mt-1 text-xs font-medium break-words text-destructive max-[30rem]:text-[0.65rem] max-[30rem]:leading-tight max-[30rem]:wrap-normal">{message}</p>
       ) : null
     }
     return (
@@ -471,15 +422,9 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.quantity ?? ''}
               onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              list={`sku-${sku.id}-quantity-options`}
-              className={skuFieldClass}
+              className={skuNumberClass}
             />
             {fieldError('quantity')}
-            <datalist id={`sku-${sku.id}-quantity-options`}>
-              {unitOptionsForMeasurement(measurement, measurementCatalog).map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
           </div>
           <div className="min-w-0">
             <select
@@ -504,7 +449,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.listPrice ?? ''}
               onChange={(event) => updateSku(sku.id, { listPrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuFieldClass}
+              className={skuNumberClass}
             />
             {fieldError('list-price')}
           </div>
@@ -518,7 +463,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.salePrice ?? ''}
               onChange={(event) => updateSku(sku.id, { salePrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuFieldClass}
+              className={skuNumberClass}
             />
             {fieldError('sale-price')}
           </div>
@@ -559,7 +504,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
         id={`product-${product.id}`}
         role="group"
         aria-labelledby={`sku-product-${product.id}`}
-        className="overflow-x-auto rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-3"
+        className="overflow-x-auto rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-3 max-[30rem]:p-2"
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -629,7 +574,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
             const count = group.products.length
             const meta = count ? `${count} ${count === 1 ? 'product' : 'products'}` : 'No products'
             return (
-              <SkuCategoryPanel
+              <CategoryPanel
                 key={group.id}
                 id={`sku-category-${group.id}`}
                 open={openId === group.id}
@@ -643,7 +588,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
                 ) : (
                   <p className="text-xs text-[var(--ob-ink-soft)]">No products in this category.</p>
                 )}
-              </SkuCategoryPanel>
+              </CategoryPanel>
             )
           })}
         </div>

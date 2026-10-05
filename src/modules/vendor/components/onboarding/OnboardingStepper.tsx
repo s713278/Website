@@ -69,7 +69,7 @@ export function OnboardingStepper({
   return (
     <nav aria-label="Onboarding progress">
       <div ref={scrollRef} className="ob-stepper-scroll overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <ol className="mx-auto flex w-full min-w-max max-w-[54rem] items-start px-4 pt-4 pb-3 sm:px-6">
+        <ol className="flex w-full min-w-max items-start pt-4 pb-3">
           {ONBOARDING_STEPS.map((item, index) => {
             const state = stateOf(item.step)
             const reachable = state === 'done' || state === 'open' || state === 'current'

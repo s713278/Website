@@ -18,7 +18,8 @@ export const ONBOARDING_CONFIG = {
   maxSkus: 200,
   /** Structural sanity bound for a stored draft — not a plan limit. */
   maxPersistedCategories: 50,
-  businessTypePageSize: 6,
+  businessTypePageSize: 9,
+  categoryPageSize: 9,
   businessTypeSearchDebounceMs: 650,
   draftSaveDelayMs: 1200,
 } as const
@@ -287,13 +288,16 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   step: OnboardingStep
   short: string
   title: string
+  /** `{categoryLimit}` is replaced with the vendor's plan cap. */
   description: string
+  /** A phrase within `description` to set in bold. */
+  emphasis?: string
 }> = [
   { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Enter the number customers can use to contact you.' },
   { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code sent to WhatsApp.' },
-  { step: 3, short: 'Business', title: 'Choose your business type', description: 'Choose the closest match for your store.' },
-  { step: 4, short: 'Categories', title: 'Choose your categories', description: 'Choose what your store sells.' },
-  { step: 5, short: 'Products', title: 'Choose products to sell', description: 'Choose the products you sell.' },
+  { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the option that best matches what you sell. Can’t find yours? Choose Others.', emphasis: 'Others' },
+  { step: 4, short: 'Categories', title: 'Pick Categories', description: 'Choose up to {categoryLimit} — start small, add more later from your dashboard.' },
+  { step: 5, short: 'Products', title: 'Pick Products', description: 'Choose the products you sell.' },
   { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how customers receive orders.' },
   { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay.' },

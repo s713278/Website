@@ -834,7 +834,10 @@
 
   @media (min-width: 900px) {
     .ob-grid {
-      grid-template-columns: minmax(0, 1fr) clamp(17rem, 24vw, 20.5rem);
+      /* The track is the phone's own width (17.5rem), so the phone's right edge is the
+         wizard's right edge. */
+      grid-template-columns: minmax(0, 1fr) clamp(15rem, 22vw, 17.5rem);
+      column-gap: clamp(2rem, 4vw, 4rem);
     }
   }
 }

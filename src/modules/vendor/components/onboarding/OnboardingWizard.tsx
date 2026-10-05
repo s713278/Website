@@ -185,6 +185,7 @@ export function OnboardingWizard() {
   // offering controls that cannot reach a store already under review.
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const storeIsApproved = useOnboardingStore(selectStoreIsApproved)
+  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
@@ -881,6 +882,7 @@ export function OnboardingWizard() {
   })
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
+  const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
   // A submitted store needs no further setup whatever the local draft says:
   // `storeSubmission` comes from the account, so "Complete setup" has nothing to do.
   const setupNeedsNoFurtherAction =
@@ -922,10 +924,12 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="onboarding-shell h-full min-h-0 overflow-hidden text-[var(--ob-ink)] [contain:paint]">
-      <div className="ob-grid">
+    <div className="onboarding-shell h-full min-h-0 overflow-hidden px-5 text-[var(--ob-ink)] [contain:paint] sm:px-8 xl:px-10">
+      {/* A working tool rather than a reading page, so on desktop it sits slightly wider than the
+          marketing header's measure. */}
+      <div className="ob-grid mx-auto w-full max-w-[81rem]">
         <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="grid shrink-0 grid-cols-2 gap-1 p-1.5 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
+          <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
             <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>
             <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'preview' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}><EyeIcon className="size-4" /> Your shop</button>
           </div>
@@ -933,28 +937,36 @@ export function OnboardingWizard() {
           <div className="min-h-0 flex-1">
             <main id="onboarding-form-panel" role="tabpanel" aria-labelledby="onboarding-form-tab" className={cn('h-full min-h-0 min-w-0', mobileView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
               <section className="flex h-full min-h-0 flex-col">
-                <div className="shrink-0">
+                {/* The stepper, status and footer reserve the form's scrollbar gutter, so all
+                    four rows share one right edge. */}
+                <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
                   <OnboardingStepper {...stepperProps} onNavigate={navigateToStep} />
+                  {currentStep >= 3 && currentStep < 10 && (!liveApi || storeIsSubmitted) ? (
+                    <div className="border-b border-[var(--ob-line)]">
+                      <OnboardingStatus demo={!liveApi} submitted={storeIsSubmitted} approved={storeIsApproved} />
+                    </div>
+                  ) : null}
                 </div>
-                {currentStep >= 3 && currentStep < 10 && (!liveApi || storeIsSubmitted) ? (
-                  <div className="shrink-0 border-b border-[var(--ob-line)]">
-                    <OnboardingStatus demo={!liveApi} submitted={storeIsSubmitted} approved={storeIsApproved} />
-                  </div>
-                ) : null}
 
-                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 [scrollbar-gutter:stable] sm:px-6 min-[900px]:px-8 min-[900px]:pt-5">
-                  <div className="mx-auto w-full max-w-[54rem]">
+                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form -mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pt-4 pb-8 [scrollbar-gutter:stable] min-[900px]:pt-5">
+                  <div className="w-full">
                     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                       <div className="min-w-0 flex-1">
                         <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.625rem] leading-[1.15] font-bold tracking-[-0.03em] text-[var(--ob-ink)] outline-none sm:text-[1.875rem]">{stepMeta.title}</h1>
-                        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">{stepMeta.description}</p>
+                        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">
+                          {stepMeta.emphasis
+                            ? stepDescription.split(stepMeta.emphasis).flatMap((part, index) => index
+                              ? [<strong key={index} className="font-semibold text-[var(--ob-ink)]">{stepMeta.emphasis}</strong>, part]
+                              : [part])
+                            : stepDescription}
+                        </p>
                       </div>
                       {/* The catalog-source toggle and "Start over" both act on the browser
                           draft, and a submitted store is one an administrator holds — neither can
                           touch it, so it is shown neither. "Start over" additionally needs a
                           resolved vendor session to sign out of: the anonymous identity steps have
                           nothing to end, and the dead-end notices below carry their own instead. */}
-                      <div className="flex shrink-0 items-center gap-1 pt-1">
+                      <div className="-mr-1 flex shrink-0 items-center gap-1 pt-1">
                         {storeIsSubmitted ? null : <>
                         {catalogPolicy.sampleControlVisible ? (
                         <button
@@ -1021,7 +1033,7 @@ export function OnboardingWizard() {
                           disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {measurementsPending && catalogUnlocked ? (
                           <p className="flex items-center gap-2 text-sm text-[var(--ob-ink-soft)]">
@@ -1046,8 +1058,8 @@ export function OnboardingWizard() {
                   </div>
                 </div>
 
-                {currentStep >= 3 ? <div className="shrink-0 border-t border-[var(--ob-line)] bg-[var(--ob-canvas-base)]">
-                  <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
+                {currentStep >= 3 ? <div className="-mx-1 shrink-0 overflow-hidden px-1 [scrollbar-gutter:stable]">
+                  <div className="flex w-full items-center justify-end gap-3 border-t border-[var(--ob-line)] py-3">
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
                       {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || measurementsPending} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
@@ -1060,7 +1072,7 @@ export function OnboardingWizard() {
           </div>
         </div>
 
-        <PhonePreviewStage className="hidden h-full min-[900px]:flex" />
+        <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" />
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />

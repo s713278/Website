@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ToggleEvent } from 'react'
 import {
+  CheckIcon,
   RefreshCwIcon,
   SearchIcon,
+  SparklesIcon,
   StoreIcon,
 } from 'lucide-react'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
@@ -16,22 +18,19 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
-import { productMeasurementSummary } from '../../lib/onboarding-measurement'
+import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { writesReachAccount } from '../../lib/onboarding-sync'
 import { StepNotice } from './AccessNotice'
 import {
   selectCatalogPolicy,
-  selectCategoryLimit,
   selectCategoryLimitReached,
   selectProductLimit,
   selectProductLimitReached,
-  selectProjectedCategoryTotal,
-  selectProjectedProductTotal,
   useOnboardingStore,
 } from '../../store/onboarding-store'
-import type { ValidationIssue } from '../../types/onboarding'
+import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
 import { AuthorCategoryForm, AuthorProductForm, PermanenceNotice } from './CatalogAuthoring'
-import { AccordionPanel, CatalogError, CatalogLoading, ChoiceCard, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
+import { CatalogError, CatalogLoading, CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -54,10 +53,12 @@ function ReferenceThumb({
   iconSrc,
   imageSrc,
   fallbackSrc,
+  className,
 }: {
   iconSrc: string | null | undefined
   imageSrc: string | null
   fallbackSrc: string
+  className?: string
 }) {
   const [failedSources, setFailedSources] = useState<string[]>([])
   const sources = [iconSrc, imageSrc].filter((source): source is string => Boolean(source))
@@ -74,7 +75,7 @@ function ReferenceThumb({
       alt=""
       loading="lazy"
       decoding="async"
-      className="size-12 shrink-0 rounded-lg object-cover"
+      className={cn('size-12 shrink-0 rounded-lg object-cover', className)}
       onError={() => {
         if (src !== fallbackSrc) {
           setFailedSources((current) => current.includes(src) ? current : [...current, src])
@@ -106,7 +107,7 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
   return (
     <span
       aria-hidden="true"
-      className="grid size-10 place-items-center rounded-lg bg-[var(--ob-brand-soft)] text-primary"
+      className="grid size-12 place-items-center rounded-xl bg-[var(--ob-brand-soft)] text-primary @min-[30rem]:size-10"
     >
       {!icon || failed ? (
         <StoreIcon className="size-5" />
@@ -130,7 +131,7 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
   )
 }
 
-export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps) {
+export function BusinessStep({ issues, onUseSample }: Omit<CatalogStepProps, 'confirm'>) {
   const draft = useOnboardingStore((state) => state.draft)
   const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
   const references = useBusinessTypeReferences(draft.catalogSource)
@@ -209,17 +210,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
   ])
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
-    if (selected?.id === businessType.id) return
-    const apply = () => changeBusinessType(businessType)
-    if (selected) {
-      confirm({
-        title: 'Change business type?',
-        description: 'This clears the categories, products, and sizes you picked for this business type but have not saved yet. Anything already saved to your store stays on it and still counts toward your plan limits.',
-        confirmLabel: 'Change business type',
-        tone: 'danger',
-        onConfirm: apply,
-      })
-    } else apply()
+    if (selected?.id !== businessType.id) changeBusinessType(businessType)
   }
 
   return (
@@ -233,7 +224,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
             references.submitSearch()
           }}
         >
-          <FieldLabel htmlFor="business-search">Business type</FieldLabel>
+          <FieldLabel htmlFor="business-search">Search business type</FieldLabel>
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
             <input
@@ -241,7 +232,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
               type="search"
               value={references.searchInput}
               onChange={(event) => references.setSearchInput(event.target.value)}
-              placeholder={draft.catalogSource === 'account' ? 'Search live business types' : 'Search sample business types'}
+              placeholder="e.g. Bakery, Pickles, Dairy"
               aria-controls="business-type"
               aria-busy={references.searchPending || references.loading}
               enterKeyHint="search"
@@ -268,9 +259,9 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
             aria-label="Business type choices"
             aria-busy={references.loading || references.loadingMore}
           >
-            {showInitialSkeleton ? <CatalogLoading count={6} cardClassName="h-16 rounded-xl" /> : null}
+            {showInitialSkeleton ? <CatalogLoading count={ONBOARDING_CONFIG.businessTypePageSize} cardClassName="h-32 @min-[30rem]:h-26" className={choiceGrid} /> : null}
             {items.length ? (
-              <div className={cn('grid gap-3 @min-[32rem]:grid-cols-2', showInitialSkeleton && 'mt-3')}>
+              <div className={cn(choiceGrid, showInitialSkeleton && 'mt-3')}>
                 {items.map((item) => (
                   <ChoiceCard
                     key={item.id}
@@ -284,7 +275,7 @@ export function BusinessStep({ issues, confirm, onUseSample }: CatalogStepProps)
             ) : null}
             {references.loadingMore && !references.searchPending ? (
               <div className="mt-3">
-                <CatalogLoading count={2} cardClassName="h-16 rounded-xl" />
+                <CatalogLoading count={3} cardClassName="h-32 @min-[30rem]:h-26" className={choiceGrid} />
               </div>
             ) : null}
             {incrementalError ? (
@@ -342,10 +333,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useState<string | null>(null)
-  const categoryLimit = useOnboardingStore(selectCategoryLimit)
-  // The projected account total — draft plus what the account already holds — is what the
-  // limit gates, so a business-type change cannot reopen a fresh allowance on a full account.
-  const projectedCategories = useOnboardingStore(selectProjectedCategoryTotal)
+  // The limit gates the projected account total — draft plus what the account already
+  // holds — so a business-type change cannot reopen a fresh allowance on a full account.
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
   const liveApi = isLiveApi()
@@ -408,75 +397,68 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     <div className="space-y-4">
       {writesReachAccount(draft.catalogSource) ? <PermanenceNotice kind="categories" /> : null}
       {blocked ? <StepNotice message={blocked} /> : null}
-      {categoryLimitReached ? (
-        <StepNotice message={`You've reached your plan's limit of ${categoryLimit} categories, counting those already saved to your store.`} />
-      ) : null}
-      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedCategories} of {categoryLimit} used</p>
-      {createControlVisible ? (
-        <AuthorCategoryForm onAdded={() => setSearch('')} />
-      ) : null}
-      <div className="relative">
-        <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
-        <input
-          id="category-search"
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search loaded categories"
-          className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
-        />
+      <div>
+        <FieldLabel htmlFor="category-search">Search category</FieldLabel>
+        <div className="relative">
+          <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
+          <input
+            id="category-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="e.g. Pickles, Meals, Cakes"
+            aria-controls="categories"
+            autoComplete="off"
+            className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+          />
+        </div>
       </div>
-      {references.loading ? <CatalogLoading /> : null}
+      {references.loading ? <CatalogLoading count={ONBOARDING_CONFIG.categoryPageSize} cardClassName="h-32 @min-[30rem]:h-26" className={choiceGrid} /> : null}
       {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
       {loadedItems.length ? (
-        <div id="categories" className="grid gap-3 @min-[32rem]:grid-cols-2">
+        <div id="categories" className={choiceGrid}>
           {loadedItems.map((category) => {
             const choice = catalogChoiceState(draft.categories, category.id)
             const atLimit = !choice.chosen && categoryLimitReached
             const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
-              <button
+              <ChoiceCard
                 key={category.id}
-                type="button"
-                aria-pressed={choice.chosen}
-                aria-disabled={atLimit || onStore}
-                onClick={() => toggle(category)}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl border p-3 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
-                  choice.chosen
-                    ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
-                    : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
-                  atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
+                selected={choice.chosen}
+                inactive={atLimit}
+                title={category.name}
+                description={onStore
+                  ? 'Saved to your store'
+                  : choice.pending
+                    ? 'Not saved yet — select to remove'
+                    : null}
+                leading={(
+                  <ReferenceThumb
+                    iconSrc={category.icon}
+                    imageSrc={category.imageUrl}
+                    fallbackSrc={categoryFallbackImage}
+                    className="@min-[30rem]:size-10"
+                  />
                 )}
-              >
-                <ReferenceThumb
-                  iconSrc={category.icon}
-                  imageSrc={category.imageUrl}
-                  fallbackSrc={categoryFallbackImage}
-                />
-                <span className="min-w-0">
-                  <strong className="block truncate text-sm text-[var(--ob-ink)]">{category.name}</strong>
-                  <span className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
-                    {onStore
-                      ? 'Saved to your store'
-                      : choice.pending
-                        ? 'Not saved yet — select to remove'
-                        : category.description || 'Catalog category'}
-                  </span>
-                </span>
-              </button>
+                onClick={() => toggle(category)}
+              />
             )
           })}
         </div>
       ) : null}
       <FieldError issues={issues} field="categories" />
       {!references.lastPage ? (
-        <Button variant="outline" size="sm" disabled={references.loadingMore} onClick={references.loadMore}>
-          {references.loadingMore ? 'Loading…' : 'Load more categories'}
-        </Button>
+        <div className="flex justify-center">
+          <Button variant="ghost" size="sm" disabled={references.loadingMore} onClick={references.loadMore}>
+            {references.loadingMore ? 'Loading…' : 'Show more categories'}
+          </Button>
+        </div>
+      ) : null}
+      {createControlVisible ? (
+        <AuthorCategoryForm onAdded={() => setSearch('')} />
       ) : null}
     </div>
   )
@@ -564,122 +546,195 @@ function ProductCategoryPicker({
     } else applyProductChoice()
   }
 
+  const selectedCount = selectedForCategory.length
+  const searchId = `product-search-${categoryId}`
+
   return (
-    <AccordionPanel
+    <CategoryPanel
       id={`category-products-${categoryId}`}
       open={open}
       onToggle={onToggle}
-      summary={
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)]">{categoryName}</h3>
-          <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">
-            {selectedForCategory.length ? `${selectedForCategory.length} chosen` : 'Nothing chosen yet'}
-          </p>
-        </div>
-      }
+      name={categoryName}
+      meta={selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
+      count={selectedCount}
     >
-      {createControlVisible ? (
-        <AuthorProductForm
-          categoryId={categoryId}
-          categoryName={categoryName}
-          onAdded={() => setSearch('')}
-        />
-      ) : null}
       {/* Search lives in the panel, not the summary: a click inside the summary row
           would collapse the group the vendor is trying to search. */}
-      <div className="relative mb-3">
-        <SearchIcon className="pointer-events-none absolute top-2.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
-        <input
-          type="search"
-          aria-label={`Search products in ${categoryName}`}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search loaded products"
-          className="h-9 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
-        />
-      </div>
-      {blocked ? <div className="mb-3"><StepNotice message={blocked} /></div> : null}
-      {references.loading ? <CatalogLoading count={4} /> : null}
-      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
-      {!references.loading && !references.error && !items.length ? (
-        <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
-      ) : null}
-      {items.length ? (
-        <div className="grid gap-3 @min-[32rem]:grid-cols-2 @min-[52rem]:grid-cols-3">
-          {items.map((product) => {
-            const choice = catalogChoiceState(draft.products, product.id)
-            const onStore = choice.chosen && isProductAssigned(product.id)
-            const atLimit = !choice.chosen && productLimitReached
-            const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
-            const unitSummary = measurementSummary.units.length
-              ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
-              : 'Units unavailable'
-            return (
-              <button
-                key={product.id}
-                type="button"
-                aria-pressed={choice.chosen}
-                aria-disabled={onStore || atLimit}
-                onClick={() => toggle(product)}
-                className={cn(
-                  'grid min-h-28 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 rounded-xl border p-3.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
-                  choice.chosen
-                    ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
-                    : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
-                  atLimit && 'cursor-not-allowed opacity-45 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
-                )}
-              >
-                <ReferenceThumb
-                  iconSrc={product.icon}
-                  imageSrc={product.imageUrl}
-                  fallbackSrc={productFallbackImage}
-                />
-                <span className="min-w-0">
-                  <strong className="line-clamp-2 text-sm leading-5 text-[var(--ob-ink)]">{product.name}</strong>
-                  {onStore || choice.pending ? (
-                    <span className="mt-1 block line-clamp-2 text-xs leading-4 text-[var(--ob-ink-soft)]">
-                      {onStore ? 'Saved to your store' : 'Not saved yet — select to remove'}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="col-span-2 flex flex-wrap items-baseline gap-x-1.5 border-l-2 border-[var(--ob-brand)]/35 pl-2.5 text-xs leading-5 text-[var(--md-green-800)] dark:text-emerald-200">
-                  {measurementSummary.measurement ? (
-                    <>
-                      <span className="font-semibold">{measurementSummary.measurement}</span>
-                      <span className="text-[var(--ob-ink-soft)] dark:text-emerald-100/70">{unitSummary}</span>
-                    </>
-                  ) : (
-                    <span className="font-medium">Measurement unavailable</span>
-                  )}
-                </span>
-              </button>
-            )
-          })}
+      <div className="space-y-3">
+        <div>
+          <FieldLabel htmlFor={searchId}>Search in {categoryName}</FieldLabel>
+          <div className="relative">
+            <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
+            <input
+              id={searchId}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Try a name, e.g. tomato"
+              autoComplete="off"
+              className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+            />
+          </div>
         </div>
-      ) : null}
-      {!references.lastPage ? (
-        <Button className="mt-3" variant="outline" size="sm" disabled={references.loadingMore} onClick={references.loadMore}>
-          {references.loadingMore ? 'Loading…' : `Load more in ${categoryName}`}
-        </Button>
-      ) : null}
-    </AccordionPanel>
+        {createControlVisible ? (
+          <div className="border-t border-[var(--ob-line-soft)] pt-3">
+            <AuthorProductForm
+              categoryId={categoryId}
+              categoryName={categoryName}
+              onAdded={() => setSearch('')}
+            />
+          </div>
+        ) : null}
+        {blocked ? <StepNotice message={blocked} /> : null}
+        {references.loading ? <CatalogLoading count={6} cardClassName="h-36 @min-[30rem]:h-32" className={choiceGrid} /> : null}
+        {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+        {!references.loading && !references.error && !items.length ? (
+          <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
+        ) : null}
+        {items.length ? (
+          <div className={choiceGrid}>
+            {items.map((product) => {
+              const choice = catalogChoiceState(draft.products, product.id)
+              const onStore = choice.chosen && isProductAssigned(product.id)
+              const atLimit = !choice.chosen && productLimitReached
+              const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
+              const units = measurementSummary.additionalUnitCount
+                ? [...measurementSummary.units, `+${measurementSummary.additionalUnitCount}`]
+                : measurementSummary.units
+              if (choice.pending) {
+                return <PendingProductCard key={product.id} productId={product.id} onRemove={() => toggle(product)} />
+              }
+              return (
+                <ChoiceCard
+                  key={product.id}
+                  selected={choice.chosen}
+                  inactive={atLimit}
+                  title={product.name}
+                  description={onStore ? 'Saved to your store' : null}
+                  leading={(
+                    <ReferenceThumb
+                      iconSrc={product.icon}
+                      imageSrc={product.imageUrl}
+                      fallbackSrc={productFallbackImage}
+                      className="@min-[30rem]:size-10"
+                    />
+                  )}
+                  footer={<MeasurementChips measurement={measurementSummary.measurement} units={units} />}
+                  onClick={() => toggle(product)}
+                />
+              )
+            })}
+          </div>
+        ) : null}
+        {!references.lastPage ? (
+          <div className="flex justify-center pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-[var(--ob-brand)]/40 px-5 text-[var(--md-green-800)] hover:border-[var(--ob-brand)] hover:bg-[var(--ob-brand-soft)] dark:text-emerald-200"
+              disabled={references.loadingMore}
+              onClick={references.loadMore}
+            >
+              {references.loadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </CategoryPanel>
+  )
+}
+
+/**
+ * A product the vendor authored here, after the reference's dashed custom card. Until
+ * Continue creates it, its measurement can still change, so the card carries the picker.
+ * The whole card stays the remove target: a full-size button sits under the picker,
+ * since a select cannot live inside a button.
+ */
+function PendingProductCard({ productId, onRemove }: { productId: number; onRemove: () => void }) {
+  const product = useOnboardingStore((state) => state.draft.products.find((item) => item.id === productId))
+  const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
+  const setPendingProductMeasurement = useOnboardingStore((state) => state.setPendingProductMeasurement)
+  if (!product) return null
+  const entry = measurementCatalog.find((item) => item.id === product.measurementId)
+  const selectId = `pending-product-measurement-${productId}`
+
+  return (
+    <div className="relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5">
+      <button
+        type="button"
+        aria-pressed="true"
+        aria-label={`${product.name}, added by you and not saved yet. Select to remove.`}
+        onClick={onRemove}
+        className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand)]/40"
+      />
+      <span aria-hidden="true" className="grid size-12 place-items-center rounded-lg text-amber-500 @min-[30rem]:size-10">
+        <SparklesIcon className="size-7" />
+      </span>
+      <span aria-hidden="true" className="line-clamp-2 text-sm leading-5 font-semibold text-[var(--md-green-800)] dark:text-[var(--ob-ink)]">
+        {product.name}
+      </span>
+      <span className="relative z-10 flex flex-wrap items-center justify-center gap-1.5">
+        <label htmlFor={selectId} className="text-xs font-medium text-[var(--ob-ink-soft)]">Sold by</label>
+        <select
+          id={selectId}
+          value={entry?.id ?? ''}
+          className="h-8 rounded-md border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-2 text-xs font-medium text-[var(--ob-ink)] outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+          onChange={(event) => {
+            const next = measurementCatalog.find((item) => item.id === Number(event.target.value))
+            if (next) setPendingProductMeasurement(productId, { measurementId: next.id, measurementName: next.type })
+          }}
+        >
+          {entry ? null : <option value="" disabled>Choose</option>}
+          {measurementCatalog.map((item) => (
+            <option key={item.id} value={item.id}>{measurementLabel(item.type)}</option>
+          ))}
+        </select>
+        {entry?.units.map((unit) => (
+          <span
+            key={unit}
+            className="rounded-full bg-[var(--ob-sheet)]/70 px-2 py-0.5 text-[0.6875rem] leading-4 font-medium text-[var(--md-green-800)] dark:text-emerald-200"
+          >
+            {unit}
+          </span>
+        ))}
+      </span>
+      <span className="pointer-events-none absolute top-2 right-2 grid size-5 place-items-center rounded-full bg-[var(--ob-brand)] text-white" aria-hidden="true">
+        <CheckIcon className="size-3 stroke-[3]" />
+      </span>
+    </div>
+  )
+}
+
+/** How a product is sold: its measurement, then the units its sizes can use. */
+function MeasurementChips({ measurement, units }: { measurement: string | null; units: string[] }) {
+  if (!measurement) {
+    return <span className="text-xs text-[var(--ob-ink-soft)]">Measurement unavailable</span>
+  }
+  return (
+    <span className="flex flex-wrap justify-center gap-1">
+      <span className="rounded-full bg-muted px-2 py-0.5 text-[0.6875rem] leading-4 font-semibold text-[var(--ob-ink)]">
+        {measurement}
+      </span>
+      {units.map((unit) => (
+        <span
+          key={unit}
+          className="rounded-full bg-[var(--ob-brand-soft)] px-2 py-0.5 text-[0.6875rem] leading-4 font-medium text-[var(--md-green-800)] dark:text-emerald-200"
+        >
+          {unit}
+        </span>
+      ))}
+    </span>
   )
 }
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const categories = useOnboardingStore((state) => state.draft.categories)
   const catalogSource = useOnboardingStore((state) => state.draft.catalogSource)
-  const selectedProducts = useOnboardingStore((state) => state.draft.products)
   const productLimit = useOnboardingStore(selectProductLimit)
-  const projectedProducts = useOnboardingStore(selectProjectedProductTotal)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const liveApi = isLiveApi()
   const createControlVisible = useOnboardingStore(
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
-  )
-  const summary = useMemo(
-    () => categories.map((category) => ({ ...category, count: selectedProducts.filter((item) => item.categoryId === category.id).length })),
-    [categories, selectedProducts],
   )
   const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
   const { openId, onToggle } = useSingleOpen(categoryIds)
@@ -694,14 +749,6 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
       {productLimitReached ? (
         <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
       ) : null}
-      <p className="text-sm text-[var(--ob-ink-soft)]">{projectedProducts} of {productLimit} products used</p>
-      <div className="flex flex-wrap gap-2 text-xs">
-        {summary.map((category) => (
-          <span key={category.id} className="rounded-full bg-muted px-2.5 py-1 font-medium">
-            {category.name}: {category.count}
-          </span>
-        ))}
-      </div>
       <div id="products" className="space-y-3">
         {categories.map((category) => (
           <ProductCategoryPicker
