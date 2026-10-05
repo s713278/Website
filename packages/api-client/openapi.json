@@ -58,6 +58,10 @@
       "description": "APIs for managing customer shopping cart with multi-item support.\n<br><br><b>Vendor Context:</b>\n<br>• Each customer can only have items from ONE vendor per cart\n<br>• Attempting to add items from different vendors will return an error\n<br>• Clear cart option available to switch vendors\n<br><br><b>Cart Features:</b>\n<br>• Add multiple items from the same vendor\n<br>• Update item quantities\n<br>• Remove individual items\n<br>• Clear entire cart\n<br>• Real-time total calculation\n<br>• 24-hour cart expiration\n"
     },
     {
+      "name": "21. Vendor Social Links API",
+      "description": "Manage optional vendor social media links (Instagram, Facebook, YouTube, LinkedIn, ...).\nActive links are also returned as `social_links` in the storefront API.\n"
+    },
+    {
       "name": "02. Vendors and Products Listing API",
       "description": "APIs for fetching vendors listing and SKU listing in order to display on UI for User journey."
     },
@@ -1733,7 +1737,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "Get current subscription",
-        "description": "Returns the vendor's single current subscription row (trial or paid), including:\n\n- `status`: TRIAL_ACTIVE | TRIAL_EXPIRED | PAYMENT_PENDING | ACTIVE | PAST_DUE |\n  HALTED | CANCELLED | EXPIRED\n- Trial fields (populated when the vendor started on the free trial)\n- Razorpay identifiers (`razorpay_subscription_id`, `razorpay_status`)\n- `checkout_url` while PAYMENT_PENDING, so the UI can resume checkout\n- Billing period (`current_period_*`, `next_billing_at`) once ACTIVE\n- Cancellation state (`cancel_at_period_end`, `cancelled_at`)\n\nPrices are in **paise**. `404` if the vendor has never started a trial.\n",
+        "description": "Returns the vendor's single current subscription row (trial or paid), including:\n\n- `status`: TRIAL_ACTIVE | TRIAL_EXPIRED | PAYMENT_PENDING | ACTIVE | PAST_DUE |\n  HALTED | CANCELLED | EXPIRED\n- Trial fields (populated when the vendor started on the free trial)\n- Razorpay identifiers (`razorpay_subscription_id`, `razorpay_status`)\n- `checkout_url` while PAYMENT_PENDING, so the UI can resume checkout\n- Billing period (`current_period_*`, `next_billing_at`) once ACTIVE\n- Cancellation state (`cancel_at_period_end`, `cancelled_at`)\n\nPrices are in **rupees**. `404` if the vendor has never started a trial.\n",
         "operationId": "getCurrentSubscription",
         "parameters": [
           {
@@ -1791,7 +1795,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "Subscribe to a paid plan",
-        "description": "Starts a paid subscription for the vendor:\n\n1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).\n2. Creates a Razorpay subscription via `external_plan_id`.\n3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing\n   trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.\n4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.\n   The key ID is public and may be used by the UI to initialise Razorpay Checkout;\n   no key secret or webhook secret is ever returned.\n\nIdempotent: calling again while `PAYMENT_PENDING` returns the existing checkout\nURL — no duplicate Razorpay subscription is created.\n\nActivation does NOT happen here; the signed Razorpay webhook flips status to\n`ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on\nthe same plan; `400` if the plan is not purchasable online; `404` if the vendor\nhas no subscription row (go live first).\n",
+        "description": "Starts a paid subscription for the vendor:\n\n1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).\n2. Creates a Razorpay subscription via `external_plan_id` with the full plan\n   price as the **upfront amount** — checkout charges it immediately and it is\n   **non-refundable**. Razorpay's first recurring charge is scheduled at\n   `start_at`, which is the next renewal date: paid period start\n   (trial end, or now if the trial already ended) + one billing interval\n   (30 days for MONTHLY, 365 days for YEARLY). `next_billing_at` returns it.\n3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing\n   trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.\n4. Returns `razorpay_key_id`, `razorpay_subscription_id`, `checkout_url`, and a\n   `message` with the billing terms (non-refundable, cancellation applies from\n   the next billing cycle).\n   The key ID is public and may be used by the UI to initialise Razorpay Checkout;\n   no key secret or webhook secret is ever returned.\n\nIdempotent: calling again while `PAYMENT_PENDING` returns the existing checkout\nURL — no duplicate Razorpay subscription is created.\n\nThe subscription becomes `ACTIVE` when the upfront payment is confirmed via\n`/subscription/confirm` or the `subscription.authenticated` webhook.\nConflicts: `409` if the vendor already has an ACTIVE subscription on\nthe same plan — when cancellation is already scheduled, the error message\nincludes the access end date (`current_period_end`) after which the vendor\ncan renew; `400` if the plan is not purchasable online; `404` if the vendor\nhas no subscription row (go live first).\n",
         "operationId": "subscribe",
         "parameters": [
           {
@@ -1900,7 +1904,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "Confirm Razorpay checkout",
-        "description": "Verifies the three values Razorpay Checkout returns to the browser after payment:\n\n- `razorpay_subscription_id` — must equal the id returned by the subscribe call\n- `razorpay_payment_id` — the payment attempt id from the Checkout handler\n- `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`\n\nOn success the payment authorization is recorded in history; status stays\n`PAYMENT_PENDING` until the Razorpay webhook activates the subscription — the\nUI should poll `GET /vendors/{id}/subscription` for `ACTIVE`.\nReturns `401` on signature mismatch and `400` on subscription mismatch.\n",
+        "description": "Verifies the three values Razorpay Checkout returns to the browser after payment:\n\n- `razorpay_subscription_id` — must equal the id returned by the subscribe call\n- `razorpay_payment_id` — the payment attempt id from the Checkout handler\n- `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`\n\nOn success the signature proves the upfront payment was collected, so the\nsubscription moves to `ACTIVE` immediately, the paid period is recorded\n(until `next_billing_at`), and the vendor is notified by WhatsApp/email.\nReturns `401` on signature mismatch and `400` on subscription mismatch.\n",
         "operationId": "confirmPayment",
         "parameters": [
           {
@@ -1991,7 +1995,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "Cancel paid subscription",
-        "description": "Cancels the vendor's paid subscription at Razorpay with `cancel_at_cycle_end`:\n\n- ACTIVE / PAST_DUE → `cancel_at_period_end = true`; access continues until\n  `current_period_end`, then the `subscription.cancelled` webhook sets CANCELLED.\n- PAYMENT_PENDING → cancelled immediately (status becomes CANCELLED).\n\n`400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.\n",
+        "description": "Cancels the vendor's paid subscription at Razorpay so it does not renew.\n**The upfront payment is never refunded** — cancellation always applies from the\nnext billing cycle and access continues until `current_period_end`.\n\nOutcomes by current state:\n\n- `ACTIVE` / `PAST_DUE` → `cancel_at_period_end = true`; status unchanged.\n  Razorpay is cancelled at cycle end (`active` subs) or immediately\n  (`authenticated` subs — the scheduled first charge never runs).\n- `PAYMENT_PENDING`, checkout never paid → cancelled immediately;\n  status becomes `CANCELLED` with `cancelled_at` set.\n- `PAYMENT_PENDING` but payment already completed (confirm/webhook still in\n  flight) → treated as paid: `cancel_at_period_end = true`, access continues\n  until `current_period_end`; activation still flips status to `ACTIVE`.\n- **Idempotent**: calling again while `cancel_at_period_end = true` returns the\n  current state with the same billing `message` — no second Razorpay call.\n\n`400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.\n",
         "operationId": "cancel",
         "parameters": [
           {
@@ -2015,8 +2019,11 @@
                   "$ref": "#/components/schemas/APIResponse"
                 },
                 "examples": {
-                  "Current subscription": {
-                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Current_Success"
+                  "Scheduled at period end": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Cancel_Success"
+                  },
+                  "Immediate (unpaid pending)": {
+                    "$ref": "#/components/examples/Resp_Vendor_Subscription_Cancel_Pending_Success"
                   }
                 }
               }
@@ -2279,6 +2286,139 @@
                       ]
                     }
                   }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/vendors/{vendor_id}/social-links": {
+      "get": {
+        "tags": [
+          "21. Vendor Social Links API"
+        ],
+        "summary": "Get vendor social links",
+        "description": "Returns the vendor's active social links (with <code>id</code>) ordered by\n<code>display_order</code>.\n<br><b>Public endpoint</b> — API key optional, no bearer token required.\n",
+        "operationId": "getSocialLinks",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 273
+            },
+            "example": 273
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Social links loaded successfully",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseListVendorSocialLinkResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseListVendorSocialLinkResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "21. Vendor Social Links API"
+        ],
+        "summary": "Create vendor social link",
+        "description": "Adds a social link for a platform. Only one link per platform per vendor.\n<br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.\n",
+        "operationId": "createSocialLink",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 273
+            },
+            "example": 273
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVendorSocialLinkRequest"
+              },
+              "example": {
+                "platform": "INSTAGRAM",
+                "url": "https://www.instagram.com/srkfoods",
+                "display_order": 1
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Social link created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseVendorSocialLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid platform or URL",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseVendorSocialLinkResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseVendorSocialLinkResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Platform already configured for vendor",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseVendorSocialLinkResponse"
                 }
               }
             }
@@ -8105,7 +8245,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Get vendor dashboard context",
-        "description": "Returns the vendor's onboarding state and current subscription context.\n\nThe `subscription` object reflects the vendor's current lifecycle state\n(e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted\ntrial dates, storefront/dashboard access flags, the active plan's features and\nlimits, and a list of available paid plans with UI-driven allowed actions.\n\nTrial expiry is evaluated at request time; no background job is required.\n",
+        "description": "Returns the vendor's onboarding state and current entitlements.\n\nUse `onboarding.status` to decide between the dashboard (`COMPLETED`) and the\nonboarding flow (`IN_PROGRESS`, resume at `onboarding.next_step`).\n\n`features` and `limits` reflect what the vendor can use right now:\n- Onboarding (before go-live): `features` is empty and `limits` holds the configured\n  onboarding limits (`max_categories`, `max_products`, `max_skus`).\n- Trial / paid: the current plan's features and limits.\n- Trial expired, halted, cancelled or expired: both empty.\n\nSubscription details (plan, trial dates,\nbilling) are served by `GET /vendors/{vendor_id}/subscription`, and purchasable\nplans by `GET /subscription-plans`.\n\nTrial expiry is evaluated at request time; no background job is required.\n",
         "operationId": "getVendorContext",
         "parameters": [
           {
@@ -8131,6 +8271,9 @@
                 "examples": {
                   "Success": {
                     "$ref": "#/components/examples/Resp_Vendor_Context_Success"
+                  },
+                  "Onboarding": {
+                    "$ref": "#/components/examples/Resp_Vendor_Context_Onboarding"
                   }
                 }
               }
@@ -8414,6 +8557,247 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/APIResponsePaginationResponseStorefrontProductResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/vendors/{identifier}/storefront/products/{product_id}": {
+      "get": {
+        "tags": [
+          "20. Vendor Storefront API"
+        ],
+        "summary": "Get a single storefront product with all variants",
+        "description": "Returns one storefront product grouped by <code>vendor_product_id</code> with all of its active SKU variants — identical in shape to a single entry in <code>GET /{identifier}/storefront/products</code>. All variants are returned in one response (no pagination).\n<br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.\n<br><b>Public endpoint</b> — no bearer token or vendor login required. The <code>X-API-Key</code> header is optional; when sent it must be valid, otherwise <code>401</code> is returned.\n<br>Test data: identifier <code>91</code>, product_id <code>161</code>\n",
+        "operationId": "getStorefrontProduct",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Optional public API key. If supplied, it must be a valid key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "identifier",
+            "in": "path",
+            "description": "Vendor identifier — either a numeric vendor ID or the store_identifier slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 91
+          },
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Vendor product identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 161
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product loaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontProductResponse"
+                },
+                "examples": {
+                  "Storefront product": {
+                    "$ref": "#/components/examples/Resp_Storefront_Product_Success"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "An X-API-Key header was sent but it is not a valid key",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseStorefrontProductResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found/not ACTIVE+APPROVED, or product not found/has no active variants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Storefront_Product_Not_Found"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseStorefrontProductResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/vendors/{identifier}/storefront/contact-us": {
+      "get": {
+        "tags": [
+          "20. Vendor Storefront API"
+        ],
+        "summary": "Get vendor contact-us details",
+        "description": "Returns everything needed to render a vendor's <b>Contact Us</b> page in one call:\n<ul>\n  <li><b>Vendor contact</b> — <code>business_name</code>, <code>owner_name</code>,\n      <code>contact_number</code>, <code>communication_email</code>.</li>\n  <li><b>main_address</b> — the vendor's registered business address.</li>\n  <li><b>addresses</b> — active vendor store locations, each with its store\n      <code>type</code> and <code>address</code>. <code>MAIN_BRANCH</code> entries come\n      first, then by store name. Inactive stores are excluded.</li>\n  <li><b>social_links</b> — active social media links ordered by\n      <code>display_order</code>.</li>\n</ul>\n<b>Store types:</b> <code>MAIN_BRANCH</code>, <code>BRANCH</code>,\n<code>HEAD_OFFICE</code>, <code>PICKUP_POINT</code>, <code>WAREHOUSE</code>,\n<code>DARK_STORE</code>, <code>DISTRIBUTION_CENTER</code>, <code>KITCHEN</code>,\n<code>FARM</code>, <code>OUTLET</code>, <code>FRANCHISE</code>, <code>KIOSK</code>,\n<code>OTHER</code>.\n<br><br>The <code>identifier</code> accepts a numeric vendor ID (e.g. <code>91</code>)\nor the store slug (e.g. <code>mirdoddi-farm-fresh-91</code>). Only <b>ACTIVE</b> and\n<b>APPROVED</b> vendors are returned.\n<br><br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>\nheader is optional; when sent it must be valid, otherwise <code>401</code> is returned.\n<br>Responses are cached and refreshed when the vendor profile, status or social links\nchange.\n<br>Test data: identifier <code>91</code>\n",
+        "operationId": "getContactUs",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Optional public API key. If supplied, it must be a valid key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "identifier",
+            "in": "path",
+            "description": "Vendor identifier — either a numeric vendor ID or the store_identifier slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 91
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact details loaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontContactUsResponse"
+                },
+                "examples": {
+                  "Contact Us": {
+                    "description": "Contact Us",
+                    "value": {
+                      "success": true,
+                      "status": 200,
+                      "data": {
+                        "vendor_id": 91,
+                        "store_identifier": "mirdoddi-farm-fresh-91",
+                        "business_name": "Mirdoddi Farm Fresh",
+                        "owner_name": "Swamy",
+                        "contact_number": "919900000000",
+                        "communication_email": "owner@mirdoddi.com",
+                        "main_address": {
+                          "address1": "Road No-27F",
+                          "city": "Hyderabad",
+                          "district": "Rangareddy",
+                          "state": "Telangana",
+                          "country": "India",
+                          "zipCode": "500049"
+                        },
+                        "addresses": [
+                          {
+                            "type": "MAIN_BRANCH",
+                            "address": {
+                              "address1": "Road No-27F",
+                              "city": "Hyderabad",
+                              "state": "Telangana",
+                              "zipCode": "500049"
+                            }
+                          },
+                          {
+                            "type": "PICKUP_POINT",
+                            "address": {
+                              "address1": "SD Road",
+                              "city": "Secunderabad",
+                              "state": "Telangana",
+                              "zipCode": "500003"
+                            }
+                          }
+                        ],
+                        "social_links": [
+                          {
+                            "id": 12,
+                            "platform": "INSTAGRAM",
+                            "url": "https://www.instagram.com/mirdoddi",
+                            "display_order": 1
+                          }
+                        ]
+                      },
+                      "timestamp": "2026-10-01T10:14:25.123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "An X-API-Key header was sent but it is not a valid key",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Invalid API key": {
+                    "description": "Invalid API key",
+                    "value": {
+                      "success": false,
+                      "status": "UNAUTHORIZED",
+                      "failure_reason": "Invalid or missing API key",
+                      "user_message": "User authentication failed!!",
+                      "timestamp": "2026-10-01T10:14:25.123456789",
+                      "api_details": [],
+                      "reason_code": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found, or not ACTIVE/APPROVED",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Vendor not found": {
+                    "description": "Vendor not found",
+                    "value": {
+                      "success": false,
+                      "status": "404",
+                      "failure_reason": "No data found!!",
+                      "user_message": "No data found!!",
+                      "timestamp": "2026-10-01T10:14:25.123456789",
+                      "api_details": [],
+                      "reason_code": "404"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseStorefrontContactUsResponse"
                 }
               }
             }
@@ -9221,7 +9605,7 @@
           "21. Vendor Billing API"
         ],
         "summary": "List available paid plans",
-        "description": "Returns every active, purchasable platform plan from the internal catalogue\n(`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.\nResults are cached; the internal trial plan is never included.\n\nEach plan includes `plan_id`, `plan_code`, price fields in **paise**\n(`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,\n`features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).\nThe UI submits `plan_code` (or `external_plan_id`) to the subscribe endpoint.\n",
+        "description": "Returns every active, purchasable platform plan from the internal catalogue\n(`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.\nResults are cached; the internal trial plan is never included.\n\nEach plan includes `plan_id`, `plan_code`, price fields in **rupees**\n(`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,\n`features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).\nThe UI submits `plan_code` to the subscribe endpoint.\n",
         "operationId": "listPaidPlans",
         "responses": {
           "200": {
@@ -10675,6 +11059,67 @@
         }
       }
     },
+    "/v1/vendors/{vendor_id}/social-links/{social_link_id}": {
+      "delete": {
+        "tags": [
+          "21. Vendor Social Links API"
+        ],
+        "summary": "Delete vendor social link",
+        "description": "Permanently removes a social link.\n<br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.\n",
+        "operationId": "deleteSocialLink",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 273
+            },
+            "example": 273
+          },
+          {
+            "name": "social_link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 12
+            },
+            "example": 12
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Social link deleted",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseString"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Social link not found for vendor",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponseString"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
     "/v1/vendors/{vendor_id}/skus/{sku_id}/subscription-plans/{id}": {
       "delete": {
         "tags": [
@@ -11676,10 +12121,10 @@
       "Contact": {
         "type": "object",
         "properties": {
-          "profile": {
-            "$ref": "#/components/schemas/Profile"
+          "name": {
+            "type": "string"
           },
-          "wa_id": {
+          "phone": {
             "type": "string"
           }
         }
@@ -11742,14 +12187,6 @@
             "type": "string"
           },
           "phone_number_id": {
-            "type": "string"
-          }
-        }
-      },
-      "Profile": {
-        "type": "object",
-        "properties": {
-          "name": {
             "type": "string"
           }
         }
@@ -11911,6 +12348,101 @@
           "sku_subscription_plan_id",
           "start_date"
         ]
+      },
+      "CreateVendorSocialLinkRequest": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "description": "Social media platform",
+            "enum": [
+              "INSTAGRAM",
+              "FACEBOOK",
+              "YOUTUBE",
+              "TWITTER",
+              "LINKEDIN"
+            ],
+            "example": "INSTAGRAM"
+          },
+          "url": {
+            "type": "string",
+            "description": "Public profile/page URL",
+            "example": "https://www.instagram.com/srkfoods",
+            "maxLength": 500,
+            "minLength": 0
+          },
+          "display_order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Display order on the storefront (ascending)",
+            "example": 1,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "platform"
+        ]
+      },
+      "APIResponseVendorSocialLinkResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "$ref": "#/components/schemas/VendorSocialLinkResponse",
+            "description": "Data"
+          }
+        }
+      },
+      "VendorSocialLinkResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Social link ID (used for delete)",
+            "example": 12
+          },
+          "platform": {
+            "type": "string",
+            "description": "Social media platform",
+            "enum": [
+              "INSTAGRAM",
+              "FACEBOOK",
+              "YOUTUBE",
+              "TWITTER",
+              "LINKEDIN"
+            ],
+            "example": "INSTAGRAM"
+          },
+          "url": {
+            "type": "string",
+            "description": "Public profile/page URL",
+            "example": "https://www.instagram.com/srkfoods"
+          },
+          "display_order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Display order on the storefront (ascending)",
+            "example": 1
+          }
+        }
       },
       "ItemSkuCreateRequest": {
         "type": "object",
@@ -13943,6 +14475,36 @@
           }
         }
       },
+      "APIResponseListVendorSocialLinkResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "type": "array",
+            "description": "Data",
+            "items": {
+              "$ref": "#/components/schemas/VendorSocialLinkResponse"
+            }
+          }
+        }
+      },
       "APIResponseSkuInfoDTO": {
         "type": "object",
         "properties": {
@@ -14265,6 +14827,13 @@
             "description": "Instagram page URL",
             "example": "https://instagram.com/yourshop"
           },
+          "social_links": {
+            "type": "array",
+            "description": "Active vendor social media links ordered by display order; empty if none",
+            "items": {
+              "$ref": "#/components/schemas/VendorSocialLinkResponse"
+            }
+          },
           "whatsapp_cta_text": {
             "type": "string",
             "description": "WhatsApp CTA button label",
@@ -14557,6 +15126,202 @@
             "type": "boolean",
             "description": "Whether sale_price is lower than list_price",
             "example": false
+          }
+        }
+      },
+      "APIResponseStorefrontProductResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "$ref": "#/components/schemas/StorefrontProductResponse",
+            "description": "Data"
+          }
+        }
+      },
+      "PickupStoreDTO": {
+        "type": "object",
+        "description": "Vendor store location",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Vendor store ID",
+            "example": 10
+          },
+          "type": {
+            "type": "string",
+            "description": "Store location type",
+            "enum": [
+              "MAIN_BRANCH",
+              "BRANCH",
+              "HEAD_OFFICE",
+              "PICKUP_POINT",
+              "WAREHOUSE",
+              "DARK_STORE",
+              "DISTRIBUTION_CENTER",
+              "KITCHEN",
+              "FARM",
+              "OUTLET",
+              "FRANCHISE",
+              "KIOSK",
+              "OTHER"
+            ],
+            "example": "MAIN_BRANCH"
+          },
+          "name": {
+            "type": "string",
+            "description": "Store display name",
+            "example": "H2A2 Farms Main Store"
+          },
+          "code": {
+            "type": "string",
+            "description": "Unique store code",
+            "example": "H2A2-MAIN"
+          },
+          "address": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            },
+            "description": "Store address as key-value pairs",
+            "example": {
+              "address1": "Road No-27F",
+              "city": "Hyderabad",
+              "state": "Telangana",
+              "zipCode": "500049"
+            }
+          },
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          },
+          "pickup_timings": {
+            "$ref": "#/components/schemas/JsonNode"
+          },
+          "ready_in_minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pickup_slots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contact": {
+            "$ref": "#/components/schemas/Contact"
+          }
+        }
+      },
+      "StorefrontContactUsResponse": {
+        "type": "object",
+        "description": "Vendor contact-us details: contact info, main address, store addresses and social links",
+        "properties": {
+          "vendor_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unique identifier of the vendor",
+            "example": 91
+          },
+          "store_identifier": {
+            "type": "string",
+            "description": "Public store identifier/slug",
+            "example": "mirdoddi-farm-fresh-91"
+          },
+          "business_name": {
+            "type": "string",
+            "description": "Display name of the vendor's business",
+            "example": "Mirdoddi Farm Fresh"
+          },
+          "owner_name": {
+            "type": "string",
+            "description": "Business owner name",
+            "example": "Swamy"
+          },
+          "contact_number": {
+            "type": "string",
+            "description": "Vendor contact number",
+            "example": 919900000000
+          },
+          "communication_email": {
+            "type": "string",
+            "description": "Vendor communication email",
+            "example": "owner@example.com"
+          },
+          "main_address": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Main (registered business) address of the vendor as key-value pairs",
+            "example": {
+              "address1": "Road No-27F",
+              "city": "Hyderabad",
+              "state": "Telangana",
+              "country": "India",
+              "zipCode": "500049"
+            }
+          },
+          "addresses": {
+            "type": "array",
+            "description": "Active vendor store addresses; each item contains only `type` and `address`. MAIN_BRANCH entries first, then by store name. Empty array if none.",
+            "items": {
+              "$ref": "#/components/schemas/PickupStoreDTO"
+            }
+          },
+          "social_links": {
+            "type": "array",
+            "description": "Active vendor social media links ordered by display order. Empty if none.",
+            "items": {
+              "$ref": "#/components/schemas/VendorSocialLinkResponse"
+            }
+          }
+        }
+      },
+      "APIResponseStorefrontContactUsResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Customer registered successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP Status Code",
+            "example": 201
+          },
+          "data": {
+            "$ref": "#/components/schemas/StorefrontContactUsResponse",
+            "description": "Data"
           }
         }
       },
@@ -15303,6 +16068,30 @@
           "reg_source": "android"
         }
       },
+      "Resp_Vendor_Subscription_Cancel_Pending_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "success": true,
+          "status": 200,
+          "data": {
+            "subscription_id": 25,
+            "vendor_id": 91,
+            "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+            "plan_name": "Mithra Social Starter",
+            "billing_cycle": "MONTHLY",
+            "currency": "INR",
+            "sale_price": 299,
+            "status": "CANCELLED",
+            "razorpay_subscription_id": "sub_Qk0example123",
+            "razorpay_status": "cancelled",
+            "cancel_at_period_end": true,
+            "cancelled_at": "2026-09-26T10:20:00Z",
+            "created_at": "2026-09-12T10:00:00Z",
+            "updated_at": "2026-09-26T10:20:00Z",
+            "message": "Subscription cancelled."
+          }
+        }
+      },
       "Req_Vendor_Subscription_Subscribe_Yearly": {
         "value": {
           "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY"
@@ -15461,8 +16250,8 @@
               },
               "billing_cycle": "MONTHLY",
               "currency": "INR",
-              "sale_price": 29900,
-              "list_price": 59900,
+              "sale_price": 299,
+              "list_price": 599,
               "external_plan_id": "plan_Qk0example1"
             },
             {
@@ -15484,8 +16273,8 @@
               },
               "billing_cycle": "YEARLY",
               "currency": "INR",
-              "sale_price": 299900,
-              "list_price": 599900,
+              "sale_price": 2999,
+              "list_price": 5999,
               "external_plan_id": "plan_Qk0example2"
             }
           ]
@@ -15564,6 +16353,31 @@
           "user_role": "USER"
         }
       },
+      "Resp_Vendor_Context_Onboarding": {
+        "value": {
+          "timestamp": "2026-08-14T17:10:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "vendor_id": 91,
+            "business_name": "SK Organic Store",
+            "vendor_status": "INACTIVE",
+            "approval_status": "PENDING",
+            "role": "OWNER",
+            "onboarding": {
+              "status": "IN_PROGRESS",
+              "next_step": 5,
+              "description": "Step 4: Pick Categories"
+            },
+            "features": [],
+            "limits": {
+              "max_categories": 2,
+              "max_products": 10,
+              "max_skus": 25
+            }
+          }
+        }
+      },
       "Resp_Vendor_Context_Not_Found": {
         "value": {
           "success": false,
@@ -15586,7 +16400,7 @@
             "plan_name": "Mithra Social Starter",
             "billing_cycle": "MONTHLY",
             "currency": "INR",
-            "sale_price": 29900,
+            "sale_price": 299,
             "status": "ACTIVE",
             "trial_started_at": "2026-09-12T10:00:00Z",
             "trial_ends_at": "2026-09-26T10:00:00Z",
@@ -15650,7 +16464,7 @@
             "plan_name": "Mithra Social Starter",
             "billing_cycle": "MONTHLY",
             "currency": "INR",
-            "sale_price": 29900,
+            "sale_price": 299,
             "status": "PAYMENT_PENDING",
             "trial_started_at": "2026-09-12T10:00:00Z",
             "trial_ends_at": "2026-09-26T10:00:00Z",
@@ -15658,9 +16472,11 @@
             "razorpay_subscription_id": "sub_Qk0example123",
             "razorpay_status": "created",
             "checkout_url": "https://rzp.io/rzp/example",
+            "next_billing_at": "2026-10-26T10:00:00Z",
             "cancel_at_period_end": false,
             "created_at": "2026-09-12T10:00:00Z",
-            "updated_at": "2026-09-26T10:05:00Z"
+            "updated_at": "2026-09-26T10:05:00Z",
+            "message": "Upfront payment of INR 299 is charged now and is non-refundable. The next renewal is scheduled on 2026-10-26. Cancellation applies from the next billing cycle; access continues until the paid period ends."
           }
         }
       },
@@ -15703,12 +16519,6 @@
                     1,
                     2
                   ]
-                },
-                "subscription": {
-                  "status": "NOT_STARTED",
-                  "plan_code": null,
-                  "trial_started_at": null,
-                  "trial_ends_at": null
                 }
               }
             ],
@@ -15759,10 +16569,21 @@
           "success": false,
           "status": "409",
           "timestamp": "2026-09-26T10:20:00.000000",
-          "failure_reason": "An active subscription already exists.",
+          "failure_reason": "An active subscription already exists and cancellation is scheduled. Access continues until 2026-10-26; you can renew after that date.",
           "user_message": "Already you have active subscription on your profile.",
           "api_details": [],
           "reason_code": "409"
+        }
+      },
+      "Resp_Storefront_Product_Not_Found": {
+        "value": {
+          "success": false,
+          "status": "404",
+          "failure_reason": "No data found!!",
+          "user_message": "No data found!!",
+          "timestamp": "2026-10-03T23:10:06.403286519",
+          "api_details": [],
+          "reason_code": "404"
         }
       },
       "Req_Delivery_Address_Success": {
@@ -15781,6 +16602,32 @@
           "failure_reason": "Unauthorized access to vendor #91",
           "user_message": "You are not authorized to access this vendor.",
           "api_details": []
+        }
+      },
+      "Resp_Vendor_Subscription_Cancel_Success": {
+        "value": {
+          "timestamp": "2026-09-26T10:20:00.000000",
+          "success": true,
+          "status": 200,
+          "data": {
+            "subscription_id": 25,
+            "vendor_id": 91,
+            "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
+            "plan_name": "Mithra Social Starter",
+            "billing_cycle": "MONTHLY",
+            "currency": "INR",
+            "sale_price": 299,
+            "status": "ACTIVE",
+            "razorpay_subscription_id": "sub_Qk0example123",
+            "razorpay_status": "active",
+            "current_period_start": "2026-09-26T10:00:00Z",
+            "current_period_end": "2026-10-26T10:00:00Z",
+            "next_billing_at": "2026-10-26T10:00:00Z",
+            "cancel_at_period_end": true,
+            "created_at": "2026-09-12T10:00:00Z",
+            "updated_at": "2026-09-26T10:20:00Z",
+            "message": "Subscription will not renew. The upfront payment is non-refundable and cancellation applies from the next billing cycle; access continues until 2026-10-26."
+          }
         }
       },
       "Resp_SignUp_Duplicate": {
@@ -15842,64 +16689,12 @@
             "vendor_id": 91,
             "business_name": "SK Organic Store",
             "store_identifier": "sk-organic-store",
-            "vendor_status": "INACTIVE",
-            "approval_status": "PENDING",
+            "vendor_status": "ACTIVE",
+            "approval_status": "APPROVED",
             "role": "OWNER",
             "onboarding": {
-              "status": "IN_PROGRESS",
-              "description": "Step 2 is completed"
-            },
-            "subscription": {
-              "lifecycle_status": "TRIAL_ACTIVE",
-              "display_status": "Free trial",
-              "trial": {
-                "started_at": "2026-09-07T17:10:00.123456789",
-                "ends_at": "2026-09-21T17:10:00.123456789",
-                "days_total": 14,
-                "days_remaining": 0,
-                "expired": false
-              },
-              "plan": {
-                "plan_code": "SOCIAL_STARTER_TRIAL",
-                "plan_name": "Social Starter Trial",
-                "description": "14-day free trial for new vendors",
-                "features": [
-                  "STOREFRONT",
-                  "ORDERS",
-                  "CUSTOMERS",
-                  "CATALOG",
-                  "NOTIFICATIONS"
-                ],
-                "limits": {
-                  "max_products": 100,
-                  "max_images_per_product": 10,
-                  "max_staff_users": 2
-                },
-                "billing_cycle": "TRIAL",
-                "currency": "INR",
-                "sale_price": 0
-              },
-              "available_paid_plans": [
-                {
-                  "plan_code": "MITHRA_SOCIAL_STARTER_MONTHLY",
-                  "plan_name": "Mithra Social Starter",
-                  "billing_cycle": "MONTHLY",
-                  "currency": "INR",
-                  "sale_price": 29900,
-                  "list_price": 59900,
-                  "discount": 30000
-                },
-                {
-                  "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY",
-                  "plan_name": "Mithra Social Starter (Yearly)",
-                  "billing_cycle": "YEARLY",
-                  "currency": "INR",
-                  "sale_price": 299900,
-                  "list_price": 599900,
-                  "discount": 300000
-                }
-              ],
-              "updated_at": "2026-09-21T17:10:00.123456789"
+              "status": "COMPLETED",
+              "description": "Onboarding completed"
             },
             "features": [
               "STOREFRONT",
@@ -15907,7 +16702,14 @@
               "CUSTOMERS",
               "CATALOG",
               "NOTIFICATIONS"
-            ]
+            ],
+            "limits": {
+              "max_categories": 10,
+              "max_products": 100,
+              "max_skus": 250,
+              "max_images_per_product": 10,
+              "max_staff_users": 2
+            }
           }
         }
       },
@@ -16002,6 +16804,53 @@
           "failure_reason": "Full authentication is required to access this resource",
           "user_message": "User authentication failed!!",
           "api_details": []
+        }
+      },
+      "Resp_Storefront_Product_Success": {
+        "value": {
+          "timestamp": "2026-10-03T23:10:06.403286519",
+          "success": true,
+          "status": 200,
+          "data": {
+            "vendor_product_id": 418,
+            "product_name": "Amla Pickle",
+            "category_id": 152,
+            "category_name": "Pickles",
+            "product_image_path": "https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Original_Amla_Pickle.webp",
+            "product_description": "Amla Pickle is handcrafted using carefully selected ingredients, authentic family recipes and hygienic preparation methods.",
+            "active": true,
+            "min_sale_price": 245,
+            "max_sale_price": 450,
+            "starting_at": 245,
+            "default_sku_id": 4153,
+            "variants_count": 2,
+            "variants": [
+              {
+                "sku_id": 4153,
+                "quantity_value": 500,
+                "unit": "gr",
+                "sku_type": "ITEM",
+                "active": true,
+                "price_id": 962,
+                "list_price": 250,
+                "sale_price": 245,
+                "discount": 5,
+                "on_sale": true
+              },
+              {
+                "sku_id": 4152,
+                "quantity_value": 1,
+                "unit": "KG",
+                "sku_type": "ITEM",
+                "active": true,
+                "price_id": 961,
+                "list_price": 500,
+                "sale_price": 450,
+                "discount": 50,
+                "on_sale": true
+              }
+            ]
+          }
         }
       },
       "Resp_Vendor_Subscription_Bad_Request": {
