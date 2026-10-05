@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -108,6 +108,43 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
   )
 }
 
+type OnboardingState = ReturnType<typeof useOnboardingStore.getState>
+
+/**
+ * Recomputes, from the store as it is now, the issues a validation reported on Continue.
+ * Only validation-origin issues carry one; a server or request failure has nothing to
+ * re-run, so it stays until the next action.
+ */
+type IssueRecheck = (state: OnboardingState) => ValidationIssue[]
+
+type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
+
+const NO_ISSUES: ShownIssues = { issues: [] }
+
+/**
+ * The Continue validation for Steps 3-10, read entirely from the given store state so a
+ * re-check while the vendor edits runs exactly what Continue ran. The projected account
+ * total is what every limit gates, so validation is handed the account snapshot and the
+ * product/size caps alongside the category cap.
+ */
+function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
+  const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } = state
+  const categoryLimit = selectCategoryLimit(state)
+  const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
+  if (draft.currentStep === 10) {
+    return readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
+  }
+  // Validate additions without reopening whole-store readiness for submitted vendors.
+  return selectStoreIsSubmitted(state)
+    ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
+    : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
+}
+
+const phoneIssues: IssueRecheck = (state) => validateStep(1, state.draft, state.runtime)
+
+const OTP_INCOMPLETE: ValidationIssue = { step: 2, field: 'otp-0', message: 'Enter all four digits before verifying.' }
+const otpIssues: IssueRecheck = (state) => state.runtime.otpDigits.some((digit) => !digit) ? [OTP_INCOMPLETE] : []
+
 /**
  * A submitted store is read-only except for categories/products, approved size additions,
  * and the Step 10 status view. The Continue handler and the
@@ -133,7 +170,6 @@ export function OnboardingWizard() {
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
-  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setProductLimit = useOnboardingStore((state) => state.setProductLimit)
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
@@ -163,7 +199,30 @@ export function OnboardingWizard() {
   // the handlers and the render agree without re-reading the store in each one.
   const catalogPolicy = selectCatalogPolicy({ draft: { catalogSource, completedSteps } }, { liveApi })
 
-  const [issues, setIssues] = useState<ValidationIssue[]>([])
+  const [shownIssues, setShownIssues] = useState<ShownIssues>(NO_ISSUES)
+  // While the vendor edits, a validation issue the same check no longer reports is hidden;
+  // new problems still wait for the next Continue. The selector returns the indexes still
+  // present as a string, so the wizard re-renders only when that set changes — not per
+  // keystroke — and `issues` keeps its identity while the set holds. Hiding a fixed issue
+  // never adds one, so Step 6 (which opens a panel only for a newly arrived issue) stays put.
+  const stillShownKey = useOnboardingStore((state) => {
+    const { issues: shown, recheck } = shownIssues
+    if (!recheck) return 'all'
+    const current = recheck(state)
+    return shown
+      .flatMap((item, index) =>
+        current.some((next) => next.field === item.field && next.message === item.message) ? [index] : [])
+      .join(',')
+  })
+  const issues = useMemo(() => {
+    if (stillShownKey === 'all') return shownIssues.issues
+    const kept = new Set(stillShownKey.split(','))
+    return shownIssues.issues.filter((_, index) => kept.has(String(index)))
+  }, [shownIssues, stillShownKey])
+  // Errors render inline on each step, so this polite region is what tells a screen-reader
+  // user a Continue failed. `count` re-keys the text so a repeat of the same message is
+  // announced again; it reads empty once the shown issues clear (a fix, a step change).
+  const [issueAnnouncement, setIssueAnnouncement] = useState({ text: '', count: 0 })
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   // The wizard must not paint an interactive step before the account has been read:
@@ -383,7 +442,7 @@ export function OnboardingWizard() {
     requestControllerRef.current?.abort()
     requestControllerRef.current = null
     setBusy(false)
-    setIssues([])
+    setShownIssues(NO_ISSUES)
     setStatusMessage(null)
     setMobileView('form')
     formScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
@@ -417,9 +476,19 @@ export function OnboardingWizard() {
     }, 0)
   }
 
-  const showIssues = (nextIssues: ValidationIssue[]) => {
-    setIssues(nextIssues)
-    if (nextIssues[0]) focusField(nextIssues[0].field)
+  /**
+   * Shows issues and focuses the first. Pass `recheck` only for validation-origin issues:
+   * those clear as the vendor fixes them. Server and request failures (OTP, a failed save
+   * or go-live, the blocked sample catalog) omit it and stay until the next action.
+   */
+  const showIssues = (nextIssues: ValidationIssue[], recheck?: IssueRecheck) => {
+    setShownIssues({ issues: nextIssues, recheck })
+    const first = nextIssues[0]
+    setIssueAnnouncement((current) => ({ text: first?.message ?? '', count: current.count + 1 }))
+    // Every issue renders inline on its own step. Step 10's readiness check raises issues
+    // for Steps 3-9, whose fields are not on screen; Step 10 lists those in its readiness list.
+    const onScreen = first?.step === useOnboardingStore.getState().draft.currentStep
+    if (first) focusField(onScreen ? first.field : 'readiness-issues')
   }
 
   const requestSampleCatalog = () => {
@@ -488,13 +557,13 @@ export function OnboardingWizard() {
     // exists, so `request-otp` can no longer swap the signed-in vendor underneath a
     // draft. Changing number now goes through sign-out instead.
     if (identitySettled) return
-    const { draft, runtime } = useOnboardingStore.getState()
-    const phoneIssues = validateStep(1, draft, runtime)
-    if (phoneIssues.length) {
-      showIssues(phoneIssues)
+    const state = useOnboardingStore.getState()
+    const nextIssues = phoneIssues(state)
+    if (nextIssues.length) {
+      showIssues(nextIssues, phoneIssues)
       return
     }
-    await sendOtp(runtime.phone)
+    await sendOtp(state.runtime.phone)
   }
 
   const sendOtp = async (phone: string) => {
@@ -521,10 +590,12 @@ export function OnboardingWizard() {
 
   const handleOtpVerify = async () => {
     if (identitySettled) return
-    const { runtime } = useOnboardingStore.getState()
+    const state = useOnboardingStore.getState()
+    const { runtime } = state
     const otp = runtime.otpDigits.join('')
-    if (runtime.otpDigits.some((digit) => !digit)) {
-      showIssues([{ step: 2, field: 'otp-0', message: 'Enter all four digits before verifying.' }])
+    const nextIssues = otpIssues(state)
+    if (nextIssues.length) {
+      showIssues(nextIssues, otpIssues)
       return
     }
     const controller = beginRequest()
@@ -652,14 +723,11 @@ export function OnboardingWizard() {
   }
 
   const handleCatalogContinue = async () => {
-    const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } =
-      useOnboardingStore.getState()
-    // The projected account total is what every limit gates, so validation is handed the
-    // account snapshot and the product/size caps alongside the category cap.
-    const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
+    const state = useOnboardingStore.getState()
+    const { draft, runtime } = state
     if (draft.currentStep === 10) {
-      const nextIssues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
-      if (nextIssues.length) return showIssues(nextIssues)
+      const nextIssues = catalogStepIssues(state)
+      if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
@@ -690,11 +758,8 @@ export function OnboardingWizard() {
       return
     }
 
-    // Validate additions without reopening whole-store readiness for submitted vendors.
-    const nextIssues = storeIsSubmitted
-      ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
-      : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
-    if (nextIssues.length) return showIssues(nextIssues)
+    const nextIssues = catalogStepIssues(state)
+    if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
     // Started alongside this step's save, so the next step's catalog is usually ready when it
@@ -778,7 +843,7 @@ export function OnboardingWizard() {
 
   const changeOtpPhone = () => {
     cancelActiveRequest()
-    setIssues([])
+    setShownIssues(NO_ISSUES)
     setStatusMessage(null)
     const phone = useOnboardingStore.getState().runtime.phone
     useOnboardingStore.getState().updatePhone(phone)
@@ -928,14 +993,9 @@ export function OnboardingWizard() {
                     <div>
                       {persistenceStatus === 'unavailable' ? <p role="status" className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
 
-                      {issues.length ? (
-                        <div className="mt-5 rounded-xl border-l-2 border-l-destructive bg-destructive/[0.06] p-4" role="alert" aria-labelledby="error-summary-heading">
-                          <h2 id="error-summary-heading" className="font-display text-sm font-semibold text-destructive">Please fix {issues.length} item{issues.length === 1 ? '' : 's'}</h2>
-                          <ul className="mt-2 space-y-1.5 text-sm">
-                            {issues.map((item, index) => <li key={`${item.field}-${index}`}><button type="button" onClick={() => item.step === currentStep ? focusField(item.field) : navigateToStep(item.step)} className="text-left underline decoration-destructive/40 underline-offset-2 hover:text-destructive">{item.message}{item.step !== currentStep ? ` (Step ${item.step})` : ''}</button></li>)}
-                          </ul>
-                        </div>
-                      ) : null}
+                      <div role="status" aria-live="polite" className="sr-only">
+                        {issues.length && issueAnnouncement.text ? <span key={issueAnnouncement.count}>{issueAnnouncement.text}</span> : null}
+                      </div>
 
                       {/* Keyed on the step so each one arrives rather than swapping in place. */}
                       <div key={currentStep} className="ob-step-enter mt-6">
@@ -975,11 +1035,11 @@ export function OnboardingWizard() {
                             : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
                           />
                         ) : null}
-                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
+                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                         {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
+                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </fieldset>
                       </div>
                     </div>

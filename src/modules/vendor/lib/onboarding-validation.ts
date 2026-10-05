@@ -127,15 +127,18 @@ export function validateDraftSku(
   // The name, description and per-size fulfilment fields are no longer vendor controls (the
   // name follows the product, the description is hidden, fulfilment is set once in Step 7), so
   // their former rules are gone: an issue must point at a field the compact card still renders.
+  // A blank quantity reports as required instead; two blank sizes are not yet duplicates.
   const identity = skuIdentity(sku)
-  const duplicateSize = siblingSkus.some(
+  const duplicateSize = sku.quantity !== null && siblingSkus.some(
     (candidate) => candidate.id !== sku.id && skuIdentity(candidate) === identity,
   )
   if (duplicateSize) {
     issues.push(issue(6, `${prefix}-quantity`, 'Each size needs a unique quantity and unit.'))
   }
   if (!sku.unit.trim()) issues.push(issue(6, `${prefix}-unit`, 'Choose a unit.'))
-  if (!positive(sku.quantity)) {
+  if (sku.quantity === null) {
+    issues.push(issue(6, `${prefix}-quantity`, 'Required field.'))
+  } else if (!positive(sku.quantity)) {
     issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be greater than zero.'))
   } else if (sku.quantity < 0.000001) {
     issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be at least 0.000001.'))
@@ -145,18 +148,22 @@ export function validateDraftSku(
     // that true), so keying off it here is safe.
     issues.push(issue(6, `${prefix}-quantity`, 'Quantity must be a whole number for count items.'))
   }
-  if (!positive(sku.listPrice)) {
+  if (sku.listPrice === null) {
+    issues.push(issue(6, `${prefix}-list-price`, 'Required field.'))
+  } else if (!positive(sku.listPrice)) {
     issues.push(issue(6, `${prefix}-list-price`, 'MRP must be greater than zero.'))
   } else if (!withinTwoDecimals(sku.listPrice)) {
     issues.push(issue(6, `${prefix}-list-price`, 'MRP can have at most two decimal places.'))
   }
-  if (!positive(sku.salePrice)) {
-    issues.push(issue(6, `${prefix}-sale-price`, 'Price must be greater than zero.'))
+  if (sku.salePrice === null) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Required field.'))
+  } else if (!positive(sku.salePrice)) {
+    issues.push(issue(6, `${prefix}-sale-price`, 'Discounted price must be greater than zero.'))
   } else if (!withinTwoDecimals(sku.salePrice)) {
-    issues.push(issue(6, `${prefix}-sale-price`, 'Price can have at most two decimal places.'))
+    issues.push(issue(6, `${prefix}-sale-price`, 'Discounted price can have at most two decimal places.'))
   }
   if (positive(sku.salePrice) && positive(sku.listPrice) && sku.salePrice > sku.listPrice) {
-    issues.push(issue(6, `${prefix}-sale-price`, 'Price cannot exceed MRP.'))
+    issues.push(issue(6, `${prefix}-sale-price`, 'Discounted price cannot exceed MRP.'))
   }
   return issues
 }
@@ -328,13 +335,16 @@ export function validateStep(
       // The measurement every size of this product must carry. Undefined when no catalog has
       // loaded to resolve it, so the guard stays quiet rather than resolving to COUNT.
       const expectedMeasurement = expectedMeasurementFor(product, measurementCatalog)
-      const validActiveSkus = productSkus.filter(
-        (sku) => sku.active && validateDraftSku(sku, productSkus, expectedMeasurement).length === 0,
-      )
-      if (!validActiveSkus.length) {
-        issues.push(issue(6, `product-${product.id}`, `${product.name} needs at least one size with a price.`))
+      const skuIssues = productSkus.flatMap((sku) => validateDraftSku(sku, productSkus, expectedMeasurement))
+      // Field issues already block Continue and point at the control to fix. Once every size is
+      // valid, the product still needs one of them switched on. Step 6 scaffolds a size for
+      // every product, but a product with none must still not pass.
+      if (!productSkus.length) {
+        issues.push(issue(6, `product-${product.id}`, `Add a size for ${product.name}.`))
+      } else if (!skuIssues.length && !productSkus.some((sku) => sku.active)) {
+        issues.push(issue(6, `product-${product.id}`, `Turn on at least one size for ${product.name}.`))
       }
-      for (const sku of productSkus) issues.push(...validateDraftSku(sku, productSkus, expectedMeasurement))
+      issues.push(...skuIssues)
     }
     return issues
   }
@@ -355,20 +365,21 @@ export function validateStep(
     if (draft.storefront.instagram.length > 200) issues.push(issue(9, 'instagram', 'Keep the Instagram value under 200 characters.'))
     if (draft.storefront.welcomeMessage.length > 160) issues.push(issue(9, 'welcome-message', 'Keep the welcome message under 160 characters.'))
     if (draft.storefront.announcementBar.length > 100) issues.push(issue(9, 'announcement-bar', 'Keep the announcement under 100 characters.'))
-    for (const [field, color] of [
-      ['primary-color', draft.storefront.primaryColor],
-      ['accent-color', draft.storefront.accentColor],
-      ['background-color', draft.storefront.backgroundColor],
-      ['text-color', draft.storefront.textColor],
+    for (const [field, label, color] of [
+      ['primary-color', 'Primary color', draft.storefront.primaryColor],
+      ['accent-color', 'Accent color', draft.storefront.accentColor],
+      ['background-color', 'Background color', draft.storefront.backgroundColor],
+      ['text-color', 'Text color', draft.storefront.textColor],
     ] as const) {
-      if (!isValidHex(color)) issues.push(issue(9, field, 'Use a six-digit hex color.'))
+      // Named, because background and text colors have no input of their own to label them.
+      if (!isValidHex(color)) issues.push(issue(9, field, `${label}: use a six-digit hex color.`))
     }
     if (
       isValidHex(draft.storefront.textColor) &&
       isValidHex(draft.storefront.backgroundColor) &&
       contrastRatio(draft.storefront.textColor, draft.storefront.backgroundColor) < 4.5
     ) {
-      issues.push(issue(9, 'text-color', 'Store text needs at least 4.5:1 contrast against the background.'))
+      issues.push(issue(9, 'text-color', 'Text color: store text needs at least 4.5:1 contrast against the background color.'))
     }
     return issues
   }

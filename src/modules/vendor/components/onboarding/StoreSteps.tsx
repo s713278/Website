@@ -47,7 +47,7 @@ import type {
   ValidationIssue,
   VendorOnboardingDraftV1,
 } from '../../types/onboarding'
-import { FieldLabel, StepSection } from './StepPrimitives'
+import { FieldError, FieldLabel, StepSection } from './StepPrimitives'
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
@@ -274,6 +274,13 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
         <div className="grid gap-4 pt-1 pb-5 @min-[32rem]:grid-cols-2">
           <ColorInput id="primary-color" label="Primary" value={store.primaryColor} error={issues.find((item) => item.field === 'primary-color')?.message} onChange={(primaryColor) => updateStore({ primaryColor }, true)} />
           <ColorInput id="accent-color" label="Accent" value={store.accentColor} error={issues.find((item) => item.field === 'accent-color')?.message} onChange={(accentColor) => updateStore({ accentColor }, true)} />
+          {/* Background and text colors come only from theme presets, so they have no input;
+              their issues (an invalid hex, too little contrast) show here and take focus. */}
+          {(['background-color', 'text-color'] as const).map((field) => issues.some((item) => item.field === field) ? (
+            <div key={field} id={field} aria-describedby={`${field}-error`} className="@min-[32rem]:col-span-2">
+              <FieldError issues={issues} field={field} />
+            </div>
+          ) : null)}
           <div className="@min-[32rem]:col-span-2">
             <PresetSwatches label="Primary presets" presets={PRIMARY_PRESETS} value={store.primaryColor} onChange={(primaryColor) => updateStore({ primaryColor }, true)} />
           </div>
@@ -543,10 +550,9 @@ function BriefGroup({
 }
 
 /**
- * The compact account of the store the vendor has configured — catalog, orders, and store
+ * The compact account of the store the vendor has configured — catalog, checkout options, and store
  * identity — each group carrying a way back to the step that owns it. Values come from the
- * pure `buildReviewSummary`, which masks contacts and drops credentials, so this component
- * only lays them out.
+ * pure `buildReviewSummary`, which drops credentials, so this component only lays them out.
  */
 function JourneyBrief({
   draft,
@@ -571,7 +577,7 @@ function JourneyBrief({
         <BriefRow label="Sizes">{catalog.activeSizeCount} active · {catalog.inactiveSizeCount} inactive</BriefRow>
       </BriefGroup>
 
-      <BriefGroup title="Orders" editStep={7} onGoToStep={onGoToStep}>
+      <BriefGroup title="Checkout Options" editStep={7} onGoToStep={onGoToStep}>
         <BriefRow label="Fulfilment">{orders.fulfilment}</BriefRow>
         <BriefRow label="Payments"><BriefChips items={orders.paymentMethods} empty="None selected" /></BriefRow>
         <BriefRow label="Order WhatsApp">{orders.orderWhatsapp ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not added</span>}</BriefRow>
@@ -587,9 +593,16 @@ function JourneyBrief({
 }
 
 export function ReviewStep({
+  issues: shownIssues,
   onGoToStep,
   submitsToAccount,
 }: {
+  /**
+   * The wizard's shown issues. Only Step 10's own (a failed submission, a blocked sample
+   * catalog — both on field `store-name`) render here; readiness issues for Steps 3-9 are
+   * recomputed below and listed on their own.
+   */
+  issues: ValidationIssue[]
   onGoToStep: (step: OnboardingStep) => void
   /**
    * Whether pressing the primary action will submit to the vendor account (live) rather than
@@ -611,6 +624,7 @@ export function ReviewStep({
     maxSkus: skuLimit,
     account: accountCatalog,
   })
+  const submitIssues = shownIssues.filter((item) => item.step === 10)
   const completed =
     draft.publication.state === 'prototype-complete' &&
     draft.completedSteps.includes(10) &&
@@ -631,7 +645,7 @@ export function ReviewStep({
         {/* Readiness issues stay prominent and actionable, above the brief rather than hidden
             by it: the brief is the recap, the list is the work still to do. */}
         {issues.length ? (
-          <ul className="space-y-2" aria-label="Readiness issues">
+          <ul id="readiness-issues" className="space-y-2" aria-label="Readiness issues">
             {issues.map((item, index) => (
               <li key={`${item.step}-${item.field}-${index}`}>
                 <button type="button" onClick={() => onGoToStep(item.step)} className="flex w-full items-start justify-between gap-3 rounded-lg bg-[var(--ob-canvas)] p-3 text-left text-sm outline-none transition-colors hover:bg-[var(--ob-canvas)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
@@ -643,6 +657,13 @@ export function ReviewStep({
         ) : null}
         {/* The journey brief is shown on every visit to Step 10, resolved or not. */}
         <JourneyBrief draft={draft} runtime={runtime} onGoToStep={onGoToStep} />
+        {/* A submission failure sits beside the action that raised it. Step 10 renders no
+            store-name input, so this container takes the field's id as the focus target. */}
+        {submitIssues.length ? (
+          <div id="store-name" aria-describedby="store-name-error">
+            <FieldError issues={submitIssues} field="store-name" />
+          </div>
+        ) : null}
         {/* The consequence sentence sits immediately above the primary action in the footer. */}
         <p className="text-sm leading-6 text-[var(--ob-ink-soft)]">
           {submitsToAccount

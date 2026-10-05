@@ -18,11 +18,20 @@ const savedSize: VendorSkuRef = {
   isActive: true, quantity: 1, unit: 'L', listPrice: 100, salePrice: 90,
 }
 
+let scrollIntoView: PropertyDescriptor | undefined
+let scrollTo: PropertyDescriptor | undefined
+
 beforeEach(() => {
   vi.stubEnv('VITE_USE_API', 'true')
   vi.stubEnv('DEV', false)
   vi.stubGlobal('CSS', { escape: (value: string) => value })
+  scrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() })
+  // Showing issues focuses and scrolls to the first field after a timer, which jsdom does not
+  // implement; that timer can fire in any test whose Continue fails.
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+  scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   localStorage.clear()
   invalidateVendorOnboardingState()
   useOnboardingStore.getState().abandonDraft()
@@ -66,6 +75,10 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
+  if (scrollIntoView) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', scrollIntoView)
+  else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView
+  if (scrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollTo)
+  else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
 })
 
 function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false) {
@@ -82,15 +95,30 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
   render(strict ? <StrictMode>{wizard}</StrictMode> : wizard)
 }
 
+const follows = (first: Node, second: Node) =>
+  Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+// The wizard's polite live region that announces the first issue after a failed action.
+function liveRegion() {
+  const region = document.querySelector('[role="status"][aria-live="polite"]')
+  if (!(region instanceof HTMLElement)) throw new Error('Expected the issue live region')
+  return region
+}
+
+// On-screen copies of a message, leaving out the sr-only live region that also announces it.
+function shownCopies(text: string) {
+  return screen.getAllByText(text).filter((element) => !liveRegion().contains(element))
+}
+
 async function openSizes() {
   fireEvent.click(await screen.findByRole('button', { name: /^Step 6,/ }))
-  return screen.findByRole('button', { name: 'Add another size' })
+  return screen.findByRole('button', { name: 'Add another size to Test Juice' })
 }
 
 function fillNewSize() {
   fireEvent.change(screen.getAllByLabelText('Quantity').at(-1)!, { target: { value: '2' } })
   fireEvent.change(screen.getAllByLabelText('MRP (₹)').at(-1)!, { target: { value: '180' } })
-  fireEvent.change(screen.getAllByLabelText('Price (₹)').at(-1)!, { target: { value: '160' } })
+  fireEvent.change(screen.getAllByLabelText('Discounted price (₹)').at(-1)!, { target: { value: '160' } })
 }
 
 describe('onboarding account hydration and size permissions', () => {
@@ -127,7 +155,7 @@ describe('onboarding account hydration and size permissions', () => {
     expect(screen.getByText('Sizes and prices unlock after approval.')).toBeTruthy()
     expect(screen.queryByText('Your store is with us for review.')).toBeNull()
     expect(add.matches(':disabled')).toBe(true)
-    const card = screen.getByRole('group', { name: '1 L size' })
+    const card = screen.getByRole('group', { name: 'Test Juice, 1 L size' })
     expect(screen.queryByLabelText('Quantity')).toBeNull()
     expect(within(card).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
     expect(within(card).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
@@ -136,11 +164,11 @@ describe('onboarding account hydration and size permissions', () => {
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
   })
 
-  it('renders approved saved sizes as compact read-only cards', async () => {
+  it('renders approved saved sizes as read-only rows', async () => {
     renderAccount('APPROVED')
     await openSizes()
 
-    const card = screen.getByRole('group', { name: '1 L size' })
+    const card = screen.getByRole('group', { name: 'Test Juice, 1 L size' })
     expect(within(card).getByText('1 L')).toBeTruthy()
     expect(within(card).getByText('₹100')).toBeTruthy()
     expect(within(card).getByText('₹90')).toBeTruthy()
@@ -159,12 +187,12 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED')
     await openSizes()
 
-    const card = screen.getByRole('group', { name: '1 L size' })
+    const card = screen.getByRole('group', { name: 'Test Juice, 1 L size' })
     const activeSwitch = within(card).getByRole('switch', { name: '1 L status: inactive' })
     const removeButton = within(card).getByRole('button', { name: 'Remove 1 L' })
     expect(activeSwitch.getAttribute('aria-checked')).toBe('false')
     expect(activeSwitch.className).toContain('bg-slate-300')
-    expect(removeButton.className).toContain('bg-slate-100')
+    expect(removeButton.className).toContain('text-slate-400')
     expect(removeButton.matches(':disabled')).toBe(true)
   })
 
@@ -174,19 +202,25 @@ describe('onboarding account hydration and size permissions', () => {
     fireEvent.click(add)
     fillNewSize()
 
-    const card = screen.getByRole('group', { name: '2 L size' })
+    const card = screen.getByRole('group', { name: 'Test Juice, 2 L size' })
     const activeSwitch = within(card).getByRole('switch', { name: '2 L status: active' })
     const removeButton = within(card).getByRole('button', { name: 'Remove 2 L' })
     expect(activeSwitch.matches(':disabled')).toBe(false)
     expect(activeSwitch.className).toContain('h-7 w-12')
     expect(removeButton.matches(':disabled')).toBe(false)
     expect(removeButton.className).toContain('size-9')
+    expect(removeButton.className).not.toContain('pointer-events-none')
+    expect(removeButton.className).not.toMatch(/\bbg-/)
 
     fireEvent.click(activeSwitch)
     expect(activeSwitch.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(removeButton)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove size' }))
-    await waitFor(() => expect(screen.queryByRole('group', { name: '2 L size' })).toBeNull())
+    // Removal is immediate: no confirmation dialog stands between the click and the row going.
+    expect(screen.queryByRole('group', { name: 'Test Juice, 2 L size' })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.queryByText('Remove this size?')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove size' })).toBeNull()
   })
 
   it('counts backend usage omitted from the size list against the plan limit', async () => {
@@ -201,7 +235,7 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED')
     const add = await openSizes()
     expect(add.matches(':disabled')).toBe(false)
-    expect(within(screen.getByRole('group', { name: '1 L size' })).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
+    expect(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
     expect(screen.queryByLabelText('Quantity')).toBeNull()
     fireEvent.click(add)
     fillNewSize()
@@ -234,7 +268,111 @@ describe('onboarding account hydration and size permissions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
 
-    await waitFor(() => expect(screen.getAllByText('Could not create size').length).toBeGreaterThan(0))
+    // The failure is shown inline on Step 6, once, and never in a wizard-level summary.
+    await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size'))
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('skus')))
+    expect(document.getElementById('skus')?.getAttribute('tabindex')).toBe('-1')
+    expect(liveRegion().textContent).toBe('Could not create size')
+    expect(shownCopies('Could not create size')).toHaveLength(1)
+    expect(screen.queryByText(/Please fix/)).toBeNull()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+  })
+})
+
+describe('stale validation errors', () => {
+  const lastField = (label: string) => screen.getAllByLabelText(label).at(-1) as HTMLInputElement
+  const fieldError = (input: HTMLInputElement) => document.getElementById(`${input.id}-error`)
+  // Issues are shown only inline on their own step; the wizard-level summary is gone.
+  const expectNoSummary = () => {
+    expect(screen.queryByText(/Please fix/)).toBeNull()
+    expect(document.getElementById('error-summary-heading')).toBeNull()
+    expect(screen.queryAllByRole('alert').filter((alert) => /Please fix/.test(alert.textContent ?? ''))).toHaveLength(0)
+  }
+
+  // The full suite runs these well past the 5 s default under load.
+  const timeout = 15_000
+
+  it('clears a shown field error once the vendor fixes the field, before Continue', { timeout }, async () => {
+    renderAccount('APPROVED')
+    fireEvent.click(await openSizes())
+    fillNewSize()
+    fireEvent.change(lastField('Discounted price (₹)'), { target: { value: '200' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    const price = lastField('Discounted price (₹)')
+    await waitFor(() => expect(fieldError(price)?.textContent).toBe('Discounted price cannot exceed MRP.'))
+    expect(price.getAttribute('aria-invalid')).toBe('true')
+    // The first faulty field takes focus once the step has rendered, and its message is announced.
+    await waitFor(() => expect(document.activeElement).toBe(price))
+    expect(liveRegion().textContent).toBe('Discounted price cannot exceed MRP.')
+    expectNoSummary()
+
+    fireEvent.change(price, { target: { value: '160' } })
+
+    expect(fieldError(lastField('Discounted price (₹)'))).toBeNull()
+    expect(lastField('Discounted price (₹)').getAttribute('aria-invalid')).toBeNull()
+    expect(screen.queryByText('Discounted price cannot exceed MRP.')).toBeNull()
+    expect(liveRegion().textContent).toBe('')
+    expectNoSummary()
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+  })
+
+  it('clears only the fixed error and never adds a new one before Continue', { timeout }, async () => {
+    renderAccount('APPROVED')
+    fireEvent.click(await openSizes())
+    fillNewSize()
+    fireEvent.change(lastField('Quantity'), { target: { value: '' } })
+    fireEvent.change(lastField('Discounted price (₹)'), { target: { value: '200' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await waitFor(() => expect(fieldError(lastField('Quantity'))?.textContent).toBe('Required field.'))
+    // Each field error renders directly below its own input.
+    expect(lastField('Quantity').nextElementSibling).toBe(fieldError(lastField('Quantity')))
+    expect(lastField('Discounted price (₹)').nextElementSibling).toBe(fieldError(lastField('Discounted price (₹)')))
+    expectNoSummary()
+    expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
+
+    fireEvent.change(lastField('Quantity'), { target: { value: '2' } })
+
+    expect(fieldError(lastField('Quantity'))).toBeNull()
+    expect(lastField('Quantity').getAttribute('aria-invalid')).toBeNull()
+    expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
+    expect(lastField('Discounted price (₹)').getAttribute('aria-invalid')).toBe('true')
+
+    // A new problem typed in (MRP with three decimals) waits for the next Continue.
+    fireEvent.change(lastField('MRP (₹)'), { target: { value: '180.555' } })
+
+    expect(fieldError(lastField('MRP (₹)'))).toBeNull()
+    expect(screen.queryByText('MRP can have at most two decimal places.')).toBeNull()
+    expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await waitFor(() => expect(fieldError(lastField('MRP (₹)'))?.textContent).toBe('MRP can have at most two decimal places.'))
+    expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
+    expectNoSummary()
+  })
+
+  it('keeps a failed save message while the vendor edits fields', { timeout }, async () => {
+    renderAccount('APPROVED')
+    fireEvent.click(await openSizes())
+    fillNewSize()
+    vi.mocked(vendorOnboardingService.createSkus).mockRejectedValue(new Error('Could not create size'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size'))
+    expectNoSummary()
+
+    fireEvent.change(lastField('Discounted price (₹)'), { target: { value: '150' } })
+    fireEvent.change(lastField('MRP (₹)'), { target: { value: '170' } })
+
+    expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size')
+    expect(shownCopies('Could not create size')).toHaveLength(1)
+    expectNoSummary()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
   })
 })
@@ -299,7 +437,7 @@ describe('Continue on an unchanged catalog step', () => {
     expect(vendorOnboardingService.updateSku).not.toHaveBeenCalled()
 
     await openSizes()
-    fireEvent.click(screen.getByRole('button', { name: 'Add another size' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add another size to Test Juice' }))
     fillNewSize()
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(vendorOnboardingService.createSkus).toHaveBeenCalledTimes(1))
@@ -326,6 +464,127 @@ describe('Continue on unchanged checkout settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('button', { name: /Step 9,.*You are here/ })
     expect(save).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('save failures shown inline on their own step', () => {
+  const expectNoSummary = () => {
+    expect(screen.queryByText(/Please fix/)).toBeNull()
+    expect(document.getElementById('error-summary-heading')).toBeNull()
+  }
+
+  it('shows a failed Step 7 save under the fulfilment choices', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockRejectedValue(new Error('Could not save checkout'))
+    renderAccount('APPROVED', 7)
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => expect(document.getElementById('fulfillment-error')?.textContent).toBe('Could not save checkout'))
+    // Directly below the fulfilment choices it belongs to.
+    expect(follows(document.getElementById('fulfillment')!, document.getElementById('fulfillment-error')!)).toBe(true)
+    expect(shownCopies('Could not save checkout')).toHaveLength(1)
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('fulfillment')))
+    expect(liveRegion().textContent).toBe('Could not save checkout')
+    expectNoSummary()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(7)
+  })
+
+  it('shows a failed Step 8 save in the payments area', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('APPROVED', 7)
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    expect(document.getElementById('payments-error')).toBeNull()
+
+    save.mockRejectedValue(new Error('Could not save payments'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /cash on delivery/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => expect(document.getElementById('payments-error')?.textContent).toBe('Could not save payments'))
+    expect(document.getElementById('payments')?.contains(document.getElementById('payments-error'))).toBe(true)
+    expect(shownCopies('Could not save payments')).toHaveLength(1)
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('payments')))
+    expect(document.getElementById('payments')?.getAttribute('tabindex')).toBe('-1')
+    expect(liveRegion().textContent).toBe('Could not save payments')
+    expectNoSummary()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(8)
+  })
+
+  it('shows a failed go-live on Step 10 above the consequence sentence', async () => {
+    renderAccount('APPROVED', 10)
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    act(() => {
+      const store = useOnboardingStore.getState()
+      store.updateDraft((draft) => ({
+        ...draft,
+        payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
+        storefront: { ...draft.storefront, businessLocation: 'Test Road' },
+      }))
+      store.updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+    vi.spyOn(vendorOnboardingService, 'goLive').mockRejectedValue(new Error('Could not submit the store'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
+
+    await waitFor(() => expect(document.getElementById('store-name-error')?.textContent).toBe('Could not submit the store'))
+    const error = document.getElementById('store-name-error')!
+    expect(document.getElementById('store-name')?.contains(error)).toBe(true)
+    expect(follows(error, screen.getByText(/^Submitting sends your store for review/))).toBe(true)
+    expect(shownCopies('Could not submit the store')).toHaveLength(1)
+    expectNoSummary()
+    expect(useOnboardingStore.getState().storeSubmission).toBeNull()
+  })
+})
+
+describe('Step 10 readiness issues', () => {
+  it('focuses the readiness list when Submit finds issues owned by earlier steps', async () => {
+    renderAccount('APPROVED', 10)
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+
+    const list = document.getElementById('readiness-issues')
+    expect(list).not.toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(list))
+    const first = within(list!).getAllByRole('button')[0]
+    expect(liveRegion().textContent).not.toBe('')
+    expect(first.textContent).toContain(liveRegion().textContent!)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(goLive).not.toHaveBeenCalled()
+  })
+})
+
+describe('Step 10 store summary', () => {
+  it('groups checkout settings under Checkout Options and shows WhatsApp numbers in full', async () => {
+    renderAccount('APPROVED', 10)
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    act(() => {
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210', supportWhatsapp: '9000000001' })
+    })
+
+    const summary = screen.getByLabelText('Store summary')
+    expect(within(summary).getByRole('heading', { name: 'Checkout Options' })).toBeTruthy()
+    expect(within(summary).queryByRole('heading', { name: 'Orders' })).toBeNull()
+    const value = (label: string) => within(summary).getByText(label).nextElementSibling?.textContent
+    expect(value('Order WhatsApp')).toBe('9876543210')
+    expect(value('Support WhatsApp')).toBe('9000000001')
+    expect(summary.textContent).not.toContain('•')
+  })
+
+  it('reads Not added for a missing order number and drops an empty support row', async () => {
+    renderAccount('APPROVED', 10)
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    act(() => {
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '', supportWhatsapp: '' })
+    })
+
+    const summary = screen.getByLabelText('Store summary')
+    expect(within(summary).getByText('Order WhatsApp').nextElementSibling?.textContent).toBe('Not added')
+    expect(within(summary).queryByText('Support WhatsApp')).toBeNull()
   })
 })
 

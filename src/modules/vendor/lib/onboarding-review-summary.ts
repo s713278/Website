@@ -33,9 +33,9 @@ export type CatalogSummary = {
 export type OrdersSummary = {
   fulfilment: string
   paymentMethods: string[]
-  /** Masked; `null` when nothing has been entered so the row can be dropped. */
+  /** As entered; `null` when nothing has been entered so the row can be dropped. */
   orderWhatsapp: string | null
-  /** Masked; `null` when the optional support number is absent. */
+  /** As entered; `null` when the optional support number is absent. */
   supportWhatsapp: string | null
 }
 
@@ -50,20 +50,6 @@ export type ReviewSummary = {
   store: StoreSummary
 }
 
-/**
- * Display-only mask for a contact number shown on the review brief.
- *
- * Never returns the whole number: at most the last four digits are visible, matching the
- * verified-phone mask elsewhere in onboarding. An empty value collapses to `null` so the
- * caller can drop the row entirely. The mask is a fixed width, not a per-digit blanking, so a
- * partial number entered before Step 9 validation passes cannot leak how many digits it holds.
- */
-export function maskContact(value: string): string | null {
-  const digits = value.replace(/\D/g, '')
-  if (!digits) return null
-  return `•••••• ${digits.slice(-4)}`
-}
-
 function trimmedOrNull(value: string): string | null {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
@@ -74,8 +60,9 @@ function trimmedOrNull(value: string): string | null {
  * Step 10 shows above the final action.
  *
  * Pure and account-agnostic: it summarizes the draft and its runtime contacts and nothing
- * else. It deliberately omits credentials, OTPs, and low-value styling detail, and it masks
- * both contact numbers — the review brief is a recap, not a place to surface secrets.
+ * else. It deliberately omits credentials, OTPs, and low-value styling detail — the review
+ * brief is a recap, not a place to surface secrets. Contact numbers are the vendor's own and
+ * show in full, as entered.
  */
 export function buildReviewSummary(
   draft: VendorOnboardingDraftV1,
@@ -98,8 +85,8 @@ export function buildReviewSummary(
       paymentMethods: draft.payments
         .filter((payment) => payment.enabled)
         .map((payment) => PAYMENT_SUMMARY_LABELS[payment.type]),
-      orderWhatsapp: maskContact(runtime.orderWhatsapp),
-      supportWhatsapp: maskContact(runtime.supportWhatsapp),
+      orderWhatsapp: trimmedOrNull(runtime.orderWhatsapp),
+      supportWhatsapp: trimmedOrNull(runtime.supportWhatsapp),
     },
     store: {
       storeName: trimmedOrNull(draft.storefront.storeName),

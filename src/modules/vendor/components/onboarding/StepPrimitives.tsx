@@ -112,8 +112,8 @@ export function Hint({
 /**
  * A collapsible group.
  *
- * Deliberately still a `<details>`: the error summary reopens a collapsed group by
- * setting `open` on the nearest one, and native disclosure keeps the keyboard and
+ * Deliberately still a `<details>`: the wizard's `focusField` reopens a collapsed group by
+ * setting `open` on the nearest one (`closest('details')`), and native disclosure keeps the keyboard and
  * screen-reader behaviour that a hand-rolled version would have to reproduce.
  */
 export function AccordionPanel({
