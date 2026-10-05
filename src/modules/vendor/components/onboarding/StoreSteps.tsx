@@ -48,6 +48,7 @@ import type {
   VendorOnboardingDraftV1,
 } from '../../types/onboarding'
 import { FieldError, FieldLabel, StepSection } from './StepPrimitives'
+import { TaglineExamplesDialog } from './TaglineExamplesDialog'
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
@@ -233,7 +234,17 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
           <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
           <Input id="owner-name" label="Owner name" value={draft.business.ownerName} minLength={3} error={issues.find((item) => item.field === 'owner-name')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, ownerName: event.target.value } }), 9)} placeholder="Full name" />
           <Input id="contact-person" label="Contact person" value={draft.business.contactPerson} minLength={3} error={issues.find((item) => item.field === 'contact-person')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, contactPerson: event.target.value } }), 9)} placeholder="Who should customers speak with?" />
-          <Input id="tagline" label="Tagline (optional)" value={store.tagline} maxLength={120} error={issues.find((item) => item.field === 'tagline')?.message} onChange={(event) => updateStore({ tagline: event.target.value })} />
+          <div>
+            <FieldLabel htmlFor="tagline" optional>Tagline</FieldLabel>
+            <div className="flex items-start gap-2">
+              <Input id="tagline" value={store.tagline} maxLength={120} error={issues.find((item) => item.field === 'tagline')?.message} onChange={(event) => updateStore({ tagline: event.target.value })} placeholder="Traditional • Natural • Homemade" />
+              <TaglineExamplesDialog
+                businessTypeName={draft.business.businessType?.name}
+                currentTagline={store.tagline}
+                onUse={(tagline) => updateStore({ tagline })}
+              />
+            </div>
+          </div>
           <Input id="business-location" label="Business location" value={store.businessLocation} maxLength={100} error={issues.find((item) => item.field === 'business-location')?.message} onChange={(event) => updateStore({ businessLocation: event.target.value })} placeholder="Hyderabad, Telangana" />
           <Input id="order-whatsapp" label="Order WhatsApp" type="tel" inputMode="numeric" maxLength={10} value={runtime.orderWhatsapp} error={issues.find((item) => item.field === 'order-whatsapp')?.message} onChange={(event) => updateRuntime({ orderWhatsapp: event.target.value.replace(/\D/g, '').slice(0, 10) }, 9)} placeholder="9876543210" autoComplete="tel-national" />
           <Input id="support-whatsapp" label="Support WhatsApp (optional)" type="tel" inputMode="numeric" maxLength={10} value={runtime.supportWhatsapp} error={issues.find((item) => item.field === 'support-whatsapp')?.message} onChange={(event) => updateRuntime({ supportWhatsapp: event.target.value.replace(/\D/g, '').slice(0, 10) }, 9)} placeholder="9876543210" autoComplete="tel-national" />
