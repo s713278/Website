@@ -10,6 +10,7 @@ export type CheckoutAddressForm = {
   state: string
   zipCode: string
 }
+export const CHECKOUT_ADDRESS_MAP_ENABLED = false
 
 const PLACEHOLDER_NAMES = new Set(['User', 'Vendor'])
 
@@ -36,11 +37,15 @@ function streetFromPin(location: string) {
   if (placeParts.length >= 3) {
     const street = placeParts.slice(0, -2)
     return {
-      address1: street[0] ?? '',
-      address2: street.slice(1).join(', '),
+      address1: street.join(', '),
+      address2: '',
     }
   }
   return { address1: location.trim(), address2: '' }
+}
+
+function looksLikeFullAddress(value: string) {
+  return /\b\d{6}\b/.test(value) || /,\s*[^,]+,\s*[^,]+/.test(value)
 }
 
 export function checkoutAddressFormFromPin(input: {
@@ -56,18 +61,36 @@ export function checkoutAddressFormFromPin(input: {
   address2?: string | null
   district?: string | null
 }): CheckoutAddressForm {
-  const parsed = parseLocationParts(input.location)
-  const savedStreet = input.address1?.trim()
-  const fromPin = streetFromPin(input.location)
+  const location = input.location.trim()
+  const savedStreet = [input.address1?.trim(), input.address2?.trim()].filter(Boolean).join(', ')
+  const parsed = parseLocationParts(savedStreet || location)
+
+  const city = input.city?.trim() || parsed.city || ''
+  const state = input.state?.trim() || parsed.state || ''
+  const zipCode = (input.zipCode?.replace(/\D/g, '') || parsed.zipCode || '').slice(0, 6)
+  const district = input.district?.trim() ?? ''
+
+  // Prefer structured street. If the only saved line is a full Google-style label,
+  // or city/ZIP are still missing, split so City / State / ZIP are not left blank.
+  const shouldSplit =
+    (!savedStreet && Boolean(location)) ||
+    (!city && Boolean(savedStreet || location)) ||
+    (!zipCode && Boolean(savedStreet || location)) ||
+    (Boolean(savedStreet) && looksLikeFullAddress(savedStreet) && (!city || !zipCode || !state))
+
+  const street = shouldSplit
+    ? streetFromPin(savedStreet || location)
+    : { address1: savedStreet || streetFromPin(location).address1, address2: '' }
+
   return {
     name: usableName(input.recipientName) || usableName(input.userName),
     contactNumber: contactDigits(input.contactNumber) || contactDigits(input.userPhone),
-    address1: savedStreet || fromPin.address1,
-    address2: input.address2?.trim() || (savedStreet ? '' : fromPin.address2),
-    city: input.city?.trim() || parsed.city || '',
-    district: input.district?.trim() ?? '',
-    state: input.state?.trim() || parsed.state || '',
-    zipCode: (input.zipCode?.replace(/\D/g, '') || parsed.zipCode || '').slice(0, 6),
+    address1: street.address1,
+    address2: street.address2,
+    city,
+    district,
+    state,
+    zipCode,
   }
 }
 
@@ -87,14 +110,27 @@ export function customerNameFromProfile(payload: unknown) {
   return name
 }
 
-export function checkoutAddressError(form: CheckoutAddressForm) {
+/** One validation message at a time, in field order. */
+export function checkoutAddressError(
+  form: CheckoutAddressForm,
+  options?: { mapEnabled?: boolean; mapPinned?: boolean },
+) {
   if (!form.name.trim()) return 'Enter the name for this delivery.'
-  if (!/^\d{10}$/.test(form.contactNumber.trim())) return 'Enter a 10-digit contact number.'
-  if (!form.address1.trim()) return 'Enter the street address.'
+  if (!/^\d{10}$/.test(form.contactNumber.trim())) return 'Enter a 10-digit phone number.'
+  if (!form.address1.trim()) return 'Enter the address.'
   if (!form.city.trim()) return 'Enter the city.'
+  if (!form.district.trim()) return 'Enter the district.'
   if (!form.state.trim()) return 'Enter the state.'
   if (!/^\d{6}$/.test(form.zipCode.trim())) return 'Enter a 6-digit ZIP code.'
+  if (options?.mapEnabled && !options.mapPinned) return 'Pin this address on Google Map.'
   return ''
+}
+
+export function isCheckoutAddressComplete(
+  form: CheckoutAddressForm,
+  options?: { mapEnabled?: boolean; mapPinned?: boolean },
+) {
+  return checkoutAddressError(form, options) === ''
 }
 
 /** One line the shop and WhatsApp message can show after the form is saved. */

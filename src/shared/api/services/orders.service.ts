@@ -81,6 +81,7 @@ export type PlaceOrderInput = {
   deliveryDate?: string | null
   orderTimingType?: string | null
   paymentTypeId?: string | null
+  pickupAddressId?: string | number | null
   pickupSlot?: string | null
 }
 
@@ -155,18 +156,67 @@ function hasCheckoutPin(input: PlaceOrderInput) {
   )
 }
 
-async function saveCheckoutAddress(userId: number, input: PlaceOrderInput) {
+async function saveCheckoutAddress(
+  userId: number,
+  input: PlaceOrderInput,
+  setAsDefault = true,
+) {
   const path = `/v1/users/${userId}`
   const filled = await fillCheckoutAddress(input)
   const saved = await apiPatch<ApiEnvelope<unknown>>(
     path,
     mapNameAndAddressRequest(filled),
-    { params: { setAsDefault: true } },
+    { params: { setAsDefault } },
   )
   const fromSave = extractAddressId(saved)
   if (fromSave) return fromSave
   const refreshed = await apiGet<ApiEnvelope<unknown>>(path)
   return extractAddressId(refreshed)
+}
+
+
+export async function updateCustomerDeliveryAddress(input: {
+  userId: string | number
+  name: string
+  location: string
+  lat: number
+  lng: number
+  city: string
+  country?: string | null
+  zipCode: string
+  state: string
+  district?: string | null
+  address1: string
+  address2?: string | null
+  setAsDefault?: boolean
+}): Promise<number | null> {
+  const userId = asNumericId(input.userId)
+  if (!userId) return null
+  if (!isLiveApi()) return null
+
+  return saveCheckoutAddress(
+    userId,
+    {
+      storeId: '',
+      storeName: '',
+      address: input.location,
+      phone: '',
+      lines: [],
+      deliveryFee: 0,
+      total: 0,
+      userName: input.name,
+      lat: input.lat,
+      lng: input.lng,
+      city: input.city,
+      country: input.country,
+      zipCode: input.zipCode,
+      state: input.state,
+      district: input.district,
+      address1: input.address1,
+      address2: input.address2,
+    },
+    input.setAsDefault ?? false,
+  )
 }
 
 async function resolveAddressId(input: PlaceOrderInput): Promise<number | null> {
@@ -224,6 +274,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     throw new Error('Choose a delivery date to continue.')
   }
 
+  if (isPickup && !input.pickupSlot?.trim()) {
+    throw new Error('Choose a pickup time to continue.')
+  }
+
   const body = mapCreateOrderFromCartBody({
     vendorId: input.storeId,
     deliveryMethod: input.deliveryMethod,
@@ -232,6 +286,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     orderTimingType: input.orderTimingType,
     paymentTypeId: input.paymentTypeId,
     notes: input.note,
+    pickupAddressId: input.pickupAddressId,
     pickupSlot: input.pickupSlot,
   })
 
@@ -356,6 +411,7 @@ export async function getMyOrder(
 
 export const ordersService = {
   placeOrder,
+  updateCustomerDeliveryAddress,
   listMyOrders,
   listMyOrdersPage,
   getMyOrder,
