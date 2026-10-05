@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mapVendorContext, vendorOnboardingService, type VendorContext } from '@/shared/api'
+import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
 import { loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
@@ -11,6 +12,7 @@ const VENDOR_ID = '96'
 
 afterEach(() => {
   invalidateVendorOnboardingState()
+  clearVendorHeaderHint()
   vi.restoreAllMocks()
 })
 
@@ -196,5 +198,64 @@ describe('loadVendorOnboardingState reads only what the resume step needs', () =
     await expect(loadMeasurementCatalog(read)).rejects.toThrow('offline')
     await expect(loadMeasurementCatalog(read)).resolves.toBe(SAMPLE_MEASUREMENT_CATALOG)
     expect(read).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('loadVendorOnboardingState remembers the header hint', () => {
+  function contextWith(vendorStatus: string, nextStep: number): VendorContext {
+    return mapVendorContext({
+      data: {
+        vendor_id: VENDOR_ID,
+        vendor_status: vendorStatus,
+        approval_status: 'PENDING',
+        onboarding: { status: 'IN_PROGRESS', next_step: nextStep },
+      },
+    })
+  }
+
+  function answerProfile() {
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+      businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
+    })
+  }
+
+  it('from an accepted read', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(contextWith('SETTING_UP', 3))
+    answerProfile()
+
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    expect(readVendorHeaderHint(VENDOR_ID)).toMatchObject({
+      vendorId: VENDOR_ID, vendorStatus: 'SETTING_UP', onboarding: { nextStep: 3 },
+    })
+  })
+
+  it('not from a read a forced reload replaced, even when it lands last', async () => {
+    let resolveOld!: (value: VendorContext) => void
+    vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce(contextWith('SETTING_UP', 3))
+    answerProfile()
+
+    const oldRead = loadVendorOnboardingState(VENDOR_ID)
+    await loadVendorOnboardingState(VENDOR_ID, { force: true })
+    resolveOld(contextWith('INACTIVE', 1))
+    await oldRead
+
+    expect(readVendorHeaderHint(VENDOR_ID)).toMatchObject({ vendorStatus: 'SETTING_UP', onboarding: { nextStep: 3 } })
+  })
+
+  it('not from a read that a sign-out dropped', async () => {
+    let resolveOld!: (value: VendorContext) => void
+    vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+    answerProfile()
+
+    const oldRead = loadVendorOnboardingState(VENDOR_ID)
+    invalidateVendorOnboardingState()
+    resolveOld(contextWith('SETTING_UP', 3))
+    await oldRead
+
+    expect(readVendorHeaderHint(VENDOR_ID)).toBeNull()
   })
 })

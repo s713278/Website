@@ -1,4 +1,5 @@
 import { vendorOnboardingService, type VendorContext } from '@/shared/api'
+import { rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
 import {
   invalidateVendorOnboardingState,
@@ -49,7 +50,11 @@ export function loadVendorOnboardingState(
   // write back over whatever replaced it.
   entry.promise = entry.promise
     .then((state) => {
-      if (isCurrentEntry(vendorId, entry)) entry.resolved = state
+      if (isCurrentEntry(vendorId, entry)) {
+        entry.resolved = state
+        // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
+        rememberVendorHeaderHint(state.context)
+      }
       return state
     })
     .catch((error: unknown) => {

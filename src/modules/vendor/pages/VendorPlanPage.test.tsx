@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { resetLiveBilling } from '@/modules/vendor/store/live-billing'
+import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import {
   ApiError, configureApiClient, liveBillingService, mapVendorContext, mapVendorPlan, type LiveSubscriptionRead, type VendorContext,
 } from '@/shared/api'
@@ -23,7 +23,7 @@ import { VendorPlanPage } from './VendorPlanPage'
 beforeEach(() => { vi.stubEnv('VITE_USE_API', 'false'); configureApiClient({ useApi: false }) })
 afterEach(() => {
   cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers()
-  resetDemoState(); resetBillingPrototypeState(); useAuthStore.getState().clearSession(); resetLiveBilling()
+  resetDemoState(); resetBillingPrototypeState(); useAuthStore.getState().clearSession(); resetLiveBilling(); resetLiveBillingPlansForTests()
 })
 
 function context(scenario: 'trial_active' | 'current_context', vendorId = 'vendor-1') {
@@ -314,7 +314,8 @@ describe('VendorPlanPage', () => {
       expect(screen.queryByText(/^Confirming payment/)).toBeNull()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
       expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-      expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
+      // The plans list is read once per page load; Check again rereads only the subscription.
+      expect(reads.listPaidPlans).toHaveBeenCalledOnce()
     })
 
     describe('Stop the plan', () => {
@@ -1218,6 +1219,8 @@ describe('VendorPlanPage', () => {
       /** Row 7: free days while the payment is confirmed. */
       const confirmingFreeDays = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
       const keptFreeDays = 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.'
+      /** How long a good read stays fresh: focus before then sends nothing. */
+      const freshFor = 15 * 60 * 1000
 
       beforeEach(() => {
         // The suite fakes only Date, and useFakeTimers() does not reinstall over it.
@@ -1226,7 +1229,7 @@ describe('VendorPlanPage', () => {
         vi.setSystemTime(daysBeforeEnd(12.5))
       })
 
-      it('rereads when the window regains focus', async () => {
+      it('rereads the subscription, not the plans list, when the window regains focus once the read is 15 minutes old', async () => {
         const reads = stubReads(async () => trial())
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
@@ -1234,9 +1237,18 @@ describe('VendorPlanPage', () => {
         reads.readSubscription.mockImplementation(async () => confirmingFreeDays())
         await focus()
         await wait()
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        await wait(freshFor - 1)
+        await focus()
+        await wait()
+        expect(reads.readSubscription).toHaveBeenCalledOnce()
+        expect(screen.getByText('13')).toBeTruthy()
+        await wait(1)
+        await focus()
+        await wait()
         expect(screen.getByText(keptFreeDays)).toBeTruthy()
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-        expect(reads.listPaidPlans).toHaveBeenCalledTimes(2)
+        expect(reads.listPaidPlans).toHaveBeenCalledOnce()
       })
 
       it('rereads at T, so free days turn into Shop closed at that moment', async () => {
@@ -1362,6 +1374,7 @@ describe('VendorPlanPage', () => {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         reads.readSubscription.mockImplementation(async () => { throw failure() })
+        await wait(freshFor)
         await focus()
         await wait(retrying)
         expect(reads.readSubscription).toHaveBeenCalledTimes(calls)
@@ -1494,6 +1507,23 @@ describe('VendorPlanPage', () => {
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Free days start when your shop goes live.')).toBeTruthy()
       expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+    })
+
+    it('rereads the subscription on every open but the plans list once, and keeps Checkout off until the open’s read lands', async () => {
+      const reads = stubReads(async () => trial())
+      const { unmount } = show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('13')).toBeTruthy()
+      unmount()
+      const reopened = deferred<LiveSubscriptionRead>()
+      reads.readSubscription.mockImplementation(() => reopened.promise)
+      show(accountFor(context('trial_active', 'vendor-1')))
+      // The last view shows at once, but Checkout waits for this open's read.
+      expect(screen.getByText('13')).toBeTruthy()
+      expect((screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }) as HTMLButtonElement).disabled).toBe(true)
+      expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+      await act(async () => { reopened.resolve(trial()) })
+      expect((screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }) as HTMLButtonElement).disabled).toBe(false)
+      expect(reads.listPaidPlans).toHaveBeenCalledOnce()
     })
 
     it('drops the first vendor’s late read after a vendor switch through applySession', async () => {
@@ -1635,15 +1665,79 @@ describe('VendorPlanPage', () => {
         expect(reads.readHistory).toHaveBeenLastCalledWith('vendor-2', expect.anything())
       })
 
-      it('rereads the history whenever Plan rereads, such as on focus', async () => {
+      // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+      it('rereads the history on focus only when the reread changed', async () => {
         const reads = stubReads(async () => trial())
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         expect(reads.readHistory).toHaveBeenCalledOnce()
+        // Past the 15 minutes a good read stays fresh.
+        await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000) })
         await act(async () => { window.dispatchEvent(new Event('focus')) })
         await wait()
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        expect(reads.readHistory).toHaveBeenCalledOnce()
+
+        reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+        await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000) })
+        await act(async () => { window.dispatchEvent(new Event('focus')) })
+        await wait()
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
         expect(reads.readHistory).toHaveBeenCalledTimes(2)
+      })
+
+      // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+      describe('when Plan opens again', () => {
+        /** Opens Plan, lets its reads land, and leaves it. */
+        async function visit(vendorId = 'vendor-1') {
+          const view = render(page(vendorId))
+          await wait()
+          view.unmount()
+        }
+
+        it('shows the last rows at once and reads no history when the subscription read is unchanged', async () => {
+          vi.setSystemTime(new Date('2026-10-15T06:00:00Z'))
+          const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription() }), undefined, async () => liveStoppedHistory())
+          await visit()
+          render(page('vendor-1'))
+          expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'AutoPay set up17 days ago', 'Free days started17 days ago'])
+          expect(within(section()).queryByRole('status')).toBeNull()
+          await wait()
+          expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+          expect(reads.readHistory).toHaveBeenCalledOnce()
+          expect(rows()).toHaveLength(4)
+        })
+
+        it('reads the history once when the subscription read changed', async () => {
+          const reads = stubReads(async () => trial())
+          await visit()
+          reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
+          render(page('vendor-1'))
+          await wait()
+          expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+          expect(reads.readHistory).toHaveBeenCalledTimes(2)
+        })
+
+        it('reads the history again after a failed history read, which is never kept', async () => {
+          const reads = stubReads(async () => trial(), undefined, async () => { throw new ApiError('History is unavailable.', 500, null, '/v1/vendors/vendor-1/subscription/history', 'server') })
+          await visit()
+          reads.readHistory.mockResolvedValue([])
+          render(page('vendor-1'))
+          await wait()
+          expect(reads.readHistory).toHaveBeenCalledTimes(2)
+          expect(rows()).toEqual(['Free days started2 days ago'])
+        })
+
+        it('reads its own history after a vendor switch or a sign-out, never the last vendor\'s', async () => {
+          const reads = stubReads(async () => trial(), undefined, async () => [])
+          await visit('vendor-1')
+          act(() => { signIn('vendor-2') })
+          await visit('vendor-2')
+          expect(reads.readHistory).toHaveBeenLastCalledWith('vendor-2', expect.anything())
+          act(() => { useAuthStore.getState().clearSession(); signIn('vendor-1') })
+          await visit('vendor-1')
+          expect(reads.readHistory.mock.calls.map(([vendorId]) => vendorId)).toEqual(['vendor-1', 'vendor-2', 'vendor-1'])
+        })
       })
     })
   })

@@ -1,4 +1,5 @@
 import type { VendorContext } from '@/shared/api'
+import { rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 
 /**
  * One in-flight context read per vendor.
@@ -62,6 +63,8 @@ export function loadVendorContext(
         }
         entry.resolved = context
         accepted.set(vendorId, context)
+        // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
+        rememberVendorHeaderHint(context)
       }
       return context
     })

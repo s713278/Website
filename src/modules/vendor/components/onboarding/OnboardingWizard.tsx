@@ -806,8 +806,7 @@ export function OnboardingWizard() {
   const confirmStartOver = () => requestConfirmation({
     title: 'Start over?',
     description:
-      'This signs you out and returns you to the first step. Anything already saved to your store stays on your account, and is picked up when you sign in again with this number. '
-      + 'Unsaved details in this browser, and any photos you picked, are cleared.',
+      'You will be logged out. Your saved details are safe.',
     confirmLabel: 'Start over',
     tone: 'danger',
     onConfirm: () => {

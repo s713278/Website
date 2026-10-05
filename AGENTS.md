@@ -77,7 +77,7 @@ Read the relevant owner before changing its area; load additional documents as t
 | An architectural or domain decision | Relevant [docs/adr/](./docs/adr/) entries — decisions, trade-offs, and removal conditions |
 | API calls, transport, mapping, or demo/live behavior | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) |
 | A missing contract capability or temporary exception | [docs/API_GAPS.md](./docs/API_GAPS.md) |
-| Vendor platform billing | Product rules: [docs/VENDOR_BILLING_DECISIONS.md](./docs/VENDOR_BILLING_DECISIONS.md); backend contract, gaps and Razorpay setup: [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md) |
+| Vendor platform billing | Product rules: [docs/VENDOR_BILLING_DECISIONS.md](./docs/VENDOR_BILLING_DECISIONS.md); backend contract, gaps and Razorpay setup: [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md); billing read caching target: [docs/VENDOR_BILLING_READS_TARGET.md](./docs/VENDOR_BILLING_READS_TARGET.md) |
 | Authentication, roles, route gates, or session-owned state | [docs/SESSION.md](./docs/SESSION.md) — current lifecycle and separately marked target model |
 | Adding or changing tests | [docs/TESTING.md](./docs/TESTING.md) — tiers, writing rules, and runner limits |
 | API package commands or exports | [packages/api-client/README.md](./packages/api-client/README.md) |
@@ -209,6 +209,11 @@ Update the session document with the implementation, not in advance of it.
 - The Zustand cart (`md-cart`) persists vendor-scoped lines and summaries. Preserve its live API
   orchestration and local demo path; [cart behavior](./docs/API_ARCHITECTURE.md#storefront-cart) owns the details.
 - `openapi-fetch` is declared by the API package but currently unused.
+- Two temporary markers stand in for a caching layer: `TEMP(vendor-header-hint)` persists the
+  vendor's last-known account state for the marketing header, and `TEMP(vendor-billing-reads)` limits
+  Live API billing reads in memory. A caching-layer migration (e.g. TanStack Query) must first remove
+  both, per [docs/SESSION.md](./docs/SESSION.md#temporary-vendor-header-hint--tempvendor-header-hint)
+  and [docs/VENDOR_BILLING_READS_TARGET.md](./docs/VENDOR_BILLING_READS_TARGET.md#removal).
 
 ## UI and design reference
 

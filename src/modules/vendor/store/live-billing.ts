@@ -1,16 +1,18 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
-import { isSettledView } from '@/modules/vendor/lib/live-billing-wording'
+import { isSettledView, liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
 import { liveBillingService, mapLiveBilling, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /**
  * The Live API billing read, shared by Plan and the console chrome so they cannot disagree. One read
- * covers the subscription and the plans list; if either fails, the whole read fails.
+ * covers the subscription and the plans list; if either fails, the whole read fails. The plans list
+ * is read once per page load and shared by every later read.
  *
  * The read belongs to one vendor and one session. A session or vendor change clears it, and a
  * response that lands after that is dropped, so the next vendor on this browser never sees it.
- * The confirmation hold lives beside it, in memory only, and is cleared with it.
+ * The confirmation hold lives beside it, in memory only, and is cleared with it; so does Plan's last
+ * good history (TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md).
  */
 export interface LiveBillingRead {
   /** The last view read. A failed reread keeps it, with its plan name, beside the error. */
@@ -33,10 +35,16 @@ export interface LiveBillingRead {
   hold: string | null
 }
 
-/** `plans` is the last plans response, so a cancel response can be mapped without reading it again. */
-interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown }
+/**
+ * `plans` is the last plans response, so a cancel response can be mapped without reading it again.
+ * `readAt` is when the view last landed, or `null` when another tab says it is out of date.
+ * `signature` is the content of the subscription response the view came from, so Plan's history
+ * knows whether the subscription changed.
+ */
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown; readAt: number | null; signature: string | null }
 
-const empty: Snapshot = { vendorId: null, plans: null, view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: false, hold: null }
+const empty: Snapshot = { vendorId: null, plans: null, readAt: null, signature: null, view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: false, hold: null }
 /** What a vendor sees before its first read lands. */
 const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: true, hold: null }
 let snapshot = empty
@@ -46,6 +54,44 @@ let inFlight: { vendorId: string; generation: number; controller: AbortControlle
 const listeners = new Set<() => void>()
 /** The reread at the shown view's next T or P. */
 let boundaryTimer: number | undefined
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** The plans list, read once per page load and kept across sessions: it is public and holds no vendor data. */
+let plansRead: Promise<unknown> | null = null
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** Tells the browser's other tabs that a vendor's billing changed, while anything here shows the read. */
+let channel: BroadcastChannel | null = null
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** Counts other tabs' messages, so a read that started before one does not count as fresh. */
+let announcements = 0
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** Plan's last good history read, with the subscription response it was read against; memory only. */
+let historyRead: { vendorId: string; signature: string; events: unknown } | null = null
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** Counts resets, so a history read that lands after one is not kept. */
+let resets = 0
+
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+function readPlans(): Promise<unknown> {
+  if (plansRead) return plansRead
+  // No signal: one read's abort must not fail the plans list every later read shares.
+  const read = liveBillingService.listPaidPlans()
+  plansRead = read
+  read.catch(() => {
+    if (plansRead === read) plansRead = null
+  })
+  return read
+}
+
+/** Lets each test read the plans list afresh; the app never forgets it. */
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+export function resetLiveBillingPlansForTests() {
+  plansRead = null
+}
+
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+function announce(vendorId: string | null) {
+  if (vendorId !== null) channel?.postMessage({ vendorId })
+}
 
 /**
  * A new view sets the boundary timer again; a session or vendor change leaves none to set. A settled
@@ -53,8 +99,11 @@ let boundaryTimer: number | undefined
  */
 function publish(next: Snapshot) {
   const viewChanged = next.view !== snapshot.view
-  snapshot = next.hold !== null && next.view !== null && isSettledView(next.view) ? { ...next, hold: null } : next
+  const settled = next.hold !== null && next.view !== null && isSettledView(next.view)
+  snapshot = settled ? { ...next, hold: null } : next
   if (viewChanged) armBoundary()
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+  if (settled) announce(next.vendorId)
   listeners.forEach((listener) => listener())
 }
 
@@ -75,12 +124,16 @@ export function readLiveBilling(vendorId: string): Promise<void> {
   const promise = (async () => {
     try {
       for (let retry = 0; ; retry += 1) {
+        // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+        const seen = announcements
         try {
           const [read, plans] = await Promise.all([
             liveBillingService.readSubscription(vendorId, { signal: controller.signal }),
-            liveBillingService.listPaidPlans({ signal: controller.signal }),
+            // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+            readPlans(),
           ])
-          if (current()) publish({ vendorId, plans, view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false, hold: snapshot.hold })
+          // TEMP(vendor-billing-reads): a read that started before another tab's message may predate its change.
+          if (current()) publish({ vendorId, plans, readAt: seen === announcements ? Date.now() : null, signature: JSON.stringify(read), view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false, hold: snapshot.hold })
           return
         } catch (error) {
           if (!current()) return
@@ -117,7 +170,9 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const read = { kind: 'subscription', subscription } as const
   const view = mapLiveBilling(read, snapshot.plans, new Date())
   dropRead()
-  publish({ ...snapshot, view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false })
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+  publish({ ...snapshot, readAt: Date.now(), signature: JSON.stringify(read), view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false })
+  announce(vendorId)
 }
 
 /**
@@ -125,7 +180,10 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
  * line. Only a settled read ends it.
  */
 export function holdLiveBilling(vendorId: string, waiting: string) {
-  if (snapshot.vendorId === vendorId) publish({ ...snapshot, hold: waiting })
+  if (snapshot.vendorId !== vendorId) return
+  publish({ ...snapshot, hold: waiting })
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+  announce(vendorId)
 }
 
 /** Drops the read in flight, so neither its response nor its retries land. */
@@ -138,7 +196,36 @@ function dropRead() {
 /** Forgets the read and drops any response still on its way. */
 export function resetLiveBilling() {
   dropRead()
+  // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+  historyRead = null
+  resets += 1
   publish(empty)
+}
+
+/**
+ * The vendor's last good history, while the subscription response it was read against is still the
+ * shown one; otherwise `undefined`, and the history must be read again.
+ */
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+export function keptLiveHistory(vendorId: string): unknown {
+  return historyRead && snapshot.vendorId === vendorId && historyRead.vendorId === vendorId && historyRead.signature === snapshot.signature ? historyRead.events : undefined
+}
+
+/**
+ * Reads the vendor's history and keeps a good one against the shown subscription response. Plan's
+ * read on open starts just after its sections mount, so this first waits a tick and for any read in
+ * flight to land; that read's landing usually supersedes this one, which then sends nothing.
+ */
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+export async function readLiveHistory(vendorId: string, signal: AbortSignal): Promise<unknown> {
+  await Promise.resolve()
+  if (inFlight?.vendorId === vendorId) await inFlight.promise
+  if (signal.aborted) throw signal.reason
+  const signature = snapshot.vendorId === vendorId ? snapshot.signature : null
+  const claim = resets
+  const events = await liveBillingService.readHistory(vendorId, { signal })
+  if (!signal.aborted && signature !== null && claim === resets) historyRead = { vendorId, signature, events }
+  return events
 }
 
 // A new session, a sign-out or a vendor switch all replace the session's user.
@@ -147,12 +234,18 @@ useAuthStore.subscribe((state, previous) => {
 })
 
 /*
-  While anything shows the read, it stays current: returning to the window rereads it, and so does
-  the view's next T or P, when its free days or paid days end. Day counts stay as read until then.
-  There is one focus listener and one timer however many components show the read, so they cause
-  one reread. Once nothing shows it, a read waiting to retry gives up, and the next showing reads
-  afresh.
+  While anything shows the read, it stays current: returning to the window rereads it once it is
+  15 minutes old, has failed, waits on a payment (a hold or a Confirming view), or another tab has
+  changed the vendor's billing; so does the view's next T or P, when its free days or paid days end.
+  Day counts stay as read until then. There is one focus listener, one timer and one channel to
+  other tabs however many components show the read, so they cause one reread. Once nothing shows
+  it, a read waiting to retry gives up, and the next showing reads afresh.
+  TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
 */
+
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** How long a read stays fresh enough that returning to the window does not reread it. */
+const freshFor = 15 * 60_000
 
 /** The longest delay a browser timer takes (about 24.8 days); a longer one runs at once. */
 const maxTimerDelay = 2 ** 31 - 1
@@ -181,22 +274,43 @@ function armBoundary() {
   arm()
 }
 
-/** Rereads for the signed-in vendor, and for no one after sign-out. */
+/** Rereads for the signed-in vendor, and for no one after sign-out, when the read may be out of date. */
 function rereadOnFocus() {
   const vendorId = useAuthStore.getState().user?.vendorId
-  if (vendorId) void readLiveBilling(vendorId)
+  if (vendorId && isStale(vendorId)) void readLiveBilling(vendorId)
+}
+
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+function isStale(vendorId: string): boolean {
+  const { readAt, error, hold, view } = snapshot
+  return snapshot.vendorId !== vendorId || readAt === null || error !== null || hold !== null
+    || (view !== null && liveBillingWording(view).confirming !== null) || Date.now() - readAt >= freshFor
+}
+
+// TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+/** Another tab changed this vendor's billing, so the next return to the window rereads it. */
+function onAnnounced(event: MessageEvent<{ vendorId?: unknown }>) {
+  if (snapshot.vendorId === null || event.data?.vendorId !== snapshot.vendorId) return
+  announcements += 1
+  publish({ ...snapshot, readAt: null })
 }
 
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
   if (listeners.size === 1) {
     window.addEventListener('focus', rereadOnFocus)
+    // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+    channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('md-vendor-billing') : null
+    if (channel) channel.onmessage = onAnnounced
     armBoundary()
   }
   return () => {
     listeners.delete(listener)
     if (listeners.size > 0) return
     window.removeEventListener('focus', rereadOnFocus)
+    // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
+    channel?.close()
+    channel = null
     armBoundary()
     if (inFlight?.waiting) {
       dropRead()

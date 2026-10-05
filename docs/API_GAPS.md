@@ -123,6 +123,22 @@ evidence. This table is the summary.
 | J | The status stays `TRIAL_ACTIVE` after `trial_ends_at` | The status contradicts the dates; anything reading the status alone sees a trial | `TRIAL_EXPIRED` at `trial_ends_at`, on server time | No |
 | K | The early first fee is not built | Paying in the free days sets up AutoPay only (₹5 now, ₹299 at trial end); the shop is hidden after the trial end until Razorpay charges | One ₹299 now, a paid month from `trial_ends_at`, `start_at` = `current_period_end` | Yes |
 
+#### Billing read gaps
+
+Recorded 4 October 2026. Every billing endpoint answers `Cache-Control: no-store` and nothing
+announces a billing change, so the app limits its billing reads in memory: the
+`TEMP(vendor-billing-reads)` workaround, whose target design and request counts
+[VENDOR_BILLING_READS_TARGET.md](./VENDOR_BILLING_READS_TARGET.md) owns. None of these is a release
+blocker. Each fix is a contract change the backend would have to publish; no such endpoint, field or
+header exists today.
+
+| Gap | Problem | Required contract change | Frontend code it would retire |
+|---|---|---|---|
+| Subscribe guard | No documented guarantee that a second subscribe, from another tab or device or after a stale read, cannot start a second payment. On dev, a repeat while pending returns the same subscription, but after the trial end that reuse is [gap I](#billing-gaps-ak), and an active subscription is not covered | Subscribe made idempotent per store (a repeat returns the existing subscription and Checkout), or rejected with a 4xx and the reason while a subscription is active or confirming | Plan's forced read on open and Checkout disabled while reading; the target's `refetchOnMount: 'always'` |
+| Billing change push | Nothing tells an open tab that billing changed (a webhook-applied payment, a cancel or a charge elsewhere), so the app rereads on focus once 15 minutes old, on Plan and at T or P | A vendor-scoped push channel, such as server-sent events, announcing billing changes | The 15-minute focus gate, the cross-tab `BroadcastChannel` and most of Plan's 5 s poll; the target's 15 min `staleTime` could rise |
+| Plan summary in the vendor context | The rail chip, Settings' Plan row and the chrome need the plan name, trial end and billing status, but since 29 September the vendor context has none, so every vendor page starts a billing read | The vendor context carries a plan summary: plan name, `trial_ends_at` and the billing status | The chrome's, rail's and Settings' use of the shared billing read (`useStartedLiveBilling`); only Plan would read billing |
+| Cacheable plans catalog | `GET /v1/subscription-plans` is public and static but answers `no-store`, so the browser cannot cache it | An `ETag` with conditional requests, or a `max-age`, instead of `no-store` | The in-memory, once-per-page-load plans request; the target's `staleTime: Infinity` plans query |
+
 ### Backend request: let a vendor edit their own catalog during setup
 
 The single largest unresolved gap in onboarding. A vendor who picks the wrong category or

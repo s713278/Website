@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
 import logoDarkMd from '@/assets/logo_dark_md.png'
@@ -7,13 +7,6 @@ import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 import { useHeaderActions } from '../hooks/useHeaderActions'
 import { isOnboardingPath, type HeaderAction } from '../lib/header-actions'
-
-// Only a vendor with unfinished setup can open it, so it stays out of the first bundle.
-const ConfirmDialog = lazy(() =>
-  import('@/modules/vendor/components/onboarding/ConfirmDialog').then((m) => ({
-    default: m.ConfirmDialog,
-  })),
-)
 
 const NAV = [
   { label: 'About Us', href: '#about' },
@@ -90,7 +83,6 @@ export function MarketingHeader() {
   // than showing a login link to someone part-way through store setup.
   const actions = useHeaderActions()
   const logout = useAuthStore((state) => state.logout)
-  const [confirmingLogOut, setConfirmingLogOut] = useState(false)
 
   // On the landing page the hero runs underneath the header, so at the top of the page the
   // header lets its background through. Once the page scrolls (or the menu opens over it) it
@@ -171,7 +163,7 @@ export function MarketingHeader() {
               <HeaderActionButton
                 key={action.label}
                 action={action}
-                onLogOut={() => setConfirmingLogOut(true)}
+                onLogOut={() => void logout()}
               />
             ))}
           </div>
@@ -206,24 +198,11 @@ export function MarketingHeader() {
               action={action}
               mobile
               onNavigate={() => setOpen(false)}
-              onLogOut={() => setConfirmingLogOut(true)}
+              onLogOut={() => void logout()}
             />
           ))}
         </div>
       </div>
-      {confirmingLogOut ? (
-        <Suspense fallback={null}>
-          <ConfirmDialog
-            open
-            title="Log out?"
-            description="This signs you out on this device. Anything already saved to your store stays on your account, and is picked up when you sign in again with this number. Unsaved details in this browser are cleared."
-            confirmLabel="Log out"
-            tone="danger"
-            onConfirm={() => void logout()}
-            onOpenChange={setConfirmingLogOut}
-          />
-        </Suspense>
-      ) : null}
     </header>
   )
 }

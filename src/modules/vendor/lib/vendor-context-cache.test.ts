@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VendorContext } from '@/shared/api'
+import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
 import { invalidateVendorOnboardingState } from './onboarding-state-cache'
 import {
   invalidateVendorContext,
@@ -8,7 +9,10 @@ import {
   peekVendorContext,
 } from './vendor-context-cache'
 
-afterEach(() => invalidateVendorContext())
+afterEach(() => {
+  invalidateVendorContext()
+  clearVendorHeaderHint()
+})
 
 function contextFor(vendorId: string): VendorContext {
   return {
@@ -152,5 +156,41 @@ describe('loadVendorContext', () => {
     await expect(loadVendorContext('97', async () => ({ ...contextFor('97'), billing: { revision: 1 } })))
       .resolves.toMatchObject({ vendorId: '97', billing: { revision: 1 } })
     expect(contextSnapshotMayReplace(contextFor('96'), contextFor('97'))).toBe(false)
+  })
+
+  describe('remembers the header hint', () => {
+    it('from an accepted read', async () => {
+      await loadVendorContext('96', async () => ({ ...contextFor('96'), vendorStatus: 'ACTIVE' }))
+
+      expect(readVendorHeaderHint('96')).toMatchObject({ vendorId: '96', vendorStatus: 'ACTIVE' })
+    })
+
+    it('not from a read older than the last confirmed billing status', async () => {
+      await loadVendorContext('96', async () => ({ ...contextFor('96'), billing: { revision: 4 }, vendorStatus: 'ACTIVE' }))
+      invalidateVendorContext('96')
+
+      await expect(loadVendorContext('96', async () => ({ ...contextFor('96'), billing: { revision: 3 } })))
+        .rejects.toThrow(/older/)
+
+      expect(readVendorHeaderHint('96')).toMatchObject({ vendorStatus: 'ACTIVE' })
+    })
+
+    it('not from a read superseded while it was in flight', async () => {
+      let resolveOld!: (value: VendorContext) => void
+      const oldRead = loadVendorContext('96', () => new Promise((resolve) => { resolveOld = resolve }))
+      invalidateVendorContext('96')
+
+      resolveOld({ ...contextFor('96'), vendorStatus: 'ACTIVE' })
+      await oldRead
+
+      expect(readVendorHeaderHint('96')).toBeNull()
+    })
+
+    it('not from a read for another store', async () => {
+      await expect(loadVendorContext('96', async () => contextFor('97'))).rejects.toThrow(/another store/)
+
+      expect(readVendorHeaderHint('96')).toBeNull()
+      expect(readVendorHeaderHint('97')).toBeNull()
+    })
   })
 })
