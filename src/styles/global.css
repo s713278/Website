@@ -802,24 +802,34 @@
 }
 @layer components {
   /* The step row scrolls when it outgrows the window. Without a container edge to
-     clip against, a half-cut node at x=0 just looks broken, so the ends fade instead —
-     which also reads as "there is more this way". Invisible at widths where the row
-     fits, because the fade then falls on empty gutter. */
+     clip against, a half-cut node just looks broken, so an end fades instead — which
+     also reads as "there is more this way". Each end fades only while steps are hidden
+     past it (set by the stepper), so a fully visible first or last dot stays crisp. */
   .ob-stepper-scroll {
+    --ob-fade-before: 0px;
+    --ob-fade-after: 0px;
     -webkit-mask-image: linear-gradient(
       to right,
       transparent 0,
-      #000 1.5rem,
-      #000 calc(100% - 1.5rem),
+      #000 var(--ob-fade-before),
+      #000 calc(100% - var(--ob-fade-after)),
       transparent 100%
     );
     mask-image: linear-gradient(
       to right,
       transparent 0,
-      #000 1.5rem,
-      #000 calc(100% - 1.5rem),
+      #000 var(--ob-fade-before),
+      #000 calc(100% - var(--ob-fade-after)),
       transparent 100%
     );
+  }
+
+  .ob-stepper-scroll[data-fade-before] {
+    --ob-fade-before: 1.5rem;
+  }
+
+  .ob-stepper-scroll[data-fade-after] {
+    --ob-fade-after: 1.5rem;
   }
 
   /* Form column · preview bay. Declared here rather than as Tailwind breakpoint
