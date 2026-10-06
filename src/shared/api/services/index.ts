@@ -38,7 +38,11 @@ export {
   getProductSkuDetail,
   getStorefrontProduct,
 } from './catalog.service'
-export type { StorefrontCheckoutOptions, StorefrontCheckoutPayment } from '../mappers/storefront-checkout'
+export type {
+  StorefrontCheckoutOptions,
+  StorefrontCheckoutPayment,
+  StorefrontPickupStore,
+} from '../mappers/storefront-checkout'
 export { hasStoreContactContent } from '../mappers/storefront-contact'
 export type { StoreContact, StoreContactAddress, StoreContactLink } from '../mappers/storefront-contact'
 export {

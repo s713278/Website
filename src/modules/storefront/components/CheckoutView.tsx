@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  Copy,
   CreditCard,
   MapPin,
   ShieldCheck,
@@ -28,10 +29,12 @@ import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHead
 import { StorefrontMobileActionBar } from '@/modules/storefront/components/StorefrontMobileActionBar'
 import { lineAmount, priceDetailsFromSummary } from '@/modules/storefront/lib/cart-utils'
 import {
+  CHECKOUT_ADDRESS_MAP_ENABLED,
   checkoutAddressError,
   checkoutAddressFormFromPin,
   customerNameFromProfile,
   formatCheckoutAddress,
+  isCheckoutAddressComplete,
   type CheckoutAddressForm,
 } from '@/modules/storefront/lib/checkout-address-form'
 import {
@@ -60,8 +63,12 @@ import { cn } from '@/lib/utils'
 const EMPTY_DELIVERY_SLOTS: StorefrontCheckoutOptions['deliverySlots'] = []
 const EMPTY_PAYMENT_OPTIONS: StorefrontCheckoutOptions['paymentOptions'] = []
 const EMPTY_DELIVERY_METHODS: StorefrontCheckoutOptions['deliveryMethods'] = []
-const ADDRESS_NOTE = 'Check address and items for delivery to the following address.'
+const EMPTY_PICKUP_STORES: StorefrontCheckoutOptions['pickupStores'] = []
+const ADDRESS_NOTE_SAVED = 'Check address and items — delivery will be done here.'
+const ADDRESS_NOTE_EMPTY = 'Add the address — delivery will be done here.'
 const PLACE_ORDER_LABEL = 'Create Order & Send On WhatsApp'
+const PICKUP_SLOTS_MISSING =
+  'This store has not configured pickup times yet. Choose home delivery or contact the store.'
 
 type CheckoutViewProps = {
   store: Store
@@ -73,9 +80,26 @@ type CheckoutViewProps = {
   onBack: () => void
 }
 
-function deliveryMethodLabel(method: string) {
-  if (method === 'STORE_PICKUP') return 'Store pickup'
-  return 'Home delivery'
+function deliveryMethodLabel(method: StorefrontCheckoutOptions['deliveryMethods'][number]) {
+  return method === 'STORE_PICKUP' ? 'Store pickup' : 'Home delivery'
+}
+
+function deliveryMethodHint(
+  method: StorefrontCheckoutOptions['deliveryMethods'][number],
+  options: StorefrontCheckoutOptions | null,
+) {
+  if (method === 'STORE_PICKUP') {
+    return options?.pickupMessage?.trim() || 'Free · Collect from store'
+  }
+  const charge = options?.shipping.deliveryCharge
+  if (charge != null && charge > 0) {
+    const threshold = options?.shipping.freeDeliveryThreshold
+    if (threshold != null && threshold > 0) {
+      return `${formatCurrency(charge)} · Free above ${formatCurrency(threshold)}`
+    }
+    return `${formatCurrency(charge)} delivery charge`
+  }
+  return 'Delivered to your address'
 }
 
 function paymentIcon(type: StorefrontCheckoutPayment['type'] | undefined) {
@@ -99,10 +123,14 @@ function paymentNote(
   if (type === 'CASH_ON_DELIVERY' || label.includes('CASH')) {
     return `Pay ${storeName} when you receive your order.`
   }
-  if (type === 'ONLINE' || type === 'UPI' || label.includes('UPI')) {
+  if (type === 'PRE_PAID' || type === 'ONLINE' || type === 'UPI' || label.includes('UPI')) {
     return `Pay ${storeName} directly using any UPI app, like PhonePe, Google Pay, etc.`
   }
   return undefined
+}
+
+function hasPrepaidDetails(option: StorefrontCheckoutPayment) {
+  return Boolean(option.details?.upiAccount || option.details?.accountHolderName)
 }
 
 export function CheckoutView({
@@ -131,6 +159,7 @@ export function CheckoutView({
   const deliverySlots = checkoutOptions?.deliverySlots ?? EMPTY_DELIVERY_SLOTS
   const paymentOptions = checkoutOptions?.paymentOptions ?? EMPTY_PAYMENT_OPTIONS
   const deliveryMethods = checkoutOptions?.deliveryMethods ?? EMPTY_DELIVERY_METHODS
+  const pickupStores = checkoutOptions?.pickupStores ?? EMPTY_PICKUP_STORES
   const estimateDates = checkoutOptions?.availableDeliveryDates ?? []
   const estimateLabel = formatDeliveryEstimate(estimateDates)
   const consentTitle = checkoutOptions?.consentTitle
@@ -139,15 +168,23 @@ export function CheckoutView({
 
   const defaultPaymentId =
     paymentOptions.find((option) => option.isDefault)?.id ?? paymentOptions[0]?.id ?? ''
+  const defaultDeliveryMethod = deliveryMethods[0] ?? 'HOME_DELIVERY'
+  const defaultPickupStoreId = pickupStores[0]?.id ?? ''
 
   const [deliverySlot, setDeliverySlot] = useState(deliverySlots[0]?.id ?? '')
+  const [pickupStoreId, setPickupStoreId] = useState(defaultPickupStoreId)
+  const [pickupSlot, setPickupSlot] = useState(pickupStores[0]?.pickupSlots[0]?.id ?? '')
   const [payment, setPayment] = useState(defaultPaymentId)
+  const [deliveryMethod, setDeliveryMethod] =
+    useState<StorefrontCheckoutOptions['deliveryMethods'][number]>(defaultDeliveryMethod)
   const [consentAccepted, setConsentAccepted] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [error, setError] = useState('')
   const [editingAddress, setEditingAddress] = useState(false)
   const [addressForm, setAddressForm] = useState<CheckoutAddressForm | null>(null)
   const [addressError, setAddressError] = useState('')
+  const [addressSaving, setAddressSaving] = useState(false)
+  const [addressMapPinned, setAddressMapPinned] = useState(false)
 
   useEffect(() => {
     if (!deliverySlots.some((slot) => slot.id === deliverySlot) && deliverySlots[0]) {
@@ -156,22 +193,53 @@ export function CheckoutView({
   }, [deliverySlots, deliverySlot])
 
   useEffect(() => {
+    if (!pickupStores.some((storeOption) => storeOption.id === pickupStoreId) && pickupStores[0]) {
+      setPickupStoreId(pickupStores[0].id)
+    }
+  }, [pickupStores, pickupStoreId])
+
+  const selectedPickupStore =
+    pickupStores.find((storeOption) => storeOption.id === pickupStoreId) ?? pickupStores[0] ?? null
+  const pickupSlots = selectedPickupStore?.pickupSlots ?? EMPTY_DELIVERY_SLOTS
+
+  useEffect(() => {
+    if (!pickupSlots.some((slot) => slot.id === pickupSlot) && pickupSlots[0]) {
+      setPickupSlot(pickupSlots[0].id)
+    }
+  }, [pickupSlots, pickupSlot])
+
+  useEffect(() => {
     if (!paymentOptions.some((option) => option.id === payment) && defaultPaymentId) {
       setPayment(defaultPaymentId)
     }
   }, [paymentOptions, payment, defaultPaymentId])
 
   useEffect(() => {
+    if (!deliveryMethods.includes(deliveryMethod) && defaultDeliveryMethod) {
+      setDeliveryMethod(defaultDeliveryMethod)
+    }
+  }, [deliveryMethods, deliveryMethod, defaultDeliveryMethod])
+
+  useEffect(() => {
     setConsentAccepted(false)
   }, [consentTitle, consentText])
 
   const selectedSlot = deliverySlots.find((slot) => slot.id === deliverySlot)
-  const deliveryMethod = deliveryMethods[0] ?? 'HOME_DELIVERY'
+  const selectedPickupSlot = pickupSlots.find((slot) => slot.id === pickupSlot)
+  const isStorePickup = deliveryMethod === 'STORE_PICKUP'
+  const pickupSlotsConfigured = pickupSlots.length > 0
   const deliveryDate = estimateDates[0] ?? selectedSlot?.date ?? ''
   // Item totals stay on the cart summary. The delivery line comes from checkout_options
   // shipping_config, which the cart payload does not include.
   const totals = useMemo(() => {
     const base = priceDetailsFromSummary(summary)
+    if (isStorePickup) {
+      return {
+        ...base,
+        delivery: 0,
+        total: base.total - base.delivery,
+      }
+    }
     const quoted = deliveryFeeForCheckout({
       subtotal: base.subtotal,
       method: deliveryMethod,
@@ -184,15 +252,26 @@ export function CheckoutView({
       delivery: quoted,
       total: base.total - base.delivery + quoted,
     }
-  }, [summary, deliveryMethod, checkoutOptions?.shipping, checkoutOptions?.shippingStrategyType])
+  }, [
+    summary,
+    deliveryMethod,
+    isStorePickup,
+    checkoutOptions?.shipping,
+    checkoutOptions?.shippingStrategyType,
+  ])
 
   const selectedPayment = paymentOptions.find((option) => option.id === payment)
   const selectedPaymentLabel = selectedPayment?.label ?? 'Payment'
+  const needsDeliveryAddress = !isStorePickup
+  const storePickupPhone = (store.phone || store.supportWhatsapp || '')
+    .replace(/\D/g, '')
+    .slice(-10)
 
   const canPlace =
-    Boolean(selected) &&
+    (needsDeliveryAddress ? Boolean(selected) : true) &&
     !editingAddress &&
-    Boolean(estimateLabel || deliverySlot || deliverySlots.length === 0) &&
+    Boolean(estimateLabel || deliverySlot || deliverySlots.length === 0 || isStorePickup) &&
+    (!isStorePickup || (pickupSlotsConfigured && Boolean(selectedPickupSlot))) &&
     Boolean(payment || paymentOptions.length === 0) &&
     (!requiresConsent || consentAccepted) &&
     !placing
@@ -221,6 +300,9 @@ export function CheckoutView({
     })
     setAddressForm(draft)
     setAddressError('')
+    setAddressMapPinned(
+      Number.isFinite(selected.lat) && Number.isFinite(selected.lng),
+    )
     setEditingAddress(true)
     if (!draft.name && user?.id) fillNameFromProfile(user.id)
   }
@@ -244,22 +326,28 @@ export function CheckoutView({
     setEditingAddress(false)
     setAddressForm(null)
     setAddressError('')
+    setAddressSaving(false)
+    setAddressMapPinned(false)
   }
 
-  function saveAddressEdit() {
+  async function saveAddressEdit() {
     if (!addressForm || !selected) {
       openAddressMap()
       return
     }
 
-    const problem = checkoutAddressError(addressForm)
+    const problem = checkoutAddressError(addressForm, {
+      mapEnabled: CHECKOUT_ADDRESS_MAP_ENABLED,
+      mapPinned: addressMapPinned,
+    })
     if (problem) {
       setAddressError(problem)
       return
     }
 
-    updateAddress(selected.id, {
-      location: formatCheckoutAddress(addressForm),
+    const location = formatCheckoutAddress(addressForm)
+    const next = {
+      location,
       lat: selected.lat,
       lng: selected.lng,
       city: addressForm.city.trim(),
@@ -272,12 +360,40 @@ export function CheckoutView({
       recipientName: addressForm.name.trim(),
       contactNumber: addressForm.contactNumber.trim(),
       backendAddressId: selected.backendAddressId,
-    })
+    }
 
-    setEditingAddress(false)
-    setAddressForm(null)
+    setAddressSaving(true)
     setAddressError('')
-    setError('')
+    try {
+      if (user?.id && isLiveApi()) {
+        const backendAddressId = await ordersService.updateCustomerDeliveryAddress({
+          userId: user.id,
+          name: next.recipientName,
+          location: next.location,
+          lat: next.lat,
+          lng: next.lng,
+          city: next.city,
+          country: next.country,
+          zipCode: next.zipCode,
+          state: next.state,
+          district: next.district,
+          address1: next.address1,
+          address2: next.address2,
+          setAsDefault: false,
+        })
+        if (backendAddressId) next.backendAddressId = backendAddressId
+      }
+
+      updateAddress(selected.id, next)
+      setEditingAddress(false)
+      setAddressForm(null)
+      setAddressMapPinned(false)
+      setError('')
+    } catch (err) {
+      setAddressError(getErrorMessage(err))
+    } finally {
+      setAddressSaving(false)
+    }
   }
 
   async function placeOrderOnWhatsApp() {
@@ -285,9 +401,17 @@ export function CheckoutView({
       setError('Save your delivery address to continue.')
       return
     }
-    if (!selected) {
+    if (needsDeliveryAddress && !selected) {
       setError('Add a delivery address to continue.')
       openAddressMap()
+      return
+    }
+    if (isStorePickup && !pickupSlotsConfigured) {
+      setError(PICKUP_SLOTS_MISSING)
+      return
+    }
+    if (isStorePickup && !selectedPickupSlot) {
+      setError('Choose a pickup time to continue.')
       return
     }
     if (requiresConsent && !consentAccepted) {
@@ -302,10 +426,15 @@ export function CheckoutView({
       const order = await ordersService.placeOrder({
         storeId: store.id,
         storeName: store.name,
-        address: selected.location,
-        phone: selected.contactNumber || phone,
+        address: selected?.location ?? store.name,
+        phone: selected?.contactNumber || phone,
         note: [
-          selectedSlot ? `Slot: ${selectedSlot.label}` : null,
+          isStorePickup ? 'Method: Store pickup' : null,
+          selectedPickupSlot
+            ? `Slot: ${selectedPickupSlot.label}`
+            : selectedSlot
+              ? `Slot: ${selectedSlot.label}`
+              : null,
           `Payment: ${selectedPaymentLabel}`,
         ]
           .filter(Boolean)
@@ -314,25 +443,26 @@ export function CheckoutView({
         deliveryFee: totals.delivery,
         total: totals.total,
         userId: user?.id,
-        userName: selected.recipientName || user?.name,
-        addressId: selected.backendAddressId ?? selected.id,
-        lat: selected.lat,
-        lng: selected.lng,
-        city: selected.city,
-        country: selected.country,
-        zipCode: selected.zipCode,
-        address1: selected.address1,
-        address2: selected.address2,
-        district: selected.district,
-        state: selected.state,
+        userName: selected?.recipientName || user?.name,
+        addressId: selected?.backendAddressId ?? selected?.id,
+        lat: selected?.lat,
+        lng: selected?.lng,
+        city: selected?.city,
+        country: selected?.country,
+        zipCode: selected?.zipCode,
+        address1: selected?.address1,
+        address2: selected?.address2,
+        district: selected?.district,
+        state: selected?.state,
         deliveryMethod,
-        deliveryDate,
+        deliveryDate: isStorePickup ? undefined : deliveryDate,
         orderTimingType: checkoutOptions?.schedulingStrategy,
         paymentTypeId: selectedPayment?.id ?? payment,
-        pickupSlot: selectedSlot?.label,
+        pickupAddressId: selectedPickupStore?.id,
+        pickupSlot: selectedPickupSlot?.label,
       })
 
-      if (order.addressId) {
+      if (order.addressId && selected) {
         useDeliveryAddressStore.getState().updateAddress(selected.id, {
           location: selected.location,
           lat: selected.lat,
@@ -353,15 +483,15 @@ export function CheckoutView({
       const message = buildWhatsAppOrderMessage({
         orderId: order.id,
         storeName: store.name,
-        customerName: checkoutCustomerName(selected.recipientName, user?.name),
-        location: selected.location,
-        phone: selected.contactNumber || phone,
-        address1: selected.address1,
-        address2: selected.address2,
-        city: selected.city,
-        district: selected.district,
-        state: selected.state,
-        zipCode: selected.zipCode,
+        customerName: checkoutCustomerName(selected?.recipientName, user?.name),
+        location: selected?.location ?? (isStorePickup ? 'Store pickup' : ''),
+        phone: selected?.contactNumber || phone,
+        address1: selected?.address1,
+        address2: selected?.address2,
+        city: selected?.city,
+        district: selected?.district,
+        state: selected?.state,
+        zipCode: selected?.zipCode,
         lines,
         subtotal: totals.subtotal,
         deliveryFee: totals.delivery,
@@ -438,49 +568,84 @@ export function CheckoutView({
           >
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
               <section className="space-y-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.04)] sm:p-7">
-                <CheckoutSection icon={MapPin} title="Delivery address" hint={ADDRESS_NOTE}>
-                  {editingAddress && addressForm ? (
-                    <AddressEditor
-                      value={addressForm}
-                      error={addressError}
-                      onChange={(next) => {
-                        setAddressForm(next)
-                        if (addressError) setAddressError('')
-                      }}
-                      onCancel={cancelAddressEdit}
-                      onSave={saveAddressEdit}
-                      onChooseOnMap={() => openAddressMap(selected?.id)}
-                    />
-                  ) : selected ? (
-                    <div className="flex items-start gap-3 rounded-2xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-4 py-3.5">
-                      <div className="min-w-0 flex-1">
-                        {selected.recipientName ? (
-                          <p className="text-sm font-bold text-slate-900">{selected.recipientName}</p>
-                        ) : null}
-                        {selected.contactNumber ? (
-                          <p className="text-xs text-slate-600">+91 {selected.contactNumber}</p>
-                        ) : null}
-                        <p
-                          className={cn(
-                            'whitespace-pre-wrap text-sm text-slate-900',
-                            selected.recipientName ? 'mt-1' : 'font-bold',
-                          )}
-                        >
-                          {selected.location}
-                        </p>
-                        {deliveryMethods.length > 0 ? (
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {deliveryMethods.map(deliveryMethodLabel).join(' · ')}
-                          </p>
-                        ) : null}
-                      </div>
+                <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.65rem]">
+                  Review Order
+                </h1>
+
+                {deliveryMethods.length > 0 ? (
+                  <CheckoutSection title="Delivery Method" icon={Truck}>
+                    <div className="space-y-2.5">
+                      {deliveryMethods.map((method) => (
+                        <ChoiceRow
+                          key={method}
+                          checked={deliveryMethod === method}
+                          onChange={() => setDeliveryMethod(method)}
+                          name="delivery-method"
+                          title={deliveryMethodLabel(method)}
+                          subtitle={deliveryMethodHint(method, checkoutOptions)}
+                          icon={method === 'STORE_PICKUP' ? StoreIcon : Truck}
+                        />
+                      ))}
+                    </div>
+                  </CheckoutSection>
+                ) : null}
+
+                {!isStorePickup ? (
+                <CheckoutSection
+                  icon={MapPin}
+                  title="Delivering here"
+                  hint={selected ? ADDRESS_NOTE_SAVED : ADDRESS_NOTE_EMPTY}
+                  action={
+                    !editingAddress && selected ? (
                       <button
                         type="button"
                         onClick={startAddressEdit}
                         className="inline-flex shrink-0 items-center text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
                       >
-                        Edit address
+                        Edit
                       </button>
+                    ) : null
+                  }
+                >
+                  {editingAddress && addressForm ? (
+                    <AddressEditor
+                      value={addressForm}
+                      error={addressError}
+                      mapEnabled={CHECKOUT_ADDRESS_MAP_ENABLED}
+                      mapPinned={addressMapPinned}
+                      saving={addressSaving}
+                      onChange={(next) => {
+                        setAddressForm(next)
+                        if (addressError) setAddressError('')
+                      }}
+                      onCancel={cancelAddressEdit}
+                      onSave={() => {
+                        void saveAddressEdit()
+                      }}
+                      onPinMap={() => {
+                        setAddressMapPinned(true)
+                        openAddressMap(selected?.id)
+                      }}
+                    />
+                  ) : selected ? (
+                    <div className="rounded-2xl border border-[color-mix(in_srgb,var(--store-theme,#10b981)_28%,#ffffff)] bg-[linear-gradient(135deg,var(--store-theme-soft,rgba(16,185,129,0.12)),#ffffff)] px-4 py-3.5 shadow-sm">
+                      <p className="text-[0.68rem] font-bold uppercase tracking-[0.04em] text-[var(--store-theme,var(--md-green-700))]">
+                        Home
+                      </p>
+                      {selected.recipientName ? (
+                        <p className="mt-1 text-sm font-bold text-slate-900">{selected.recipientName}</p>
+                      ) : null}
+                      <p
+                        className={cn(
+                          'whitespace-pre-wrap text-[0.9rem] font-semibold leading-snug text-slate-900',
+                          selected.recipientName ? 'mt-0.5' : 'mt-1',
+                        )}
+                      >
+                        {selected.location}
+                      </p>
+                      {selected.contactNumber ? (
+                        <p className="mt-1.5 text-xs text-slate-500">+91 {selected.contactNumber}</p>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center">
@@ -495,8 +660,76 @@ export function CheckoutView({
                     </div>
                   )}
                 </CheckoutSection>
+                ) : (
+                  <CheckoutSection
+                    icon={StoreIcon}
+                    title="Store pickup"
+                    hint={
+                      checkoutOptions?.pickupMessage?.trim() ||
+                      'Pickup is free. Collect your order from the store.'
+                    }
+                  >
+                    {pickupStores.length > 1 ? (
+                      <div className="mb-3 space-y-2.5">
+                        {pickupStores.map((storeOption) => (
+                          <ChoiceRow
+                            key={storeOption.id}
+                            checked={selectedPickupStore?.id === storeOption.id}
+                            onChange={() => setPickupStoreId(storeOption.id)}
+                            name="pickup-store"
+                            title={storeOption.name}
+                            subtitle={storeOption.address ?? undefined}
+                            icon={StoreIcon}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="rounded-2xl border border-[color-mix(in_srgb,var(--store-theme,#10b981)_28%,#ffffff)] bg-[linear-gradient(135deg,var(--store-theme-soft,rgba(16,185,129,0.12)),#ffffff)] px-4 py-3.5 shadow-sm">
+                      <p className="text-[0.68rem] font-bold uppercase tracking-[0.04em] text-[var(--store-theme,var(--md-green-700))]">
+                        In-store
+                      </p>
+                      <p className="mt-1 text-[0.9rem] font-semibold leading-snug text-slate-900">
+                        {selectedPickupStore?.name ?? store.name}
+                      </p>
+                      {(selectedPickupStore?.address || store.location) ? (
+                        <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">
+                          {selectedPickupStore?.address || store.location}
+                        </p>
+                      ) : null}
+                      {selectedPickupStore?.readyInMinutes != null ? (
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          Ready in about {selectedPickupStore.readyInMinutes} minutes
+                        </p>
+                      ) : null}
+                      {storePickupPhone.length === 10 ? (
+                        <p className="mt-1.5 text-xs text-slate-500">Contact: +91 {storePickupPhone}</p>
+                      ) : null}
+                    </div>
+                    {!pickupSlotsConfigured ? (
+                      <p className="mt-3 text-sm text-amber-800">{PICKUP_SLOTS_MISSING}</p>
+                    ) : null}
+                  </CheckoutSection>
+                )}
 
-                {deliverySlots.length > 0 ? (
+                {isStorePickup && pickupSlotsConfigured ? (
+                  <CheckoutSection title="Pickup time" icon={CalendarDays}>
+                    <div className="space-y-2.5">
+                      {pickupSlots.map((slot) => (
+                        <ChoiceRow
+                          key={slot.id}
+                          checked={pickupSlot === slot.id}
+                          onChange={() => setPickupSlot(slot.id)}
+                          name="pickup-slot"
+                          title={slot.label}
+                          subtitle={slot.description}
+                          recommended={slot.recommended}
+                        />
+                      ))}
+                    </div>
+                  </CheckoutSection>
+                ) : null}
+
+                {!isStorePickup && deliverySlots.length > 0 ? (
                   <CheckoutSection title="Delivery time" icon={CalendarDays}>
                     <div className="space-y-2.5">
                       {deliverySlots.map((slot) => (
@@ -517,20 +750,15 @@ export function CheckoutView({
                 {paymentOptions.length > 0 ? (
                   <CheckoutSection title="Payment" icon={CreditCard}>
                     <div className="space-y-2.5">
-                      {paymentOptions.map((option) => {
-                        const Icon = paymentIcon(option.type)
-                        return (
-                          <ChoiceRow
-                            key={option.id}
-                            checked={payment === option.id}
-                            onChange={() => setPayment(option.id)}
-                            name="payment-method"
-                            title={option.label}
-                            subtitle={paymentNote(option, store.name)}
-                            icon={Icon}
-                          />
-                        )
-                      })}
+                      {paymentOptions.map((option) => (
+                        <PaymentOptionCard
+                          key={option.id}
+                          option={option}
+                          checked={payment === option.id}
+                          storeName={store.name}
+                          onSelect={() => setPayment(option.id)}
+                        />
+                      ))}
                     </div>
                   </CheckoutSection>
                 ) : null}
@@ -724,11 +952,13 @@ function CheckoutSection({
   icon: Icon,
   title,
   hint,
+  action,
   children,
 }: {
   icon: typeof MapPin
   title: string
   hint?: string
+  action?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -737,7 +967,10 @@ function CheckoutSection({
         <Icon className="size-5" strokeWidth={1.75} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="text-[15px] font-bold text-slate-900">{title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-[15px] font-bold text-slate-900">{title}</h2>
+          {action}
+        </div>
         {hint ? <p className="mt-0.5 text-sm text-slate-500">{hint}</p> : null}
         <div className="mt-3">{children}</div>
       </div>
@@ -815,88 +1048,314 @@ function RadioMark({ checked }: { checked: boolean }) {
   )
 }
 
-const ADDRESS_FIELDS: Array<{
-  key: keyof CheckoutAddressForm
+function FieldLabel({
+  htmlFor,
+  label,
+  children,
+  className,
+}: {
+  htmlFor: string
   label: string
-  autoComplete: string
-  inputMode?: 'numeric' | 'text'
-  wide?: boolean
-}> = [
-  { key: 'name', label: 'Name', autoComplete: 'name', wide: true },
-  { key: 'contactNumber', label: 'Contact number', autoComplete: 'tel', inputMode: 'numeric', wide: true },
-  { key: 'address1', label: 'Address 1 / street', autoComplete: 'address-line1', wide: true },
-  { key: 'address2', label: 'Address 2 / locality', autoComplete: 'address-line2', wide: true },
-  { key: 'city', label: 'City', autoComplete: 'address-level2' },
-  { key: 'district', label: 'District', autoComplete: 'off' },
-  { key: 'state', label: 'State', autoComplete: 'address-level1' },
-  { key: 'zipCode', label: 'ZIP code / pincode', autoComplete: 'postal-code', inputMode: 'numeric' },
-]
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <label htmlFor={htmlFor} className={cn('block', className)}>
+      <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+        {label}{' '}
+        <abbr className="text-[var(--md-danger)] no-underline" title="Required">
+          *
+        </abbr>
+      </span>
+      {children}
+    </label>
+  )
+}
+
+const fieldClassName =
+  'w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--store-theme,var(--md-green-600))] focus:ring-2 focus:ring-[var(--store-theme-soft,rgba(16,185,129,0.45))]'
 
 function AddressEditor({
   value,
   error,
+  mapEnabled,
+  mapPinned,
+  saving,
   onChange,
   onCancel,
   onSave,
-  onChooseOnMap,
+  onPinMap,
 }: {
   value: CheckoutAddressForm
   error: string
+  mapEnabled: boolean
+  mapPinned: boolean
+  saving: boolean
   onChange: (value: CheckoutAddressForm) => void
   onCancel: () => void
   onSave: () => void
-  onChooseOnMap: () => void
+  onPinMap: () => void
 }) {
+  const canSave =
+    isCheckoutAddressComplete(value, { mapEnabled, mapPinned }) && !saving
+
   return (
-    <div>
+    <div data-map-enabled={mapEnabled ? 'true' : 'false'}>
       <div className="grid gap-3 sm:grid-cols-2">
-        {ADDRESS_FIELDS.map((field) => (
-          <label key={field.key} className={cn('block', field.wide && 'sm:col-span-2')}>
-            <span className="mb-1.5 block text-xs font-semibold text-slate-600">{field.label}</span>
-            <input
-              value={value[field.key]}
-              autoFocus={field.key === 'name'}
-              autoComplete={field.autoComplete}
-              inputMode={field.inputMode ?? 'text'}
-              aria-label={field.label}
-              onChange={(event) => onChange({ ...value, [field.key]: event.target.value })}
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--store-theme,var(--md-green-600))] focus:ring-2 focus:ring-[var(--store-theme-soft,rgba(16,185,129,0.45))]"
-            />
-          </label>
-        ))}
+        <FieldLabel htmlFor="checkout-addr-name" label="Name">
+          <input
+            id="checkout-addr-name"
+            value={value.name}
+            autoFocus
+            autoComplete="name"
+            aria-required
+            aria-label="Name"
+            onChange={(event) => onChange({ ...value, name: event.target.value })}
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-phone" label="Phone number">
+          <input
+            id="checkout-addr-phone"
+            value={value.contactNumber}
+            autoComplete="tel"
+            inputMode="numeric"
+            maxLength={10}
+            aria-required
+            aria-label="Phone number"
+            placeholder="10-digit mobile"
+            onChange={(event) =>
+              onChange({
+                ...value,
+                contactNumber: event.target.value.replace(/\D/g, '').slice(0, 10),
+              })
+            }
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-text" label="Address" className="sm:col-span-2">
+          <textarea
+            id="checkout-addr-text"
+            value={value.address1}
+            rows={2}
+            autoComplete="street-address"
+            aria-required
+            aria-label="Address"
+            placeholder="House, street, locality"
+            onChange={(event) =>
+              onChange({ ...value, address1: event.target.value, address2: '' })
+            }
+            className={cn(fieldClassName, 'min-h-[4.5rem] resize-y py-2.5')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-city" label="City">
+          <input
+            id="checkout-addr-city"
+            value={value.city}
+            autoComplete="address-level2"
+            aria-required
+            aria-label="City"
+            onChange={(event) => onChange({ ...value, city: event.target.value })}
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-district" label="District">
+          <input
+            id="checkout-addr-district"
+            value={value.district}
+            aria-required
+            aria-label="District"
+            onChange={(event) => onChange({ ...value, district: event.target.value })}
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-state" label="State">
+          <input
+            id="checkout-addr-state"
+            value={value.state}
+            autoComplete="address-level1"
+            aria-required
+            aria-label="State"
+            onChange={(event) => onChange({ ...value, state: event.target.value })}
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
+        <FieldLabel htmlFor="checkout-addr-zip" label="ZIP code">
+          <input
+            id="checkout-addr-zip"
+            value={value.zipCode}
+            autoComplete="postal-code"
+            inputMode="numeric"
+            maxLength={6}
+            aria-required
+            aria-label="ZIP code"
+            placeholder="6-digit PIN"
+            onChange={(event) =>
+              onChange({
+                ...value,
+                zipCode: event.target.value.replace(/\D/g, '').slice(0, 6),
+              })
+            }
+            className={cn(fieldClassName, 'h-11')}
+          />
+        </FieldLabel>
       </div>
+
+      {mapEnabled ? (
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+          <p className="text-xs font-semibold text-slate-600">
+            Google Map{' '}
+            <abbr className="text-[var(--md-danger)] no-underline" title="Required">
+              *
+            </abbr>
+          </p>
+          <button
+            type="button"
+            onClick={onPinMap}
+            className="mt-2 inline-flex h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:border-slate-300"
+          >
+            <MapPin className="size-3.5" aria-hidden />
+            Pin on Google Map
+          </button>
+          {mapPinned ? (
+            <p className="mt-2 text-xs font-medium text-slate-600">Location pinned</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {error ? (
         <p className="mt-2 text-sm text-[var(--md-danger)]" role="alert">
           {error}
         </p>
       ) : null}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <button
+
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <Button
           type="button"
-          onClick={onChooseOnMap}
-          className="inline-flex h-11 items-center gap-1.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+          variant="outline"
+          className="h-11 rounded-full border-slate-200 px-5 text-slate-800"
+          onClick={onCancel}
+          disabled={saving}
         >
-          <MapPin className="size-3.5" aria-hidden />
-          Choose on map
-        </button>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-full border-slate-200 px-5 text-slate-800"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className="h-11 rounded-full bg-[var(--store-theme,var(--md-green-800))] px-5 text-white hover:opacity-90"
-            onClick={onSave}
-          >
-            Save address
-          </Button>
-        </div>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          className="h-11 rounded-full bg-[var(--store-theme,var(--md-green-800))] px-5 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={onSave}
+          disabled={!canSave}
+        >
+          {saving ? 'Saving…' : 'Save address'}
+        </Button>
       </div>
+    </div>
+  )
+}
+
+function PaymentOptionCard({
+  option,
+  checked,
+  storeName,
+  onSelect,
+}: {
+  option: StorefrontCheckoutPayment
+  checked: boolean
+  storeName: string
+  onSelect: () => void
+}) {
+  const Icon = paymentIcon(option.type)
+  const subtitle = paymentNote(option, storeName)
+  const showDetails =
+    checked &&
+    (option.type === 'PRE_PAID' || option.type === 'ONLINE') &&
+    hasPrepaidDetails(option)
+
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border transition',
+        checked
+          ? 'border-[var(--store-theme,var(--md-green-500))] bg-[var(--store-theme-soft,rgba(16,185,129,0.12))]'
+          : 'border-slate-200 bg-white',
+      )}
+    >
+      <label className="flex cursor-pointer items-center gap-3 px-4 py-3.5">
+        <input
+          type="radio"
+          name="payment-method"
+          checked={checked}
+          onChange={onSelect}
+          className="sr-only"
+        />
+        <span
+          className={cn(
+            'inline-flex size-9 shrink-0 items-center justify-center rounded-xl',
+            checked
+              ? 'bg-white/80 text-[var(--store-theme,var(--md-green-700))]'
+              : 'bg-slate-100 text-slate-600',
+          )}
+        >
+          <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
+          {subtitle ? <span className="mt-0.5 block text-xs text-slate-500">{subtitle}</span> : null}
+        </span>
+        <RadioMark checked={checked} />
+      </label>
+
+      {showDetails && option.details ? (
+        <div className="px-4 pb-3.5">
+          <PrepaidPaymentDetails details={option.details} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PrepaidPaymentDetails({
+  details,
+}: {
+  details: NonNullable<StorefrontCheckoutPayment['details']>
+}) {
+  const [copied, setCopied] = useState(false)
+  const upi = details.upiAccount?.trim() ?? ''
+  const holder = details.accountHolderName?.trim() ?? ''
+
+  async function copyUpi() {
+    if (!upi || !navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(upi)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* Clipboard may be blocked; the UPI id stays visible to copy manually. */
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-sm">
+      {holder ? <p className="text-sm font-semibold text-slate-900">{holder}</p> : null}
+      {upi ? (
+        <div className={cn('flex items-center gap-2', holder ? 'mt-2' : undefined)}>
+          <p className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800">
+            {upi}
+          </p>
+          <button
+            type="button"
+            onClick={() => void copyUpi()}
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+            aria-label={copied ? 'UPI ID copied' : 'Copy UPI ID'}
+            title={copied ? 'Copied' : 'Copy'}
+          >
+            {copied ? (
+              <Check className="size-4 text-[var(--store-theme,var(--md-green-700))]" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

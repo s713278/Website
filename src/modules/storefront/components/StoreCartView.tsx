@@ -176,7 +176,6 @@ export function StoreCartView({
                       <p className="text-right text-base font-bold text-slate-900">
                         {formatCurrency(totals.total)}
                       </p>
-                      <p className="text-right text-xs text-slate-500">(Incl. of all taxes)</p>
                     </dd>
                   </div>
                 </dl>

@@ -25,7 +25,8 @@ export type PlaceOrderDraft = {
   orderTimingType?: string | null
   paymentTypeId?: string | null
   notes?: string | null
-  pickupSlot?: string | null
+   pickupAddressId?: string | number | null
+   pickupSlot?: string | null
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -217,7 +218,7 @@ export function mapCreateOrderFromCartBody(draft: PlaceOrderDraft): CreateOrderF
   if (orderTimingType) body.order_timing_type = orderTimingType
 
   if (method === 'STORE_PICKUP') {
-    body.pickup_address_id = vendorId
+    body.pickup_address_id = asNumericId(draft.pickupAddressId) ?? vendorId
     const slot = pickupSlot(draft.pickupSlot)
     if (slot) body.pickup_slot = slot
     return body

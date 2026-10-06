@@ -51,15 +51,29 @@ describe('mapCreateOrderFromCartBody', () => {
       mapCreateOrderFromCartBody({
         vendorId: '91',
         deliveryMethod: 'STORE_PICKUP',
+        pickupAddressId: '10',
         pickupSlot: 'MORNING',
       }),
     ).toEqual({
       vendor_id: 91,
       delivery_method: 'STORE_PICKUP',
-      pickup_address_id: 91,
+      pickup_address_id: 10,
       pickup_slot: 'Morning',
       clear_cart: true,
       order_source: 'APP',
+    })
+  })
+
+  it('falls back to vendor id when pickup store id is missing', () => {
+    expect(
+      mapCreateOrderFromCartBody({
+        vendorId: '91',
+        deliveryMethod: 'STORE_PICKUP',
+        pickupSlot: 'Evening',
+      }),
+    ).toMatchObject({
+      pickup_address_id: 91,
+      pickup_slot: 'Evening',
     })
   })
 

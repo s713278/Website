@@ -4,6 +4,7 @@ import {
   checkoutAddressFormFromPin,
   customerNameFromProfile,
   formatCheckoutAddress,
+  isCheckoutAddressComplete,
 } from './checkout-address-form'
 
 describe('checkoutAddressFormFromPin', () => {
@@ -19,8 +20,8 @@ describe('checkoutAddressFormFromPin', () => {
     ).toMatchObject({
       name: 'Aneri',
       contactNumber: '9876543210',
-      address1: 'Road No 27F',
-      address2: 'Miyapur',
+      address1: 'Road No 27F, Miyapur',
+      address2: '',
       city: 'Hyderabad',
       state: 'Telangana',
       zipCode: '500049',
@@ -41,7 +42,24 @@ describe('checkoutAddressFormFromPin', () => {
         state: 'Telangana',
         zipCode: '500049',
       }).address1,
-    ).toBe('Road No 27F')
+    ).toBe('Road No 27F, Miyapur')
+  })
+
+  it('splits a full address line into street, city, state, and ZIP when structured fields are missing', () => {
+    expect(
+      checkoutAddressFormFromPin({
+        userName: 'Swamy Kunta',
+        userPhone: '9912149049',
+        location: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032',
+      }),
+    ).toMatchObject({
+      name: 'Swamy Kunta',
+      contactNumber: '9912149049',
+      address1: 'Flat 302, Green Residency',
+      city: 'Gachibowli',
+      state: 'Hyderabad',
+      zipCode: '500032',
+    })
   })
 })
 
@@ -59,17 +77,31 @@ describe('checkoutAddressError', () => {
     address1: 'Road No 27F',
     address2: '',
     city: 'Hyderabad',
-    district: '',
+    district: 'Ranga Reddy',
     state: 'Telangana',
     zipCode: '500049',
   }
 
-  it('accepts a complete address with optional locality and district', () => {
+  it('accepts a complete address including district', () => {
     expect(checkoutAddressError(complete)).toBe('')
+    expect(isCheckoutAddressComplete(complete)).toBe(true)
   })
 
-  it('asks for a 10-digit contact number', () => {
+  it('blocks save when district is empty', () => {
+    expect(checkoutAddressError({ ...complete, district: '' })).toMatch(/district/i)
+    expect(isCheckoutAddressComplete({ ...complete, district: '' })).toBe(false)
+  })
+
+  it('asks for a 10-digit phone number', () => {
     expect(checkoutAddressError({ ...complete, contactNumber: '98765' })).toMatch(/10-digit/)
+  })
+
+  it('requires a map pin only when mapEnabled is on', () => {
+    expect(checkoutAddressError(complete, { mapEnabled: false, mapPinned: false })).toBe('')
+    expect(
+      checkoutAddressError(complete, { mapEnabled: true, mapPinned: false }),
+    ).toMatch(/Google Map/i)
+    expect(checkoutAddressError(complete, { mapEnabled: true, mapPinned: true })).toBe('')
   })
 })
 

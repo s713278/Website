@@ -16,6 +16,20 @@ export type StorefrontCheckoutPayment = {
   label: string
   type: 'CASH_ON_DELIVERY' | 'ONLINE' | 'PRE_PAID'
   isDefault?: boolean
+    details?: {
+    upiAccount?: string
+    accountHolderName?: string
+  }
+}
+
+export type StorefrontPickupStore = {
+  /** Vendor store id — sent as `pickup_address_id` on from-cart. */
+  id: string
+  name: string
+  address: string | null
+  readyInMinutes: number | null
+  /** Configured slots from `pickup_options.stores[].pickup_slots` (e.g. Morning, Evening). */
+  pickupSlots: StorefrontCheckoutSlot[]
 }
 
 export type StorefrontCheckoutOptions = {
@@ -30,6 +44,10 @@ export type StorefrontCheckoutOptions = {
     deliveryCharge: number | null
     freeDeliveryThreshold: number | null
   }
+  /** `pickup_options.stores` — source of pickup_address_id and pickup_slot. */
+  pickupStores: StorefrontPickupStore[]
+  /** `pickup_options.pickup_message` when the API sends one. */
+  pickupMessage: string | null
   consentTitle: string | null
   consentText: string | null
   fulfillmentType: string | null
@@ -94,6 +112,38 @@ function mapTimeSlot(value: unknown, index: number): StorefrontCheckoutSlot | nu
     label: text,
     description: 'Delivery window',
     recommended: index === 0,
+  }
+}
+
+function mapPickupSlot(value: unknown, index: number): StorefrontCheckoutSlot | null {
+  const text = asString(value)
+  if (!text) return null
+  return {
+    id: `pickup-slot-${index}-${text}`,
+    label: text,
+    description: 'Pickup window',
+    recommended: index === 0,
+  }
+}
+
+function mapPickupStore(value: unknown, index: number): StorefrontPickupStore | null {
+  const row = asRecord(value)
+  if (!row) return null
+  const id = asString(row.store_id) ?? asString(row.storeId) ?? asString(row.id)
+  if (!id) return null
+  const slotsRaw = Array.isArray(row.pickup_slots)
+    ? row.pickup_slots
+    : Array.isArray(row.pickupSlots)
+      ? row.pickupSlots
+      : []
+  return {
+    id,
+    name: asString(row.name) ?? `Store ${index + 1}`,
+    address: asString(row.address),
+    readyInMinutes: asNumber(row.ready_in_minutes) ?? asNumber(row.readyInMinutes),
+    pickupSlots: slotsRaw
+      .map(mapPickupSlot)
+      .filter((slot): slot is StorefrontCheckoutSlot => slot != null),
   }
 }
 
@@ -208,13 +258,34 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
     if (!row) continue
     const type = asString(row.type)?.toUpperCase()
     if (type !== 'CASH_ON_DELIVERY' && type !== 'ONLINE' && type !== 'PRE_PAID') continue
+    const details = asRecord(row.details)
+    const upiAccount =
+      asString(details?.upi_account) ?? asString(details?.upiAccount) ?? asString(details?.upi_id)
+    const accountHolderName =
+      asString(details?.account_holder_name) ??
+      asString(details?.accountHolderName) ??
+      asString(details?.holder_name)
     paymentOptions.push({
       id: asString(row.id) ?? paymentId(type),
       label: asString(row.label) ?? paymentLabel(type),
       type,
       isDefault: row.default === true || row.is_default === true,
+      ...(upiAccount || accountHolderName
+        ? {
+            details: {
+              ...(upiAccount ? { upiAccount } : {}),
+              ...(accountHolderName ? { accountHolderName } : {}),
+            },
+          }
+        : {}),
     })
   }
+
+  const pickup = asRecord(data.pickup_options) ?? {}
+  const storesRaw = Array.isArray(pickup.stores) ? pickup.stores : []
+  const pickupStores = storesRaw
+    .map(mapPickupStore)
+    .filter((store): store is StorefrontPickupStore => store != null)
 
   return {
     deliveryMethods:
@@ -241,6 +312,8 @@ export function mapStorefrontCheckoutOptions(payload: unknown): StorefrontChecko
         'freeDeliveryThreshold',
       ),
     },
+    pickupStores,
+    pickupMessage: asString(pickup.pickup_message) ?? asString(pickup.pickupMessage),
     consentTitle: asString(data.customer_consent_title),
     consentText: asString(data.customer_consent_text),
     fulfillmentType: asString(data.fulfillment_type)?.toUpperCase() ?? null,

@@ -33,6 +33,16 @@ describe('mapStorefrontCheckoutOptions', () => {
             label: 'Cash on delivery',
             default: true,
           },
+          {
+            id: 38,
+            type: 'PRE_PAID',
+            label: 'UPI',
+            details: {
+              upi_account: 'stage@upi',
+              account_holder_name: 'Stage Owner',
+            },
+            default: true,
+          },
         ],
         customer_consent_title: 'Title',
         customer_consent_text: 'Test Consent',
@@ -53,6 +63,13 @@ describe('mapStorefrontCheckoutOptions', () => {
     expect(formatDeliveryEstimate(mapped?.availableDeliveryDates ?? [])).toBe('19–21 Sept')
     expect(mapped?.paymentOptions).toEqual([
       { id: '76', label: 'Cash on delivery', type: 'CASH_ON_DELIVERY', isDefault: true },
+      {
+        id: '38',
+        label: 'UPI',
+        type: 'PRE_PAID',
+        isDefault: true,
+        details: { upiAccount: 'stage@upi', accountHolderName: 'Stage Owner' },
+      },
     ])
     expect(mapped?.shippingStrategyType).toBe('ORDER_AMOUNT_THRESHOLD')
     expect(mapped?.shipping).toEqual({
@@ -63,6 +80,85 @@ describe('mapStorefrontCheckoutOptions', () => {
     expect(mapped?.consentText).toBe('Test Consent')
     expect(mapped?.fulfillmentType).toBe('HOME_DELIVERY')
     expect(mapped?.orderAcceptancePolicy).toBe('AUTO_ACCEPT')
+    expect(mapped?.pickupMessage).toBeNull()
+  })
+
+  it('maps BOTH fulfillment with store pickup and pickup_message', () => {
+    const mapped = mapStorefrontCheckoutOptions({
+      success: true,
+      status: 200,
+      data: {
+        delivery_methods: ['HOME_DELIVERY', 'STORE_PICKUP'],
+        delivery_options: {
+          scheduling_strategy: 'INSTANT',
+          eligible_delivery_dates: [],
+          shipping_strategy_type: 'ORDER_AMOUNT_THRESHOLD',
+          shipping_config: {
+            delivery_charge: 10,
+            free_delivery_threshold: 100,
+          },
+        },
+        pickup_options: {
+          stores: [],
+          pickup_message: 'Pickup is free. Your order will be ready for pickup.',
+        },
+        payment_options: [{ id: 132, type: 'PRE_PAID', label: 'UPI', default: true }],
+        fulfillment_type: 'BOTH',
+        delivery_slots: [],
+      },
+    })
+
+    expect(mapped?.deliveryMethods).toEqual(['HOME_DELIVERY', 'STORE_PICKUP'])
+    expect(mapped?.fulfillmentType).toBe('BOTH')
+    expect(mapped?.pickupMessage).toBe('Pickup is free. Your order will be ready for pickup.')
+    expect(mapped?.pickupStores).toEqual([])
+  })
+
+  it('maps pickup stores and slots for STORE_PICKUP', () => {
+    const mapped = mapStorefrontCheckoutOptions({
+      success: true,
+      data: {
+        delivery_methods: ['STORE_PICKUP'],
+        pickup_options: {
+          stores: [
+            {
+              store_id: 10,
+              name: 'Main Store',
+              address: '123 Main St, Hyderabad',
+              ready_in_minutes: 30,
+              pickup_slots: ['Morning', 'Evening'],
+            },
+          ],
+          pickup_message: 'Pickup is free.',
+        },
+        payment_options: [{ id: 1, type: 'CASH_ON_DELIVERY', label: 'COD', default: true }],
+        delivery_slots: [],
+      },
+    })
+
+    expect(mapped?.pickupStores).toEqual([
+      {
+        id: '10',
+        name: 'Main Store',
+        address: '123 Main St, Hyderabad',
+        readyInMinutes: 30,
+        pickupSlots: [
+          {
+            id: 'pickup-slot-0-Morning',
+            label: 'Morning',
+            description: 'Pickup window',
+            recommended: true,
+          },
+          {
+            id: 'pickup-slot-1-Evening',
+            label: 'Evening',
+            description: 'Pickup window',
+            recommended: false,
+          },
+        ],
+      },
+    ])
+    expect(mapped?.pickupMessage).toBe('Pickup is free.')
   })
 
   it('still accepts older available_delivery_dates examples', () => {
