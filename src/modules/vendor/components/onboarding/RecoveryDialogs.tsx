@@ -5,7 +5,7 @@ import { Button } from '@/shared/components/ui'
 function DialogFrame({ children }: { children: ReactNode }) {
   return (
     <AlertDialog.Portal>
-      <AlertDialog.Overlay className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none" />
+      <AlertDialog.Overlay className="fixed inset-0 z-50 bg-slate-950/45 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-reduce:animate-none" />
       <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-card p-5 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.55)] outline-none data-[state=open]:animate-in data-[state=open]:zoom-in-95 motion-reduce:animate-none">
         {children}
       </AlertDialog.Content>

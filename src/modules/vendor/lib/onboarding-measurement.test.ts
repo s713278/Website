@@ -7,7 +7,6 @@ import {
   productMeasurementSummary,
   reconcileSkuToProductMeasurement,
   reconcileUnitForMeasurement,
-  unitOptionsForMeasurement,
   unitsForMeasurement,
 } from './onboarding-measurement'
 
@@ -144,17 +143,6 @@ describe('units and defaults follow the catalog', () => {
   it('offers nothing for a type the catalog does not carry', () => {
     expect(unitsForMeasurement('AREA', CATALOG)).toEqual([])
     expect(defaultUnitForMeasurement('AREA', CATALOG)).toBe('')
-  })
-})
-
-describe('unitOptionsForMeasurement', () => {
-  it('returns the backend quantity suggestions to prefill Step 6', () => {
-    expect(unitOptionsForMeasurement('WEIGHT', CATALOG)).toEqual([0.5, 1, 2, 5])
-    expect(unitOptionsForMeasurement('COUNT', CATALOG)).toEqual([1, 5, 10, 20])
-  })
-
-  it('returns an empty list for a measurement with no suggestions', () => {
-    expect(unitOptionsForMeasurement('SLOT', CATALOG)).toEqual([])
   })
 })
 

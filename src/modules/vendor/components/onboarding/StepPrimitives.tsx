@@ -1,5 +1,5 @@
 import type { ReactNode, ToggleEvent } from 'react'
-import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
+import { AlertTriangleIcon, CheckIcon, ChevronRightIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, LoadingSkeleton } from '@/shared/components/ui'
 import type { ValidationIssue } from '../../types/onboarding'
@@ -110,39 +110,54 @@ export function Hint({
 }
 
 /**
- * A collapsible group.
+ * A category's collapsible panel, after the design reference's `.ob-cat-panel`: a left chevron
+ * disc, the name and a short status line, and a count pill, with a thin brand outline while open.
+ * Steps 5 and 6 share it so the two catalog steps read as one place.
  *
- * Deliberately still a `<details>`: the error summary reopens a collapsed group by
- * setting `open` on the nearest one, and native disclosure keeps the keyboard and
+ * Deliberately still a `<details>`: the wizard's `focusField` reopens a collapsed group by
+ * setting `open` on the nearest one (`closest('details')`), and native disclosure keeps the keyboard and
  * screen-reader behaviour that a hand-rolled version would have to reproduce.
  */
-export function AccordionPanel({
+export function CategoryPanel({
   id,
   open,
   onToggle,
-  summary,
+  name,
+  meta,
+  count,
   children,
-  className,
 }: {
-  id?: string
+  id: string
   open: boolean
   onToggle: (event: ToggleEvent<HTMLDetailsElement>) => void
-  summary: ReactNode
+  name: string
+  meta: string
+  count: number
   children: ReactNode
-  className?: string
 }) {
   return (
     <details
       id={id}
       open={open}
       onToggle={onToggle}
-      className={cn('group overflow-hidden rounded-2xl border border-[var(--ob-line)] bg-[var(--ob-sheet)]', className)}
+      className="group overflow-hidden rounded-2xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] shadow-xs transition-[border-color,box-shadow] open:border-[color-mix(in_srgb,var(--ob-brand)_35%,var(--ob-line))] open:shadow-[0_0_0_1px_color-mix(in_srgb,var(--ob-brand)_18%,transparent)] motion-reduce:transition-none"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 outline-none transition-colors hover:bg-[var(--ob-canvas)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)] [&::-webkit-details-marker]:hidden">
-        {summary}
-        <ChevronDownIcon className="size-4 shrink-0 text-[var(--ob-ink-soft)] transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+      <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-2.5 px-3.5 py-3 outline-none transition-colors hover:bg-[var(--ob-brand-soft)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ob-brand)] motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
+        <span
+          aria-hidden="true"
+          className="inline-flex size-[1.35rem] shrink-0 items-center justify-center rounded-full bg-[var(--ob-brand-soft)] text-[var(--ob-brand)] transition-transform group-open:rotate-90 group-open:bg-[var(--ob-brand)] group-open:text-white motion-reduce:transition-none"
+        >
+          <ChevronRightIcon className="size-3.5" strokeWidth={2.6} />
+        </span>
+        <div className="min-w-0">
+          <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)]">{name}</h3>
+          <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">{meta}</p>
+        </div>
+        <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-bold text-[var(--ob-ink-soft)] group-open:bg-[var(--ob-brand-soft)] group-open:text-[color-mix(in_srgb,var(--ob-brand)_80%,var(--ob-ink))]">
+          {count}
+        </span>
       </summary>
-      <div className="border-t border-[var(--ob-line)] p-4">{children}</div>
+      <div className="border-t border-[var(--ob-line-soft)] px-3 pt-3 pb-3.5 max-[30rem]:px-2">{children}</div>
     </details>
   )
 }
@@ -151,50 +166,61 @@ export function AccordionPanel({
 export const fieldShell =
   'h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--ob-pending)] focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)] disabled:opacity-60'
 
+/** Two tiles a row on phones, three once the form column is tablet-wide. */
+export const choiceGrid = 'grid grid-cols-2 gap-3 @min-[30rem]:grid-cols-3 @min-[30rem]:gap-x-2'
+
 export function ChoiceCard({
   selected,
   title,
   description,
   onClick,
   disabled,
+  inactive,
   id,
   leading,
+  footer,
 }: {
   selected: boolean
   title: string
   description?: string | null
   onClick: () => void
   disabled?: boolean
+  /** Looks unavailable but stays clickable, so the step can explain why. */
+  inactive?: boolean
   id?: string
   leading?: ReactNode
+  /** Extra detail under the title, such as a product's measurement chips. */
+  footer?: ReactNode
 }) {
+  const muted = disabled || inactive
   return (
     <button
       id={id}
       type="button"
       aria-pressed={selected}
+      aria-disabled={inactive || undefined}
       disabled={disabled}
       onClick={onClick}
       className={cn(
         // Chosen is an emerald outline plus a mint fill, as in the design reference.
         // Every pick control in the wizard wears the same mark so a vendor learns it once.
-        'group relative min-h-16 w-full overflow-hidden rounded-xl border py-3 pr-9 pl-3.5 text-left outline-none transition-[border-color,background-color] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
+        'relative flex min-h-32 w-full cursor-pointer flex-col items-center justify-center gap-2.5 rounded-xl border px-3 py-4 text-center @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5 outline-none transition-[border-color,background-color,box-shadow,translate] duration-200 ease-out focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)] motion-reduce:transition-none',
         selected
-          ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)]'
-          : 'border-[var(--ob-line)] bg-[var(--ob-sheet)] hover:border-[var(--ob-brand)]/45 hover:bg-[var(--ob-brand-soft)]/40',
-        disabled && 'cursor-not-allowed opacity-50 hover:border-[var(--ob-line)] hover:bg-[var(--ob-sheet)]',
+          ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] ring-3 ring-[var(--ob-brand-soft)]'
+          : 'border-[var(--ob-line)] bg-[var(--ob-sheet)]',
+        !selected && !muted && 'hover:-translate-y-0.5 hover:border-[var(--ob-brand)] motion-reduce:hover:translate-y-0',
+        muted && 'cursor-not-allowed opacity-50',
       )}
     >
-      <span className="flex min-w-0 items-center gap-3">
-        {leading ? <span className="shrink-0">{leading}</span> : null}
-        <span className="min-w-0">
-          <span className={cn('block truncate text-sm font-semibold text-[var(--ob-ink)]', selected && 'text-[var(--md-green-800)] dark:text-[var(--ob-ink)]')}>{title}</span>
-          {description ? <span className="mt-0.5 block text-xs leading-5 text-[var(--ob-ink-soft)]">{description}</span> : null}
-        </span>
+      {leading}
+      <span className="min-w-0">
+        <span className={cn('line-clamp-2 text-sm leading-5 font-semibold text-[var(--ob-ink)]', selected && 'text-[var(--md-green-800)] dark:text-[var(--ob-ink)]')}>{title}</span>
+        {description ? <span className="mt-1 line-clamp-2 block text-xs leading-4 text-[var(--ob-ink-soft)]">{description}</span> : null}
       </span>
+      {footer}
       <span
         className={cn(
-          'absolute top-1/2 right-3 grid size-5 -translate-y-1/2 place-items-center rounded-full transition-opacity',
+          'absolute top-2 right-2 grid size-5 place-items-center rounded-full transition-opacity',
           selected ? 'bg-[var(--ob-brand)] text-white opacity-100' : 'opacity-0',
         )}
         aria-hidden="true"
@@ -208,12 +234,14 @@ export function ChoiceCard({
 export function CatalogLoading({
   count = 6,
   cardClassName,
+  className = 'grid gap-3 @min-[32rem]:grid-cols-2',
 }: {
   count?: number
   cardClassName?: string
+  className?: string
 }) {
   return (
-    <div className="grid gap-3 @min-[32rem]:grid-cols-2">
+    <div className={className}>
       {Array.from({ length: count }, (_, index) => (
         <LoadingSkeleton key={index} className={cn('h-24 rounded-xl', cardClassName)} />
       ))}

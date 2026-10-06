@@ -18,7 +18,6 @@ import {
   UploadIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isLiveApi } from '@/shared/api'
 import { Button, Input } from '@/shared/components/ui'
 import { storefrontUrl } from '@/shared/lib/store-link'
 import { ACCENT_PRESETS, FONT_PRESETS, PRIMARY_PRESETS } from '@/shared/lib/theme'
@@ -30,7 +29,6 @@ import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { StoreSharePanels } from '../StoreSharePanels'
-import { StepNotice } from './AccessNotice'
 import {
   selectCategoryLimit,
   selectProductLimit,
@@ -47,7 +45,8 @@ import type {
   ValidationIssue,
   VendorOnboardingDraftV1,
 } from '../../types/onboarding'
-import { FieldLabel, StepSection } from './StepPrimitives'
+import { FieldError, FieldLabel, StepSection } from './StepPrimitives'
+import { TaglineExamplesDialog } from './TaglineExamplesDialog'
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
@@ -138,7 +137,7 @@ function Disclosure({
 }) {
   return (
     <details className="group mt-6 border-t border-[var(--ob-line)]" open={open}>
-      <summary className="-mx-2 flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-2 py-4 font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)] outline-none transition-colors hover:text-[var(--ob-brand)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
+      <summary className="-mx-1 flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 py-4 font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)] outline-none transition-colors hover:text-[var(--ob-brand)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
         <span className="flex items-center gap-2.5">{icon}{title}</span>
         <ChevronDownIcon className="size-4 shrink-0 text-[var(--ob-ink-soft)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
@@ -217,23 +216,22 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
 
   return (
     <div>
-      {/*
-        Step 9 is written to the account like every other step, but it is the only one
-        that cannot be read back: the storefront read 404s until an admin approves the
-        store. Saying so here stops a returning vendor concluding their branding was
-        never saved. See docs/API_GAPS.md.
-      */}
-      {isLiveApi() ? (
-        <div className="mb-6">
-          <StepNotice message="These details are saved, but cannot be read back until approval. Check them before continuing." />
-        </div>
-      ) : null}
       <StepSection id="store-basics" title="Store basics">
         <div className="grid gap-4 @min-[32rem]:grid-cols-2">
           <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
           <Input id="owner-name" label="Owner name" value={draft.business.ownerName} minLength={3} error={issues.find((item) => item.field === 'owner-name')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, ownerName: event.target.value } }), 9)} placeholder="Full name" />
           <Input id="contact-person" label="Contact person" value={draft.business.contactPerson} minLength={3} error={issues.find((item) => item.field === 'contact-person')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, contactPerson: event.target.value } }), 9)} placeholder="Who should customers speak with?" />
-          <Input id="tagline" label="Tagline (optional)" value={store.tagline} maxLength={120} error={issues.find((item) => item.field === 'tagline')?.message} onChange={(event) => updateStore({ tagline: event.target.value })} />
+          <div>
+            <FieldLabel htmlFor="tagline" optional>Tagline</FieldLabel>
+            <div className="flex items-start gap-2">
+              <Input id="tagline" value={store.tagline} maxLength={120} error={issues.find((item) => item.field === 'tagline')?.message} onChange={(event) => updateStore({ tagline: event.target.value })} placeholder="Traditional • Natural • Homemade" />
+              <TaglineExamplesDialog
+                businessTypeName={draft.business.businessType?.name}
+                currentTagline={store.tagline}
+                onUse={(tagline) => updateStore({ tagline })}
+              />
+            </div>
+          </div>
           <Input id="business-location" label="Business location" value={store.businessLocation} maxLength={100} error={issues.find((item) => item.field === 'business-location')?.message} onChange={(event) => updateStore({ businessLocation: event.target.value })} placeholder="Hyderabad, Telangana" />
           <Input id="order-whatsapp" label="Order WhatsApp" type="tel" inputMode="numeric" maxLength={10} value={runtime.orderWhatsapp} error={issues.find((item) => item.field === 'order-whatsapp')?.message} onChange={(event) => updateRuntime({ orderWhatsapp: event.target.value.replace(/\D/g, '').slice(0, 10) }, 9)} placeholder="9876543210" autoComplete="tel-national" />
           <Input id="support-whatsapp" label="Support WhatsApp (optional)" type="tel" inputMode="numeric" maxLength={10} value={runtime.supportWhatsapp} error={issues.find((item) => item.field === 'support-whatsapp')?.message} onChange={(event) => updateRuntime({ supportWhatsapp: event.target.value.replace(/\D/g, '').slice(0, 10) }, 9)} placeholder="9876543210" autoComplete="tel-national" />
@@ -274,6 +272,13 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
         <div className="grid gap-4 pt-1 pb-5 @min-[32rem]:grid-cols-2">
           <ColorInput id="primary-color" label="Primary" value={store.primaryColor} error={issues.find((item) => item.field === 'primary-color')?.message} onChange={(primaryColor) => updateStore({ primaryColor }, true)} />
           <ColorInput id="accent-color" label="Accent" value={store.accentColor} error={issues.find((item) => item.field === 'accent-color')?.message} onChange={(accentColor) => updateStore({ accentColor }, true)} />
+          {/* Background and text colors come only from theme presets, so they have no input;
+              their issues (an invalid hex, too little contrast) show here and take focus. */}
+          {(['background-color', 'text-color'] as const).map((field) => issues.some((item) => item.field === field) ? (
+            <div key={field} id={field} aria-describedby={`${field}-error`} className="@min-[32rem]:col-span-2">
+              <FieldError issues={issues} field={field} />
+            </div>
+          ) : null)}
           <div className="@min-[32rem]:col-span-2">
             <PresetSwatches label="Primary presets" presets={PRIMARY_PRESETS} value={store.primaryColor} onChange={(primaryColor) => updateStore({ primaryColor }, true)} />
           </div>
@@ -543,10 +548,9 @@ function BriefGroup({
 }
 
 /**
- * The compact account of the store the vendor has configured — catalog, orders, and store
+ * The compact account of the store the vendor has configured — catalog, checkout options, and store
  * identity — each group carrying a way back to the step that owns it. Values come from the
- * pure `buildReviewSummary`, which masks contacts and drops credentials, so this component
- * only lays them out.
+ * pure `buildReviewSummary`, which drops credentials, so this component only lays them out.
  */
 function JourneyBrief({
   draft,
@@ -571,7 +575,7 @@ function JourneyBrief({
         <BriefRow label="Sizes">{catalog.activeSizeCount} active · {catalog.inactiveSizeCount} inactive</BriefRow>
       </BriefGroup>
 
-      <BriefGroup title="Orders" editStep={7} onGoToStep={onGoToStep}>
+      <BriefGroup title="Checkout Options" editStep={7} onGoToStep={onGoToStep}>
         <BriefRow label="Fulfilment">{orders.fulfilment}</BriefRow>
         <BriefRow label="Payments"><BriefChips items={orders.paymentMethods} empty="None selected" /></BriefRow>
         <BriefRow label="Order WhatsApp">{orders.orderWhatsapp ?? <span className="font-normal text-[var(--ob-ink-soft)]">Not added</span>}</BriefRow>
@@ -587,9 +591,16 @@ function JourneyBrief({
 }
 
 export function ReviewStep({
+  issues: shownIssues,
   onGoToStep,
   submitsToAccount,
 }: {
+  /**
+   * The wizard's shown issues. Only Step 10's own (a failed submission, a blocked sample
+   * catalog — both on field `store-name`) render here; readiness issues for Steps 3-9 are
+   * recomputed below and listed on their own.
+   */
+  issues: ValidationIssue[]
   onGoToStep: (step: OnboardingStep) => void
   /**
    * Whether pressing the primary action will submit to the vendor account (live) rather than
@@ -611,6 +622,7 @@ export function ReviewStep({
     maxSkus: skuLimit,
     account: accountCatalog,
   })
+  const submitIssues = shownIssues.filter((item) => item.step === 10)
   const completed =
     draft.publication.state === 'prototype-complete' &&
     draft.completedSteps.includes(10) &&
@@ -631,7 +643,7 @@ export function ReviewStep({
         {/* Readiness issues stay prominent and actionable, above the brief rather than hidden
             by it: the brief is the recap, the list is the work still to do. */}
         {issues.length ? (
-          <ul className="space-y-2" aria-label="Readiness issues">
+          <ul id="readiness-issues" className="space-y-2" aria-label="Readiness issues">
             {issues.map((item, index) => (
               <li key={`${item.step}-${item.field}-${index}`}>
                 <button type="button" onClick={() => onGoToStep(item.step)} className="flex w-full items-start justify-between gap-3 rounded-lg bg-[var(--ob-canvas)] p-3 text-left text-sm outline-none transition-colors hover:bg-[var(--ob-canvas)] focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]">
@@ -643,6 +655,13 @@ export function ReviewStep({
         ) : null}
         {/* The journey brief is shown on every visit to Step 10, resolved or not. */}
         <JourneyBrief draft={draft} runtime={runtime} onGoToStep={onGoToStep} />
+        {/* A submission failure sits beside the action that raised it. Step 10 renders no
+            store-name input, so this container takes the field's id as the focus target. */}
+        {submitIssues.length ? (
+          <div id="store-name" aria-describedby="store-name-error">
+            <FieldError issues={submitIssues} field="store-name" />
+          </div>
+        ) : null}
         {/* The consequence sentence sits immediately above the primary action in the footer. */}
         <p className="text-sm leading-6 text-[var(--ob-ink-soft)]">
           {submitsToAccount

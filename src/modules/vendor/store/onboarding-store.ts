@@ -180,6 +180,14 @@ type OnboardingStore = {
    */
   removePendingEntry: (id: number) => void
   /**
+   * Change how a still-pending product is measured. Only a pending product can change:
+   * once Continue creates it, its measurement belongs to the platform catalog.
+   */
+  setPendingProductMeasurement: (
+    id: number,
+    measurement: { measurementId: number; measurementName: string },
+  ) => void
+  /**
    * Record the platform id a create returned, replacing the pending id and dropping `pending`.
    *
    * Flushed to storage immediately so a reload after a create but before its assign cannot
@@ -737,6 +745,17 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         skus: current.skus.filter((sku) => sku.productId !== id),
       }
     }, isPendingCategory ? 4 : 5)
+  },
+
+  setPendingProductMeasurement(id, measurement) {
+    const { draft } = useOnboardingStore.getState()
+    if (!draft.products.some((p) => p.id === id && p.pending === true)) return
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      products: current.products.map((p) =>
+        p.id === id && p.pending === true ? { ...p, ...measurement } : p,
+      ),
+    }), 5)
   },
 
   recordCreatedEntry(entry) {

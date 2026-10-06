@@ -8,7 +8,7 @@ import type {
   SelectedProduct,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
-import { buildReviewSummary, maskContact } from './onboarding-review-summary'
+import { buildReviewSummary } from './onboarding-review-summary'
 
 const BUSINESS_TYPE: BusinessTypeReference = { id: 7, name: 'Home foods', icon: null, displayOrder: null }
 
@@ -47,27 +47,6 @@ function draftWith(overrides: (draft: VendorOnboardingDraftV1) => void): VendorO
   overrides(draft)
   return draft
 }
-
-describe('maskContact', () => {
-  it('shows only the last four digits of a full number', () => {
-    expect(maskContact('9876543210')).toBe('•••••• 3210')
-  })
-
-  it('strips spacing and other non-digits before masking', () => {
-    expect(maskContact('98765 43210')).toBe('•••••• 3210')
-  })
-
-  it('returns null for an empty or blank value so the row can be dropped', () => {
-    expect(maskContact('')).toBeNull()
-    expect(maskContact('   ')).toBeNull()
-  })
-
-  it('never exposes more than the last four digits of a partial number', () => {
-    // A brief can render before Step 9 validation passes, so a half-typed number must not
-    // reveal its full self. The fixed mask also hides how many digits were entered.
-    expect(maskContact('98765')).toBe('•••••• 8765')
-  })
-})
 
 describe('buildReviewSummary catalog group', () => {
   it('carries the chosen business type name, or null when none is chosen', () => {
@@ -136,19 +115,35 @@ describe('buildReviewSummary orders group', () => {
     ])
   })
 
-  it('masks the order number and drops the optional support number when absent', () => {
+  it('shows the order number in full and drops the optional support number when absent', () => {
     const runtime = createEmptyRuntimeState()
     runtime.orderWhatsapp = '9876543210'
     const orders = buildReviewSummary(createEmptyOnboardingDraft(), runtime).orders
-    expect(orders.orderWhatsapp).toBe('•••••• 3210')
+    expect(orders.orderWhatsapp).toBe('9876543210')
     expect(orders.supportWhatsapp).toBeNull()
   })
 
-  it('masks the support number when one is provided', () => {
+  it('shows the support number in full when one is provided', () => {
     const runtime = createEmptyRuntimeState()
     runtime.orderWhatsapp = '9876543210'
     runtime.supportWhatsapp = '9000000001'
-    expect(buildReviewSummary(createEmptyOnboardingDraft(), runtime).orders.supportWhatsapp).toBe('•••••• 0001')
+    expect(buildReviewSummary(createEmptyOnboardingDraft(), runtime).orders.supportWhatsapp).toBe('9000000001')
+  })
+
+  it('trims both numbers, and reports empty or blank values as null', () => {
+    const runtime = createEmptyRuntimeState()
+    runtime.orderWhatsapp = '  9876543210 '
+    runtime.supportWhatsapp = ' 9000000001  '
+    const orders = buildReviewSummary(createEmptyOnboardingDraft(), runtime).orders
+    expect(orders.orderWhatsapp).toBe('9876543210')
+    expect(orders.supportWhatsapp).toBe('9000000001')
+
+    const blank = createEmptyRuntimeState()
+    blank.orderWhatsapp = ''
+    blank.supportWhatsapp = '   '
+    const empty = buildReviewSummary(createEmptyOnboardingDraft(), blank).orders
+    expect(empty.orderWhatsapp).toBeNull()
+    expect(empty.supportWhatsapp).toBeNull()
   })
 })
 

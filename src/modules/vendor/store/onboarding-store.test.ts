@@ -719,6 +719,25 @@ describe('authored pending entries', () => {
     expect(draft.products).toEqual([])
   })
 
+  it('changes how a still-pending product is measured', () => {
+    const store = useOnboardingStore.getState()
+    const categoryId = store.addPendingCategory({ name: 'Bakery', businessTypeId: 7 })
+    const productId = store.addPendingProduct({ name: 'Sourdough', categoryId, measurementId: 3, measurementName: 'COUNT' })
+
+    useOnboardingStore.getState().setPendingProductMeasurement(productId, { measurementId: 1, measurementName: 'WEIGHT' })
+
+    expect(useOnboardingStore.getState().draft.products[0]).toMatchObject({ id: productId, measurementId: 1, measurementName: 'WEIGHT', pending: true })
+  })
+
+  it('never changes the measurement of a product that is not pending', () => {
+    const product = { id: 42, name: 'Account', description: null, imageUrl: null, measurementId: 3, measurementName: 'COUNT', categoryId: 1 }
+    useOnboardingStore.setState({ draft: { ...createEmptyOnboardingDraft(), products: [product] } })
+
+    useOnboardingStore.getState().setPendingProductMeasurement(42, { measurementId: 1, measurementName: 'WEIGHT' })
+
+    expect(useOnboardingStore.getState().draft.products).toEqual([product])
+  })
+
   it('ignores a non-pending id', () => {
     useOnboardingStore.setState({
       draft: {

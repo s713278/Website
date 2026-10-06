@@ -379,7 +379,7 @@ export interface paths {
          *     - Billing period (`current_period_*`, `next_billing_at`) once ACTIVE
          *     - Cancellation state (`cancel_at_period_end`, `cancelled_at`)
          *
-         *     Prices are in **paise**. `404` if the vendor has never started a trial.
+         *     Prices are in **rupees**. `404` if the vendor has never started a trial.
          */
         get: operations["getCurrentSubscription"];
         put?: never;
@@ -388,19 +388,29 @@ export interface paths {
          * @description Starts a paid subscription for the vendor:
          *
          *     1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).
-         *     2. Creates a Razorpay subscription via `external_plan_id`.
+         *     2. Creates a Razorpay subscription via `external_plan_id` with the full plan
+         *        price as the **upfront amount** — checkout charges it immediately and it is
+         *        **non-refundable**. Razorpay's first recurring charge is scheduled at
+         *        `start_at`, which is the next renewal date: paid period start
+         *        (trial end, or now if the trial already ended) + one billing interval
+         *        (30 days for MONTHLY, 365 days for YEARLY). `next_billing_at` returns it.
          *     3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing
          *        trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.
-         *     4. Returns `razorpay_key_id`, `razorpay_subscription_id`, and `checkout_url`.
+         *     4. Returns `razorpay_key_id`, `razorpay_subscription_id`, `checkout_url`, and a
+         *        `message` with the billing terms (non-refundable, cancellation applies from
+         *        the next billing cycle).
          *        The key ID is public and may be used by the UI to initialise Razorpay Checkout;
          *        no key secret or webhook secret is ever returned.
          *
          *     Idempotent: calling again while `PAYMENT_PENDING` returns the existing checkout
          *     URL — no duplicate Razorpay subscription is created.
          *
-         *     Activation does NOT happen here; the signed Razorpay webhook flips status to
-         *     `ACTIVE`. Conflicts: `409` if the vendor already has an ACTIVE subscription on
-         *     the same plan; `400` if the plan is not purchasable online; `404` if the vendor
+         *     The subscription becomes `ACTIVE` when the upfront payment is confirmed via
+         *     `/subscription/confirm` or the `subscription.authenticated` webhook.
+         *     Conflicts: `409` if the vendor already has an ACTIVE subscription on
+         *     the same plan — when cancellation is already scheduled, the error message
+         *     includes the access end date (`current_period_end`) after which the vendor
+         *     can renew; `400` if the plan is not purchasable online; `404` if the vendor
          *     has no subscription row (go live first).
          */
         post: operations["subscribe"];
@@ -427,9 +437,9 @@ export interface paths {
          *     - `razorpay_payment_id` — the payment attempt id from the Checkout handler
          *     - `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`
          *
-         *     On success the payment authorization is recorded in history; status stays
-         *     `PAYMENT_PENDING` until the Razorpay webhook activates the subscription — the
-         *     UI should poll `GET /vendors/{id}/subscription` for `ACTIVE`.
+         *     On success the signature proves the upfront payment was collected, so the
+         *     subscription moves to `ACTIVE` immediately, the paid period is recorded
+         *     (until `next_billing_at`), and the vendor is notified by WhatsApp/email.
          *     Returns `401` on signature mismatch and `400` on subscription mismatch.
          */
         post: operations["confirmPayment"];
@@ -450,11 +460,22 @@ export interface paths {
         put?: never;
         /**
          * Cancel paid subscription
-         * @description Cancels the vendor's paid subscription at Razorpay with `cancel_at_cycle_end`:
+         * @description Cancels the vendor's paid subscription at Razorpay so it does not renew.
+         *     **The upfront payment is never refunded** — cancellation always applies from the
+         *     next billing cycle and access continues until `current_period_end`.
          *
-         *     - ACTIVE / PAST_DUE → `cancel_at_period_end = true`; access continues until
-         *       `current_period_end`, then the `subscription.cancelled` webhook sets CANCELLED.
-         *     - PAYMENT_PENDING → cancelled immediately (status becomes CANCELLED).
+         *     Outcomes by current state:
+         *
+         *     - `ACTIVE` / `PAST_DUE` → `cancel_at_period_end = true`; status unchanged.
+         *       Razorpay is cancelled at cycle end (`active` subs) or immediately
+         *       (`authenticated` subs — the scheduled first charge never runs).
+         *     - `PAYMENT_PENDING`, checkout never paid → cancelled immediately;
+         *       status becomes `CANCELLED` with `cancelled_at` set.
+         *     - `PAYMENT_PENDING` but payment already completed (confirm/webhook still in
+         *       flight) → treated as paid: `cancel_at_period_end = true`, access continues
+         *       until `current_period_end`; activation still flips status to `ACTIVE`.
+         *     - **Idempotent**: calling again while `cancel_at_period_end = true` returns the
+         *       current state with the same billing `message` — no second Razorpay call.
          *
          *     `400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.
          */
@@ -491,6 +512,33 @@ export interface paths {
          *     <br><br><b>Future Support:</b> CSV/Excel bulk import via multipart upload.
          */
         post: operations["createSubscriptionsOnBehalfOfCustomers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/social-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor social links
+         * @description Returns the vendor's active social links (with <code>id</code>) ordered by
+         *     <code>display_order</code>.
+         *     <br><b>Public endpoint</b> — API key optional, no bearer token required.
+         */
+        get: operations["getSocialLinks"];
+        put?: never;
+        /**
+         * Create vendor social link
+         * @description Adds a social link for a platform. Only one link per platform per vendor.
+         *     <br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.
+         */
+        post: operations["createSocialLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2005,12 +2053,20 @@ export interface paths {
         };
         /**
          * Get vendor dashboard context
-         * @description Returns the vendor's onboarding state and current subscription context.
+         * @description Returns the vendor's onboarding state and current entitlements.
          *
-         *     The `subscription` object reflects the vendor's current lifecycle state
-         *     (e.g. NOT_STARTED, TRIAL_ACTIVE, TRIAL_EXPIRED, ACTIVE). It includes persisted
-         *     trial dates, storefront/dashboard access flags, the active plan's features and
-         *     limits, and a list of available paid plans with UI-driven allowed actions.
+         *     Use `onboarding.status` to decide between the dashboard (`COMPLETED`) and the
+         *     onboarding flow (`IN_PROGRESS`, resume at `onboarding.next_step`).
+         *
+         *     `features` and `limits` reflect what the vendor can use right now:
+         *     - Onboarding (before go-live): `features` is empty and `limits` holds the configured
+         *       onboarding limits (`max_categories`, `max_products`, `max_skus`).
+         *     - Trial / paid: the current plan's features and limits.
+         *     - Trial expired, halted, cancelled or expired: both empty.
+         *
+         *     Subscription details (plan, trial dates,
+         *     billing) are served by `GET /vendors/{vendor_id}/subscription`, and purchasable
+         *     plans by `GET /subscription-plans`.
          *
          *     Trial expiry is evaluated at request time; no background job is required.
          */
@@ -2104,6 +2160,72 @@ export interface paths {
          *     <br><b>Public endpoint</b> — no bearer token or vendor login required.
          */
         get: operations["getStorefrontProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single storefront product with all variants
+         * @description Returns one storefront product grouped by <code>vendor_product_id</code> with all of its active SKU variants — identical in shape to a single entry in <code>GET /{identifier}/storefront/products</code>. All variants are returned in one response (no pagination).
+         *     <br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.
+         *     <br><b>Public endpoint</b> — no bearer token or vendor login required. The <code>X-API-Key</code> header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
+         *     <br>Test data: identifier <code>91</code>, product_id <code>161</code>
+         */
+        get: operations["getStorefrontProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront/contact-us": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor contact-us details
+         * @description Returns everything needed to render a vendor's <b>Contact Us</b> page in one call:
+         *     <ul>
+         *       <li><b>Vendor contact</b> — <code>business_name</code>, <code>owner_name</code>,
+         *           <code>contact_number</code>, <code>communication_email</code>.</li>
+         *       <li><b>main_address</b> — the vendor's registered business address.</li>
+         *       <li><b>addresses</b> — active vendor store locations, each with its store
+         *           <code>type</code> and <code>address</code>. <code>MAIN_BRANCH</code> entries come
+         *           first, then by store name. Inactive stores are excluded.</li>
+         *       <li><b>social_links</b> — active social media links ordered by
+         *           <code>display_order</code>.</li>
+         *     </ul>
+         *     <b>Store types:</b> <code>MAIN_BRANCH</code>, <code>BRANCH</code>,
+         *     <code>HEAD_OFFICE</code>, <code>PICKUP_POINT</code>, <code>WAREHOUSE</code>,
+         *     <code>DARK_STORE</code>, <code>DISTRIBUTION_CENTER</code>, <code>KITCHEN</code>,
+         *     <code>FARM</code>, <code>OUTLET</code>, <code>FRANCHISE</code>, <code>KIOSK</code>,
+         *     <code>OTHER</code>.
+         *     <br><br>The <code>identifier</code> accepts a numeric vendor ID (e.g. <code>91</code>)
+         *     or the store slug (e.g. <code>mirdoddi-farm-fresh-91</code>). Only <b>ACTIVE</b> and
+         *     <b>APPROVED</b> vendors are returned.
+         *     <br><br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>
+         *     header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
+         *     <br>Responses are cached and refreshed when the vendor profile, status or social links
+         *     change.
+         *     <br>Test data: identifier <code>91</code>
+         */
+        get: operations["getContactUs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2389,10 +2511,10 @@ export interface paths {
          *     (`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.
          *     Results are cached; the internal trial plan is never included.
          *
-         *     Each plan includes `plan_id`, `plan_code`, price fields in **paise**
+         *     Each plan includes `plan_id`, `plan_code`, price fields in **rupees**
          *     (`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,
          *     `features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).
-         *     The UI submits `plan_code` (or `external_plan_id`) to the subscribe endpoint.
+         *     The UI submits `plan_code` to the subscribe endpoint.
          */
         get: operations["listPaidPlans"];
         put?: never;
@@ -2877,6 +2999,27 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/social-links/{social_link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete vendor social link
+         * @description Permanently removes a social link.
+         *     <br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.
+         */
+        delete: operations["deleteSocialLink"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3496,8 +3639,8 @@ export interface components {
             field?: string;
         };
         Contact: {
-            profile?: components["schemas"]["Profile"];
-            wa_id?: string;
+            name?: string;
+            phone?: string;
         };
         Context: {
             from?: string;
@@ -3519,9 +3662,6 @@ export interface components {
         Metadata: {
             display_phone_number?: string;
             phone_number_id?: string;
-        };
-        Profile: {
-            name?: string;
         };
         Text: {
             body?: string;
@@ -3611,6 +3751,68 @@ export interface components {
              * @example 6:00 AM - 8:00 AM
              */
             delivery_slot?: string;
+        };
+        CreateVendorSocialLinkRequest: {
+            /**
+             * @description Social media platform
+             * @example INSTAGRAM
+             * @enum {string}
+             */
+            platform: "INSTAGRAM" | "FACEBOOK" | "YOUTUBE" | "TWITTER" | "LINKEDIN";
+            /**
+             * @description Public profile/page URL
+             * @example https://www.instagram.com/srkfoods
+             */
+            url?: string;
+            /**
+             * Format: int32
+             * @description Display order on the storefront (ascending)
+             * @example 1
+             */
+            display_order?: number;
+        };
+        APIResponseVendorSocialLinkResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["VendorSocialLinkResponse"];
+        };
+        VendorSocialLinkResponse: {
+            /**
+             * Format: int64
+             * @description Social link ID (used for delete)
+             * @example 12
+             */
+            id?: number;
+            /**
+             * @description Social media platform
+             * @example INSTAGRAM
+             * @enum {string}
+             */
+            platform?: "INSTAGRAM" | "FACEBOOK" | "YOUTUBE" | "TWITTER" | "LINKEDIN";
+            /**
+             * @description Public profile/page URL
+             * @example https://www.instagram.com/srkfoods
+             */
+            url?: string;
+            /**
+             * Format: int32
+             * @description Display order on the storefront (ascending)
+             * @example 1
+             */
+            display_order?: number;
         };
         ItemSkuCreateRequest: {
             /**
@@ -4675,6 +4877,24 @@ export interface components {
              */
             preference_type?: "VENDOR" | "PRODUCT" | "CATEGORY";
         };
+        APIResponseListVendorSocialLinkResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["VendorSocialLinkResponse"][];
+        };
         APIResponseSkuInfoDTO: {
             /**
              * @description Response message
@@ -4918,6 +5138,8 @@ export interface components {
              * @example https://instagram.com/yourshop
              */
             instagram_url?: string;
+            /** @description Active vendor social media links ordered by display order; empty if none */
+            social_links?: components["schemas"]["VendorSocialLinkResponse"][];
             /**
              * @description WhatsApp CTA button label
              * @example Order on WhatsApp
@@ -5128,6 +5350,137 @@ export interface components {
              * @example false
              */
             on_sale?: boolean;
+        };
+        APIResponseStorefrontProductResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["StorefrontProductResponse"];
+        };
+        /** @description Vendor store location */
+        PickupStoreDTO: {
+            /**
+             * Format: int64
+             * @description Vendor store ID
+             * @example 10
+             */
+            id?: number;
+            /**
+             * @description Store location type
+             * @example MAIN_BRANCH
+             * @enum {string}
+             */
+            type?: "MAIN_BRANCH" | "BRANCH" | "HEAD_OFFICE" | "PICKUP_POINT" | "WAREHOUSE" | "DARK_STORE" | "DISTRIBUTION_CENTER" | "KITCHEN" | "FARM" | "OUTLET" | "FRANCHISE" | "KIOSK" | "OTHER";
+            /**
+             * @description Store display name
+             * @example H2A2 Farms Main Store
+             */
+            name?: string;
+            /**
+             * @description Unique store code
+             * @example H2A2-MAIN
+             */
+            code?: string;
+            /**
+             * @description Store address as key-value pairs
+             * @example {
+             *       "address1": "Road No-27F",
+             *       "city": "Hyderabad",
+             *       "state": "Telangana",
+             *       "zipCode": "500049"
+             *     }
+             */
+            address?: {
+                [key: string]: Record<string, never>;
+            };
+            latitude?: number;
+            longitude?: number;
+            pickup_timings?: components["schemas"]["JsonNode"];
+            /** Format: int32 */
+            ready_in_minutes?: number;
+            pickup_slots?: string[];
+            contact?: components["schemas"]["Contact"];
+        };
+        /** @description Vendor contact-us details: contact info, main address, store addresses and social links */
+        StorefrontContactUsResponse: {
+            /**
+             * Format: int64
+             * @description Unique identifier of the vendor
+             * @example 91
+             */
+            vendor_id?: number;
+            /**
+             * @description Public store identifier/slug
+             * @example mirdoddi-farm-fresh-91
+             */
+            store_identifier?: string;
+            /**
+             * @description Display name of the vendor's business
+             * @example Mirdoddi Farm Fresh
+             */
+            business_name?: string;
+            /**
+             * @description Business owner name
+             * @example Swamy
+             */
+            owner_name?: string;
+            /**
+             * @description Vendor contact number
+             * @example 919900000000
+             */
+            contact_number?: string;
+            /**
+             * @description Vendor communication email
+             * @example owner@example.com
+             */
+            communication_email?: string;
+            /**
+             * @description Main (registered business) address of the vendor as key-value pairs
+             * @example {
+             *       "address1": "Road No-27F",
+             *       "city": "Hyderabad",
+             *       "state": "Telangana",
+             *       "country": "India",
+             *       "zipCode": "500049"
+             *     }
+             */
+            main_address?: {
+                [key: string]: string;
+            };
+            /** @description Active vendor store addresses; each item contains only `type` and `address`. MAIN_BRANCH entries first, then by store name. Empty array if none. */
+            addresses?: components["schemas"]["PickupStoreDTO"][];
+            /** @description Active vendor social media links ordered by display order. Empty if none. */
+            social_links?: components["schemas"]["VendorSocialLinkResponse"][];
+        };
+        APIResponseStorefrontContactUsResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["StorefrontContactUsResponse"];
         };
         APIResponsePaginationResponseOrderDetailsDTO: {
             /**
@@ -6416,6 +6769,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    getSocialLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Social links loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseListVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseListVendorSocialLinkResponse"];
+                };
+            };
+        };
+    };
+    createSocialLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "platform": "INSTAGRAM",
+                 *       "url": "https://www.instagram.com/srkfoods",
+                 *       "display_order": 1
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateVendorSocialLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Social link created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Invalid platform or URL */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Platform already configured for vendor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
                 };
             };
         };
@@ -9357,6 +9803,123 @@ export interface operations {
             };
         };
     };
+    getStorefrontProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+                /**
+                 * @description Vendor product identifier
+                 * @example 161
+                 */
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontProductResponse"];
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontProductResponse"];
+                };
+            };
+            /** @description Vendor not found/not ACTIVE+APPROVED, or product not found/has no active variants */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontProductResponse"];
+                };
+            };
+        };
+    };
+    getContactUs: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contact details loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontContactUsResponse"];
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Vendor not found, or not ACTIVE/APPROVED */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontContactUsResponse"];
+                };
+            };
+        };
+    };
     getVendorProfileByMobile: {
         parameters: {
             query: {
@@ -10515,6 +11078,40 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    deleteSocialLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+                /** @example 12 */
+                social_link_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Social link deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseString"];
+                };
+            };
+            /** @description Social link not found for vendor */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseString"];
                 };
             };
         };

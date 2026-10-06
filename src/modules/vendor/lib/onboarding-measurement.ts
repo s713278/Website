@@ -186,14 +186,6 @@ export function reconcileSkuToProductMeasurement(
   return { ...sku, measurementType, unit }
 }
 
-/** The quantity suggestions to prefill at Step 6 for a product measured this way. */
-export function unitOptionsForMeasurement(
-  type: MeasurementType,
-  catalog: MeasurementCatalog,
-): number[] {
-  return measurementEntryByType(catalog, type)?.unitOptions ?? []
-}
-
 /** A human label for a measurement type in the Step 6 unit picker and the authoring form. */
 export function measurementLabel(type: MeasurementType): string {
   return MEASUREMENT_LABELS[type] ?? type

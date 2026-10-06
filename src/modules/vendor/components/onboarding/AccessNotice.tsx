@@ -1,4 +1,4 @@
-import { BuildingIcon, CheckCircle2Icon, CircleAlertIcon, ClockIcon, DatabaseIcon, StoreIcon, UserXIcon } from 'lucide-react'
+import { BuildingIcon, CheckCircle2Icon, CircleAlertIcon, ClockIcon, DatabaseIcon, InfoIcon, StoreIcon, UserXIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
 import type { OnboardingAccess } from '../../lib/onboarding-access'
 
@@ -93,16 +93,39 @@ export function AccessNotice({ access, onSelectVendor, onSignOut }: AccessNotice
 }
 
 /**
- * A neutral step-level notice.
+ * The wizard's one step-level notice. Every message in Steps 3-10 has a fixed home by kind,
+ * so a vendor learns where to look once:
  *
- * Keep this separate from the quiet status row because it describes a problem that needs
- * attention rather than ordinary setup state.
+ * - how to fill the step: the step description under the title, never a box;
+ * - what saving does that cannot be taken back: the save note beside Continue
+ *   (`saveNote` in `ONBOARDING_STEPS`), so it is in view at the moment of the save;
+ * - a plan limit: next to the list or counter it limits;
+ * - the step cannot be used as it is: this notice, at the top of the step.
+ *
+ * Nothing a vendor must read before saving goes in a tooltip: it is invisible until found,
+ * and unreliable on the phones most vendors set up from.
  */
-export function StepNotice({ message }: { message: string }) {
+export function StepNotice({
+  message,
+  tone = 'warning',
+}: {
+  message: string
+  /** `info` for a state that holds the step back by design; `warning` for a problem. */
+  tone?: 'info' | 'warning'
+}) {
+  const Icon = tone === 'info' ? InfoIcon : CircleAlertIcon
   return (
-    <div className="flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35">
-      <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-      <p className="text-amber-900 dark:text-amber-100">{message}</p>
+    <div
+      role={tone === 'info' ? 'status' : undefined}
+      className={tone === 'info'
+        ? 'flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5'
+        : 'flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35'}
+    >
+      <Icon
+        className={tone === 'info' ? 'mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]' : 'mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300'}
+        aria-hidden="true"
+      />
+      <p className={tone === 'info' ? 'text-[var(--ob-ink)]' : 'text-amber-900 dark:text-amber-100'}>{message}</p>
     </div>
   )
 }
@@ -143,19 +166,9 @@ export function OnboardingStatus({
   const { Icon, iconClassName } = status
 
   return (
-    <div role="status" className="mx-auto flex w-full max-w-[54rem] items-center gap-2 px-4 py-2 text-xs leading-5 text-[var(--ob-ink-soft)] sm:px-6 min-[900px]:px-8">
+    <div role="status" className="flex w-full items-center gap-2 py-2 text-xs leading-5 text-[var(--ob-ink-soft)]">
       <Icon className={`size-3.5 shrink-0 ${iconClassName}`} aria-hidden="true" />
       <p><span className="font-semibold text-[var(--ob-ink)]">{status.label}</span><span aria-hidden="true"> · </span>{status.detail}</p>
     </div>
-  )
-}
-
-/** A compact explanation for a step whose controls are unavailable. */
-export function StepRestrictionNotice({ children }: { children: React.ReactNode }) {
-  return (
-    <p role="status" className="flex items-center gap-2 text-sm leading-5 text-[var(--ob-ink-soft)]">
-      <ClockIcon className="size-4 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
-      <span>{children}</span>
-    </p>
   )
 }

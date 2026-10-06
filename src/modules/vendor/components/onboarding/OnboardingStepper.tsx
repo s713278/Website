@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckIcon, LockKeyholeIcon, PlusIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ONBOARDING_STEPS, isAdditiveCatalogStep, type OnboardingStep } from '../../types/onboarding'
@@ -47,7 +47,8 @@ export function OnboardingStepper({
   onNavigate,
 }: StepperProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const currentRef = useRef<HTMLLIElement>(null)
+  const currentRef = useRef<HTMLButtonElement>(null)
+  const [hidden, setHidden] = useState({ before: false, after: false })
 
   const stateOf = (step: OnboardingStep): StepState => {
     if (step < firstNavigableStep) return 'settled'
@@ -62,14 +63,44 @@ export function OnboardingStepper({
     const scroller = scrollRef.current
     const node = currentRef.current
     if (!scroller || !node) return
-    const left = node.offsetLeft - scroller.clientWidth / 2 + node.clientWidth / 2
+    const scrollerBox = scroller.getBoundingClientRect()
+    const nodeBox = node.getBoundingClientRect()
+    const left = nodeBox.left - scrollerBox.left + scroller.scrollLeft - scroller.clientWidth / 2 + nodeBox.width / 2
     scroller.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
   }, [currentStep])
 
+  // An end fades only while steps are scrolled out past it. A fade at the true first or
+  // last step would wash out a dot that is fully in view.
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const measure = () => {
+      const before = scroller.scrollLeft > 1
+      const after = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1
+      setHidden((current) => current.before === before && current.after === after ? current : { before, after })
+    }
+    measure()
+    scroller.addEventListener('scroll', measure, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(scroller)
+    return () => {
+      scroller.removeEventListener('scroll', measure)
+      observer?.disconnect()
+    }
+  }, [])
+
   return (
     <nav aria-label="Onboarding progress">
-      <div ref={scrollRef} className="ob-stepper-scroll overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <ol className="mx-auto flex w-full min-w-max max-w-[54rem] items-start px-4 pt-4 pb-3 sm:px-6">
+      <div
+        ref={scrollRef}
+        data-fade-before={hidden.before || undefined}
+        data-fade-after={hidden.after || undefined}
+        className="ob-stepper-scroll overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {/* Dots sit at fixed width with the links between them taking the slack, so the
+            first and last dots land on the form’s edges (inset only by the current-step ring)
+            and every link is the same length. */}
+        <ol className="flex w-full min-w-max items-start px-1 pt-4 pb-8">
           {ONBOARDING_STEPS.map((item, index) => {
             const state = stateOf(item.step)
             const reachable = state === 'done' || state === 'open' || state === 'current'
@@ -84,20 +115,20 @@ export function OnboardingStepper({
             return (
               <li
                 key={item.step}
-                ref={state === 'current' ? currentRef : undefined}
-                className="relative flex min-w-19 flex-1 flex-col items-center sm:min-w-22"
+                className={cn('flex items-start', index > 0 && 'min-w-19 flex-1 sm:min-w-22')}
               >
                 {index > 0 ? (
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'absolute top-3.5 right-1/2 left-[calc(-50%+0.875rem)] h-0.5 rounded-full transition-colors',
+                      'mt-3.5 h-0.5 flex-1 rounded-full transition-colors',
                       linkDone ? 'bg-[var(--ob-brand)]' : 'bg-[var(--ob-line)]',
                     )}
                   />
                 ) : null}
 
                 <button
+                  ref={state === 'current' ? currentRef : undefined}
                   type="button"
                   disabled={!reachable || state === 'current'}
                   aria-current={state === 'current' ? 'step' : undefined}
@@ -105,7 +136,7 @@ export function OnboardingStepper({
                   title={`${item.short}: ${STATE_LABEL[state].toLowerCase()}${additive ? ', still open for additions' : ''}`}
                   onClick={() => onNavigate(item.step)}
                   className={cn(
-                    'group flex w-full flex-col items-center gap-1.5 rounded-lg px-1 pb-0.5 outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
+                    'group relative block size-7 shrink-0 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
                     !reachable && 'cursor-not-allowed',
                   )}
                 >
@@ -139,7 +170,9 @@ export function OnboardingStepper({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'max-w-full truncate text-[11px] leading-4 font-medium transition-colors',
+                      // The end labels hang inward from their dots so they never pass the form's edges.
+                      'absolute top-full mt-1.5 text-[11px] leading-4 font-medium whitespace-nowrap transition-colors',
+                      index === 0 ? 'left-0' : index === ONBOARDING_STEPS.length - 1 ? 'right-0' : 'left-1/2 -translate-x-1/2',
                       state === 'current' && 'font-semibold text-[var(--ob-brand)]',
                       state === 'done' && 'text-[var(--ob-ink)]',
                       (state === 'open' || state === 'settled') && 'text-[var(--ob-ink-soft)]',

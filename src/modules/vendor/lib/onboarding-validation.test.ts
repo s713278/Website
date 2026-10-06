@@ -115,14 +115,17 @@ describe('validateStep — step 6 SKUs', () => {
     )
 
     const issues = validateStep(6, draft, runtime)
-    expect(issues.some((issue) => issue.field === 'product-1')).toBe(true)
+    expect(issues).toContainEqual(expect.objectContaining({
+      field: 'product-1', message: 'Turn on at least one size for Cold Pressed Juice.',
+    }))
   })
 
   it('still reports a product with no SKUs at all', () => {
     const draft = draftWith([product(1, 'Cold Pressed Juice')], [])
 
-    const issues = validateStep(6, draft, runtime)
-    expect(issues.some((issue) => issue.field === 'product-1')).toBe(true)
+    expect(validateStep(6, draft, runtime)).toEqual([
+      expect.objectContaining({ field: 'product-1', message: 'Add a size for Cold Pressed Juice.' }),
+    ])
   })
 
   it('points each SKU issue at the field ID the form renders', () => {
@@ -133,10 +136,92 @@ describe('validateStep — step 6 SKUs', () => {
       [sku({ id: 'sku-4021', productId: 1, salePrice: null })],
     )
 
-    const priceIssue = validateStep(6, draft, runtime).find((issue) =>
-      issue.message.includes('Price'),
-    )
+    const priceIssue = validateStep(6, draft, runtime).find((issue) => issue.field.endsWith('-sale-price'))
     expect(priceIssue?.field).toBe('sku-sku-4021-sale-price')
+    expect(priceIssue?.message).toBe('Required field.')
+  })
+})
+
+describe('validateStep — step 6 blank fields and the product-level prompt', () => {
+  const issuesAt = (issues: ReturnType<typeof validateStep>, field: string) =>
+    issues.filter((item) => item.field === field).map((item) => item.message)
+
+  it('reports exactly "Required field." on each blank quantity, MRP and Discounted price', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'draft-sku-1-1', productId: 1, quantity: null, listPrice: null, salePrice: null })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-quantity')).toEqual(['Required field.'])
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-list-price')).toEqual(['Required field.'])
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-sale-price')).toEqual(['Required field.'])
+  })
+
+  it('keeps the greater-than-zero messages for entered values that are not positive', () => {
+    const draft = draftWith(
+      [product(1, 'Rice')],
+      [sku({ id: 'draft-sku-1-1', productId: 1, quantity: 0, listPrice: 0, salePrice: -1 })],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-quantity')).toEqual(['Quantity must be greater than zero.'])
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-list-price')).toEqual(['MRP must be greater than zero.'])
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-sale-price')).toEqual(['Discounted price must be greater than zero.'])
+  })
+
+  it('does not call two blank-quantity sizes duplicates', () => {
+    const draft = draftWith(
+      [product(1, 'Milk')],
+      [
+        sku({ id: 'draft-sku-1-1', productId: 1, quantity: null }),
+        sku({ id: 'draft-sku-1-2', productId: 1, quantity: null }),
+      ],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.message === 'Each size needs a unique quantity and unit.')).toBe(false)
+    expect(issuesAt(issues, 'sku-draft-sku-1-1-quantity')).toEqual(['Required field.'])
+    expect(issuesAt(issues, 'sku-draft-sku-1-2-quantity')).toEqual(['Required field.'])
+  })
+
+  it('asks the vendor to turn on a size when every size is valid but inactive', () => {
+    const draft = draftWith(
+      [product(1, 'Milk')],
+      [
+        sku({ id: 'sku-1', productId: 1, quantity: 1, active: false }),
+        sku({ id: 'sku-2', productId: 1, quantity: 2, active: false }),
+      ],
+    )
+
+    expect(validateStep(6, draft, runtime)).toEqual([
+      expect.objectContaining({ field: 'product-1', message: 'Turn on at least one size for Milk.' }),
+    ])
+  })
+
+  it('leaves the product prompt out while a size has a field problem', () => {
+    const draft = draftWith(
+      [product(1, 'Milk')],
+      [
+        sku({ id: 'sku-1', productId: 1, quantity: 1, active: false }),
+        sku({ id: 'sku-2', productId: 1, quantity: 2, active: false, listPrice: null }),
+      ],
+    )
+
+    const issues = validateStep(6, draft, runtime)
+    expect(issues.some((item) => item.field === 'product-1')).toBe(false)
+    expect(issuesAt(issues, 'sku-sku-2-list-price')).toEqual(['Required field.'])
+  })
+
+  it('never emits the retired "needs at least one size with a price" message', () => {
+    const drafts = [
+      draftWith([product(1, 'Milk')], [sku({ id: 'sku-1', productId: 1, active: false })]),
+      draftWith([product(1, 'Milk')], [sku({ id: 'sku-1', productId: 1, listPrice: null, salePrice: null })]),
+      draftWith([product(1, 'Milk')], []),
+    ]
+    for (const draft of drafts) {
+      expect(validateStep(6, draft, runtime).some((item) => item.message.includes('needs at least one size'))).toBe(false)
+    }
   })
 })
 
@@ -191,14 +276,16 @@ describe('validateStep — step 6 purchasable size rules', () => {
     expect(issues.some((item) => item.field === 'sku-sku-1-list-price')).toBe(true)
   })
 
-  it('rejects a Price with more than two decimal places', () => {
+  it('rejects a Discounted price with more than two decimal places', () => {
     const draft = draftWith(
       [product(1, 'Rice')],
       [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 55.005 })],
     )
 
     const issues = validateStep(6, draft, runtime)
-    expect(issues.some((item) => item.field === 'sku-sku-1-sale-price')).toBe(true)
+    expect(issues).toContainEqual(expect.objectContaining({
+      field: 'sku-sku-1-sale-price', message: 'Discounted price can have at most two decimal places.',
+    }))
   })
 
   it('accepts monetary values with one or two decimal places', () => {
@@ -210,7 +297,7 @@ describe('validateStep — step 6 purchasable size rules', () => {
     expect(validateStep(6, draft, runtime)).toEqual([])
   })
 
-  it('accepts a Price equal to MRP', () => {
+  it('accepts a Discounted price equal to MRP', () => {
     const draft = draftWith(
       [product(1, 'Rice')],
       [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 60 })],
@@ -219,14 +306,16 @@ describe('validateStep — step 6 purchasable size rules', () => {
     expect(validateStep(6, draft, runtime)).toEqual([])
   })
 
-  it('rejects a Price above MRP at the visible sale-price field', () => {
+  it('rejects a Discounted price above MRP at the visible sale-price field', () => {
     const draft = draftWith(
       [product(1, 'Rice')],
       [sku({ id: 'sku-1', productId: 1, listPrice: 60, salePrice: 61 })],
     )
 
     const issues = validateStep(6, draft, runtime)
-    expect(issues.some((item) => item.field === 'sku-sku-1-sale-price')).toBe(true)
+    expect(issues).toContainEqual(expect.objectContaining({
+      field: 'sku-sku-1-sale-price', message: 'Discounted price cannot exceed MRP.',
+    }))
   })
 
   it('flags two sizes that share a quantity and unit even with different names and prices', () => {
@@ -396,8 +485,8 @@ describe('validateStep — step 6 measurement guard', () => {
 
     const issues = validateStep(6, draft, runtime, undefined, CATALOG)
     expect(issues.some((item) => item.field === 'sku-sku-1')).toBe(true)
-    // The off-measurement size cannot be the product's one valid active size either.
-    expect(issues.some((item) => item.field === 'product-1')).toBe(true)
+    // The size-level issue already blocks the product, so no product-level prompt is added.
+    expect(issues.some((item) => item.field === 'product-1')).toBe(false)
   })
 
   it('rejects the drift through the full readiness pass', () => {

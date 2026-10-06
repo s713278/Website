@@ -120,7 +120,7 @@ export function OtpStep({
         }}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <FieldLabel htmlFor="otp-0">Four-digit code</FieldLabel>
             <OtpInput
               value={otpDigits}
@@ -139,7 +139,7 @@ export function OtpStep({
       </form>
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Button type="button" variant="ghost" size="sm" onClick={onChangePhone}>
+        <Button type="button" variant="ghost" size="sm" className="-ml-3" onClick={onChangePhone}>
           Change number
         </Button>
         <Button type="button" variant="outline" size="sm" disabled={busy || seconds > 0} onClick={() => void resend()}>

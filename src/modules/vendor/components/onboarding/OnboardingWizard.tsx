@@ -1,9 +1,10 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   DatabaseIcon,
   EyeIcon,
+  InfoIcon,
   LockKeyholeIcon,
   Loader2Icon,
   RotateCcwIcon,
@@ -56,7 +57,7 @@ import {
   type OnboardingStep,
   type ValidationIssue,
 } from '../../types/onboarding'
-import { AccessNotice, OnboardingStatus, StepNotice, StepRestrictionNotice } from './AccessNotice'
+import { AccessNotice, OnboardingStatus, StepNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpStep, PhoneStep } from './IdentitySteps'
@@ -108,6 +109,43 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
   )
 }
 
+type OnboardingState = ReturnType<typeof useOnboardingStore.getState>
+
+/**
+ * Recomputes, from the store as it is now, the issues a validation reported on Continue.
+ * Only validation-origin issues carry one; a server or request failure has nothing to
+ * re-run, so it stays until the next action.
+ */
+type IssueRecheck = (state: OnboardingState) => ValidationIssue[]
+
+type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
+
+const NO_ISSUES: ShownIssues = { issues: [] }
+
+/**
+ * The Continue validation for Steps 3-10, read entirely from the given store state so a
+ * re-check while the vendor edits runs exactly what Continue ran. The projected account
+ * total is what every limit gates, so validation is handed the account snapshot and the
+ * product/size caps alongside the category cap.
+ */
+function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
+  const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } = state
+  const categoryLimit = selectCategoryLimit(state)
+  const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
+  if (draft.currentStep === 10) {
+    return readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
+  }
+  // Validate additions without reopening whole-store readiness for submitted vendors.
+  return selectStoreIsSubmitted(state)
+    ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
+    : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
+}
+
+const phoneIssues: IssueRecheck = (state) => validateStep(1, state.draft, state.runtime)
+
+const OTP_INCOMPLETE: ValidationIssue = { step: 2, field: 'otp-0', message: 'Enter all four digits before verifying.' }
+const otpIssues: IssueRecheck = (state) => state.runtime.otpDigits.some((digit) => !digit) ? [OTP_INCOMPLETE] : []
+
 /**
  * A submitted store is read-only except for categories/products, approved size additions,
  * and the Step 10 status view. The Continue handler and the
@@ -133,7 +171,6 @@ export function OnboardingWizard() {
   const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
   const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
   const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
-  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setProductLimit = useOnboardingStore((state) => state.setProductLimit)
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
@@ -149,6 +186,7 @@ export function OnboardingWizard() {
   // offering controls that cannot reach a store already under review.
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const storeIsApproved = useOnboardingStore(selectStoreIsApproved)
+  const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
 
@@ -163,7 +201,30 @@ export function OnboardingWizard() {
   // the handlers and the render agree without re-reading the store in each one.
   const catalogPolicy = selectCatalogPolicy({ draft: { catalogSource, completedSteps } }, { liveApi })
 
-  const [issues, setIssues] = useState<ValidationIssue[]>([])
+  const [shownIssues, setShownIssues] = useState<ShownIssues>(NO_ISSUES)
+  // While the vendor edits, a validation issue the same check no longer reports is hidden;
+  // new problems still wait for the next Continue. The selector returns the indexes still
+  // present as a string, so the wizard re-renders only when that set changes — not per
+  // keystroke — and `issues` keeps its identity while the set holds. Hiding a fixed issue
+  // never adds one, so Step 6 (which opens a panel only for a newly arrived issue) stays put.
+  const stillShownKey = useOnboardingStore((state) => {
+    const { issues: shown, recheck } = shownIssues
+    if (!recheck) return 'all'
+    const current = recheck(state)
+    return shown
+      .flatMap((item, index) =>
+        current.some((next) => next.field === item.field && next.message === item.message) ? [index] : [])
+      .join(',')
+  })
+  const issues = useMemo(() => {
+    if (stillShownKey === 'all') return shownIssues.issues
+    const kept = new Set(stillShownKey.split(','))
+    return shownIssues.issues.filter((_, index) => kept.has(String(index)))
+  }, [shownIssues, stillShownKey])
+  // Errors render inline on each step, so this polite region is what tells a screen-reader
+  // user a Continue failed. `count` re-keys the text so a repeat of the same message is
+  // announced again; it reads empty once the shown issues clear (a fix, a step change).
+  const [issueAnnouncement, setIssueAnnouncement] = useState({ text: '', count: 0 })
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   // The wizard must not paint an interactive step before the account has been read:
@@ -383,7 +444,7 @@ export function OnboardingWizard() {
     requestControllerRef.current?.abort()
     requestControllerRef.current = null
     setBusy(false)
-    setIssues([])
+    setShownIssues(NO_ISSUES)
     setStatusMessage(null)
     setMobileView('form')
     formScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
@@ -417,9 +478,19 @@ export function OnboardingWizard() {
     }, 0)
   }
 
-  const showIssues = (nextIssues: ValidationIssue[]) => {
-    setIssues(nextIssues)
-    if (nextIssues[0]) focusField(nextIssues[0].field)
+  /**
+   * Shows issues and focuses the first. Pass `recheck` only for validation-origin issues:
+   * those clear as the vendor fixes them. Server and request failures (OTP, a failed save
+   * or go-live, the blocked sample catalog) omit it and stay until the next action.
+   */
+  const showIssues = (nextIssues: ValidationIssue[], recheck?: IssueRecheck) => {
+    setShownIssues({ issues: nextIssues, recheck })
+    const first = nextIssues[0]
+    setIssueAnnouncement((current) => ({ text: first?.message ?? '', count: current.count + 1 }))
+    // Every issue renders inline on its own step. Step 10's readiness check raises issues
+    // for Steps 3-9, whose fields are not on screen; Step 10 lists those in its readiness list.
+    const onScreen = first?.step === useOnboardingStore.getState().draft.currentStep
+    if (first) focusField(onScreen ? first.field : 'readiness-issues')
   }
 
   const requestSampleCatalog = () => {
@@ -488,13 +559,13 @@ export function OnboardingWizard() {
     // exists, so `request-otp` can no longer swap the signed-in vendor underneath a
     // draft. Changing number now goes through sign-out instead.
     if (identitySettled) return
-    const { draft, runtime } = useOnboardingStore.getState()
-    const phoneIssues = validateStep(1, draft, runtime)
-    if (phoneIssues.length) {
-      showIssues(phoneIssues)
+    const state = useOnboardingStore.getState()
+    const nextIssues = phoneIssues(state)
+    if (nextIssues.length) {
+      showIssues(nextIssues, phoneIssues)
       return
     }
-    await sendOtp(runtime.phone)
+    await sendOtp(state.runtime.phone)
   }
 
   const sendOtp = async (phone: string) => {
@@ -521,10 +592,12 @@ export function OnboardingWizard() {
 
   const handleOtpVerify = async () => {
     if (identitySettled) return
-    const { runtime } = useOnboardingStore.getState()
+    const state = useOnboardingStore.getState()
+    const { runtime } = state
     const otp = runtime.otpDigits.join('')
-    if (runtime.otpDigits.some((digit) => !digit)) {
-      showIssues([{ step: 2, field: 'otp-0', message: 'Enter all four digits before verifying.' }])
+    const nextIssues = otpIssues(state)
+    if (nextIssues.length) {
+      showIssues(nextIssues, otpIssues)
       return
     }
     const controller = beginRequest()
@@ -652,14 +725,11 @@ export function OnboardingWizard() {
   }
 
   const handleCatalogContinue = async () => {
-    const { draft, runtime, measurementCatalog, accountCatalog, productLimit, skuLimit } =
-      useOnboardingStore.getState()
-    // The projected account total is what every limit gates, so validation is handed the
-    // account snapshot and the product/size caps alongside the category cap.
-    const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
+    const state = useOnboardingStore.getState()
+    const { draft, runtime } = state
     if (draft.currentStep === 10) {
-      const nextIssues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
-      if (nextIssues.length) return showIssues(nextIssues)
+      const nextIssues = catalogStepIssues(state)
+      if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
       const slug = normalizeDraftSlug(draft.storefront.storeName || draft.business.businessName)
       // Sample mode is gated here for the same reason Steps 3-9 gate on it: its IDs are
@@ -690,11 +760,8 @@ export function OnboardingWizard() {
       return
     }
 
-    // Validate additions without reopening whole-store readiness for submitted vendors.
-    const nextIssues = storeIsSubmitted
-      ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
-      : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
-    if (nextIssues.length) return showIssues(nextIssues)
+    const nextIssues = catalogStepIssues(state)
+    if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
     // Started alongside this step's save, so the next step's catalog is usually ready when it
@@ -778,7 +845,7 @@ export function OnboardingWizard() {
 
   const changeOtpPhone = () => {
     cancelActiveRequest()
-    setIssues([])
+    setShownIssues(NO_ISSUES)
     setStatusMessage(null)
     const phone = useOnboardingStore.getState().runtime.phone
     useOnboardingStore.getState().updatePhone(phone)
@@ -816,6 +883,12 @@ export function OnboardingWizard() {
   })
 
   const stepMeta = ONBOARDING_STEPS[currentStep - 1]
+  const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
+  // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
+  // catalog source, and once the store is submitted it is read-only and saves nothing.
+  const saveNote = !stepMeta.saveNote || !catalogUnlocked ? null
+    : currentStep === 9 ? (liveApi && !storeIsSubmitted ? stepMeta.saveNote : null)
+      : writesReachAccount(catalogSource) ? stepMeta.saveNote : null
   // A submitted store needs no further setup whatever the local draft says:
   // `storeSubmission` comes from the account, so "Complete setup" has nothing to do.
   const setupNeedsNoFurtherAction =
@@ -857,10 +930,12 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="onboarding-shell h-full min-h-0 overflow-hidden text-[var(--ob-ink)] [contain:paint]">
-      <div className="ob-grid">
+    <div className="onboarding-shell h-full min-h-0 overflow-hidden px-5 text-[var(--ob-ink)] [contain:paint] sm:px-8 xl:px-10">
+      {/* A working tool rather than a reading page, so on desktop it sits slightly wider than the
+          marketing header's measure. */}
+      <div className="ob-grid mx-auto w-full max-w-[81rem]">
         <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="grid shrink-0 grid-cols-2 gap-1 p-1.5 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
+          <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
             <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>
             <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'preview' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}><EyeIcon className="size-4" /> Your shop</button>
           </div>
@@ -868,28 +943,36 @@ export function OnboardingWizard() {
           <div className="min-h-0 flex-1">
             <main id="onboarding-form-panel" role="tabpanel" aria-labelledby="onboarding-form-tab" className={cn('h-full min-h-0 min-w-0', mobileView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
               <section className="flex h-full min-h-0 flex-col">
-                <div className="shrink-0">
+                {/* The stepper, status and footer reserve the form's scrollbar gutter, so all
+                    four rows share one right edge. */}
+                <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
                   <OnboardingStepper {...stepperProps} onNavigate={navigateToStep} />
+                  {currentStep >= 3 && currentStep < 10 && (!liveApi || storeIsSubmitted) ? (
+                    <div className="border-b border-[var(--ob-line)]">
+                      <OnboardingStatus demo={!liveApi} submitted={storeIsSubmitted} approved={storeIsApproved} />
+                    </div>
+                  ) : null}
                 </div>
-                {currentStep >= 3 && currentStep < 10 && (!liveApi || storeIsSubmitted) ? (
-                  <div className="shrink-0 border-b border-[var(--ob-line)]">
-                    <OnboardingStatus demo={!liveApi} submitted={storeIsSubmitted} approved={storeIsApproved} />
-                  </div>
-                ) : null}
 
-                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 [scrollbar-gutter:stable] sm:px-6 min-[900px]:px-8 min-[900px]:pt-5">
-                  <div className="mx-auto w-full max-w-[54rem]">
+                <div ref={formScrollRef} id="onboarding-form-scroll" className="@container/onboarding-form -mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pt-4 pb-8 [scrollbar-gutter:stable] min-[900px]:pt-5">
+                  <div className="w-full">
                     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                       <div className="min-w-0 flex-1">
                         <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.625rem] leading-[1.15] font-bold tracking-[-0.03em] text-[var(--ob-ink)] outline-none sm:text-[1.875rem]">{stepMeta.title}</h1>
-                        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">{stepMeta.description}</p>
+                        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--ob-ink-soft)]">
+                          {stepMeta.emphasis
+                            ? stepDescription.split(stepMeta.emphasis).flatMap((part, index) => index
+                              ? [<strong key={index} className="font-semibold text-[var(--ob-ink)]">{stepMeta.emphasis}</strong>, part]
+                              : [part])
+                            : stepDescription}
+                        </p>
                       </div>
                       {/* The catalog-source toggle and "Start over" both act on the browser
                           draft, and a submitted store is one an administrator holds — neither can
                           touch it, so it is shown neither. "Start over" additionally needs a
                           resolved vendor session to sign out of: the anonymous identity steps have
                           nothing to end, and the dead-end notices below carry their own instead. */}
-                      <div className="flex shrink-0 items-center gap-1 pt-1">
+                      <div className="-mr-1 flex shrink-0 items-center gap-1 pt-1">
                         {storeIsSubmitted ? null : <>
                         {catalogPolicy.sampleControlVisible ? (
                         <button
@@ -928,21 +1011,16 @@ export function OnboardingWizard() {
                     <div>
                       {persistenceStatus === 'unavailable' ? <p role="status" className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
 
-                      {issues.length ? (
-                        <div className="mt-5 rounded-xl border-l-2 border-l-destructive bg-destructive/[0.06] p-4" role="alert" aria-labelledby="error-summary-heading">
-                          <h2 id="error-summary-heading" className="font-display text-sm font-semibold text-destructive">Please fix {issues.length} item{issues.length === 1 ? '' : 's'}</h2>
-                          <ul className="mt-2 space-y-1.5 text-sm">
-                            {issues.map((item, index) => <li key={`${item.field}-${index}`}><button type="button" onClick={() => item.step === currentStep ? focusField(item.field) : navigateToStep(item.step)} className="text-left underline decoration-destructive/40 underline-offset-2 hover:text-destructive">{item.message}{item.step !== currentStep ? ` (Step ${item.step})` : ''}</button></li>)}
-                          </ul>
-                        </div>
-                      ) : null}
+                      <div role="status" aria-live="polite" className="sr-only">
+                        {issues.length && issueAnnouncement.text ? <span key={issueAnnouncement.count}>{issueAnnouncement.text}</span> : null}
+                      </div>
 
                       {/* Keyed on the step so each one arrives rather than swapping in place. */}
                       <div key={currentStep} className="ob-step-enter mt-6">
                         {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} /> : null}
                         {currentStep === 2 && !identitySettled ? <OtpStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} onResend={resendOtp} onChangePhone={changeOtpPhone} /> : null}
                         {catalogUnlocked && storeIsSubmitted && currentStep === 6 && !storeIsApproved ? (
-                          <div className="mb-4"><StepRestrictionNotice>Sizes and prices unlock after approval.</StepRestrictionNotice></div>
+                          <div className="mb-4"><StepNotice tone="info" message="Sizes and prices unlock after approval." /></div>
                         ) : null}
                         {catalogUnlocked && currentStep >= 3 && contextError ? (
                           <div className="mb-4"><StepNotice message={contextError} /></div>
@@ -961,7 +1039,7 @@ export function OnboardingWizard() {
                           disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} /> : null}
                         {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                         {measurementsPending && catalogUnlocked ? (
                           <p className="flex items-center gap-2 text-sm text-[var(--ob-ink-soft)]">
@@ -975,19 +1053,25 @@ export function OnboardingWizard() {
                             : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
                           />
                         ) : null}
-                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} confirm={requestConfirmation} /> : null}
+                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} /> : null}
                         {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                         {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                         {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
+                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </fieldset>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {currentStep >= 3 ? <div className="shrink-0 border-t border-[var(--ob-line)] bg-[var(--ob-canvas-base)]">
-                  <div className="mx-auto flex w-full max-w-[54rem] items-center justify-end gap-3 px-4 py-3 sm:px-6 min-[900px]:px-8">
+                {currentStep >= 3 ? <div className="-mx-1 shrink-0 overflow-hidden px-1 [scrollbar-gutter:stable]">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-[var(--ob-line)] py-3">
+                    {saveNote ? (
+                      <p className="flex min-w-0 basis-full items-center gap-1.5 text-xs leading-5 text-[var(--ob-ink-soft)] sm:mr-auto sm:basis-0 sm:grow">
+                        <InfoIcon className="size-3.5 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
+                        <span>{saveNote}</span>
+                      </p>
+                    ) : null}
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
                       {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || measurementsPending} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
@@ -1000,7 +1084,7 @@ export function OnboardingWizard() {
           </div>
         </div>
 
-        <PhonePreviewStage className="hidden h-full min-[900px]:flex" />
+        <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" />
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />
