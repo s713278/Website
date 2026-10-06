@@ -234,7 +234,7 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
         {bill ? (
           <>
             <dl className="mt-3 space-y-2.5 text-sm">
-              <BillRow label="Item total" value={formatCurrency(bill.grossAmount)} />
+              <BillRow label="Item total (MRP)" value={formatCurrency(bill.grossAmount)} />
               {bill.discount > 0 ? (
                 <BillRow label="Discount" value={`- ${formatCurrency(bill.discount)}`} accent />
               ) : null}

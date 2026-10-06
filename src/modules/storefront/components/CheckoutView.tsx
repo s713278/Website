@@ -816,7 +816,7 @@ export function CheckoutView({
                   </div>
 
                   <dl className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-sm">
-                    <SummaryRow label="Subtotal" value={formatCurrency(totals.subtotal)} />
+                    <SummaryRow label="Item total (MRP)" value={formatCurrency(totals.subtotal)} />
                     <SummaryRow
                       label="Delivery"
                       value={totals.delivery > 0 ? formatCurrency(totals.delivery) : 'Free'}

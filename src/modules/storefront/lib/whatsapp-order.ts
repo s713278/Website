@@ -139,7 +139,7 @@ function itemBlock(line: CartLine, index: number) {
 
 function paymentBlock(input: WhatsAppOrderInput) {
   const fees = [
-    `Subtotal: ${formatCurrency(input.subtotal)}`,
+    `Item total (MRP): ${formatCurrency(input.subtotal)}`,
     input.deliveryFee > 0 ? `Delivery: ${formatCurrency(input.deliveryFee)}` : null,
     input.packagingFee > 0 ? `Packaging: ${formatCurrency(input.packagingFee)}` : null,
     (input.serviceFee ?? 0) > 0 ? `Service charge: ${formatCurrency(input.serviceFee ?? 0)}` : null,

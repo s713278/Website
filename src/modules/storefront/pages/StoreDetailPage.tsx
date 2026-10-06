@@ -158,6 +158,12 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
     setQuery('')
   }
 
+  function closeBrowse() {
+    setBrowseOpen(false)
+    setCategoryFilter(ALL_CATEGORY)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function handleToggleSearch() {
     if (searchOpen) {
       closeSearch()
@@ -184,6 +190,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
         cartCount={itemCount}
         searchOpen={searchOpen}
         onToggleSearch={handleToggleSearch}
+        onBack={browseOpen && !searchOpen ? closeBrowse : undefined}
       />
 
       {searchOpen ? (
