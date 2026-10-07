@@ -37,6 +37,7 @@ type StorefrontHeaderProps = {
   searchOpen?: boolean
   /** Shop home only. Other pages open the shop search. */
   onToggleSearch?: () => void
+  onBack?: () => void
 }
 
 const BACK_BUTTON_CLASS =
@@ -203,6 +204,7 @@ export function StorefrontHeader({
   cartCount = 0,
   searchOpen = false,
   onToggleSearch,
+  onBack,
 }: StorefrontHeaderProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -236,6 +238,15 @@ export function StorefrontHeader({
             >
               <ChevronLeft className="size-6" strokeWidth={1.75} />
             </button>
+          ) : onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className={BACK_BUTTON_CLASS}
+              aria-label="Go back"
+            >
+              <ChevronLeft className="size-6" strokeWidth={1.75} />
+            </button>
           ) : backTo ? (
             <Link to={backTo} className={BACK_BUTTON_CLASS} aria-label="Go back">
               <ChevronLeft className="size-6" strokeWidth={1.75} />
@@ -244,6 +255,11 @@ export function StorefrontHeader({
 
           <Link
             to={shopHref}
+            onClick={(event) => {
+              if (!onBack) return
+              event.preventDefault()
+              onBack()
+            }}
             className="flex min-w-0 flex-1 items-center overflow-hidden lg:min-w-[220px] lg:flex-none"
           >
             <StoreBrandLogo
