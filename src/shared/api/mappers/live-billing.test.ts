@@ -9,12 +9,12 @@ import {
 } from './live-billing'
 
 const trialEnd = '2026-10-12T10:04:16.169Z'
-const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 299 }
+const plan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter', price: 399 }
 const subscription = (overrides: Record<string, unknown> = {}) =>
   ({ kind: 'subscription' as const, subscription: liveTrialSubscription(overrides) })
 const autoPay = (overrides: Record<string, unknown> = {}) =>
   ({ kind: 'subscription' as const, subscription: liveTrialAutoPaySubscription(overrides) })
-/** Gap K's requested read after Pay ₹299 with Razorpay during free days. */
+/** Gap K's requested read after Pay ₹399 with Razorpay during free days. */
 const early = (overrides: Record<string, unknown> = {}) =>
   ({ kind: 'subscription' as const, subscription: liveEarlyFeeSubscription(overrides) })
 /** Gap K's requested read once the early first fee is captured. */
@@ -117,7 +117,7 @@ describe('mapLiveBilling', () => {
     })
   })
 
-  describe('gap K: Pay ₹299 with Razorpay during free days', () => {
+  describe('gap K: Pay ₹399 with Razorpay during free days', () => {
     it('today’s shape (PAYMENT_PENDING, authenticated, no P) reads row 7 before T and row 8 after', () => {
       expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(10))).toEqual(confirmingFreeDays(10))
       expect(mapLiveBilling(autoPay(), livePlans, daysBeforeEnd(-0.5))).toEqual(confirmingAfterFreeDays)
@@ -127,7 +127,7 @@ describe('mapLiveBilling', () => {
       expect(mapLiveBilling(early(), livePlans, daysBeforeEnd(10))).toMatchObject({ state: 'free_days', daysLeft: 10 })
     })
 
-    it('the fixed shape: ₹299 paid, not yet recorded, reads row 9, then row 7 once AutoPay reads agreed', () => {
+    it('the fixed shape: ₹399 paid, not yet recorded, reads row 9, then row 7 once AutoPay reads agreed', () => {
       expect(mapLiveBilling(early(), livePlans, daysBeforeEnd(2.5)).state).toBe('three_days_left')
       expect(mapLiveBilling(early({ razorpay_status: 'authenticated' }), livePlans, daysBeforeEnd(2.5)))
         .toEqual(confirmingFreeDays(3))
@@ -138,7 +138,7 @@ describe('mapLiveBilling', () => {
         .toEqual(confirmingAfterFreeDays)
     })
 
-    it('the fixed shape: ₹299 captured reads Paid with the free days kept', () => {
+    it('the fixed shape: ₹399 captured reads Paid with the free days kept', () => {
       expect(mapLiveBilling(earlyPaid(), livePlans, daysBeforeEnd(10))).toEqual(paidFreeDaysKept)
     })
 
@@ -174,7 +174,7 @@ describe('mapLiveBilling', () => {
       }
     })
 
-    it('keeps next_billing_at as sent, which the wording does not use for the next ₹299 (gap D)', () => {
+    it('keeps next_billing_at as sent, which the wording does not use for the next ₹399 (gap D)', () => {
       expect(mapLiveBilling(earlyPaid({ next_billing_at: '2026-11-13T10:04:16Z' }), livePlans, daysBeforeEnd(10)))
         .toEqual({ ...paidFreeDaysKept, nextChargeAt: '2026-11-13T10:04:16.000Z' })
       expect(mapLiveBilling(earlyPaid({ next_billing_at: null }), livePlans, daysBeforeEnd(10)))
@@ -313,7 +313,7 @@ describe('mapLiveBilling', () => {
       })
     })
 
-    it('gap E, the fixed shape: keeps the stopped read until the ₹299 is captured, then Paid for another month', () => {
+    it('gap E, the fixed shape: keeps the stopped read until the ₹399 is captured, then Paid for another month', () => {
       expect(mapLiveBilling(stopped(), livePlans, now).state).toBe('stopped')
       expect(mapLiveBilling({ kind: 'subscription', subscription: liveCancelledPaidSubscription() }, livePlans, now).state).toBe('autopay_off')
       const kept = paid({
@@ -334,7 +334,7 @@ describe('mapLiveBilling', () => {
 
       it('gap D, today’s shape: shows next_billing_at as sent, then Collecting from P until the renewal lands', () => {
         // Measured on 28 Sep: the first charge a day after T, a period ending at IST midnight, and
-        // the next ₹299 at P.
+        // the next ₹399 at P.
         expect(mapLiveBilling(paid(), livePlans, now)).toMatchObject({ state: 'paid', nextChargeAt: periodEnd })
         // A charge date after P, as the 24-hour offset gave, is shown as sent, not replaced by P.
         expect(mapLiveBilling(paid({ next_billing_at: '2026-11-13T18:30Z' }), livePlans, now))
@@ -347,7 +347,7 @@ describe('mapLiveBilling', () => {
           .toMatchObject({ state: 'paid', paidThrough: '2026-12-12T18:30:00.000Z' })
       })
 
-      it('gap D, the fixed shape: the next ₹299 exactly at P, then Collecting from P until the renewal lands', () => {
+      it('gap D, the fixed shape: the next ₹399 exactly at P, then Collecting from P until the renewal lands', () => {
         const freeDaysEnd = '2026-10-12T10:04:16.169Z'
         const monthAfter = '2026-11-12T10:04:16.169Z'
         const early = paid({ current_period_start: freeDaysEnd, current_period_end: monthAfter, next_billing_at: monthAfter })
@@ -597,7 +597,7 @@ describe('mapLiveBillingHistory', () => {
       mapLiveBillingHistory([liveHistoryEvent('SUBSCRIPTION_CHARGED', { external_payment_id: 'pay_FakeCharge0001', ...overrides })], null)[0].amount
     expect(charge({})).toBeNull()
     expect(charge({ amount: null })).toBeNull()
-    expect(charge({ amount: 299 })).toBe(299)
+    expect(charge({ amount: 399 })).toBe(399)
   })
 
   it('lists newest first whatever order the events arrive in', () => {

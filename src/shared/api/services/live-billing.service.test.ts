@@ -107,7 +107,7 @@ describe('liveBillingService writes and lists', () => {
   it('returns the cancelled subscription, history and plans in wire shape', async () => {
     const cancelled = { status: 'ACTIVE', cancel_at_period_end: true }
     const history = [{ event_type: 'SUBSCRIPTION_CANCELLED' }]
-    const plans = [{ plan_code: 'PLATFORM_MONTHLY', billing_cycle: 'MONTHLY', sale_price: 299 }]
+    const plans = [{ plan_code: 'PLATFORM_MONTHLY', billing_cycle: 'MONTHLY', sale_price: 399 }]
     vi.spyOn(apiBillingService, 'cancel').mockResolvedValue({ success: true, data: cancelled })
     vi.spyOn(apiBillingService, 'getHistory').mockResolvedValue({ success: true, data: history })
     vi.spyOn(apiBillingService, 'listPaidPlans').mockResolvedValue({ success: true, data: plans })

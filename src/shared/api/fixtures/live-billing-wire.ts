@@ -13,7 +13,7 @@ export const liveMonthlyPlan = {
   billing_cycle: 'MONTHLY',
   currency: 'INR',
   // Rupees on the live API, although OpenAPI documents paise.
-  sale_price: 299,
+  sale_price: 399,
   list_price: 599,
   external_plan_id: 'plan_FakeMonthly0001',
 }
@@ -50,11 +50,11 @@ export function liveTrialSubscription(overrides: Record<string, unknown> = {}) {
 const paidPlanFields = {
   plan_code: 'MITHRA_SOCIAL_STARTER_MONTHLY',
   plan_name: 'Mithra Social Starter',
-  sale_price: 299,
+  sale_price: 399,
 }
 
 /**
- * Pay ₹299 with Razorpay during free days, as dev returns it today (gaps K and C): Checkout approved
+ * Pay ₹399 with Razorpay during free days, as dev returns it today (gaps K and C): Checkout approved
  * an AutoPay-only subscription, read as PAYMENT_PENDING with the paid plan and no `next_billing_at`,
  * while the trial dates stay correct.
  */
@@ -70,8 +70,8 @@ export function liveTrialAutoPaySubscription(overrides: Record<string, unknown> 
 }
 
 /**
- * Pay ₹299 with Razorpay during free days, in the read gap K requests (not built on dev): the trial
- * status and plan stay until the ₹299 is captured, with a Razorpay subscription `created` until
+ * Pay ₹399 with Razorpay during free days, in the read gap K requests (not built on dev): the trial
+ * status and plan stay until the ₹399 is captured, with a Razorpay subscription `created` until
  * Checkout pays and approves AutoPay.
  */
 export function liveEarlyFeeSubscription(overrides: Record<string, unknown> = {}) {
@@ -85,7 +85,7 @@ export function liveEarlyFeeSubscription(overrides: Record<string, unknown> = {}
 
 /**
  * The early first fee captured, in the read gap K requests (not built on dev): ACTIVE, the paid month
- * running from T to one month later, and the next ₹299 at its end.
+ * running from T to one month later, and the next ₹399 at its end.
  */
 export function liveEarlyFeePaidSubscription(overrides: Record<string, unknown> = {}) {
   return liveEarlyFeeSubscription({
@@ -101,7 +101,7 @@ export function liveEarlyFeePaidSubscription(overrides: Record<string, unknown> 
 }
 
 /**
- * Razorpay has activated the subscription but not yet captured the ₹299 (gap B): ACTIVE with no paid
+ * Razorpay has activated the subscription but not yet captured the ₹399 (gap B): ACTIVE with no paid
  * period and no next charge.
  */
 export function liveActivatedSubscription(overrides: Record<string, unknown> = {}) {
@@ -114,7 +114,7 @@ export function liveActivatedSubscription(overrides: Record<string, unknown> = {
 }
 
 /**
- * Paid: Razorpay captured the ₹299. The period comes from the invoice and ends at IST midnight, and
+ * Paid: Razorpay captured the ₹399. The period comes from the invoice and ends at IST midnight, and
  * `next_billing_at` is the period end.
  */
 export function livePaidSubscription(overrides: Record<string, unknown> = {}) {
@@ -155,7 +155,7 @@ export function liveCancelledPaidSubscription(overrides: Record<string, unknown>
 }
 
 /**
- * Pay ₹299 after the trial, as dev returns it today (gap I): PAYMENT_PENDING with the paid plan and
+ * Pay ₹399 after the trial, as dev returns it today (gap I): PAYMENT_PENDING with the paid plan and
  * a Razorpay subscription still `created`, no paid period and no next charge.
  */
 export function livePayingAfterTrialSubscription(overrides: Record<string, unknown> = {}) {

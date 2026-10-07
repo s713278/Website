@@ -16,7 +16,7 @@ export interface LiveBillingPlan { code: string; name: string; price: number }
 export type LiveBillingView =
   /** `trialDays` is how many days the free days last, from `trial_started_at` to T; `null` without a readable start. */
   | { state: 'free_days' | 'three_days_left'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number; trialDays: number | null }
-  /** Free days while Razorpay confirms the ₹299 paid early (the early first fee); the free days are kept. */
+  /** Free days while Razorpay confirms the ₹399 paid early (the early first fee); the free days are kept. */
   | { state: 'free_days_confirming'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
   /** Razorpay is collecting the first fee or a renewal: open, with no dates. */
   | { state: 'collecting'; shop: 'open'; plan: LiveBillingPlan }
@@ -142,12 +142,12 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   // need no P: a trial status with AutoPay agreed and P set is unseen, so it takes the read error path.
   const trialStatus = status === 'TRIAL_ACTIVE' || status === 'TRIAL_EXPIRED' || status === 'PAYMENT_PENDING'
   if (trialStatus && autoPayAgreed && trialEndsAt) {
-    // Row 7. Gap K: dev has no early first fee yet, so Pay ₹299 with Razorpay makes an AutoPay-only
+    // Row 7. Gap K: dev has no early first fee yet, so Pay ₹399 with Razorpay makes an AutoPay-only
     // subscription, which reads here until T. Gap C: dev reports it as PAYMENT_PENDING.
     if (status !== 'TRIAL_EXPIRED' && beforeTrialEnd && periodEnd === null) {
       return { state: 'free_days_confirming', shop: 'open', plan, trialEndsAt, daysLeft: daysUntil(trialEndsAt, now) }
     }
-    // Row 8, before row 10, so an unconfirmed ₹299 never offers another. Gap J: dev keeps TRIAL_ACTIVE
+    // Row 8, before row 10, so an unconfirmed ₹399 never offers another. Gap J: dev keeps TRIAL_ACTIVE
     // after T. Gap K: dev's AutoPay-only subscription reads here from T until Razorpay charges.
     if (!beforeTrialEnd && periodEnd === null) return { state: 'confirming', shop: 'hidden', plan, ended: 'free_days' }
     // Row 8b, gap C: a payment after paid days, such as after a halt, still PAYMENT_PENDING. A P

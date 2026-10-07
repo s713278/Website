@@ -32,7 +32,7 @@ reads; see [Live API billing](#live-api-billing--29-september-2026).)*
 
 ## Agreed product rules
 
-- The platform fee is ₹299/month, INR. Production tax and invoicing treatment remains pending.
+- The platform fee is ₹399/month, INR. Production tax and invoicing treatment remains pending.
 - One eligible 14-day trial per verified vendor identity. It starts only when a store has **both
   completed onboarding and received successful approval**. Submission alone does not start it;
   delayed approval must not consume trial days. Repeated completion/approval events or login

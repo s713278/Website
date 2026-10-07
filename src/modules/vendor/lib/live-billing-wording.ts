@@ -140,7 +140,7 @@ export function liveBillingWording(view: LiveBillingView): LiveBillingWording {
     }
     const closedCard = { ...hidden, eyebrow: 'Shop closed' }
     const ended = `${view.ended === 'paid_days' ? 'Paid' : 'Free'} days are over.`
-    // Confirming offers no payment, so a second ₹299 cannot start while the first is confirmed.
+    // Confirming offers no payment, so a second ₹399 cannot start while the first is confirmed.
     if (view.state === 'confirming') return {
       card: { ...closedCard, body: `${ended} ${hiddenShop}` }, note: null,
       confirming: confirmingPayment,

@@ -26,7 +26,7 @@ export function LiveShellBanner() {
   return banner ? <BillingStateBanner banner={banner} className="mx-[var(--vc-gutter)] mt-4" /> : null
 }
 
-/** The top bar's Plan button, labelled for the state: "Pay ₹299", "Keep open · ₹299" or "Shop plan". */
+/** The top bar's Plan button, labelled for the state: "Pay ₹399", "Keep open · ₹399" or "Shop plan". */
 export function LiveHeaderButton() {
   const label = useLiveBillingChrome()?.header ?? 'Shop plan'
   return (
