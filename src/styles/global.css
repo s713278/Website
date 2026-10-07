@@ -441,6 +441,47 @@
     }
   }
 
+  /* Sign-in awning: the striped shade over a shopfront, hung above both sign-in forms. A rod,
+     then stripes whose scalloped hem drops onto the form. One scallop spans one stripe, and both
+     patterns are centred so the hem stays symmetric at any width. The shadow is on the wrapper
+     because a filter on the masked element would itself be masked away. Decorative only. */
+  .md-awning {
+    --md-awning-stripe: 2rem;
+    --md-awning-drop: calc(var(--md-awning-stripe) / 2);
+    position: relative;
+    z-index: 1;
+    margin-bottom: calc(var(--md-awning-drop) * -1);
+    filter: drop-shadow(0 3px 0 rgb(6 78 59 / 0.14));
+  }
+
+  .md-awning::before {
+    content: '';
+    display: block;
+    height: 0.375rem;
+    border-radius: 999px;
+    background: var(--md-green-800);
+  }
+
+  .md-awning::after {
+    content: '';
+    display: block;
+    height: calc(2.25rem + var(--md-awning-drop));
+    background: linear-gradient(
+        90deg,
+        var(--md-green-600) 50%,
+        #fff 50%
+      )
+      center / calc(var(--md-awning-stripe) * 2) 100% repeat-x;
+    -webkit-mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+    mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+  }
+
 }
 
 @theme inline {
