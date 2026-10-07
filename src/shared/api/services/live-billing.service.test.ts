@@ -1,9 +1,16 @@
 import { ApiError, vendorBillingService as apiBillingService } from '@mithra/api-client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { configureApiClient } from '../config'
 import { liveBillingService } from './live-billing.service'
 
+beforeEach(() => {
+  configureApiClient({ useApi: true })
+})
+
 afterEach(() => {
+  configureApiClient({ useApi: false })
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const trialSubscription = {
@@ -123,5 +130,36 @@ describe('liveBillingService writes and lists', () => {
     await expect(liveBillingService.subscribe('91', 'PLATFORM_MONTHLY')).rejects.toMatchObject({
       message: 'No plan',
     })
+  })
+})
+
+describe('liveBillingService in local development demo mode', () => {
+  beforeEach(() => {
+    configureApiClient({ useApi: false })
+  })
+
+  it('reads and writes through the local Razorpay Test helper, never the backend', async () => {
+    const backend = vi.spyOn(apiBillingService, 'getSubscription')
+    const requests: Array<[string, RequestInit | undefined]> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      requests.push([url, init])
+      return { ok: true, status: 200, json: async () => ({ success: true, status: 200, data: trialSubscription }) }
+    }))
+
+    await expect(liveBillingService.readSubscription('r1')).resolves.toEqual({ kind: 'subscription', subscription: trialSubscription })
+    await liveBillingService.cancel('r1')
+    expect(requests.map(([url, init]) => [url, init?.method, init?.body])).toEqual([
+      ['/__local_vendor_billing_test/api/v1/vendors/r1/subscription', 'GET', undefined],
+      ['/__local_vendor_billing_test/api/v1/vendors/r1/subscription/cancel', 'POST', '{}'],
+    ])
+    expect(backend).not.toHaveBeenCalled()
+  })
+
+  it('reports the helper’s 404 as a shop that is not live yet, and keeps its message for other failures', async () => {
+    const answer = (status: number, message: string) => ({ ok: false, status, json: async () => ({ success: false, status, message }) })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(answer(404, 'No subscription for this vendor yet.')).mockResolvedValueOnce(answer(409, 'An active subscription already exists.')))
+
+    await expect(liveBillingService.readSubscription('r1')).resolves.toEqual({ kind: 'not-live' })
+    await expect(liveBillingService.subscribe('r1', 'MITHRA_SOCIAL_STARTER_MONTHLY')).rejects.toMatchObject({ status: 409, message: 'An active subscription already exists.' })
   })
 })

@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
 import { isSettledView, liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
-import { liveBillingService, mapLiveBilling, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart, type LiveBillingView } from '@/shared/api'
+import { confirmingLiveBilling, liveBillingService, mapLiveBilling, mapLiveLatestPayment, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart, type LiveBillingView, type LiveLatestPayment } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /**
@@ -15,7 +15,11 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
  * good history (TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md).
  */
 export interface LiveBillingRead {
-  /** The last view read. A failed reread keeps it, with its plan name, beside the error. */
+  /**
+   * The last view read, as everything shows it: while a payment is confirming (the hold, or a read
+   * reporting the latest payment `authorized`), its Confirming look, which offers no Checkout. A failed
+   * reread keeps it, with its plan name, beside the error.
+   */
   view: LiveBillingView | null
   /** The subscription's plan name, for the rail and Settings; the vendor context no longer has it. */
   planName: string | null
@@ -28,25 +32,38 @@ export interface LiveBillingRead {
   reading: boolean
   /**
    * The confirmation hold's waiting line, or `null` when there is no hold. From Checkout's success
-   * until a settled read, Plan keeps the card's Checkout action off, so a payment that may still be
-   * in flight is never offered twice. It survives leaving Plan; a reload, sign-out or vendor change
+   * until a settled read, `view` is its Confirming look, with no Checkout action, so a payment that
+   * may still be in flight is never offered twice. It survives leaving Plan; a reload, sign-out or vendor change
    * ends it.
    */
   hold: string | null
+  /**
+   * A read during the hold reported the hold's payment failed, which ended the hold. Memory only:
+   * the next Checkout, a reload, sign-out or a vendor change clears it.
+   */
+  paymentFailed: boolean
 }
 
 /**
  * `plans` is the last plans response, so a cancel response can be mapped without reading it again.
+ * `readView` is the view as read; `view` is what it shows while a payment is confirming.
  * `readAt` is when the view last landed, or `null` when another tab says it is out of date.
  * `signature` is the content of the subscription response the view came from, so Plan's history
- * knows whether the subscription changed.
+ * knows whether the subscription changed. `holdPaymentId` is the Checkout payment the hold waits
+ * on, and `latestPayment` the last response's latest payment, when the backend reports one.
  */
 // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
-interface Snapshot extends LiveBillingRead { vendorId: string | null; plans: unknown; readAt: number | null; signature: string | null }
+interface Snapshot extends LiveBillingRead {
+  vendorId: string | null; plans: unknown; readView: LiveBillingView | null; readAt: number | null; signature: string | null
+  holdPaymentId: string | null; latestPayment: LiveLatestPayment | null
+}
 
-const empty: Snapshot = { vendorId: null, plans: null, readAt: null, signature: null, view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: false, hold: null }
+const empty: Snapshot = {
+  vendorId: null, plans: null, readView: null, readAt: null, signature: null, view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: false,
+  hold: null, paymentFailed: false, holdPaymentId: null, latestPayment: null,
+}
 /** What a vendor sees before its first read lands. */
-const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: true, hold: null }
+const unread: LiveBillingRead = { view: null, planName: null, trialStartedAt: null, trialEndsAt: null, error: null, reading: true, hold: null, paymentFailed: false }
 let snapshot = empty
 let generation = 0
 /** The read in flight; `waiting` while it waits to retry. */
@@ -94,13 +111,28 @@ function announce(vendorId: string | null) {
 }
 
 /**
- * A new view sets the boundary timer again; a session or vendor change leaves none to set. A settled
- * view ends the confirmation hold.
+ * Whether a payment is confirming: the hold, or a read reporting the latest payment `authorized`
+ * (Razorpay has it, the backend has not recorded it), which survives a reload.
  */
-function publish(next: Snapshot) {
-  const viewChanged = next.view !== snapshot.view
-  const settled = next.hold !== null && next.view !== null && isSettledView(next.view)
-  snapshot = settled ? { ...next, hold: null } : next
+const paymentConfirming = (read: Pick<Snapshot, 'hold' | 'latestPayment'>) => read.hold !== null || read.latestPayment?.status === 'authorized'
+
+/**
+ * A new view sets the boundary timer again; a session or vendor change leaves none to set. A settled
+ * view ends the confirmation hold, and so does a read reporting the hold's payment failed, which
+ * Plan then says. Both decide on the view as read; what shows is its Confirming look while a payment
+ * is confirming, kept as the same object until the read or that changes.
+ */
+function publish(next: Omit<Snapshot, 'view'>) {
+  const settled = next.hold !== null && next.readView !== null && isSettledView(next.readView)
+  // Only the backend can tell a failed payment from a slow one (the requested latest payment fields).
+  const failed = !settled && next.hold !== null && next.latestPayment !== null
+    && next.latestPayment.id === next.holdPaymentId && next.latestPayment.status === 'failed'
+  const held = settled || failed ? { ...next, hold: null, holdPaymentId: null, paymentFailed: failed } : next
+  const confirming = paymentConfirming(held)
+  const view = held.readView === snapshot.readView && confirming === paymentConfirming(snapshot) ? snapshot.view
+    : held.readView !== null && confirming ? confirmingLiveBilling(held.readView) : held.readView
+  const viewChanged = view !== snapshot.view
+  snapshot = { ...held, view }
   if (viewChanged) armBoundary()
   // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
   if (settled) announce(next.vendorId)
@@ -133,7 +165,7 @@ export function readLiveBilling(vendorId: string): Promise<void> {
             readPlans(),
           ])
           // TEMP(vendor-billing-reads): a read that started before another tab's message may predate its change.
-          if (current()) publish({ vendorId, plans, readAt: seen === announcements ? Date.now() : null, signature: JSON.stringify(read), view: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false, hold: snapshot.hold })
+          if (current()) publish({ vendorId, plans, readAt: seen === announcements ? Date.now() : null, signature: JSON.stringify(read), readView: mapLiveBilling(read, plans, new Date()), planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), latestPayment: mapLiveLatestPayment(read), error: null, reading: false, hold: snapshot.hold, holdPaymentId: snapshot.holdPaymentId, paymentFailed: snapshot.paymentFailed })
           return
         } catch (error) {
           if (!current()) return
@@ -171,19 +203,24 @@ export async function cancelLiveBilling(vendorId: string): Promise<void> {
   const view = mapLiveBilling(read, snapshot.plans, new Date())
   dropRead()
   // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
-  publish({ ...snapshot, readAt: Date.now(), signature: JSON.stringify(read), view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), error: null, reading: false })
+  publish({ ...snapshot, readAt: Date.now(), signature: JSON.stringify(read), readView: view, planName: mapLivePlanName(read), trialStartedAt: mapLiveTrialStart(read), trialEndsAt: mapLiveTrialEnd(read), latestPayment: mapLiveLatestPayment(read), error: null, reading: false })
   announce(vendorId)
 }
 
 /**
  * Starts the confirmation hold once Checkout reports a payment, with the Checkout action's waiting
- * line. Only a settled read ends it.
+ * line and Checkout's payment ID. Only a settled read, or one reporting that payment failed, ends it.
  */
-export function holdLiveBilling(vendorId: string, waiting: string) {
+export function holdLiveBilling(vendorId: string, waiting: string, paymentId: string) {
   if (snapshot.vendorId !== vendorId) return
-  publish({ ...snapshot, hold: waiting })
+  publish({ ...snapshot, hold: waiting, holdPaymentId: paymentId, paymentFailed: false })
   // TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md.
   announce(vendorId)
+}
+
+/** Forgets a failed payment the hold ended on, once the vendor starts another Checkout. */
+export function clearLiveBillingPaymentFailed(vendorId: string) {
+  if (snapshot.vendorId === vendorId && snapshot.paymentFailed) publish({ ...snapshot, paymentFailed: false })
 }
 
 /** Drops the read in flight, so neither its response nor its retries land. */
@@ -235,7 +272,8 @@ useAuthStore.subscribe((state, previous) => {
 
 /*
   While anything shows the read, it stays current: returning to the window rereads it once it is
-  15 minutes old, has failed, waits on a payment (a hold or a Confirming view), or another tab has
+  15 minutes old, has failed, waits on a payment (a hold, or a Confirming view, such as one for a
+  payment the read reports authorized), or another tab has
   changed the vendor's billing; so does the view's next T or P, when its free days or paid days end.
   Day counts stay as read until then. There is one focus listener, one timer and one channel to
   other tabs however many components show the read, so they cause one reread. Once nothing shows

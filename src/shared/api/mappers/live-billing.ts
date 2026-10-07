@@ -1,5 +1,10 @@
-import { daysUntil } from '../fixtures/billing-prototype'
 import type { LiveSubscriptionRead } from '../services/live-billing.service'
+
+const dayMs = 24 * 60 * 60 * 1000
+/** Whole days left until `end`, rounded up; never negative. */
+const daysUntil = (end: string, now: Date) => Math.max(0, Math.ceil((Date.parse(end) - now.getTime()) / dayMs))
+/** Whole days from `start` to `end`, rounded; at least 1. */
+const daysBetween = (start: string, end: string) => Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / dayMs))
 
 /** The one monthly paid plan: its name, code for subscribe, and price in rupees. */
 export interface LiveBillingPlan { code: string; name: string; price: number }
@@ -9,7 +14,8 @@ export interface LiveBillingPlan { code: string; name: string; price: number }
  * dates decide it; the browser clock only compares them with now.
  */
 export type LiveBillingView =
-  | { state: 'free_days' | 'three_days_left'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
+  /** `trialDays` is how many days the free days last, from `trial_started_at` to T; `null` without a readable start. */
+  | { state: 'free_days' | 'three_days_left'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number; trialDays: number | null }
   /** Free days while Razorpay confirms the ₹299 paid early (the early first fee); the free days are kept. */
   | { state: 'free_days_confirming'; shop: 'open'; plan: LiveBillingPlan; trialEndsAt: string; daysLeft: number }
   /** Razorpay is collecting the first fee or a renewal: open, with no dates. */
@@ -20,9 +26,12 @@ export type LiveBillingView =
    * variant), and `null` without T or once it has passed.
    */
   | { state: 'paid'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; nextChargeAt: string | null; trialEndsAt: string | null }
-  /** No more charges: the vendor stopped the plan, or AutoPay is off, whoever turned it off. Open until P. */
-  | { state: 'stopped'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
-  | { state: 'autopay_off'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number }
+  /**
+   * No more charges: the vendor stopped the plan, or AutoPay is off, whoever turned it off. Open until P.
+   * `confirming` is set only by `confirmingLiveBilling`, while a payment to keep the shop open is confirmed.
+   */
+  | { state: 'stopped'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number; confirming?: true }
+  | { state: 'autopay_off'; shop: 'open'; plan: LiveBillingPlan; paidThrough: string; daysLeft: number; confirming?: true }
   /** Renewal failed after every retry. */
   | { state: 'payment_failed'; shop: 'hidden'; plan: LiveBillingPlan }
   /** The shop is hidden because paid days or free days are over. */
@@ -151,7 +160,9 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   const freeDaysStatus = status === 'TRIAL_ACTIVE' || status === 'PAYMENT_PENDING' || (status === 'CANCELLED' && periodEnd === null)
   if (freeDaysStatus && !autoPayAgreed && trialEndsAt && beforeTrialEnd) {
     const daysLeft = daysUntil(trialEndsAt, now)
-    return { state: daysLeft <= 3 ? 'three_days_left' : 'free_days', shop: 'open', plan, trialEndsAt, daysLeft }
+    const trialStartedAt = mapLiveTrialStart(read)
+    const trialDays = trialStartedAt ? daysBetween(trialStartedAt, trialEndsAt) : null
+    return { state: daysLeft <= 3 ? 'three_days_left' : 'free_days', shop: 'open', plan, trialEndsAt, daysLeft, trialDays }
   }
   // Row 10, gap J: dev keeps TRIAL_ACTIVE after T, so row 9's facts past T close the shop as well.
   // Gap I's shape (PAYMENT_PENDING, `created`, no P, after T) lands here too. AutoPay agreed is row 8's.
@@ -164,6 +175,30 @@ export function mapLiveBilling(read: LiveSubscriptionRead, plans: unknown, now: 
   }
 
   throw new LiveBillingUnreadableError()
+}
+
+/**
+ * The view while a payment is confirming, whether or not the read shows it yet: every state that
+ * offers Checkout turns into its Confirming look, which offers none. Free days and 3 days left turn
+ * into row 7; a shop closed after free days into row 8, and one closed after paid days or a failed
+ * payment into row 8b; Stopped and AutoPay off keep their state, marked `confirming`. Any other view
+ * is returned as it is.
+ */
+export function confirmingLiveBilling(view: LiveBillingView): LiveBillingView {
+  switch (view.state) {
+    case 'free_days':
+    case 'three_days_left':
+      return { state: 'free_days_confirming', shop: 'open', plan: view.plan, trialEndsAt: view.trialEndsAt, daysLeft: view.daysLeft }
+    case 'shop_closed':
+      return { state: 'confirming', shop: 'hidden', plan: view.plan, ended: view.ended }
+    case 'payment_failed':
+      return { state: 'confirming', shop: 'hidden', plan: view.plan, ended: 'paid_days' }
+    case 'stopped':
+    case 'autopay_off':
+      return { ...view, confirming: true }
+    default:
+      return view
+  }
 }
 
 /** The subscription row, or `null` before go-live or when the read carries no object. */
@@ -202,6 +237,26 @@ export function mapLiveTrialEnd(read: LiveSubscriptionRead): string | null {
   }
 }
 
+/**
+ * The requested payment-outcome fields of `GET …/subscription`. Neither is in the published contract
+ * yet (docs/API_GAPS.md, "Billing read gaps": Payment outcome), so today's backend omits both.
+ */
+interface LiveLatestPaymentWire {
+  /** The Razorpay payment ID of the most recent payment on the vendor's current subscription. */
+  latest_payment_id?: unknown
+  /** That payment's raw Razorpay status, lowercase, such as `authorized`, `captured` or `failed`. */
+  latest_payment_status?: unknown
+}
+
+/** The most recent payment on the vendor's current subscription, with its raw Razorpay status. */
+export interface LiveLatestPayment { id: string; status: string }
+
+/** The read's latest payment, or `null` before go-live or unless both fields are present and readable. */
+export function mapLiveLatestPayment(read: LiveSubscriptionRead): LiveLatestPayment | null {
+  const { latest_payment_id: id, latest_payment_status: status }: LiveLatestPaymentWire = subscriptionRecord(read) ?? {}
+  return typeof id === 'string' && id.trim() && typeof status === 'string' && status.trim() ? { id, status } : null
+}
+
 /** One row of "Payments you made". `amount` is in rupees, and only when the event sent one. */
 export interface LiveBillingHistoryRow { title: string; at: string; amount: number | null }
 
@@ -212,7 +267,7 @@ const planStopped = (event: WireRecord) => event.event_type === 'CANCELLATION_RE
  * Maps `GET …/subscription/history` and the subscription's `trial_started_at` to "Payments you made",
  * newest first. Dev records some events twice (G), so an event shows once per type and payment ID, or
  * per type and subscription ID when it has no payment. The oldest copy keeps its time. Dev sends no
- * amounts, so none is inferred. Checkout, authorization, activation and unknown events are ignored.
+ * amounts, so none is inferred. Checkout, authentication, authorization, activation and unknown events are ignored.
  */
 export function mapLiveBillingHistory(payload: unknown, trialStartedAt: string | null): LiveBillingHistoryRow[] {
   if (!Array.isArray(payload)) throw new LiveBillingUnreadableError()
@@ -243,7 +298,6 @@ function eventAt(event: WireRecord): string {
 function historyTitle(event: WireRecord, events: WireRecord[]): string | null {
   switch (event.event_type) {
     case 'SUBSCRIPTION_CHARGED': return 'Payment received'
-    case 'SUBSCRIPTION_AUTHENTICATED': return 'AutoPay set up'
     case 'CANCELLATION_REQUESTED': return planStopped(event) ? 'Plan stopped' : 'AutoPay turned off'
     case 'SUBSCRIPTION_CANCELLED': {
       // A stopped plan's subscription ends at P; the stop already says so.

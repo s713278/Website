@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PrototypeCard } from '@/modules/vendor/lib/billing-prototype-card'
 import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-billing-retry'
-import { liveBillingWording, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
+import { liveBillingWording, livePaymentFailed, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { LivePaymentsYouMade } from '@/modules/vendor/components/LivePaymentsYouMade'
-import { cancelLiveBilling, holdLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
+import { cancelLiveBilling, clearLiveBillingPaymentFailed, holdLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
 import { getErrorMessage, isApiError, liveBillingService, mapLiveCheckout, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Card } from '@/shared/components/ui'
@@ -21,7 +21,7 @@ function StateCard({ card, children }: { card: PrototypeCard; children?: ReactNo
   return <Card className={cn('grid gap-3 p-5', toneClass[card.tone])}>
     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{card.eyebrow}</p>
     {'days' in card.figure
-      ? <p className="flex items-baseline gap-2"><span className="font-display text-5xl font-bold">{card.figure.days}</span><span className="text-lg text-muted-foreground">days left</span></p>
+      ? <p className="flex items-baseline gap-2"><span className="font-display text-5xl font-bold">{card.figure.days}</span><span className="text-lg text-muted-foreground">{card.figure.days === 1 ? 'day left' : 'days left'}</span></p>
       : <h2 className="font-display text-4xl font-bold">{card.figure.headline}</h2>}
     <p>{card.body}</p>
     <p className="text-sm font-semibold text-primary">{card.plan}</p>
@@ -51,7 +51,7 @@ export function LiveVendorPlan() {
   const { vendorId } = useVendorAccount()
   // A new session clears the shared read, even for the same vendor, so Plan reads again.
   const sessionUser = useAuthStore((state) => state.user)
-  const { view, error, reading, trialStartedAt, hold } = useLiveBilling(vendorId)
+  const { view, error, reading, trialStartedAt, hold, paymentFailed } = useLiveBilling(vendorId)
   // The shared read retries an outage quietly, so one shown here has run out of retries.
   const errorMessage = useMemo(() => error ? isBriefOutage(error) ? notResponding : getErrorMessage(error) : null, [error])
 
@@ -122,6 +122,7 @@ export function LiveVendorPlan() {
     current.running = true
     setActing(true)
     setActionError(null)
+    clearLiveBillingPaymentFailed(vendorId)
     const { signal } = current.controller
     try {
       const config = mapLiveCheckout(await liveBillingService.subscribe(vendorId, from.plan.code))
@@ -135,7 +136,7 @@ export function LiveVendorPlan() {
         if (failure.reason) setActionError(purpose.failed(failure.reason))
         return
       }
-      holdLiveBilling(vendorId, purpose.waiting)
+      holdLiveBilling(vendorId, purpose.waiting, result.callback.razorpay_payment_id)
       setPollWindowOpen(true)
       void confirm(result.callback, signal)
     } catch (cause) {
@@ -175,8 +176,9 @@ export function LiveVendorPlan() {
   </div> : null
   if (!view) return readAlert ?? <p role="status">Reading shop plan…</p>
 
-  const { card, note, confirming, stopConfirmation, checkout: purpose } = liveBillingWording(view)
-  const actionAlert = actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null
+  const { card, note, confirming, stopConfirmation, stopNote, checkout: purpose } = liveBillingWording(view)
+  const alertLine = (message: string | null) => message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null
+  const actionAlert = alertLine(actionError)
   return <div className="grid gap-4">
     {readAlert}
     {note ? <Card className="p-5"><p>{note}</p></Card> : null}
@@ -185,25 +187,21 @@ export function LiveVendorPlan() {
         {card.action && purpose ? <div className="grid gap-1">
           {/* TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md. Plan rereads on open, and no server guarantee against a second subscribe is known, so Checkout waits for the read. */}
           <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null || reading} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
-          <p className="text-xs text-muted-foreground">{card.action.help}</p>
-          {actionAlert}
+          {/* A payment the read reports failed outranks what Plan saw while it waited, such as a confirm failure. */}
+          {alertLine(paymentFailed ? livePaymentFailed : actionError)}
         </div> : null}
       </StateCard>
-      {/* A Confirming view's own status line is the waiting line, so it never shows twice. */}
-      {hold && !confirming ? <div className="grid gap-2 text-sm">
-        <p role="status">{hold}</p>
-        {!polling ? <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button> : null}
-      </div> : null}
-      {/* Confirming offers no payment action; Check again only rereads the shared read. */}
+      {/* While a payment confirms, the shared read shows a Confirming view: no payment action, and Check again only rereads the shared read. A confirm failure shows here. */}
       {confirming ? <div className="grid gap-2 text-sm">
         <p role="status">{confirming}</p>
         <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button>
+        {actionAlert}
       </div> : null}
       <Section title="What you get">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm">{whatYouGet.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section>
-      {/* Hidden while paid, while Razorpay collects or while it confirms a payment in free days: the vendor has nothing to pay. */}
-      {view.state !== 'collecting' && view.state !== 'paid' && view.state !== 'free_days_confirming' ? <Section title="If you do not pay">
+      {/* Hidden while paid, while Razorpay collects or while a payment is confirming: the vendor has nothing to pay. */}
+      {view.state !== 'collecting' && view.state !== 'paid' && !confirming ? <Section title="If you do not pay">
         <ul className="grid list-disc gap-1.5 pl-5 text-sm text-[var(--badge-warning-fg)]">{ifYouDoNotPay.map((item) => <li key={item}>{item}</li>)}</ul>
       </Section> : null}
       <Section title="Payments you made">
@@ -217,7 +215,7 @@ export function LiveVendorPlan() {
             <Button variant="outline" className="w-fit rounded-full" disabled={acting} onClick={() => setConfirmStop(false)}>Keep the plan</Button>
           </div>
         </> : <>
-          <p className="text-sm text-muted-foreground">Stop any time. The shop stays open until the days you already paid for are over.</p>
+          <p className="text-sm text-muted-foreground">{stopNote}</p>
           <Button variant="outline" className="w-fit rounded-full" disabled={acting} onClick={() => setConfirmStop(true)}>Stop the plan</Button>
         </>}
         {actionAlert}

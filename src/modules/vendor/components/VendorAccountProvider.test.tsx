@@ -3,7 +3,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
@@ -47,7 +46,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
-  resetBillingPrototypeState()
 })
 
 function AccountReading() {

@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:billing-helper": "node --test scripts/vendor-billing-test-helper.test.mjs",
-    "dev:billing-helper": "node scripts/vendor-billing-test-helper.mjs",
+    "dev:billing-helper": "node --env-file-if-exists=.env.billing-helper.local scripts/vendor-billing-test-helper.mjs",
     "fetch:openapi": "npm --prefix packages/api-client run fetch-openapi",
     "generate:api": "npm --prefix packages/api-client run generate",
     "sync:api": "npm --prefix packages/api-client run sync"
