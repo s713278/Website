@@ -29,7 +29,6 @@ export function MarketingProductLoop() {
     <section
       className="border-y border-slate-200 bg-white py-4"
       aria-label="Product demo path"
-      id="how-it-works"
     >
       <div className="marketing-measure marketing-gutter box-content flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">

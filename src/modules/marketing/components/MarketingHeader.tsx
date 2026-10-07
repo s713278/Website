@@ -145,13 +145,13 @@ export function MarketingHeader() {
                     >
                       How it works
                     </a>
-                    <Link
-                      to="/login"
+                    <a
+                      href="mailto:mithradirect@gmail.com?subject=Support"
                       className="block rounded-lg px-3 py-2 text-sm hover:bg-emerald-50"
                       onClick={() => setResourcesOpen(false)}
                     >
                       Help & support
-                    </Link>
+                    </a>
                   </div>
                 ) : null}
               </div>
