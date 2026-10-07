@@ -484,6 +484,106 @@
 
 }
 
+/* Height breakpoints preserve login controls when landscape screens leave less
+   vertical room. The illustration takes the space left by its heading. */
+@layer utilities {
+  @media (max-height: 700px) {
+    .md-login .md-login-awning {
+      display: none;
+    }
+    .md-login .md-login-header {
+      padding-block: 0.5rem;
+    }
+    .md-login .md-login-main {
+      justify-content: center;
+      padding-block: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 1.25rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 1.5rem;
+    }
+    .md-login .md-login-art-copy > p:first-child {
+      font-size: 1.5rem;
+      line-height: 1.3;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .md-login h1 {
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+    .md-login .md-login-lead,
+    .md-login #phone-help,
+    .md-login .md-login-sent-label {
+      display: none;
+    }
+    .md-login form {
+      margin-top: 1rem;
+    }
+    .md-login .md-login-phone-field,
+    .md-login .md-login-otp-cell {
+      height: 3.5rem;
+    }
+    .md-login form > button[type="submit"] {
+      height: 2.75rem;
+      margin-top: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.75rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0.5rem;
+    }
+    .md-login [role="alert"] {
+      font-size: 0.8125rem;
+      line-height: 1.125rem;
+    }
+  }
+
+  @media (max-height: 380px) {
+    .md-login .md-login-header {
+      padding-block: 0;
+    }
+    .md-login .md-login-main {
+      padding-block: 0.25rem;
+    }
+    .md-login h1 {
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+    .md-login #otp-sent-to {
+      margin-top: 0;
+    }
+    .md-login form {
+      margin-top: 0.25rem;
+    }
+    .md-login .md-login-phone-field,
+    .md-login .md-login-otp-cell {
+      height: 2.75rem;
+    }
+    .md-login form > button[type="submit"] {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0;
+    }
+    .md-login [role="alert"] {
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 0.75rem;
+    }
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-display);
   --font-sans: var(--font-body);

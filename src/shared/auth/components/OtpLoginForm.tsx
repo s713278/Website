@@ -132,11 +132,11 @@ export function OtpLoginForm({
     'rounded font-semibold text-[var(--md-green-700)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-green-600)]'
 
   return (
-    <div className="min-h-dvh bg-white lg:grid lg:grid-cols-2">
-      <div className="flex min-h-dvh flex-col">
+    <div className="md-login h-dvh overflow-hidden bg-white lg:grid lg:grid-cols-2">
+      <div className="flex h-full min-h-0 flex-col">
         {/* Phones get the awning instead of the street, which has no room beside the form. */}
-        <div className="md-awning mb-1 lg:hidden" aria-hidden />
-        <header className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10">
+        <div className="md-login-awning md-awning mb-1 shrink-0 lg:hidden" aria-hidden />
+        <header className="md-login-header flex shrink-0 items-center justify-between gap-4 px-6 py-5 sm:px-10">
           {shop ? (
             <Link to={from || '/stores'} aria-label={shop.name}>
               <StoreBrandLogo storeName={shop.name} logoUrl={shop.logoUrl} />
@@ -158,7 +158,7 @@ export function OtpLoginForm({
           </Link>
         </header>
 
-        <main className="flex flex-1 flex-col px-6 pb-12 pt-12 sm:px-10 sm:pt-16 lg:justify-center lg:pb-24 lg:pt-6">
+        <main className="md-login-main flex min-h-0 flex-1 flex-col px-6 pb-12 pt-12 sm:px-10 sm:pt-16 lg:justify-center lg:pb-24 lg:pt-6">
           <div
             key={step}
             className="mx-auto w-full max-w-[24rem] animate-in fade-in-0 slide-in-from-bottom-2 duration-300 motion-reduce:animate-none"
@@ -169,7 +169,7 @@ export function OtpLoginForm({
 
             {step === 'phone' ? (
               <>
-                <p className="mt-2 text-balance text-center text-[0.9375rem] leading-relaxed text-[var(--md-muted)]">{lead}</p>
+                <p className="md-login-lead mt-2 text-balance text-center text-[0.9375rem] leading-relaxed text-[var(--md-muted)]">{lead}</p>
                 <form
                   className="mt-8"
                   noValidate
@@ -180,7 +180,7 @@ export function OtpLoginForm({
                 >
                   <div
                     className={
-                      'flex h-16 items-center rounded-2xl border bg-white transition-colors focus-within:ring-4 motion-reduce:transition-none ' +
+                      'md-login-phone-field flex h-16 items-center rounded-2xl border bg-white transition-colors focus-within:ring-4 motion-reduce:transition-none ' +
                       (error
                         ? 'border-[var(--md-danger)] focus-within:ring-[var(--md-danger)]/15'
                         : 'border-slate-300 focus-within:border-[var(--md-green-600)] focus-within:ring-[var(--md-green-600)]/15')
@@ -231,7 +231,7 @@ export function OtpLoginForm({
 
                 {/* Phone step only: leaving mid-OTP would abandon a code that was already sent. */}
                 {isVendor || !shop ? (
-                  <p className="mt-8 text-center text-sm text-[var(--md-muted)]">
+                  <p className="md-login-switch mt-8 text-center text-sm text-[var(--md-muted)]">
                     {isVendor ? 'Shopping, not selling?' : 'Selling on MithraDirect?'}{' '}
                     <Link to={loginPathForRole(isVendor ? 'customer' : 'vendor')} className={linkClass}>
                       {isVendor ? 'Sign in as a customer' : 'Sign in to your shop'}
@@ -242,7 +242,7 @@ export function OtpLoginForm({
             ) : (
               <>
                 <p id="otp-sent-to" className="mt-2 text-balance text-center text-[0.9375rem] leading-relaxed text-[var(--md-muted)]">
-                  Sent on WhatsApp to{' '}
+                  <span className="md-login-sent-label">Sent on WhatsApp to </span>
                   <span className="whitespace-nowrap font-medium tabular-nums text-[var(--md-ink)]">
                     +91 {phone.slice(0, 5)} {phone.slice(5)}
                   </span>
@@ -285,7 +285,7 @@ export function OtpLoginForm({
                         <span
                           key={i}
                           className={
-                            'flex h-16 items-center justify-center rounded-2xl border bg-white font-display text-3xl font-semibold tabular-nums text-[var(--md-ink)] transition-colors motion-reduce:transition-none ' +
+                            'md-login-otp-cell flex h-16 items-center justify-center rounded-2xl border bg-white font-display text-3xl font-semibold tabular-nums text-[var(--md-ink)] transition-colors motion-reduce:transition-none ' +
                             (error
                               ? 'border-[var(--md-danger)]'
                               : i === activeCell
@@ -308,7 +308,7 @@ export function OtpLoginForm({
                   <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={verifying}>
                     {verifying ? 'Verifying…' : 'Verify & continue'}
                   </Button>
-                  <p className="mt-5 text-center text-sm text-[var(--md-muted)]">
+                  <p className="md-login-resend mt-5 text-center text-sm text-[var(--md-muted)]">
                     Didn’t get it?{' '}
                     <button
                       type="button"
@@ -326,38 +326,22 @@ export function OtpLoginForm({
         </main>
       </div>
 
-      <aside className="sticky top-0 hidden h-dvh p-3 lg:block" aria-hidden>
-        <div className="flex h-full flex-col overflow-hidden rounded-[2rem] bg-[#ecfdf5]">
-          <div className="flex-none px-8 pb-10 pt-10 xl:px-12 xl:pt-14">
+      <aside className="hidden h-full min-h-0 p-3 lg:block" aria-hidden>
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] bg-[#ecfdf5]">
+          <div className="md-login-art-copy flex-none px-8 pb-4 pt-10 xl:px-12 xl:pt-14">
             <p className="max-w-md text-balance font-display text-[1.75rem] font-semibold leading-snug tracking-[-0.02em] text-[var(--md-green-800)] xl:text-[2rem]">
               {isVendor ? 'Your shop, open to the whole neighbourhood.' : 'Order from the shops around you.'}
             </p>
-            <p className="mt-2 max-w-md text-[0.9375rem] leading-relaxed text-[var(--md-green-700)]">
-              {isVendor
-                ? 'Florists, bakers and grocers take orders from nearby customers on WhatsApp.'
-                : 'Florists, bakers and grocers nearby, all in one place.'}
-            </p>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col justify-end">
-            <div className="relative">
-              <div className="absolute -top-7 left-8 z-10 flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_8px_24px_rgb(6_78_59/0.12)] xl:left-12">
-                <span className="flex size-10 items-center justify-center rounded-full bg-[var(--md-green-700)] text-white">
-                  <MessageCircle className="size-5" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--md-ink)]">{isVendor ? 'New order' : 'Order placed'}</p>
-                  <p className="mt-0.5 text-xs tabular-nums text-[var(--md-muted)]">{isVendor ? 'Priya · ₹246' : 'Fresh bakes · ₹246'}</p>
-                </div>
-              </div>
-              <img
-                src="/images/auth/neighbourhood-market-reference.png"
-                alt=""
-                width={1536}
-                height={1024}
-                fetchPriority="high"
-                className="block aspect-[3/2] max-h-[65dvh] w-full object-cover object-center"
-              />
-            </div>
+          <div className="min-h-0 flex-1">
+            <img
+              src="/images/auth/neighbourhood-market-reference.png"
+              alt=""
+              width={1536}
+              height={1024}
+              fetchPriority="high"
+              className="block h-full w-full object-contain object-bottom"
+            />
           </div>
         </div>
       </aside>

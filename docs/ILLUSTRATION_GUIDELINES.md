@@ -45,8 +45,8 @@ remain the focus.
 
 Show ordering through natural gestures: a customer taps their phone while a shopkeeper checks
 theirs. Keep the digital story subtle; avoid connecting the phones with arrows or dotted paths.
-The login interface already supplies a small order notification, so the artwork needs no duplicate
-floating badge or notification graphic.
+The login panel pairs a heading with the illustration. Keep the scene free of floating order
+badges or notification graphics.
 
 Match existing artwork's character proportions, shapes, palette, contour weight, and subtle grain when
 adding another illustration. Do not invent a different visual style per page.
