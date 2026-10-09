@@ -13,6 +13,7 @@ import {
   mapProductPage,
   mapStorefrontConfigRequest,
   mapVendorContext,
+  mapVendorOnboardingProgress,
   mapVendorProfile,
   mapVendorSkus,
   type CheckoutDeliveryInput,
@@ -269,6 +270,32 @@ describe('mapVendorContext', () => {
     })
 
     expect(context.subscription.limits).toMatchObject({ maxCategories: 10, maxProducts: null })
+  })
+})
+
+describe('mapVendorOnboardingProgress', () => {
+  it('reads the wire block, with a numeric-string step', () => {
+    expect(mapVendorOnboardingProgress({ status: 'COMPLETED', description: 'Onboarding completed', next_step: 11 }))
+      .toEqual({ status: 'COMPLETED', description: 'Onboarding completed', nextStep: 11 })
+    expect(mapVendorOnboardingProgress({ status: 'IN_PROGRESS', next_step: '5' }))
+      .toEqual({ status: 'IN_PROGRESS', description: null, nextStep: 5 })
+  })
+
+  it.each([undefined, null, 'nope', 7, [], {}, { status: 'WHATEVER', description: 3, next_step: 'soon' }])(
+    'maps %j to UNKNOWN and null',
+    (value) => {
+      expect(mapVendorOnboardingProgress(value)).toEqual({ status: 'UNKNOWN', description: null, nextStep: null })
+    },
+  )
+
+  it('is what the vendor context carries as its onboarding', () => {
+    const onboarding = { status: 'IN_PROGRESS', description: 'Step 4 is completed', next_step: 5 }
+    expect(mapVendorContext({ data: { vendor_id: 1, onboarding } }).onboarding)
+      .toEqual(mapVendorOnboardingProgress(onboarding))
+    expect(mapVendorContext({ data: { vendor_id: 1, onboarding } }).onboarding)
+      .toEqual({ status: 'IN_PROGRESS', description: 'Step 4 is completed', nextStep: 5 })
+    expect(mapVendorContext({ data: { vendor_id: 1 } }).onboarding)
+      .toEqual({ status: 'UNKNOWN', description: null, nextStep: null })
   })
 })
 

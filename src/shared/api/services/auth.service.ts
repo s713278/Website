@@ -16,6 +16,7 @@ import {
 } from '@/shared/auth/api/demo-auth'
 import { apiPost } from '../client'
 import { toApiError } from '../errors'
+import { mapVendorOnboardingProgress, type VendorContext } from '../mappers/vendor-onboarding'
 import { isLiveApi } from '../mode'
 import {
   clearTokens,
@@ -80,7 +81,24 @@ type VendorEntry = {
   vendor_id?: number | string
   vendorId?: number | string
   name?: string
+  status?: unknown
+  onboarding?: unknown
 }
+
+/**
+ * A membership with the store's status and setup progress as `verify-otp` reported them.
+ *
+ * A sign-in snapshot: go-live and every saved setup step change it, so it decides only where
+ * this sign-in lands and is never stored. The session user keeps the plain memberships, and
+ * every later decision reads the vendor context instead.
+ */
+export type VendorSignInMembership = VendorMembership & {
+  status: string | null
+  onboarding: VendorContext['onboarding']
+}
+
+/** A verified session plus the sign-in snapshot of its memberships; only `session` is applied. */
+export type OtpAuthSession = AuthSession & { signInVendors?: VendorSignInMembership[] }
 
 type VerifyOtpData = {
   user_id?: number | string
@@ -168,10 +186,10 @@ function mapVerifiedRoles(raw: unknown): UserRole[] {
 }
 
 /** Normalise `vendors[]` into stable memberships, dropping entries without a usable ID. */
-function mapVendorMemberships(raw: unknown): VendorMembership[] {
+function mapVendorMemberships(raw: unknown): VendorSignInMembership[] {
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>()
-  const memberships: VendorMembership[] = []
+  const memberships: VendorSignInMembership[] = []
   for (const entry of raw as VendorEntry[]) {
     const rawId = entry?.vendor_id ?? entry?.vendorId
     if (rawId == null) continue
@@ -179,7 +197,8 @@ function mapVendorMemberships(raw: unknown): VendorMembership[] {
     if (!vendorId || seen.has(vendorId)) continue
     seen.add(vendorId)
     const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : undefined
-    memberships.push({ vendorId, name })
+    const status = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim() : null
+    memberships.push({ vendorId, name, status, onboarding: mapVendorOnboardingProgress(entry.onboarding) })
   }
   return memberships
 }
@@ -204,7 +223,7 @@ function mapSessionUser(
   data: VerifyOtpData,
   input: OtpVerifyInput,
   roles: UserRole[],
-  vendors: VendorMembership[],
+  vendors: VendorSignInMembership[],
 ): User {
   const mobile = digitsPhone(input.phone)
   return {
@@ -214,7 +233,7 @@ function mapSessionUser(
     phone: mobile,
     role: input.role,
     roles,
-    vendors,
+    vendors: vendors.map(({ vendorId, name }) => ({ vendorId, name })),
     // Memberships come from the backend, so an unambiguous single store is resolved
     // whichever screen was used to sign in. Only the ambiguous case is left open —
     // picking `vendors[0]` would silently choose a store for a multi-vendor identity.
@@ -252,7 +271,7 @@ export async function requestOtp(input: OtpRequestInput) {
  * the refused number's token sitting under the first vendor's still-persisted user.
  * Tokens are only ever adopted into a session by `applySession()`.
  */
-export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
+export async function verifyOtp(input: OtpVerifyInput): Promise<OtpAuthSession> {
   const mobile = digitsPhone(input.phone)
   const otp = input.otp.replace(/\D/g, '')
 
@@ -306,6 +325,7 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<AuthSession> {
       token: parsed.accessToken,
       refreshToken: parsed.refreshToken,
       user: mapSessionUser(data, input, roles, vendors),
+      signInVendors: vendors,
     }
   } catch (error) {
     // No session is being created, so nothing may keep the credentials the package just

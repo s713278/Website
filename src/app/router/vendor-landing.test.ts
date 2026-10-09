@@ -1,15 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import * as serverState from '@/modules/vendor/lib/onboarding-server-state'
 import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import * as liveBilling from '@/modules/vendor/store/live-billing'
 import {
   configureApiClient,
   mapVendorContext,
   vendorOnboardingService,
   type VendorContext,
+  type VendorSignInMembership,
 } from '@/shared/api'
 import type { User } from '@/shared/types'
 import { preloadVendorDashboard } from './vendor-dashboard-chunks'
+import { resumePathAfterLogin } from './role-home'
 import { landingPathIfKnown, resolveLandingPath } from './vendor-landing'
 
 vi.mock('./vendor-dashboard-chunks', () => ({ preloadVendorDashboard: vi.fn() }))
@@ -196,5 +200,186 @@ describe('resolveLandingPath dashboard preload', () => {
 
     await resolveLandingPath(noStore)
     expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveLandingPath from the sign-in snapshot', () => {
+  const never = Symbol('still waiting')
+  /** The landing path, or `never` when it is still undecided after the given time. */
+  const settled = (landing: Promise<string>, ms = 30) =>
+    Promise.race([landing, new Promise<typeof never>((resolve) => setTimeout(() => resolve(never), ms))])
+
+  /** Lets the sign-in kick-offs' dynamic imports (already loaded here) run to their calls. */
+  const flush = async () => {
+    await import('@/modules/vendor/lib/onboarding-server-state')
+    await import('@/modules/vendor/store/live-billing')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  const member = (
+    status: string | null,
+    nextStep: number | null,
+    onboardingStatus: VendorSignInMembership['onboarding']['status'] = nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS',
+  ): VendorSignInMembership => ({
+    vendorId: VENDOR_ID, name: undefined, status,
+    onboarding: { status: onboardingStatus, description: null, nextStep },
+  })
+
+  let accountContext: MockInstance<typeof serverState.loadVendorAccountContext>
+  let onboardingState: MockInstance<typeof serverState.loadVendorOnboardingState>
+  let billing: MockInstance<typeof liveBilling.readLiveBilling>
+  let getContext: MockInstance<typeof vendorOnboardingService.getVendorContext>
+
+  beforeEach(() => {
+    // Nothing reaches the network: the context call is never answered, and the kick-offs are spies.
+    getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+    accountContext = vi.spyOn(serverState, 'loadVendorAccountContext').mockReturnValue(neverSettles())
+    onboardingState = vi.spyOn(serverState, 'loadVendorOnboardingState').mockReturnValue(neverSettles())
+    billing = vi.spyOn(liveBilling, 'readLiveBilling').mockResolvedValue(undefined)
+  })
+
+  afterEach(flush)
+
+  it('lands a submitted store on the dashboard without waiting on the context', async () => {
+    await expect(settled(resolveLandingPath(vendor, null, [member('ACTIVE', 11)]))).resolves.toBe('/vendor')
+    await flush()
+
+    expect(preloadVendorDashboard).toHaveBeenCalledTimes(1)
+    // The same reads the dashboard will join are started, not awaited.
+    expect(accountContext).toHaveBeenCalledWith(VENDOR_ID)
+    expect(billing).toHaveBeenCalledWith(VENDOR_ID)
+    expect(getContext).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['an unfinished step', member('ACTIVE', 3)],
+    ['a completed status on an inactive store', member('INACTIVE', null, 'COMPLETED')],
+  ])('lands %s in setup without waiting on the context', async (_label, membership) => {
+    await expect(settled(resolveLandingPath(vendor, null, [membership]))).resolves.toBe('/onboarding')
+  })
+
+  it.each([
+    ['no status', member(null, 11)],
+    ['an unknown status and no step', member('ACTIVE', null, 'UNKNOWN')],
+    ['an unknown status and an out-of-range step', member('ACTIVE', 12, 'UNKNOWN')],
+    ['an unknown status and a zero step', member('ACTIVE', 0, 'UNKNOWN')],
+  ])('falls back to the context for %s', async (_label, membership) => {
+    let answer!: (value: { context: VendorContext }) => void
+    accountContext.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+
+    const landing = resolveLandingPath(vendor, null, [membership])
+    await expect(settled(landing)).resolves.toBe(never)
+
+    answer({ context: SUBMITTED })
+    await expect(landing).resolves.toBe('/vendor')
+    await flush()
+    // A destination read from the context starts nothing beyond the context itself.
+    expect(billing).not.toHaveBeenCalled()
+  })
+
+  it('falls back when the snapshot has no entry for the signed-in store', async () => {
+    const other = { ...member('ACTIVE', 11), vendorId: 'another-store' }
+
+    await expect(settled(resolveLandingPath(vendor, null, [other]))).resolves.toBe(never)
+  })
+
+  it('routes a multi-store identity by role only and starts no reads', async () => {
+    const choosing: User = { ...vendor, vendors: [{ vendorId: VENDOR_ID }, { vendorId: 'second' }], vendorId: undefined }
+
+    await expect(settled(resolveLandingPath(choosing, null, [member('ACTIVE', 11), { ...member('ACTIVE', 11), vendorId: 'second' }])))
+      .resolves.toBe('/onboarding')
+    await flush()
+
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+    expect(accountContext).not.toHaveBeenCalled()
+    expect(onboardingState).not.toHaveBeenCalled()
+    expect(billing).not.toHaveBeenCalled()
+    expect(getContext).not.toHaveBeenCalled()
+  })
+
+  it('trusts a context already read over a contradicting snapshot', async () => {
+    await loadVendorContext(VENDOR_ID, async () => SETTING_UP)
+
+    await expect(settled(resolveLandingPath(vendor, null, [member('ACTIVE', 11)]))).resolves.toBe('/onboarding')
+    await flush()
+    expect(accountContext).not.toHaveBeenCalled()
+    expect(billing).not.toHaveBeenCalled()
+    expect(onboardingState).not.toHaveBeenCalled()
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+
+  it('trusts a submitted cached context over a snapshot that says setup', async () => {
+    await loadVendorContext(VENDOR_ID, async () => SUBMITTED)
+
+    await expect(settled(resolveLandingPath(vendor, null, [member('ACTIVE', 3)]))).resolves.toBe('/vendor')
+    await flush()
+    expect(billing).not.toHaveBeenCalled()
+    expect(accountContext).not.toHaveBeenCalled()
+  })
+
+  it('keeps honouring `from` for a shopper, starting nothing for a destination other than the dashboard', async () => {
+    const dual: User = { ...vendor, role: 'customer', roles: ['customer', 'vendor'] }
+
+    await expect(settled(resolveLandingPath(dual, '/checkout', [member('ACTIVE', 11)]))).resolves.toBe('/checkout')
+    await expect(settled(resolveLandingPath(dual, '//evil.example', [member('ACTIVE', 11)]))).resolves.toBe(
+      resumePathAfterLogin(dual, '//evil.example'),
+    )
+    // A vendor session ignores `from`, as it always has.
+    await expect(settled(resolveLandingPath(vendor, '/checkout', [member('ACTIVE', 11)]))).resolves.toBe('/vendor')
+    await flush()
+
+    expect(billing).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts billing for the dashboard only', async () => {
+    await resolveLandingPath(vendor, null, [member('ACTIVE', 3)])
+    await flush()
+    expect(billing).not.toHaveBeenCalled()
+    expect(accountContext).not.toHaveBeenCalled()
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+
+    await resolveLandingPath(vendor, null, [member('ACTIVE', 11)])
+    await flush()
+    expect(billing).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts the wizard’s reads without a seed context when sign-in heads to setup', async () => {
+    await resolveLandingPath(vendor, null, [member('ACTIVE', 3)])
+    await flush()
+
+    expect(onboardingState).toHaveBeenCalledTimes(1)
+    expect(onboardingState).toHaveBeenCalledWith(VENDOR_ID)
+    expect(onboardingState.mock.calls[0][1]).toBeUndefined()
+  })
+
+  it('does not reject when the background reads fail', async () => {
+    accountContext.mockRejectedValue(new Error('offline'))
+    billing.mockRejectedValue(new Error('offline'))
+    onboardingState.mockRejectedValue(new Error('offline'))
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+
+    await expect(resolveLandingPath(vendor, null, [member('ACTIVE', 11)])).resolves.toBe('/vendor')
+    await expect(resolveLandingPath(vendor, null, [member('ACTIVE', 3)])).resolves.toBe('/onboarding')
+    await flush()
+    await flush()
+    process.off('unhandledRejection', unhandled)
+
+    expect(billing).toHaveBeenCalled()
+    expect(onboardingState).toHaveBeenCalled()
+    expect(unhandled).not.toHaveBeenCalled()
+  })
+
+  it('still waits on the context when no snapshot is given, as a later landing does', async () => {
+    let answer!: (value: { context: VendorContext }) => void
+    accountContext.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+
+    const landing = resolveLandingPath(vendor)
+    await expect(settled(landing)).resolves.toBe(never)
+
+    answer({ context: SUBMITTED })
+    await expect(landing).resolves.toBe('/vendor')
+    await flush()
+    expect(billing).not.toHaveBeenCalled()
   })
 })

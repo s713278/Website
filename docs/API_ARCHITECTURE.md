@@ -294,9 +294,14 @@ dashboard's is preferred). Waiting on the full read there held the actions back 
 its reads settled, however little the decision used them. On `/onboarding` the header shares the
 wizard's full read instead of asking for the context a second time.
 
-Post-sign-in routing (`resolveLandingPath`) decides from the context the same way, through
+Post-sign-in routing (`resolveLandingPath`) first decides from the chosen vendor's `verify-otp`
+`vendors[]` status and onboarding when they suffice (see
+[SESSION.md](./SESSION.md#where-a-session-lands)); it then awaits no request, and starts
+`loadVendorAccountContext` plus the shell's `readLiveBilling` for `/vendor`, or
+`loadVendorOnboardingState` (reading the context through the dashboard's cache) for `/onboarding`,
+none awaited. Otherwise it decides from the context the same way, through
 `loadVendorAccountContext` or a resolved context in either cache. A submitted store therefore lands
-on `/vendor` after one request, instead of waiting on the complete read set the dashboard never
+on `/vendor` after at most one request, instead of waiting on the complete read set the dashboard never
 uses. Only when the destination is `/onboarding` does sign-in start `loadVendorOnboardingState`,
 seeded with that context and not awaited, so the setup reads overlap navigation and the wizard's
 route chunk. A failed prefetch is evicted as usual and the wizard retries it.
@@ -577,7 +582,8 @@ Razorpay's reason.
   [VENDOR_BILLING_READS_TARGET.md](./VENDOR_BILLING_READS_TARGET.md) owns the target, request counts
   and removal.
 - A read already in flight for the vendor is joined. The chrome, rail and Settings start a read
-  only when none is loaded, so client navigation sends nothing.
+  only when none is loaded, so client navigation sends nothing. A sign-in routed to `/vendor` from
+  the `verify-otp` snapshot starts that same read early, and the chrome joins it.
 - Plan rereads on mount, and its Checkout action is off while any read runs, so Checkout is
   offered only from a read that has just landed.
 - The plans list is requested once per page load and kept in memory, never persisted; rereads

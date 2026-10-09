@@ -99,7 +99,7 @@ export function OtpLoginForm({
       completeOtpLogin(session)
       // Resolved before navigating: a vendor whose store is already submitted goes
       // straight to their dashboard instead of flashing through the setup wizard.
-      const destination = await resolveLandingPath(session.user, from)
+      const destination = await resolveLandingPath(session.user, from, session.signInVendors)
       if (gen !== requestGen.current) return
       navigate(destination, { replace: true })
     } catch (err) {
