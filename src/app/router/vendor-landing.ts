@@ -3,6 +3,7 @@ import { peekVendorAccountContext } from '@/modules/vendor/lib/onboarding-state-
 import { isLiveApi } from '@/shared/api'
 import type { User } from '@/shared/types'
 import { resumePathAfterLogin, VENDOR_ONBOARDING_HREF } from './role-home'
+import { preloadVendorDashboard } from './vendor-dashboard-chunks'
 
 /** Whether this session's destination depends on reading a vendor account at all. */
 function needsAccountRead(user: User): user is User & { vendorId: string } {
@@ -40,6 +41,10 @@ export async function resolveLandingPath(user: User, from?: string | null): Prom
 
   const known = landingPathIfKnown(user, from)
   if (known) return known
+
+  // A returning vendor is headed for the dashboard, so its chunks download while the context
+  // is in flight. The wizard is not guessed at; its route chunk still loads on navigation.
+  preloadVendorDashboard()
 
   try {
     // Imported on demand: this module is reachable from the eagerly-routed login screens,

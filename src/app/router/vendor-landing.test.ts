@@ -9,7 +9,10 @@ import {
   type VendorContext,
 } from '@/shared/api'
 import type { User } from '@/shared/types'
+import { preloadVendorDashboard } from './vendor-dashboard-chunks'
 import { landingPathIfKnown, resolveLandingPath } from './vendor-landing'
+
+vi.mock('./vendor-dashboard-chunks', () => ({ preloadVendorDashboard: vi.fn() }))
 
 const VENDOR_ID = 'test-vendor'
 
@@ -53,6 +56,7 @@ function holdSetupReads() {
 }
 
 beforeEach(() => {
+  vi.mocked(preloadVendorDashboard).mockClear()
   vi.stubEnv('VITE_USE_API', 'true')
   configureApiClient({ useApi: true })
   invalidateVendorOnboardingState()
@@ -128,5 +132,69 @@ describe('resolveLandingPath', () => {
     expect(landingPathIfKnown(noStore)).toBe('/onboarding')
     await expect(resolveLandingPath(noStore)).resolves.toBe('/onboarding')
     expect(getContext).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveLandingPath dashboard preload', () => {
+  it('starts the dashboard chunks before the vendor context answers', async () => {
+    let answer!: (context: VendorContext) => void
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(
+      new Promise<VendorContext>((resolve) => { answer = resolve }),
+    )
+
+    const landing = resolveLandingPath(vendor)
+
+    // Synchronous with the call: the context promise has not been given its answer yet.
+    expect(preloadVendorDashboard).toHaveBeenCalledTimes(1)
+    answer(SUBMITTED)
+    await expect(landing).resolves.toBe('/vendor')
+    expect(preloadVendorDashboard).toHaveBeenCalledTimes(1)
+  })
+
+  it('still preloads when the context read fails', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
+
+    await expect(resolveLandingPath(vendor)).resolves.toBe('/onboarding')
+    expect(preloadVendorDashboard).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not preload for a customer', async () => {
+    const customer: User = { ...vendor, role: 'customer', roles: ['customer'], vendors: [], vendorId: undefined }
+
+    await expect(resolveLandingPath(customer)).resolves.toBe('/')
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+
+  it('does not preload in demo mode', async () => {
+    vi.stubEnv('VITE_USE_API', 'false')
+    configureApiClient({ useApi: false })
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('unexpected read'))
+
+    await resolveLandingPath(vendor)
+
+    expect(getContext).not.toHaveBeenCalled()
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+
+  it('does not preload when a cached context already decides the destination', async () => {
+    await loadVendorContext(VENDOR_ID, async () => SUBMITTED)
+
+    await expect(resolveLandingPath(vendor)).resolves.toBe('/vendor')
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+
+  it('does not preload when the caller already has a destination', async () => {
+    await loadVendorContext(VENDOR_ID, async () => SETTING_UP)
+    const dual: User = { ...vendor, role: 'customer', roles: ['customer', 'vendor'] }
+
+    await expect(resolveLandingPath(dual, '/checkout')).resolves.toBe('/checkout')
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
+  })
+
+  it('does not preload for a vendor with no single store', async () => {
+    const noStore: User = { ...vendor, vendors: [], vendorId: undefined }
+
+    await resolveLandingPath(noStore)
+    expect(preloadVendorDashboard).not.toHaveBeenCalled()
   })
 })
