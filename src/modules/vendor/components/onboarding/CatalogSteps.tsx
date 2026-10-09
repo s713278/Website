@@ -499,7 +499,11 @@ function ProductCategoryPicker({
   const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
-  const references = useProductReferences(draft.catalogSource, categoryId)
+  // A closed panel shows only its selected count, which the draft holds, so its products
+  // are read when it is first opened and kept for every reopening after that.
+  const [opened, setOpened] = useState(open)
+  if (open && !opened) setOpened(true)
+  const references = useProductReferences(draft.catalogSource, categoryId, opened)
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useRefusalNote()
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)

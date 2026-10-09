@@ -116,12 +116,14 @@ function useBusinessTypeSearch(delayMs: number) {
   }
 }
 
+/** `enabled: false` shows a cached page but holds the first request until it turns true. */
 function usePagedReference<T extends { id: number }>(
   cacheKey: string,
   loadPage: (
     pageNumber: number,
     signal: AbortSignal,
   ) => Promise<ReferencePage<T>>,
+  enabled = true,
 ): InternalPagedReferenceResult<T> {
   const [state, setState] = useState<KeyedPagedReferenceState<T>>(() =>
     createReferenceState<T>(cacheKey),
@@ -215,6 +217,7 @@ function usePagedReference<T extends { id: number }>(
     }
 
     setState(createReferenceState<T>(cacheKey))
+    if (!enabled) return
     const requestTimer = window.setTimeout(() => {
       void run(cacheKey, 0, false)
     }, 0)
@@ -222,7 +225,7 @@ function usePagedReference<T extends { id: number }>(
       window.clearTimeout(requestTimer)
       requestRef.current?.abort()
     }
-  }, [cacheKey, run])
+  }, [cacheKey, enabled, run])
 
   const activeState = state.cacheKey === cacheKey
     ? state
@@ -413,6 +416,7 @@ export function useCategoryReferences(
 export function useProductReferences(
   mode: CatalogSource,
   categoryId: number,
+  enabled = true,
 ): PagedReferenceResult<ProductReference> {
   return usePagedReference(
     `product:${mode}:${categoryId}`,
@@ -436,5 +440,6 @@ export function useProductReferences(
         { signal },
       )
     },
+    enabled,
   )
 }

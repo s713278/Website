@@ -272,3 +272,77 @@ describe('business step after a resume that read the catalog', () => {
     expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ keyword: 'bakery', pageNumber: 0, pageSize: 9 })
   })
 })
+
+describe('product step reads a category only once its panel has been opened', () => {
+  const product = (id: number, name: string) => ({
+    id, name, description: null, icon: null, imageUrl: null, measurementId: null, measurementName: 'COUNT',
+  })
+  const category = (id: number, name: string) => ({
+    id, businessTypeId: 51, name, description: null, imageUrl: null, displayOrder: id,
+  })
+
+  function setup() {
+    emptyReferenceCache()
+    const read = vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockImplementation(async (categoryId) => ({
+      items: [product(categoryId * 10 + 1, `Item of ${categoryId}`)],
+      pageNumber: 0, pageSize: 12, totalElements: 1, totalPages: 1, lastPage: true,
+    }))
+    setCatalogDraft(51, [category(510, 'Fruit'), category(511, 'Dairy'), category(512, 'Bakery')])
+    return read
+  }
+
+  const readIds = (read: ReturnType<typeof setup>) => read.mock.calls.map((call) => call[0])
+
+  function setPanelOpen(categoryId: number, open: boolean) {
+    const details = document.getElementById(`category-products-${categoryId}`)
+    if (!(details instanceof HTMLDetailsElement)) throw new Error(`Expected a panel for category ${categoryId}`)
+    act(() => {
+      details.open = open
+      fireEvent(details, new Event('toggle'))
+    })
+  }
+
+  const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+
+  it('reads only the panel open by default on the first render', async () => {
+    const read = setup()
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+
+    expect(await screen.findByRole('button', { name: /Item of 510/ })).toBeTruthy()
+    await settle()
+
+    expect(readIds(read)).toEqual([510])
+  })
+
+  it('reads another panel exactly once when it is opened, and not again on reopening', async () => {
+    const read = setup()
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Item of 510/ })
+
+    setPanelOpen(511, true)
+    expect(await screen.findByRole('button', { name: /Item of 511/ })).toBeTruthy()
+    expect(readIds(read)).toEqual([510, 511])
+
+    setPanelOpen(510, true)
+    setPanelOpen(511, true)
+    await settle()
+
+    expect(readIds(read)).toEqual([510, 511])
+    expect(readIds(read).filter((id) => id === 510)).toHaveLength(1)
+  })
+
+  it('counts a closed panel’s selected products without reading it', async () => {
+    const read = setup()
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      products: [{ ...product(5121, 'Rye Loaf'), categoryId: 512 }],
+    }), 5)
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Item of 510/ })
+    await settle()
+
+    const summary = document.getElementById('category-products-512')?.querySelector('summary')
+    expect(summary?.textContent).toContain('1 selected')
+    expect(readIds(read)).toEqual([510])
+  })
+})
