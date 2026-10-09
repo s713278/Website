@@ -157,6 +157,26 @@ describe('CheckoutView', () => {
     ).toBeTruthy()
   })
 
+  it('uses delivery_slots for pickup time when pickup stores are empty', () => {
+    renderCheckout([line], {
+      ...checkoutOptions,
+      deliveryMethods: ['HOME_DELIVERY', 'STORE_PICKUP'],
+      pickupStores: [],
+      deliverySlots: [
+        { id: 'slot-0-Morning', label: 'Morning' },
+        { id: 'slot-1-Evening', label: 'Evening' },
+      ],
+      pickupMessage: 'Pickup is free.',
+      shipping: { deliveryCharge: 10, freeDeliveryThreshold: 100 },
+    })
+
+    fireEvent.click(screen.getByRole('radio', { name: /Store pickup/i }))
+    expect(screen.getByText('Pickup time')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /^Morning$/i })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /^Evening$/i })).toBeTruthy()
+    expect(screen.queryByText(/This store has not configured pickup times yet/)).toBeNull()
+  })
+
   it('shows API pickup slots and sends the selected slot on place', async () => {
     const placeOrder = vi.spyOn(ordersService, 'placeOrder').mockResolvedValue({
       id: 'ord-1',
@@ -183,14 +203,10 @@ describe('CheckoutView', () => {
             {
               id: 'pickup-slot-0-Morning',
               label: 'Morning',
-              description: 'Pickup window',
-              recommended: true,
             },
             {
               id: 'pickup-slot-1-Evening',
               label: 'Evening',
-              description: 'Pickup window',
-              recommended: false,
             },
           ],
         },
@@ -232,7 +248,9 @@ describe('CheckoutView', () => {
     ).toBeNull()
 
     fireEvent.click(screen.getByRole('radio', { name: /UPI/i }))
+    expect(screen.getByText('Name')).toBeTruthy()
     expect(screen.getByText('Stage Owner')).toBeTruthy()
+    expect(screen.getByText('UPI ID')).toBeTruthy()
     expect(screen.getByText('stage@upi')).toBeTruthy()
 
     expect(screen.getAllByRole('button', { name: /Create Order & Send On WhatsApp/ }).length).toBeGreaterThan(0)

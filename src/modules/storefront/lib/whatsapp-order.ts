@@ -22,6 +22,9 @@ type WhatsAppOrderInput = {
   serviceFee?: number
   total: number
   paymentLabel: string
+  deliveryMethodLabel?: string
+  deliverySlotLabel?: string
+  deliveryDateLabel?: string
 }
 
 export function whatsappHref(phone: string, message: string) {
@@ -150,6 +153,15 @@ function paymentBlock(input: WhatsAppOrderInput) {
   return [`Method: ${input.paymentLabel}`, fees, `*Total: ${formatCurrency(input.total)}*`].join('\n')
 }
 
+function fulfillmentBlock(input: WhatsAppOrderInput) {
+  const rows = [
+    input.deliveryMethodLabel?.trim() ? `Method: ${input.deliveryMethodLabel.trim()}` : null,
+    input.deliverySlotLabel?.trim() ? `Slot: ${input.deliverySlotLabel.trim()}` : null,
+    input.deliveryDateLabel?.trim() ? `Date: ${input.deliveryDateLabel.trim()}` : null,
+  ].filter((row): row is string => Boolean(row))
+  return rows.length > 0 ? rows.join(' · ') : null
+}
+
 export function buildWhatsAppOrderMessage(input: WhatsAppOrderInput) {
   const customer = [
     input.customerName?.trim() ? `Name: ${input.customerName.trim()}` : null,
@@ -159,17 +171,24 @@ export function buildWhatsAppOrderMessage(input: WhatsAppOrderInput) {
     .join(' · ')
 
   const items = input.lines.map((line, index) => itemBlock(line, index)).join('\n')
+  const fulfillment = fulfillmentBlock(input)
+  const addressHeading = input.deliveryMethodLabel?.trim().toLowerCase().includes('pickup')
+    ? '*Pickup*'
+    : '*Delivery address*'
 
   return [
     `🛒 *New Order — ${input.storeName}*`,
     `*Order ID:* ${input.orderId}`,
     '*Customer*',
     customer,
-    '*Delivery address*',
+    addressHeading,
     addressBlock(input).join('\n'),
+    fulfillment,
     '*Items*',
     items,
     '*Payment*',
     paymentBlock(input),
-  ].join('\n')
+  ]
+    .filter((row): row is string => Boolean(row))
+    .join('\n')
 }

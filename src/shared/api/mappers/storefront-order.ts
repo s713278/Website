@@ -93,7 +93,7 @@ function timingType(
 }
 
 function pickupSlot(value: string | null | undefined): 'Morning' | 'Evening' | undefined {
-  const slot = value?.trim()
+  const slot = value?.trim().replace(/^['"]+|['"]+$/g, '').trim()
   if (slot === 'Morning' || slot === 'Evening') return slot
   const upper = slot?.toUpperCase()
   if (upper === 'MORNING') return 'Morning'

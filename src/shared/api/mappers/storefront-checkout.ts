@@ -104,26 +104,51 @@ function paymentId(type: StorefrontCheckoutPayment['type']): string {
   return 'online'
 }
 
-function mapTimeSlot(value: unknown, index: number): StorefrontCheckoutSlot | null {
+function mapSlotLabel(value: unknown): string | null {
   const text = asString(value)
   if (!text) return null
+  // Live checkout_options has returned quoted labels: "'Morning'".
+  return text.replace(/^['"]+|['"]+$/g, '').trim() || null
+}
+
+function mapCheckoutSlot(
+  value: unknown,
+  index: number,
+  idPrefix: string,
+): StorefrontCheckoutSlot | null {
+  const asText = mapSlotLabel(value)
+  if (asText) {
+    return {
+      id: `${idPrefix}-${index}-${asText}`,
+      label: asText,
+    }
+  }
+
+  const row = asRecord(value)
+  if (!row) return null
+  const label =
+    mapSlotLabel(row.label) ??
+    mapSlotLabel(row.name) ??
+    mapSlotLabel(row.slot) ??
+    mapSlotLabel(row.pickup_slot) ??
+    mapSlotLabel(row.delivery_slot)
+  if (!label) return null
+  const description = mapSlotLabel(row.description) ?? mapSlotLabel(row.subtitle)
+  const recommended = row.recommended === true || row.is_recommended === true
   return {
-    id: `slot-${index}-${text}`,
-    label: text,
-    description: 'Delivery window',
-    recommended: index === 0,
+    id: mapSlotLabel(row.id) ?? `${idPrefix}-${index}-${label}`,
+    label,
+    ...(description ? { description } : {}),
+    ...(recommended ? { recommended: true } : {}),
   }
 }
 
+function mapTimeSlot(value: unknown, index: number): StorefrontCheckoutSlot | null {
+  return mapCheckoutSlot(value, index, 'slot')
+}
+
 function mapPickupSlot(value: unknown, index: number): StorefrontCheckoutSlot | null {
-  const text = asString(value)
-  if (!text) return null
-  return {
-    id: `pickup-slot-${index}-${text}`,
-    label: text,
-    description: 'Pickup window',
-    recommended: index === 0,
-  }
+  return mapCheckoutSlot(value, index, 'pickup-slot')
 }
 
 function mapPickupStore(value: unknown, index: number): StorefrontPickupStore | null {
