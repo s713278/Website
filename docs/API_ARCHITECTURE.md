@@ -245,7 +245,9 @@ and vendor profile. A caller that has just read the context passes it in, and th
 instead of requesting it again. The business-type catalog (one 100-item page) is read only once the
 profile shows a saved business type, because it exists to map that saved name back to the reference
 Step 3 stores; a vendor who has not chosen one, like every new vendor on Step 3, skips it, and Step 3
-lists its own page. As soon as context reveals the backend resume step, it starts only the cumulative
+lists its own page. A successful read also files Step 3's unsearched first page in the catalog
+reference cache (never over an existing entry), so the step's first visit makes no request; later
+pages still load on scroll. As soon as context reveals the backend resume step, it starts only the cumulative
 account reads needed to reconstruct that step and every earlier one:
 
 | Resume step | Additional account reads |

@@ -13,6 +13,7 @@ import {
   getSampleProducts,
 } from '../data/onboarding-sample'
 import {
+  businessTypeCacheKey,
   readReferenceCache,
   writeReferenceCache,
 } from '../lib/onboarding-catalog-cache'
@@ -296,13 +297,7 @@ export function useBusinessTypeReferences(
   const search = useBusinessTypeSearch(
     ONBOARDING_CONFIG.businessTypeSearchDebounceMs,
   )
-  const cacheKey = [
-    'business',
-    mode,
-    `query:${search.committedQuery}`,
-    `size:${ONBOARDING_CONFIG.businessTypePageSize}`,
-    'sort:id:ASC',
-  ].join(':')
+  const cacheKey = businessTypeCacheKey(mode, search.committedQuery)
   const cancelledSearchKeyRef = useRef<string | null>(null)
   const references = usePagedReference(
     cacheKey,

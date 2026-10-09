@@ -4,9 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
-import { vendorOnboardingService } from '@/shared/api'
+import { mapVendorContext, vendorOnboardingService } from '@/shared/api'
 import { useOnboardingStore } from '../../store/onboarding-store'
-import { CategoryStep, ProductStep } from './CatalogSteps'
+import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
+import { loadServerOnboardingState } from '../../lib/onboarding-resume'
+import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 
 afterEach(() => {
   cleanup()
@@ -188,5 +190,85 @@ describe('category step messages', () => {
     expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeTruthy()
     act(() => vi.advanceTimersByTime(4000))
     expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeNull()
+  })
+})
+
+// The reference cache is module-level with no reset; 48 other keys push every earlier entry out.
+function emptyReferenceCache() {
+  for (let index = 0; index < 48; index++) {
+    writeReferenceCache(
+      `test-filler:${index}`,
+      { items: [], pageNumber: 0, pageSize: 9, totalElements: 0, totalPages: 0, lastPage: true },
+      false,
+    )
+  }
+}
+
+describe('business step after a resume that read the catalog', () => {
+  const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
+  const wide = {
+    items: Array.from({ length: 30 }, (_, index) => type(index + 1)),
+    pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
+  }
+
+  async function resumeThenRender() {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
+      data: {
+        vendor_id: '88', vendor_status: 'SETTING_UP', approval_status: 'PENDING',
+        onboarding: { status: 'IN_PROGRESS', next_step: 4 },
+      },
+    }))
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+      businessName: 'Store', businessType: 'Business 3', ownerName: '', contactPerson: '', contactNumber: '',
+    })
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
+    const getBusinessTypes = vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
+    getBusinessTypes.mockResolvedValueOnce(wide)
+    await loadServerOnboardingState('88')
+    getBusinessTypes.mockClear()
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
+    render(<BusinessStep issues={[]} />)
+    return getBusinessTypes
+  }
+
+  it('shows the first nine types without asking for them', async () => {
+    const getBusinessTypes = await resumeThenRender()
+
+    expect(await screen.findByRole('button', { name: /Business 1$/ })).toBeTruthy()
+    // Let the zero-delay fetch timer run, were there one.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+
+    expect(getBusinessTypes).not.toHaveBeenCalled()
+    const cards = screen.getAllByRole('button', { name: /^Business \d+$/ })
+    expect(cards.map((card) => card.textContent)).toEqual(
+      Array.from({ length: 9 }, (_, index) => `Business ${index + 1}`),
+    )
+  })
+
+  it('requests page 1 of nine when the vendor shows more', async () => {
+    const getBusinessTypes = await resumeThenRender()
+    getBusinessTypes.mockResolvedValue({
+      items: [type(10), type(11)], pageNumber: 1, pageSize: 9, totalElements: 30, totalPages: 4, lastPage: false,
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show more' }))
+
+    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
+    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ pageNumber: 1, pageSize: 9 })
+    expect(await screen.findByRole('button', { name: /Business 10$/ })).toBeTruthy()
+  })
+
+  it('still requests a keyword search with the keyword', async () => {
+    const getBusinessTypes = await resumeThenRender()
+    getBusinessTypes.mockResolvedValue({
+      items: [type(21)], pageNumber: 0, pageSize: 9, totalElements: 1, totalPages: 1, lastPage: true,
+    })
+
+    fireEvent.change(await screen.findByLabelText('Search business type'), { target: { value: 'bakery' } })
+    fireEvent.submit(screen.getByRole('search'))
+
+    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
+    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ keyword: 'bakery', pageNumber: 0, pageSize: 9 })
   })
 })

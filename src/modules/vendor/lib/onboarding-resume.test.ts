@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
-import type {
-  BusinessTypeReference,
-  CheckoutOptionsSnapshot,
-  VendorCategoryRef,
-  VendorContext,
-  VendorProductRef,
-  VendorProfile,
-  VendorSkuRef,
+import {
+  mapVendorContext,
+  vendorOnboardingService,
+  type BusinessTypeReference,
+  type CheckoutOptionsSnapshot,
+  type VendorCategoryRef,
+  type VendorContext,
+  type VendorProductRef,
+  type VendorProfile,
+  type VendorSkuRef,
 } from '@/shared/api'
+import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
 import { createEmptyRuntimeState } from '../data/onboarding-defaults'
 import {
   accountReadsForResumeStep,
@@ -17,6 +20,7 @@ import {
   derivedResumeStep,
   earliestIncompleteStep,
   furthestSavedStep,
+  loadServerOnboardingState,
   resumeStep,
   isVendorApproved,
   isStoreSubmitted,
@@ -458,5 +462,67 @@ describe('a partial resume still produces a loadable draft', () => {
     for (const category of draft.categories) {
       expect(category.businessTypeId).toBe(BUSINESS_TYPE.id)
     }
+  })
+})
+
+describe('loadServerOnboardingState files Step 3\'s first page', () => {
+  const accountKey = businessTypeCacheKey('account', '')
+  const types = Array.from({ length: 30 }, (_, index) => ({
+    id: index + 1, name: `Type ${index + 1}`, icon: null, displayOrder: index + 1,
+  }))
+
+  // The cache is module-level with no reset; 48 other keys push every earlier entry out.
+  beforeEach(() => {
+    for (let index = 0; index < 48; index++) {
+      writeReferenceCache(`test-filler:${index}`, { items: [], pageNumber: 0, pageSize: 9, totalElements: 0, totalPages: 0, lastPage: true }, false)
+    }
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  function answerReads(businessType: string | null) {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
+      data: {
+        vendor_id: '91', vendor_status: 'SETTING_UP', approval_status: 'PENDING',
+        onboarding: { status: 'IN_PROGRESS', next_step: 4 },
+      },
+    }))
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+      businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
+    })
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
+    return vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
+  }
+
+  it('seeds the account key from the 100-row read when a type is saved', async () => {
+    const getBusinessTypes = answerReads('Type 3')
+    getBusinessTypes.mockResolvedValue({
+      items: types, pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
+    })
+
+    const state = await loadServerOnboardingState('91')
+
+    expect(getBusinessTypes).toHaveBeenCalledTimes(1)
+    expect(state.businessTypes).toHaveLength(30)
+    const seeded = readReferenceCache<{ id: number }>(accountKey)
+    expect(seeded?.items.map((entry) => entry.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(seeded).toMatchObject({ pageNumber: 0, lastPage: false })
+  })
+
+  it('seeds nothing when the read rejects', async () => {
+    answerReads('Type 3').mockRejectedValue(new Error('offline'))
+
+    const state = await loadServerOnboardingState('91')
+
+    expect(state.businessTypes).toEqual([])
+    expect(readReferenceCache(accountKey)).toBeNull()
+  })
+
+  it.each([null, 'Others'])('makes no read and seeds nothing for a saved type of %s', async (saved) => {
+    const getBusinessTypes = answerReads(saved)
+
+    await loadServerOnboardingState('91')
+
+    expect(getBusinessTypes).not.toHaveBeenCalled()
+    expect(readReferenceCache(accountKey)).toBeNull()
   })
 })

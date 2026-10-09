@@ -1,4 +1,5 @@
 import type { ReferencePage } from '@/shared/api'
+import { ONBOARDING_CONFIG, type CatalogSource } from '../types/onboarding'
 
 type IdentifiedReference = { id: number }
 
@@ -76,4 +77,38 @@ export function writeReferenceCache<T extends IdentifiedReference>(
 
   touchCacheEntry(key, snapshot)
   return snapshot
+}
+
+/** Step 3's key for one search of the business type list, paged by the step's page size. */
+export function businessTypeCacheKey(mode: CatalogSource, query: string): string {
+  return [
+    'business',
+    mode,
+    `query:${query}`,
+    `size:${ONBOARDING_CONFIG.businessTypePageSize}`,
+    'sort:id:ASC',
+  ].join(':')
+}
+
+/**
+ * File Step 3's first unsearched page from a wider read of the same list, so the step's
+ * first visit costs no request. `page` must be page 0 of the unfiltered list sorted by id
+ * ascending. Later pages are left to the step's infinite scroll, and an entry the step
+ * already holds is never replaced.
+ */
+export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(
+  mode: CatalogSource,
+  page: ReferencePage<T>,
+): void {
+  const key = businessTypeCacheKey(mode, '')
+  const size = ONBOARDING_CONFIG.businessTypePageSize
+  // A short page that is not the last cannot stand in for a full first page.
+  const complete = page.lastPage || page.items.length >= size
+  if (page.pageNumber !== 0 || !complete || referenceCache.has(key)) return
+
+  touchCacheEntry(key, {
+    items: page.items.slice(0, size),
+    pageNumber: 0,
+    lastPage: page.lastPage && page.items.length <= size,
+  })
 }

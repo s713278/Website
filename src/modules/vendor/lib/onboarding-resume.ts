@@ -16,6 +16,7 @@ import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
+import { seedBusinessTypeFirstPage } from './onboarding-catalog-cache'
 import { accountSkuId } from './onboarding-sku-id'
 import { measurementFromProduct, reconcileUnitForMeasurement } from './onboarding-measurement'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
@@ -131,11 +132,15 @@ export async function loadServerOnboardingState(
   // One page covers the catalog (30 types); needed only to turn a saved business type's
   // display string back into the reference object Step 3 stores. A vendor who has not
   // chosen one yet, like every new vendor on Step 3, skips it: the step lists its own page.
+  // A successful read also files Step 3's first page, so revisiting it costs no request.
   const businessTypesPromise = profilePromise.then((profile) => savedBusinessType(profile)
     ? optional(vendorOnboardingService.getBusinessTypes(
         { pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' },
         config,
-      ))
+      ).then((page) => {
+        seedBusinessTypeFirstPage('account', page)
+        return page
+      }))
     : null)
 
   // Deliberately not optional. Context decides liveness, limits and whether a resume
