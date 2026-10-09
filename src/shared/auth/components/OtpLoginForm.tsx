@@ -326,21 +326,21 @@ export function OtpLoginForm({
         </main>
       </div>
 
-      <aside className="hidden h-full min-h-0 p-3 lg:block" aria-hidden>
-        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] bg-[#ecfdf5]">
+      <aside className="hidden h-full min-h-0 items-center p-3 lg:flex" aria-hidden>
+        <div className="flex aspect-[667/617] max-h-full min-h-0 w-full flex-col overflow-hidden rounded-[2rem] bg-[#ecfdf5]">
           <div className="md-login-art-copy flex-none px-8 pb-4 pt-10 xl:px-12 xl:pt-14">
             <p className="max-w-md text-balance font-display text-[1.75rem] font-semibold leading-snug tracking-[-0.02em] text-[var(--md-green-800)] xl:text-[2rem]">
-              {isVendor ? 'Your shop, open to the whole neighbourhood.' : 'Order from the shops around you.'}
+              {isVendor ? 'Turn your Instagram into a digital store.' : 'Order from the shops around you.'}
             </p>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="flex min-h-0 flex-1 items-end">
             <img
-              src="/images/auth/neighbourhood-market-reference.png"
+              src="/images/auth/instagram-to-store-phone.png"
               alt=""
               width={1536}
               height={1024}
               fetchPriority="high"
-              className="block h-full w-full object-contain object-bottom"
+              className="block h-auto max-h-full w-full object-contain object-bottom [mask-image:linear-gradient(to_bottom,transparent,#000_8%)]"
             />
           </div>
         </div>
