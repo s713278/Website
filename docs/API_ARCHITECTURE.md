@@ -242,7 +242,9 @@ mode is blocked at Continue because its synthetic IDs cannot reach an account.
 `loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
 snapshot for the setup wizard. It starts the two reads every vendor needs together: vendor context
 and vendor profile. A caller that has just read the context passes it in, and the snapshot reuses it
-instead of requesting it again. The business-type catalog (one 100-item page) is read only once the
+instead of requesting it again; otherwise `loadVendorOnboardingState` takes the context through the
+dashboard's context cache, so a context the session already holds or is reading costs no second
+request. The business-type catalog (one 100-item page) is read only once the
 profile shows a saved business type, because it exists to map that saved name back to the reference
 Step 3 stores; a vendor who has not chosen one, like every new vendor on Step 3, skips it, and Step 3
 lists its own page. A successful read also files Step 3's unsearched first page in the catalog

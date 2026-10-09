@@ -9,7 +9,7 @@ import {
   writeEntry,
   type CacheEntry,
 } from './onboarding-state-cache'
-import { loadVendorContext } from './vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext } from './vendor-context-cache'
 
 /**
  * One read of the vendor's account, shared by everything that needs it.
@@ -30,7 +30,9 @@ export { invalidateVendorOnboardingState }
 
 /**
  * `context` is a vendor context the caller has only just read, such as sign-in's; the
- * snapshot then reuses it instead of requesting it a second time.
+ * snapshot then reuses it instead of requesting it a second time. Without one, the context
+ * comes through the dashboard's context cache, so a context the session already holds or is
+ * reading is shared. `force` reads a fresh one.
  */
 export function loadVendorOnboardingState(
   vendorId: string,
@@ -38,10 +40,15 @@ export function loadVendorOnboardingState(
 ): Promise<ServerOnboardingState> {
   const existing = readEntry(vendorId)
   if (existing && !options.force) return existing.promise
+  if (options.force && !options.context) invalidateVendorContext(vendorId)
 
   const entry: CacheEntry = {
     resolved: null,
-    promise: loadServerOnboardingState(vendorId, {}, options.context),
+    promise: loadServerOnboardingState(
+      vendorId,
+      {},
+      options.context ?? loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)),
+    ),
   }
   writeEntry(vendorId, entry)
 

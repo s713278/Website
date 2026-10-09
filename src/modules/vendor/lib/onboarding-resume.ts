@@ -120,11 +120,11 @@ export function measurementCatalogsForResume(measurements: MeasurementCatalog | 
 export async function loadServerOnboardingState(
   vendorId: string,
   config: LoadConfig = {},
-  knownContext?: VendorContext,
+  knownContext?: VendorContext | Promise<VendorContext>,
 ): Promise<ServerOnboardingState> {
   // Start both universal reads before awaiting context. The dependent fan-out can then
   // begin as soon as context reveals the resume step, without waiting for the profile.
-  // A context the caller just read is reused.
+  // A context the caller just read, or is already reading, is reused.
   const contextPromise = knownContext
     ? Promise.resolve(knownContext)
     : vendorOnboardingService.getVendorContext(vendorId, config)

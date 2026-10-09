@@ -6,7 +6,7 @@ import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-ca
 import { loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
 import { invalidateVendorOnboardingState, writeEntry } from './onboarding-state-cache'
 import type { ServerOnboardingState } from './onboarding-resume'
-import { peekVendorContext } from './vendor-context-cache'
+import { loadVendorContext, peekVendorContext } from './vendor-context-cache'
 
 const VENDOR_ID = '96'
 
@@ -257,5 +257,113 @@ describe('loadVendorOnboardingState remembers the header hint', () => {
     await oldRead
 
     expect(readVendorHeaderHint(VENDOR_ID)).toBeNull()
+  })
+})
+
+describe('loadVendorOnboardingState shares the vendor context read', () => {
+  const context = contextFor(VENDOR_ID)
+
+  /** Every read after the context. The profile read is answered; the rest are not reached at Step 11. */
+  function answerRest() {
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+      businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
+    })
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null)
+    vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG)
+  }
+
+  it('makes no context request when the context cache already holds one', async () => {
+    answerRest()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context)
+    await loadVendorContext(VENDOR_ID, (id) => vendorOnboardingService.getVendorContext(id))
+    getContext.mockClear()
+
+    const state = await loadVendorOnboardingState(VENDOR_ID)
+
+    expect(getContext).not.toHaveBeenCalled()
+    expect(state.context).toBe(context)
+  })
+
+  it('makes no context request after loadVendorAccountContext filed one', async () => {
+    answerRest()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context)
+    await loadVendorAccountContext(VENDOR_ID)
+
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    expect(getContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one request with an account-context load still in flight', async () => {
+    answerRest()
+    let resolveContext!: (value: VendorContext) => void
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockReturnValue(new Promise((resolve) => { resolveContext = resolve }))
+
+    const accountRead = loadVendorAccountContext(VENDOR_ID)
+    const stateRead = loadVendorOnboardingState(VENDOR_ID)
+    // Asserted while the read is unsettled: once it lands, a duplicate would be invisible.
+    expect(getContext).toHaveBeenCalledTimes(1)
+
+    resolveContext(context)
+    await expect(accountRead).resolves.toEqual({ context })
+    await expect(stateRead).resolves.toMatchObject({ context })
+    expect(getContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one request when the onboarding state is asked for first', async () => {
+    answerRest()
+    let resolveContext!: (value: VendorContext) => void
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockReturnValue(new Promise((resolve) => { resolveContext = resolve }))
+
+    const stateRead = loadVendorOnboardingState(VENDOR_ID)
+    const accountRead = loadVendorAccountContext(VENDOR_ID)
+    expect(getContext).toHaveBeenCalledTimes(1)
+
+    resolveContext(context)
+    await Promise.all([stateRead, accountRead])
+    expect(getContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again after the vendor’s snapshot is invalidated', async () => {
+    answerRest()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context)
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    invalidateVendorOnboardingState(VENDOR_ID)
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    expect(getContext).toHaveBeenCalledTimes(2)
+  })
+
+  it('still rejects the snapshot when the context read fails', async () => {
+    answerRest()
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
+
+    await expect(loadVendorOnboardingState(VENDOR_ID)).rejects.toThrow('offline')
+  })
+
+  it('reads a fresh context when forced, even with one cached', async () => {
+    answerRest()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context)
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    await loadVendorOnboardingState(VENDOR_ID, { force: true })
+
+    expect(getContext).toHaveBeenCalledTimes(2)
+  })
+
+  it('makes no context request when the caller supplies one', async () => {
+    answerRest()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('unexpected read'))
+
+    const state = await loadVendorOnboardingState(VENDOR_ID, { context })
+
+    expect(getContext).not.toHaveBeenCalled()
+    expect(state.context).toBe(context)
   })
 })
