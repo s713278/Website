@@ -1,85 +1,55 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, renameSync, mkdirSync, openSync, closeSync, unlinkSync, fsyncSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { prototypeSeed, prototypeStates } from '../src/shared/api/fixtures/billing-prototype.ts'
 
-/** The earlier three scenarios stay readable for stored records such as vendor `r1`; Plan selects only the prototype states. */
-const scenarios = ['active_trial', 'expired_trial', 'paid_sample', ...prototypeStates]
-/** Scenarios whose seeded free days can still be running. */
-const trialScenarios = ['active_trial', 'free_days', 'three_days_left']
-/** Scenarios seeded with a labelled sample paid boundary rather than a provider-verified fee. */
-const samplePaidScenarios = ['paid_sample', 'paid', 'stopped', 'shop_closed']
-/** Prototype states whose ₹299 is collected now; a provider-confirmed fee moves them to Paid. */
-const payNowScenarios = ['payment_failed', 'shop_closed']
+/*
+  A local stand-in for the backend's vendor billing API, backed by real Razorpay Test calls.
+
+  It serves the published routes (`GET/POST /v1/vendors/{id}/subscription`, `…/confirm`, `…/cancel`,
+  `…/history` and `GET /v1/subscription-plans`) under `/api`, in the envelope and wire shape the Live
+  Plan reads, and follows the corrected behaviour the backend brief asks for
+  (docs/VENDOR_BILLING_BACKEND_BRIEF.md, sections 4 and 7):
+
+  - Free days: subscribe creates a subscription whose first fee is an upfront `addons` item of the
+    plan price, with `start_at` = P = T + one month. Its capture is the paid month T → P.
+  - Stop the plan: an immediate Razorpay cancel; P is kept and the read says ACTIVE with
+    `cancel_at_period_end: true`.
+  - Keep shop open: the old subscription is cancelled now and a new addon subscription starts at
+    old P + one month.
+  - After T unpaid, or after paid days or a halt: an immediate-start subscription, never reusing one
+    created during the free days.
+  - Renewals extend P only along the original cycle; Razorpay's `pending` reads PAST_DUE and `halted`
+    reads HALTED, after which the helper cancels the halted subscription.
+
+  `POST /dev/vendors/{id}/scenario` seeds a vendor's dates and statuses for UI testing. Seeded
+  states own no Razorpay object until the vendor pays; every Razorpay object is created here.
+
+  `POST /dev/vendors/{id}/simulation` chooses a simulated payment outcome (stay pending, succeed or
+  fail after `simulatedDelayMs`) for outcomes Razorpay Test Checkout cannot produce. While one is
+  chosen, subscribe creates a `sub_Sim…` subscription that never reaches Razorpay; the development
+  app's stand-in Checkout pays it through `…/simulation/pay`, which returns a callback signed like
+  Checkout's, and `…/simulation/deliver` settles a pending payment now. Its Razorpay objects are a
+  pure function of the stored payment and now, so the same reconcile reads them.
+*/
+
+const dayMs = 24 * 60 * 60 * 1000
+const minuteMs = 60 * 1000
 const vendorPattern = /^[A-Za-z0-9_-]{1,80}$/
-const keyPattern = /^[A-Za-z0-9_-]{8,100}$/
-/** A browser callback or a no-longer-fresh provider object stays unresolved until provider verification. */
-const unresolvedStates = ['callback_unverified', 'callback_verified', 'provider_pending', 'needs_verification', 'schedule_mismatch']
-/** A provider outcome exists for these attempts, so preparation never reopens or replaces them. */
-const settledStates = [...unresolvedStates, 'authorised', 'fee_confirmed', 'provider_closed']
-/**
- * Status reads reread these associated attempts. Confirmed fees, closed objects and recorded
- * ownership/plan/schedule/period mismatches stay final until the guarded reset.
- */
-const readbackStates = ['association_unverified', 'callback_unverified', 'callback_verified', 'provider_pending', 'needs_verification', 'authorised']
-/** Only these statuses confirm authorisation; retrying, halted or paused collection stays pending. */
-const authorisedStatuses = ['authenticated', 'active']
 /** Razorpay statuses that can never charge again. */
 const closedStatuses = ['cancelled', 'completed', 'expired']
-/**
- * Razorpay statuses under which a scheduled fee is still being collected, its retries included (`pending`).
- * Only `halted`, after every retry is used, is a failed platform fee.
- */
-const collectingStatuses = ['authenticated', 'active', 'pending']
+const trialPlan = { code: 'SOCIAL_STARTER_TRIAL', name: 'Social Starter Trial' }
+const paidPlan = { code: 'MITHRA_SOCIAL_STARTER_MONTHLY', name: 'Mithra Social Starter' }
 
-/**
- * AutoPay after a confirmed fee: retrying (`pending`) and a finished Test schedule keep the observed
- * authorisation; cancellation or expiry revokes it; halted collection has failed; anything else is unconfirmed.
- * Records saved before renewal readback have no status and keep their confirmed authorisation.
- */
-function authorisationAfterFee(providerStatus) {
-  if (!providerStatus || ['authenticated', 'active', 'pending', 'completed'].includes(providerStatus)) return 'confirmed'
-  if (['cancelled', 'expired'].includes(providerStatus)) return 'revoked'
-  return providerStatus === 'halted' ? 'failed' : 'pending'
-}
-/** Razorpay has shown that this attempt's object can never charge again. */
-const collectionEnded = (attempt) => attempt.state === 'provider_closed' || (attempt.state === 'fee_confirmed' && closedStatuses.includes(attempt.providerStatus))
-/** A provider object exists, or may exist after an unanswered create. */
-const hasObject = (attempt) => Boolean(attempt.associationId) || attempt.state === 'provider_requested'
-/** A halted object whose cancellation Razorpay Test has not yet accepted; an unanswered or rejected request is retried. */
-const haltedUncancelled = (attempt) => Boolean(attempt.haltedAt) && Boolean(attempt.attemptId) && attempt.providerStatus === 'halted'
-  && (!attempt.cancellation || ['requested', 'failed'].includes(attempt.cancellation.state))
-/** Helper cancellation progress still waiting for a provider read that shows the object closed. */
-const openCancellationStates = ['requested', 'acknowledged', 'scheduled']
-/**
- * Helper cancellation states that stop the prototype's Paid: a cycle-end stop Razorpay Test accepted (its reads
- * cannot show one) or a stop a read has confirmed. An accepted immediate stop waits for that read.
- */
-const stopAcceptedStates = ['scheduled', 'confirmed']
-/**
- * In the prototype's Stopped, a paid agreement with a scheduled cycle-end stop is closed now, and read closed,
- * before Keep shop open creates its replacement: provider reads cannot show the scheduled stop.
- */
-const stopToClose = (record, attempt) => record.scenario === 'stopped' && attempt.state === 'fee_confirmed'
-  && !collectionEnded(attempt) && attempt.cancellation?.state === 'scheduled'
-/** Reset outcomes showing a recorded object can never charge again, or was never created. */
-const resetTerminalOutcomes = ['closed', 'cancelled_by_reset', 'never_created']
-
-/** The provider object is the one this helper created for this vendor attempt on the configured plan. */
-const ownedBy = (subscription, { attempt, vendorId, planId }) => subscription.id === attempt.associationId && subscription.plan_id === planId
-  && subscription.notes?.md_attempt === attempt.attemptId && subscription.notes?.md_vendor === vendorId
-
-/** The approved platform fee; another plan price is never counted as the first fee. */
-const platformFeeMinor = 29900
-const preparationLifetimeMs = 30 * 60 * 1000
-/** After this long, a creation absent from the provider list was never committed and may be retried. */
-const uncertainCreationWindowMs = 10 * 60 * 1000
-
-/** `definite` means Razorpay rejected the request, so no provider object was created. */
+/** `definite` means Razorpay rejected the request, so nothing was created or changed. */
 export class ProviderError extends Error {
   constructor(message, definite) { super(message); this.name = 'ProviderError'; this.definite = definite }
+}
+
+/** An HTTP error answered in the backend's failure envelope. */
+class HttpError extends Error {
+  constructor(status, message) { super(message); this.status = status }
 }
 
 /** Test Mode REST client. The secret stays in this process; only its public key reaches the browser. */
@@ -104,265 +74,68 @@ export function createRazorpayTestProvider({ keyId, secret }) {
     fetchPlan: (id) => call('GET', `/plans/${encodeURIComponent(id)}`),
     fetchPayment: (id) => call('GET', `/payments/${encodeURIComponent(id)}`),
     listInvoices: ({ subscriptionId }) => call('GET', `/invoices?subscription_id=${encodeURIComponent(subscriptionId)}&count=100`),
-    listSubscriptions: ({ planId, from, skip }) => call('GET', `/subscriptions?plan_id=${encodeURIComponent(planId)}&from=${from}&count=100&skip=${skip}`),
-    cancelSubscription: (id, { cancelAtCycleEnd }) => call('POST', `/subscriptions/${encodeURIComponent(id)}/cancel`, { cancel_at_cycle_end: cancelAtCycleEnd }),
+    cancelSubscription: (id) => call('POST', `/subscriptions/${encodeURIComponent(id)}/cancel`, { cancel_at_cycle_end: 0 }),
   }
 }
 
-const seconds = (iso) => Math.floor(Date.parse(iso) / 1000)
-const replaceAttempt = (record, attempt, next) => record.attempts.map((item) => item === attempt ? next : item)
-
-/** Finds the object tagged with this attempt; an unreadably long list stays uncertain. */
-async function findTaggedSubscription(client, { planId, attempt }) {
-  for (let skip = 0; skip < 1000; skip += 100) {
-    const { items = [] } = await client.listSubscriptions({ planId, from: seconds(attempt.requestedAt) - 300, skip })
-    const found = items.find((item) => item.notes?.md_attempt === attempt.attemptId)
-    if (found || items.length < 100) return found ?? null
-  }
-  throw new ProviderError('Razorpay Test returned too many subscriptions to reconcile.', false)
-}
-
-function scenarioDates(scenario, now) {
-  if (prototypeStates.includes(scenario)) return prototypeSeed(scenario, now)
-  const day = 24 * 60 * 60 * 1000
-  const trialEndsAt = new Date(now.getTime() + (scenario === 'active_trial' ? 14 : -7) * day).toISOString()
-  const paidThrough = scenario === 'paid_sample' ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds())).toISOString() : null
-  return { trialEndsAt, paidThrough }
-}
-
-function currentStatus(record, now) {
-  const attempts = record.attempts ?? []
-  const nowMs = now.getTime()
-  const trialActive = trialScenarios.includes(record.scenario) && nowMs < Date.parse(record.trialEndsAt)
-  const sampleActive = samplePaidScenarios.includes(record.scenario) && nowMs < Date.parse(record.paidThrough)
-  const has = (action, states) => attempts.some((attempt) => attempt.action === action && states.includes(attempt.state))
-  // The latest provider object is the current agreement; an earlier one it replaced is history.
-  const agreement = attempts.findLast(hasObject) ?? null
-  // A rejected request that Razorpay later shows closed was not this Plan's cancellation: it reads as external revocation.
-  const cancelling = agreement?.cancellation?.state === 'failed' && collectionEnded(agreement) ? null : agreement?.cancellation ?? null
-  // Only provider-confirmed fees count; renewals extend the latest paid agreement only along its original cycle chain.
-  const paidAttempt = attempts.findLast((attempt) => attempt.state === 'fee_confirmed') ?? null
-  const fee = paidAttempt?.fee ?? null
-  // A replacement prepared after the paid agreement decides what is collected next; the paid one keeps its coverage.
-  const replacement = paidAttempt && agreement !== paidAttempt ? agreement : null
-  // A closed object, or a scheduled or confirmed stop, collects nothing further.
-  const collectionStopped = Boolean(paidAttempt) && (collectionEnded(paidAttempt) || ['scheduled', 'confirmed'].includes(paidAttempt.cancellation?.state))
-  const paidThrough = (paidAttempt?.renewals?.at(-1) ?? fee)?.periodEnd ?? (samplePaidScenarios.includes(record.scenario) ? record.paidThrough : null)
-  const paidActive = Boolean(paidThrough) && nowMs < Date.parse(paidThrough)
-  const authorisation = !agreement ? 'not_configured'
-    : cancelling?.state === 'confirmed' ? 'revoked'
-      : agreement.state === 'fee_confirmed' ? authorisationAfterFee(agreement.providerStatus)
-        : agreement.state === 'authorised' ? 'confirmed'
-          : agreement.action === 'setup_autopay' && unresolvedStates.includes(agreement.state) ? 'pending'
-            : agreement.action === 'setup_autopay' && agreement.state === 'provider_closed' ? 'failed' : 'not_configured'
-  const setupAuthorised = agreement?.action === 'setup_autopay' && agreement.state === 'authorised' ? agreement : null
-  // A trial AutoPay object may still charge at the boundary until the provider shows it closed.
-  const trialObject = attempts.some((attempt) => attempt.action === 'setup_autopay' && attempt.state !== 'provider_closed' && hasObject(attempt))
-  // The latest due fee is the cycle starting where confirmed coverage ends; a recorded outcome for an older cycle is history.
-  const renewal = !replacement && paidAttempt?.renewal?.dueAt === paidThrough ? paidAttempt.renewal : null
-  // Past the paid boundary, the replacement's first fee at that boundary is due.
-  const replacementDue = Boolean(replacement) && !paidActive && (replacement.state === 'authorised' || unresolvedStates.includes(replacement.state))
-  // Rejoining is safe only when every earlier object is closed at Razorpay; an unfinished preparation is reused, never duplicated.
-  const collecting = attempts.filter((attempt) => hasObject(attempt) && !collectionEnded(attempt))
-  const replaceable = collecting.every((attempt) => (attempt.action === 'setup_autopay' && !settledStates.includes(attempt.state)) || stopToClose(record, attempt))
-  const retained = trialActive || sampleActive || (Boolean(fee) && paidActive)
-  // The collection retry period: past its boundary, a scheduled fee Razorpay is still collecting keeps service until
-  // collection halts. A fee paid now (Pay ₹299) has none, and a cancellation ends the retries.
-  const scheduled = replacement ?? paidAttempt ?? (agreement?.action === 'setup_autopay' ? agreement : null)
-  const retrying = !retained && !paidActive && Boolean(scheduled) && !scheduled.haltedAt
-    && (scheduled.state === 'fee_confirmed' || (scheduled.action === 'setup_autopay' && ['authorised', 'provider_pending'].includes(scheduled.state)))
-    && (!scheduled.providerStatus || collectingStatuses.includes(scheduled.providerStatus))
-    && renewal?.status !== 'failed' && (!scheduled.cancellation || scheduled.cancellation.state === 'failed')
-  // After a halt, that agreement is history: Pay ₹299 returns once every object reads closed, so two never overlap.
-  const lastHalt = attempts.findLastIndex((attempt) => attempt.haltedAt)
-  const payable = lastHalt >= 0
-    ? collecting.length === 0 && !attempts.slice(lastHalt + 1).some((attempt) => attempt.action === 'pay_first_fee' && settledStates.includes(attempt.state))
-    : !fee && !trialObject && !has('pay_first_fee', settledStates)
-  // Only a helper-created object that can still collect is cancelled; an unanswered or rejected request may be retried.
-  const cancellable = Boolean(agreement?.attemptId) && (['authorised', 'provider_pending'].includes(agreement.state) || (agreement.state === 'fee_confirmed' && !collectionEnded(agreement)))
-    && (!cancelling || ['requested', 'failed'].includes(cancelling.state))
-  // The prototype's sample Paid has no provider object, so stopping it is a local state change.
-  const sampleStop = record.scenario === 'paid' && Boolean(record.events) && !agreement && sampleActive
-  // A pending reset owns every recorded object, so no billing change starts meanwhile.
-  const availableActions = record.reset ? [] : [
-    ...(retained ? (replaceable ? ['setup_autopay'] : [])
-      : (!samplePaidScenarios.includes(record.scenario) || payNowScenarios.includes(record.scenario)) && payable ? ['pay_first_fee'] : []),
-    ...(cancellable || sampleStop ? ['cancel'] : []),
-  ]
-  const paymentStatus = fee ? (replacement ? (replacementDue ? 'pending' : 'confirmed') : renewal?.status ?? (paidActive || collectionStopped ? 'confirmed' : 'pending'))
-    : has('pay_first_fee', [...unresolvedStates, 'authorised']) || (setupAuthorised && !trialActive && !sampleActive) || retrying ? 'pending' : 'none'
-  return {
-    trialStatus: trialActive ? 'active' : 'ended',
-    // Past a confirmed or sample paid boundary the demonstration is restricted, with no grace period once collection has
-    // halted. Through the retry period, access stays as the coverage that just ended left it.
-    accessStatus: trialActive || (retrying && !paidThrough) ? 'TRIAL' : paidActive || retrying ? 'PAID' : paidThrough ? 'PAYMENT_REQUIRED' : 'TRIAL_ENDED',
-    daysRemaining: trialActive ? Math.ceil((Date.parse(record.trialEndsAt) - nowMs) / (24 * 60 * 60 * 1000)) : 0,
-    storeVisible: Boolean(trialActive || paidActive || retrying),
-    collectionRetrying: retrying,
-    paidThrough,
-    // The renewal date stays the original anchor; a closed or stopping object schedules nothing further.
-    nextChargeAt: replacement ? (replacement.state === 'authorised' ? replacement.expectedChargeAt ?? null : null)
-      : fee ? (collectionStopped ? null : paidThrough) : setupAuthorised?.expectedChargeAt ?? null,
-    availableActions,
-    authorisationStatus: authorisation,
-    paymentStatus,
-    // A due fee past the local boundary with no provider record yet is local simulation, not a provider fact,
-    // while the confirmed coverage it follows remains Razorpay's.
-    providerVerified: {
-      authorisation: authorisation === 'confirmed',
-      payment: Boolean(fee) && (replacement ? !replacementDue : paidActive || collectionStopped || Boolean(renewal?.status)),
-      coverage: Boolean(fee),
-    },
-    // Only the current agreement's progress is shown; a replaced agreement's cancellation stays in its attempt history.
-    // Razorpay's acceptance of an immediate stop is still only a request until a read shows the object cancelled.
-    cancellation: cancelling ? {
-      status: cancelling.state === 'acknowledged' ? 'requested' : cancelling.state,
-      stage: cancelling.state, mode: cancelling.mode, requestedAt: cancelling.requestedAt, effectiveAt: cancelling.effectiveAt ?? null,
-      // Only when the helper cancelled after Razorpay halted collection, rather than at the vendor's request.
-      ...(cancelling.reason ? { reason: cancelling.reason } : {}),
-    } : null,
-  }
-}
-
-const iso = (value) => new Date(value * 1000).toISOString()
-const monthlyInvoice = (item, subscriptionId, amount) => item.subscription_id === subscriptionId && item.amount === amount && item.currency === 'INR'
-const coversOneMonth = (invoice) => { const days = (invoice.billing_end - invoice.billing_start) / 86400; return days >= 28 && days <= 31 }
-/** The invoice's captured, unrefunded platform-fee payment as a stored fee period, or null. */
-function capturedFee(invoice, payment, amount) {
-  if (payment.id !== invoice.payment_id || payment.invoice_id !== invoice.id || payment.status !== 'captured'
-    || payment.amount !== amount || payment.currency !== 'INR' || payment.refund_status) return null
-  return { invoiceId: invoice.id, paymentId: payment.id, amountMinor: amount, currency: 'INR', periodStart: iso(invoice.billing_start), periodEnd: iso(invoice.billing_end) }
+const iso = (ms) => new Date(ms).toISOString()
+/** Payment outcomes the dev panel can choose; `real` is Razorpay Test Checkout. */
+const simulationOutcomes = ['real', 'pending', 'succeed', 'fail']
+const seconds = (at) => Math.floor(Date.parse(at) / 1000)
+/** Whole seconds, as Razorpay stores `start_at`, so a stored P always equals the provider's. */
+const wholeSecond = (ms) => Math.floor(ms / 1000) * 1000
+/** One billing month later, on the same UTC day and time. */
+const addMonth = (at, months = 1) => {
+  const date = new Date(at)
+  return iso(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()))
 }
 
 /**
- * Rereads the attempt's Test subscription, plan, invoices and payments and derives only what they
- * prove. Browser values never enter this decision; a token authorisation is not the platform fee.
+ * The scenarios the dev panel can seed, relative to now. Every seeded paid period is labelled
+ * `seeded`: no Razorpay object or payment stands behind it until the vendor pays.
  */
-async function readProviderOutcome(client, { attempt, vendorId, planId }) {
-  const subscription = await client.fetchSubscription(attempt.associationId)
-  if (subscription.id !== attempt.associationId || subscription.plan_id !== planId || subscription.quantity !== 1
-    || subscription.notes?.md_attempt !== attempt.attemptId || subscription.notes?.md_vendor !== vendorId) {
-    return { state: 'needs_verification', problem: 'ownership', fee: null }
-  }
-  if (subscription.status === 'created') return null
-  const plan = await client.fetchPlan(planId)
-  const amount = attempt.expected?.amountMinor
-  if (plan.id !== planId || plan.period !== 'monthly' || plan.interval !== 1 || plan.item?.currency !== 'INR'
-    || amount !== platformFeeMinor || plan.item?.amount !== amount) {
-    return { state: 'needs_verification', problem: 'plan', fee: null }
-  }
-  const expectedStart = attempt.expectedChargeAt ? seconds(attempt.expectedChargeAt) : null
-  if (expectedStart !== null && subscription.start_at !== expectedStart) return { state: 'needs_verification', problem: 'schedule', fee: null }
+export const scenarioNames = ['free_days', 'three_days_left', 'trial_ending_soon', 'trial_ended', 'paid', 'stopped', 'autopay_off', 'paid_days_ended', 'renewal_retrying', 'payment_failed']
 
-  const { items = [] } = await client.listInvoices({ subscriptionId: subscription.id })
-  // Invoices for other amounts, such as a refundable card token charge, are not the monthly fee.
-  // Only the first monthly invoice is the first fee; a later paid cycle cannot stand in for it.
-  const [invoice] = items.filter((item) => monthlyInvoice(item, subscription.id, amount)).sort((a, b) => a.billing_start - b.billing_start)
-  let fee = null
-  if (invoice?.status === 'paid' && invoice.payment_id) {
-    const earliestStart = expectedStart ?? (attempt.requestedAt ? seconds(attempt.requestedAt) - 300 : null)
-    if (!Number.isSafeInteger(invoice.billing_start) || !coversOneMonth(invoice)
-      || (expectedStart !== null ? invoice.billing_start !== expectedStart : earliestStart === null || invoice.billing_start < earliestStart)) {
-      return { state: 'needs_verification', problem: 'period', fee: null }
-    }
-    fee = capturedFee(invoice, await client.fetchPayment(invoice.payment_id), amount)
+function seedScenario(scenario, nowMs, trialDays) {
+  const at = (offset) => iso(wholeSecond(nowMs + offset))
+  const trial = (trialEndsAt) => ({ trialEndsAt, trialStartedAt: iso(Date.parse(trialEndsAt) - trialDays * dayMs) })
+  // A paid month that ends at `end`, after free days that ended when it began.
+  const paidMonth = (end, changes) => {
+    const start = addMonth(end, -1)
+    return { ...trial(start), period: { start, end }, seededCharge: { at: start, end }, ...changes }
   }
-  if (fee) return { state: 'fee_confirmed', problem: null, fee, ...await readRenewals(client, { subscription, invoices: items, attempt: { ...attempt, fee } }) }
-  const state = authorisedStatuses.includes(subscription.status) ? 'authorised' : closedStatuses.includes(subscription.status) ? 'provider_closed' : 'provider_pending'
-  // The status tells a first fee still being retried (`pending`) from halted or paused collection.
-  return { state, problem: null, fee: null, providerStatus: subscription.status }
+  switch (scenario) {
+    case 'free_days': return trial(at(12 * dayMs))
+    case 'three_days_left': return trial(at(3 * dayMs))
+    // Long enough to pay in, short enough to watch the free days end.
+    case 'trial_ending_soon': return trial(at(5 * minuteMs))
+    case 'trial_ended': return trial(at(-2 * dayMs))
+    case 'paid': return paidMonth(addMonth(at(0)), { seededRazorpayStatus: 'active' })
+    case 'stopped': return paidMonth(at(8 * dayMs), { cancelAtPeriodEnd: true, seededRazorpayStatus: 'cancelled', seededStop: at(-dayMs) })
+    case 'autopay_off': return paidMonth(at(8 * dayMs), { externalCancel: true, seededRazorpayStatus: 'cancelled' })
+    case 'paid_days_ended': return paidMonth(at(-2 * dayMs), { cancelAtPeriodEnd: true, seededRazorpayStatus: 'cancelled', seededStop: at(-10 * dayMs) })
+    // Razorpay retries a declined renewal on each of the three days after P, then halts.
+    case 'renewal_retrying': return paidMonth(at(-dayMs), { retrying: true, seededRazorpayStatus: 'pending' })
+    case 'payment_failed': return paidMonth(at(-3 * dayMs), { halted: true, seededRazorpayStatus: 'cancelled' })
+  }
+  throw new HttpError(400, 'Choose an available scenario.')
 }
 
-/**
- * Extends confirmed coverage only along the original cycle chain: each renewal is a paid, captured
- * ₹299 invoice starting exactly where the last confirmed period ended. A retry settles that same
- * cycle, so neither its payment time nor a Test Dashboard acceleration starts a new month. Counted
- * renewals are append-only and a latest-due failure never reverts to pending, so repeated, stale or
- * out-of-order reads cannot count a fee twice or roll status back.
- */
-async function readRenewals(client, { subscription, invoices, attempt }) {
-  const renewals = [...(attempt.renewals ?? [])]
-  const counted = new Set([attempt.fee.invoiceId, ...renewals.map((item) => item.invoiceId)])
-  const monthly = invoices.filter((item) => monthlyInvoice(item, subscription.id, platformFeeMinor))
-  const dueAt = () => (renewals.at(-1) ?? attempt.fee).periodEnd
-  for (;;) {
-    const start = seconds(dueAt())
-    const invoice = monthly.find((item) => item.billing_start === start && item.status === 'paid' && item.payment_id)
-    const renewed = invoice && coversOneMonth(invoice) ? capturedFee(invoice, await client.fetchPayment(invoice.payment_id), platformFeeMinor) : null
-    if (!renewed) break
-    renewals.push(renewed)
-    counted.add(invoice.id)
+function requireTestConfig({ keyId, secret, planId }) {
+  if (!/^rzp_test_[A-Za-z0-9]+$/.test(keyId ?? '') || !secret || typeof secret !== 'string') {
+    throw new Error('Set RAZORPAY_TEST_KEY_ID and RAZORPAY_TEST_KEY_SECRET (load .env.billing-helper.local); only rzp_test_ keys are accepted.')
   }
-  const due = dueAt()
-  const open = monthly.some((item) => !counted.has(item.id) && item.billing_start === seconds(due))
-  // Only halted collection has failed; a declined attempt Razorpay is retrying (`pending`) is still pending.
-  const observed = open ? (subscription.status === 'halted' ? 'failed' : 'pending') : null
-  const prior = attempt.renewal?.dueAt === due ? attempt.renewal : null
-  // A paid charge that is not the next original cycle, such as a duplicate or a period starting at charge time, is never coverage.
-  const uncounted = monthly.some((item) => !counted.has(item.id) && item.status === 'paid' && item.billing_start !== seconds(due))
-  // A failure recorded before halted-only failures (a retrying read) re-derives while Razorpay still retries.
-  const status = prior?.status === 'failed' && subscription.status !== 'pending' ? 'failed' : observed ?? prior?.status ?? null
-  const problem = uncounted || prior?.problem ? 'uncounted' : null
-  return {
-    renewals,
-    renewal: status || problem ? { dueAt: due, status, problem } : null,
-    providerStatus: subscription.status,
-  }
-}
-
-/** Rereads a confirmed fee's subscription for renewals and closure; the first fee itself is never rederived. */
-async function readRenewalOutcome(client, { attempt }) {
-  const subscription = await client.fetchSubscription(attempt.associationId)
-  if (subscription.id !== attempt.associationId) throw new ProviderError('Razorpay Test returned another subscription.', false)
-  const { items = [] } = await client.listInvoices({ subscriptionId: subscription.id })
-  return { state: 'fee_confirmed', problem: null, fee: attempt.fee, ...await readRenewals(client, { subscription, invoices: items, attempt }) }
-}
-
-/**
- * A helper cancellation is confirmed only by a read showing its object closed, effective no later than
- * that read; a later stale active read never reopens it because closed objects are not reread.
- */
-function reconcileCancellation(attempt, readAt) {
-  const { cancellation } = attempt
-  if (!cancellation || !openCancellationStates.includes(cancellation.state) || !collectionEnded(attempt)) return attempt
-  const scheduled = cancellation.state === 'scheduled' && cancellation.effectiveAt
-  const effectiveAt = scheduled && Date.parse(cancellation.effectiveAt) < Date.parse(readAt) ? cancellation.effectiveAt : readAt
-  return { ...attempt, cancellation: { ...cancellation, state: 'confirmed', effectiveAt } }
-}
-
-/** Checks the inspected provider object against the scenario before Checkout may open it. */
-function inspectionProblem({ subscription, plan, attempt, vendorId, planId }) {
-  if (!ownedBy(subscription, { attempt, vendorId, planId })) {
-    return { state: 'needs_verification', error: 'The recorded Test subscription does not belong to this vendor attempt. No replacement is created.' }
-  }
-  if (plan.id !== planId || plan.period !== 'monthly' || plan.interval !== 1 || plan.item?.currency !== 'INR'
-    || !Number.isSafeInteger(plan.item?.amount) || plan.item.amount <= 0 || subscription.quantity !== 1) {
-    return { state: 'schedule_mismatch', error: 'The Test subscription is not on the supplied monthly INR plan. Checkout is blocked.' }
-  }
-  if (subscription.status !== 'created' || subscription.paid_count) {
-    return { state: 'needs_verification', error: 'The recorded Test subscription is no longer fresh. Its outcome needs provider verification; no replacement is created.' }
-  }
-  const expectedStart = attempt.expectedChargeAt ? seconds(attempt.expectedChargeAt) : null
-  if ((subscription.start_at ?? null) !== expectedStart) {
-    return { state: 'schedule_mismatch', error: 'The Test subscription start differs from the original trial expiry or paid-through date. Checkout is blocked; the boundary is not moved.' }
-  }
-  return null
-}
-
-function requireTestConfig(config) {
-  if (!/^rzp_test_[A-Za-z0-9]+$/.test(config.keyId ?? '') || !config.secret || typeof config.secret !== 'string') {
-    throw new Error('Set local RAZORPAY_TEST_KEY_ID and RAZORPAY_TEST_KEY_SECRET; only rzp_test_ keys are accepted.')
-  }
-  if (/rzp_live_|live/i.test(config.secret)) throw new Error('Live provider configuration is refused.')
+  if (/rzp_live_|live/i.test(secret)) throw new Error('Live provider configuration is refused.')
+  if (!/^plan_[A-Za-z0-9]+$/.test(planId ?? '')) throw new Error('Set RAZORPAY_TEST_PLAN_ID to the monthly Test plan.')
 }
 
 function readStore(file) {
   try {
     const data = JSON.parse(readFileSync(file, 'utf8'))
-    if (data.version !== 1 || !data.vendors || typeof data.vendors !== 'object') throw new Error('Unknown local helper store format.')
-    return { version: 1, vendors: Object.assign(Object.create(null), data.vendors), history: Object.assign(Object.create(null), data.history) }
+    if (data.version !== 2 || !data.vendors || typeof data.vendors !== 'object') throw new Error('Unknown local billing store format; point VENDOR_BILLING_TEST_STORE at a new file.')
+    return { version: 2, vendors: Object.assign(Object.create(null), data.vendors), archive: Object.assign(Object.create(null), data.archive) }
   } catch (error) {
-    if (error.code === 'ENOENT') return { version: 1, vendors: Object.create(null), history: Object.create(null) }
+    if (error.code === 'ENOENT') return { version: 2, vendors: Object.create(null), archive: Object.create(null) }
     throw error
   }
 }
@@ -375,598 +148,568 @@ function saveStore(file, store) {
   catch (error) { try { closeSync(descriptor) } catch { /* already closed */ }; try { unlinkSync(temporary) } catch { /* no temporary file */ }; throw error }
 }
 
-function publicRecord(record) {
-  return record ? structuredClone(record) : null
-}
-
-/** Records saved before reset existed are their vendor's first generation. */
-const generationOf = (record) => record.generation ?? 1
-const period = (fee) => fee && { amountMinor: fee.amountMinor, currency: fee.currency, periodStart: fee.periodStart, periodEnd: fee.periodEnd }
-
-/** What history keeps of an attempt: dates, provider association and observed outcomes, never keys or payment identifiers. */
-function scrubAttempt(attempt) {
-  return {
-    attemptId: attempt.attemptId ?? null, action: attempt.action, state: attempt.state, associationId: attempt.associationId ?? null,
-    requestedAt: attempt.requestedAt ?? null, expectedChargeAt: attempt.expectedChargeAt ?? null, problem: attempt.problem ?? null,
-    providerStatus: attempt.providerStatus ?? null, fee: period(attempt.fee) ?? null, renewals: (attempt.renewals ?? []).map(period),
-    renewal: attempt.renewal ? { dueAt: attempt.renewal.dueAt, status: attempt.renewal.status } : null,
-    cancellation: attempt.cancellation ? { state: attempt.cancellation.state, mode: attempt.cancellation.mode, requestedAt: attempt.cancellation.requestedAt, effectiveAt: attempt.cancellation.effectiveAt ?? null } : null,
-  }
-}
-
-/** The idempotency keys a generation used; they are kept only to refuse late replays and never shown. */
-const usedKeys = (record) => [
-  ...record.attempts.flatMap((attempt) => [attempt.idempotencyKey, attempt.cancellation?.idempotencyKey]),
-  record.reset?.idempotencyKey,
-  record.stoppedBy,
-].filter(Boolean)
-
-const publicHistory = (entries = []) => entries.map(({ retiredKeys, ...entry }) => structuredClone(entry))
-
-function response(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
-  res.end(JSON.stringify(body))
-}
-
 async function requestBody(req) {
   let body = ''
   for await (const chunk of req) {
     body += chunk
-    if (body.length > 2048) throw new Error('Request is too large.')
+    if (body.length > 4096) throw new HttpError(413, 'Request is too large.')
   }
-  return JSON.parse(body || '{}')
+  try { return JSON.parse(body || '{}') } catch { throw new HttpError(400, 'Invalid JSON request.') }
 }
 
-/** Local-only HTTP boundary. Provider calls happen only after durable intent exists. */
-export function createVendorBillingTestHelper({ file, keyId, secret, planId, now = () => new Date(), provider }) {
-  requireTestConfig({ keyId, secret })
-  if (!/^plan_[A-Za-z0-9]+$/.test(planId ?? '')) throw new Error('Set local RAZORPAY_TEST_PLAN_ID to the supplied monthly Test plan.')
+/** A simulated payment's phase at `atMs`: `pending` until it settles, then `captured` or `failed`. */
+function paymentPhase(payment, atMs) {
+  if (!payment.settleAt || atMs < Date.parse(payment.settleAt)) return 'pending'
+  return payment.outcome === 'succeed' ? 'captured' : 'failed'
+}
+/** Simulated time stops when the subscription was cancelled, so a payment pending then never settles. */
+const simulatedAt = (subscription, nowMs) => subscription.simulatedCancelledAt ? Math.min(nowMs, Date.parse(subscription.simulatedCancelledAt)) : nowMs
+/** The phase of a simulated subscription's latest payment, or null before its first. */
+function simulatedPhase(subscription, nowMs) {
+  const payment = subscription.simulatedPayments?.at(-1)
+  return payment ? paymentPhase(payment, simulatedAt(subscription, nowMs)) : null
+}
+/** A simulated subscription whose latest payment failed: Razorpay leaves it unchanged, ready for a retry. */
+const simulatedFailed = (subscription, nowMs) => Boolean(subscription?.simulated) && !subscription.paid && simulatedPhase(subscription, nowMs) === 'failed'
+/** A simulated payment phase as Razorpay's payment status. */
+const paymentStatuses = { pending: 'authorized', captured: 'captured', failed: 'failed' }
+
+/**
+ * The latest payment on the vendor's current subscription, as the read's requested
+ * `latest_payment_id` and `latest_payment_status` (docs/API_GAPS.md, billing read gaps). Only a
+ * simulated subscription reports one; a real Razorpay Test subscription reports none, as no
+ * Razorpay payment is read for it here.
+ */
+function latestPayment(subscription, nowMs) {
+  const payment = subscription?.simulated ? subscription.simulatedPayments.at(-1) : null
+  return payment ? { id: payment.paymentId, status: paymentStatuses[simulatedPhase(subscription, nowMs)] } : { id: null, status: null }
+}
+
+/**
+ * Razorpay's objects for a simulated subscription, scripted from its stored payments and now, in the
+ * provider's shape. Addon kinds turn `authenticated` with the first payment and stay so; their addon
+ * invoice is `paid` once a payment is captured. An immediate start stays `created` until its payment
+ * is captured, then turns `active` with a paid invoice for paidAt → one month later. A failed payment
+ * changes neither the subscription nor the invoice. Nothing here reaches Razorpay.
+ */
+function scriptedRazorpay(subscription, { planId, nowMs }) {
+  const at = () => simulatedAt(subscription, nowMs())
+  const payments = subscription.simulatedPayments
+  const latest = () => payments.at(-1) ?? null
+  const captured = () => payments.find((payment) => paymentPhase(payment, at()) === 'captured') ?? null
+  const status = () => {
+    if (subscription.simulatedCancelledAt) return 'cancelled'
+    if (subscription.kind === 'immediate') return captured() ? 'active' : 'created'
+    return latest() ? 'authenticated' : 'created'
+  }
+  const invoiceId = `inv_${subscription.id.slice('sub_'.length)}`
+  const missing = async () => { throw new ProviderError('A simulated subscription has no such Razorpay call.', true) }
+  return {
+    createSubscription: missing,
+    fetchPlan: missing,
+    fetchSubscription: async (id) => ({ id, status: status(), plan_id: planId, start_at: subscription.startAt ? seconds(subscription.startAt) : null, notes: subscription.notes }),
+    listInvoices: async () => {
+      const amount = subscription.amountMinor
+      const paid = captured()
+      if (subscription.kind === 'immediate') {
+        if (!paid) return { items: [] }
+        const start = wholeSecond(Date.parse(paid.paidAt))
+        return { items: [{ id: invoiceId, subscription_id: subscription.id, status: 'paid', amount, payment_id: paid.paymentId, billing_start: start / 1000, billing_end: seconds(addMonth(start)), line_items: [{ type: 'plan', amount }] }] }
+      }
+      if (!latest()) return { items: [] }
+      return { items: [{ id: invoiceId, subscription_id: subscription.id, status: paid ? 'paid' : 'issued', amount, payment_id: paid?.paymentId ?? null, billing_start: null, billing_end: null, line_items: [{ type: 'addon', amount }] }] }
+    },
+    fetchPayment: async (id) => {
+      const payment = payments.find((item) => item.paymentId === id)
+      if (!payment) throw new ProviderError('No such simulated payment.', true)
+      return { id, amount: subscription.amountMinor, currency: 'INR', status: paymentStatuses[paymentPhase(payment, at())] }
+    },
+    cancelSubscription: async () => {
+      subscription.simulatedCancelledAt ??= iso(nowMs())
+      return {}
+    },
+  }
+}
+
+/** The vendor's latest Razorpay subscription, which decides what is collected next. */
+const currentOf = (record) => record.subscriptions.at(-1) ?? null
+const openOf = (record) => record.subscriptions.filter((item) => !item.closed)
+
+/**
+ * The backend's subscription read for a vendor record at `nowMs`, as section 4 of the brief
+ * requires it. Seeded states report their seeded Razorpay status until a Razorpay object exists.
+ */
+export function subscriptionRow(record, nowMs) {
+  const current = currentOf(record)
+  const beforeT = nowMs < Date.parse(record.trialEndsAt)
+  // Paying after T, or after paid days or a halt: PAYMENT_PENDING until the charge is captured.
+  // A simulated first payment that failed after a halt leaves the halt showing.
+  const payingNow = current && current.kind === 'immediate' && !current.paid && !current.closed && !(record.halted && simulatedFailed(current, nowMs))
+  // Keep shop open keeps the stopped read until its ₹ is captured (flow 3).
+  const reported = current && current.kind === 'keep_open' && !current.paid ? record.subscriptions.at(-2) ?? null : current
+  const status = payingNow ? 'PAYMENT_PENDING'
+    : record.halted ? 'HALTED'
+      : record.period ? (record.externalCancel ? 'CANCELLED' : record.retrying ? 'PAST_DUE' : 'ACTIVE')
+        : beforeT ? 'TRIAL_ACTIVE' : 'TRIAL_EXPIRED'
+  const paid = Boolean(record.period) || payingNow || record.halted
+  const renewing = status === 'ACTIVE' && !record.cancelAtPeriodEnd
+  const payment = latestPayment(current, nowMs)
+  return {
+    subscription_id: record.rowId,
+    vendor_id: record.vendorId,
+    plan_code: paid ? paidPlan.code : trialPlan.code,
+    plan_name: paid ? paidPlan.name : trialPlan.name,
+    billing_cycle: 'MONTHLY',
+    currency: 'INR',
+    sale_price: paid ? record.planPrice : 0,
+    status,
+    trial_started_at: record.trialStartedAt,
+    trial_ends_at: record.trialEndsAt,
+    razorpay_subscription_id: reported?.id ?? null,
+    // After a simulated early fee fails, the backend still reads plain free days, not a payment being confirmed.
+    razorpay_status: (simulatedFailed(reported, nowMs) ? 'created' : reported?.razorpayStatus) ?? record.seededRazorpayStatus ?? null,
+    current_period_start: record.period?.start ?? null,
+    current_period_end: record.period?.end ?? null,
+    next_billing_at: renewing ? record.period?.end ?? null : null,
+    cancel_at_period_end: Boolean(record.period) && Boolean(record.cancelAtPeriodEnd),
+    latest_payment_id: payment.id,
+    latest_payment_status: payment.status,
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  }
+}
+
+/** Local-only HTTP boundary over the vendor billing store and Razorpay Test. */
+export function createVendorBillingTestHelper({ file, keyId, secret, planId, trialDays = 14, simulatedDelayMs = 5000, now = () => new Date(), provider }) {
+  requireTestConfig({ keyId, secret, planId })
   const client = provider ?? createRazorpayTestProvider({ keyId, secret })
   const store = readStore(file)
-  const busyVendors = new Set()
-  /** One provider read per vendor at a time; simultaneous status reads share its result. */
-  const statusReads = new Map()
-  /** `providerCheck` reports whether this read reached the provider; a failed read keeps recorded results. */
-  const view = (record, providerCheck = 'not_checked') => ({ ...publicRecord(record), serverTime: now().toISOString(), ...currentStatus(record, now()), providerCheck })
+  /** Every request for a vendor runs after the one before it, so reads and writes never race Razorpay. */
+  const queues = new Map()
+  let plan = null
 
-  /** Persists before returning; a failed write restores the previous record. */
-  function commit(vendorId, record, changes) {
-    const next = { ...record, ...changes, revision: record.revision + 1 }
-    store.vendors[vendorId] = next
-    try { saveStore(file, store) } catch (error) { store.vendors[vendorId] = record; throw error }
-    return next
+  const nowMs = () => now().getTime()
+  const stamp = () => now().toISOString()
+  /** Razorpay Test for a real subscription; the scripted objects for a simulated one. */
+  const providerFor = (subscription) => subscription.simulated ? scriptedRazorpay(subscription, { planId, nowMs }) : client
+
+  /** The configured plan, read once: a monthly INR plan whose price is every fee and addon. */
+  async function readPlan() {
+    if (plan) return plan
+    const read = await client.fetchPlan(planId)
+    if (read.id !== planId || read.period !== 'monthly' || read.interval !== 1 || read.item?.currency !== 'INR' || !Number.isSafeInteger(read.item?.amount) || read.item.amount <= 0) {
+      throw new HttpError(500, 'RAZORPAY_TEST_PLAN_ID is not a monthly (interval 1) INR plan.')
+    }
+    plan = { amountMinor: read.item.amount }
+    return plan
   }
 
-  /** A key used by a reset generation belongs to that history; replaying it never reaches the current generation. */
-  const retired = (vendorId, key) => (store.history[vendorId] ?? []).some((entry) => entry.retiredKeys.includes(key))
-  const retiredReply = [409, { error: 'This request belongs to an earlier, reset Test scenario. Nothing was changed; refresh Plan.' }]
-  const resetPendingReply = [409, { error: 'A Test scenario reset is pending for this vendor. Retry the reset; no new Checkout or cancellation starts meanwhile.' }]
+  function save(vendorId, record) {
+    const previous = store.vendors[vendorId]
+    store.vendors[vendorId] = { ...record, updatedAt: stamp() }
+    try { saveStore(file, store) } catch (error) { store.vendors[vendorId] = previous; throw error }
+    return store.vendors[vendorId]
+  }
 
-  async function prepare(vendorId, { action, idempotencyKey }) {
-    if (!['setup_autopay', 'pay_first_fee'].includes(action) || typeof idempotencyKey !== 'string' || !keyPattern.test(idempotencyKey)) {
-      return [400, { error: 'A valid billing action and idempotency key are required.' }]
-    }
-    if (retired(vendorId, idempotencyKey)) return retiredReply
-    let record = store.vendors[vendorId]
-    if (!record) return [409, { error: 'Select a scenario first.' }]
-    if (record.reset) return resetPendingReply
-    const keyed = record.attempts.findLast((item) => item.idempotencyKey === idempotencyKey)
-    if (keyed && keyed.action !== action) return [409, { error: 'The idempotency key belongs to another action.' }]
-    // One logical preparation per scenario action: a key minted after a reload converges on it. An object
-    // Razorpay shows closed is history, so rejoining, even under the page's earlier key, prepares a new one.
-    let attempt = (keyed && !collectionEnded(keyed) ? keyed : null) ?? record.attempts.find((item) => item.action === action && !collectionEnded(item))
-    if (attempt && settledStates.includes(attempt.state)) {
-      return [409, { error: unresolvedStates.includes(attempt.state)
-        ? 'This Test subscription already has an unverified outcome. No replacement is created; refresh billing status.'
-        : 'This Test subscription already has a provider outcome. No replacement is created; refresh billing status.' }]
-    }
-    const derived = currentStatus(record, now())
-    if (!derived.availableActions.includes(action)) {
-      return [409, { error: 'This billing action is not available for the current Test scenario. Refresh billing status.' }]
-    }
-    const save = (changes) => {
-      const next = { ...attempt, ...changes }
-      record = commit(vendorId, record, { attempts: replaceAttempt(record, attempt, next) })
-      attempt = next
-    }
-    // AutoPay starts at the retained boundary: the paid sample's anchor or verified paid-through date, otherwise
-    // the original trial expiry. A rejoin keeps that same boundary, so no fee is taken twice.
-    const expectedChargeAt = action === 'setup_autopay' ? derived.paidThrough ?? record.trialEndsAt : null
-    for (const stopped of record.attempts.filter((item) => stopToClose(record, item))) {
-      const closing = await closeStoppedAgreement(vendorId, record, stopped)
-      record = closing.record
-      if (closing.reply) return closing.reply
-    }
-    if (!attempt) {
-      attempt = { action, idempotencyKey, state: 'intent_recorded', associationId: null }
-      record = commit(vendorId, record, { attempts: [...record.attempts, attempt] })
-    }
-    if (!attempt.attemptId) save({ attemptId: `lt_${randomUUID().replaceAll('-', '')}`, scenario: record.scenario, expectedChargeAt })
+  function event(record, type, changes = {}) {
+    record.history.push({
+      event_id: record.history.length + 1, event_type: type, event_at: stamp(),
+      previous_status: changes.previous ?? null, new_status: changes.next ?? null,
+      external_subscription_id: changes.subscriptionId ?? null, external_payment_id: changes.paymentId ?? null,
+      ...(changes.amount !== undefined ? { amount: changes.amount } : {}),
+    })
+  }
+  const statusOf = (record) => subscriptionRow(record, nowMs()).status
 
-    if (!attempt.associationId) {
-      let subscription = null
-      if (attempt.state === 'provider_requested') {
-        subscription = await findTaggedSubscription(client, { planId, attempt })
-        // A timed-out create can still commit late, so a recent miss is not proof of absence.
-        if (!subscription && now().getTime() - Date.parse(attempt.requestedAt) < uncertainCreationWindowMs) {
-          return [504, { error: 'The earlier Razorpay Test request is still uncertain and not visible yet. Refresh billing status later; no second subscription is created.' }]
+  /** Cancels a recorded subscription now and reads it closed; an object already closed is settled. */
+  async function closeSubscription(record, subscription, by) {
+    if (subscription.closed) return
+    const razorpay = providerFor(subscription)
+    let read = await razorpay.fetchSubscription(subscription.id)
+    if (!closedStatuses.includes(read.status)) {
+      await razorpay.cancelSubscription(subscription.id)
+      read = await razorpay.fetchSubscription(subscription.id)
+    }
+    if (!closedStatuses.includes(read.status)) throw new HttpError(502, 'Razorpay Test has not shown the old subscription closed yet. Try again in a moment.')
+    Object.assign(subscription, { razorpayStatus: read.status, closed: true, cancelledBy: subscription.cancelledBy ?? by })
+  }
+
+  /** The subscription's captured ₹ payment for `invoice`, or null. A refunded payment is never a fee. */
+  async function capturedPayment(razorpay, invoice, amountMinor) {
+    if (invoice.status !== 'paid' || !invoice.payment_id || invoice.amount !== amountMinor) return null
+    const payment = await razorpay.fetchPayment(invoice.payment_id)
+    return payment.status === 'captured' && payment.amount === amountMinor && payment.currency === 'INR' && !payment.refund_status ? payment : null
+  }
+
+  /**
+   * Rereads every open Razorpay subscription the vendor has and applies only what Razorpay shows:
+   * an upfront or immediate fee captured, renewals along the original cycle, retrying, halts and
+   * cancellations from outside. Free-days subscriptions still `created` at T are cancelled (recipe 4).
+   */
+  async function reconcile(record) {
+    const { amountMinor } = await readPlan()
+    for (const subscription of record.subscriptions) {
+      if (subscription.closed) continue
+      const razorpay = providerFor(subscription)
+      const read = await razorpay.fetchSubscription(subscription.id)
+      if (read.id !== subscription.id || read.notes?.md_vendor !== record.vendorId) throw new HttpError(500, 'Razorpay Test returned a subscription this vendor does not own.')
+      const before = statusOf(record)
+      if (read.status === 'authenticated' && !subscription.authenticated) {
+        subscription.authenticated = true
+        event(record, 'SUBSCRIPTION_AUTHENTICATED', { previous: before, next: before, subscriptionId: subscription.id })
+      }
+      subscription.razorpayStatus = read.status
+      const { items: invoices = [] } = await razorpay.listInvoices({ subscriptionId: subscription.id })
+      const charged = (payment, period) => {
+        event(record, 'SUBSCRIPTION_CHARGED', { previous: before, next: 'ACTIVE', subscriptionId: subscription.id, paymentId: payment.id, amount: amountMinor / 100 })
+        Object.assign(record, { period, retrying: false, halted: false, externalCancel: false })
+      }
+
+      if (!subscription.paid) {
+        // The upfront ₹ has no billing dates: Razorpay records no period for it, so the helper stores T → P (or old P → new P).
+        const first = subscription.kind === 'immediate'
+          ? invoices.filter((item) => Number.isSafeInteger(item.billing_start)).sort((a, b) => a.billing_start - b.billing_start)[0]
+          : invoices.find((item) => !item.billing_start && item.line_items?.some((line) => line.type === 'addon'))
+        const payment = first ? await capturedPayment(razorpay, first, amountMinor) : null
+        if (payment) {
+          subscription.paid = true
+          subscription.countedInvoices = [first.id]
+          charged(payment, subscription.kind === 'immediate'
+            ? { start: iso(first.billing_start * 1000), end: iso(first.billing_end * 1000) }
+            : { start: subscription.coverStart, end: subscription.startAt })
+          record.cancelAtPeriodEnd = false
         }
       }
-      if (!subscription) {
-        save({ state: 'provider_requested', requestedAt: now().toISOString() })
-        try {
-          subscription = await client.createSubscription({
-            plan_id: planId, total_count: 12, quantity: 1, customer_notify: false,
-            ...(attempt.expectedChargeAt ? { start_at: seconds(attempt.expectedChargeAt) } : {}),
-            notes: { md_attempt: attempt.attemptId, md_vendor: vendorId, md_scenario: record.scenario },
-          })
-        } catch (error) {
-          if (error instanceof ProviderError && error.definite) save({ state: 'creation_rejected' })
+      if (subscription.simulated && !subscription.paid) {
+        // A failed simulated payment leaves the subscription for a retry; the history notes it once.
+        for (const { paymentId } of subscription.simulatedPayments) {
+          if ((await razorpay.fetchPayment(paymentId)).status === 'failed' && !record.history.some((item) => item.event_type === 'PAYMENT_FAILED' && item.external_payment_id === paymentId)) {
+            event(record, 'PAYMENT_FAILED', { previous: before, next: statusOf(record), subscriptionId: subscription.id, paymentId })
+          }
+        }
+      }
+      if (subscription.paid && record.period) {
+        // A renewal is the next cycle starting exactly at P; a retry that succeeds keeps that cycle's dates.
+        for (;;) {
+          const renewal = invoices.find((item) => item.billing_start === seconds(record.period.end) && !subscription.countedInvoices.includes(item.id))
+          const payment = renewal ? await capturedPayment(razorpay, renewal, amountMinor) : null
+          if (!payment) break
+          subscription.countedInvoices.push(renewal.id)
+          charged(payment, { start: iso(renewal.billing_start * 1000), end: iso(renewal.billing_end * 1000) })
+        }
+      }
+
+      if (closedStatuses.includes(read.status)) {
+        subscription.closed = true
+        if (!subscription.cancelledBy) {
+          subscription.cancelledBy = 'outside'
+          // AutoPay ended outside MithraDirect: P is kept and the read says CANCELLED (flow 6).
+          if (subscription === currentOf(record) && subscription.paid && !record.cancelAtPeriodEnd) record.externalCancel = true
+          event(record, 'SUBSCRIPTION_CANCELLED', { previous: before, next: statusOf(record), subscriptionId: subscription.id })
+        }
+        continue
+      }
+      if (subscription.paid && subscription === currentOf(record)) {
+        // Only a halt is a failed fee; Razorpay's `pending` is the collection retry period.
+        record.retrying = read.status === 'pending' && nowMs() >= Date.parse(record.period.end)
+        if (read.status === 'halted' && !record.halted) {
+          record.halted = true
+          record.retrying = false
+          event(record, 'SUBSCRIPTION_HALTED', { previous: before, next: 'HALTED', subscriptionId: subscription.id })
+          await closeSubscription(record, subscription, 'helper')
+          event(record, 'SUBSCRIPTION_CANCELLED', { previous: 'HALTED', next: 'HALTED', subscriptionId: subscription.id })
+        }
+      }
+      if (!subscription.paid && subscription.kind === 'early' && read.status === 'created' && nowMs() >= Date.parse(record.trialEndsAt)) {
+        await closeSubscription(record, subscription, 'helper')
+      }
+    }
+    return record
+  }
+
+  /** A fresh vendor record from a seeded scenario. */
+  async function seed(vendorId, scenario) {
+    if (!scenarioNames.includes(scenario)) throw new HttpError(400, 'Choose an available scenario.')
+    const { amountMinor } = await readPlan()
+    let previous = store.vendors[vendorId]
+    // Nothing the earlier scenario created may charge later: each of its subscriptions is read closed first.
+    if (previous) {
+      previous = structuredClone(previous)
+      for (const subscription of openOf(previous)) await closeSubscription(previous, subscription, 'reset')
+      store.archive[vendorId] = [...(store.archive[vendorId] ?? []), { scenario: previous.scenario, archivedAt: stamp(), subscriptions: previous.subscriptions.map(({ id, kind, razorpayStatus, paid }) => ({ id, kind, razorpayStatus, paid })) }]
+    }
+    const seeded = seedScenario(scenario, nowMs(), trialDays)
+    const record = {
+      vendorId, scenario, rowId: 9001,
+      planPrice: amountMinor / 100, createdAt: stamp(), subscriptions: [], history: [],
+      period: null, cancelAtPeriodEnd: false, externalCancel: false, retrying: false, halted: false, seededRazorpayStatus: null,
+      simulation: previous?.simulation ?? null,
+      ...seeded,
+    }
+    if (seeded.seededCharge) record.history.push({ event_id: 1, event_type: 'SUBSCRIPTION_CHARGED', event_at: seeded.seededCharge.at, previous_status: 'TRIAL_ACTIVE', new_status: 'ACTIVE', external_subscription_id: 'sub_seeded', external_payment_id: 'pay_seeded1', amount: record.planPrice })
+    if (seeded.seededStop) record.history.push({ event_id: 2, event_type: 'CANCELLATION_REQUESTED', event_at: seeded.seededStop, previous_status: 'ACTIVE', new_status: 'ACTIVE', external_subscription_id: 'sub_seeded', external_payment_id: null })
+    if (scenario === 'autopay_off') record.history.push({ event_id: 2, event_type: 'SUBSCRIPTION_CANCELLED', event_at: iso(nowMs() - dayMs), previous_status: 'ACTIVE', new_status: 'CANCELLED', external_subscription_id: 'sub_seeded', external_payment_id: null })
+    delete record.seededCharge
+    delete record.seededStop
+    return save(vendorId, record)
+  }
+
+  function requireRecord(vendorId) {
+    const record = store.vendors[vendorId]
+    // Before go-live the backend answers 404; here, before a scenario is chosen.
+    if (!record) throw new HttpError(404, 'No subscription for this vendor yet. Choose a scenario on Plan.')
+    return structuredClone(record)
+  }
+
+  async function read(vendorId) {
+    const record = await reconcile(requireRecord(vendorId))
+    return subscriptionRow(save(vendorId, record), nowMs())
+  }
+
+  /**
+   * Creates the Razorpay subscription for `kind`; `startAt` and `coverStart` belong to the addon kinds.
+   * While a simulated outcome is chosen, the subscription is simulated and Razorpay is never called.
+   */
+  async function create(record, kind, { startAt = null, coverStart = null } = {}) {
+    const { amountMinor } = await readPlan()
+    const notes = { md_vendor: record.vendorId, md_kind: kind, md_scenario: record.scenario }
+    const created = record.simulation
+      ? { id: `sub_Sim${randomBytes(6).toString('hex')}`, status: 'created', short_url: null }
+      : await client.createSubscription({
+        plan_id: planId, total_count: 12, quantity: 1, customer_notify: 0,
+        ...(startAt ? { start_at: seconds(startAt), addons: [{ item: { name: kind === 'early' ? 'First month' : 'Next month', amount: amountMinor, currency: 'INR' } }] } : {}),
+        notes,
+      })
+    const subscription = { id: created.id, kind, createdAt: stamp(), startAt, coverStart, razorpayStatus: created.status, shortUrl: created.short_url ?? null, paid: false, closed: false, cancelledBy: null, countedInvoices: [],
+      ...(record.simulation ? { simulated: true, notes, amountMinor, simulatedPayments: [], simulatedCancelledAt: null } : {}) }
+    record.subscriptions.push(subscription)
+    event(record, 'CHECKOUT_CREATED', { previous: statusOf(record), next: statusOf(record), subscriptionId: created.id })
+    return subscription
+  }
+
+  /**
+   * A repeat while a subscription is unpaid and still `created` returns it; anything else is not reusable.
+   * A simulated one is reused with no payment yet or after a failed one, and only while an outcome is
+   * simulated; a real one only while none is.
+   */
+  const reusable = (record, subscription, kind, startAt = null) => subscription && subscription.kind === kind && !subscription.paid && !subscription.closed
+    && Boolean(subscription.simulated) === Boolean(record.simulation) && subscription.startAt === startAt
+    && (subscription.simulated ? simulatedPhase(subscription, nowMs()) !== 'pending' : subscription.razorpayStatus === 'created')
+  /** A first payment Razorpay may still be confirming. A real one is known only once its subscription is past `created`. */
+  const paymentPending = (subscription) => subscription && !subscription.paid && !subscription.closed
+    && (subscription.simulated ? simulatedPhase(subscription, nowMs()) === 'pending' : subscription.razorpayStatus !== 'created')
+
+  /** Subscribe: decided on server time, after reconciling, as flows 1, 3 and 4 describe. */
+  async function subscribe(vendorId, body) {
+    if (body?.plan_code !== paidPlan.code) throw new HttpError(400, 'This plan is not purchasable.')
+    const record = await reconcile(requireRecord(vendorId))
+    const current = currentOf(record)
+    const at = nowMs()
+    let subscription
+    if (paymentPending(current)) {
+      throw new HttpError(409, 'A payment for this plan is already being confirmed.')
+    }
+    if (record.period && at < Date.parse(record.period.end) && !record.halted) {
+      if (!record.cancelAtPeriodEnd && !record.externalCancel) throw new HttpError(409, 'An active subscription already exists.')
+      // Keep shop open: ₹ now for old P → old P + one month; AutoPay from then.
+      const startAt = addMonth(record.period.end)
+      if (reusable(record, current, 'keep_open', startAt)) subscription = current
+      else {
+        for (const open of openOf(record)) await closeSubscription(record, open, 'replaced')
+        subscription = await create(record, 'keep_open', { startAt, coverStart: record.period.end })
+      }
+    } else if (!record.period && at < Date.parse(record.trialEndsAt)) {
+      // The early first fee: ₹ now for T → T + one month, no free day lost.
+      const startAt = addMonth(record.trialEndsAt)
+      if (reusable(record, current, 'early', startAt)) subscription = current
+      else {
+        for (const open of openOf(record)) await closeSubscription(record, open, 'replaced')
+        subscription = await create(record, 'early', { startAt, coverStart: record.trialEndsAt })
+      }
+    } else if (reusable(record, current, 'immediate')) subscription = current
+    else {
+      // Never reuse a free-days subscription after T (gap I): close every open one first.
+      for (const open of openOf(record)) await closeSubscription(record, open, 'replaced')
+      subscription = await create(record, 'immediate')
+    }
+    const saved = save(vendorId, record)
+    return { ...subscriptionRow(saved, nowMs()), razorpay_key_id: keyId, razorpay_subscription_id: subscription.id, checkout_url: subscription.shortUrl }
+  }
+
+  /** Checks Checkout's signature over `payment_id|subscription_id`; writes one PAYMENT_AUTHORIZED per payment. */
+  async function confirm(vendorId, body) {
+    const { razorpay_payment_id: paymentId, razorpay_subscription_id: subscriptionId, razorpay_signature: signature } = body ?? {}
+    if (!/^pay_[A-Za-z0-9]{1,40}$/.test(paymentId ?? '') || typeof subscriptionId !== 'string' || typeof signature !== 'string') {
+      throw new HttpError(400, 'Checkout returned incomplete details.')
+    }
+    let record = requireRecord(vendorId)
+    if (!record.subscriptions.some((item) => item.id === subscriptionId && !item.closed)) throw new HttpError(400, 'This payment is for another subscription.')
+    const expected = createHmac('sha256', secret).update(`${paymentId}|${subscriptionId}`).digest()
+    const given = /^[a-f0-9]{64}$/.test(signature) ? Buffer.from(signature, 'hex') : Buffer.alloc(0)
+    if (given.length !== expected.length || !timingSafeEqual(expected, given)) throw new HttpError(401, 'The Checkout signature did not verify.')
+    if (!record.history.some((item) => item.event_type === 'PAYMENT_AUTHORIZED' && item.external_payment_id === paymentId)) {
+      event(record, 'PAYMENT_AUTHORIZED', { previous: statusOf(record), next: statusOf(record), subscriptionId, paymentId })
+    }
+    record = await reconcile(record)
+    return subscriptionRow(save(vendorId, record), nowMs())
+  }
+
+  /** Stop the plan: an immediate Razorpay cancel that keeps P (flow 2), or ends a payment still pending. */
+  async function cancel(vendorId) {
+    const record = await reconcile(requireRecord(vendorId))
+    const before = statusOf(record)
+    const open = openOf(record)
+    const current = currentOf(record)
+    const stop = async () => {
+      for (const subscription of open) {
+        try { await closeSubscription(record, subscription, 'vendor') } catch (error) {
+          // Razorpay's refusal is answered as a 4xx with its reason, not a 500.
+          if (error instanceof ProviderError && error.definite) throw new HttpError(400, error.message)
           throw error
         }
       }
-      if (record.associations.some((association) => association.id === subscription.id)) {
-        return [409, { error: 'This Test subscription is already associated with another attempt.' }]
+    }
+    if (before === 'PAYMENT_PENDING') {
+      await stop()
+      event(record, 'CANCELLATION_REQUESTED', { previous: before, next: statusOf(record), subscriptionId: current.id })
+    } else if (['ACTIVE', 'PAST_DUE'].includes(before) && record.period) {
+      // A repeat changes nothing and writes no second row.
+      if (!record.cancelAtPeriodEnd) {
+        await stop()
+        // A cancellation during the retry period ends the retries; coverage has already ended.
+        Object.assign(record, { cancelAtPeriodEnd: true, retrying: false, seededRazorpayStatus: record.subscriptions.length ? record.seededRazorpayStatus : 'cancelled' })
+        event(record, 'CANCELLATION_REQUESTED', { previous: before, next: 'ACTIVE', subscriptionId: current?.id ?? 'sub_seeded' })
       }
-      const next = { ...attempt, associationId: subscription.id, state: 'association_unverified' }
-      record = commit(vendorId, record, {
-        attempts: replaceAttempt(record, attempt, next),
-        associations: [...record.associations, { id: subscription.id, state: 'unverified', attemptId: attempt.attemptId, action }],
-      })
-      attempt = next
-    }
+    } else throw new HttpError(409, 'There is no active subscription to cancel.')
+    return subscriptionRow(save(vendorId, record), nowMs())
+  }
 
-    const [subscription, plan] = await Promise.all([client.fetchSubscription(attempt.associationId), client.fetchPlan(planId)])
-    const problem = inspectionProblem({ subscription, plan, attempt, vendorId, planId })
-    if (problem) {
-      save({ state: problem.state })
-      return [409, { error: problem.error }]
-    }
-    // Inspection matched start_at at Razorpay's whole-second precision, so quote the original boundary.
-    const expected = { amountMinor: plan.item.amount, currency: 'INR', chargeAt: attempt.expectedChargeAt, authorisationAmountMinor: null }
-    if (JSON.stringify(attempt.expected) !== JSON.stringify(expected)) save({ expected })
-    const lifetimeEnd = now().getTime() + preparationLifetimeMs
-    return [200, {
-      attempt: {
-        attemptId: attempt.attemptId, vendorId, action, mode: 'provider', expected,
-        config: { keyId, subscriptionId: attempt.associationId, name: 'MithraDirect', description: 'Vendor platform membership · local Razorpay Test Mode' },
-        expiresAt: new Date(expected.chargeAt ? Math.min(lifetimeEnd, Date.parse(expected.chargeAt)) : lifetimeEnd).toISOString(),
-      },
-      record: view(record),
-    }]
+  /** The vendor's chosen payment outcome and the simulated delay; `real` before a scenario too. */
+  function simulation(vendorId) {
+    return { outcome: store.vendors[vendorId]?.simulation ?? 'real', delay_ms: simulatedDelayMs }
+  }
+
+  async function simulate(vendorId, body) {
+    if (!simulationOutcomes.includes(body?.outcome)) throw new HttpError(400, 'Choose real, pending, succeed or fail.')
+    const record = requireRecord(vendorId)
+    save(vendorId, { ...record, simulation: body.outcome === 'real' ? null : body.outcome })
+    return simulation(vendorId)
   }
 
   /**
-   * Verifies the Checkout signature against the subscription this helper recorded, then records only
-   * that an authentic callback arrived. The payment ID and signature are neither stored nor logged.
+   * The stand-in Checkout's payment on a simulated subscription: records it with the chosen outcome
+   * and returns Checkout's callback, signed as Razorpay signs it, for the Plan to confirm.
    */
-  function submit(vendorId, { attemptId, subscriptionId, paymentId, signature }) {
-    if (typeof attemptId !== 'string' || typeof subscriptionId !== 'string' || !/^pay_[A-Za-z0-9]{1,40}$/.test(paymentId ?? '')
-      || !/^[a-f0-9]{64}$/.test(signature ?? '')) {
-      return [400, { error: 'Checkout returned incomplete details. Nothing was recorded; refresh billing status.' }]
-    }
-    const record = store.vendors[vendorId]
-    const attempt = record?.attempts.find((item) => item.attemptId === attemptId)
-    if (!attempt?.associationId || attempt.associationId !== subscriptionId) {
-      return [409, { error: 'Checkout returned details for another Test attempt. Nothing was recorded; refresh billing status.' }]
-    }
-    const expected = createHmac('sha256', secret).update(`${paymentId}|${attempt.associationId}`).digest()
-    if (!timingSafeEqual(expected, Buffer.from(signature, 'hex'))) {
-      return [400, { error: 'The Checkout callback failed Razorpay Test signature verification. Nothing was recorded; refresh billing status.' }]
-    }
-    // A duplicate or late callback never moves an attempt that already has a provider result.
-    if (!['association_unverified', 'callback_unverified'].includes(attempt.state)) return [200, { record: view(record) }]
-    const next = commit(vendorId, record, { attempts: replaceAttempt(record, attempt, { ...attempt, state: 'callback_verified' }) })
-    return [200, { record: view(next) }]
+  async function simulatedPay(vendorId, body) {
+    const record = await reconcile(requireRecord(vendorId))
+    const subscription = record.subscriptions.find((item) => item.id === body?.subscription_id)
+    if (!subscription) throw new HttpError(400, 'This payment is for another subscription.')
+    if (!subscription.simulated) throw new HttpError(400, 'This subscription is real; pay it with Razorpay Test Checkout.')
+    if (!record.simulation) throw new HttpError(409, 'Choose a simulated payment outcome first.')
+    if (subscription.closed || subscription.paid) throw new HttpError(409, 'This subscription takes no more payments.')
+    if (simulatedPhase(subscription, nowMs()) === 'pending') throw new HttpError(409, 'A payment for this plan is already being confirmed.')
+    const paymentId = `pay_Sim${randomBytes(6).toString('hex')}`
+    subscription.simulatedPayments.push({ paymentId, outcome: record.simulation, paidAt: stamp(), settleAt: record.simulation === 'pending' ? null : iso(nowMs() + simulatedDelayMs) })
+    save(vendorId, record)
+    return { razorpay_payment_id: paymentId, razorpay_subscription_id: subscription.id, razorpay_signature: createHmac('sha256', secret).update(`${paymentId}|${subscription.id}`).digest('hex') }
   }
 
-  /**
-   * Keep shop open never lets two agreements collect at the same boundary: the stopped agreement is closed
-   * now, with the request recorded first, and only a read showing it closed lets the replacement be created.
-   * Its paid coverage is the helper's record of the confirmed fee, so closing it early loses no paid days.
-   */
-  async function closeStoppedAgreement(vendorId, record, attempt) {
-    let subscription
-    try {
-      subscription = await client.fetchSubscription(attempt.associationId)
-      if (!ownedBy(subscription, { attempt, vendorId, planId })) {
-        return { record, reply: [409, { error: 'The stopped plan\'s Test subscription does not belong to this vendor attempt. No replacement is created.' }] }
-      }
-      if (!closedStatuses.includes(subscription.status)) {
-        const requested = { ...attempt, cancellation: { ...attempt.cancellation, closeRequestedAt: attempt.cancellation.closeRequestedAt ?? now().toISOString() } }
-        record = commit(vendorId, record, { attempts: replaceAttempt(record, attempt, requested) })
-        attempt = requested
-        await client.cancelSubscription(attempt.associationId, { cancelAtCycleEnd: false })
-        subscription = await client.fetchSubscription(attempt.associationId)
-      }
-    } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      return { record, reply: [error.definite ? 502 : 504, { error: `${error.definite ? error.message : 'Razorpay Test did not respond'}. The stopped plan's subscription is not confirmed closed, so no new one was created. Try again in a moment.` }] }
-    }
-    if (subscription.id !== attempt.associationId || !closedStatuses.includes(subscription.status)) {
-      return { record, reply: [504, { error: 'Razorpay Test has not yet shown the stopped plan\'s subscription closed, so no new one was created. Try again in a moment.' }] }
-    }
-    const closed = reconcileCancellation({ ...attempt, providerStatus: subscription.status, verifiedAt: now().toISOString() }, now().toISOString())
-    return { record: commit(vendorId, record, { attempts: replaceAttempt(record, attempt, closed) }) }
+  /** Settles the vendor's pending simulated payment now, as Razorpay finally would. */
+  async function deliver(vendorId, body) {
+    if (!['succeed', 'fail'].includes(body?.result)) throw new HttpError(400, 'Deliver succeed or fail.')
+    let record = await reconcile(requireRecord(vendorId))
+    const current = currentOf(record)
+    if (!current?.simulated || current.closed || simulatedPhase(current, nowMs()) !== 'pending') throw new HttpError(409, 'No simulated payment is pending.')
+    Object.assign(current.simulatedPayments.at(-1), { outcome: body.result, settleAt: stamp() })
+    record = await reconcile(record)
+    return subscriptionRow(save(vendorId, record), nowMs())
   }
 
-  /**
-   * Records the vendor's cancellation against the current helper-created agreement before asking Razorpay
-   * Test to stop it. Its acceptance is a request or a scheduled stop only; a later status read confirms it.
-   */
-  async function cancel(vendorId, { idempotencyKey }) {
-    if (typeof idempotencyKey !== 'string' || !keyPattern.test(idempotencyKey)) return [400, { error: 'A valid idempotency key is required.' }]
-    if (retired(vendorId, idempotencyKey)) return retiredReply
-    let record = store.vendors[vendorId]
-    if (!record) return [409, { error: 'Select a scenario first.' }]
-    if (record.reset) return resetPendingReply
-    if (record.stoppedBy === idempotencyKey) return [200, { record: view(record) }]
-    // A key belongs to one agreement's cancellation; replaying it after a rejoin never touches the replacement.
-    if (record.attempts.some((item) => item.cancellation?.idempotencyKey === idempotencyKey && item !== record.attempts.findLast(hasObject))) {
-      return [200, { record: view(record) }]
-    }
-    let attempt = record.attempts.findLast(hasObject)
-    // One logical cancellation per agreement: a replayed or reloaded key converges on its recorded progress.
-    if (attempt?.cancellation && !['requested', 'failed'].includes(attempt.cancellation.state)) return [200, { record: view(record) }]
-    const derived = currentStatus(record, now())
-    if (!derived.availableActions.includes('cancel')) {
-      return [409, { error: 'There is no Test AutoPay agreement to cancel for this scenario. Refresh billing status.' }]
-    }
-    if (!attempt) {
-      record = commit(vendorId, record, { stoppedBy: idempotencyKey, ...planStopped(record, derived.paidThrough, now().toISOString()) })
-      return [200, { record: view(record) }]
-    }
-    let subscription
-    try { subscription = await client.fetchSubscription(attempt.associationId) } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      return [error.definite ? 502 : 504, { error: 'Razorpay Test could not be read, so nothing was cancelled. Refresh billing status and try again.' }]
-    }
-    if (!ownedBy(subscription, { attempt, vendorId, planId })) {
-      return [409, { error: 'The recorded Test subscription does not belong to this vendor attempt. Nothing was cancelled.' }]
-    }
-    // A paid cycle in progress stops at its end; before the first fee, or once paid coverage has lapsed, the stop is immediate.
-    const paidCycle = attempt.state === 'fee_confirmed' && now().getTime() < Date.parse(derived.paidThrough)
-    const mode = attempt.cancellation?.mode ?? (paidCycle ? 'cycle_end' : 'immediate')
-    const retried = attempt.cancellation?.state === 'requested'
-    const save = (changes) => {
-      const next = { ...attempt, cancellation: { ...attempt.cancellation, ...changes } }
-      // Razorpay Test accepting a cycle-end stop moves the prototype's Paid to Stopped; an immediate one waits for a read.
-      const stop = record.events && record.scenario === 'paid' && stopAcceptedStates.includes(next.cancellation.state) ? planStopped(record, derived.paidThrough, now().toISOString()) : {}
-      record = commit(vendorId, record, { attempts: replaceAttempt(record, attempt, next), ...stop })
-      attempt = next
-    }
-    save({
-      idempotencyKey: attempt.cancellation?.idempotencyKey ?? idempotencyKey, associationId: attempt.associationId, mode,
-      state: 'requested', requestedAt: attempt.cancellation?.requestedAt ?? now().toISOString(), effectiveAt: null,
-    })
-    // An earlier unanswered request may already have landed: the status read confirms it without asking again.
-    if (closedStatuses.includes(subscription.status)) return [200, { record: view(record) }]
-    try {
-      await client.cancelSubscription(attempt.associationId, { cancelAtCycleEnd: mode === 'cycle_end' })
-    } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      if (!error.definite) {
-        return [504, { error: 'The Razorpay Test cancellation outcome is uncertain, so future collection is not shown as stopped. Refresh billing status to reconcile it.' }]
-      }
-      // After an unanswered request, a refusal may mean the earlier stop already landed, so it stays uncertain.
-      if (retried) return [504, { error: 'Razorpay Test refused a repeated cancellation request, so the earlier one may already have landed. Future collection is not shown as stopped; refresh billing status.' }]
-      save({ state: 'failed' })
-      return [502, { error: `${error.message}. Future collection has not been stopped.` }]
-    }
-    save(mode === 'cycle_end' ? { state: 'scheduled', effectiveAt: derived.paidThrough } : { state: 'acknowledged' })
-    return [200, { record: view(record) }]
+  async function plans() {
+    const { amountMinor } = await readPlan()
+    return [{ plan_id: 2, plan_code: paidPlan.code, plan_name: paidPlan.name, billing_cycle: 'MONTHLY', currency: 'INR', sale_price: amountMinor / 100, external_plan_id: planId }]
   }
 
-  /**
-   * Settles one recorded object for reset. Only a read showing it closed settles it; an unread, unowned or
-   * unconfirmed object stays unresolved. Each cancellation request is persisted before Razorpay is asked.
-   */
-  async function settleForReset(vendorId, attempt, entry, save) {
-    // Razorpay has already shown this object closed, and a closed subscription never restarts.
-    if (collectionEnded(attempt)) return save({ outcome: entry.cancellationRequestedAt ? 'cancelled_by_reset' : 'closed', providerStatus: attempt.providerStatus ?? entry.providerStatus })
-    let { associationId } = entry
-    let subscription
-    try {
-      if (associationId) subscription = await client.fetchSubscription(associationId)
-      else {
-        // A creation whose response was lost is found by its attempt tag.
-        subscription = await findTaggedSubscription(client, { planId, attempt })
-        if (!subscription) {
-          // A timed-out create can still commit late, so a recent miss is not proof of absence.
-          return save({ outcome: now().getTime() - Date.parse(attempt.requestedAt) < uncertainCreationWindowMs ? 'creation_uncertain' : 'never_created' })
-        }
-        associationId = subscription.id
-      }
-    } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      return save({ outcome: 'read_failed' })
-    }
-    // Only an object this helper created for this vendor attempt is within reset's reach.
-    if (!attempt.attemptId || !ownedBy(subscription, { attempt: { ...attempt, associationId }, vendorId, planId })) {
-      return save({ associationId, outcome: 'not_owned', providerStatus: null })
-    }
-    if (closedStatuses.includes(subscription.status)) {
-      return save({ associationId, outcome: entry.cancellationRequestedAt ? 'cancelled_by_reset' : 'closed', providerStatus: subscription.status })
-    }
-    const retried = Boolean(entry.cancellationRequestedAt)
-    save({ associationId, outcome: 'cancel_requested', providerStatus: subscription.status, cancellationRequestedAt: entry.cancellationRequestedAt ?? now().toISOString() })
-    // A reset stops collection now, including a paid cycle or a scheduled cycle-end stop.
-    try { await client.cancelSubscription(associationId, { cancelAtCycleEnd: false }) } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      // An unanswered request may still land; after one, a refusal may mean the earlier stop already did.
-      return save(!error.definite || retried ? { outcome: 'cancel_requested' } : { outcome: 'cancel_rejected', cancellationRequestedAt: null })
-    }
-    // Acceptance is only a request: a read showing the object closed confirms it.
-    let after = null
-    try { after = await client.fetchSubscription(associationId) } catch (error) { if (!(error instanceof ProviderError)) throw error }
-    return save(after?.id === associationId && closedStatuses.includes(after.status)
-      ? { outcome: 'cancelled_by_reset', providerStatus: after.status } : { outcome: 'cancel_acknowledged' })
+  /** Runs `task` after every earlier request for the vendor. */
+  function queued(vendorId, task) {
+    const previous = queues.get(vendorId) ?? Promise.resolve()
+    const run = previous.catch(() => {}).then(task)
+    const tail = run.catch(() => {})
+    queues.set(vendorId, tail)
+    tail.then(() => { if (queues.get(vendorId) === tail) queues.delete(vendorId) })
+    return run
   }
 
-  /**
-   * Reconciles every provider object recorded for the vendor's current generation, then retires it to a
-   * scrubbed history. Any unsettled object keeps the reset pending, and a retry converges on the same reset.
-   * The vendor then has no scenario until the operator explicitly selects a fresh generation.
-   */
-  async function reset(vendorId, { scenario, generation, idempotencyKey }) {
-    if (!scenarios.includes(scenario) || !Number.isSafeInteger(generation) || typeof idempotencyKey !== 'string' || !keyPattern.test(idempotencyKey)) {
-      return [400, { error: 'Confirm the Test scenario and generation to reset.' }]
-    }
-    let record = store.vendors[vendorId]
-    const history = store.history[vendorId] ?? []
-    const reply = () => [200, { record: record ? view(record) : null, history: publicHistory(store.history[vendorId]) }]
-    if (!record || record.scenario !== scenario || generationOf(record) !== generation) {
-      // Repeating a completed reset's confirmation converges on it and never touches a newer generation.
-      if (history.some((entry) => entry.generation === generation && entry.scenario === scenario)) return reply()
-      return [409, { error: 'This reset confirmation names another Test scenario for this vendor. Nothing was reset; refresh Plan and confirm again.' }]
-    }
-    if (!record.reset) record = commit(vendorId, record, { reset: { state: 'pending', idempotencyKey, requestedAt: now().toISOString(), objects: [] } })
-    for (const attempt of record.attempts.filter(hasObject)) {
-      let entry = record.reset.objects.find((item) => attempt.attemptId ? item.attemptId === attempt.attemptId : item.associationId === attempt.associationId)
-        ?? { attemptId: attempt.attemptId ?? null, associationId: attempt.associationId ?? null, action: attempt.action, outcome: null, providerStatus: null, cancellationRequestedAt: null }
-      if (resetTerminalOutcomes.includes(entry.outcome)) continue
-      const save = (changes) => {
-        const next = { ...entry, ...changes }
-        const objects = record.reset.objects.includes(entry) ? record.reset.objects.map((item) => item === entry ? next : item) : [...record.reset.objects, next]
-        record = commit(vendorId, record, { reset: { ...record.reset, objects } })
-        entry = next
-      }
-      await settleForReset(vendorId, attempt, entry, save)
-    }
-    if (!record.reset.objects.every((item) => resetTerminalOutcomes.includes(item.outcome))) return reply()
-    const retiring = record
-    store.history[vendorId] = [...history, {
-      generation, scenario, selectedAt: retiring.selectedAt ?? retiring.serverTime, trialEndsAt: retiring.trialEndsAt,
-      paidThrough: samplePaidScenarios.includes(scenario) ? retiring.paidThrough : null,
-      resetRequestedAt: retiring.reset.requestedAt, resetCompletedAt: now().toISOString(),
-      attempts: retiring.attempts.map(scrubAttempt), objects: retiring.reset.objects, retiredKeys: usedKeys(retiring),
-    }]
-    delete store.vendors[vendorId]
-    try { saveStore(file, store) } catch (error) { store.vendors[vendorId] = retiring; store.history[vendorId] = history; throw error }
-    record = null
-    return reply()
-  }
-
-  /**
-   * The prototype's Paid, stopped: paid days are kept and AutoPay is shown cancelled. `autopay_ended` records a
-   * stop that came from outside Plan, such as the card issuer revoking the mandate.
-   */
-  function planStopped(record, paidThrough, at, kind = 'plan_stopped', reason = null) {
-    return { scenario: 'stopped', paidThrough, autoPay: 'cancelled', events: [...record.events, { kind, at, paidThrough, ...(reason ? { reason } : {}) }] }
-  }
-
-  /**
-   * Prototype changes a provider read has just confirmed: trial AutoPay history rows; a ₹299 paid now in
-   * Payment failed or Shop closed moving the scenario to Paid over the provider's invoice period; Keep shop
-   * open's AutoPay moving Stopped back to Paid with the same paid-through; and a confirmed stop of Paid, or Razorpay
-   * closing Paid's agreement from outside, moving it to Stopped.
-   */
-  function prototypeChanges(record, before, after, at) {
-    // Razorpay halted a scheduled fee after its boundary: the retries are used up, so the shop is hidden. A halt before
-    // the boundary keeps the covered days; the helper's cancellation then ends AutoPay as below.
-    if (after.haltedAt && !before.haltedAt && ['paid', ...trialScenarios].includes(record.scenario)
-      && now().getTime() >= Date.parse(currentStatus(record, now()).paidThrough ?? record.trialEndsAt)) {
-      return { scenario: 'payment_failed', autoPay: 'none', failedPaymentAt: at, events: [...record.events, { kind: 'payment_failed', at }] }
-    }
-    if (record.scenario === 'stopped' && after.action === 'setup_autopay' && after.state === 'authorised' && before.state !== 'authorised') {
-      return { scenario: 'paid', autoPay: 'on', events: [...record.events, { kind: 'plan_resumed', at, chargeAt: after.expectedChargeAt }] }
-    }
-    if (record.scenario === 'paid' && after.cancellation?.reason !== 'halted'
-      && stopAcceptedStates.includes(after.cancellation?.state) && !stopAcceptedStates.includes(before.cancellation?.state)) {
-      return planStopped(record, currentStatus(record, now()).paidThrough, at)
-    }
-    // Paid's agreement closed without Stop the plan, from outside or by the helper after a halt, so nothing more is
-    // charged: Stopped keeps the paid days and offers Keep shop open, which Paid has no button for.
-    if (record.scenario === 'paid' && collectionEnded(after) && !collectionEnded(before) && after.attemptId === record.attempts.findLast(hasObject)?.attemptId) {
-      return planStopped(record, currentStatus(record, now()).paidThrough, at, 'autopay_ended', after.haltedAt ? 'halted' : null)
-    }
-    const events = [...record.events, ...(trialScenarios.includes(record.scenario) ? autoPayEvents(before, after, at) : [])]
-    if (!payNowScenarios.includes(record.scenario) || after.action !== 'pay_first_fee' || after.state !== 'fee_confirmed' || before.state === 'fee_confirmed') return { events: [...events, ...paidEvents(before, after, at)] }
-    const { amountMinor, periodStart, periodEnd } = after.fee
-    return { scenario: 'paid', paidThrough: periodEnd, autoPay: 'on', failedPaymentAt: null, events: [...events, { kind: 'paid', at: periodStart, amountMinor, paidThrough: periodEnd }] }
-  }
-
-  /**
-   * "Paid ₹299" rows for fees a provider read has just confirmed outside Pay ₹299: a trial AutoPay fee Razorpay
-   * collected, and each renewal along the paid cycle. They are dated at the read, since a cycle can start later.
-   */
-  function paidEvents(before, after, at) {
-    if (after.state !== 'fee_confirmed') return []
-    const fees = [...(before.state === 'fee_confirmed' ? [] : [after.fee]), ...(after.renewals ?? []).slice(before.renewals?.length ?? 0)]
-    return fees.map(({ amountMinor, periodEnd }) => ({ kind: 'paid', at, amountMinor, paidThrough: periodEnd }))
-  }
-
-  /** Prototype history rows for an AutoPay change a provider read has just confirmed. */
-  function autoPayEvents(before, after, at) {
-    if (after.action !== 'setup_autopay') return []
-    if (after.state === 'authorised' && before.state !== 'authorised') return [{ kind: 'autopay_on', at, chargeAt: after.expectedChargeAt }]
-    if ((before.state === 'authorised' || before.haltedAt) && after.state === 'provider_closed') return [{ kind: 'autopay_off', at: after.cancellation?.effectiveAt ?? at }]
-    return []
-  }
-
-  /** Rereads associated provider records; only a changed derived result is persisted. */
-  async function readProvider(vendorId) {
-    let record = store.vendors[vendorId]
-    // A confirmed fee is reread for renewals until its subscription closes; problems and closed objects stay final.
-    const due = record.attempts.filter((attempt) => attempt.associationId && !attempt.problem
-      && (readbackStates.includes(attempt.state) || (attempt.state === 'fee_confirmed' && !closedStatuses.includes(attempt.providerStatus))))
-    if (!due.length) return view(record)
-    let check = 'current'
-    for (const attempt of due) {
-      let outcome
-      try {
-        outcome = attempt.state === 'fee_confirmed' ? await readRenewalOutcome(client, { attempt })
-          : await readProviderOutcome(client, { attempt, vendorId, planId })
-      } catch (error) {
-        if (!(error instanceof ProviderError)) throw error
-        check = 'unavailable'
-        continue
-      }
-      // Halted collection is a failed platform fee, recorded once; the object is cancelled below.
-      const read = { ...attempt, ...outcome, ...(outcome?.providerStatus === 'halted' && !attempt.haltedAt ? { haltedAt: now().toISOString() } : {}) }
-      const next = reconcileCancellation(read, now().toISOString())
-      if (next === read && (!outcome || Object.entries(outcome).every(([key, value]) => JSON.stringify(value ?? null) === JSON.stringify(attempt[key] ?? null)))) continue
-      // Only prototype scenarios carry seeded history; others gain none.
-      const prototypePatch = record.events ? prototypeChanges(record, attempt, next, now().toISOString()) : {}
-      record = commit(vendorId, record, { attempts: replaceAttempt(record, attempt, { ...next, verifiedAt: now().toISOString() }), ...prototypePatch })
-    }
-    for (const attempt of record.reset ? [] : record.attempts.filter(haltedUncancelled)) {
-      if (!await cancelHalted(vendorId, attempt)) check = 'unavailable'
-      record = store.vendors[vendorId]
-    }
-    return view(record, check)
-  }
-
-  /**
-   * Razorpay halted collection after every retry, so the fee has failed. The helper cancels the halted object
-   * now, so nothing can charge the vendor later; the request is recorded first, and a later read confirms it.
-   * Returns false when Razorpay Test could not be asked, leaving the request for the next read to retry.
-   */
-  async function cancelHalted(vendorId, attempt) {
-    const record = store.vendors[vendorId]
-    const requested = { ...attempt, cancellation: {
-      idempotencyKey: attempt.cancellation?.idempotencyKey ?? `halted_${attempt.attemptId}`, associationId: attempt.associationId, mode: 'immediate', reason: 'halted',
-      state: 'requested', requestedAt: attempt.cancellation?.requestedAt ?? now().toISOString(), effectiveAt: null,
-    } }
-    commit(vendorId, record, { attempts: replaceAttempt(record, attempt, requested) })
-    try {
-      await client.cancelSubscription(attempt.associationId, { cancelAtCycleEnd: false })
-    } catch (error) {
-      if (!(error instanceof ProviderError)) throw error
-      return false
-    }
-    const accepted = store.vendors[vendorId]
-    commit(vendorId, accepted, { attempts: replaceAttempt(accepted, requested, { ...requested, cancellation: { ...requested.cancellation, state: 'acknowledged' } }) })
-    return true
+  const envelope = (status, data) => ({ timestamp: stamp(), success: status < 400, status, ...(status < 400 ? { data } : { message: data }) })
+  function respond(res, status, data) {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+    res.end(JSON.stringify(envelope(status, data)))
   }
 
   return createServer(async (req, res) => {
     try {
       if (req.method === 'POST' && (req.headers['content-type'] !== 'application/json'
         || (req.headers.origin && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(req.headers.origin)))) {
-        return response(res, 403, { error: 'Local helper writes require the local development app.' })
+        return respond(res, 403, 'Local billing writes require the local development app.')
       }
       const path = new URL(req.url, 'http://localhost').pathname
-      const match = /^\/vendors\/([^/]+)\/(scenario|status|intents|associations|preparations|submissions|cancellations|resets)$/.exec(path)
-      if (!match || !vendorPattern.test(match[1])) return response(res, 404, { error: 'Unknown local helper route.' })
-      const [, vendorId, operation] = match
-      if (req.method === 'GET' && operation === 'status') {
-        const record = store.vendors[vendorId]
-        const history = publicHistory(store.history[vendorId])
-        if (!record) return response(res, 200, { record: null, history })
-        if (statusReads.has(vendorId)) return response(res, 200, { record: await statusReads.get(vendorId), history })
-        // A read during a write returns the recorded state, marked as not freshly checked.
-        if (busyVendors.has(vendorId)) return response(res, 200, { record: view(record, 'deferred'), history })
-        busyVendors.add(vendorId)
-        const read = readProvider(vendorId)
-        statusReads.set(vendorId, read)
-        try { return response(res, 200, { record: await read, history }) } finally { busyVendors.delete(vendorId); statusReads.delete(vendorId) }
-      }
-      if (req.method === 'POST' && ['preparations', 'submissions', 'cancellations', 'resets'].includes(operation)) {
+      if (req.method === 'GET' && path === '/api/v1/subscription-plans') return respond(res, 200, await plans())
+      if (req.method === 'GET' && path === '/dev/scenarios') return respond(res, 200, scenarioNames)
+      const scenarioMatch = /^\/dev\/vendors\/([^/]+)\/scenario$/.exec(path)
+      if (scenarioMatch && vendorPattern.test(scenarioMatch[1]) && req.method === 'POST') {
         const body = await requestBody(req)
-        // Concurrent local requests for one vendor get a clear conflict instead of racing the provider.
-        if (busyVendors.has(vendorId)) return response(res, 409, { error: 'A Test billing request is already in progress for this vendor. Refresh billing status.' })
-        busyVendors.add(vendorId)
-        try {
-          const [status, result] = operation === 'preparations' ? await prepare(vendorId, body)
-            : operation === 'cancellations' ? await cancel(vendorId, body)
-              : operation === 'resets' ? await reset(vendorId, body) : submit(vendorId, body)
-          return response(res, status, result)
-        } catch (error) {
-          if (!(error instanceof ProviderError)) throw error
-          return response(res, error.definite ? 502 : 504, { error: error.definite ? error.message
-            : 'The Razorpay Test outcome is uncertain. Refresh billing status; a retry reconciles the same request and never creates a second subscription.' })
-        } finally { busyVendors.delete(vendorId) }
+        const record = await queued(scenarioMatch[1], () => seed(scenarioMatch[1], body?.scenario))
+        return respond(res, 200, { scenario: record.scenario, subscription: subscriptionRow(record, nowMs()) })
       }
-      if (req.method === 'POST' && operation === 'scenario') {
-        const { scenario } = await requestBody(req)
-        if (!scenarios.includes(scenario)) return response(res, 400, { error: 'Choose an available Test scenario.' })
-        const existing = store.vendors[vendorId]
-        if (existing) return response(res, existing.scenario === scenario ? 200 : 409, existing.scenario === scenario
-          ? { record: view(existing) } : { error: 'This vendor already has a scenario. Reset Test scenario first; reset reconciles its Test subscriptions.' })
-        const createdAt = now()
-        const dates = scenarioDates(scenario, createdAt)
-        // Each explicitly selected scenario after a completed reset is a fresh generation.
-        const generation = (store.history[vendorId]?.at(-1)?.generation ?? 0) + 1
-        const record = {
-          vendorId, scenario, generation, selectedAt: createdAt.toISOString(), revision: 1, serverTime: createdAt.toISOString(), ...dates,
-          ...currentStatus({ scenario, ...dates }, createdAt),
-          attempts: [], associations: [],
+      const simulationMatch = /^\/dev\/vendors\/([^/]+)\/simulation(?:\/(pay|deliver))?$/.exec(path)
+      if (simulationMatch && vendorPattern.test(simulationMatch[1])) {
+        const [, vendorId, operation] = simulationMatch
+        const body = req.method === 'POST' ? await requestBody(req) : null
+        const result = await queued(vendorId, async () => {
+          if (req.method === 'GET' && !operation) return simulation(vendorId)
+          if (req.method === 'POST' && !operation) return simulate(vendorId, body)
+          if (req.method === 'POST' && operation === 'pay') return simulatedPay(vendorId, body)
+          if (req.method === 'POST' && operation === 'deliver') return deliver(vendorId, body)
+          throw new HttpError(405, 'Unsupported local billing method.')
+        })
+        return respond(res, 200, result)
+      }
+      const match = /^\/api\/v1\/vendors\/([^/]+)\/subscription(?:\/(confirm|cancel|history))?$/.exec(path)
+      if (!match || !vendorPattern.test(match[1])) return respond(res, 404, 'Unknown local billing route.')
+      const [, vendorId, operation] = match
+      const body = req.method === 'POST' ? await requestBody(req) : null
+      const result = await queued(vendorId, async () => {
+        if (req.method === 'GET' && !operation) return read(vendorId)
+        if (req.method === 'GET' && operation === 'history') {
+          await read(vendorId)
+          return [...store.vendors[vendorId].history].reverse().slice(0, 100)
         }
-        store.vendors[vendorId] = record
-        try { saveStore(file, store) } catch (error) { delete store.vendors[vendorId]; throw error }
-        return response(res, 201, { record: view(record) })
-      }
-      if (req.method === 'POST' && operation === 'intents') {
-        const { action, idempotencyKey } = await requestBody(req)
-        const record = store.vendors[vendorId]
-        if (retired(vendorId, idempotencyKey)) return response(res, ...retiredReply)
-        if (!record) return response(res, 409, { error: 'Select a scenario first.' })
-        if (record.reset) return response(res, ...resetPendingReply)
-        if (!['setup_autopay', 'pay_first_fee', 'cancel'].includes(action) || typeof idempotencyKey !== 'string' || !keyPattern.test(idempotencyKey)) {
-          return response(res, 400, { error: 'A valid action and idempotency key are required.' })
-        }
-        const prior = record.attempts.find((attempt) => attempt.idempotencyKey === idempotencyKey)
-        if (prior) return response(res, prior.action === action ? 200 : 409, prior.action === action
-          ? { record: publicRecord(record) } : { error: 'The idempotency key belongs to another action.' })
-        const next = { ...record, revision: record.revision + 1, attempts: [...record.attempts, { action, idempotencyKey, state: 'intent_recorded', associationId: null }] }
-        store.vendors[vendorId] = next
-        try { saveStore(file, store) } catch (error) { store.vendors[vendorId] = record; throw error }
-        return response(res, 201, { record: publicRecord(next) })
-      }
-      if (req.method === 'POST' && operation === 'associations') {
-        const { idempotencyKey, subscriptionId } = await requestBody(req)
-        const record = store.vendors[vendorId]
-        if (retired(vendorId, idempotencyKey)) return response(res, ...retiredReply)
-        if (record?.reset) return response(res, ...resetPendingReply)
-        const attempt = record?.attempts.find((item) => item.idempotencyKey === idempotencyKey)
-        if (!attempt || !/^sub_[A-Za-z0-9_-]{3,80}$/.test(subscriptionId ?? '')) return response(res, 400, { error: 'A saved intent and Test subscription identifier are required.' })
-        if (attempt.associationId) return response(res, attempt.associationId === subscriptionId ? 200 : 409, attempt.associationId === subscriptionId
-          ? { record: publicRecord(record) } : { error: 'This intent is already associated with another subscription.' })
-        if (record.associations.some((association) => association.id === subscriptionId)) return response(res, 409, { error: 'This subscription is already associated with another intent.' })
-        const next = { ...record, revision: record.revision + 1,
-          attempts: record.attempts.map((item) => item === attempt ? { ...item, associationId: subscriptionId, state: 'association_unverified' } : item),
-          associations: [...record.associations, { id: subscriptionId, state: 'unverified' }],
-        }
-        store.vendors[vendorId] = next
-        try { saveStore(file, store) } catch (error) { store.vendors[vendorId] = record; throw error }
-        return response(res, 201, { record: publicRecord(next) })
-      }
-      response(res, 405, { error: 'Unsupported local helper method.' })
+        if (req.method === 'POST' && !operation) return subscribe(vendorId, body)
+        if (req.method === 'POST' && operation === 'confirm') return confirm(vendorId, body)
+        if (req.method === 'POST' && operation === 'cancel') return cancel(vendorId)
+        throw new HttpError(405, 'Unsupported local billing method.')
+      })
+      return respond(res, 200, result)
     } catch (error) {
-      response(res, 500, { error: error instanceof SyntaxError ? 'Invalid JSON request.' : 'Local helper storage failed.' })
+      if (error instanceof HttpError) return respond(res, error.status, error.message)
+      if (error instanceof ProviderError) return respond(res, error.definite ? 502 : 504, error.definite ? error.message : 'Razorpay Test did not respond. Try again in a moment.')
+      respond(res, 500, 'Local billing helper failed.')
     }
   })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
+    const trialDays = Number(process.env.BILLING_HELPER_TRIAL_DAYS ?? 14)
+    const simulatedDelayMs = Number(process.env.BILLING_HELPER_SIMULATED_DELAY_MS ?? 5000)
     const server = createVendorBillingTestHelper({
-      file: process.env.VENDOR_BILLING_TEST_STORE ?? resolve('vendor-billing-test-store.local'),
+      file: process.env.VENDOR_BILLING_TEST_STORE ?? resolve('vendor-billing-backend-store.local'),
       keyId: process.env.RAZORPAY_TEST_KEY_ID,
       secret: process.env.RAZORPAY_TEST_KEY_SECRET,
       planId: process.env.RAZORPAY_TEST_PLAN_ID,
+      trialDays: Number.isInteger(trialDays) && trialDays > 0 ? trialDays : 14,
+      simulatedDelayMs: Number.isSafeInteger(simulatedDelayMs) && simulatedDelayMs > 0 ? simulatedDelayMs : 5000,
     })
-    server.listen(4179, '127.0.0.1', () => process.stdout.write('Local vendor billing Test helper listening on 127.0.0.1:4179\n'))
+    server.listen(4179, '127.0.0.1', () => process.stdout.write('Local vendor billing backend (Razorpay Test) listening on 127.0.0.1:4179\n'))
   } catch (error) { process.stderr.write(`${error.message}\n`); process.exitCode = 1 }
 }

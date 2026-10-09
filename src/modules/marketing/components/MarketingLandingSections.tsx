@@ -287,7 +287,7 @@ export function FeaturesSection() {
 
 export function HowItWorksSection() {
   return (
-    <SectionShell id="about" className="bg-white">
+    <SectionShell id="how-it-works" className="bg-white">
       <SectionHeader
         title="How MithraDirect works"
         copy="Start your online business journey in 4 simple steps."
@@ -881,7 +881,7 @@ export function ExploreStoresSection() {
 
 export function AudienceSection() {
   return (
-    <SectionShell className="bg-white">
+    <SectionShell id="about" className="bg-white">
       <SectionHeader
         title="Who is MithraDirect for?"
         copy="Built for the makers, growers, and neighbourhood brands who keep communities thriving."
@@ -1110,7 +1110,7 @@ export function InvitationSection() {
             Start Your Store Free
           </Link>
           <a
-            href="mailto:hello@mithradirect.com?subject=MithraDirect%20demo"
+            href="mailto:mithradirect@gmail.com?subject=MithraDirect%20demo"
             className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-white/60 px-7 py-3 font-bold text-white transition hover:bg-white/10"
           >
             <Play className="size-4 fill-current" aria-hidden /> Book a Demo

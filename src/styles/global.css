@@ -441,6 +441,147 @@
     }
   }
 
+  /* Sign-in awning: the striped shade over a shopfront, hung above both sign-in forms. A rod,
+     then stripes whose scalloped hem drops onto the form. One scallop spans one stripe, and both
+     patterns are centred so the hem stays symmetric at any width. The shadow is on the wrapper
+     because a filter on the masked element would itself be masked away. Decorative only. */
+  .md-awning {
+    --md-awning-stripe: 2rem;
+    --md-awning-drop: calc(var(--md-awning-stripe) / 2);
+    position: relative;
+    z-index: 1;
+    margin-bottom: calc(var(--md-awning-drop) * -1);
+    filter: drop-shadow(0 3px 0 rgb(6 78 59 / 0.14));
+  }
+
+  .md-awning::before {
+    content: '';
+    display: block;
+    height: 0.375rem;
+    border-radius: 999px;
+    background: var(--md-green-800);
+  }
+
+  .md-awning::after {
+    content: '';
+    display: block;
+    height: calc(2.25rem + var(--md-awning-drop));
+    background: linear-gradient(
+        90deg,
+        var(--md-green-600) 50%,
+        #fff 50%
+      )
+      center / calc(var(--md-awning-stripe) * 2) 100% repeat-x;
+    -webkit-mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+    mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+  }
+
+}
+
+/* Height breakpoints preserve login controls when landscape screens leave less
+   vertical room. The illustration takes the space left by its heading. */
+@layer utilities {
+  @media (max-height: 700px) {
+    .md-login .md-login-awning {
+      display: none;
+    }
+    .md-login .md-login-header {
+      padding-block: 0.5rem;
+    }
+    .md-login .md-login-main {
+      justify-content: center;
+      padding-block: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 1.25rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 1.5rem;
+    }
+    .md-login .md-login-art-copy > p:first-child {
+      font-size: 1.5rem;
+      line-height: 1.3;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .md-login h1 {
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+    .md-login .md-login-lead,
+    .md-login #phone-help,
+    .md-login .md-login-sent-label {
+      display: none;
+    }
+    .md-login form {
+      margin-top: 1rem;
+    }
+    .md-login .md-login-phone-field,
+    .md-login .md-login-otp-cell {
+      height: 3.5rem;
+    }
+    .md-login form > button[type="submit"] {
+      height: 2.75rem;
+      margin-top: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.75rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0.5rem;
+    }
+    .md-login [role="alert"] {
+      font-size: 0.8125rem;
+      line-height: 1.125rem;
+    }
+  }
+
+  @media (max-height: 380px) {
+    .md-login .md-login-header {
+      padding-block: 0;
+    }
+    .md-login .md-login-main {
+      padding-block: 0.25rem;
+    }
+    .md-login h1 {
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+    .md-login #otp-sent-to {
+      margin-top: 0;
+    }
+    .md-login form {
+      margin-top: 0.25rem;
+    }
+    .md-login .md-login-phone-field,
+    .md-login .md-login-otp-cell {
+      height: 2.75rem;
+    }
+    .md-login form > button[type="submit"] {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0;
+    }
+    .md-login [role="alert"] {
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 0.75rem;
+    }
+  }
 }
 
 @theme inline {

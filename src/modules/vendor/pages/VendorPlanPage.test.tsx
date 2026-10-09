@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
-import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import {
@@ -23,7 +22,7 @@ import { VendorPlanPage } from './VendorPlanPage'
 beforeEach(() => { vi.stubEnv('VITE_USE_API', 'false'); configureApiClient({ useApi: false }) })
 afterEach(() => {
   cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers()
-  resetDemoState(); resetBillingPrototypeState(); useAuthStore.getState().clearSession(); resetLiveBilling(); resetLiveBillingPlansForTests()
+  resetDemoState(); useAuthStore.getState().clearSession(); resetLiveBilling(); resetLiveBillingPlansForTests()
 })
 
 function context(scenario: 'trial_active' | 'current_context', vendorId = 'vendor-1') {
@@ -61,19 +60,40 @@ async function productionBuild() {
 const removedControls = ['Use local Razorpay Test Mode', 'Show a sample billing status']
 
 describe('VendorPlanPage', () => {
-  it('shows the six-state prototype on demo Plan in development, without the old billing controls', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('connection refused') }))
+  it('shows the Live Plan from the local Razorpay Test helper in development, with its scenario chips', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-29T22:04:16.169Z'))
+    useAuthStore.getState().applySession({ token: 'test-token', refreshToken: null, user: {
+      id: 'user-vendor-1', name: 'Test Vendor', email: 'vendor@example.test', role: 'vendor', roles: ['vendor'], vendors: [{ vendorId: 'vendor-1' }], vendorId: 'vendor-1',
+    } })
+    let subscription = liveTrialSubscription()
+    const requests: Array<{ url: string; body: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      requests.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null })
+      if (url.endsWith('/scenario')) subscription = liveStoppedSubscription()
+      const data = url.endsWith('/subscription-plans') ? livePlans : url.endsWith('/history') ? [] : url.endsWith('/scenario') ? {} : subscription
+      return { ok: true, status: 200, json: async () => ({ success: true, status: 200, data }) }
+    }))
     show(accountFor(context('trial_active')))
-    expect(await screen.findByRole('button', { name: 'Free days', pressed: true })).toBeTruthy()
-    expect(screen.getAllByRole('button', { pressed: false }).map((button) => button.textContent)).toEqual(['3 days left', 'Paid', 'Payment failed', 'Stopped', 'Shop closed'])
+    expect(await screen.findByText('13')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' })).toBeTruthy()
+    const chips = within((await screen.findByText('Local Razorpay Test: choose a billing scenario')).parentElement!)
+    expect(chips.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Free days', '3 days left', 'Free days end in 5 min', 'Free days over', 'Paid', 'Stopped', 'AutoPay off', 'Paid days over', 'Renewal retrying', 'Payment failed',
+    ])
     for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
     expect(screen.queryByText('Simulated billing')).toBeNull()
+
+    fireEvent.click(chips.getByRole('button', { name: 'Stopped' }))
+    expect(await screen.findByText('Plan stopped')).toBeTruthy()
+    expect(requests).toContainEqual({ url: '/__local_vendor_billing_test/dev/vendors/vendor-1/scenario', body: { scenario: 'stopped' } })
+    expect(chips.getByRole('button', { name: 'Stopped', pressed: true })).toBeTruthy()
   })
 
-  it('keeps the demo billing panel in a production build, with no prototype', async () => {
+  it('keeps the demo billing panel in a production build, with no scenario chips', async () => {
     (await productionBuild()).show(accountFor(context('trial_active')))
     expect(await screen.findByText('Simulated billing')).toBeTruthy()
-    expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
+    expect(screen.queryByText('Local Razorpay Test: choose a billing scenario')).toBeNull()
     for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
   })
 
@@ -170,18 +190,18 @@ describe('VendorPlanPage', () => {
       signIn('vendor-1')
     })
 
-    it('shows free days with the rounded-up count, the exact end and the sections, and Pay ₹299 with Razorpay as its only action', async () => {
+    it('shows free days with the rounded-up count, the free days’ length and the sections, and Pay ₹399 with Razorpay as its only action', async () => {
       const reads = stubReads(async () => trial())
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('13')).toBeTruthy()
       expect(screen.getByText('Free days')).toBeTruthy()
-      expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.')).toBeTruthy()
-      expect(screen.getByText('Mithra Social Starter · ₹299 / month')).toBeTruthy()
+      expect(screen.getByText('Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹399 each month — to keep it open.')).toBeTruthy()
+      expect(screen.getByText('Mithra Social Starter · ₹399 / month')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹299 with Razorpay'])
-      expect(screen.getByText('Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹299 each month.')).toBeTruthy()
-      expect(screen.queryByText('Prototype: try each shop-plan state')).toBeNull()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹399 with Razorpay'])
+      expect(screen.queryByText(/Opens Razorpay Checkout/)).toBeNull()
+      expect(screen.queryByText('Local Razorpay Test: choose a billing scenario')).toBeNull()
       for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
       expect(reads.readSubscription).toHaveBeenCalledWith('vendor-1', expect.anything())
     })
@@ -191,8 +211,18 @@ describe('VendorPlanPage', () => {
       stubReads(async () => trial())
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('3')).toBeTruthy()
-      expect(screen.getByText('Pay ₹299 now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' })).toBeTruthy()
+      expect(screen.getByText('Pay ₹399 with Razorpay now so customers can still open your shop when free days end.')).toBeTruthy()
+      expect(screen.getByText('days left')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' })).toBeTruthy()
+    })
+
+    it('says "day left" next to a count of 1', async () => {
+      vi.setSystemTime(daysBeforeEnd(0.5))
+      stubReads(async () => trial())
+      show(accountFor(context('trial_active', 'vendor-1')))
+      expect(await screen.findByText('1')).toBeTruthy()
+      expect(screen.getByText('day left')).toBeTruthy()
+      expect(screen.queryByText('days left')).toBeNull()
     })
 
     it('shows free days while the payment is confirmed (row 7) with no action and no "If you do not pay"; Check again rereads, gaps K and C', async () => {
@@ -201,14 +231,14 @@ describe('VendorPlanPage', () => {
       expect(await screen.findByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
       expect(screen.getByText('Free days')).toBeTruthy()
       expect(screen.getByText('13')).toBeTruthy()
-      expect(screen.getByText('Confirming payment… Card payments take about a minute; UPI can take a few hours.')).toBeTruthy()
+      expect(screen.getByText('Confirming your payment…')).toBeTruthy()
       expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
 
       reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
       fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
       expect(await screen.findByText('Paid')).toBeTruthy()
-      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
+      expect(screen.queryByText(/^Confirming your payment/)).toBeNull()
       expect(reads.readSubscription).toHaveBeenCalledTimes(2)
     })
 
@@ -218,7 +248,7 @@ describe('VendorPlanPage', () => {
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
       expect(screen.getByText('1')).toBeTruthy()
-      expect(screen.queryByText(/^Pay ₹299 now/)).toBeNull()
+      expect(screen.queryByText(/^Pay ₹399 with Razorpay now/)).toBeNull()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
     })
 
@@ -247,16 +277,17 @@ describe('VendorPlanPage', () => {
       expect(screen.queryAllByRole('button')).toEqual([])
     })
 
-    it('shows Paid with the last paid day and next charge, the "Stop the plan" section, and no "If you do not pay"', async () => {
+    it('shows Paid with the payment, the last paid day and next month’s charge, the "Stop the plan" section, and no "If you do not pay"', async () => {
       vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
       stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Shop is open')).toBeTruthy()
       expect(screen.getByText('Paid')).toBeTruthy()
-      expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 12 Nov. Next ₹299 is charged on 13 Nov.')).toBeTruthy()
+      expect(screen.getByText('You paid ₹399 via Razorpay. Shop stays open until 12 Nov. Next month is another ₹399.')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'What you get' })).toBeTruthy()
       expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
       expect(screen.getByRole('region', { name: 'Stop the plan' })).toBeTruthy()
+      expect(screen.getByText('Stop any time. Your shop stays open until 12 Nov.')).toBeTruthy()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
     })
 
@@ -267,22 +298,22 @@ describe('VendorPlanPage', () => {
       const { container } = show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('21')).toBeTruthy()
       expect(screen.getByText('Plan stopped')).toBeTruthy()
-      expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.')).toBeTruthy()
+      expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹399 with Razorpay if you want to keep it after that.')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(container.textContent).not.toMatch(/Next ₹299/)
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Keep shop open · ₹299'])
+      expect(container.textContent).not.toMatch(/Next ₹399/)
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Keep shop open · ₹399'])
       expect(screen.queryByRole('region', { name: 'Stop the plan' })).toBeNull()
     })
 
-    it('shows Payment failed with its hidden shop, "If you do not pay" and Pay ₹299', async () => {
+    it('shows Payment failed with its hidden shop, "If you do not pay" and Pay ₹399', async () => {
       vi.setSystemTime(new Date('2026-11-20T10:00:00Z'))
       stubReads(async () => ({ kind: 'subscription', subscription: liveHaltedSubscription() }))
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Payment failed')).toBeTruthy()
       expect(screen.getByText('Shop is hidden')).toBeTruthy()
-      expect(screen.getByText('Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.')).toBeTruthy()
+      expect(screen.getByText('Customers cannot see your shop. Pay ₹399 with Razorpay to open it again. Old orders are still here.')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹299 with Razorpay'])
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹399 with Razorpay'])
     })
 
     it('shows Shop closed once free days end without AutoPay, even while the status is still TRIAL_ACTIVE, gap J', async () => {
@@ -290,20 +321,20 @@ describe('VendorPlanPage', () => {
       stubReads(async () => trial())
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Shop closed')).toBeTruthy()
-      expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+      expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹399 with Razorpay to open it again.')).toBeTruthy()
       expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
-      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
-      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹299 with Razorpay'])
+      expect(screen.queryByText(/^Confirming your payment/)).toBeNull()
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹399 with Razorpay'])
     })
 
-    it('shows Confirming once free days end before the payment is confirmed (row 8), with no Pay button but Check again, which rereads, gaps C and K', async () => {
+    it('shows Confirming once free days end before the payment is confirmed (row 8), with no Pay button, no Pay sentence and no "If you do not pay" but Check again, which rereads, gaps C and K', async () => {
       vi.setSystemTime(daysBeforeEnd(-0.5))
       const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() }))
       show(accountFor(context('trial_active', 'vendor-1')))
       expect(await screen.findByText('Shop closed')).toBeTruthy()
-      expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
-      expect(screen.getByText('Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.')).toBeTruthy()
-      expect(screen.getByRole('region', { name: 'If you do not pay' })).toBeTruthy()
+      expect(screen.getByText('Free days are over. Customers cannot see your shop.')).toBeTruthy()
+      expect(screen.getByText('Confirming your payment…')).toBeTruthy()
+      expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
       expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
 
@@ -311,11 +342,63 @@ describe('VendorPlanPage', () => {
       reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }))
       fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
       expect(await screen.findByText('Paid')).toBeTruthy()
-      expect(screen.queryByText(/^Confirming payment/)).toBeNull()
+      expect(screen.queryByText(/^Confirming your payment/)).toBeNull()
       expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
       expect(reads.readSubscription).toHaveBeenCalledTimes(2)
       // The plans list is read once per page load; Check again rereads only the subscription.
       expect(reads.listPaidPlans).toHaveBeenCalledOnce()
+    })
+
+    describe('a payment the read reports authorized (requested latest_payment_status), with no hold, such as after a reload', () => {
+      const waiting = 'Confirming your payment…'
+      const authorized = { latest_payment_id: 'pay_FakePayment0001', latest_payment_status: 'authorized' }
+      const inPaidDays = new Date('2026-10-22T18:30:00Z')
+      const lapsed = new Date('2026-11-20T10:00:00Z')
+
+      it.each([
+        ['Free days as row 7', 'Free days', daysBeforeEnd(12.5), () => liveTrialSubscription(authorized), 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.'],
+        ['3 days left as row 7', 'Free days', daysBeforeEnd(2.5), () => liveTrialSubscription(authorized), 'Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.'],
+        ['Shop closed after free days as row 8', 'Shop closed', daysBeforeEnd(-0.5), () => liveTrialSubscription(authorized), 'Free days are over. Customers cannot see your shop.'],
+        ['Shop closed after paid days as row 8b', 'Shop closed', lapsed, () => liveStoppedSubscription(authorized), 'Paid days are over. Customers cannot see your shop.'],
+        ['Payment failed as row 8b', 'Shop closed', lapsed, () => liveHaltedSubscription(authorized), 'Paid days are over. Customers cannot see your shop.'],
+        ['Stopped with no Keep shop open', 'Plan stopped', inPaidDays, () => liveStoppedSubscription(authorized), 'You stopped the plan. Shop stays open until 12 Nov.'],
+        ['AutoPay off with no Keep shop open', 'AutoPay off', inPaidDays, () => liveCancelledPaidSubscription(authorized), 'AutoPay is off, so no more ₹399 is charged. Shop stays open until 12 Nov.'],
+      ])('shows %s, with no action, no "If you do not pay" and Check again', async (_, eyebrow, now, subscription, body) => {
+        vi.setSystemTime(now)
+        stubReads(async () => ({ kind: 'subscription', subscription: subscription() }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        expect(await screen.findByText(body)).toBeTruthy()
+        expect(screen.getByText(eyebrow)).toBeTruthy()
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.queryByText(/Pay ₹399/)).toBeNull()
+        expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Check again'])
+      })
+
+      it('shows Paid once Check again reads the payment captured', async () => {
+        vi.setSystemTime(inPaidDays)
+        const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription(authorized) }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        expect(await screen.findByText(waiting)).toBeTruthy()
+        reads.readSubscription.mockImplementation(async () => ({ kind: 'subscription', subscription: livePaidSubscription({ ...authorized, latest_payment_status: 'captured' }) }))
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+        expect(await screen.findByText('Paid')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
+      })
+
+      it.each([
+        ['failed', { ...authorized, latest_payment_status: 'failed' }],
+        ['captured', { ...authorized, latest_payment_status: 'captured' }],
+        ['absent (today’s backend)', {}],
+      ])('offers Pay as usual when the latest payment is %s, with no failure shown', async (_, latest) => {
+        stubReads(async () => ({ kind: 'subscription', subscription: liveTrialSubscription(latest) }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        expect(await screen.findByText('13')).toBeTruthy()
+        expect(screen.queryByText(waiting)).toBeNull()
+        expect(screen.queryByRole('alert')).toBeNull()
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Pay ₹399 with Razorpay'])
+      })
     })
 
     describe('Stop the plan', () => {
@@ -335,11 +418,11 @@ describe('VendorPlanPage', () => {
         const cancel = vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveStoppedSubscription())
         show(accountFor(context('trial_active', 'vendor-1')))
         fireEvent.click(await screen.findByRole('button', { name: 'Stop the plan' }))
-        expect(screen.getByText('Stop the plan? No more ₹299 is charged. Your shop stays open until 12 Nov, then customers cannot see it.')).toBeTruthy()
+        expect(screen.getByText('Stop the plan? No more ₹399 is charged. Your shop stays open until 12 Nov, then customers cannot see it.')).toBeTruthy()
         expect(cancel).not.toHaveBeenCalled()
         fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
         expect(await screen.findByText('Plan stopped')).toBeTruthy()
-        expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.')).toBeTruthy()
+        expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹399 with Razorpay if you want to keep it after that.')).toBeTruthy()
         expect(screen.queryByRole('region', { name: 'Stop the plan' })).toBeNull()
         expect(cancel).toHaveBeenCalledOnce()
         expect(reads.readSubscription).toHaveBeenCalledOnce()
@@ -462,8 +545,8 @@ describe('VendorPlanPage', () => {
       /** Gap K's requested read once the early first fee is captured: the paid month runs from T to 12 Nov. */
       const earlyPaid = (overrides: Record<string, unknown> = {}): LiveSubscriptionRead =>
         ({ kind: 'subscription', subscription: liveEarlyFeePaidSubscription(overrides) })
-      const keptBody = 'You paid ₹299 via Razorpay. Your free days are kept, so the shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.'
-      const usualBody = 'You paid ₹299 via Razorpay. Shop stays open until 12 Nov. Next ₹299 is charged on 12 Nov.'
+      const keptBody = 'You paid ₹399 via Razorpay. Shop stays open until 12 Nov. Next month is another ₹399.'
+      const usualBody = 'You paid ₹399 via Razorpay. Shop stays open until 12 Nov. Next month is another ₹399.'
       /** Lets pending promises and timers due within `ms` run. */
       const wait = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
 
@@ -474,8 +557,8 @@ describe('VendorPlanPage', () => {
         vi.setSystemTime(daysBeforeEnd(10))
       })
 
-      it('shows Paid with the free days kept, the next ₹299 on P, the "Stop the plan" section and no "If you do not pay"', async () => {
-        // Gap D: a later next_billing_at does not move the date shown.
+      it('shows Paid with the free days kept, next month’s ₹399, the "Stop the plan" section and no "If you do not pay"', async () => {
+        // Gap D: a later next_billing_at changes nothing shown.
         stubReads(async () => earlyPaid({ next_billing_at: '2026-11-13T10:04:16Z' }))
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
@@ -486,7 +569,7 @@ describe('VendorPlanPage', () => {
         expect(screen.getByRole('region', { name: 'Stop the plan' })).toBeTruthy()
         expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Stop the plan'])
         fireEvent.click(screen.getByRole('button', { name: 'Stop the plan' }))
-        expect(screen.getByText('Stop the plan? No more ₹299 is charged. Your shop stays open until 12 Nov, then customers cannot see it.')).toBeTruthy()
+        expect(screen.getByText('Stop the plan? No more ₹399 is charged. Your shop stays open until 12 Nov, then customers cannot see it.')).toBeTruthy()
       })
 
       it('rereads at T, so the card turns into the usual Paid wording at that moment, without a reload', async () => {
@@ -501,13 +584,12 @@ describe('VendorPlanPage', () => {
         await wait(1)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(screen.getByText(usualBody)).toBeTruthy()
-        expect(screen.queryByText(keptBody)).toBeNull()
         expect(screen.getByRole('region', { name: 'Stop the plan' })).toBeTruthy()
       })
 
       it.each([
-        ['Stopped, gap A’s fixed shape', { cancel_at_period_end: true, next_billing_at: null }, 'Plan stopped', 'You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.'],
-        ['AutoPay off, from a backend that cancels at once', { status: 'CANCELLED', razorpay_status: 'cancelled', cancelled_at: '2026-10-02T10:05:00.20417Z' }, 'AutoPay off', 'AutoPay is off, so no more ₹299 is charged. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.'],
+        ['Stopped, gap A’s fixed shape', { cancel_at_period_end: true, next_billing_at: null }, 'Plan stopped', 'You stopped the plan. Shop stays open until 12 Nov. Pay ₹399 with Razorpay if you want to keep it after that.'],
+        ['AutoPay off, from a backend that cancels at once', { status: 'CANCELLED', razorpay_status: 'cancelled', cancelled_at: '2026-10-02T10:05:00.20417Z' }, 'AutoPay off', 'AutoPay is off, so no more ₹399 is charged. Shop stays open until 12 Nov. Pay ₹399 with Razorpay if you want to keep it after that.'],
       ])('stops the plan from the variant to %s, keeping the free days and the paid month, with one cancel call and no reread', async (_, response, eyebrow, body) => {
         const reads = stubReads(async () => earlyPaid())
         const cancel = vi.spyOn(liveBillingService, 'cancel').mockResolvedValue(liveEarlyFeePaidSubscription(response))
@@ -543,9 +625,9 @@ describe('VendorPlanPage', () => {
       })
     })
 
-    describe('Pay ₹299 with Razorpay during free days', () => {
-      const payEarly = 'Pay ₹299 with Razorpay'
-      const waiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
+    describe('Pay ₹399 with Razorpay during free days', () => {
+      const payEarly = 'Pay ₹399 with Razorpay'
+      const waiting = 'Confirming your payment…'
       /** Row 7: free days while Razorpay confirms the payment, in today's shape (gaps K and C). A Confirming view. */
       const confirmingFreeDays = (): LiveSubscriptionRead => ({ kind: 'subscription', subscription: liveTrialAutoPaySubscription() })
       /** Settled reads: Paid (row 3) and Collecting (row 3a). */
@@ -569,9 +651,9 @@ describe('VendorPlanPage', () => {
       })
 
       it.each([
-        ['Free days', 12.5, 'Your shop is live free until 12 Oct, 3:34 pm. After that, subscribe with Razorpay — ₹299 each month — to keep it open.', paid, 'Paid'],
-        ['3 days left', 2.5, 'Pay ₹299 now so customers can still open your shop when free days end. Free days end on 12 Oct, 3:34 pm.', collecting, 'AutoPay on.'],
-      ])('from %s: subscribes, opens Checkout, confirms, then polls every 5 s through row 7 until a settled read', async (_, days, body, settled, settledText) => {
+        ['Free days', 12.5, 'Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹399 each month — to keep it open.', paid, 'Paid'],
+        ['3 days left', 2.5, 'Pay ₹399 with Razorpay now so customers can still open your shop when free days end.', collecting, 'AutoPay on.'],
+      ])('from %s: subscribes, opens Checkout, confirms, shows row 7 at once, then polls every 5 s until a settled read', async (_, days, body, settled, settledText) => {
         vi.setSystemTime(daysBeforeEnd(days))
         const reads = stubReads(async () => trial())
         const subscribed = subscribe()
@@ -580,7 +662,7 @@ describe('VendorPlanPage', () => {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         expect(screen.getByText(body)).toBeTruthy()
-        expect(screen.getByText('Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your free days are kept: your paid month starts on 12 Oct, then AutoPay charges ₹299 each month.')).toBeTruthy()
+        expect(screen.queryByText(/Opens Razorpay Checkout/)).toBeNull()
         fireEvent.click(button())
         await wait()
         expect(subscribed).toHaveBeenCalledExactlyOnceWith('vendor-1', 'MITHRA_SOCIAL_STARTER_MONTHLY')
@@ -589,14 +671,18 @@ describe('VendorPlanPage', () => {
         expect(confirmed).toHaveBeenCalledExactlyOnceWith('vendor-1', callback)
         expect(subscribed.mock.invocationCallOrder[0]).toBeLessThan(opened.mock.invocationCallOrder[0])
         expect(opened.mock.invocationCallOrder[0]).toBeLessThan(confirmed.mock.invocationCallOrder[0])
-        expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(true)
+        // Row 7 at once, before any read reports it: no action, no Pay sentence, no "If you do not pay".
+        expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.queryByText(body)).toBeNull()
+        expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
         expect(reads.readSubscription).toHaveBeenCalledOnce()
 
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-        expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(true)
+        expect(screen.getAllByText(waiting)).toHaveLength(1)
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
 
         // Row 7 is a Confirming view: its own status line is the waiting line, and the poll goes on.
         reads.readSubscription.mockResolvedValue(confirmingFreeDays())
@@ -619,7 +705,7 @@ describe('VendorPlanPage', () => {
         expect(screen.queryByRole('alert')).toBeNull()
       })
 
-      /** Shows Plan, presses Pay ₹299 with Razorpay and lets Checkout submit, leaving Plan polling. */
+      /** Shows Plan, presses Pay ₹399 with Razorpay and lets Checkout submit, leaving Plan polling. */
       async function payDuringFreeDays() {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
@@ -627,29 +713,28 @@ describe('VendorPlanPage', () => {
         await wait()
       }
 
-      it('stops polling after 90 s but keeps the hold: the action stays off beside the waiting line and Check again until a settled read', async () => {
+      it('stops polling after 90 s but keeps the hold: row 7 stays, with no action and Check again, until a settled read', async () => {
         const reads = stubReads(async () => trial())
         subscribe()
         open().mockResolvedValue(submitted())
         confirm().mockResolvedValue(null)
         await payDuringFreeDays()
         await wait(85_000)
-        expect(button().disabled).toBe(true)
-        expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(19)
         expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(true)
         await wait(60_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(19)
-        expect(button().disabled).toBe(true)
+        expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
 
         // An unchanged read does not end the hold.
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
         await wait()
         expect(reads.readSubscription).toHaveBeenCalledTimes(20)
         expect(screen.getAllByText(waiting)).toHaveLength(1)
-        expect(button().disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
 
         // Row 7 does not end it either; its status line and Check again stand in for the waiting line.
         reads.readSubscription.mockResolvedValue(confirmingFreeDays())
@@ -667,7 +752,7 @@ describe('VendorPlanPage', () => {
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
       })
 
-      it('keeps polling and holding when Free days turn into 3 days left, which still offers Pay ₹299 with Razorpay', async () => {
+      it('keeps polling and holding when Free days turn into 3 days left, still shown as row 7', async () => {
         const reads = stubReads(async () => trial())
         subscribe()
         open().mockResolvedValue(submitted())
@@ -679,12 +764,13 @@ describe('VendorPlanPage', () => {
         expect(screen.getByText('4')).toBeTruthy()
         await wait(5_000)
         expect(screen.getByText('3')).toBeTruthy()
-        expect(screen.getByText(/^Pay ₹299 now/)).toBeTruthy()
+        expect(screen.queryByText(/^Pay ₹399 with Razorpay now/)).toBeNull()
+        expect(screen.getByText('Your shop is live free until 12 Oct, 3:34 pm. Your free days are kept.')).toBeTruthy()
         expect(screen.getByText(waiting)).toBeTruthy()
-        expect(button().disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
-        expect(button().disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
 
         reads.readSubscription.mockResolvedValue(paid())
         await wait(5_000)
@@ -694,7 +780,7 @@ describe('VendorPlanPage', () => {
         expect(reads.readSubscription).toHaveBeenCalledTimes(4)
       })
 
-      it('keeps the hold after leaving Plan: back on Plan, the waiting line shows with Check again and the action off, with no poll', async () => {
+      it('keeps the hold after leaving Plan: back on Plan, row 7 shows with Check again and no action, with no poll', async () => {
         const reads = stubReads(async () => trial())
         subscribe()
         open().mockResolvedValue(submitted())
@@ -708,11 +794,10 @@ describe('VendorPlanPage', () => {
         // Plan's mount read, which is unchanged.
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
         expect(screen.getAllByText(waiting)).toHaveLength(1)
-        expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
-        expect(button().disabled).toBe(true)
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
         await wait(60_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
-        expect(button().disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
 
         reads.readSubscription.mockResolvedValue(paid())
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
@@ -755,6 +840,114 @@ describe('VendorPlanPage', () => {
         expect(screen.queryByText(waiting)).toBeNull()
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
         expect(button().disabled).toBe(false)
+      })
+
+      describe('a read reporting the payment failed (requested latest_payment_id and latest_payment_status)', () => {
+        const paymentFailed = 'Payment failed. Try again.'
+        /** Free days, with the read's latest payment; by default this payment, failed. */
+        const reporting = (id: string = callback.razorpay_payment_id, status = 'failed'): LiveSubscriptionRead =>
+          ({ kind: 'subscription', subscription: liveTrialSubscription({ latest_payment_id: id, latest_payment_status: status }) })
+
+        /** Pays during free days, then lets the next poll read report this payment failed. */
+        async function failAtPoll() {
+          const reads = stubReads(async () => trial())
+          const subscribed = subscribe()
+          const opened = open().mockResolvedValue(submitted())
+          confirm().mockResolvedValue(null)
+          await payDuringFreeDays()
+          expect(screen.getByText(waiting)).toBeTruthy()
+          reads.readSubscription.mockResolvedValue(reporting())
+          await wait(5_000)
+          return { reads, subscribed, opened }
+        }
+
+        it('ends the hold at a poll read: the waiting line and the poll stop, Pay is back, and the failure shows under it', async () => {
+          const { reads } = await failAtPoll()
+          expect(screen.queryByText(waiting)).toBeNull()
+          expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+          expect(button().disabled).toBe(false)
+          expect(screen.getByRole('alert').textContent).toBe(paymentFailed)
+          expect(button().parentElement?.contains(screen.getByRole('alert'))).toBe(true)
+          // No help line between them: the alert is the very next element.
+          expect(button().nextElementSibling).toBe(screen.getByRole('alert'))
+          expect(screen.getByText('13')).toBeTruthy()
+          await wait(90_000)
+          expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+        })
+
+        it.each([
+          ['another payment failed', () => reporting('pay_FakeOther0001')],
+          ['this payment still authorized', () => reporting(callback.razorpay_payment_id, 'authorized')],
+          ['no latest payment (today’s backend)', trial],
+        ])('keeps the hold for a read with %s', async (_, read) => {
+          const reads = stubReads(async () => trial())
+          subscribe()
+          open().mockResolvedValue(submitted())
+          confirm().mockResolvedValue(null)
+          await payDuringFreeDays()
+          reads.readSubscription.mockResolvedValue(read())
+          await wait(5_000)
+          expect(reads.readSubscription).toHaveBeenCalledTimes(2)
+          expect(screen.getByText(waiting)).toBeTruthy()
+          expect(screen.queryByRole('button', { name: payEarly })).toBeNull()
+          expect(screen.queryByRole('alert')).toBeNull()
+          await wait(5_000)
+          expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        })
+
+        it('ends the hold at Check again after the poll, and at a focus reread', async () => {
+          const reads = stubReads(async () => trial())
+          subscribe()
+          open().mockResolvedValue(submitted())
+          confirm().mockResolvedValue(null)
+          await payDuringFreeDays()
+          await wait(90_000)
+          reads.readSubscription.mockResolvedValue(reporting())
+          fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+          await wait()
+          expect(screen.queryByText(waiting)).toBeNull()
+          expect(button().disabled).toBe(false)
+          expect(screen.getByRole('alert').textContent).toBe(paymentFailed)
+
+          // The next payment's failure, read on returning to the window after its poll.
+          const next = { ...callback, razorpay_payment_id: 'pay_FakePayment0003' }
+          open().mockResolvedValue({ status: 'submitted', callback: next })
+          reads.readSubscription.mockResolvedValue(trial())
+          fireEvent.click(button())
+          await wait()
+          expect(screen.getByText(waiting)).toBeTruthy()
+          expect(screen.queryByRole('alert')).toBeNull()
+          await wait(90_000)
+          reads.readSubscription.mockResolvedValue(reporting(next.razorpay_payment_id))
+          act(() => { window.dispatchEvent(new Event('focus')) })
+          await wait()
+          expect(screen.queryByText(waiting)).toBeNull()
+          expect(button().disabled).toBe(false)
+          expect(screen.getByRole('alert').textContent).toBe(paymentFailed)
+        })
+
+        it('clears the failure when Pay is pressed again, even if Checkout then closes', async () => {
+          const { subscribed, opened } = await failAtPoll()
+          opened.mockResolvedValue({ status: 'dismissed' })
+          fireEvent.click(button())
+          await wait()
+          expect(subscribed).toHaveBeenCalledTimes(2)
+          expect(screen.queryByRole('alert')).toBeNull()
+          expect(button().disabled).toBe(false)
+        })
+
+        it('shows no failure after a reload, which starts a fresh store, even while the read still reports it', async () => {
+          await failAtPoll()
+          expect(screen.getByRole('alert').textContent).toBe(paymentFailed)
+          cleanup()
+          act(() => resetLiveBilling())
+          show(accountFor(context('trial_active', 'vendor-1')))
+          await wait()
+          expect(screen.getByText('13')).toBeTruthy()
+          expect(screen.queryByRole('alert')).toBeNull()
+          expect(screen.queryByText(waiting)).toBeNull()
+          expect(button().disabled).toBe(false)
+        })
       })
 
       const badGateway = () => new ApiError('Bad gateway', 502, null, '/v1/vendors/vendor-1/subscription/confirm', 'server')
@@ -843,6 +1036,7 @@ describe('VendorPlanPage', () => {
         const confirmed = confirm()
         await payDuringFreeDays()
         expect(screen.getByRole('alert').textContent).toBe('The payment did not go through (Your payment was declined by the bank.). Nothing changed; your free days are the same.')
+        expect(button().nextElementSibling).toBe(screen.getByRole('alert'))
         expect(screen.getByText('13')).toBeTruthy()
         expect(screen.queryByText(waiting)).toBeNull()
         expect(button().disabled).toBe(false)
@@ -949,13 +1143,11 @@ describe('VendorPlanPage', () => {
       })
     })
 
-    describe('Keep shop open and Pay ₹299', () => {
-      const keepOpen = 'Keep shop open · ₹299'
-      const pay = 'Pay ₹299 with Razorpay'
-      const keepOpenWaiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours.'
-      const paymentWaiting = 'Confirming payment… Card payments take about a minute; UPI can take a few hours. Your shop opens once Razorpay confirms the ₹299.'
-      const keepOpenHelp = 'Opens Razorpay Checkout. Pay ₹299 now by card or UPI. Your shop stays open for another month after 12 Nov, then AutoPay charges ₹299 each month.'
-      const payHelp = 'Opens Razorpay Checkout. Pay by card or UPI.'
+    describe('Keep shop open and Pay ₹399', () => {
+      const keepOpen = 'Keep shop open · ₹399'
+      const pay = 'Pay ₹399 with Razorpay'
+      const keepOpenWaiting = 'Confirming your payment…'
+      const paymentWaiting = 'Confirming your payment…'
       /** 21 days before P: the last paid day is 12 Nov and P is IST midnight starting 13 Nov. */
       const inPaidDays = new Date('2026-10-22T18:30:00Z')
       /** A week after P and after the trial end. */
@@ -974,8 +1166,8 @@ describe('VendorPlanPage', () => {
       const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name })
       /** Rows 4 and 5, which offer Keep shop open: row, eyebrow and read. */
       const stoppedRows = [
-        ['4, Stopped', 'Plan stopped', () => read(liveStoppedSubscription())],
-        ['5, AutoPay off', 'AutoPay off', () => read(liveCancelledPaidSubscription())],
+        ['4, Stopped', 'Plan stopped', () => read(liveStoppedSubscription()), 'You stopped the plan.'],
+        ['5, AutoPay off', 'AutoPay off', () => read(liveCancelledPaidSubscription()), 'AutoPay is off, so no more ₹399 is charged.'],
       ] as const
 
       beforeEach(() => {
@@ -993,7 +1185,30 @@ describe('VendorPlanPage', () => {
         await wait()
       }
 
-      it.each(stoppedRows)('keeps the shop open from row %s: subscribe, Checkout, confirm, then the poll until a settled read', async (_, eyebrow, stopped) => {
+      it.each([
+        ['Plan stopped', inPaidDays, keepOpen, () => read(liveStoppedSubscription())],
+        ['AutoPay off', inPaidDays, keepOpen, () => read(liveCancelledPaidSubscription())],
+        ['Payment failed', lapsed, pay, () => read(liveHaltedSubscription())],
+        ['Shop closed', lapsed, pay, () => read(liveTrialSubscription())],
+      ])('shows no help line under the %s action, and a failed payment’s alert directly follows it', async (_, now, action, current) => {
+        stubReads(async () => current())
+        subscribe()
+        open().mockImplementation(async (_config, options) => {
+          options?.onPaymentFailure?.('Your payment was declined by the bank.')
+          return { status: 'dismissed' }
+        })
+        confirm()
+        vi.setSystemTime(now)
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(button(action).nextElementSibling).toBeNull()
+        expect(screen.queryByText(/Opens Razorpay Checkout|card or UPI|AutoPay charges/)).toBeNull()
+        fireEvent.click(button(action))
+        await wait()
+        expect(button(action).nextElementSibling).toBe(screen.getByRole('alert'))
+      })
+
+      it.each(stoppedRows)('keeps the shop open from row %s: subscribe, Checkout, confirm, the confirming variant at once, then the poll until a settled read', async (_, eyebrow, stopped, reason) => {
         const reads = stubReads(async () => stopped())
         const subscribed = subscribe()
         const opened = open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
@@ -1002,7 +1217,7 @@ describe('VendorPlanPage', () => {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         expect(screen.getByText(eyebrow)).toBeTruthy()
-        expect(screen.getByText(keepOpenHelp)).toBeTruthy()
+        expect(screen.queryByText(/Opens Razorpay Checkout/)).toBeNull()
         fireEvent.click(button(keepOpen))
         await wait()
         expect(subscribed).toHaveBeenCalledExactlyOnceWith('vendor-1', 'MITHRA_SOCIAL_STARTER_MONTHLY')
@@ -1010,19 +1225,24 @@ describe('VendorPlanPage', () => {
         expect(confirmed).toHaveBeenCalledExactlyOnceWith('vendor-1', callback)
         expect(subscribed.mock.invocationCallOrder[0]).toBeLessThan(opened.mock.invocationCallOrder[0])
         expect(opened.mock.invocationCallOrder[0]).toBeLessThan(confirmed.mock.invocationCallOrder[0])
-        expect(screen.getByText(keepOpenWaiting)).toBeTruthy()
-        expect(button(keepOpen).disabled).toBe(true)
+        // The confirming variant at once: same eyebrow and days, no Pay sentence, no action, no "If you do not pay".
+        expect(screen.getByText(eyebrow)).toBeTruthy()
+        expect(screen.getByText('21')).toBeTruthy()
+        expect(screen.getByText(`${reason} Shop stays open until 12 Nov.`)).toBeTruthy()
+        expect(screen.getAllByText(keepOpenWaiting)).toHaveLength(1)
+        expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
 
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-        expect(button(keepOpen).disabled).toBe(true)
-        // Gap E's fixed shape once the ₹299 is captured: ACTIVE, the flag false, P a month later.
+        expect(screen.queryByRole('button', { name: keepOpen })).toBeNull()
+        // Gap E's fixed shape once the ₹399 is captured: ACTIVE, the flag false, P a month later.
         reads.readSubscription.mockResolvedValue(read(livePaidSubscription({
           razorpay_subscription_id: 'sub_FakeRejoin0001', current_period_start: '2026-11-12T18:30Z',
           current_period_end: '2026-12-12T18:30Z', next_billing_at: '2026-12-12T18:30Z', updated_at: '2026-10-22T18:31:40.52208Z',
         })))
         await wait(5_000)
-        expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 12 Dec. Next ₹299 is charged on 13 Dec.')).toBeTruthy()
+        expect(screen.getByText('You paid ₹399 via Razorpay. Shop stays open until 12 Dec. Next month is another ₹399.')).toBeTruthy()
         expect(screen.queryByText(keepOpenWaiting)).toBeNull()
         await wait(90_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
@@ -1030,14 +1250,14 @@ describe('VendorPlanPage', () => {
       })
 
       it.each([
-        ['1, Payment failed', 'Payment failed', () => read(liveHaltedSubscription())],
-        ['6′, Shop closed after a stopped plan', 'Paid days are over.', () => read(liveStoppedSubscription())],
-        ['6′, Shop closed after AutoPay off', 'Paid days are over.', () => read(liveCancelledPaidSubscription())],
-        ['10, Shop closed after free days', 'Free days are over.', () => read(liveTrialSubscription())],
+        ['1, Payment failed', 'Payment failed', () => read(liveHaltedSubscription()), 'Paid days are over.'],
+        ['6′, Shop closed after a stopped plan', 'Paid days are over.', () => read(liveStoppedSubscription()), 'Paid days are over.'],
+        ['6′, Shop closed after AutoPay off', 'Paid days are over.', () => read(liveCancelledPaidSubscription()), 'Paid days are over.'],
+        ['10, Shop closed after free days', 'Free days are over.', () => read(liveTrialSubscription()), 'Free days are over.'],
         ['11, Shop closed while paying again', 'Paid days are over.', () => read(liveHaltedSubscription({
           status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0002', razorpay_status: 'created',
-        }))],
-      ])('pays ₹299 from row %s: subscribe, Checkout, confirm, then the poll until a settled read', async (_, shown, closed) => {
+        })), 'Paid days are over.'],
+      ])('pays ₹399 from row %s: subscribe, Checkout, confirm, Confirming at once, then the poll until a settled read', async (_, shown, closed, ended) => {
         const reads = stubReads(async () => closed())
         const subscribed = subscribe()
         const opened = open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
@@ -1046,7 +1266,7 @@ describe('VendorPlanPage', () => {
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
         expect(screen.getByText(new RegExp(shown))).toBeTruthy()
-        expect(screen.getByText(payHelp)).toBeTruthy()
+        expect(screen.queryByText(/Opens Razorpay Checkout/)).toBeNull()
         fireEvent.click(button(pay))
         await wait()
         expect(subscribed).toHaveBeenCalledExactlyOnceWith('vendor-1', 'MITHRA_SOCIAL_STARTER_MONTHLY')
@@ -1054,22 +1274,27 @@ describe('VendorPlanPage', () => {
         expect(confirmed).toHaveBeenCalledExactlyOnceWith('vendor-1', callback)
         expect(subscribed.mock.invocationCallOrder[0]).toBeLessThan(opened.mock.invocationCallOrder[0])
         expect(opened.mock.invocationCallOrder[0]).toBeLessThan(confirmed.mock.invocationCallOrder[0])
-        expect(screen.getByText(paymentWaiting)).toBeTruthy()
-        expect(button(pay).disabled).toBe(true)
+        // Confirming (rows 8 and 8b) at once: no Pay sentence, no action, no "If you do not pay".
+        expect(screen.getByText('Shop closed')).toBeTruthy()
+        expect(screen.getByText(`${ended} Customers cannot see your shop.`)).toBeTruthy()
+        expect(screen.getAllByText(paymentWaiting)).toHaveLength(1)
+        expect(screen.queryByText(/Pay ₹399/)).toBeNull()
+        expect(screen.queryByRole('region', { name: 'If you do not pay' })).toBeNull()
+        expect(screen.getAllByRole('button').map((item) => item.textContent)).toEqual(['Check again'])
 
         await wait(5_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
-        expect(button(pay).disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: pay })).toBeNull()
         reads.readSubscription.mockResolvedValue(paidAgain())
         await wait(5_000)
-        expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 19 Dec. Next ₹299 is charged on 20 Dec.')).toBeTruthy()
+        expect(screen.getByText('You paid ₹399 via Razorpay. Shop stays open until 19 Dec. Next month is another ₹399.')).toBeTruthy()
         expect(screen.queryByText(paymentWaiting)).toBeNull()
         expect(screen.queryByRole('button', { name: pay })).toBeNull()
         await wait(90_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(3)
       })
 
-      it('keeps the Pay ₹299 poll and hold through a Confirming read, showing only its status line and one Check again, until Paid', async () => {
+      it('keeps the Pay ₹399 poll and hold through a Confirming read, showing only its status line and one Check again, until Paid', async () => {
         const reads = stubReads(async () => read(liveTrialSubscription()))
         subscribe()
         open().mockResolvedValue({ status: 'submitted', callback: { ...callback } })
@@ -1093,7 +1318,7 @@ describe('VendorPlanPage', () => {
         reads.readSubscription.mockResolvedValue(paidAgain())
         fireEvent.click(button('Check again'))
         await wait()
-        expect(screen.getByText('You paid ₹299 via Razorpay. Shop stays open until 19 Dec. Next ₹299 is charged on 20 Dec.')).toBeTruthy()
+        expect(screen.getByText('You paid ₹399 via Razorpay. Shop stays open until 19 Dec. Next month is another ₹399.')).toBeTruthy()
         expect(screen.queryByText(paymentWaiting)).toBeNull()
         expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
       })
@@ -1101,9 +1326,9 @@ describe('VendorPlanPage', () => {
       it.each([
         ['Keep shop open, through Stopped turning into AutoPay off', inPaidDays, keepOpen, keepOpenWaiting, () => read(liveStoppedSubscription()),
           () => read(liveCancelledPaidSubscription()), 'AutoPay off', () => read(liveActivatedSubscription()), 'AutoPay on.'],
-        ['Pay ₹299, through Payment failed turning into Shop closed while paying again (row 11)', lapsed, pay, paymentWaiting, () => read(liveHaltedSubscription()),
+        ['Pay ₹399, through Payment failed turning into Shop closed while paying again (row 11)', lapsed, pay, paymentWaiting, () => read(liveHaltedSubscription()),
           () => read(liveHaltedSubscription({ status: 'PAYMENT_PENDING', razorpay_subscription_id: 'sub_FakePayAgain0002', razorpay_status: 'created' })),
-          'Paid days are over.', paidAgain, 'You paid ₹299 via Razorpay. Shop stays open until 19 Dec. Next ₹299 is charged on 20 Dec.'],
+          'Paid days are over.', paidAgain, 'You paid ₹399 via Razorpay. Shop stays open until 19 Dec. Next month is another ₹399.'],
       ])('holds %s, past the 90 s cap, until a settled read', async (_, now, action, waitingLine, before, after, shown, settled, settledText) => {
         const reads = stubReads(async () => before())
         subscribe()
@@ -1114,11 +1339,11 @@ describe('VendorPlanPage', () => {
         await wait(5_000)
         expect(screen.getByText(new RegExp(shown))).toBeTruthy()
         expect(screen.getByText(waitingLine)).toBeTruthy()
-        expect(button(action).disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: action })).toBeNull()
         await wait(85_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(19)
         expect(screen.getByText(waitingLine)).toBeTruthy()
-        expect(button(action).disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: action })).toBeNull()
         expect(button('Check again')).toBeTruthy()
 
         reads.readSubscription.mockResolvedValue(settled())
@@ -1170,7 +1395,7 @@ describe('VendorPlanPage', () => {
       it.each([
         ['Keep shop open', inPaidDays, keepOpen, () => read(liveStoppedSubscription()), 'Plan stopped',
           'The payment did not go through (Your payment was declined by the bank.). Nothing changed; the plan is still stopped.'],
-        ['Pay ₹299', lapsed, pay, () => read(liveHaltedSubscription()), 'Payment failed',
+        ['Pay ₹399', lapsed, pay, () => read(liveHaltedSubscription()), 'Payment failed',
           'The payment did not go through (Your payment was declined by the bank.). Nothing changed; your shop is still hidden.'],
       ])('words %s’s failed payment after Checkout closes, with the state unchanged and no confirm', async (_, now, action, current, eyebrow, message) => {
         const reads = stubReads(async () => current())
@@ -1192,7 +1417,7 @@ describe('VendorPlanPage', () => {
 
       it.each([
         ['Keep shop open', inPaidDays, keepOpen, () => read(liveStoppedSubscription())],
-        ['Pay ₹299', lapsed, pay, () => read(liveHaltedSubscription())],
+        ['Pay ₹399', lapsed, pay, () => read(liveHaltedSubscription())],
       ])('subscribes once for a double click on %s', async (_, now, action, current) => {
         stubReads(async () => current())
         const response = deferred<unknown>()
@@ -1263,7 +1488,7 @@ describe('VendorPlanPage', () => {
         await wait(1)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(screen.getByText('Shop closed')).toBeTruthy()
-        expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+        expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹399 with Razorpay to open it again.')).toBeTruthy()
       })
 
       it('rereads at T for row 7, so free days while the payment is confirmed turn into Confirming at that moment (row 8)', async () => {
@@ -1277,8 +1502,8 @@ describe('VendorPlanPage', () => {
         await wait(1)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(screen.getByText('Shop closed')).toBeTruthy()
-        expect(screen.getByText('Free days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
-        expect(screen.getByText(/^Confirming payment…/)).toBeTruthy()
+        expect(screen.getByText('Free days are over. Customers cannot see your shop.')).toBeTruthy()
+        expect(screen.getByText(/^Confirming your payment…/)).toBeTruthy()
         expect(screen.queryByRole('button', { name: /Pay/ })).toBeNull()
       })
 
@@ -1315,7 +1540,7 @@ describe('VendorPlanPage', () => {
         await wait(3 * day)
         expect(reads.readSubscription).toHaveBeenCalledTimes(2)
         expect(screen.getByText('Shop closed')).toBeTruthy()
-        expect(screen.getByText('Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.')).toBeTruthy()
+        expect(screen.getByText('Paid days are over. Customers cannot see your shop. Pay ₹399 with Razorpay to open it again.')).toBeTruthy()
       })
 
       const readFailure = (status: number, kind: 'server' | 'network', message = 'Something went wrong on our side. Please try again later.') =>
@@ -1381,7 +1606,7 @@ describe('VendorPlanPage', () => {
         expect(screen.getByRole('alert').textContent).toBe(message)
         expect(screen.getByText('13')).toBeTruthy()
         expect(screen.getByText('Free days')).toBeTruthy()
-        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Pay ₹299 with Razorpay'])
+        expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Pay ₹399 with Razorpay'])
 
         reads.readSubscription.mockImplementation(async () => confirmingFreeDays())
         fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
@@ -1400,7 +1625,7 @@ describe('VendorPlanPage', () => {
         await wait()
         expect(screen.getByRole('alert').textContent).toBe('Billing is down for a moment.')
         expect(screen.getByText('Shop closed')).toBeTruthy()
-        expect(screen.getByText(/^Confirming payment…/)).toBeTruthy()
+        expect(screen.getByText(/^Confirming your payment…/)).toBeTruthy()
         expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Try again', 'Check again'])
       })
 
@@ -1519,10 +1744,10 @@ describe('VendorPlanPage', () => {
       show(accountFor(context('trial_active', 'vendor-1')))
       // The last view shows at once, but Checkout waits for this open's read.
       expect(screen.getByText('13')).toBeTruthy()
-      expect((screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }) as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' }) as HTMLButtonElement).disabled).toBe(true)
       expect(reads.readSubscription).toHaveBeenCalledTimes(2)
       await act(async () => { reopened.resolve(trial()) })
-      expect((screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }) as HTMLButtonElement).disabled).toBe(false)
+      expect((screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' }) as HTMLButtonElement).disabled).toBe(false)
       expect(reads.listPaidPlans).toHaveBeenCalledOnce()
     })
 
@@ -1583,18 +1808,18 @@ describe('VendorPlanPage', () => {
         const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription() }), undefined, async () => liveStoppedHistory())
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹299 with Razorpay if you want to keep it after that.')).toBeTruthy()
-        expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'AutoPay set up17 days ago', 'Free days started17 days ago'])
+        expect(screen.getByText('You stopped the plan. Shop stays open until 12 Nov. Pay ₹399 with Razorpay if you want to keep it after that.')).toBeTruthy()
+        expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'Free days started17 days ago'])
         expect(section().textContent).not.toMatch(/₹/)
         expect(reads.readHistory).toHaveBeenCalledExactlyOnceWith('vendor-1', expect.anything())
       })
 
       it('shows an amount only when the event carries one', async () => {
         vi.setSystemTime(new Date('2026-10-15T06:00:00Z'))
-        stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }), undefined, async () => [{ ...charged, amount: 299 }])
+        stubReads(async () => ({ kind: 'subscription', subscription: livePaidSubscription() }), undefined, async () => [{ ...charged, amount: 399 }])
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        expect(rows()).toEqual(['Payment received₹299 · 2 days ago', 'Free days started17 days ago'])
+        expect(rows()).toEqual(['Payment received₹399 · 2 days ago', 'Free days started17 days ago'])
       })
 
       it('keeps a history failure inside the section, with its own Try again', async () => {
@@ -1604,7 +1829,7 @@ describe('VendorPlanPage', () => {
         expect(screen.getAllByRole('alert')).toEqual([within(section()).getByRole('alert')])
         expect(within(section()).getByRole('alert').textContent).toBe('History is unavailable.')
         expect(screen.getByText('13')).toBeTruthy()
-        expect(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' })).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' })).toBeTruthy()
 
         reads.readHistory.mockResolvedValue([])
         fireEvent.click(within(section()).getByRole('button', { name: 'Try again' }))
@@ -1641,7 +1866,7 @@ describe('VendorPlanPage', () => {
         vi.spyOn(liveBillingService, 'confirm').mockReturnValue(confirmed.promise)
         show(accountFor(context('trial_active', 'vendor-1')))
         await wait()
-        fireEvent.click(screen.getByRole('button', { name: 'Pay ₹299 with Razorpay' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' }))
         await wait()
         expect(reads.readHistory).toHaveBeenCalledOnce()
         await act(async () => { confirmed.resolve(null) })
@@ -1700,12 +1925,12 @@ describe('VendorPlanPage', () => {
           const reads = stubReads(async () => ({ kind: 'subscription', subscription: liveStoppedSubscription() }), undefined, async () => liveStoppedHistory())
           await visit()
           render(page('vendor-1'))
-          expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'AutoPay set up17 days ago', 'Free days started17 days ago'])
+          expect(rows()).toEqual(['Plan stoppedYesterday', 'Payment received2 days ago', 'Free days started17 days ago'])
           expect(within(section()).queryByRole('status')).toBeNull()
           await wait()
           expect(reads.readSubscription).toHaveBeenCalledTimes(2)
           expect(reads.readHistory).toHaveBeenCalledOnce()
-          expect(rows()).toHaveLength(4)
+          expect(rows()).toHaveLength(3)
         })
 
         it('reads the history once when the subscription read changed', async () => {

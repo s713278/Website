@@ -91,26 +91,24 @@ The development server is available at [http://localhost:5173](http://localhost:
 | `VITE_RAZORPAY_TEST_SUBSCRIPTION_ID` | unset | Optional immediate-start Test subscription ID for that preview |
 | `VITE_RAZORPAY_TEST_FUTURE_SUBSCRIPTION_ID` | unset | Optional separate future-start Test subscription ID for the legacy AutoPay setup fixture |
 
-For the local Plan Test showcase, run the billing helper (the local test server), `npm run dev:billing-helper`, in a separate terminal with
-`RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET` and `RAZORPAY_TEST_PLAN_ID` (the supplied
-monthly Test plan) set in that terminal's environment. Only `rzp_test_` keys are accepted. The
-helper listens on `127.0.0.1:4179`; Vite proxies its local HTTP interface during development.
-Its scenario store defaults to the ignored local file `vendor-billing-test-store.local`;
-`VENDOR_BILLING_TEST_STORE` may point to another locally excluded path. Keep Test credentials out of `VITE_*` variables and repository files.
-With the helper running, demo mode in development (`VITE_USE_API=false`, `npm run dev`) shows a
-six-state prototype on `/vendor/plan`: Free days, 3 days left, Paid, Payment failed, Stopped and
-Shop closed. Choosing a different state at the bottom of Plan seeds it under the helper vendor key
-`r1-prototype`, after cancelling that key's earlier Test subscriptions. Each payment action opens
-hosted Razorpay Test Checkout through the helper, and stopping or turning off AutoPay also goes
-through it. The helper verifies the callback signature server-side, and the state changes only
-after a Razorpay Test read or acceptance confirms the result; the seeded Paid sample stops locally. Without the helper, the
-states still display, but their actions are disabled. The prototype is frozen with the old trial
-AutoPay flow; the Live API and production builds have no prototype, and Live API billing is
-described in [the architecture owner](./docs/API_ARCHITECTURE.md#vendor-platform-billing-live-api). The [decision record](./docs/VENDOR_BILLING_DECISIONS.md#six-state-demo-plan-prototype--24-september-2026)
-owns the states, and the
-[dated evidence](./docs/VENDOR_BILLING_PREVIEW.md#six-state-prototype-evidence--24-september-2026)
-records which Test card and hosted Checkout steps work for this account. Never reset or reuse the
-helper vendor `r1`, which is kept for a renewal-recovery check.
+For local billing testing, run the billing helper (a local stand-in for the backend's billing API),
+`npm run dev:billing-helper`, in a separate terminal. It loads `RAZORPAY_TEST_KEY_ID`,
+`RAZORPAY_TEST_KEY_SECRET` and `RAZORPAY_TEST_PLAN_ID` (a monthly, interval-1 Test plan) from the
+git-ignored `.env.billing-helper.local`, or from the terminal's environment. Only `rzp_test_` keys
+are accepted. The helper listens on `127.0.0.1:4179`; Vite proxies it during development. Its store
+defaults to the ignored local file `vendor-billing-backend-store.local`; `VENDOR_BILLING_TEST_STORE`
+may point to another locally excluded path, `BILLING_HELPER_TRIAL_DAYS` (default 14) sets the
+seeded trial length, and `BILLING_HELPER_SIMULATED_DELAY_MS` (default 5000) sets the delay of a
+simulated payment outcome. Keep Test credentials out of `VITE_*` variables and repository files.
+With the helper running, demo mode in development (`VITE_USE_API=false`, `npm run dev`) shows the
+Live Plan and billing chrome on `/vendor/plan`, read from the helper instead of the backend, with
+scenario chips under Plan (free days, free days ending in 5 minutes, free days over, paid, stopped,
+AutoPay off, paid days over, renewal retrying, payment failed). Paying, stopping and keeping the
+shop open open real Razorpay Test Checkout unless a simulated payment outcome is chosen; the helper follows the
+[backend brief](./docs/VENDOR_BILLING_BACKEND_BRIEF.md#4-required-behavior-by-flow) (an upfront
+addon during free days, `start_at` = T + one month) and is described in
+[the architecture owner](./docs/API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo).
+Production demo builds keep the simulated billing panel.
 
 `VITE_PUBLIC_SITE_URL` falls back to the browser's current origin when unset, which is why it
 must be set on every deployment: without it a vendor copies a `localhost` or preview-deployment

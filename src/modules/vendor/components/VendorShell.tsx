@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   ClipboardList,
   Gauge,
@@ -14,8 +14,10 @@ import logoDarkMd from '@/assets/logo_dark_md.png'
 import { LiveHeaderButton, LiveShellBanner } from '@/modules/vendor/components/LiveBillingChrome'
 import { VendorAccountProvider } from '@/modules/vendor/components/VendorAccountProvider'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import type { PrototypeTone } from '@/modules/vendor/lib/billing-prototype-card'
+import { liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
 import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
-import { isLiveApi } from '@/shared/api'
+import { usesLiveBilling } from '@/shared/api'
 import { Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
@@ -121,7 +123,7 @@ function BrandMark() {
  *
  * The chip is withheld rather than guessed at when no plan name has loaded — a chip
  * reading "Free plan" on a store whose plan never loaded is the one mistake this corner
- * can make. Demo reads its context's plan; the live API reads the subscription.
+ * can make. Demo reads its context's plan; the live API's chip is the billing state's badge.
  */
 function RailFoot() {
   const { context, plan, storeState } = useVendorAccount()
@@ -130,7 +132,7 @@ function RailFoot() {
 
   return (
     <div className="mt-auto grid gap-2.5 border-t border-[var(--vc-edge)] px-2 pt-3">
-      {isLiveApi() ? <LivePlanChip /> : plan.name ? <PlanChip name={plan.name} /> : null}
+      {usesLiveBilling() ? <LivePlanChip /> : plan.name ? <PlanChip name={plan.name} /> : null}
 
       {isOpen && identifier ? (
         <Link to={`/stores/${identifier}`}>
@@ -149,24 +151,37 @@ function RailFoot() {
   )
 }
 
-function PlanChip({ name }: { name: string }) {
+const chipTone: Record<PrototypeTone, { chip: string; dot: string }> = {
+  neutral: { chip: 'border-[var(--vc-tint-line)] bg-[var(--vc-tint)] text-[var(--vc-tint-ink)]', dot: 'bg-[var(--md-green-500)]' },
+  danger: { chip: 'border-destructive/30 bg-destructive/[0.04] text-destructive', dot: 'bg-destructive' },
+  warning: { chip: 'border-amber-300 bg-amber-50/70 text-[var(--badge-warning-fg)] dark:border-amber-800 dark:bg-amber-950/30', dot: 'bg-amber-500' },
+}
+
+/** The rail's pill; only the live API's badge sets `tone`, which it also marks on the element. */
+function Chip({ tone, children }: { tone?: PrototypeTone; children: ReactNode }) {
+  const colours = chipTone[tone ?? 'neutral']
   return (
-    <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-2.5 py-1 text-xs font-bold text-[var(--vc-tint-ink)]">
-      <span className="size-1.5 rounded-full bg-[var(--md-green-500)]" aria-hidden />
-      {name} plan
+    <span data-tone={tone} className={cn('inline-flex w-full items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold', colours.chip)}>
+      <span className={cn('size-1.5 rounded-full', colours.dot)} aria-hidden />
+      {children}
     </span>
   )
 }
 
+function PlanChip({ name }: { name: string }) {
+  return <Chip>{name} plan</Chip>
+}
+
 /**
- * The live API's chip names the plan from the subscription read the chrome shares, because the
- * vendor context no longer carries it. It is withheld before go-live, while the first read loads
- * and after it fails.
+ * The live API's chip is the billing state's badge from the read the chrome shares: days left,
+ * the plan's name, the last open day, or Shop closed. It is withheld before go-live, while the
+ * first read loads and after it fails.
  */
 function LivePlanChip() {
   const { vendorId } = useVendorAccount()
-  const { planName } = useStartedLiveBilling(vendorId)
-  return planName ? <PlanChip name={planName} /> : null
+  const { view } = useStartedLiveBilling(vendorId)
+  const badge = view ? liveBillingWording(view).badge : null
+  return badge ? <Chip tone={badge.tone}>{badge.text}</Chip> : null
 }
 
 /**
@@ -183,27 +198,33 @@ function PlanBanner() {
 }
 
 /**
- * The live API's plan banner. It has no free plan, so the banner follows the free days instead:
- * an open store sees it until T, from the subscription read, even after paying early. It sits
- * below the billing banner rather than replacing it.
+ * The live API's plan banner. It has no free plan, so the banner follows the unpaid free days
+ * instead: an open store sees it until T, from the subscription read, while the shared view is Free
+ * days or 3 days left. It is hidden while a payment confirms and once paid, and sits below the
+ * billing banner rather than replacing it.
  */
 function LivePlanBanner() {
   const { vendorId, storeState } = useVendorAccount()
-  const { trialEndsAt } = useStartedLiveBilling(vendorId)
+  const { view, trialEndsAt } = useStartedLiveBilling(vendorId)
   if (storeState !== 'OPEN' || !trialEndsAt || Date.now() >= Date.parse(trialEndsAt)) return null
-  return <ShareLinkBanner lead="Free plan active" />
+  if (view?.state !== 'free_days' && view?.state !== 'three_days_left') return null
+  return <ShareLinkBanner />
 }
 
-function ShareLinkBanner({ lead }: { lead: string }) {
+function ShareLinkBanner({ lead }: { lead?: string }) {
   return (
     <div
       role="status"
       className="mx-[var(--vc-gutter)] mt-4 flex flex-wrap items-center justify-between gap-2.5 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[image:var(--vc-banner)] px-4 py-3 text-sm text-slate-700"
     >
-      <p>
-        <strong className="font-semibold">{lead}</strong> — share your shop link
-        to get your first WhatsApp orders.
-      </p>
+      {lead ? (
+        <p>
+          <strong className="font-semibold">{lead}</strong> — share your shop link
+          to get your first WhatsApp orders.
+        </p>
+      ) : (
+        <p>Share your shop link to get your first WhatsApp orders.</p>
+      )}
       <Link
         to="/vendor/storefront"
         className="rounded-full border border-[var(--vc-tint-line)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--vc-tint-ink)] transition hover:bg-[var(--vc-tint)]"
@@ -213,17 +234,6 @@ function ShareLinkBanner({ lead }: { lead: string }) {
     </div>
   )
 }
-
-/**
- * The six-state Plan prototype's banner and header button: local development in demo mode only.
- *
- * They read the prototype state Plan shares, and link to Plan rather than opening Checkout. A
- * production build drops the import entirely and keeps the plan pill and `PlanBanner`; the live API
- * has its own billing chrome and `LivePlanBanner`.
- */
-const prototypeChrome = import.meta.env.DEV ? () => import('@/modules/vendor/components/BillingPrototypeChrome') : null
-const PrototypeShellBanner = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeShellBanner })))
-const PrototypeHeaderButton = prototypeChrome && lazy(() => prototypeChrome().then((module) => ({ default: module.PrototypeHeaderButton })))
 
 /**
  * The console frame.
@@ -241,7 +251,7 @@ function VendorChrome() {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
   const title = pageTitle(pathname)
-  const live = isLiveApi()
+  const live = usesLiveBilling()
 
   // Arriving somewhere is what closing the drawer means, so the route is what closes it —
   // not each link having to remember to.
@@ -341,10 +351,6 @@ function VendorChrome() {
             */}
             {live ? (
               <LiveHeaderButton />
-            ) : PrototypeHeaderButton ? (
-              <Suspense fallback={null}>
-                <PrototypeHeaderButton />
-              </Suspense>
             ) : (
               <Link to="/vendor/plan">
                 <Button size="sm" className="rounded-full">
@@ -360,10 +366,6 @@ function VendorChrome() {
             <LiveShellBanner />
             <LivePlanBanner />
           </>
-        ) : PrototypeShellBanner ? (
-          <Suspense fallback={null}>
-            <PrototypeShellBanner />
-          </Suspense>
         ) : (
           <PlanBanner />
         )}

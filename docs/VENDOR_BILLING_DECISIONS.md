@@ -32,7 +32,7 @@ reads; see [Live API billing](#live-api-billing--29-september-2026).)*
 
 ## Agreed product rules
 
-- The platform fee is ₹299/month, INR. Production tax and invoicing treatment remains pending.
+- The platform fee is ₹399/month, INR. Production tax and invoicing treatment remains pending.
 - One eligible 14-day trial per verified vendor identity. It starts only when a store has **both
   completed onboarding and received successful approval**. Submission alone does not start it;
   delayed approval must not consume trial days. Repeated completion/approval events or login
@@ -296,12 +296,16 @@ enforcement remain separate work; the temporary helper is not the production bil
 
 ## Six-state demo Plan prototype — 24 September 2026
 
-**Status:** agreed with the product owner and implemented on 24 September 2026.
+**Status:** agreed with the product owner and implemented on 24 September 2026. **Removed on
+7 October 2026:** at the product owner's request, demo mode in development now shows the Live Plan
+against a local Razorpay Test backend that follows the [early first fee](#early-first-fee--29-september-2026)
+([architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo)). The
+rest of this section is history.
 It changes only the development demo Plan, its button labels and which billing views Plan shows.
 It follows the [agreed product rules](#agreed-product-rules) as they stood on 24 September; since
 29 September 2026 it is frozen with demo mode and keeps trial AutoPay, so its actions differ from
 the Live API's [early first fee](#early-first-fee--29-september-2026). The
-[architecture owner](./API_ARCHITECTURE.md#six-state-plan-prototype) describes the implementation,
+[architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo) describes the implementation,
 and the [preview record](./VENDOR_BILLING_PREVIEW.md#six-state-prototype-evidence--24-september-2026)
 holds the hosted Test evidence.
 
@@ -401,7 +405,7 @@ These rules apply to cards and UPI.
   helper treats Razorpay's retrying `pending` as service-continuing, treats only `halted` as failed
   and cancels a halted subscription. A halt past the boundary moves the prototype to Payment failed;
   a Test-accelerated halt before paid-through keeps the paid days and ends AutoPay (Stopped). The
-  [architecture owner](./API_ARCHITECTURE.md#six-state-plan-prototype) describes it.
+  [architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo) describes it.
 
 ### UPI: accounts and launch evidence
 
@@ -438,7 +442,7 @@ history:
    did not go through…" rather than naming a card. Authorisation help says "a small refundable
    charge" until Test evidence shows the UPI amount; Razorpay documents both ₹5 and ₹1. Update the
    six-state section's "card payment only" note and the
-   [architecture owner](./API_ARCHITECTURE.md#six-state-plan-prototype) with the implementation.
+   [architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo) with the implementation.
 4. **Test evidence.** By UPI, observe trial AutoPay setup, an immediate ₹299, and one scheduled
    debit that succeeds and one that fails; record it in the
    [preview record](./VENDOR_BILLING_PREVIEW.md). Razorpay does not document UPI subscriptions in
@@ -461,7 +465,10 @@ implementation to the [architecture owner](./API_ARCHITECTURE.md), with the wiri
   the six billing states of the [prototype](#six-state-demo-plan-prototype--24-september-2026),
   driven only by the published backend billing API. The Live API never uses the local test server.
   Chips and sample lines stay in demo mode.
-- **Demo mode is frozen.** The local test server and the prototype stay as they are, with no new
+- **Demo mode is frozen.** *(Superseded on 7 October 2026: the local test server was rebuilt to
+  follow the backend brief's corrected model, and demo mode in development shows the Live Plan
+  against it; see [the architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo).)*
+  The local test server and the prototype stay as they are, with no new
   features. The server is deleted once the backend covers what only it does today: keeping the
   trial while AutoPay is on, cancelling before the first fee, setting AutoPay up again before the
   paid days end, and treating a fee as paid only once it is captured. (Since the early first fee,

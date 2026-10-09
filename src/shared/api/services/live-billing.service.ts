@@ -1,6 +1,8 @@
 import { vendorBillingService as apiBillingService, type components } from '@mithra/api-client'
 import { unwrapData } from '../client'
 import { assertApiSuccess, isApiError } from '../errors'
+import { isLiveApi } from '../mode'
+import { localBillingBackend } from './local-billing-backend.service'
 
 export type LiveBillingRequestConfig = {
   signal?: AbortSignal
@@ -17,6 +19,9 @@ export type LiveSubscriptionRead =
   | { kind: 'subscription'; subscription: unknown }
   | { kind: 'not-live' }
 
+/** The backend, or in local development demo mode the local Razorpay Test helper standing in for it. */
+const transport = () => isLiveApi() || !import.meta.env.DEV ? apiBillingService : localBillingBackend
+
 async function unwrapSuccess(request: Promise<unknown>): Promise<unknown> {
   return unwrapData(assertApiSuccess(await request))
 }
@@ -28,7 +33,7 @@ async function readSubscription(
   try {
     return {
       kind: 'subscription',
-      subscription: await unwrapSuccess(apiBillingService.getSubscription(vendorId, config)),
+      subscription: await unwrapSuccess(transport().getSubscription(vendorId, config)),
     }
   } catch (error) {
     if (isApiError(error) && error.status === 404) return { kind: 'not-live' }
@@ -43,12 +48,12 @@ async function readSubscription(
 export const liveBillingService = {
   readSubscription,
   subscribe: (vendorId: string | number, planCode: LiveBillingSubscribeInput['plan_code']) =>
-    unwrapSuccess(apiBillingService.subscribe(vendorId, { plan_code: planCode })),
+    unwrapSuccess(transport().subscribe(vendorId, { plan_code: planCode })),
   confirm: (vendorId: string | number, payment: LiveBillingConfirmInput) =>
-    unwrapSuccess(apiBillingService.confirm(vendorId, payment)),
-  cancel: (vendorId: string | number) => unwrapSuccess(apiBillingService.cancel(vendorId)),
+    unwrapSuccess(transport().confirm(vendorId, payment)),
+  cancel: (vendorId: string | number) => unwrapSuccess(transport().cancel(vendorId)),
   readHistory: (vendorId: string | number, config: LiveBillingRequestConfig = {}) =>
-    unwrapSuccess(apiBillingService.getHistory(vendorId, config)),
+    unwrapSuccess(transport().getHistory(vendorId, config)),
   listPaidPlans: (config: LiveBillingRequestConfig = {}) =>
-    unwrapSuccess(apiBillingService.listPaidPlans(config)),
+    unwrapSuccess(transport().listPaidPlans(config)),
 }

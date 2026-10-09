@@ -131,7 +131,8 @@ announces a billing change, so the app limits its billing reads in memory: the
 `TEMP(vendor-billing-reads)` workaround, whose target design and request counts
 [VENDOR_BILLING_READS_TARGET.md](./VENDOR_BILLING_READS_TARGET.md) owns. None of these is a release
 blocker. Each fix is a contract change the backend would have to publish; no such endpoint, field or
-header exists today.
+header exists today. The payment outcome row, recorded 7 October 2026, is about what the read says
+rather than how often it is read.
 
 | Gap | Problem | Required contract change | Frontend code it would retire |
 |---|---|---|---|
@@ -139,6 +140,7 @@ header exists today.
 | Billing change push | Nothing tells an open tab that billing changed (a webhook-applied payment, a cancel or a charge elsewhere), so the app rereads on focus once 15 minutes old, on Plan and at T or P | A vendor-scoped push channel, such as server-sent events, announcing billing changes | The 15-minute focus gate, the cross-tab `BroadcastChannel` and most of Plan's 5 s poll; the target's 15 min `staleTime` could rise |
 | Plan summary in the vendor context | The rail chip, Settings' Plan row and the chrome need the plan name, trial end and billing status, but since 29 September the vendor context has none, so every vendor page starts a billing read | The vendor context carries a plan summary: plan name, `trial_ends_at` and the billing status | The chrome's, rail's and Settings' use of the shared billing read (`useStartedLiveBilling`); only Plan would read billing |
 | Cacheable plans catalog | `GET /v1/subscription-plans` is public and static but answers `no-store`, so the browser cannot cache it | An `ETag` with conditional requests, or a `max-age`, instead of `no-store` | The in-memory, once-per-page-load plans request; the target's `staleTime: Infinity` plans query |
+| Payment outcome | After Checkout, a failed payment reads the same as one Razorpay has not confirmed yet: an immediate-start payment stays `razorpay_status: created` and Keep shop open keeps the stopped read either way. Plan keeps "Confirming your payment…" with no payment action until a reload | The subscription read gains `latest_payment_id` (the Razorpay payment ID of the most recent payment on the vendor's current subscription) and `latest_payment_status` (that payment's raw Razorpay status, lowercase, such as `authorized`, `captured` or `failed`), each `null` when there is none | None; Plan already reads both when present. A read during the [confirmation hold](./API_ARCHITECTURE.md#vendor-platform-billing-live-api) naming the hold's payment `failed` ends the hold and shows "Payment failed. Try again." `latest_payment_status: authorized` also lets Plan keep "Confirming your payment…" across a reload. |
 
 ### Backend request: let a vendor edit their own catalog during setup
 

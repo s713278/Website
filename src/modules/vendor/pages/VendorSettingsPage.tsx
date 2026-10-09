@@ -4,7 +4,7 @@ import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import type { VendorStoreProfile } from '@/modules/vendor/types/dashboard'
-import { getErrorMessage, isLiveApi, vendorService } from '@/shared/api'
+import { getErrorMessage, usesLiveBilling, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, Spinner } from '@/shared/components'
 
@@ -163,7 +163,7 @@ export function VendorSettingsPage() {
       {loading ? <Spinner label="Loading your details…" /> : null}
 
       {!loading && profile ? (
-        <StoreSettings profile={profile} planName={isLiveApi() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />
+        <StoreSettings profile={profile} planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />
       ) : null}
 
       {/*
