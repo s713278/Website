@@ -272,6 +272,13 @@ wizard reaches a step that uses it (5, 6 or 10). The read starts alongside the p
 and the step shows "Loading measurements…" with Continue disabled until it settles. A failed read
 keeps the sample-unit fallback, as a failed snapshot read does.
 
+The snapshot is assembled from per-resource cache entries (`onboarding-resource-cache`, one per
+vendor for profile, business types, categories, products, sizes and checkout options). Each entry is
+single-flight, a failed read is evicted so the next load retries it (the snapshot still records it as
+empty), and a late response for an invalidated entry reaches its caller but is not stored. The
+snapshot invalidation below drops all of the vendor's resource entries with it.
+`buildResumeDraft` composes one pure applier per resource over that snapshot.
+
 Submitted vendors load the complete read set so earlier setup remains reviewable. If context omits
 `onboarding.next_step`, the loader also chooses the complete set so the resource-derived resume
 fallback is computed from real data rather than an intentionally partial snapshot. Context failure

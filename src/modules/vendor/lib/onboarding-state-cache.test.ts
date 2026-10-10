@@ -6,6 +6,7 @@ import {
   writeEntry,
 } from './onboarding-state-cache'
 import type { ServerOnboardingState } from './onboarding-resume'
+import { loadOnboardingResource, peekOnboardingResource } from './onboarding-resource-cache'
 import { loadVendorContext } from './vendor-context-cache'
 
 const VENDOR_ID = '96'
@@ -65,5 +66,33 @@ describe('peekVendorAccountContext', () => {
     invalidateVendorOnboardingState(VENDOR_ID)
 
     expect(peekVendorAccountContext(VENDOR_ID)).toBeNull()
+  })
+})
+
+describe('invalidateVendorOnboardingState', () => {
+  async function fill(vendorId: string) {
+    await loadOnboardingResource(vendorId, 'profile', async () => null)
+    await loadOnboardingResource(vendorId, 'checkout', async () => null)
+  }
+
+  it('drops every resource of the vendor and leaves other vendors', async () => {
+    await fill(VENDOR_ID)
+    await fill('97')
+
+    invalidateVendorOnboardingState(VENDOR_ID)
+
+    expect(peekOnboardingResource(VENDOR_ID, 'profile')).toBeNull()
+    expect(peekOnboardingResource(VENDOR_ID, 'checkout')).toBeNull()
+    expect(peekOnboardingResource('97', 'profile')).toEqual({ value: null })
+  })
+
+  it('drops every vendor’s resources on sign-out', async () => {
+    await fill(VENDOR_ID)
+    await fill('97')
+
+    invalidateVendorOnboardingState()
+
+    expect(peekOnboardingResource(VENDOR_ID, 'profile')).toBeNull()
+    expect(peekOnboardingResource('97', 'checkout')).toBeNull()
   })
 })

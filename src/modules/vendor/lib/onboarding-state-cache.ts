@@ -1,6 +1,7 @@
 import type { VendorContext } from '@/shared/api'
 import type { ServerOnboardingState } from './onboarding-resume'
 import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
+import { invalidateOnboardingResources } from './onboarding-resource-cache'
 import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
 
 /**
@@ -49,7 +50,8 @@ export function peekVendorAccountContext(vendorId: string): VendorContext | null
 }
 
 /**
- * Drop both account snapshots so the next wizard or dashboard read hits the account.
+ * Drop both account snapshots, and the account resources they are built from, so the next
+ * wizard or dashboard read hits the account.
  *
  * Call after any write that changes what a resume would produce — every persisted step
  * and go-live — and on sign-out, where one vendor's store details must not outlive their
@@ -62,5 +64,6 @@ export function invalidateVendorOnboardingState(vendorId?: string): void {
     entries.clear()
     invalidateMeasurementCatalog()
   }
+  invalidateOnboardingResources(vendorId)
   invalidateVendorContext(vendorId)
 }

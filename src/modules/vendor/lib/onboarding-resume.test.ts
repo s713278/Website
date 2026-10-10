@@ -12,9 +12,18 @@ import {
   type VendorSkuRef,
 } from '@/shared/api'
 import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
-import { createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { invalidateOnboardingResources } from './onboarding-resource-cache'
 import {
   accountReadsForResumeStep,
+  applyBusinessType,
+  applyCategories,
+  applyCheckout,
+  applyProducts,
+  applyProfile,
+  applyResumeFrame,
+  applyResumeState,
+  applySkus,
   backendResumeStep,
   buildResumeDraft,
   derivedResumeStep,
@@ -25,9 +34,14 @@ import {
   isVendorApproved,
   isStoreSubmitted,
   measurementCatalogsForResume,
+  resolveBusinessType,
+  resumeOrderWhatsapp,
   resumePaymentDetails,
+  stepResources,
+  type ResumeApplyOptions,
   type ServerOnboardingState,
 } from './onboarding-resume'
+import type { OnboardingStep } from '../types/onboarding'
 import { readinessIssues } from './onboarding-validation'
 import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
 import { deriveStoreState } from './store-state'
@@ -477,7 +491,10 @@ describe('loadServerOnboardingState files Step 3\'s first page', () => {
       writeReferenceCache(`test-filler:${index}`, { items: [], pageNumber: 0, pageSize: 9, totalElements: 0, totalPages: 0, lastPage: true }, false)
     }
   })
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    invalidateOnboardingResources()
+  })
 
   function answerReads(businessType: string | null) {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
@@ -524,5 +541,158 @@ describe('loadServerOnboardingState files Step 3\'s first page', () => {
 
     expect(getBusinessTypes).not.toHaveBeenCalled()
     expect(readReferenceCache(accountKey)).toBeNull()
+  })
+})
+
+describe('stepResources', () => {
+  it.each([
+    [1, false, [], false],
+    [2, false, [], false],
+    [3, false, ['profile', 'businessTypes'], false],
+    [4, false, ['profile', 'businessTypes', 'categories'], false],
+    [5, false, ['profile', 'businessTypes', 'categories', 'products'], true],
+    [6, false, ['profile', 'businessTypes', 'categories', 'products', 'skus'], true],
+    [7, false, ['checkout'], false],
+    [8, false, ['checkout'], false],
+    [9, false, ['profile', 'businessTypes'], false],
+    [10, false, ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'], true],
+    [10, true, ['profile'], false],
+  ] as const)('Step %i (submitted: %s) needs %j, units %s', (step, submitted, account, units) => {
+    expect(stepResources(step, { submitted })).toEqual({ account, units })
+  })
+
+  it('gives a submitted store the same sets as anyone else on Steps 3-9', () => {
+    for (const step of [3, 4, 5, 6, 7, 8, 9] as const) {
+      expect(stepResources(step, { submitted: true })).toEqual(stepResources(step, { submitted: false }))
+    }
+  })
+})
+
+describe('per-resource appliers', () => {
+  const NONE: ResumeApplyOptions = { edited: new Set(), submitted: false }
+
+  /** Every applier in dependency order, by hand, over every resource of the state. */
+  function composeByHand(state: ServerOnboardingState) {
+    const options = { ...NONE, submitted: isStoreSubmitted(state) }
+    const businessType = resolveBusinessType(state.profile, state.businessTypes)
+    let draft = applyResumeFrame(createEmptyOnboardingDraft(), resumeStep(state), options)
+    draft = applyProfile(draft, state.profile, options)
+    draft = applyBusinessType(draft, businessType, options)
+    draft = applyCategories(draft, state.categories, businessType, options)
+    draft = applyProducts(draft, state.products, options)
+    draft = applySkus(draft, state.skus, state.products, state.measurements, options)
+    draft = applyCheckout(draft, state.checkout, options)
+    return {
+      draft,
+      orderWhatsapp: resumeOrderWhatsapp(state.profile),
+      paymentDetails: resumePaymentDetails(state.checkout, createEmptyRuntimeState().paymentDetails),
+    }
+  }
+
+  it.each([
+    ['a full account', fullState()],
+    ['a submitted store', fullState({ context: SUBMITTED_CONTEXT })],
+    ['a vendor on Step 4', fullState({
+      context: context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 4 } }),
+      products: [], skus: [], checkout: null,
+    })],
+    ['an empty account', fullState({
+      profile: null, categories: [], products: [], skus: [], checkout: null, businessTypes: [],
+    })],
+    ['a failed business-type lookup', fullState({ businessTypes: [] })],
+    ['an unset business type', fullState({ profile: { ...PROFILE, businessType: 'Others' } })],
+  ])('compose to exactly buildResumeDraft for %s', (_, state) => {
+    const resumed = buildResumeDraft(state)
+    const composed = composeByHand(state)
+
+    expect(composed.draft).toEqual(resumed.draft)
+    expect(composed.orderWhatsapp).toBe(resumed.orderWhatsapp)
+    expect(composed.paymentDetails).toEqual(
+      resumePaymentDetails(state.checkout, createEmptyRuntimeState().paymentDetails),
+    )
+    expect(applyResumeState(state, createEmptyOnboardingDraft(), {
+      ...NONE, submitted: isStoreSubmitted(state),
+    })).toEqual(resumed)
+  })
+
+  /** A local draft distinct from anything the account would produce. */
+  function localDraft() {
+    const draft = createEmptyOnboardingDraft()
+    return {
+      ...draft,
+      currentStep: 5 as OnboardingStep,
+      completedSteps: [1, 2, 3, 4] as OnboardingStep[],
+      catalogSource: 'sample' as const,
+      business: { businessType: { ...BUSINESS_TYPE, id: 99, name: 'Local' }, businessName: 'Local', ownerName: 'L', contactPerson: 'L' },
+      categories: [{ id: 77, name: 'Local', imageUrl: null, businessTypeId: 99, description: null, displayOrder: null }],
+      products: [],
+      skus: [],
+      delivery: { ...draft.delivery, consentTitle: 'Local terms' },
+      payments: draft.payments.map((option) => ({ ...option, enabled: true })),
+      storefront: { ...draft.storefront, storeName: 'Local' },
+    }
+  }
+
+  it.each([
+    [3, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyBusinessType(draft, BUSINESS_TYPE, options), 'business.businessType'],
+    [4, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyCategories(draft, CATEGORIES, BUSINESS_TYPE, options), 'categories'],
+    [5, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyProducts(draft, PRODUCTS, options), 'products'],
+    [6, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applySkus(draft, SKUS, PRODUCTS, SAMPLE_MEASUREMENT_CATALOG, options), 'skus'],
+    [7, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyCheckout(draft, CHECKOUT, options), 'delivery'],
+    [8, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyCheckout(draft, CHECKOUT, options), 'payments'],
+    [9, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyProfile(draft, PROFILE, options), 'storefront'],
+  ] as const)('leave Step %i untouched while it has unsaved edits, unless submitted', (step, apply, path) => {
+    const pick = (draft: object) => path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], draft)
+    const local = localDraft()
+
+    const kept = apply(local, { edited: new Set([step]), submitted: false })
+    expect(pick(kept)).toEqual(pick(local))
+
+    const applied = apply(local, { edited: new Set(), submitted: false })
+    expect(pick(applied)).not.toEqual(pick(local))
+
+    const submitted = apply(local, { edited: new Set([step]), submitted: true })
+    expect(pick(submitted)).toEqual(pick(applied))
+  })
+
+  it('apply the other step of a shared checkout read when only one is edited', () => {
+    const local = localDraft()
+
+    const draft = applyCheckout(local, CHECKOUT, { edited: new Set([7]), submitted: false })
+
+    expect(draft.delivery).toEqual(local.delivery)
+    expect(draft.payments).toEqual(applyCheckout(local, CHECKOUT, NONE).payments)
+  })
+
+  it('keep the business names with Step 9 edits', () => {
+    const local = localDraft()
+
+    const draft = applyProfile(local, PROFILE, { edited: new Set([9]), submitted: false })
+
+    expect(draft.business).toEqual(local.business)
+  })
+
+  it('frame the draft only when nothing is edited or the store is submitted', () => {
+    const local = localDraft()
+
+    expect(applyResumeFrame(local, 7, { edited: new Set([4]), submitted: false })).toBe(local)
+
+    for (const options of [NONE, { edited: new Set<OnboardingStep>([4]), submitted: true }]) {
+      const framed = applyResumeFrame(local, 7, options)
+      expect(framed).toMatchObject({
+        currentStep: 7,
+        completedSteps: [1, 2, 3, 4, 5, 6],
+        mobileVerified: true,
+        catalogSource: createEmptyOnboardingDraft().catalogSource,
+      })
+      // Resource sections are the appliers' business, not the frame's.
+      expect(framed.categories).toBe(local.categories)
+    }
+  })
+
+  it('never synthesize a zero business type id when the lookup missed', () => {
+    const draft = applyCategories(createEmptyOnboardingDraft(), CATEGORIES, null, NONE)
+
+    expect(draft.categories.map((category) => category.businessTypeId)).toEqual([null])
   })
 })

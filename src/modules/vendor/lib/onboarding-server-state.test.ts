@@ -5,7 +5,7 @@ import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sampl
 import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
 import { loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
 import { invalidateVendorOnboardingState, writeEntry } from './onboarding-state-cache'
-import type { ServerOnboardingState } from './onboarding-resume'
+import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
 import { loadVendorContext, peekVendorContext } from './vendor-context-cache'
 
 const VENDOR_ID = '96'
@@ -190,6 +190,53 @@ describe('loadVendorOnboardingState reads only what the resume step needs', () =
     invalidateVendorOnboardingState()
 
     expect(peekMeasurementCatalog()).toBeNull()
+  })
+
+  it('reuses resources a previous snapshot already read', async () => {
+    const spies = answerReads(contextAtStep(5), 'Grocery')
+
+    await loadServerOnboardingState(VENDOR_ID)
+    await loadServerOnboardingState(VENDOR_ID)
+
+    expect(spies.getVendorContext).toHaveBeenCalledTimes(2)
+    expect(spies.getVendorProfile).toHaveBeenCalledTimes(1)
+    expect(spies.getBusinessTypes).toHaveBeenCalledTimes(1)
+    expect(spies.getVendorCategories).toHaveBeenCalledTimes(1)
+    expect(spies.getVendorProducts).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads the resources again after the vendor’s state is invalidated', async () => {
+    const spies = answerReads(contextAtStep(4), 'Grocery')
+
+    await loadVendorOnboardingState(VENDOR_ID)
+    invalidateVendorOnboardingState(VENDOR_ID)
+    await loadVendorOnboardingState(VENDOR_ID)
+
+    expect(spies.getVendorProfile).toHaveBeenCalledTimes(2)
+    expect(spies.getVendorCategories).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a failed resource on the next snapshot, still reading it as empty', async () => {
+    const spies = answerReads(contextAtStep(4), 'Grocery')
+    spies.getVendorCategories.mockRejectedValueOnce(new Error('offline'))
+
+    const first = await loadServerOnboardingState(VENDOR_ID)
+    const second = await loadServerOnboardingState(VENDOR_ID)
+
+    expect(first.categories).toEqual([])
+    expect(second.categories).toEqual([])
+    expect(spies.getVendorCategories).toHaveBeenCalledTimes(2)
+    expect(spies.getVendorProfile).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips business types after a failed profile read', async () => {
+    const spies = answerReads(contextAtStep(4), 'Grocery')
+    spies.getVendorProfile.mockRejectedValueOnce(new Error('offline'))
+
+    const state = await loadServerOnboardingState(VENDOR_ID)
+
+    expect(state.profile).toBeNull()
+    expect(spies.getBusinessTypes).not.toHaveBeenCalled()
   })
 
   it('does not keep a failed catalog read, so the next caller asks again', async () => {

@@ -7,6 +7,7 @@ import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { mapVendorContext, vendorOnboardingService } from '@/shared/api'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
+import { invalidateOnboardingResources } from '../../lib/onboarding-resource-cache'
 import { loadServerOnboardingState } from '../../lib/onboarding-resume'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 
@@ -17,6 +18,7 @@ afterEach(() => {
   useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [] })
   vi.restoreAllMocks()
   vi.useRealTimers()
+  invalidateOnboardingResources()
 })
 
 function setCatalogDraft(
