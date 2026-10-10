@@ -316,9 +316,8 @@ reuses it rather than reading the context again.
 The marketing header decides its vendor actions from the context alone. On every route, `/onboarding`
 included, it calls `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
 context cache so the dashboard opens on it, or no request when that cache already holds a resolved
-context. Waiting on the full read held the actions back until the
-slowest of its reads settled, however little the decision used them. On `/onboarding` the wizard
-reads its context through the same cache, so the two share one context request.
+context. On `/onboarding` the wizard reads its context through the same cache, so the two share one
+context request.
 
 Post-sign-in routing (`resolveLandingPath`) first decides from the chosen vendor's `verify-otp`
 `vendors[]` status and onboarding when they suffice (see

@@ -68,10 +68,10 @@ export function catalogFingerprint(step: OnboardingStep, draft: VendorOnboarding
 /**
  * Fingerprints for the catalog steps a resumed draft took in full from the account.
  *
- * Only the steps before the one it opens on: the resume's cumulative reads always cover
- * those, while the opening step itself may not have been read at all. When only some
- * steps took the account copy (`applied`), a step also needs it for itself and every
- * catalog step before it, since its fingerprint covers them all.
+ * Only the steps before the one it opens on: the account's pointer says that one is not
+ * finished, so its Continue still saves. When only some steps took the account copy
+ * (`applied`), a step also needs it for itself and every catalog step before it, since its
+ * fingerprint covers them all.
  */
 export function resumedCatalogFingerprints(
   draft: VendorOnboardingDraftV1,
