@@ -50,8 +50,6 @@ export type ServerOnboardingState = {
   skus: VendorSkuRef[]
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
-  measurements: MeasurementCatalog
-  productMeasurementCatalog: MeasurementCatalog
 }
 
 /** A never-configured vendor reports this, so it cannot be read as a real choice. */
@@ -163,7 +161,7 @@ export function savedBusinessType(profile: VendorProfile | null): string | null 
   return type && type !== UNSET_BUSINESS_TYPE ? type : null
 }
 
-export function hasBusinessType(state: ServerOnboardingState): boolean {
+function hasBusinessType(state: ServerOnboardingState): boolean {
   return savedBusinessType(state.profile) !== null
 }
 
@@ -242,23 +240,6 @@ export function clampResumePointer(next: number | null | undefined): OnboardingS
   if (next > 10) return 10
   if (next < 3) return 3
   return next as OnboardingStep
-}
-
-/**
- * Where the wizard opens.
- *
- * The backend's own pointer is authoritative. It tracks what the vendor actually
- * completed rather than what the account happens to hold, which is the difference that
- * matters: a vendor who finished Step 8 but has one unpriced product left over reports
- * `next_step: 9`, while deriving from resources reports 6 and throws away their
- * delivery, payment and storefront work on every visit.
- *
- * `derivedResumeStep` is a fallback for one case only — the contract dropping the field.
- * It is not a second opinion, and nothing should prefer it.
- */
-export function resumeStep(state: ServerOnboardingState): OnboardingStep {
-  if (isStoreSubmitted(state)) return 10
-  return backendResumeStep(state.context) ?? derivedResumeStep(state)
 }
 
 /** Resource-derived fallback. Only reachable if `next_step` stops being returned. */
@@ -425,14 +406,6 @@ export function resumePaymentDetails(
   }
 }
 
-export type ResumeResult = {
-  draft: VendorOnboardingDraftV1
-  furthestVisitedStep: OnboardingStep
-  openAt: OnboardingStep
-  /** Step 9's order number, as the ten-digit national number its control shows. */
-  orderWhatsapp: string
-}
-
 /**
  * The vendor record stores the contact number in whatever form it was registered with;
  * Step 9 shows a plain ten-digit national number. This strips an Indian `+91`/`0` prefix
@@ -591,36 +564,6 @@ export function resumeOrderWhatsapp(profile: VendorProfile | null): string {
   return toNationalMobile(profile?.contactNumber)
 }
 
-/** Every applier in dependency order over a full account snapshot. */
-export function applyResumeState(
-  state: ServerOnboardingState,
-  draft: VendorOnboardingDraftV1,
-  options: ResumeApplyOptions,
-): ResumeResult {
-  const openAt = resumeStep(state)
-  const businessType = resolveBusinessType(state.profile, state.businessTypes)
-  let next = applyResumeFrame(draft, openAt, options)
-  next = applyProfile(next, state.profile, options)
-  next = applyBusinessType(next, businessType, options)
-  next = applyCategories(next, state.categories, businessType, options)
-  next = applyProducts(next, state.products, options)
-  next = applySkus(next, state.skus, state.products, state.measurements, options)
-  next = applyCheckout(next, state.checkout, options)
-  return {
-    openAt,
-    furthestVisitedStep: openAt,
-    orderWhatsapp: resumeOrderWhatsapp(state.profile),
-    draft: next,
-  }
-}
-
-export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
-  return applyResumeState(state, createEmptyOnboardingDraft(), {
-    edited: new Set(),
-    submitted: isStoreSubmitted(state),
-  })
-}
-
 /** Where one resource's read stands in the current wizard visit. */
 export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
 
@@ -661,5 +604,5 @@ export function accountResumeState(
   context: VendorContext,
   values: OnboardingResourceData,
 ): ServerOnboardingState {
-  return { context, ...values, ...measurementCatalogsForResume(null) }
+  return { context, ...values }
 }

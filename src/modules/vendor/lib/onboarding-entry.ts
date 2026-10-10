@@ -13,7 +13,7 @@ export type OnboardingEntry = { kind: 'submitted' } | { kind: 'resume' }
 /**
  * Deliberately carries no step. It used to expose an `openAt` derived from
  * `earliestIncompleteStep`, which nothing read — `vendorLandingPath` only ever branches
- * on `kind` — and which contradicted `resumeStep`, whose whole point is that the
+ * on `kind` — and which contradicted `backendResumeStep`, whose whole point is that the
  * backend's `next_step` is authoritative and resource-derivation is a last resort.
  * The wizard decides where to open; this decides only which route to land on.
  */

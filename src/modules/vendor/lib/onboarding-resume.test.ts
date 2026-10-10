@@ -21,15 +21,12 @@ import {
   applyProducts,
   applyProfile,
   applyResumeFrame,
-  applyResumeState,
   applySkus,
   backendResumeStep,
-  buildResumeDraft,
   derivedResumeStep,
   earliestIncompleteStep,
   furthestSavedStep,
   loadAccountResource,
-  resumeStep,
   isVendorApproved,
   isStoreSubmitted,
   measurementCatalogsForResume,
@@ -150,10 +147,22 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
     skus: SKUS,
     checkout: CHECKOUT,
     businessTypes: [BUSINESS_TYPE],
-    measurements: SAMPLE_MEASUREMENT_CATALOG,
-    productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     ...overrides,
   }
+}
+
+/** Every applier in dependency order over the whole state, as the wizard composes them. */
+function composeByHand(state: ServerOnboardingState) {
+  const options = { edited: new Set<OnboardingStep>(), submitted: isStoreSubmitted(state) }
+  const businessType = resolveBusinessType(state.profile, state.businessTypes)
+  let draft = applyResumeFrame(createEmptyOnboardingDraft(), derivedResumeStep(state), options)
+  draft = applyProfile(draft, state.profile, options)
+  draft = applyBusinessType(draft, businessType, options)
+  draft = applyCategories(draft, state.categories, businessType, options)
+  draft = applyProducts(draft, state.products, options)
+  draft = applySkus(draft, state.skus, state.products, SAMPLE_MEASUREMENT_CATALOG, options)
+  draft = applyCheckout(draft, state.checkout, options)
+  return { draft, orderWhatsapp: resumeOrderWhatsapp(state.profile) }
 }
 
 const SUBMITTED_CONTEXT = context({
@@ -210,7 +219,7 @@ function withNextStep(nextStep: number | null, overrides: Partial<ServerOnboardi
   }
 }
 
-describe('resumeStep — the backend pointer decides', () => {
+describe('backendResumeStep — the backend pointer decides', () => {
   it('opens where the backend says, not where the resources imply', () => {
     // The case that proves the point. Verified on a submitted account: three products,
     // two priced, delivery and payments saved. The account "looks" incomplete at Step 6;
@@ -223,12 +232,12 @@ describe('resumeStep — the backend pointer decides', () => {
     })
 
     expect(earliestIncompleteStep(stranded)).toBe(6)
-    expect(resumeStep(stranded)).toBe(9)
+    expect(backendResumeStep(stranded.context)).toBe(9)
   })
 
   it('takes next_step verbatim across the setup range', () => {
     for (const step of [3, 4, 5, 6, 7, 8, 9, 10] as const) {
-      expect(resumeStep(withNextStep(step))).toBe(step)
+      expect(backendResumeStep(withNextStep(step).context)).toBe(step)
     }
   })
 
@@ -251,12 +260,12 @@ describe('resumeStep — the backend pointer decides', () => {
         onboarding: { ...SUBMITTED_CONTEXT.onboarding, nextStep: 6 },
       },
     })
-    expect(resumeStep(submitted)).toBe(6)
+    expect(isStoreSubmitted(submitted)).toBe(false)
+    expect(backendResumeStep(submitted.context)).toBe(6)
   })
 
   it('falls back to the derivation only when the field is missing', () => {
     expect(backendResumeStep(withNextStep(null).context)).toBeNull()
-    expect(resumeStep(withNextStep(null))).toBe(derivedResumeStep(withNextStep(null)))
   })
 })
 
@@ -305,12 +314,11 @@ describe('derivedResumeStep — fallback only, if the contract drops next_step',
   })
 })
 
-describe('buildResumeDraft', () => {
+describe('the appliers over a whole account', () => {
   it('hydrates every step the account can supply', () => {
-    const { draft, openAt, furthestVisitedStep } = buildResumeDraft(fullState())
+    const { draft } = composeByHand(fullState())
 
-    expect(openAt).toBe(9)
-    expect(furthestVisitedStep).toBe(9)
+    expect(draft.currentStep).toBe(9)
     expect(draft.mobileVerified).toBe(true)
     expect(draft.business.businessType).toEqual(BUSINESS_TYPE)
     expect(draft.business.ownerName).toBe('Sanjay Kumar')
@@ -328,7 +336,7 @@ describe('buildResumeDraft', () => {
     // Step 6 no longer edits a size's name, description, or per-size fulfilment. Resume must
     // still carry the name and description the account holds so hiding the controls never
     // erases them, and default the fulfilment flags the SKU read never returns.
-    const { draft } = buildResumeDraft(fullState())
+    const { draft } = composeByHand(fullState())
 
     expect(draft.skus[0]).toMatchObject({
       name: 'Orange Juice',
@@ -342,7 +350,7 @@ describe('buildResumeDraft', () => {
     // The product is measured by VOLUME (id 2); a SKU stored in 'kg' predates that or was
     // written directly. Resume derives the measurement from the product and snaps the unit
     // to a valid one for it rather than resuming an off-product measurement.
-    const { draft } = buildResumeDraft(
+    const { draft } = composeByHand(
       fullState({ skus: [{ ...SKUS[0], unit: 'kg' }] }),
     )
 
@@ -352,9 +360,8 @@ describe('buildResumeDraft', () => {
 
   it('hydrates a submitted vendor too, not just an unfinished one', () => {
     // A submitted store still has to show its own catalog and settings on Steps 3-9.
-    const { draft, openAt } = buildResumeDraft(fullState({ context: SUBMITTED_CONTEXT }))
+    const { draft } = composeByHand(fullState({ context: SUBMITTED_CONTEXT }))
 
-    expect(openAt).toBe(10)
     expect(draft.currentStep).toBe(10)
     expect(draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(draft.categories).toHaveLength(1)
@@ -366,12 +373,12 @@ describe('buildResumeDraft', () => {
   it('restores the order WhatsApp number as a ten-digit national number', () => {
     // Nothing else can supply it: the storefront read 404s before approval, and runtime
     // state is never persisted. Step 9 now holds national digits, so that is what resume gives.
-    const { orderWhatsapp } = buildResumeDraft(fullState())
+    const { orderWhatsapp } = composeByHand(fullState())
     expect(orderWhatsapp).toBe('9876543210')
   })
 
   it('strips a stored +91 country code back to the national number', () => {
-    const { orderWhatsapp } = buildResumeDraft(
+    const { orderWhatsapp } = composeByHand(
       fullState({ profile: { ...PROFILE, contactNumber: '+919876543210' } }),
     )
     expect(orderWhatsapp).toBe('9876543210')
@@ -380,26 +387,18 @@ describe('buildResumeDraft', () => {
   it('leaves the order number empty when the stored value is not an Indian mobile', () => {
     // An unconvertible number yields an empty field and the vendor simply re-enters it,
     // rather than seeding Step 9 with a value its validator would reject anyway.
-    const { orderWhatsapp } = buildResumeDraft(
+    const { orderWhatsapp } = composeByHand(
       fullState({ profile: { ...PROFILE, contactNumber: '+14155552671' } }),
     )
     expect(orderWhatsapp).toBe('')
   })
 
   it('leaves an unconfigured vendor at Step 3 with an empty draft', () => {
-    const { draft, openAt } = buildResumeDraft({
-      context: context(),
-      profile: { ...PROFILE, businessType: 'Others' },
-      categories: [],
-      products: [],
-      skus: [],
-      checkout: null,
-      businessTypes: [BUSINESS_TYPE],
-      measurements: SAMPLE_MEASUREMENT_CATALOG,
-      productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
-    })
+    const { draft } = composeByHand(fullState({
+      profile: { ...PROFILE, businessType: 'Others' }, categories: [], products: [], skus: [], checkout: null,
+    }))
 
-    expect(openAt).toBe(3)
+    expect(draft.currentStep).toBe(3)
     expect(draft.business.businessType).toBeNull()
     expect(draft.categories).toEqual([])
   })
@@ -409,7 +408,7 @@ describe('a resumed draft is submittable', () => {
   it('raises no readiness issues once Step 9 branding is confirmed', () => {
     // The end-to-end guard: everything the account gave back has to survive the wizard's
     // own validators, or the vendor is blocked on Step 6 and Step 10 with no way forward.
-    const resumed = buildResumeDraft(fullState({ context: SUBMITTED_CONTEXT }))
+    const resumed = composeByHand(fullState({ context: SUBMITTED_CONTEXT }))
     const runtime = {
       ...createEmptyRuntimeState(),
       orderWhatsapp: resumed.orderWhatsapp,
@@ -425,7 +424,7 @@ describe('a resumed draft is submittable', () => {
 })
 
 describe('a partial resume still produces a loadable draft', () => {
-  // `getBusinessTypes` is wrapped in `optional()`, so it can fail while the vendor's
+  // `getBusinessTypes` can fail independently, while the vendor's
   // categories load fine. Attributing those categories to business type `0` used to make
   // the draft unpersistable — the validator rejects a zero reference id — so a transient
   // read failure came back as "your saved draft is damaged" on the next reload.
@@ -434,7 +433,7 @@ describe('a partial resume still produces a loadable draft', () => {
   }
 
   it('records unknown attribution as null rather than zero', () => {
-    const { draft } = buildResumeDraft(stateWithoutBusinessTypes())
+    const { draft } = composeByHand(stateWithoutBusinessTypes())
 
     expect(draft.business.businessType).toBeNull()
     expect(draft.categories.length).toBeGreaterThan(0)
@@ -444,13 +443,13 @@ describe('a partial resume still produces a loadable draft', () => {
   })
 
   it('round-trips through the draft validator', () => {
-    const { draft, furthestVisitedStep } = buildResumeDraft(stateWithoutBusinessTypes())
+    const { draft } = composeByHand(stateWithoutBusinessTypes())
     const envelope = {
       version: 4,
       revision: 1,
       updatedAt: new Date().toISOString(),
       ownerId: '91',
-      furthestVisitedStep,
+      furthestVisitedStep: draft.currentStep,
       editedSteps: [],
       draft: toPersistedDraft(draft),
       previewSnapshot: null,
@@ -460,7 +459,7 @@ describe('a partial resume still produces a loadable draft', () => {
   })
 
   it('still attributes categories when the lookup succeeds', () => {
-    const { draft } = buildResumeDraft(fullState())
+    const { draft } = composeByHand(fullState())
     for (const category of draft.categories) {
       expect(category.businessTypeId).toBe(BUSINESS_TYPE.id)
     }
@@ -560,50 +559,6 @@ describe('stepResources', () => {
 
 describe('per-resource appliers', () => {
   const NONE: ResumeApplyOptions = { edited: new Set(), submitted: false }
-
-  /** Every applier in dependency order, by hand, over every resource of the state. */
-  function composeByHand(state: ServerOnboardingState) {
-    const options = { ...NONE, submitted: isStoreSubmitted(state) }
-    const businessType = resolveBusinessType(state.profile, state.businessTypes)
-    let draft = applyResumeFrame(createEmptyOnboardingDraft(), resumeStep(state), options)
-    draft = applyProfile(draft, state.profile, options)
-    draft = applyBusinessType(draft, businessType, options)
-    draft = applyCategories(draft, state.categories, businessType, options)
-    draft = applyProducts(draft, state.products, options)
-    draft = applySkus(draft, state.skus, state.products, state.measurements, options)
-    draft = applyCheckout(draft, state.checkout, options)
-    return {
-      draft,
-      orderWhatsapp: resumeOrderWhatsapp(state.profile),
-      paymentDetails: resumePaymentDetails(state.checkout, createEmptyRuntimeState().paymentDetails),
-    }
-  }
-
-  it.each([
-    ['a full account', fullState()],
-    ['a submitted store', fullState({ context: SUBMITTED_CONTEXT })],
-    ['a vendor on Step 4', fullState({
-      context: context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 4 } }),
-      products: [], skus: [], checkout: null,
-    })],
-    ['an empty account', fullState({
-      profile: null, categories: [], products: [], skus: [], checkout: null, businessTypes: [],
-    })],
-    ['a failed business-type lookup', fullState({ businessTypes: [] })],
-    ['an unset business type', fullState({ profile: { ...PROFILE, businessType: 'Others' } })],
-  ])('compose to exactly buildResumeDraft for %s', (_, state) => {
-    const resumed = buildResumeDraft(state)
-    const composed = composeByHand(state)
-
-    expect(composed.draft).toEqual(resumed.draft)
-    expect(composed.orderWhatsapp).toBe(resumed.orderWhatsapp)
-    expect(composed.paymentDetails).toEqual(
-      resumePaymentDetails(state.checkout, createEmptyRuntimeState().paymentDetails),
-    )
-    expect(applyResumeState(state, createEmptyOnboardingDraft(), {
-      ...NONE, submitted: isStoreSubmitted(state),
-    })).toEqual(resumed)
-  })
 
   /** A local draft distinct from anything the account would produce. */
   function localDraft() {

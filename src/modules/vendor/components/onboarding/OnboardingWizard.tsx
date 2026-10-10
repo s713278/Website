@@ -290,38 +290,37 @@ function startAccountEntry(
     const approved = selectStoreIsApproved(state)
     const options = { edited: new Set(state.editedSteps), submitted }
     const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
-    const has = (resource: OnboardingResource) => resource in values
     let draft = state.draft
     let paymentDetails = state.runtime.paymentDetails
     let orderWhatsapp = ''
     const ran = (resource: OnboardingResource) => applied.add(resource)
 
-    if (!applied.has('profile') && has('profile')) {
+    if (!applied.has('profile') && view.resources.profile === 'loaded') {
       draft = applyProfile(draft, values.profile!, options)
       if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!)
       ran('profile')
     }
-    const businessType = has('profile') && has('businessTypes')
+    const businessType = view.resources.profile === 'loaded' && view.resources.businessTypes === 'loaded'
       ? resolveBusinessType(values.profile!, values.businessTypes!)
       : undefined
     if (!applied.has('businessTypes') && businessType !== undefined) {
       draft = applyBusinessType(draft, businessType, options)
       ran('businessTypes')
     }
-    if (!applied.has('categories') && has('categories') && businessType !== undefined) {
+    if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
       draft = applyCategories(draft, values.categories!, businessType, options)
       ran('categories')
     }
-    if (!applied.has('products') && has('products')) {
+    if (!applied.has('products') && view.resources.products === 'loaded') {
       draft = applyProducts(draft, values.products!, options)
       ran('products')
     }
     // Saved sizes are rebuilt against the units, so they wait for them (or their fallback).
-    if (!applied.has('skus') && has('skus') && has('products') && units !== undefined) {
+    if (!applied.has('skus') && view.resources.skus === 'loaded' && view.resources.products === 'loaded' && units !== undefined) {
       draft = applySkus(draft, values.skus!, values.products!, measurementCatalogsForResume(units).measurements, options)
       ran('skus')
     }
-    if (!applied.has('checkout') && has('checkout')) {
+    if (!applied.has('checkout') && view.resources.checkout === 'loaded') {
       draft = applyCheckout(draft, values.checkout!, options)
       if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
       ran('checkout')
@@ -395,7 +394,7 @@ function startAccountEntry(
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
-      if (resource === 'businessTypes' && 'profile' in values) {
+      if (resource === 'businessTypes' && view.resources.profile === 'loaded') {
         // The profile decides whether business types are needed at all.
         if (!savedBusinessType(values.profile!)) {
           landValue('businessTypes', [])
@@ -709,7 +708,7 @@ export function OnboardingWizard() {
     // Demo mode has no account to read; the local draft is all there is, so every step
     // counts as loaded.
     if (!isLiveApi()) {
-      setLoadedSteps([3, 4, 5, 6, 7, 8, 9])
+      setLoadedSteps([...ACCOUNT_STEPS])
       return
     }
 
