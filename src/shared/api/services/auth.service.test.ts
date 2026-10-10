@@ -161,3 +161,87 @@ describe('credential-refusal cleanup is independent of any UI', () => {
     off()
   })
 })
+
+describe('verifyOtp sign-in snapshot of vendor memberships', () => {
+  beforeEach(() => {
+    installLocalStorage()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const verified = (vendors: unknown[]) =>
+    envelope({ mobile_verified: true, roles: ['VENDOR'], user_id: 7, vendors })
+
+  it('maps each membership’s status and onboarding into signInVendors', async () => {
+    const { authService } = await import('./auth.service')
+    verifyOtpResponse = verified([
+      { vendor_id: 42, name: ' Green Bowl ', status: ' ACTIVE ', onboarding: { status: 'COMPLETED', description: 'Done', next_step: 11 } },
+      { vendor_id: 43, status: 'SETTING_UP', onboarding: { status: 'IN_PROGRESS', next_step: '5' } },
+    ])
+
+    const session = await authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' })
+
+    expect(session.signInVendors).toEqual([
+      { vendorId: '42', name: 'Green Bowl', status: 'ACTIVE', onboarding: { status: 'COMPLETED', description: 'Done', nextStep: 11 } },
+      { vendorId: '43', name: undefined, status: 'SETTING_UP', onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 5 } },
+    ])
+  })
+
+  it('maps missing or garbage fields to null and UNKNOWN', async () => {
+    const { authService } = await import('./auth.service')
+    verifyOtpResponse = verified([
+      { vendor_id: 1 },
+      { vendor_id: 2, status: 7, onboarding: { status: 'WHATEVER', description: 3, next_step: 'soon' } },
+      { vendor_id: 3, status: '  ', onboarding: 'nope' },
+    ])
+
+    const session = await authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' })
+
+    const unknown = { status: 'UNKNOWN', description: null, nextStep: null }
+    expect(session.signInVendors?.map(({ vendorId, status, onboarding }) => ({ vendorId, status, onboarding }))).toEqual([
+      { vendorId: '1', status: null, onboarding: unknown },
+      { vendorId: '2', status: null, onboarding: unknown },
+      { vendorId: '3', status: null, onboarding: unknown },
+    ])
+  })
+
+  it('keeps only the id and name on the session user', async () => {
+    const { authService } = await import('./auth.service')
+    verifyOtpResponse = verified([
+      { vendor_id: 42, name: 'Green Bowl', status: 'ACTIVE', onboarding: { status: 'COMPLETED', next_step: 11 } },
+    ])
+
+    const session = await authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' })
+
+    expect(session.user.vendors).toEqual([{ vendorId: '42', name: 'Green Bowl' }])
+    expect(Object.keys(session.user.vendors![0]).sort()).toEqual(['name', 'vendorId'])
+    expect(session.user.vendorId).toBe('42')
+  })
+
+  it('stores nothing of the snapshot when the session is applied', async () => {
+    vi.resetModules()
+    // zustand's persist middleware reads `window.localStorage` when the store is created.
+    vi.stubGlobal('window', { localStorage: globalThis.localStorage })
+    const { authService } = await import('./auth.service')
+    const { useAuthStore } = await import('@/shared/auth/store/auth-store')
+    verifyOtpResponse = verified([
+      { vendor_id: 42, name: 'Green Bowl', status: 'ACTIVE', onboarding: { status: 'COMPLETED', description: 'Onboarding completed', next_step: 11 } },
+    ])
+
+    const session = await authService.verifyOtp({ phone: '9876543210', otp: '1234', role: 'vendor' })
+    expect(session.signInVendors).toHaveLength(1)
+    useAuthStore.getState().applySession(session)
+
+    const state = useAuthStore.getState()
+    expect(state).not.toHaveProperty('signInVendors')
+    expect(state.user?.vendors).toEqual([{ vendorId: '42', name: 'Green Bowl' }])
+    const persisted = localStorage.getItem('md-auth') ?? ''
+    expect(persisted).toContain('"vendorId":"42"')
+    for (const leaked of ['signInVendors', 'onboarding', 'nextStep', 'next_step', 'ACTIVE', 'COMPLETED', 'Onboarding completed']) {
+      expect(persisted).not.toContain(leaked)
+      expect(JSON.stringify(state)).not.toContain(leaked)
+    }
+  })
+})

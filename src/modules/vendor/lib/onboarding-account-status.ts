@@ -1,8 +1,8 @@
-import type { ServerOnboardingState } from './onboarding-resume'
+import type { VendorContext } from '@/shared/api'
 
 type AccountStatusState = {
-  context: Pick<ServerOnboardingState['context'], 'vendorStatus' | 'approvalStatus'> & {
-    onboarding?: ServerOnboardingState['context']['onboarding']
+  context: Pick<VendorContext, 'vendorStatus' | 'approvalStatus'> & {
+    onboarding?: VendorContext['onboarding']
   }
 }
 
@@ -14,6 +14,11 @@ type AccountStatusState = {
 export function isApprovalGranted(approvalStatus: string | null): boolean {
   const status = approvalStatus?.toUpperCase()
   return status === 'APPROVED' || status === 'ACTIVE'
+}
+
+/** Whether `next_step` is a usable 1-based wizard position, with `11` meaning complete. */
+function isKnownNextStep(nextStep: number | null | undefined): nextStep is number {
+  return nextStep != null && Number.isInteger(nextStep) && nextStep >= 1 && nextStep <= 11
 }
 
 /**
@@ -34,11 +39,26 @@ export function isStoreSubmitted(state: AccountStatusState): boolean {
   // The backend's progress wins even if the account was activated manually. Only a
   // context with no onboarding evidence falls back to the legacy activation signal.
   const nextStep = onboarding?.nextStep
-  if (nextStep != null && Number.isInteger(nextStep) && nextStep >= 1 && nextStep <= 11) {
-    return nextStep === 11
-  }
+  if (isKnownNextStep(nextStep)) return nextStep === 11
   if (onboarding && onboarding.status !== 'UNKNOWN') return onboarding.status === 'COMPLETED'
   return true
+}
+
+/**
+ * `isStoreSubmitted` over a `verify-otp` membership, or `null` when the entry cannot decide it.
+ *
+ * Deciding needs the vendor status and some onboarding evidence — a usable `next_step` or a
+ * known status. Without that, `isStoreSubmitted` would fall back to activation alone, so the
+ * caller reads the vendor context instead. Approval is never consulted.
+ */
+export function storeSubmittedAtSignIn(membership: {
+  status: string | null
+  onboarding: NonNullable<AccountStatusState['context']['onboarding']>
+}): boolean | null {
+  const { status, onboarding } = membership
+  if (!status) return null
+  if (!isKnownNextStep(onboarding.nextStep) && onboarding.status === 'UNKNOWN') return null
+  return isStoreSubmitted({ context: { vendorStatus: status, approvalStatus: null, onboarding } })
 }
 
 export function isVendorApproved(state: AccountStatusState): boolean {

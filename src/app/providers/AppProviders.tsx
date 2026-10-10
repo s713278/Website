@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
+import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { clearVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import { clearCustomerSessionCaches } from '@/modules/storefront/lib/customer-session-cache'
 import { configureApiClient, onCredentialsRefused, setApiErrorLogger } from '@/shared/api'
@@ -14,8 +16,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => onExplicitSignOut(clearOnboardingDraft), [])
 
   // Cached account reads are one vendor's store details and must not outlive their
-  // session — the next sign-in on this browser may be someone else.
-  useEffect(() => onExplicitSignOut(() => invalidateVendorOnboardingState()), [])
+  // session — the next sign-in on this browser may be someone else. The platform units are
+  // no vendor's data, but are dropped with them. All three caches are leaf modules, so this
+  // wiring does not pull the API graph into the initial bundle.
+  useEffect(() => onExplicitSignOut(() => {
+    invalidateOnboardingResources()
+    invalidateVendorContext()
+    invalidateMeasurementCatalog()
+  }), [])
 
   // TEMP(vendor-header-hint): see docs/SESSION.md for removal.
   // The persisted last-known record is the same vendor's state, so it goes with them.

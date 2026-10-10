@@ -36,6 +36,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | `GET /v1/vendors/{id}/storefront/products` | Paginated public product grid (`page_number`, `page_size`, `result[]`, `last_page`) | Call the live path from `storefrontService.listProducts` + `mapStorefrontProductPage`. Chip labels may append price until names exist. Frontend maps name→numeric id from products when possible; otherwise filters client-side by category name. |
 | `GET /v1/vendors/{identifier}/storefront/products/{product_id}` | Product detail with every variant in one object | Called from `storefrontService.getProduct` + `mapStorefrontProductDetail`. Public (`skipAuth`), so a 401 is not refreshed or retried. 404 is an unavailable product. The checked-in OpenAPI snapshot does not list this path yet. |
 | `GET /v1/vendors/{identifier}/storefront/contact-us` | Contact page: business name, owner, phone, main address, extra addresses, social links. The shop calls `storefrontService.getContact` and maps the response with `mapStorefrontContact`. 
+| `catalog_preview` on `GET /v1/vendors/{vendor_id}/context` | Account catalog details and counts for the setup phone preview without separate catalog reads; see the [backend requirement](#backend-request-account-catalog-summary-for-the-phone-preview). | The frontend already maps the block (`mapVendorContext`) and shows it when present ([hydration](./API_ARCHITECTURE.md#vendor-setup-account-hydration)). Until the backend adds it, a submitted Step 10 reads context + profile only and its phone preview shows no categories or products and 0 / 0 / 0. |
 | Per-order WhatsApp message | Server-owned WhatsApp order text | Build the string client-side. (A bare `/v1/whatsapp` GET/POST exists but is not a per-order message endpoint.) |
 | Rich product attributes on the storefront payload | Ingredients / nutrition / rating on the PDP | None. `ProductDTO` is `id`, `name`, `description`, `measurement_unit_id`, `image_path` — the spec itself calls it "lightweight". Pull detail from the SKU endpoints or fixtures. |
 | Guest cart → merge on customer OTP | Browse anonymously, then sign in without losing the cart | Cart is local-only (`md-cart` via `useCartStore`) and never syncs, so there is nothing to merge yet |
@@ -76,6 +77,47 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Unimplemented shipping strategies | Flat / tiered / weight-based delivery pricing | `FLAT`, `ZIPCODE_TIERED` and `WEIGHT_BASED` are in the enum (and `FLAT` even has a documented example) but return `No validator registered for shipping strategy type`. Only `ORDER_AMOUNT_THRESHOLD` and `ZIPCODE_THRESHOLD` work. A flat charge is expressed as `ORDER_AMOUNT_THRESHOLD` with a zero threshold. |
 | Unvalidated `scheduling_config` | Trusting the delivery schedule a vendor configures | The backend stores `scheduling_config` **verbatim without validation** — even `{}` is accepted. `FIXED_WINDOW` and `CUSTOMER_SELECT_DATE` keys come from documented examples; `PREDEFINED_DAYS` and `INSTANT` keys are our own snake_case and no consumer contract confirms them. |
 | Unique `cart_item_id` per cart line | Quantity + / − / remove by `PUT`/`DELETE /cart/items/{cart_item_id}` | 
+
+### Backend request: account catalog summary for the phone preview
+
+**Required addition, not a shipped contract:** add `catalog_preview` inside the response envelope's
+`data` object on `GET /v1/vendors/{vendor_id}/context` (`GET /context` within the vendor routes).
+The phone preview needs this account summary to show its product showcase and Categories / Products /
+Sizes counts before the corresponding setup steps have fetched their full account resources,
+including when a submitted vendor returns directly to Step 10.
+
+Required shape (field names below are illustrative, not sample account data):
+
+```js
+catalog_preview: {
+  categories:       [{ id, name }],
+  products:         [{ id, name, category_id, image_url, price }],  // price = lowest active sale price
+  active_sku_count: 12 // example count
+}
+```
+
+- `categories`: the complete list of categories assigned to this vendor, with numeric `id` and
+  display `name`. The Categories count is `categories.length`.
+- `products`: the complete list of products assigned to this vendor, with numeric `id`, display
+  `name`, `category_id` linking to a category in this summary, and `image_url` for the preview card
+  (`null` when unavailable). The Products count is `products.length`; these arrays must not be
+  paginated or truncated to a showcase sample, because the frontend derives the counts from them.
+- `price`: the product's lowest active SKU sale price, in rupees, or `null` if there is no active
+  sale price. Do not substitute a list price or zero for a missing sale price.
+- `active_sku_count`: a non-negative integer counting the vendor's active SKUs. This supplies the
+  preview's Sizes count; it is not the total including inactive SKUs.
+
+Return the summary from the vendor's persisted account, reflecting successful catalog writes on
+subsequent context reads. An empty account returns `categories: []`, `products: []`, and
+`active_sku_count: 0`; an absent block means the capability is unavailable, not an empty account.
+Document the block and its field types/nullability in the backend OpenAPI response.
+
+**Current frontend:** `mapVendorContext` already maps this shape. The summary is display-only and
+never hydrates or overwrites the editable draft. Each preview section uses the account summary only
+until its owning step has been read or edited; see
+[account hydration](./API_ARCHITECTURE.md#vendor-setup-account-hydration). No extra full-catalog read
+is made solely to populate the phone preview. Remove this gap once the deployed context returns the
+documented block and its showcase and counts have been verified with safe test data.
 
 ### Vendor platform billing
 

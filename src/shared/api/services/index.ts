@@ -21,8 +21,10 @@ export {
   type AuthSessionProblem,
   type LoginInput,
   type OtpRequestInput,
+  type OtpAuthSession,
   type OtpVerifyInput,
   type RegisterInput,
+  type VendorSignInMembership,
 } from './auth.service'
 
 export {

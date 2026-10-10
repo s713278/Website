@@ -3,7 +3,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { ONBOARDING_DRAFT_STORAGE_KEY } from '@/modules/vendor/lib/onboarding-draft-keys'
-import { authService } from '@/shared/api'
+import {
+  invalidateMeasurementCatalog,
+  loadMeasurementCatalog,
+  peekMeasurementCatalog,
+} from '@/modules/vendor/lib/measurement-catalog-cache'
+import {
+  invalidateOnboardingResources,
+  loadOnboardingResource,
+  peekOnboardingResource,
+} from '@/modules/vendor/lib/onboarding-resource-cache'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { authService, mapVendorContext } from '@/shared/api'
 // Reached by its own path rather than through the `@/shared/api` façade on purpose. The
 // subject here is the stored value's survival, not API behaviour, and the façade
 // deliberately does not export the store: no screen may know where the record is kept.
@@ -22,6 +33,9 @@ import { AppProviders } from './AppProviders'
 
 afterEach(() => {
   cleanup()
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
   useAuthStore.getState().clearSession()
   localStorage.clear()
   vi.restoreAllMocks()
@@ -91,5 +105,52 @@ describe('sign-out cleanup', () => {
     expect(useCartStore.getState().lines).toEqual([])
     expect(localStorage.getItem(CART_STORAGE_KEY)).toBeNull()
     expect(useAuthStore.getState().user).toBeNull()
+  })
+
+  describe('the vendor’s cached account reads', () => {
+    const readContext = vi.fn(async (vendorId: string) => mapVendorContext({
+      data: { vendor_id: vendorId, vendor_status: 'SETTING_UP', approval_status: 'PENDING' },
+    }))
+    const readCheckout = vi.fn(async () => null)
+    const readUnits = vi.fn(async () => [])
+
+    async function loadAll() {
+      await loadVendorContext('262', readContext)
+      await loadOnboardingResource('262', 'checkout', readCheckout)
+      await loadMeasurementCatalog(readUnits)
+    }
+
+    it('are dropped on an explicit sign-out, so the next load reads them again', async () => {
+      vi.spyOn(authService, 'signOut').mockResolvedValue(undefined)
+      render(<AppProviders>{null}</AppProviders>)
+      signIn()
+      await loadAll()
+
+      await useAuthStore.getState().logout()
+
+      expect(peekVendorContext('262')).toBeNull()
+      expect(peekOnboardingResource('262', 'checkout')).toBeNull()
+      expect(peekMeasurementCatalog()).toBeNull()
+      readContext.mockClear()
+      readCheckout.mockClear()
+      readUnits.mockClear()
+      await loadAll()
+      expect(readContext).toHaveBeenCalledTimes(1)
+      expect(readCheckout).toHaveBeenCalledTimes(1)
+      expect(readUnits).toHaveBeenCalledTimes(1)
+    })
+
+    it('survive an involuntary session loss', async () => {
+      render(<AppProviders>{null}</AppProviders>)
+      signIn()
+      await loadAll()
+
+      // What `onUnauthorized` does after a failed refresh.
+      useAuthStore.getState().clearSession()
+
+      expect(peekVendorContext('262')).not.toBeNull()
+      expect(peekOnboardingResource('262', 'checkout')).not.toBeNull()
+      expect(peekMeasurementCatalog()).not.toBeNull()
+    })
   })
 })

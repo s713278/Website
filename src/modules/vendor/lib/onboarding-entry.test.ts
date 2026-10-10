@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { resumePathAfterLogin, vendorLandingPath } from '@/app/router/role-home'
 import type { User } from '@/shared/types'
 import { resolveOnboardingEntry } from './onboarding-entry'
-import { resumeStep, type ServerOnboardingState } from './onboarding-resume'
+import { backendResumeStep, type ServerOnboardingState } from './onboarding-resume'
 
 type Context = ServerOnboardingState['context']
 
@@ -63,8 +62,6 @@ function state(
       payments: [{ type: 'CASH_ON_DELIVERY', isDefault: true, details: {} }],
     },
     businessTypes: [{ id: 7, name: 'Beverages & Juice Center', icon: null, displayOrder: 1 }],
-    measurements: SAMPLE_MEASUREMENT_CATALOG,
-    productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
     ...saved,
   }
 }
@@ -85,7 +82,7 @@ describe('resolveOnboardingEntry', () => {
     unfinished.context.onboarding = { status: 'IN_PROGRESS', nextStep: 7, description: 'Step 6: Set Prices' }
 
     expect(vendorLandingPath(resolveOnboardingEntry(unfinished))).toBe('/onboarding')
-    expect(resumeStep(unfinished)).toBe(7)
+    expect(backendResumeStep(unfinished.context)).toBe(7)
   })
 
   it('reports a submitted store awaiting approval as submitted', () => {
@@ -100,7 +97,7 @@ describe('resolveOnboardingEntry', () => {
     const unfinished = state('ACTIVE', approval)
     unfinished.context.onboarding = { status: 'IN_PROGRESS', description: null, nextStep: 5 }
     expect(resolveOnboardingEntry(unfinished).kind).toBe('resume')
-    expect(resumeStep(unfinished)).toBe(5)
+    expect(backendResumeStep(unfinished.context)).toBe(5)
   })
 
   it('keeps an active store in setup when only its status reports incomplete onboarding', () => {

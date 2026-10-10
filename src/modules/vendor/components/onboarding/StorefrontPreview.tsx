@@ -3,6 +3,7 @@ import { MapPinIcon, MenuIcon, MessageCircleIcon, ShoppingBagIcon } from 'lucide
 import { cn } from '@/lib/utils'
 import { applyStoreTheme, clearStoreTheme, normalizeHex } from '@/shared/lib/theme'
 import { bestContrastText, validateDraftSku } from '../../lib/onboarding-validation'
+import type { PhonePreviewAccountParts } from '../../lib/phone-preview-catalog'
 import type { VendorOnboardingDraftV1 } from '../../types/onboarding'
 
 type StorefrontPreviewProps = {
@@ -10,6 +11,8 @@ type StorefrontPreviewProps = {
   logoUrl: string | null
   bannerUrl: string | null
   fullPage?: boolean
+  /** Catalog parts shown from the account summary instead of the draft. */
+  accountParts?: PhonePreviewAccountParts
 }
 
 function PreviewImage({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
@@ -28,7 +31,7 @@ function PreviewImage({ src, alt, className }: { src: string | null; alt: string
   return <img src={src} alt={alt} className={cn('object-cover', className)} onError={() => setFailed(true)} />
 }
 
-export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false }: StorefrontPreviewProps) {
+export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false, accountParts }: StorefrontPreviewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const store = draft.storefront
   const storeName = store.storeName.trim() || draft.business.businessName.trim() || 'Your local store'
@@ -81,7 +84,8 @@ export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false 
   // fit a fixed height with nothing scrolling — which meant a vendor with eight products
   // was shown two and had no way to check the rest. The screen scrolls now, as it does
   // in design-reference/onboarding.html, so there is nothing left to cap.
-  const products = useMemo(
+  const categories = accountParts?.categories ?? draft.categories
+  const draftProducts = useMemo(
     () => draft.products.map((product) => {
       const productSkus = draft.skus.filter((sku) => sku.productId === product.id)
       return {
@@ -93,6 +97,7 @@ export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false 
     }),
     [draft.products, draft.skus],
   )
+  const products = accountParts?.products ?? draftProducts
   const trustBadges = store.trustStrip.filter((badge) => badge.enabled)
 
   const content = (
@@ -177,11 +182,11 @@ export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false 
         <section aria-labelledby="preview-categories">
           <div className="mb-2 flex items-center justify-between">
             <h3 id="preview-categories" className={cn('font-display font-bold', fullPage ? 'text-sm' : 'text-[13px]')}>Browse categories</h3>
-            <span className={cn('text-[var(--store-muted)]', fullPage ? 'text-[11px]' : 'text-[10px]')}>{draft.categories.length || 0} selected</span>
+            <span className={cn('text-[var(--store-muted)]', fullPage ? 'text-[11px]' : 'text-[10px]')}>{categories.length || 0} selected</span>
           </div>
-          {draft.categories.length ? (
+          {categories.length ? (
             <div className={cn('flex flex-wrap', fullPage ? 'gap-2' : 'gap-1.5')}>
-              {draft.categories.map((category) => (
+              {categories.map((category) => (
                 <span key={category.id} className={cn('rounded-full border border-[var(--store-border)] bg-[var(--store-panel)] font-medium', fullPage ? 'px-3 py-1.5 text-xs' : 'px-2.5 py-1 text-[11px]')}>
                   {category.name}
                 </span>

@@ -19,6 +19,7 @@ import type {
   SelectedProduct,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import type { OnboardingResource } from './onboarding-resume'
 import { serverSkuIdOf } from './onboarding-sku-id'
 
 /**
@@ -67,17 +68,21 @@ export function catalogFingerprint(step: OnboardingStep, draft: VendorOnboarding
 /**
  * Fingerprints for the catalog steps a resumed draft took in full from the account.
  *
- * Only the steps before the one it opens on: the resume's cumulative reads always cover
- * those, while the opening step itself may not have been read at all.
+ * Only the steps before the one it opens on: the account's pointer says that one is not
+ * finished, so its Continue still saves. When only some steps took the account copy
+ * (`applied`), a step also needs it for itself and every catalog step before it, since its
+ * fingerprint covers them all.
  */
 export function resumedCatalogFingerprints(
   draft: VendorOnboardingDraftV1,
   furthestVisitedStep: OnboardingStep,
+  applied?: ReadonlySet<OnboardingStep>,
 ): Partial<Record<OnboardingStep, string>> {
   const fingerprints: Partial<Record<OnboardingStep, string>> = {}
   for (const step of [4, 5, 6] as const) {
     const fingerprint = catalogFingerprint(step, draft)
-    if (step < furthestVisitedStep && fingerprint) fingerprints[step] = fingerprint
+    const fromAccount = !applied || ([3, 4, 5, 6] as const).every((chain) => chain > step || applied.has(chain))
+    if (step < furthestVisitedStep && fromAccount && fingerprint) fingerprints[step] = fingerprint
   }
   return fingerprints
 }
@@ -117,6 +122,21 @@ export function stepSaveFingerprint(
 export function stepsSavedTogether(step: OnboardingStep): OnboardingStep[] {
   return step === 7 || step === 8 ? [7, 8] : [step]
 }
+
+/** The account resource a step's save writes, so only its cached read goes stale. */
+export function savedResources(step: OnboardingStep): readonly OnboardingResource[] {
+  if (step === 3 || step === 9) return ['profile']
+  if (step === 4) return ['categories']
+  if (step === 5) return ['products']
+  if (step === 6) return ['skus']
+  if (step === 7 || step === 8) return ['checkout']
+  return []
+}
+
+/** Go-live can change every account resource; business types are platform data it never touches. */
+export const GO_LIVE_RESOURCES: readonly OnboardingResource[] = [
+  'profile', 'categories', 'products', 'skus', 'checkout',
+]
 
 /** Field to focus when a save for this step fails. */
 export function stepErrorField(step: OnboardingStep): string {

@@ -1,7 +1,7 @@
 import { homePathForRole, loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
 import { isApprovalGranted, isStoreSubmitted } from '@/modules/vendor/lib/onboarding-account-status'
-import type { ServerOnboardingState } from '@/modules/vendor/lib/onboarding-resume'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
+import type { VendorContext } from '@/shared/api'
 import type { User } from '@/shared/types'
 
 /**
@@ -22,10 +22,7 @@ export type HeaderAction =
 
 /** The part of the account read this decision needs. */
 type AccountSnapshot = {
-  context: Pick<
-    ServerOnboardingState['context'],
-    'vendorStatus' | 'approvalStatus' | 'storeIdentifier' | 'onboarding'
-  >
+  context: Pick<VendorContext, 'vendorStatus' | 'approvalStatus' | 'storeIdentifier' | 'onboarding'>
 }
 
 export type HeaderAccountRead =

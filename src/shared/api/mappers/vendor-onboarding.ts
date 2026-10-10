@@ -299,6 +299,17 @@ export type VendorSubscriptionUsage = {
   images: number | null
 }
 
+/**
+ * What the vendor's account holds, summarised for the setup phone preview. Requested from the
+ * backend (docs/API_GAPS.md); `null` until the context carries it. Display only: it never
+ * stands in for the account's catalog in a setup draft.
+ */
+export type VendorCatalogPreview = {
+  categories: { id: number; name: string }[]
+  products: { id: number; name: string; categoryId: number | null; imageUrl: string | null; price: number | null }[]
+  activeSkuCount: number
+}
+
 export type VendorContext = {
   vendorId: string
   /** Existing envelopes may omit the offset; billing validates it before use. */
@@ -346,6 +357,8 @@ export type VendorContext = {
     usage: VendorSubscriptionUsage
   }
   eligibleFeatures: string[]
+  /** Absent in hand-built contexts; the mapper always sets it. */
+  catalogPreview?: VendorCatalogPreview | null
 }
 
 export class InvalidVendorContextError extends Error {
@@ -379,6 +392,45 @@ function mapOnboardingStatus(value: unknown): VendorOnboardingStatus {
   return 'UNKNOWN'
 }
 
+/**
+ * The `onboarding` block, which the vendor context and each `verify-otp` `vendors[]` entry carry
+ * in the same shape. Anything missing or unrecognised maps to `UNKNOWN` / `null`.
+ */
+export function mapVendorOnboardingProgress(value: unknown): VendorContext['onboarding'] {
+  const onboarding = isRecord(value) ? value : {}
+  return {
+    status: mapOnboardingStatus(onboarding.status),
+    description: lenientString(onboarding.description),
+    nextStep: lenientInteger(onboarding.next_step),
+  }
+}
+
+/** Lenient: an entry without a usable id and name is dropped; a missing block maps to null. */
+function mapCatalogPreview(value: unknown): VendorCatalogPreview | null {
+  if (!isRecord(value)) return null
+  const records = (list: unknown) => (Array.isArray(list) ? list.filter(isRecord) : [])
+  return {
+    categories: records(value.categories).flatMap((category) => {
+      const id = lenientInteger(category.id)
+      const name = lenientString(category.name)
+      return id !== null && name !== null ? [{ id, name }] : []
+    }),
+    products: records(value.products).flatMap((product) => {
+      const id = lenientInteger(product.id)
+      const name = lenientString(product.name)
+      if (id === null || name === null) return []
+      return [{
+        id,
+        name,
+        categoryId: lenientInteger(product.category_id),
+        imageUrl: lenientString(product.image_url),
+        price: lenientNumber(product.price),
+      }]
+    }),
+    activeSkuCount: lenientInteger(value.active_sku_count) ?? 0,
+  }
+}
+
 export function mapVendorContext(payload: unknown): VendorContext {
   if (!isRecord(payload) || !isRecord(payload.data)) throw new InvalidVendorContextError()
 
@@ -386,7 +438,6 @@ export function mapVendorContext(payload: unknown): VendorContext {
   const vendorId = lenientInteger(data.vendor_id) ?? lenientString(data.vendor_id)
   if (vendorId == null || String(vendorId).trim() === '') throw new InvalidVendorContextError()
 
-  const onboarding = isRecord(data.onboarding) ? data.onboarding : {}
   const subscription = isRecord(data.subscription) ? data.subscription : {}
   // Since 29 September the context is flat: `limits` sit at the top level and there is no
   // `subscription` block. The nested shape stays for the demo seed and older payloads.
@@ -408,11 +459,7 @@ export function mapVendorContext(payload: unknown): VendorContext {
     vendorStatus: lenientString(data.vendor_status),
     approvalStatus: lenientString(data.approval_status),
     membershipRole: lenientString(data.role),
-    onboarding: {
-      status: mapOnboardingStatus(onboarding.status),
-      description: lenientString(onboarding.description),
-      nextStep: lenientInteger(onboarding.next_step),
-    },
+    onboarding: mapVendorOnboardingProgress(data.onboarding),
     subscription: {
       tier: lenientString(subscription.tier),
       planName: lenientString(subscription.plan_name) ?? lenientString(plan.plan_name),
@@ -436,6 +483,7 @@ export function mapVendorContext(payload: unknown): VendorContext {
       },
     },
     eligibleFeatures: lenientStringList(features),
+    catalogPreview: mapCatalogPreview(data.catalog_preview),
   }
 }
 

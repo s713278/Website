@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BusinessTypeReference } from '@/shared/api'
+import type { BusinessTypeReference, VendorCatalogPreview } from '@/shared/api'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
@@ -13,13 +13,20 @@ import {
   projectedSkuTotal,
   retainAssignedCatalog,
 } from '../lib/onboarding-catalog-limits'
-import { applyCreatedEntry, type AccountAssignment, type CreatedCatalogEntry } from '../lib/onboarding-sync'
+import {
+  applyCreatedEntry,
+  stepsSavedTogether,
+  type AccountAssignment,
+  type CreatedCatalogEntry,
+} from '../lib/onboarding-sync'
 import { accountSkuId } from '../lib/onboarding-sku-id'
 import { isApprovalGranted } from '../lib/onboarding-account-status'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
+  normalizeEditedSteps,
   reconcilePersistedDraft,
+  restoredEditedSteps,
   scheduleDraftSave,
   toPersistedDraft,
 } from '../lib/onboarding-persistence'
@@ -44,6 +51,8 @@ type AccountCatalog = {
   categoryIds: number[]
   productIds: number[]
   skuIds: number[]
+  /** The backend's size usage, kept so `unlistedSkuCount` stays right whichever arrives first. */
+  skuUsage?: number | null
   /** Backend usage can include inactive sizes omitted from the account list. */
   unlistedSkuCount?: number
 }
@@ -92,13 +101,25 @@ type OnboardingStore = {
   /** Vendor the current draft belongs to; `null` before verification. */
   draftOwnerId: string | null
   /**
-   * The draft holds edits that have not reached the vendor account.
+   * Steps 3-9 whose part of the draft holds edits that have not reached the vendor account
+   * (sorted, unique). Persisted with the draft.
    *
-   * Cleared whenever the two agree — after a resume, and after a step is written on
-   * Continue. While it is `false` the wizard re-reads the account on entry, so the
-   * account stays the record and a stale local copy cannot outlive one visit.
+   * A step leaves the set when it is written on Continue, and the whole set clears when a
+   * resume rebuilds the draft from the account. The wizard re-reads the account on entry
+   * and takes its copy for every step not in the set, so the account stays the record and
+   * a stale local copy cannot outlive one visit.
    */
-  hasLocalEdits: boolean
+  editedSteps: OnboardingStep[]
+  /**
+   * Steps 3-9 whose account data was read in this wizard visit. In memory only, never
+   * persisted: every entry re-reads the account, so the wizard resets it on entry, on a
+   * change of vendor and while there is no ready session, then sets it from what that read
+   * returned. It lives here, not in the wizard, because `updateDraft` needs it: an edit
+   * marks a downstream step it rewrote as edited only if that step was loaded (or already
+   * edited) — an unloaded step takes the account copy when it loads instead.
+   */
+  loadedSteps: OnboardingStep[]
+  setLoadedSteps: (steps: OnboardingStep[]) => void
   /** Attribute the draft to the signed-in vendor, discarding anything owned by another. */
   setDraftOwner: (ownerId: string | null) => void
   /** Explicit sign-out: the vendor is done with this browser's draft. */
@@ -125,6 +146,12 @@ type OnboardingStore = {
   storeSubmission: StoreSubmission | null
   setStoreSubmission: (submission: StoreSubmission | null) => void
   /**
+   * The context's catalog summary, for the phone preview only: it shows a catalog step the
+   * visit has not read. Never applied to the draft. Not persisted.
+   */
+  catalogPreview: VendorCatalogPreview | null
+  setCatalogPreview: (preview: VendorCatalogPreview | null) => void
+  /**
    * Platform IDs already assigned on the vendor's account, and the account's own SKU ids.
    *
    * Category and product assignment is additive for a vendor — there is no un-assign
@@ -135,9 +162,13 @@ type OnboardingStore = {
    * account, not the draft.
    */
   accountCatalog: AccountCatalog
+  /**
+   * Partial: each field given replaces that field, and the rest stand, because the wizard
+   * reads categories, products, sizes and usage separately and applies each as it lands.
+   */
   setAccountCatalog: (catalog: {
-    categoryIds: number[]
-    productIds: number[]
+    categoryIds?: number[]
+    productIds?: number[]
     skuIds?: number[]
     skuUsage?: number | null
   }) => void
@@ -229,11 +260,15 @@ type OnboardingStore = {
   completePrototype: (draftSlug: string) => void
   /** Steps 1-2 already satisfied by an existing vendor session. */
   adoptVerifiedSession: (maskedPhone: string | null) => void
-  /** Replace the draft with what the vendor's account already holds. */
+  /**
+   * Replace the draft with what the vendor's account already holds. `frameApplied: false`
+   * means only unedited steps took the account copy: the edited set and the notice stay.
+   */
   applyResumedDraft: (
     draft: VendorOnboardingDraftV1,
     furthestVisitedStep: OnboardingStep,
     runtime: Pick<OnboardingRuntimeState, 'paymentDetails' | 'orderWhatsapp'>,
+    options?: { frameApplied?: boolean },
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
   revokeVerifiedSession: () => void
@@ -284,6 +319,49 @@ function invalidateDraft(
   return { ...draft, currentStep, completedSteps, publication }
 }
 
+/** The part of the draft a step owns, the unit an account copy replaces. */
+function stepSection(draft: VendorOnboardingDraftV1, step: OnboardingStep): unknown[] {
+  switch (step) {
+    case 3: return [draft.business.businessType]
+    case 4: return [draft.categories]
+    case 5: return [draft.products]
+    case 6: return [draft.skus]
+    case 7: return [draft.delivery]
+    case 8: return [draft.payments]
+    case 9: return [
+      draft.business.businessName,
+      draft.business.ownerName,
+      draft.business.contactPerson,
+      draft.storefront,
+    ]
+    default: return []
+  }
+}
+
+/**
+ * The edited set after an edit made from `origin`. That step is always added. Another
+ * step whose section the edit rewrote (a category toggle drops products and sizes) is
+ * added only if its account data was loaded this visit or it was already edited, and only
+ * if the section changed by value: an unloaded section takes the account copy when it
+ * loads, and a rebuilt but equal one holds nothing new.
+ */
+function editedAfterUpdate(
+  state: Pick<OnboardingStore, 'draft' | 'editedSteps' | 'loadedSteps'>,
+  updated: VendorOnboardingDraftV1,
+  origin: OnboardingStep,
+): OnboardingStep[] {
+  const added = ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).filter((step) => {
+    if (step === origin) return true
+    if (state.editedSteps.includes(step) || !state.loadedSteps.includes(step)) return false
+    const before = stepSection(state.draft, step)
+    const after = stepSection(updated, step)
+    if (before.every((part, index) => part === after[index])) return false
+    return JSON.stringify(before) !== JSON.stringify(after)
+  })
+  if (added.every((step) => state.editedSteps.includes(step))) return state.editedSteps
+  return normalizeEditedSteps([...state.editedSteps, ...added])
+}
+
 function restorationMessage(draft: VendorOnboardingDraftV1): string {
   if (!draft.mobileVerified) {
     return 'Draft restored. Enter your WhatsApp number to continue.'
@@ -310,9 +388,11 @@ function emptyDraftState(
     recoveryMessage,
     pendingConflict: null,
     storeSubmission: null,
+    catalogPreview: null,
     ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
-    hasLocalEdits: false,
+    editedSteps: [],
+    loadedSteps: [],
   }
 }
 
@@ -352,9 +432,7 @@ function applyPersistedEnvelope(
     furthestVisitedStep: restored.furthestVisitedStep,
     previewSnapshot: envelope.previewSnapshot,
     previewRestored: Boolean(envelope.previewSnapshot),
-    // Envelopes written before this field existed are treated as holding unsaved work,
-    // so restoring one never overwrites it with the account copy.
-    hasLocalEdits: envelope.hasLocalEdits ?? true,
+    editedSteps: restoredEditedSteps(envelope),
     persistenceInitialized: true,
     persistenceStatus: 'saved',
     persistenceRevision: envelope.revision,
@@ -384,7 +462,7 @@ function persistCurrentDraft(): void {
     updatedAt,
     ownerId: state.draftOwnerId,
     furthestVisitedStep: state.furthestVisitedStep,
-    hasLocalEdits: state.hasLocalEdits,
+    editedSteps: state.editedSteps,
     draft: toPersistedDraft(state.draft),
     previewSnapshot: state.previewSnapshot,
   }
@@ -596,9 +674,15 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   storeSubmission: null,
+  catalogPreview: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
-  hasLocalEdits: false,
+  editedSteps: [],
+  loadedSteps: [],
+
+  setLoadedSteps(steps) {
+    set({ loadedSteps: normalizeEditedSteps(steps) })
+  },
 
   setDraftOwner(ownerId) {
     const state = useOnboardingStore.getState()
@@ -651,13 +735,20 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     set({ storeSubmission: submission })
   },
 
+  setCatalogPreview(preview) {
+    set({ catalogPreview: preview })
+  },
+
   setAccountCatalog(catalog) {
-    const skuIds = catalog.skuIds ?? []
-    const unlistedSkuCount = Math.max(0, (catalog.skuUsage ?? 0) - new Set(skuIds).size)
+    const current = useOnboardingStore.getState().accountCatalog
+    const skuIds = catalog.skuIds ?? current.skuIds
+    const skuUsage = 'skuUsage' in catalog ? catalog.skuUsage : current.skuUsage
+    const unlistedSkuCount = Math.max(0, (skuUsage ?? 0) - new Set(skuIds).size)
     set(accountCatalogSlice({
-      categoryIds: catalog.categoryIds,
-      productIds: catalog.productIds,
+      categoryIds: catalog.categoryIds ?? current.categoryIds,
+      productIds: catalog.productIds ?? current.productIds,
       skuIds,
+      ...(skuUsage != null ? { skuUsage } : {}),
       ...(unlistedSkuCount ? { unlistedSkuCount } : {}),
     }))
   },
@@ -886,11 +977,12 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       // furthestVisitedStep, currentStep, and publication all stay intact, and the stepper
       // does not re-lock on an add. See `CONTEXT.md` ("Submitted").
       const from = state.storeSubmission ? undefined : invalidateFrom
+      const updated = updater(state.draft)
       return {
-        draft: invalidateDraft(updater(state.draft), from),
+        draft: invalidateDraft(updated, from),
         furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, from),
         // Edited here and not yet written to the account, so this copy now outranks it.
-        hasLocalEdits: true,
+        editedSteps: editedAfterUpdate(state, updated, invalidateFrom ?? state.draft.currentStep),
         recoveryMessage: null,
       }
     })
@@ -954,10 +1046,15 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     const { syncedWithAccount = true } = options
     set((state) => ({
       furthestVisitedStep: Math.max(state.furthestVisitedStep, nextStep) as OnboardingStep,
-      // Only clear this when the step genuinely reached the account. Clearing it after a
+      // Only clear a step when it genuinely reached the account. Clearing it after a
       // skipped write tells the next account read that there is nothing local worth
-      // keeping, and it overwrites work still visible on screen.
-      hasLocalEdits: syncedWithAccount ? false : state.hasLocalEdits,
+      // keeping, and it overwrites work still visible on screen. Verifying the number
+      // starts a fresh session, so nothing from before it outranks the account.
+      editedSteps: !syncedWithAccount
+        ? state.editedSteps
+        : step === 2
+          ? []
+          : state.editedSteps.filter((edited) => !stepsSavedTogether(step).includes(edited)),
       draft: {
         ...state.draft,
         currentStep: nextStep,
@@ -999,10 +1096,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     flushScheduledDraftSave(persistCurrentDraft)
   },
 
-  applyResumedDraft(draft, furthestVisitedStep, runtime) {
+  applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true } = {}) {
     // A brand-new account resumes to an empty wizard, which is not something to
-    // announce. Only say it when there was actually something to bring back.
-    const restored = draft.categories.length > 0 || draft.products.length > 0
+    // announce. On a rebuilt draft `furthestVisitedStep` is the account's resume step, and
+    // one past Step 3 means work was saved there, whether or not it has been read yet.
+    const restored = furthestVisitedStep > 3
     set((state) => ({
       draft,
       furthestVisitedStep,
@@ -1012,11 +1110,16 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         // Never persisted locally, so a resume is the only thing that can restore it.
         orderWhatsapp: runtime.orderWhatsapp || state.runtime.orderWhatsapp,
       },
-      // This draft *is* the account copy.
-      hasLocalEdits: false,
-      recoveryMessage: restored
-        ? 'Picked up where you left off, using the setup saved to your store.'
-        : null,
+      // A rebuilt draft *is* the account copy. Taking it for some steps only leaves the
+      // edited ones as they were, and is not a resume worth announcing.
+      ...(frameApplied
+        ? {
+            editedSteps: [],
+            recoveryMessage: restored
+              ? 'Picked up where you left off, using the setup saved to your store.'
+              : null,
+          }
+        : {}),
     }))
     flushScheduledDraftSave(persistCurrentDraft)
   },

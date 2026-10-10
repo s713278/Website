@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { validateDraftSku } from '../../lib/onboarding-validation'
+import type { PhonePreviewAccountParts } from '../../lib/phone-preview-catalog'
 
 /**
  * What the shop amounts to so far, in three numbers.
@@ -9,7 +10,7 @@ import { validateDraftSku } from '../../lib/onboarding-validation'
  * sizes. The preview above already shows what the shop looks like; anything more here
  * competes with it.
  */
-export function PreviewStats({ className }: { className?: string }) {
+export function PreviewStats({ className, accountParts = {} }: { className?: string; accountParts?: PhonePreviewAccountParts }) {
   const categories = useOnboardingStore((state) => state.draft.categories.length)
   const products = useOnboardingStore((state) => state.draft.products.length)
   const skus = useOnboardingStore((state) => state.draft.skus)
@@ -20,9 +21,9 @@ export function PreviewStats({ className }: { className?: string }) {
   ).length
 
   const stats = [
-    { key: 'categories', label: 'Categories', value: categories },
-    { key: 'products', label: 'Products', value: products },
-    { key: 'sizes', label: 'Sizes', value: configured },
+    { key: 'categories', label: 'Categories', value: accountParts.categories?.length ?? categories },
+    { key: 'products', label: 'Products', value: accountParts.products?.length ?? products },
+    { key: 'sizes', label: 'Sizes', value: accountParts.sizes ?? configured },
   ]
 
   return (
