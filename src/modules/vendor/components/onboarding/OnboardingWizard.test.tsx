@@ -687,6 +687,8 @@ describe('Step 10 store summary', () => {
   it('groups checkout settings under Checkout Options and shows WhatsApp numbers in full', async () => {
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    expect(screen.getByRole('heading', { level: 1, name: 'Review your store' })).toBeTruthy()
+    expect(screen.getByText('Check your store before submitting.')).toBeTruthy()
     act(() => {
       useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210', supportWhatsapp: '9000000001' })
     })
@@ -876,6 +878,8 @@ describe('per-step account reads', () => {
     renderAccount('APPROVED')
 
     expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
+    expect(screen.getByText('Share your store link.')).toBeTruthy()
     expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
     expect(document.querySelector('.onboarding-preview-stage')).toBeNull()
     expect(screen.queryByRole('tab', { name: 'Your shop' })).toBeNull()
@@ -887,6 +891,8 @@ describe('per-step account reads', () => {
     renderAccount('PENDING')
 
     expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
+    expect(screen.getByText('Submitted for review. You can still add categories and products.')).toBeTruthy()
     expect(stepSkeleton()).toBeNull()
     const stage = document.querySelector<HTMLElement>('.onboarding-preview-stage')!
     const count = (label: string) => within(stage).getByText(label).previousElementSibling?.textContent

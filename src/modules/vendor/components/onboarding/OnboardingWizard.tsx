@@ -1178,7 +1178,13 @@ export function OnboardingWizard() {
     },
   })
 
-  const stepMeta = ONBOARDING_STEPS[currentStep - 1]
+  const stepMeta = currentStep === 10 && storeIsSubmitted
+    ? {
+        ...ONBOARDING_STEPS[9],
+        title: 'Your store',
+        description: storeIsApproved ? 'Share your store link.' : 'Submitted for review. You can still add categories and products.',
+      }
+    : ONBOARDING_STEPS[currentStep - 1]
   const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
   // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
   // catalog source, and once the store is submitted it is read-only and saves nothing.
