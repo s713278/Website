@@ -2,7 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
+import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import {
   authService,
@@ -55,6 +57,12 @@ function deferred<T>() {
 
 const neverSettles = () => new Promise<never>(() => {})
 
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
+}
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -70,7 +78,7 @@ function renderAt(path: string) {
 beforeEach(() => {
   vi.stubEnv('VITE_USE_API', 'true')
   configureApiClient({ useApi: true })
-  invalidateVendorOnboardingState()
+  invalidateAll()
   resetLiveBillingPlansForTests()
   vi.spyOn(liveBillingService, 'readSubscription').mockReturnValue(neverSettles())
   vi.spyOn(liveBillingService, 'listPaidPlans').mockReturnValue(neverSettles())
@@ -79,12 +87,42 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   useAuthStore.getState().clearSession()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
 
 describe('VendorLoginPage', () => {
+  it('starts only the landing step’s reads for a sign-in headed into setup, without awaiting them', async () => {
+    const context = deferred<VendorContext>()
+    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(context.promise)
+    const getProfile = vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockReturnValue(neverSettles())
+    const getCheckout = vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockReturnValue(neverSettles())
+    const others = (['getBusinessTypes', 'getVendorCategories', 'getVendorProducts', 'getVendorSkus', 'getMeasurements'] as const)
+      .map((name) => vi.spyOn(vendorOnboardingService, name).mockReturnValue(neverSettles()))
+    vi.spyOn(authService, 'requestOtp').mockResolvedValue({ success: true, status: 200, data: {} } as never)
+    vi.spyOn(authService, 'verifyOtp').mockResolvedValue({
+      ...session,
+      signInVendors: [{
+        vendorId: VENDOR_ID,
+        status: 'SETTING_UP',
+        onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 7 },
+      }],
+    })
+
+    renderAt('/vendor/login')
+    fireEvent.change(screen.getByLabelText(/WhatsApp number/), { target: { value: '9000000000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send OTP' }))
+    fireEvent.change(await screen.findByLabelText('OTP'), { target: { value: '1234' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify & continue' }))
+
+    expect(await screen.findByText('Setup')).toBeTruthy()
+    await vi.waitFor(() => expect(getCheckout).toHaveBeenCalledTimes(1))
+    expect(getContext).toHaveBeenCalledTimes(1)
+    expect(getProfile).toHaveBeenCalledTimes(1)
+    for (const read of others) expect(read).not.toHaveBeenCalled()
+  })
+
   it('lands an in-page sign-in from the verify-otp snapshot while the context is still in flight', async () => {
     const context = deferred<VendorContext>()
     const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(context.promise)

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import {
-  mapVendorContext,
   vendorOnboardingService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
@@ -14,8 +13,8 @@ import {
 import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { invalidateOnboardingResources } from './onboarding-resource-cache'
+import { loadStepResources } from './onboarding-server-state'
 import {
-  accountReadsForResumeStep,
   applyBusinessType,
   applyCategories,
   applyCheckout,
@@ -29,7 +28,7 @@ import {
   derivedResumeStep,
   earliestIncompleteStep,
   furthestSavedStep,
-  loadServerOnboardingState,
+  loadAccountResource,
   resumeStep,
   isVendorApproved,
   isStoreSubmitted,
@@ -162,21 +161,6 @@ const SUBMITTED_CONTEXT = context({
   storeIdentifier: 'sk-organic-store',
   approvalStatus: 'PENDING',
   onboarding: { status: 'COMPLETED', nextStep: 11, description: null },
-})
-
-describe('accountReadsForResumeStep', () => {
-  it.each([
-    [3, []],
-    [4, ['categories']],
-    [5, ['categories', 'products', 'measurements']],
-    [6, ['categories', 'products', 'measurements', 'skus']],
-    [7, ['categories', 'products', 'measurements', 'skus', 'checkout']],
-    [8, ['categories', 'products', 'measurements', 'skus', 'checkout']],
-    [9, ['categories', 'products', 'measurements', 'skus', 'checkout']],
-    [10, ['categories', 'products', 'measurements', 'skus', 'checkout']],
-  ] as const)('returns the cumulative account reads for resume Step %i', (step, expected) => {
-    expect(accountReadsForResumeStep(step)).toEqual(expected)
-  })
 })
 
 describe('submission and approval', () => {
@@ -483,7 +467,7 @@ describe('a partial resume still produces a loadable draft', () => {
   })
 })
 
-describe('loadServerOnboardingState files Step 3\'s first page', () => {
+describe('the account business-type read files Step 3\'s first page', () => {
   const accountKey = businessTypeCacheKey('account', '')
   const types = Array.from({ length: 30 }, (_, index) => ({
     id: index + 1, name: `Type ${index + 1}`, icon: null, displayOrder: index + 1,
@@ -501,12 +485,6 @@ describe('loadServerOnboardingState files Step 3\'s first page', () => {
   })
 
   function answerReads(businessType: string | null) {
-    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
-      data: {
-        vendor_id: '91', vendor_status: 'SETTING_UP', approval_status: 'PENDING',
-        onboarding: { status: 'IN_PROGRESS', next_step: 4 },
-      },
-    }))
     vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
       businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
     })
@@ -520,10 +498,10 @@ describe('loadServerOnboardingState files Step 3\'s first page', () => {
       items: types, pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
     })
 
-    const state = await loadServerOnboardingState('91')
+    const businessTypes = await loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes
 
     expect(getBusinessTypes).toHaveBeenCalledTimes(1)
-    expect(state.businessTypes).toHaveLength(30)
+    expect(businessTypes).toHaveLength(30)
     const seeded = readReferenceCache<{ id: number }>(accountKey)
     expect(seeded?.items.map((entry) => entry.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(seeded).toMatchObject({ pageNumber: 0, lastPage: false })
@@ -532,16 +510,15 @@ describe('loadServerOnboardingState files Step 3\'s first page', () => {
   it('seeds nothing when the read rejects', async () => {
     answerReads('Type 3').mockRejectedValue(new Error('offline'))
 
-    const state = await loadServerOnboardingState('91')
+    await expect(loadAccountResource('91', 'businessTypes')).rejects.toThrow('offline')
 
-    expect(state.businessTypes).toEqual([])
     expect(readReferenceCache(accountKey)).toBeNull()
   })
 
   it.each([null, 'Others'])('makes no read and seeds nothing for a saved type of %s', async (saved) => {
     const getBusinessTypes = answerReads(saved)
 
-    await loadServerOnboardingState('91')
+    await expect(loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes).resolves.toEqual([])
 
     expect(getBusinessTypes).not.toHaveBeenCalled()
     expect(readReferenceCache(accountKey)).toBeNull()

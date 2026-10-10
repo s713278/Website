@@ -15,7 +15,7 @@ import {
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
-import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
+import { loadMeasurementCatalog } from './measurement-catalog-cache'
 import { seedBusinessTypeFirstPage } from './onboarding-catalog-cache'
 import { loadOnboardingResource, type OnboardingResourceData } from './onboarding-resource-cache'
 import { accountSkuId } from './onboarding-sku-id'
@@ -60,26 +60,6 @@ const UNSET_BUSINESS_TYPE = 'Others'
 const WEEKDAYS = new Set<Weekday>([
   'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
 ])
-
-type LoadConfig = { signal?: AbortSignal }
-
-export type OnboardingAccountRead =
-  | 'categories'
-  | 'products'
-  | 'measurements'
-  | 'skus'
-  | 'checkout'
-
-const ACCOUNT_READ_START_STEP: readonly [OnboardingAccountRead, OnboardingStep][] = [
-  ['categories', 4],
-  ['products', 5],
-  // Step 5 shows each product's measurement, and saved sizes are rebuilt against it. A
-  // vendor who enters earlier gets it on reaching a step that uses it, through
-  // `loadPlatformMeasurements`, instead of paying for it on Steps 3-4.
-  ['measurements', 5],
-  ['skus', 6],
-  ['checkout', 7],
-]
 
 /** A vendor's saved setup data, read and cached one resource at a time. */
 export type OnboardingResource =
@@ -131,22 +111,6 @@ export function loadPlatformMeasurements(): Promise<MeasurementCatalog> {
   return loadMeasurementCatalog(() => vendorOnboardingService.getMeasurements())
 }
 
-/** Server resources needed to rebuild saved work and continue from the resume step. */
-export function accountReadsForResumeStep(step: OnboardingStep): OnboardingAccountRead[] {
-  return ACCOUNT_READ_START_STEP
-    .filter(([, startStep]) => step >= startStep)
-    .map(([read]) => read)
-}
-
-/** Resolves to `null` instead of rejecting, so one dead read cannot sink the resume. */
-async function optional<T>(work: Promise<T>): Promise<T | null> {
-  try {
-    return await work
-  } catch {
-    return null
-  }
-}
-
 /** Preserve Step 6's usable fallback without presenting fallback units as product metadata. */
 export function measurementCatalogsForResume(measurements: MeasurementCatalog | null): {
   measurements: MeasurementCatalog
@@ -189,71 +153,6 @@ function readAccountResource<R extends OnboardingResource>(
     checkout: () => vendorOnboardingService.getCheckoutOptions(vendorId),
   }
   return reads[resource]()
-}
-
-/**
- * The account snapshot for the resume step, built from per-resource cache entries. `config`
- * applies to the context read only: resource reads are shared across callers.
- */
-export async function loadServerOnboardingState(
-  vendorId: string,
-  config: LoadConfig = {},
-  knownContext?: VendorContext | Promise<VendorContext>,
-): Promise<ServerOnboardingState> {
-  // Start both universal reads before awaiting context. The dependent fan-out can then
-  // begin as soon as context reveals the resume step, without waiting for the profile.
-  // A context the caller just read, or is already reading, is reused.
-  const contextPromise = knownContext
-    ? Promise.resolve(knownContext)
-    : vendorOnboardingService.getVendorContext(vendorId, config)
-  const profilePromise = optional(loadAccountResource(vendorId, 'profile'))
-  // One page covers the catalog (30 types); needed only to turn a saved business type's
-  // display string back into the reference object Step 3 stores. A vendor who has not
-  // chosen one yet, like every new vendor on Step 3, skips it: the step lists its own page.
-  const businessTypesPromise = profilePromise.then((profile) => savedBusinessType(profile)
-    ? optional(loadAccountResource(vendorId, 'businessTypes'))
-    : null)
-
-  // Deliberately not optional. Context decides liveness, limits and whether a resume
-  // happens at all, so losing it is a real failure the vendor has to be told about —
-  // not an empty wizard with no explanation.
-  const context = await contextPromise
-
-  // A submitted vendor must still be able to navigate back through the complete account.
-  // If the backend ever omits its pointer, load everything so resource-derived resume can
-  // remain the safe fallback rather than deriving from an intentionally partial snapshot.
-  const step = isStoreSubmitted({ context })
-    ? 10
-    : (backendResumeStep(context) ?? 10)
-  const reads = new Set(accountReadsForResumeStep(step))
-
-  const [profile, businessTypes, categories, products, skus, checkout, measurements] = await Promise.all([
-    profilePromise,
-    businessTypesPromise,
-    reads.has('categories') ? optional(loadAccountResource(vendorId, 'categories')) : null,
-    reads.has('products') ? optional(loadAccountResource(vendorId, 'products')) : null,
-    reads.has('skus') ? optional(loadAccountResource(vendorId, 'skus')) : null,
-    reads.has('checkout') ? optional(loadAccountResource(vendorId, 'checkout')) : null,
-    // Authoritative units for Step 6. A dead read falls back to the sample catalog,
-    // which mirrors the backend shape, so a size still opens with real units rather
-    // than an empty dropdown.
-    // A catalog this session already read is reused at any step, so the snapshot never
-    // replaces real units with the sample fallback.
-    reads.has('measurements')
-      ? optional(loadPlatformMeasurements())
-      : peekMeasurementCatalog(),
-  ])
-
-  return {
-    context,
-    profile,
-    categories: categories ?? [],
-    products: products ?? [],
-    skus: skus ?? [],
-    checkout,
-    businessTypes: businessTypes ?? [],
-    ...measurementCatalogsForResume(measurements),
-  }
 }
 
 /** The profile's business type, or `null` while the vendor has not chosen one. */
@@ -329,7 +228,14 @@ export function furthestSavedStep(state: ServerOnboardingState): OnboardingStep 
  * value below 3 means "the start of setup", not "ask for the number again".
  */
 export function backendResumeStep(context: VendorContext): OnboardingStep | null {
-  const next = context.onboarding.nextStep
+  return clampResumePointer(context.onboarding.nextStep)
+}
+
+/**
+ * `backendResumeStep` over a bare pointer, such as `verify-otp`'s, so a sign-in prefetch
+ * lands on the step the wizard will open.
+ */
+export function clampResumePointer(next: number | null | undefined): OnboardingStep | null {
   if (next == null || !Number.isInteger(next)) return null
   if (next > 10) return 10
   if (next < 3) return 3

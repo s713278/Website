@@ -53,7 +53,6 @@ import {
   type ResourceStatus,
 } from '../../lib/onboarding-resume'
 import { loadStepResources } from '../../lib/onboarding-server-state'
-import { dropVendorOnboardingSnapshot, peekVendorAccountContext } from '../../lib/onboarding-state-cache'
 import { maskPhone } from '../../lib/onboarding-adapter'
 import {
   GO_LIVE_RESOURCES,
@@ -67,7 +66,7 @@ import {
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { invalidateVendorContext, loadVendorContext } from '../../lib/vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -178,14 +177,13 @@ const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 
 /**
- * Clear what an account write made stale in the shared caches: the written resources, the
- * vendor context (it carries `next_step`, plan usage and store state) and the combined
- * snapshot. Business types and units are platform data, so they stay.
+ * Clear what an account write made stale in the shared caches: the written resources and the
+ * vendor context (it carries `next_step`, plan usage and store state). Business types and
+ * units are platform data, so they stay.
  */
 function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
   invalidateOnboardingResources(vendorId, resources)
   invalidateVendorContext(vendorId)
-  dropVendorOnboardingSnapshot(vendorId)
 }
 
 /** Where this visit's account reads stand: the context, each resource and the units. */
@@ -473,7 +471,7 @@ function startAccountEntry(
   const readContext = () => {
     // Sign-in or the header may have read it already: applying it now keeps the very
     // first paint correct, instead of one frame of the un-hydrated draft.
-    const known = peekVendorAccountContext(vendorId)
+    const known = peekVendorContext(vendorId)
     if (known) return applyContext(known)
     view.context = 'loading'
     publish()

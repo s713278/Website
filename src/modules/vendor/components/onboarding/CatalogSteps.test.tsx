@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
-import { mapVendorContext, vendorOnboardingService } from '@/shared/api'
+import { vendorOnboardingService } from '@/shared/api'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
 import { invalidateOnboardingResources } from '../../lib/onboarding-resource-cache'
-import { loadServerOnboardingState } from '../../lib/onboarding-resume'
+import { loadAccountResource } from '../../lib/onboarding-resume'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 
 afterEach(() => {
@@ -215,19 +215,9 @@ describe('business step after a resume that read the catalog', () => {
 
   async function resumeThenRender() {
     emptyReferenceCache()
-    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
-      data: {
-        vendor_id: '88', vendor_status: 'SETTING_UP', approval_status: 'PENDING',
-        onboarding: { status: 'IN_PROGRESS', next_step: 4 },
-      },
-    }))
-    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-      businessName: 'Store', businessType: 'Business 3', ownerName: '', contactPerson: '', contactNumber: '',
-    })
-    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
     const getBusinessTypes = vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
     getBusinessTypes.mockResolvedValueOnce(wide)
-    await loadServerOnboardingState('88')
+    await loadAccountResource('88', 'businessTypes')
     getBusinessTypes.mockClear()
     useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
     render(<BusinessStep issues={[]} />)

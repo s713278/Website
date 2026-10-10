@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import * as serverState from '@/modules/vendor/lib/onboarding-server-state'
-import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
-import { loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
+import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import * as liveBilling from '@/modules/vendor/store/live-billing'
 import {
   configureApiClient,
@@ -59,15 +59,21 @@ function holdSetupReads() {
   return SETUP_READS.map((name) => vi.spyOn(vendorOnboardingService, name).mockReturnValue(neverSettles()))
 }
 
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
+}
+
 beforeEach(() => {
   vi.mocked(preloadVendorDashboard).mockClear()
   vi.stubEnv('VITE_USE_API', 'true')
   configureApiClient({ useApi: true })
-  invalidateVendorOnboardingState()
+  invalidateAll()
 })
 
 afterEach(() => {
-  invalidateVendorOnboardingState()
+  invalidateAll()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -90,15 +96,19 @@ describe('resolveLandingPath', () => {
     await expect(resolveLandingPath(vendor)).resolves.toBe('/onboarding')
   })
 
-  it('starts the wizard’s reads for an unfinished store, reusing the context it already has', async () => {
+  it('starts the landing step’s reads for an unfinished store, reusing the context it already has', async () => {
     const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(SETTING_UP)
-    const [getProfile] = holdSetupReads()
+    const [getProfile, getBusinessTypes, getCategories, getProducts, getSkus, getCheckout, getMeasurements] = holdSetupReads()
+    getProfile.mockResolvedValue({
+      businessName: 'Store', businessType: 'Beverages', ownerName: '', contactPerson: '', contactNumber: '',
+    })
 
     await resolveLandingPath(vendor)
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(getProfile).toHaveBeenCalledTimes(1)
-    void loadVendorOnboardingState(VENDOR_ID)
-    expect(getProfile).toHaveBeenCalledTimes(1)
+    // Pointer 5: profile, business types, categories and products; no sizes, checkout or units.
+    for (const read of [getProfile, getBusinessTypes, getCategories, getProducts]) expect(read).toHaveBeenCalledTimes(1)
+    for (const read of [getSkus, getCheckout, getMeasurements]) expect(read).not.toHaveBeenCalled()
     expect(getContext).toHaveBeenCalledTimes(1)
   })
 
@@ -226,7 +236,7 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
   })
 
   let accountContext: MockInstance<typeof serverState.loadVendorAccountContext>
-  let onboardingState: MockInstance<typeof serverState.loadVendorOnboardingState>
+  let landingPrefetch: MockInstance<typeof serverState.prefetchOnboardingLanding>
   let billing: MockInstance<typeof liveBilling.readLiveBilling>
   let getContext: MockInstance<typeof vendorOnboardingService.getVendorContext>
 
@@ -234,7 +244,7 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
     // Nothing reaches the network: the context call is never answered, and the kick-offs are spies.
     getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
     accountContext = vi.spyOn(serverState, 'loadVendorAccountContext').mockReturnValue(neverSettles())
-    onboardingState = vi.spyOn(serverState, 'loadVendorOnboardingState').mockReturnValue(neverSettles())
+    landingPrefetch = vi.spyOn(serverState, 'prefetchOnboardingLanding').mockReturnValue(undefined)
     billing = vi.spyOn(liveBilling, 'readLiveBilling').mockResolvedValue(undefined)
   })
 
@@ -292,7 +302,7 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
 
     expect(preloadVendorDashboard).not.toHaveBeenCalled()
     expect(accountContext).not.toHaveBeenCalled()
-    expect(onboardingState).not.toHaveBeenCalled()
+    expect(landingPrefetch).not.toHaveBeenCalled()
     expect(billing).not.toHaveBeenCalled()
     expect(getContext).not.toHaveBeenCalled()
   })
@@ -304,7 +314,7 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
     await flush()
     expect(accountContext).not.toHaveBeenCalled()
     expect(billing).not.toHaveBeenCalled()
-    expect(onboardingState).not.toHaveBeenCalled()
+    expect(landingPrefetch).not.toHaveBeenCalled()
     expect(preloadVendorDashboard).not.toHaveBeenCalled()
   })
 
@@ -343,19 +353,33 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
     expect(billing).toHaveBeenCalledTimes(1)
   })
 
-  it('starts the wizard’s reads without a seed context when sign-in heads to setup', async () => {
-    await resolveLandingPath(vendor, null, [member('ACTIVE', 3)])
+  it('starts the landing step’s reads from the snapshot’s pointer when sign-in heads to setup', async () => {
+    await resolveLandingPath(vendor, null, [member('ACTIVE', 7)])
     await flush()
 
-    expect(onboardingState).toHaveBeenCalledTimes(1)
-    expect(onboardingState).toHaveBeenCalledWith(VENDOR_ID)
-    expect(onboardingState.mock.calls[0][1]).toBeUndefined()
+    expect(landingPrefetch).toHaveBeenCalledTimes(1)
+    expect(landingPrefetch).toHaveBeenCalledWith(VENDOR_ID, { nextStep: 7 })
+  })
+
+  it('passes no pointer when the snapshot decides setup without one', async () => {
+    await resolveLandingPath(vendor, null, [member('INACTIVE', null, 'COMPLETED')])
+    await flush()
+
+    expect(landingPrefetch).toHaveBeenCalledWith(VENDOR_ID, { nextStep: null })
+  })
+
+  it('starts the landing step’s reads from a context-decided setup landing', async () => {
+    accountContext.mockResolvedValue({ context: SETTING_UP })
+
+    await expect(resolveLandingPath(vendor)).resolves.toBe('/onboarding')
+
+    expect(landingPrefetch).toHaveBeenCalledWith(VENDOR_ID, { context: SETTING_UP })
   })
 
   it('does not reject when the background reads fail', async () => {
     accountContext.mockRejectedValue(new Error('offline'))
     billing.mockRejectedValue(new Error('offline'))
-    onboardingState.mockRejectedValue(new Error('offline'))
+    landingPrefetch.mockImplementation(() => { throw new Error('offline') })
     const unhandled = vi.fn()
     process.on('unhandledRejection', unhandled)
 
@@ -366,7 +390,7 @@ describe('resolveLandingPath from the sign-in snapshot', () => {
     process.off('unhandledRejection', unhandled)
 
     expect(billing).toHaveBeenCalled()
-    expect(onboardingState).toHaveBeenCalled()
+    expect(landingPrefetch).toHaveBeenCalled()
     expect(unhandled).not.toHaveBeenCalled()
   })
 

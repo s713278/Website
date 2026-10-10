@@ -7,8 +7,8 @@ import { resolveLandingPath } from '@/app/router/vendor-landing'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
-import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
 import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
@@ -108,7 +108,8 @@ describe('VendorAccountProvider store state', () => {
     firstVisit.unmount()
 
     // This is the invalidation used by the wizard after persistStep and goLive.
-    invalidateVendorOnboardingState('test-vendor')
+    invalidateOnboardingResources('test-vendor')
+    invalidateVendorContext('test-vendor')
     renderContext('ACTIVE', 'PENDING', 11)
 
     expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
@@ -278,8 +279,10 @@ describe('VendorAccountProvider first render', () => {
   })
 
   afterEach(() => {
-    // Drops the snapshot, the context and the per-resource entries a test left behind.
-    invalidateVendorOnboardingState()
+    // Drops the context, the per-resource entries and the units a test left behind.
+    invalidateOnboardingResources()
+    invalidateVendorContext()
+    invalidateMeasurementCatalog()
   })
 
   function renderProvider() {
@@ -302,29 +305,5 @@ describe('VendorAccountProvider first render', () => {
     expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(readContext).not.toHaveBeenCalled()
-  })
-
-  it('does not seed from a context only the onboarding snapshot holds', async () => {
-    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(resolved)
-    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-      businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
-    })
-    vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
-      items: [], pageNumber: 0, pageSize: 100, totalElements: 0, totalPages: 0, lastPage: true,
-    })
-    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
-    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([])
-    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([])
-    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null)
-    vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue([])
-    await loadVendorOnboardingState('test-vendor')
-    // Leaves the snapshot in place and drops only the context cache.
-    invalidateVendorContext('test-vendor')
-    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(new Promise(() => {}))
-
-    renderProvider()
-
-    expect(screen.queryByLabelText('Account approval')).toBeNull()
-    await waitFor(() => expect(readContext).toHaveBeenCalledTimes(1))
   })
 })

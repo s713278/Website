@@ -3,9 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
-import { loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
+import { loadVendorAccountContext } from '@/modules/vendor/lib/onboarding-server-state'
+import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { clearVendorHeaderHint, rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import {
   configureApiClient,
@@ -17,6 +18,12 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { MarketingHeader } from './MarketingHeader'
 
 const VENDOR_ID = 'test-vendor'
+
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -98,7 +105,7 @@ function renderHeader(path = '/') {
 beforeEach(() => {
   vi.stubEnv('VITE_USE_API', 'true')
   configureApiClient({ useApi: true })
-  invalidateVendorOnboardingState()
+  invalidateAll()
   // Every accepted read writes the remembered hint, which would otherwise carry one test's
   // account into the next test's first paint.
   clearVendorHeaderHint()
@@ -115,7 +122,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   clearVendorHeaderHint()
   useAuthStore.getState().clearSession()
   vi.restoreAllMocks()
@@ -177,7 +184,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
   describe('when an earlier read already holds the account', () => {
     it.each([
-      ['sign-in or the wizard', () => loadVendorOnboardingState(VENDOR_ID)],
+      ['sign-in', () => loadVendorAccountContext(VENDOR_ID)],
       ['the dashboard', () => loadVendorContext(VENDOR_ID, (id) => vendorOnboardingService.getVendorContext(id))],
     ] as const)('paints the answer on the first frame, with no Dashboard to correct, after %s', async (_name, read) => {
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(SETTING_UP)
@@ -216,7 +223,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
       answerSetupReads()
       // The wizard starts its own read as it mounts, so it is already in flight.
-      void loadVendorOnboardingState(VENDOR_ID)
+      void loadVendorContext(VENDOR_ID, (id) => vendorOnboardingService.getVendorContext(id))
       renderHeader('/onboarding')
 
       // The header requested this module first, so its read has been issued by the time this

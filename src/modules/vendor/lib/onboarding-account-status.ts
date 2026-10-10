@@ -1,8 +1,8 @@
-import type { ServerOnboardingState } from './onboarding-resume'
+import type { VendorContext } from '@/shared/api'
 
 type AccountStatusState = {
-  context: Pick<ServerOnboardingState['context'], 'vendorStatus' | 'approvalStatus'> & {
-    onboarding?: ServerOnboardingState['context']['onboarding']
+  context: Pick<VendorContext, 'vendorStatus' | 'approvalStatus'> & {
+    onboarding?: VendorContext['onboarding']
   }
 }
 

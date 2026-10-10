@@ -7,10 +7,14 @@ import { MemoryRouter } from 'react-router-dom'
 import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
-import { loadOnboardingResource, peekOnboardingResource } from '../../lib/onboarding-resource-cache'
+import { invalidateMeasurementCatalog } from '../../lib/measurement-catalog-cache'
+import {
+  invalidateOnboardingResources,
+  loadOnboardingResource,
+  peekOnboardingResource,
+} from '../../lib/onboarding-resource-cache'
 import type { OnboardingResource } from '../../lib/onboarding-resume'
-import { invalidateVendorOnboardingState } from '../../lib/onboarding-state-cache'
-import { loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import type { OnboardingStep } from '../../types/onboarding'
@@ -20,6 +24,12 @@ const savedSize: VendorSkuRef = {
   vendorProductId: 900, skuId: 4001, priceId: 8001,
   name: 'Test Juice-1 L', size: '1 L', displayName: 'Test Juice', description: '',
   isActive: true, quantity: 1, unit: 'L', listPrice: 100, salePrice: 90,
+}
+
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
 }
 
 let scrollIntoView: PropertyDescriptor | undefined
@@ -37,7 +47,7 @@ beforeEach(() => {
   scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   localStorage.clear()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   useOnboardingStore.getState().abandonDraft()
   useAuthStore.getState().applySession({
     token: 'test-token', refreshToken: null,
@@ -72,7 +82,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   useOnboardingStore.getState().abandonDraft()
   useAuthStore.getState().clearSession()
   localStorage.clear()

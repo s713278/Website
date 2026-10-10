@@ -297,28 +297,21 @@ entry is single-flight, a failed read is evicted so the next load retries it, an
 for an invalidated entry reaches its caller but is not stored; the wizard additionally applies a
 result only while the same visit and vendor are current.
 
-Sign-in still prefetches the older all-in-one snapshot (`loadVendorOnboardingState` over
-`loadServerOnboardingState`) for `/onboarding`. It is assembled from the same resource entries, so
-the wizard joins those reads instead of repeating them; it reads the cumulative set for the resume
-step and keeps its optional behaviour (a failed read becomes empty snapshot fields).
-
-`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor
-for that prefetch. Failed loads are evicted. A successful step save drops only the resource it
-wrote (Step 3 or 9 the profile, Step 4 categories, Step 5 products, Step 6 sizes, Step 7 or 8 the
-checkout settings), submission drops every account resource except business types, and sign-out
-drops every resource for every vendor plus the units; business types and units otherwise stay
-cached until sign-out. Each of these also drops the vendor's snapshot and the dashboard's narrower
-context cache, so a later visit re-reads only what changed and returning from setup cannot reuse
-pre-write store state, storefront details, or plan usage. The open wizard keeps what it already
-applied: after a save its draft is the account copy. Both caches ignore a late
+A successful step save drops only the resource it wrote (Step 3 or 9 the profile, Step 4
+categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
+every account resource except business types, and sign-out drops every resource for every vendor
+plus the units; business types and units otherwise stay cached until sign-out. Each of these also
+drops the dashboard's context cache, so a later visit re-reads only what changed and returning from
+setup cannot reuse pre-write store state, storefront details, or plan usage. The open wizard keeps
+what it already applied: after a save its draft is the account copy. Both caches ignore a late
 response belonging to an entry that has already been invalidated. Submission's read-back of the
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
 
 The marketing header decides its vendor actions from the context alone. On every route, `/onboarding`
 included, it calls `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
-narrower cache so the dashboard opens on it, or no request when either cache already holds a resolved
-context (the dashboard's is preferred). Waiting on the full read held the actions back until the
+context cache so the dashboard opens on it, or no request when that cache already holds a resolved
+context. Waiting on the full read held the actions back until the
 slowest of its reads settled, however little the decision used them. On `/onboarding` the wizard
 reads its context through the same cache, so the two share one context request.
 
@@ -326,13 +319,16 @@ Post-sign-in routing (`resolveLandingPath`) first decides from the chosen vendor
 `vendors[]` status and onboarding when they suffice (see
 [SESSION.md](./SESSION.md#where-a-session-lands)); it then awaits no request, and starts
 `loadVendorAccountContext` plus the shell's `readLiveBilling` for `/vendor`, or
-`loadVendorOnboardingState` (reading the context through the dashboard's cache) for `/onboarding`,
-none awaited. Otherwise it decides from the context the same way, through
-`loadVendorAccountContext` or a resolved context in either cache. A submitted store therefore lands
-on `/vendor` after at most one request, instead of waiting on the complete read set the dashboard never
-uses. Only when the destination is `/onboarding` does sign-in start `loadVendorOnboardingState`,
-seeded with that context and not awaited, so the setup reads overlap navigation and the wizard's
-route chunk. A failed prefetch is evicted as usual and the wizard retries it.
+`prefetchOnboardingLanding` for `/onboarding`, none awaited. Otherwise it decides from the context
+the same way, through `loadVendorAccountContext` or a resolved context in the context cache. A
+submitted store therefore lands on `/vendor` after at most one request, instead of waiting on reads
+the dashboard never uses. For `/onboarding`, `prefetchOnboardingLanding` starts the context (or reuses
+the one just read), the profile, and the landing step's account reads from the table above, without
+the units and not awaited, so they overlap navigation and the wizard's route chunk and the wizard
+joins them. The landing step is the `verify-otp` `next_step`, or else the context's, clamped to 3–10
+exactly as the wizard clamps it; with no usable pointer only the context and profile start. Local
+edits that keep the wizard on another step can leave that set unused. A failed prefetch is evicted as
+usual and the wizard retries it.
 
 #### Vendor setup sizes (Step 6)
 

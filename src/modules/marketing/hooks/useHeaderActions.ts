@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
-import { peekVendorAccountContext } from '@/modules/vendor/lib/onboarding-state-cache'
+import { peekVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { useVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import { isLiveApi } from '@/shared/api'
@@ -80,8 +80,8 @@ export function useHeaderActions(): HeaderAction[] {
   }, [followsWizard])
 
   // A resolved cache entry paints the right actions on the first frame instead of after
-  // the effect above. The caches are dropped on go-live, so this never outlives it.
-  const cached = readsAccount ? peekVendorAccountContext(vendorId) : null
+  // the effect above. The context cache is dropped on go-live, so this never outlives it.
+  const cached = readsAccount ? peekVendorContext(vendorId) : null
   let account: HeaderAccountRead = { status: 'loading' }
   if (cached) account = { status: 'ready', state: { context: cached } }
   else if (read?.vendorId === vendorId) account = read.result

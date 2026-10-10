@@ -11,7 +11,7 @@ import type { OnboardingResource } from './onboarding-resume'
 /**
  * One in-flight, then one resolved, read per vendor and account resource.
  *
- * A leaf module, like `onboarding-state-cache`: sign-out cleanup reaches it from app-level
+ * A leaf module, like `vendor-context-cache`: sign-out cleanup reaches it from app-level
  * wiring, so it must not pull `@/shared/api` or the resume graph into the initial bundle.
  * Every import above is `import type`; the reads themselves are supplied by the caller.
  *
