@@ -358,8 +358,10 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     if (categories.some((category) => !isAccountEntry(category.id, category.pending))) return false
     if (products.some((product) => !isAccountEntry(product.id, product.pending))) return false
   }
+  // Saved account categories mirror the account, so they may keep a previous business type.
   if (business.businessType && categories.some(
-    (category) => category.businessTypeId !== business.businessType?.id,
+    (category) => (category.pending || value.catalogSource === 'sample') &&
+      category.businessTypeId !== business.businessType?.id,
   )) return false
   const categoryIds = new Set(categories.map((category) => category.id))
   if (products.some((product) => !categoryIds.has(product.categoryId))) return false

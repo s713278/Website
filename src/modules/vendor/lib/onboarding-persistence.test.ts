@@ -139,11 +139,21 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
     expect(parsePersistedEnvelope(envelope(unmarked))).toBeNull()
   })
 
-  it('rejects a category whose businessTypeId is not the selected business type', () => {
+  it('rejects a pending category whose businessTypeId is not the selected business type', () => {
     const wrongType = accountDraft({
-      categories: [{ ...accountCategory, businessTypeId: 8 }, pendingCategory],
+      categories: [accountCategory, { ...pendingCategory, businessTypeId: 8 }],
     })
     expect(parsePersistedEnvelope(envelope(wrongType))).toBeNull()
+  })
+
+  it('accepts a saved category that keeps another business type after a type change', () => {
+    const changedType = accountDraft({
+      business: { businessType: { ...businessType, id: 8 }, businessName: '', ownerName: '', contactPerson: '' },
+      categories: [accountCategory],
+      products: [accountProduct],
+      skus: [sku],
+    })
+    expect(parsePersistedEnvelope(envelope(changedType))).not.toBeNull()
   })
 
   it('rejects a product whose categoryId is not a selected category', () => {
@@ -208,6 +218,11 @@ describe('the sample rule is unchanged', () => {
   it('rejects a sample draft that carries a positive id', () => {
     const withPositive = sampleDraft({ products: [{ ...sampleProduct, id: 301 }] })
     expect(parsePersistedEnvelope(envelope(withPositive))).toBeNull()
+  })
+
+  it('rejects a sample category whose businessTypeId is not the selected business type', () => {
+    const wrongType = sampleDraft({ categories: [{ ...sampleCategory, businessTypeId: -102 }] })
+    expect(parsePersistedEnvelope(envelope(wrongType))).toBeNull()
   })
 })
 
