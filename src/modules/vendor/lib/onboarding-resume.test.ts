@@ -30,17 +30,18 @@ import {
   earliestIncompleteStep,
   furthestSavedStep,
   loadServerOnboardingState,
-  resumeFromAccount,
   resumeStep,
   isVendorApproved,
-  snapshotLoadedSteps,
   isStoreSubmitted,
   measurementCatalogsForResume,
   resolveBusinessType,
   resumeOrderWhatsapp,
   resumePaymentDetails,
+  accountResumeState,
+  stepLoadState,
   stepResources,
   type OnboardingResource,
+  type ResourceStatus,
   type ResumeApplyOptions,
   type ServerOnboardingState,
 } from './onboarding-resume'
@@ -699,116 +700,55 @@ describe('per-resource appliers', () => {
     expect(draft.categories.map((category) => category.businessTypeId)).toEqual([null])
   })
 })
+describe('stepLoadState', () => {
+  const ALL_LOADED = {
+    profile: 'loaded', businessTypes: 'loaded', categories: 'loaded',
+    products: 'loaded', skus: 'loaded', checkout: 'loaded',
+  } as const
+  const with_ = (changes: Partial<Record<OnboardingResource, ResourceStatus>>) => ({ ...ALL_LOADED, ...changes })
 
-describe('snapshotLoadedSteps', () => {
-  const ALL = new Set<OnboardingResource>(['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'])
-  const at = (nextStep: number) => context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep } })
-
-  it('counts only the steps whose resources the snapshot read', () => {
-    expect(snapshotLoadedSteps(fullState({ context: at(4) }), ALL)).toEqual([3, 4, 9])
-    expect(snapshotLoadedSteps(fullState({ context: at(6) }), ALL)).toEqual([3, 4, 5, 6, 9])
-    expect(snapshotLoadedSteps(fullState({ context: at(9) }), ALL)).toEqual([3, 4, 5, 6, 7, 8, 9])
-    expect(snapshotLoadedSteps(fullState({ context: SUBMITTED_CONTEXT }), ALL)).toEqual([3, 4, 5, 6, 7, 8, 9])
+  it('is loaded once every resource the step lists is, and the units have settled', () => {
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'loaded' })).toBe('loaded')
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'failed' })).toBe('loaded')
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'loading' })).toBe('loading')
+    expect(stepLoadState(4, { submitted: false, resources: ALL_LOADED, units: 'idle' })).toBe('loaded')
   })
 
-  it('reads everything when the pointer is missing', () => {
-    expect(snapshotLoadedSteps(fullState(), ALL)).toEqual([3, 4, 5, 6, 7, 8, 9])
+  it('waits only on what the step lists', () => {
+    const checkoutOnly = { ...with_({ profile: 'idle', businessTypes: 'idle', categories: 'failed' }), checkout: 'loaded' as const }
+    expect(stepLoadState(7, { submitted: false, resources: checkoutOnly, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(7, { submitted: false, resources: with_({ checkout: 'loading' }), units: 'idle' })).toBe('loading')
+    expect(stepLoadState(3, { submitted: false, resources: with_({ businessTypes: 'idle' }), units: 'idle' })).toBe('loading')
   })
 
-  it('does not count a resource that did not resolve', () => {
-    const withoutSkus = new Set([...ALL].filter((resource) => resource !== 'skus'))
-    expect(snapshotLoadedSteps(fullState({ context: at(9) }), withoutSkus)).toEqual([3, 4, 5, 7, 8, 9])
-
-    const withoutProfile = new Set([...ALL].filter((resource) => resource !== 'profile'))
-    expect(snapshotLoadedSteps(fullState({ context: at(9) }), withoutProfile)).toEqual([7, 8])
+  it('fails when a listed resource failed, even while another still loads', () => {
+    const resources = with_({ categories: 'failed', products: 'loading' })
+    expect(stepLoadState(5, { submitted: false, resources, units: 'loading' })).toBe('failed')
+    expect(stepLoadState(10, { submitted: false, resources: with_({ checkout: 'failed' }), units: 'loaded' })).toBe('failed')
   })
 
-  it('needs business types only once a type is saved', () => {
-    const withoutTypes = new Set([...ALL].filter((resource) => resource !== 'businessTypes'))
-    expect(snapshotLoadedSteps(fullState({ context: at(4) }), withoutTypes)).toEqual([])
-    expect(snapshotLoadedSteps(
-      fullState({ context: at(4), profile: { ...PROFILE, businessType: 'Others' } }),
-      withoutTypes,
-    )).toEqual([3, 4, 9])
+  it('never blocks a submitted Step 10 on a failed profile, and ignores units there', () => {
+    const resources = with_({ profile: 'failed', skus: 'failed' })
+    expect(stepLoadState(10, { submitted: true, resources, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(10, { submitted: true, resources: with_({ profile: 'loading' }), units: 'idle' })).toBe('loading')
+  })
+
+  it('treats the identity steps as loaded', () => {
+    const idle = with_({ profile: 'idle' })
+    expect(stepLoadState(1, { submitted: false, resources: idle, units: 'idle' })).toBe('loaded')
   })
 })
 
-describe('resumeFromAccount', () => {
-  const ALL = new Set<OnboardingResource>(['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'])
-  const paymentDetails = createEmptyRuntimeState().paymentDetails
-
-  function localDraft() {
-    const draft = createEmptyOnboardingDraft()
-    return {
-      ...draft,
-      currentStep: 5 as OnboardingStep,
-      completedSteps: [1, 2, 3, 4] as OnboardingStep[],
-      mobileVerified: true,
-      products: [{ id: 77, name: 'Local', description: null, imageUrl: null, measurementId: null, measurementName: null, categoryId: 10 }],
-    }
-  }
-
-  it('rebuilds the whole draft as before when nothing is edited', () => {
-    const state = fullState()
-    const resumed = resumeFromAccount(state, localDraft(), { edited: new Set(), paymentDetails, resolved: ALL })
-    const expected = buildResumeDraft(state)
-
-    expect(resumed.frameApplied).toBe(true)
-    expect(resumed.draft).toEqual(expected.draft)
-    expect(resumed.furthestVisitedStep).toBe(expected.furthestVisitedStep)
-    expect(resumed.orderWhatsapp).toBe(expected.orderWhatsapp)
-    expect(resumed.paymentDetails).toEqual(resumePaymentDetails(state.checkout, paymentDetails))
-    expect(resumed.appliedSteps).toEqual([3, 4, 5, 6, 7, 8, 9])
-  })
-
-  it('lets the account win every step once the store is submitted', () => {
-    const state = fullState({ context: SUBMITTED_CONTEXT })
-    const resumed = resumeFromAccount(state, localDraft(), { edited: new Set([5]), paymentDetails, resolved: ALL })
-
-    expect(resumed.frameApplied).toBe(true)
-    expect(resumed.draft).toEqual(buildResumeDraft(state).draft)
-  })
-
-  it('applies only unedited steps that were read, and leaves the frame alone', () => {
-    const state = fullState({ context: context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 6 } }) })
-    const local = localDraft()
-    const resumed = resumeFromAccount(state, local, { edited: new Set([5]), paymentDetails, resolved: ALL })
-    const full = buildResumeDraft(state).draft
-
-    expect(resumed.frameApplied).toBe(false)
-    expect(resumed.furthestVisitedStep).toBeNull()
-    expect(resumed.appliedSteps).toEqual([3, 4, 6, 9])
-    expect(resumed.loadedSteps).toEqual([3, 4, 5, 6, 9])
-    expect(resumed.draft.currentStep).toBe(5)
-    expect(resumed.draft.completedSteps).toEqual([1, 2, 3, 4])
-    expect(resumed.draft.catalogSource).toBe(local.catalogSource)
-    expect(resumed.draft.categories).toEqual(full.categories)
-    expect(resumed.draft.business).toEqual(full.business)
-    expect(resumed.draft.products).toBe(local.products)
-    expect(resumed.draft.skus).toEqual(full.skus)
-    // Checkout was not read for Step 6, so Steps 7 and 8 keep what the browser holds.
-    expect(resumed.draft.delivery).toBe(local.delivery)
-    expect(resumed.draft.payments).toBe(local.payments)
-    expect(resumed.paymentDetails).toBe(paymentDetails)
-    expect(resumed.orderWhatsapp).toBe(buildResumeDraft(state).orderWhatsapp)
-  })
-
-  it('neither applies nor counts a step whose read failed', () => {
-    const state = fullState({ context: context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 9 } }), skus: [] })
-    const local = { ...localDraft(), skus: [] }
-    const resolved = new Set([...ALL].filter((resource) => resource !== 'skus'))
-    const resumed = resumeFromAccount(state, local, { edited: new Set([5]), paymentDetails, resolved })
-
-    expect(resumed.appliedSteps).toEqual([3, 4, 7, 8, 9])
-    expect(resumed.loadedSteps).not.toContain(6)
-    expect(resumed.draft.skus).toBe(local.skus)
-  })
-
-  it('keeps the runtime values of edited steps', () => {
-    const state = fullState({ context: context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: 9 } }) })
-    const resumed = resumeFromAccount(state, localDraft(), { edited: new Set([8, 9]), paymentDetails, resolved: ALL })
-
-    expect(resumed.orderWhatsapp).toBeNull()
-    expect(resumed.paymentDetails).toBe(paymentDetails)
+describe('accountResumeState', () => {
+  it('feeds the resource-derived resume step from the values read one by one', () => {
+    const state = accountResumeState(context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: null } }), {
+      profile: { businessName: 'Store', businessType: BUSINESS_TYPE.name, ownerName: '', contactPerson: '', contactNumber: '' },
+      businessTypes: [BUSINESS_TYPE],
+      categories: [],
+      products: [],
+      skus: [],
+      checkout: null,
+    })
+    expect(derivedResumeStep(state)).toBe(4)
   })
 })

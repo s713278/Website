@@ -1,6 +1,17 @@
-import { vendorOnboardingService, type VendorContext } from '@/shared/api'
+import { vendorOnboardingService, type MeasurementCatalog, type VendorContext } from '@/shared/api'
 import { rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
-import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
+import type { OnboardingStep } from '../types/onboarding'
+import { peekMeasurementCatalog } from './measurement-catalog-cache'
+import { peekOnboardingResource, type OnboardingResourceData } from './onboarding-resource-cache'
+import {
+  loadAccountResource,
+  loadPlatformMeasurements,
+  loadServerOnboardingState,
+  savedBusinessType,
+  stepResources,
+  type OnboardingResource,
+  type ServerOnboardingState,
+} from './onboarding-resume'
 import {
   invalidateVendorOnboardingState,
   isCurrentEntry,
@@ -25,7 +36,6 @@ import { invalidateVendorContext, loadVendorContext } from './vendor-context-cac
  * The cache lives in `onboarding-state-cache` so that sign-out cleanup can invalidate it
  * without pulling this module — and the whole resume/API graph — into the initial bundle.
  */
-export { peekVendorOnboardingState } from './onboarding-state-cache'
 export { invalidateVendorOnboardingState }
 
 /**
@@ -89,4 +99,49 @@ export async function loadVendorAccountContext(
 
   const context = await loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
   return { context }
+}
+
+export type StepResourceReads = { [R in OnboardingResource]?: Promise<OnboardingResourceData[R]> } & {
+  units?: Promise<MeasurementCatalog>
+}
+
+/**
+ * Starts, or joins, each read a step needs that has not already resolved: the account
+ * resources `stepResources` lists and, with `withUnits`, the platform units. A resolved
+ * read is left out; peek its cache for the value. `skip` leaves out reads the caller
+ * already holds or handles itself, such as resources it applied before a save dropped them
+ * from the cache. Defaults to none.
+ *
+ * Business types are a dependent read: they start only once the profile shows a saved
+ * type, and resolve to `[]` without a request when it shows none.
+ *
+ * Never rejects as a whole. Each promise settles on its own, and an unobserved failure is
+ * not reported as unhandled: the cache has already dropped it so the next caller retries.
+ */
+export function loadStepResources(
+  vendorId: string,
+  step: OnboardingStep,
+  options: { submitted: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'> },
+): StepResourceReads {
+  const skip = new Set(options.skip ?? [])
+  const needs = stepResources(step, { submitted: options.submitted })
+  const reads: StepResourceReads = {}
+  const wanted = (resource: OnboardingResource) =>
+    !skip.has(resource) && peekOnboardingResource(vendorId, resource) === null
+
+  for (const resource of needs.account) {
+    if (resource === 'businessTypes' || !wanted(resource)) continue
+    Object.assign(reads, { [resource]: loadAccountResource(vendorId, resource) })
+  }
+  if (needs.account.includes('businessTypes') && wanted('businessTypes')) {
+    const profile = peekOnboardingResource(vendorId, 'profile')
+    reads.businessTypes = (profile ? Promise.resolve(profile.value) : loadAccountResource(vendorId, 'profile'))
+      .then((value) => savedBusinessType(value) ? loadAccountResource(vendorId, 'businessTypes') : [])
+  }
+  if (options.withUnits && needs.units && !skip.has('units') && peekMeasurementCatalog() === null) {
+    reads.units = loadPlatformMeasurements()
+  }
+
+  for (const read of Object.values(reads)) read.catch(() => {})
+  return reads
 }

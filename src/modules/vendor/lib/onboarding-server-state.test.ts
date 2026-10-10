@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapVendorContext, vendorOnboardingService, type VendorContext } from '@/shared/api'
+import { mapVendorContext, vendorOnboardingService, type VendorContext, type VendorProfile } from '@/shared/api'
 import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
-import { loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
+import { loadStepResources, loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
+import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
+import { loadOnboardingResource } from './onboarding-resource-cache'
 import { invalidateVendorOnboardingState, writeEntry } from './onboarding-state-cache'
 import { loadServerOnboardingState, type ServerOnboardingState } from './onboarding-resume'
 import { loadVendorContext, peekVendorContext } from './vendor-context-cache'
@@ -412,5 +414,93 @@ describe('loadVendorOnboardingState shares the vendor context read', () => {
 
     expect(getContext).not.toHaveBeenCalled()
     expect(state.context).toBe(context)
+  })
+})
+
+describe('loadStepResources', () => {
+  afterEach(() => invalidateMeasurementCatalog())
+
+  function stubReads(profileType = 'Beverages') {
+    return {
+      profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+        businessName: 'Store', businessType: profileType, ownerName: '', contactPerson: '', contactNumber: '',
+      }),
+      businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
+        items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
+      }),
+      categories: vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([]),
+      products: vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([]),
+      skus: vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([]),
+      checkout: vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null),
+      units: vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG),
+    }
+  }
+
+  const settled = (reads: Partial<Record<string, Promise<unknown>>>) => Promise.allSettled(Object.values(reads))
+  const called = (spies: ReturnType<typeof stubReads>) =>
+    Object.entries(spies).filter(([, spy]) => spy.mock.calls.length).map(([name]) => name)
+
+  it('starts only what each step lists', async () => {
+    const spies = stubReads()
+    await settled(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true }))
+    expect(called(spies)).toEqual(['checkout'])
+
+    invalidateVendorOnboardingState()
+    vi.clearAllMocks()
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: true, withUnits: true }))
+    expect(called(spies)).toEqual(['profile'])
+
+    invalidateVendorOnboardingState()
+    vi.clearAllMocks()
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: false, withUnits: true }))
+    expect(called(spies)).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'units'])
+  })
+
+  it('leaves the units out without withUnits', async () => {
+    const spies = stubReads()
+    const reads = loadStepResources(VENDOR_ID, 6, { submitted: false, withUnits: false })
+    await settled(reads)
+    expect(reads.units).toBeUndefined()
+    expect(spies.units).not.toHaveBeenCalled()
+  })
+
+  it('reads business types only after the profile shows a saved type', async () => {
+    const spies = stubReads('Others')
+    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    await expect(reads.businessTypes).resolves.toEqual([])
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+
+    invalidateVendorOnboardingState()
+    let answer!: (profile: VendorProfile) => void
+    spies.profile.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    const pending = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    await Promise.resolve()
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+    answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
+    await settled(pending)
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+  })
+
+  it('joins a read in flight, omits a resolved one and honours skip', async () => {
+    const spies = stubReads()
+    const inFlight = loadOnboardingResource(VENDOR_ID, 'checkout', () => vendorOnboardingService.getCheckoutOptions(VENDOR_ID))
+    const reads = loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })
+    await settled(reads)
+    await inFlight
+    expect(spies.checkout).toHaveBeenCalledTimes(1)
+
+    expect(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })).toEqual({})
+    const skipped = loadStepResources(VENDOR_ID, 5, { submitted: false, withUnits: true, skip: ['categories', 'units'] })
+    expect(Object.keys(skipped).sort()).toEqual(['businessTypes', 'products', 'profile'])
+    await settled(skipped)
+  })
+
+  it('settles each resource on its own', async () => {
+    const spies = stubReads()
+    spies.categories.mockRejectedValue(new Error('down'))
+    const reads = loadStepResources(VENDOR_ID, 4, { submitted: false, withUnits: true })
+    await expect(reads.categories).rejects.toThrow('down')
+    await expect(reads.profile).resolves.toMatchObject({ businessName: 'Store' })
+    await expect(reads.businessTypes).resolves.toEqual([])
   })
 })

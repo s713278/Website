@@ -239,56 +239,74 @@ mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
 #### Vendor setup account hydration
 
-`loadServerOnboardingState` remains the one hydration point that produces a shape-stable account
-snapshot for the setup wizard. It starts the two reads every vendor needs together: vendor context
-and vendor profile. A caller that has just read the context passes it in, and the snapshot reuses it
-instead of requesting it again; otherwise `loadVendorOnboardingState` takes the context through the
-dashboard's context cache, so a context the session already holds or is reading costs no second
-request. The business-type catalog (one 100-item page) is read only once the
-profile shows a saved business type, because it exists to map that saved name back to the reference
-Step 3 stores; a vendor who has not chosen one, like every new vendor on Step 3, skips it, and Step 3
-lists its own page. A successful read also files Step 3's unsearched first page in the catalog
-reference cache (never over an existing entry), so the step's first visit makes no request; later
-pages still load on scroll. As soon as context reveals the backend resume step, it starts only the cumulative
-account reads needed to reconstruct that step and every earlier one:
+The setup wizard reads the vendor's account per step. On every entry (Live API, ready session) it
+reads the vendor context and the vendor profile; every other account resource is read only when the
+vendor first opens a step that needs it (`stepResources` in `onboarding-resume.ts`;
+`loadStepResources` in `onboarding-server-state.ts` starts or joins those reads). A context the
+session already holds or is reading costs no second request. While the context is read the wizard
+shows "Restoring your setup…".
 
-| Resume step | Additional account reads |
-|---|---|
-| Business type (3) | None |
-| Categories (4) | Vendor categories |
-| Products (5) | Vendor categories, vendor products, and measurements |
-| Sizes (6) | The preceding reads plus vendor sizes |
-| Delivery through review (7–10) | The preceding reads plus checkout options |
+| Step | Account reads | Units |
+|---|---|---|
+| Business type (3), store details (9) | Profile, business types | No |
+| Categories (4) | Step 3's plus vendor categories | No |
+| Products (5) | Step 4's plus vendor products | Yes |
+| Sizes (6) | Step 5's plus vendor sizes | Yes |
+| Delivery, payments (7, 8) | Checkout options (one read for both) | No |
+| Review (10), store submitted | Profile | No |
+| Review (10), not submitted | All six | Yes |
+
+The business-type catalog (one 100-item page) is read only once the profile shows a saved business
+type, because it exists to map that saved name back to the reference Step 3 stores; a vendor who has
+not chosen one, like every new vendor on Step 3, skips it, and Step 3 lists its own page. A
+successful read also files Step 3's unsearched first page in the catalog reference cache (never over
+an existing entry), so the step's first visit makes no request; later pages still load on scroll. A
+first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not a failure.
+
+Each result is applied to the draft as it lands, through one pure applier per resource, whatever
+step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
+applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
+change; a save does not reset it. A step shows a form-shaped skeleton until its reads have loaded,
+and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
+failed resources. Continue is disabled in both states, while Back and the stepper stay usable, so a
+failed earlier step never traps the vendor. A failed read is never turned into empty data, because
+Step 6's save deletes account sizes missing from the draft and Steps 7-8 save checkout as a whole.
+A submitted store's Step 10 is the exception: it shows status only and never blocks; a failed
+profile leaves the store name to its fallback. Requests time out at 15 s and then fail.
+
+A failed context read blocks every step from 3 on: the step shows the context error above "Something
+went wrong" and Try again, which re-reads the context and then the step's resources. If the context
+has no usable `onboarding.next_step` for a store that is not submitted, the wizard opens on Step 10,
+which reads everything, and moves to the resource-derived step once every read has succeeded. If one
+fails, Step 10 shows the error until Try again succeeds. Demo mode reads nothing and never blocks a
+step; a sample-catalog draft makes no account reads.
 
 Measurements mean one authenticated `GET /v1/measurements/` followed by one authenticated
 `GET /v1/measurements/{id}` per list row. Detail calls fan out together and enrich the list because
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
-successful read per session: a later resume, or a return to setup after a saved step invalidates the
-vendor's snapshot, reuses it without a request, and only sign-out drops it. The snapshot asks for it
-from the Products step on (Step 5 shows product measurements and saved sizes are rebuilt against it)
-and otherwise carries an already-read catalog. A vendor who enters on Steps 3-4 gets it when the
-wizard reaches a step that uses it (5, 6 or 10). The read starts alongside the previous step's save,
-and the step shows "Loading measurements…" with Continue disabled until it settles. A failed read
-keeps the sample-unit fallback, as a failed snapshot read does.
+successful read per session: a later visit reuses it without a request, and only sign-out drops it.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it; it
+also starts alongside the save of the step before one of them. A failed read does not block: sizes
+fall back to the sample units and products carry no measurement metadata, and it is not retried
+within the visit.
 
-The snapshot is assembled from per-resource cache entries (`onboarding-resource-cache`, one per
-vendor for profile, business types, categories, products, sizes and checkout options). Each entry is
-single-flight, a failed read is evicted so the next load retries it (the snapshot still records it as
-empty), and a late response for an invalidated entry reaches its caller but is not stored. The
-snapshot invalidation below drops all of the vendor's resource entries with it.
-`buildResumeDraft` composes one pure applier per resource over that snapshot.
+The per-resource cache (`onboarding-resource-cache`, one entry per vendor for profile, business
+types, categories, products, sizes and checkout options) is what the wizard and sign-in share. Each
+entry is single-flight, a failed read is evicted so the next load retries it, and a late response
+for an invalidated entry reaches its caller but is not stored; the wizard additionally applies a
+result only while the same visit and vendor are current.
 
-Submitted vendors load the complete read set so earlier setup remains reviewable. If context omits
-`onboarding.next_step`, the loader also chooses the complete set so the resource-derived resume
-fallback is computed from real data rather than an intentionally partial snapshot. Context failure
-rejects hydration; the other reads retain the existing optional behavior and become empty/default
-snapshot fields when unavailable.
+Sign-in still prefetches the older all-in-one snapshot (`loadVendorOnboardingState` over
+`loadServerOnboardingState`) for `/onboarding`. It is assembled from the same resource entries, so
+the wizard joins those reads instead of repeating them; it reads the cumulative set for the resume
+step and keeps its optional behaviour (a failed read becomes empty snapshot fields).
 
-`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor,
-so the wizard, the header on `/onboarding`, and sign-in's prefetch share one fan-out. Failed loads
-are evicted, and successful setup writes, submission, and sign-out invalidate the relevant entry.
-The same invalidation also drops the dashboard's narrower context cache, so returning from setup
+`loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor
+for that prefetch. Failed loads are evicted, and successful setup writes, submission, and sign-out
+invalidate the vendor's snapshot together with all of its resource entries, so a later visit reads
+them again; the open wizard keeps what it already applied. The same invalidation also drops the
+dashboard's narrower context cache, so returning from setup
 cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
 response belonging to an entry that has already been invalidated. Submission's read-back of the
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
@@ -298,8 +316,8 @@ The marketing header decides its vendor actions from the context alone. On every
 included, it calls `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
 narrower cache so the dashboard opens on it, or no request when either cache already holds a resolved
 context (the dashboard's is preferred). Waiting on the full read held the actions back until the
-slowest of its reads settled, however little the decision used them. On `/onboarding` the wizard's
-full read takes its context through the same cache, so the two share one context request.
+slowest of its reads settled, however little the decision used them. On `/onboarding` the wizard
+reads its context through the same cache, so the two share one context request.
 
 Post-sign-in routing (`resolveLandingPath`) first decides from the chosen vendor's `verify-otp`
 `vendors[]` status and onboarding when they suffice (see

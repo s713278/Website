@@ -910,3 +910,46 @@ describe('authored pending entries', () => {
     expect(draft.products[0].categoryId).toBe(5001)
   })
 })
+
+describe('setAccountCatalog one field at a time', () => {
+  beforeEach(() => {
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+  })
+
+  it('keeps the other fields and rebuilds the predicates for the one given', () => {
+    useOnboardingStore.getState().setAccountCatalog({ productIds: [31] })
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [12] })
+
+    const state = useOnboardingStore.getState()
+    expect(state.accountCatalog.productIds).toEqual([31])
+    expect(state.isCategoryAssigned(12)).toBe(true)
+    expect(state.isProductAssigned(31)).toBe(true)
+  })
+
+  it('counts unlisted sizes right whichever of usage and size ids arrives first', () => {
+    useOnboardingStore.getState().setAccountCatalog({ skuUsage: 3 })
+    expect(useOnboardingStore.getState().accountCatalog.unlistedSkuCount).toBe(3)
+    useOnboardingStore.getState().setAccountCatalog({ skuIds: [4021] })
+    expect(useOnboardingStore.getState().accountCatalog.unlistedSkuCount).toBe(2)
+    expect(selectProjectedSkuTotal(useOnboardingStore.getState())).toBe(3)
+
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+    useOnboardingStore.getState().setAccountCatalog({ skuIds: [4021, 4022] })
+    useOnboardingStore.getState().setAccountCatalog({ skuUsage: 3 })
+    expect(useOnboardingStore.getState().accountCatalog.unlistedSkuCount).toBe(1)
+  })
+})
+
+describe('the resume notice', () => {
+  const runtime = () => ({ paymentDetails: useOnboardingStore.getState().runtime.paymentDetails, orderWhatsapp: '' })
+
+  it('is shown when the account pointer is past Step 3, before any catalog is read', () => {
+    useOnboardingStore.getState().applyResumedDraft({ ...createEmptyOnboardingDraft(), currentStep: 7 }, 7, runtime())
+    expect(useOnboardingStore.getState().recoveryMessage).toMatch(/Picked up where you left off/)
+  })
+
+  it('is not shown when the pointer is at Step 3 or earlier', () => {
+    useOnboardingStore.getState().applyResumedDraft({ ...createEmptyOnboardingDraft(), currentStep: 3 }, 3, runtime())
+    expect(useOnboardingStore.getState().recoveryMessage).toBeNull()
+  })
+})

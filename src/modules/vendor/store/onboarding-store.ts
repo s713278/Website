@@ -51,6 +51,8 @@ type AccountCatalog = {
   categoryIds: number[]
   productIds: number[]
   skuIds: number[]
+  /** The backend's size usage, kept so `unlistedSkuCount` stays right whichever arrives first. */
+  skuUsage?: number | null
   /** Backend usage can include inactive sizes omitted from the account list. */
   unlistedSkuCount?: number
 }
@@ -154,9 +156,13 @@ type OnboardingStore = {
    * account, not the draft.
    */
   accountCatalog: AccountCatalog
+  /**
+   * Partial: each field given replaces that field, and the rest stand, because the wizard
+   * reads categories, products, sizes and usage separately and applies each as it lands.
+   */
   setAccountCatalog: (catalog: {
-    categoryIds: number[]
-    productIds: number[]
+    categoryIds?: number[]
+    productIds?: number[]
     skuIds?: number[]
     skuUsage?: number | null
   }) => void
@@ -722,12 +728,15 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   setAccountCatalog(catalog) {
-    const skuIds = catalog.skuIds ?? []
-    const unlistedSkuCount = Math.max(0, (catalog.skuUsage ?? 0) - new Set(skuIds).size)
+    const current = useOnboardingStore.getState().accountCatalog
+    const skuIds = catalog.skuIds ?? current.skuIds
+    const skuUsage = 'skuUsage' in catalog ? catalog.skuUsage : current.skuUsage
+    const unlistedSkuCount = Math.max(0, (skuUsage ?? 0) - new Set(skuIds).size)
     set(accountCatalogSlice({
-      categoryIds: catalog.categoryIds,
-      productIds: catalog.productIds,
+      categoryIds: catalog.categoryIds ?? current.categoryIds,
+      productIds: catalog.productIds ?? current.productIds,
       skuIds,
+      ...(skuUsage != null ? { skuUsage } : {}),
       ...(unlistedSkuCount ? { unlistedSkuCount } : {}),
     }))
   },
@@ -1077,8 +1086,9 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true } = {}) {
     // A brand-new account resumes to an empty wizard, which is not something to
-    // announce. Only say it when there was actually something to bring back.
-    const restored = draft.categories.length > 0 || draft.products.length > 0
+    // announce. On a rebuilt draft `furthestVisitedStep` is the account's resume step, and
+    // one past Step 3 means work was saved there, whether or not it has been read yet.
+    const restored = furthestVisitedStep > 3
     set((state) => ({
       draft,
       furthestVisitedStep,

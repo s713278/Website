@@ -262,7 +262,7 @@ export async function loadServerOnboardingState(
 }
 
 /** The profile's business type, or `null` while the vendor has not chosen one. */
-function savedBusinessType(profile: VendorProfile | null): string | null {
+export function savedBusinessType(profile: VendorProfile | null): string | null {
   const type = profile?.businessType?.trim()
   return type && type !== UNSET_BUSINESS_TYPE ? type : null
 }
@@ -718,95 +718,42 @@ export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
   })
 }
 
-const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
+/** Where one resource's read stands in the current wizard visit. */
+export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
 
 /**
- * Steps 3-9 whose account data a snapshot holds: every resource the step needs was both
- * part of the snapshot's read set (profile always, the rest by its read step) and is in
- * `resolved`, the resources whose read succeeded. A failed read leaves empty data in the
- * snapshot, which must never pass for the account's copy. Business types count only once
- * a type is saved; until then no step needs them.
+ * Whether a step can show its form: every account resource it lists has loaded and, where
+ * it uses them, the units have settled. A units failure is not a block: the sample units
+ * stand in. A failed resource fails the step even while another still loads, so the vendor
+ * can retry at once. A submitted store's Step 10 shows status only and never blocks: a
+ * failed profile just leaves the store name to its fallback.
  */
-export function snapshotLoadedSteps(
-  state: ServerOnboardingState,
-  resolved: ReadonlySet<OnboardingResource>,
-): OnboardingStep[] {
-  const submitted = isStoreSubmitted(state)
-  const readStep = submitted ? 10 : (backendResumeStep(state.context) ?? 10)
-  const read = new Set<OnboardingResource>(['profile', 'businessTypes'])
-  for (const resource of accountReadsForResumeStep(readStep)) {
-    if (resource !== 'measurements') read.add(resource)
-  }
-  const covered = (resource: OnboardingResource) => read.has(resource) && (
-    resolved.has(resource) ||
-    (resource === 'businessTypes' && resolved.has('profile') && !savedBusinessType(state.profile))
-  )
-  return ACCOUNT_STEPS.filter((step) => stepResources(step, { submitted }).account.every(covered))
-}
-
-export type AccountResume = {
-  draft: VendorOnboardingDraftV1
-  /** `null` when the frame was not applied: the vendor's own progress stands. */
-  furthestVisitedStep: OnboardingStep | null
-  openAt: OnboardingStep
-  /** The whole draft was rebuilt from the account, so nothing is edited any more. */
-  frameApplied: boolean
-  /** Steps 3-9 that took the account copy. */
-  appliedSteps: OnboardingStep[]
-  /** Steps 3-9 whose account data this snapshot holds. */
-  loadedSteps: OnboardingStep[]
-  /** Step 9's order number, or `null` when Step 9 kept its local copy. */
-  orderWhatsapp: string | null
-  paymentDetails: OnboardingRuntimeState['paymentDetails']
-}
-
-/**
- * The account snapshot applied over the local draft, step by step.
- *
- * With nothing edited, or a submitted store, the draft is rebuilt exactly as
- * `buildResumeDraft` does. Otherwise the vendor's progress (open step, completed steps,
- * catalog source) stands, edited steps keep their local sections, and each other step
- * takes the account copy only where the snapshot actually holds it.
- */
-export function resumeFromAccount(
-  state: ServerOnboardingState,
-  draft: VendorOnboardingDraftV1,
+export function stepLoadState(
+  step: OnboardingStep,
   options: {
-    edited: ReadonlySet<OnboardingStep>
-    paymentDetails: OnboardingRuntimeState['paymentDetails']
-    resolved: ReadonlySet<OnboardingResource>
+    submitted: boolean
+    resources: Readonly<Record<OnboardingResource, ResourceStatus>>
+    units: ResourceStatus
   },
-): AccountResume {
-  const submitted = isStoreSubmitted(state)
-  const loadedSteps = snapshotLoadedSteps(state, options.resolved)
-  if (!options.edited.size || submitted) {
-    const resumed = buildResumeDraft(state)
-    return {
-      draft: resumed.draft,
-      furthestVisitedStep: resumed.furthestVisitedStep,
-      openAt: resumed.openAt,
-      frameApplied: true,
-      appliedSteps: [...ACCOUNT_STEPS],
-      loadedSteps,
-      orderWhatsapp: resumed.orderWhatsapp,
-      paymentDetails: resumePaymentDetails(state.checkout, options.paymentDetails),
-    }
+): 'loading' | 'failed' | 'loaded' {
+  const needs = stepResources(step, { submitted: options.submitted })
+  const statuses = needs.account.map((resource) => options.resources[resource])
+  if (step === 10 && options.submitted) {
+    return statuses.every((status) => status === 'loaded' || status === 'failed') ? 'loaded' : 'loading'
   }
+  if (statuses.includes('failed')) return 'failed'
+  if (statuses.some((status) => status !== 'loaded')) return 'loading'
+  if (needs.units && (options.units === 'idle' || options.units === 'loading')) return 'loading'
+  return 'loaded'
+}
 
-  const appliedSteps = loadedSteps.filter((step) => !options.edited.has(step))
-  // Every step not applied counts as edited for the appliers, so they leave it alone.
-  const kept = new Set(ACCOUNT_STEPS.filter((step) => !appliedSteps.includes(step)))
-  const resumed = applyResumeState(state, draft, { edited: kept, submitted: false })
-  return {
-    draft: resumed.draft,
-    furthestVisitedStep: null,
-    openAt: resumed.openAt,
-    frameApplied: false,
-    appliedSteps,
-    loadedSteps,
-    orderWhatsapp: appliedSteps.includes(9) ? resumed.orderWhatsapp : null,
-    paymentDetails: appliedSteps.includes(8)
-      ? resumePaymentDetails(state.checkout, options.paymentDetails)
-      : options.paymentDetails,
-  }
+/**
+ * The account as `derivedResumeStep` reads it, from resources read one at a time. Only for
+ * a context without a usable resume pointer, once every account resource has been read.
+ */
+export function accountResumeState(
+  context: VendorContext,
+  values: OnboardingResourceData,
+): ServerOnboardingState {
+  return { context, ...values, ...measurementCatalogsForResume(null) }
 }
