@@ -234,18 +234,6 @@ describe('mapStorefrontCheckoutOptions', () => {
       '9 PM - 12 AM',
     ])
   })
-
-  it('strips wrapping quotes from live delivery_slots labels', () => {
-    const mapped = mapStorefrontCheckoutOptions({
-      data: {
-        delivery_methods: ['STORE_PICKUP'],
-        delivery_slots: ["'Morning'", "'Evening'"],
-        pickup_options: { stores: [] },
-      },
-    })
-
-    expect(mapped?.deliverySlots.map((slot) => slot.label)).toEqual(['Morning', 'Evening'])
-  })
 })
 
 describe('deliveryFeeForCheckout', () => {

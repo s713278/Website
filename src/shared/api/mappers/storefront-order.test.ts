@@ -77,18 +77,6 @@ describe('mapCreateOrderFromCartBody', () => {
     })
   })
 
-  it('normalizes quoted pickup slot labels from live checkout_options', () => {
-    expect(
-      mapCreateOrderFromCartBody({
-        vendorId: '371',
-        deliveryMethod: 'STORE_PICKUP',
-        pickupSlot: "'Evening'",
-      }),
-    ).toMatchObject({
-      pickup_slot: 'Evening',
-    })
-  })
-
   it('rejects a non-numeric vendor id', () => {
     expect(() => mapCreateOrderFromCartBody({ vendorId: 'r1' })).toThrow(
       'This store cannot accept an order right now.',

@@ -105,10 +105,7 @@ function paymentId(type: StorefrontCheckoutPayment['type']): string {
 }
 
 function mapSlotLabel(value: unknown): string | null {
-  const text = asString(value)
-  if (!text) return null
-  // Live checkout_options has returned quoted labels: "'Morning'".
-  return text.replace(/^['"]+|['"]+$/g, '').trim() || null
+  return asString(value)
 }
 
 function mapCheckoutSlot(

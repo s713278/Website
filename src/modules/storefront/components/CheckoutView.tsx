@@ -420,7 +420,7 @@ export function CheckoutView({
       return
     }
 
-    const whatsappWindow = reserveWhatsAppWindow()
+    const whatsappWindow = reserveWhatsAppWindow(store.theme?.primaryColor)
     setPlacing(true)
     setError('')
     try {

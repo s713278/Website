@@ -5,6 +5,7 @@ import {
   hasStoreContactFacts,
   mapsEmbedUrl,
   mapsSearchUrl,
+  orderWhatsappNumber,
   storeContactHeaderProps,
   supportHelpMessage,
   supportWhatsappNumber,
@@ -83,6 +84,18 @@ describe('support WhatsApp', () => {
 
   it('prefills a help message', () => {
     expect(supportHelpMessage("Geeta's Kitchen")).toBe("Hi, I need help from Geeta's Kitchen")
+  })
+})
+
+describe('order WhatsApp', () => {
+  it('prefers order_whatsapp_number for Chat with Owner / place-order', () => {
+    expect(
+      orderWhatsappNumber(shop({ supportWhatsapp: '+919900000000', phone: '+919912149049' })),
+    ).toBe('+919912149049')
+  })
+
+  it('falls back to support WhatsApp when order number is missing', () => {
+    expect(orderWhatsappNumber(shop({ supportWhatsapp: '+919900000000' }))).toBe('+919900000000')
   })
 })
 
