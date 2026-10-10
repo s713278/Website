@@ -7,8 +7,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
+import { loadOnboardingResource, peekOnboardingResource } from '../../lib/onboarding-resource-cache'
+import type { OnboardingResource } from '../../lib/onboarding-resume'
 import { invalidateVendorOnboardingState } from '../../lib/onboarding-state-cache'
-import { loadVendorContext } from '../../lib/vendor-context-cache'
+import { loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import type { OnboardingStep } from '../../types/onboarding'
@@ -654,6 +656,8 @@ describe('Step 10 readiness issues', () => {
   it('focuses the readiness list when Submit finds issues owned by earlier steps', async () => {
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    // An unsubmitted Step 10 reads every account resource.
+    await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
     const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
@@ -699,6 +703,58 @@ describe('Step 10 store summary', () => {
   })
 })
 
+const ALL_RESOURCES: readonly OnboardingResource[] = [
+  'profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout',
+]
+
+/** Fill the shared account cache for vendor 91, as an earlier visit would have. */
+async function cacheEveryResource() {
+  await Promise.all(ALL_RESOURCES.map((resource) => loadOnboardingResource('91', resource, async () => (
+    resource === 'profile' || resource === 'checkout' ? null : []
+  ))))
+}
+
+/** The resources still resolved in the shared cache for vendor 91. */
+const cachedResources = () => ALL_RESOURCES.filter((resource) => peekOnboardingResource('91', resource))
+
+describe('what a save clears from the shared account cache', () => {
+  it('drops only the categories and the context after a Step 4 save', async () => {
+    stubReferencePages()
+    const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockResolvedValue(undefined)
+    await cacheEveryResource()
+    renderAccount('APPROVED', 7)
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 4,/ }))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }],
+    }), 4))
+    expect(peekVendorContext('91')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+
+    expect(save).toHaveBeenCalledWith('91', [11])
+    expect(cachedResources()).toEqual(['profile', 'businessTypes', 'products', 'skus', 'checkout'])
+    expect(peekVendorContext('91')).toBeNull()
+  })
+
+  it('drops only the checkout settings and the context after a Step 7 save', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await cacheEveryResource()
+    renderAccount('APPROVED', 7)
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await waitFor(() => expect(peekVendorContext('91')).not.toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+
+    expect(cachedResources()).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus'])
+    expect(peekVendorContext('91')).toBeNull()
+  })
+})
+
 describe('submitting the store for review', () => {
   it('reads the submitted context back once and shares it with the dashboard', async () => {
     renderAccount('APPROVED', 10)
@@ -712,6 +768,8 @@ describe('submitting the store for review', () => {
       }))
       store.updateRuntime({ orderWhatsapp: '9876543210' })
     })
+    // An unsubmitted Step 10 reads every account resource.
+    await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
     const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
     const context = vi.mocked(vendorOnboardingService.getVendorContext)
     const readsBefore = context.mock.calls.length
@@ -720,6 +778,8 @@ describe('submitting the store for review', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
     await waitFor(() => expect(goLive).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(context.mock.calls.length).toBe(readsBefore + 1))
+    // Go-live changes everything the account holds for the vendor but the platform business types.
+    expect(cachedResources()).toEqual(['businessTypes'])
 
     // The dashboard's provider reads through the same cache, so opening it costs nothing.
     const shared = await loadVendorContext('91', vendorOnboardingService.getVendorContext)

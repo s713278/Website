@@ -19,7 +19,9 @@ import {
   planSkuWrites,
   persistProducts,
   persistSkus,
+  GO_LIVE_RESOURCES,
   resumedCatalogFingerprints,
+  savedResources,
   stepSaveFingerprint,
   stepsSavedTogether,
 } from './onboarding-sync'
@@ -912,5 +914,24 @@ describe('stepSaveFingerprint', () => {
     // Owner and contact ride on the business-type write that Step 9 also sends.
     const owner = { ...before, business: { ...before.business, ownerName: 'Someone Else' } }
     expect(stepSaveFingerprint(9, owner, runtime)).not.toBe(stepSaveFingerprint(9, before, runtime))
+  })
+})
+
+describe('savedResources', () => {
+  it('names the one account resource each step’s save writes', () => {
+    expect(savedResources(1)).toEqual([])
+    expect(savedResources(2)).toEqual([])
+    expect(savedResources(3)).toEqual(['profile'])
+    expect(savedResources(4)).toEqual(['categories'])
+    expect(savedResources(5)).toEqual(['products'])
+    expect(savedResources(6)).toEqual(['skus'])
+    expect(savedResources(7)).toEqual(['checkout'])
+    expect(savedResources(8)).toEqual(['checkout'])
+    expect(savedResources(9)).toEqual(['profile'])
+    expect(savedResources(10)).toEqual([])
+  })
+
+  it('has go-live drop every account resource except the platform business types', () => {
+    expect([...GO_LIVE_RESOURCES].sort()).toEqual(['categories', 'checkout', 'products', 'profile', 'skus'])
   })
 })

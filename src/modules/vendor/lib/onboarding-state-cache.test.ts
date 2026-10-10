@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mapVendorContext, type VendorContext } from '@/shared/api'
 import {
+  dropVendorOnboardingSnapshot,
   invalidateVendorOnboardingState,
   peekVendorAccountContext,
+  peekVendorOnboardingState,
   writeEntry,
 } from './onboarding-state-cache'
 import type { ServerOnboardingState } from './onboarding-resume'
 import { loadOnboardingResource, peekOnboardingResource } from './onboarding-resource-cache'
-import { loadVendorContext } from './vendor-context-cache'
+import { loadVendorContext, peekVendorContext } from './vendor-context-cache'
 
 const VENDOR_ID = '96'
 
@@ -94,5 +96,22 @@ describe('invalidateVendorOnboardingState', () => {
 
     expect(peekOnboardingResource(VENDOR_ID, 'profile')).toBeNull()
     expect(peekOnboardingResource('97', 'checkout')).toBeNull()
+  })
+})
+
+describe('dropVendorOnboardingSnapshot', () => {
+  it('drops only the vendor’s snapshot, leaving its resources and context cached', async () => {
+    resolveWizardRead(contextWith('PENDING'))
+    const dashboard = contextWith('APPROVED')
+    await loadVendorContext(VENDOR_ID, async () => dashboard)
+    await loadOnboardingResource(VENDOR_ID, 'profile', async () => null)
+    await loadOnboardingResource(VENDOR_ID, 'businessTypes', async () => [])
+
+    dropVendorOnboardingSnapshot(VENDOR_ID)
+
+    expect(peekVendorOnboardingState(VENDOR_ID)).toBeNull()
+    expect(peekVendorContext(VENDOR_ID)).toBe(dashboard)
+    expect(peekOnboardingResource(VENDOR_ID, 'profile')).toEqual({ value: null })
+    expect(peekOnboardingResource(VENDOR_ID, 'businessTypes')).toEqual({ value: [] })
   })
 })

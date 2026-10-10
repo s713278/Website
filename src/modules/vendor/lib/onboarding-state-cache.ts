@@ -50,13 +50,22 @@ export function peekVendorAccountContext(vendorId: string): VendorContext | null
 }
 
 /**
+ * Drop only the vendor's combined snapshot, leaving its resource entries and context alone.
+ * A save or go-live calls this beside its own scoped resource and context drops, so no
+ * stale snapshot outlives the write.
+ */
+export function dropVendorOnboardingSnapshot(vendorId: string): void {
+  entries.delete(vendorId)
+}
+
+/**
  * Drop both account snapshots, and the account resources they are built from, so the next
  * wizard or dashboard read hits the account.
  *
- * Call after any write that changes what a resume would produce — every persisted step
- * and go-live — and on sign-out, where one vendor's store details must not outlive their
- * session. The platform measurement catalog is no vendor's data and no write changes it,
- * so only the sign-out form (no `vendorId`) drops it.
+ * Used on sign-out, where one vendor's store details must not outlive their session, and
+ * for test cleanup; a save or go-live drops only what it changed. The platform measurement
+ * catalog is no vendor's data and no write changes it, so only the sign-out form (no
+ * `vendorId`) drops it.
  */
 export function invalidateVendorOnboardingState(vendorId?: string): void {
   if (vendorId) entries.delete(vendorId)

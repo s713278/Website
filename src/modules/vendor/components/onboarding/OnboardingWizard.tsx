@@ -24,7 +24,11 @@ import { Button, LoadingSkeleton } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
-import { peekOnboardingResource, type OnboardingResourceData } from '../../lib/onboarding-resource-cache'
+import {
+  invalidateOnboardingResources,
+  peekOnboardingResource,
+  type OnboardingResourceData,
+} from '../../lib/onboarding-resource-cache'
 import {
   accountResumeState,
   applyBusinessType,
@@ -50,20 +54,22 @@ import {
   type OnboardingResource,
   type ResourceStatus,
 } from '../../lib/onboarding-resume'
-import { invalidateVendorOnboardingState, loadStepResources } from '../../lib/onboarding-server-state'
-import { peekVendorAccountContext } from '../../lib/onboarding-state-cache'
+import { loadStepResources } from '../../lib/onboarding-server-state'
+import { dropVendorOnboardingSnapshot, peekVendorAccountContext } from '../../lib/onboarding-state-cache'
 import { maskPhone } from '../../lib/onboarding-adapter'
 import {
+  GO_LIVE_RESOURCES,
   isLivePersistedStep,
   persistStep,
   resumedCatalogFingerprints,
+  savedResources,
   stepErrorField,
   stepSaveFingerprint,
   stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { loadVendorContext } from '../../lib/vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext } from '../../lib/vendor-context-cache'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -168,6 +174,17 @@ const NO_ISSUES: ShownIssues = { issues: [] }
 const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
 
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
+
+/**
+ * Clear what an account write made stale in the shared caches: the written resources, the
+ * vendor context (it carries `next_step`, plan usage and store state) and the combined
+ * snapshot. Business types and units are platform data, so they stay.
+ */
+function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
+  invalidateOnboardingResources(vendorId, resources)
+  invalidateVendorContext(vendorId)
+  dropVendorOnboardingSnapshot(vendorId)
+}
 
 /** Where this visit's account reads stand: the context, each resource and the units. */
 type AccountLoadView = {
@@ -934,7 +951,7 @@ export function OnboardingWizard() {
 
       // The account just changed, even if local navigation stopped tracking this
       // request while it was in flight. Never let a stale cache hide the submission.
-      invalidateVendorOnboardingState(access.vendorId)
+      dropWrittenAccountData(access.vendorId, GO_LIVE_RESOURCES)
       // Do not let a late response attach the previous vendor's state to a new session.
       if (useAuthStore.getState().user?.vendorId !== access.vendorId) return
       // The successful account action is enough to establish submission. Details stay
@@ -1044,8 +1061,9 @@ export function OnboardingWizard() {
         await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
           if (persistenceIsCurrent()) recordAssignment(assignment)
         }, recordCreatedEntry)
-        // This step is now on the account, so a cached read from before it is stale.
-        invalidateVendorOnboardingState(access.vendorId)
+        // This step is now on the account, so a cached read from before it is stale. The
+        // open wizard keeps what it holds: the draft is now the account copy.
+        dropWrittenAccountData(access.vendorId, savedResources(step))
         if (!persistenceIsCurrent()) return
         // Read after the save: minting authored entries rewrites their ids in the draft.
         const latest = useOnboardingStore.getState()

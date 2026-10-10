@@ -19,6 +19,7 @@ import type {
   SelectedProduct,
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
+import type { OnboardingResource } from './onboarding-resume'
 import { serverSkuIdOf } from './onboarding-sku-id'
 
 /**
@@ -121,6 +122,21 @@ export function stepSaveFingerprint(
 export function stepsSavedTogether(step: OnboardingStep): OnboardingStep[] {
   return step === 7 || step === 8 ? [7, 8] : [step]
 }
+
+/** The account resource a step's save writes, so only its cached read goes stale. */
+export function savedResources(step: OnboardingStep): readonly OnboardingResource[] {
+  if (step === 3 || step === 9) return ['profile']
+  if (step === 4) return ['categories']
+  if (step === 5) return ['products']
+  if (step === 6) return ['skus']
+  if (step === 7 || step === 8) return ['checkout']
+  return []
+}
+
+/** Go-live can change every account resource; business types are platform data it never touches. */
+export const GO_LIVE_RESOURCES: readonly OnboardingResource[] = [
+  'profile', 'categories', 'products', 'skus', 'checkout',
+]
 
 /** Field to focus when a save for this step fails. */
 export function stepErrorField(step: OnboardingStep): string {

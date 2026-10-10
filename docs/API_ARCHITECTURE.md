@@ -303,11 +303,14 @@ the wizard joins those reads instead of repeating them; it reads the cumulative 
 step and keeps its optional behaviour (a failed read becomes empty snapshot fields).
 
 `loadVendorOnboardingState` caches one in-flight promise and then one resolved snapshot per vendor
-for that prefetch. Failed loads are evicted, and successful setup writes, submission, and sign-out
-invalidate the vendor's snapshot together with all of its resource entries, so a later visit reads
-them again; the open wizard keeps what it already applied. The same invalidation also drops the
-dashboard's narrower context cache, so returning from setup
-cannot reuse pre-write store state, storefront details, or plan usage. Both caches ignore a late
+for that prefetch. Failed loads are evicted. A successful step save drops only the resource it
+wrote (Step 3 or 9 the profile, Step 4 categories, Step 5 products, Step 6 sizes, Step 7 or 8 the
+checkout settings), submission drops every account resource except business types, and sign-out
+drops every resource for every vendor plus the units; business types and units otherwise stay
+cached until sign-out. Each of these also drops the vendor's snapshot and the dashboard's narrower
+context cache, so a later visit re-reads only what changed and returning from setup cannot reuse
+pre-write store state, storefront details, or plan usage. The open wizard keeps what it already
+applied: after a save its draft is the account copy. Both caches ignore a late
 response belonging to an entry that has already been invalidated. Submission's read-back of the
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
