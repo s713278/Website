@@ -864,6 +864,13 @@ describe('resumedCatalogFingerprints', () => {
     expect(Object.keys(resumedCatalogFingerprints(resumed, 7))).toEqual(['4', '5', '6'])
     expect(resumedCatalogFingerprints(resumed, 10)[6]).toBe(catalogFingerprint(6, resumed))
   })
+
+  it('vouches only for steps whose catalog chain was taken from the account', () => {
+    const resumed = { ...createEmptyOnboardingDraft(), catalogSource: 'account' as const }
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 10, new Set([3, 4, 6, 9])))).toEqual(['4'])
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 10, new Set([4, 5, 6])))).toEqual([])
+    expect(Object.keys(resumedCatalogFingerprints(resumed, 6, new Set([3, 4, 5, 6])))).toEqual(['4', '5'])
+  })
 })
 
 describe('stepSaveFingerprint', () => {

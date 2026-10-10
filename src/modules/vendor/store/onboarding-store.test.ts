@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { ONBOARDING_CONFIG, type CatalogSource, type OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
+import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
 import {
   continueWithCatalogPolicy,
   selectCategoryLimit,
@@ -180,26 +181,170 @@ describe('completeStep and account sync', () => {
   // synced let the next account read overwrite work the vendor could still see.
   beforeEach(() => {
     seedAt(5)
-    useOnboardingStore.setState({ hasLocalEdits: true })
+    useOnboardingStore.setState({ editedSteps: [4, 5, 7, 8] })
   })
 
-  it('keeps hasLocalEdits when the step was not written to the account', () => {
+  it('keeps the edited steps when the step was not written to the account', () => {
     useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: false })
 
-    expect(useOnboardingStore.getState().hasLocalEdits).toBe(true)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5, 7, 8])
     expect(useOnboardingStore.getState().furthestVisitedStep).toBe(6)
   })
 
-  it('clears hasLocalEdits once the step reached the account', () => {
+  it('removes only the step that reached the account', () => {
     useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: true })
 
-    expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 7, 8])
   })
 
-  it('defaults to synced, so identity steps still let the account hydrate', () => {
+  it('defaults to synced', () => {
     useOnboardingStore.getState().completeStep(5, 6)
 
-    expect(useOnboardingStore.getState().hasLocalEdits).toBe(false)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 7, 8])
+  })
+
+  it('clears Steps 7 and 8 together, since one write saves both', () => {
+    useOnboardingStore.getState().completeStep(7, 8)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5])
+  })
+
+  it('clears every step once the OTP step completes, as a new session starts', () => {
+    useOnboardingStore.getState().completeStep(2, 3)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+  })
+
+  it('writes the edited steps to storage and never the legacy flag', () => {
+    const write = vi.spyOn(onboardingDraftAdapter.drafts, 'write').mockImplementation(() => {})
+    try {
+      useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: false })
+
+      const envelope = write.mock.calls.at(-1)?.[0]
+      expect(envelope?.editedSteps).toEqual([4, 5, 7, 8])
+      expect(envelope && 'hasLocalEdits' in envelope).toBe(false)
+    } finally {
+      write.mockRestore()
+    }
+  })
+})
+
+describe('editedSteps on updateDraft', () => {
+  const sku = (id: string, productId: number) => ({
+    id, productId, name: 'Regular', description: '', skuType: 'ITEM' as const, measurementType: 'COUNT' as const,
+    unit: 'pcs', quantity: 1, listPrice: 60, salePrice: 55, active: true, homeDelivery: true, storePickup: true,
+  })
+  const product = (id: number, categoryId: number) => ({
+    id, name: `P${id}`, description: null, imageUrl: null, measurementId: null, measurementName: null, categoryId,
+  })
+  const category = (id: number) => ({
+    id, name: `C${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null,
+  })
+
+  beforeEach(() => {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        currentStep: 4,
+        completedSteps: [1, 2, 3] as OnboardingStep[],
+        categories: [category(11), category(12)],
+        products: [product(31, 11), product(32, 12)],
+        skus: [sku('sku-1', 31), sku('sku-2', 32)],
+      },
+      furthestVisitedStep: 4,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+      storeSubmission: null,
+      editedSteps: [],
+      loadedSteps: [],
+    })
+  })
+
+  // Step 4's toggle: removing a category drops its products and their sizes.
+  const removeCategory12 = () => useOnboardingStore.getState().updateDraft((current) => {
+    const categories = current.categories.filter((item) => item.id !== 12)
+    const products = current.products.filter((item) => item.categoryId !== 12)
+    const ids = new Set(products.map((item) => item.id))
+    return { ...current, categories, products, skus: current.skus.filter((item) => ids.has(item.productId)) }
+  }, 4)
+
+  it('adds the step an edit came from', () => {
+    removeCategory12()
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4])
+  })
+
+  it('adds the current step when no step is named, like the Step 6 size scaffold', () => {
+    useOnboardingStore.setState((state) => ({ draft: { ...state.draft, currentStep: 6 } }))
+
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, skus: [...current.skus] }))
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([6])
+  })
+
+  it('ignores steps outside 3-9', () => {
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, mobileVerified: true }), 2)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+  })
+
+  it('adds a downstream step only when it is loaded and its section changed', () => {
+    useOnboardingStore.setState({ loadedSteps: [3, 4, 5, 6] })
+
+    removeCategory12()
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5, 6])
+  })
+
+  it('leaves an unloaded downstream step to take the account copy', () => {
+    useOnboardingStore.setState({ loadedSteps: [3, 4, 5] })
+
+    removeCategory12()
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5])
+  })
+
+  it('keeps an already edited downstream step edited, loaded or not', () => {
+    useOnboardingStore.setState({ editedSteps: [6] })
+
+    removeCategory12()
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 6])
+  })
+
+  it('does not count a rebuilt but equal section as a change', () => {
+    useOnboardingStore.setState({ loadedSteps: [3, 4, 5, 6, 7, 8, 9] })
+
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      categories: [...current.categories, category(13)],
+      products: current.products.map((item) => ({ ...item })),
+      skus: current.skus.filter(() => true),
+    }), 4)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4])
+  })
+
+  it('applies the same rule to a business type change', () => {
+    useOnboardingStore.setState((state) => ({
+      loadedSteps: [3, 4, 5, 6],
+      draft: { ...state.draft, business: { ...state.draft.business, businessType: { id: 1, name: 'Bakery', icon: null, displayOrder: null } } },
+    }))
+    useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11], productIds: [31], skuIds: [1] })
+
+    useOnboardingStore.getState().changeBusinessType({ id: 2, name: 'Grocery', icon: null, displayOrder: null })
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([3, 4, 5, 6])
+  })
+
+  it('still adds the origin step on a submitted store', () => {
+    useOnboardingStore.setState({
+      storeSubmission: { storeIdentifier: 's', vendorStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
+    })
+
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, categories: [...current.categories, category(13)] }), 4)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4])
   })
 })
 
@@ -666,7 +811,7 @@ describe('authored pending entries', () => {
       furthestVisitedStep: 4,
       persistenceInitialized: true,
       persistenceStatus: 'idle',
-      hasLocalEdits: false,
+      editedSteps: [],
     })
   })
 
@@ -677,7 +822,7 @@ describe('authored pending entries', () => {
     const [category] = useOnboardingStore.getState().draft.categories
     expect(category).toMatchObject({ id: PENDING_ID_BASE, name: 'Bakery', businessTypeId: 7, pending: true })
     // Authoring is a local edit that has not reached the account.
-    expect(useOnboardingStore.getState().hasLocalEdits).toBe(true)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4])
   })
 
   it('mints a product one below the lowest pending id and links its category', () => {

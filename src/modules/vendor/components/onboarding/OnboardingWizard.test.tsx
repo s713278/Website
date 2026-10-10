@@ -10,6 +10,8 @@ import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sa
 import { invalidateVendorOnboardingState } from '../../lib/onboarding-state-cache'
 import { loadVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
+import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
+import type { OnboardingStep } from '../../types/onboarding'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
@@ -276,6 +278,75 @@ describe('onboarding account hydration and size permissions', () => {
     expect(shownCopies('Could not create size')).toHaveLength(1)
     expect(screen.queryByText(/Please fix/)).toBeNull()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+  })
+})
+
+describe('account copy per step around unsaved edits', () => {
+  const localProduct = {
+    id: 77, name: 'Local Juice', description: null, imageUrl: null,
+    measurementId: null, measurementName: null, categoryId: 10,
+  }
+
+  function seedEdited(editedSteps: OnboardingStep[]) {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        mobileVerified: true,
+        currentStep: 5,
+        completedSteps: [1, 2, 3, 4] as OnboardingStep[],
+        products: [localProduct],
+      },
+      furthestVisitedStep: 5,
+      draftOwnerId: '91',
+      editedSteps,
+    })
+  }
+
+  it('takes the account copy for unedited steps and keeps the edited one', async () => {
+    seedEdited([5])
+    renderAccount('PENDING', 6)
+
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 9]))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.categories.map((category) => category.id)).toEqual([10])
+    expect(state.draft.business.businessType?.id).toBe(7)
+    expect(state.draft.products).toEqual([localProduct])
+    expect(state.draft.currentStep).toBe(5)
+    expect(state.furthestVisitedStep).toBe(5)
+    expect(state.editedSteps).toEqual([5])
+    expect(state.recoveryMessage).not.toMatch(/Picked up/)
+  })
+
+  it('rebuilds the whole draft from the account when nothing is edited', async () => {
+    seedEdited([])
+    renderAccount('PENDING', 6)
+
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).toBe(6))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.categories.map((category) => category.id)).toEqual([10])
+    expect(state.draft.products.map((product) => product.id)).toEqual([31])
+    expect(state.draft.skus.map((sku) => sku.id)).toEqual(['sku-4001'])
+    expect(state.furthestVisitedStep).toBe(6)
+    expect(state.recoveryMessage).toMatch(/Picked up/)
+  })
+
+  it('lets the account win every step once the store is submitted', async () => {
+    seedEdited([5])
+    renderAccount('PENDING')
+
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).toBe(10))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.products.map((product) => product.id)).toEqual([31])
+    expect(state.editedSteps).toEqual([])
+  })
+
+  it('leaves a step whose read failed alone and unloaded', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockRejectedValue(new Error('down'))
+    seedEdited([5])
+    renderAccount('PENDING', 9)
+
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 7, 8, 9]))
+    expect(useOnboardingStore.getState().draft.skus).toEqual([])
   })
 })
 

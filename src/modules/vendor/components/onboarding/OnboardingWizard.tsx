@@ -17,12 +17,13 @@ import { Button } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
+import { peekOnboardingResource } from '../../lib/onboarding-resource-cache'
 import {
-  buildResumeDraft,
   isStoreSubmitted,
   loadPlatformMeasurements,
-  resumePaymentDetails,
+  resumeFromAccount,
   stepUsesMeasurementCatalog,
+  type OnboardingResource,
   type ServerOnboardingState,
 } from '../../lib/onboarding-resume'
 import {
@@ -122,6 +123,8 @@ type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
 
 const NO_ISSUES: ShownIssues = { issues: [] }
 
+const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
+
 /**
  * The Continue validation for Steps 3-10, read entirely from the given store state so a
  * re-check while the vendor edits runs exactly what Continue ran. The projected account
@@ -181,6 +184,7 @@ export function OnboardingWizard() {
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
   const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
+  const setLoadedSteps = useOnboardingStore((state) => state.setLoadedSteps)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
   // offering controls that cannot reach a store already under review.
@@ -291,10 +295,13 @@ export function OnboardingWizard() {
    *
    * The account is the record and this browser only buffers what has not reached it, so
    * this runs on every entry — not once per browser. The one thing it will not do is
-   * overwrite edits the vendor has made and not yet saved.
+   * overwrite a step the vendor has edited and not yet saved.
    */
   useLayoutEffect(() => {
     savedStepRef.current = {}
+    // Which steps hold account data is known only for this visit; it is set again below
+    // from what this entry's read returns.
+    setLoadedSteps([])
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setProductLimit(null)
@@ -306,8 +313,10 @@ export function OnboardingWizard() {
       setAccountState('idle')
       return
     }
-    // Demo mode has no account to read; the local draft is all there is.
+    // Demo mode has no account to read; the local draft is all there is, so every step
+    // counts as loaded.
     if (!isLiveApi()) {
+      setLoadedSteps([3, 4, 5, 6, 7, 8, 9])
       setAccountState('ready')
       return
     }
@@ -347,18 +356,36 @@ export function OnboardingWizard() {
           : null,
       )
 
-      // Unsaved local work is newest only while setup can still accept it. Once the
-      // account says the store was submitted, its snapshot wins: the vendor must land
-      // on review and see what was sent, not an un-actionable browser-only draft.
+      // Unsaved local work is newest only while setup can still accept it, and only for
+      // the steps it was made on: every other step takes the account copy. Once the
+      // account says the store was submitted, its snapshot wins for every step: the vendor
+      // must land on review and see what was sent, not an un-actionable browser-only draft.
+      // A resource counts as read only if its read succeeded, which the resource cache
+      // records by keeping successes alone.
       const current = useOnboardingStore.getState()
-      if (current.hasLocalEdits && !accountStoreIsSubmitted) return
-
-      const resumed = buildResumeDraft(server)
-      applyResumedDraft(resumed.draft, resumed.furthestVisitedStep, {
-        paymentDetails: resumePaymentDetails(server.checkout, current.runtime.paymentDetails),
-        orderWhatsapp: resumed.orderWhatsapp,
+      const resolved = new Set(ACCOUNT_RESOURCES.filter(
+        (resource) => peekOnboardingResource(access.vendorId, resource) !== null,
+      ))
+      const resumed = resumeFromAccount(server, current.draft, {
+        edited: new Set(current.editedSteps),
+        paymentDetails: current.runtime.paymentDetails,
+        resolved,
       })
-      savedStepRef.current = resumedCatalogFingerprints(resumed.draft, resumed.furthestVisitedStep)
+      applyResumedDraft(
+        resumed.draft,
+        resumed.furthestVisitedStep ?? current.furthestVisitedStep,
+        {
+          paymentDetails: resumed.paymentDetails,
+          orderWhatsapp: resumed.orderWhatsapp ?? '',
+        },
+        { frameApplied: resumed.frameApplied },
+      )
+      setLoadedSteps(resumed.loadedSteps)
+      savedStepRef.current = resumedCatalogFingerprints(
+        resumed.draft,
+        resumed.openAt,
+        new Set(resumed.appliedSteps),
+      )
     }
 
     // Sign-in or the header may have resolved this already. Applying it here rather than
@@ -394,7 +421,7 @@ export function OnboardingWizard() {
     return () => {
       ignore = true
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, setProductMeasurementCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, setProductMeasurementCatalog, applyResumedDraft, setLoadedSteps])
 
   /**
    * The measurement catalog, read when the vendor reaches a step that uses it.

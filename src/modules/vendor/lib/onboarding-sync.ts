@@ -68,16 +68,20 @@ export function catalogFingerprint(step: OnboardingStep, draft: VendorOnboarding
  * Fingerprints for the catalog steps a resumed draft took in full from the account.
  *
  * Only the steps before the one it opens on: the resume's cumulative reads always cover
- * those, while the opening step itself may not have been read at all.
+ * those, while the opening step itself may not have been read at all. When only some
+ * steps took the account copy (`applied`), a step also needs it for itself and every
+ * catalog step before it, since its fingerprint covers them all.
  */
 export function resumedCatalogFingerprints(
   draft: VendorOnboardingDraftV1,
   furthestVisitedStep: OnboardingStep,
+  applied?: ReadonlySet<OnboardingStep>,
 ): Partial<Record<OnboardingStep, string>> {
   const fingerprints: Partial<Record<OnboardingStep, string>> = {}
   for (const step of [4, 5, 6] as const) {
     const fingerprint = catalogFingerprint(step, draft)
-    if (step < furthestVisitedStep && fingerprint) fingerprints[step] = fingerprint
+    const fromAccount = !applied || ([3, 4, 5, 6] as const).every((chain) => chain > step || applied.has(chain))
+    if (step < furthestVisitedStep && fromAccount && fingerprint) fingerprints[step] = fingerprint
   }
   return fingerprints
 }

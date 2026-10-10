@@ -367,9 +367,10 @@ have saved some sizes; retry reads the account again and groups only the remaini
 Continue on Steps 4-6 skips the save, and with it the account reads that precede and follow each
 write, while the step's catalog matches what this visit last saved or resumed. The comparison
 covers that step and every earlier catalog step, plus the catalog source, so an upstream change
-makes a later step save again. A resume vouches only for the steps before the one it opens on.
-A failed save, local edits that outrank the account on entry, or a change of vendor leave the step
-unvouched, so it saves as before.
+makes a later step save again. A resume vouches only for the steps before the one it opens on, and
+only for a step that took the account copy along with every catalog step before it. A failed save,
+local edits on that step or an earlier catalog step that outrank the account on entry, or a change
+of vendor leave the step unvouched, so it saves as before.
 
 Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
 the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the

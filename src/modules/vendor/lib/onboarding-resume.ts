@@ -717,3 +717,96 @@ export function buildResumeDraft(state: ServerOnboardingState): ResumeResult {
     submitted: isStoreSubmitted(state),
   })
 }
+
+const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
+
+/**
+ * Steps 3-9 whose account data a snapshot holds: every resource the step needs was both
+ * part of the snapshot's read set (profile always, the rest by its read step) and is in
+ * `resolved`, the resources whose read succeeded. A failed read leaves empty data in the
+ * snapshot, which must never pass for the account's copy. Business types count only once
+ * a type is saved; until then no step needs them.
+ */
+export function snapshotLoadedSteps(
+  state: ServerOnboardingState,
+  resolved: ReadonlySet<OnboardingResource>,
+): OnboardingStep[] {
+  const submitted = isStoreSubmitted(state)
+  const readStep = submitted ? 10 : (backendResumeStep(state.context) ?? 10)
+  const read = new Set<OnboardingResource>(['profile', 'businessTypes'])
+  for (const resource of accountReadsForResumeStep(readStep)) {
+    if (resource !== 'measurements') read.add(resource)
+  }
+  const covered = (resource: OnboardingResource) => read.has(resource) && (
+    resolved.has(resource) ||
+    (resource === 'businessTypes' && resolved.has('profile') && !savedBusinessType(state.profile))
+  )
+  return ACCOUNT_STEPS.filter((step) => stepResources(step, { submitted }).account.every(covered))
+}
+
+export type AccountResume = {
+  draft: VendorOnboardingDraftV1
+  /** `null` when the frame was not applied: the vendor's own progress stands. */
+  furthestVisitedStep: OnboardingStep | null
+  openAt: OnboardingStep
+  /** The whole draft was rebuilt from the account, so nothing is edited any more. */
+  frameApplied: boolean
+  /** Steps 3-9 that took the account copy. */
+  appliedSteps: OnboardingStep[]
+  /** Steps 3-9 whose account data this snapshot holds. */
+  loadedSteps: OnboardingStep[]
+  /** Step 9's order number, or `null` when Step 9 kept its local copy. */
+  orderWhatsapp: string | null
+  paymentDetails: OnboardingRuntimeState['paymentDetails']
+}
+
+/**
+ * The account snapshot applied over the local draft, step by step.
+ *
+ * With nothing edited, or a submitted store, the draft is rebuilt exactly as
+ * `buildResumeDraft` does. Otherwise the vendor's progress (open step, completed steps,
+ * catalog source) stands, edited steps keep their local sections, and each other step
+ * takes the account copy only where the snapshot actually holds it.
+ */
+export function resumeFromAccount(
+  state: ServerOnboardingState,
+  draft: VendorOnboardingDraftV1,
+  options: {
+    edited: ReadonlySet<OnboardingStep>
+    paymentDetails: OnboardingRuntimeState['paymentDetails']
+    resolved: ReadonlySet<OnboardingResource>
+  },
+): AccountResume {
+  const submitted = isStoreSubmitted(state)
+  const loadedSteps = snapshotLoadedSteps(state, options.resolved)
+  if (!options.edited.size || submitted) {
+    const resumed = buildResumeDraft(state)
+    return {
+      draft: resumed.draft,
+      furthestVisitedStep: resumed.furthestVisitedStep,
+      openAt: resumed.openAt,
+      frameApplied: true,
+      appliedSteps: [...ACCOUNT_STEPS],
+      loadedSteps,
+      orderWhatsapp: resumed.orderWhatsapp,
+      paymentDetails: resumePaymentDetails(state.checkout, options.paymentDetails),
+    }
+  }
+
+  const appliedSteps = loadedSteps.filter((step) => !options.edited.has(step))
+  // Every step not applied counts as edited for the appliers, so they leave it alone.
+  const kept = new Set(ACCOUNT_STEPS.filter((step) => !appliedSteps.includes(step)))
+  const resumed = applyResumeState(state, draft, { edited: kept, submitted: false })
+  return {
+    draft: resumed.draft,
+    furthestVisitedStep: null,
+    openAt: resumed.openAt,
+    frameApplied: false,
+    appliedSteps,
+    loadedSteps,
+    orderWhatsapp: appliedSteps.includes(9) ? resumed.orderWhatsapp : null,
+    paymentDetails: appliedSteps.includes(8)
+      ? resumePaymentDetails(state.checkout, options.paymentDetails)
+      : options.paymentDetails,
+  }
+}
