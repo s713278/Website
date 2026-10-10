@@ -72,7 +72,7 @@ export function demoBillingContextFields(vendorId: string) {
   const requestedAt = state.billingCancelRequestedAt.get(vendorId) ?? null
   return {
     subscription: {
-      tier: 'PLATFORM_MONTHLY', plan_name: 'MithraDirect monthly', monthly_price: 299,
+      tier: 'PLATFORM_MONTHLY', plan_name: 'MithraDirect monthly', monthly_price: 399,
       trial_days: 14,
       trial_ends_at: state.trialEndsAt,
       billing: {

@@ -146,14 +146,10 @@ describe('mapStorefrontCheckoutOptions', () => {
           {
             id: 'pickup-slot-0-Morning',
             label: 'Morning',
-            description: 'Pickup window',
-            recommended: true,
           },
           {
             id: 'pickup-slot-1-Evening',
             label: 'Evening',
-            description: 'Pickup window',
-            recommended: false,
           },
         ],
       },

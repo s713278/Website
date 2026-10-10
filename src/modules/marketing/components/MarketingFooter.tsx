@@ -19,7 +19,7 @@ const footerGroups = [
       ['About Us', '#about'],
       ['Stories', '#testimonials'],
       ['Why MithraDirect', '#comparison'],
-      ['Partner With Us', 'mailto:hello@mithradirect.com'],
+      ['Partner With Us', 'mailto:mithradirect@gmail.com'],
     ],
   },
 ]
@@ -65,7 +65,7 @@ export function MarketingFooter() {
                 <Play className="size-5 fill-current" aria-hidden />
               </a>
               <a
-                href="mailto:hello@mithradirect.com"
+                href="mailto:mithradirect@gmail.com"
                 aria-label="Email MithraDirect"
                 className="flex size-11 items-center justify-center rounded-full bg-slate-800 transition hover:bg-emerald-600"
               >
@@ -116,19 +116,19 @@ export function MarketingFooter() {
             </div>
             <nav aria-label="Legal" className="mt-6 flex flex-col gap-3 text-slate-400">
               <a
-                href="mailto:hello@mithradirect.com?subject=Privacy"
+                href="mailto:mithradirect@gmail.com?subject=Privacy"
                 className="hover:text-emerald-400"
               >
                 Privacy Policy
               </a>
               <a
-                href="mailto:hello@mithradirect.com?subject=Terms"
+                href="mailto:mithradirect@gmail.com?subject=Terms"
                 className="hover:text-emerald-400"
               >
                 Terms & Conditions
               </a>
               <a
-                href="mailto:hello@mithradirect.com?subject=Support"
+                href="mailto:mithradirect@gmail.com?subject=Support"
                 className="hover:text-emerald-400"
               >
                 Support

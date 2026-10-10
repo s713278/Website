@@ -4,17 +4,26 @@ import { ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } fro
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
+import {
+  StorefrontMobileActionBar,
+} from '@/modules/storefront/components/StorefrontMobileActionBar'
 import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
+import { WhatsAppActionLink } from '@/modules/storefront/components/WhatsAppIcon'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import {
   DELIVERY_ESTIMATE_NOTE,
   deliveryMethodLabel,
   lineMrpTotal,
   orderArrivalLabel,
+  orderStatusLabel,
   paymentNotesWithoutEstimate,
   paymentStatusLabel,
   resolveOrderItemImage,
 } from '@/modules/storefront/lib/order-display'
+import {
+  canChatAboutOrder,
+  orderOwnerChatHref,
+} from '@/modules/storefront/lib/order-owner-chat'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
 import { storeOrderPath, storePath } from '@/modules/storefront/lib/store-paths'
@@ -75,12 +84,32 @@ export function OrderDetailPage() {
     name: shopName,
     logoUrl: store?.theme?.logoImage,
   })
+  const chatHref =
+    order && store && canChatAboutOrder(order.status)
+      ? orderOwnerChatHref(store, order.id, shopName)
+      : null
+  const showStickyFooter = Boolean(order)
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
-      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} storeLoading={storeLoading} cartCount={itemCount} />
+      <StorefrontHeader
+        store={store}
+        storeId={storeId}
+        storeName={shopName}
+        storeLoading={storeLoading}
+        cartCount={itemCount}
+      />
 
-      <main className="store-shell-inner flex-1 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-6">
+      <main
+        className={cn(
+          'store-shell-inner flex-1 py-4 sm:py-6',
+          showStickyFooter
+            ? chatHref
+              ? 'pb-40 sm:pb-44 lg:pb-8'
+              : 'pb-28 sm:pb-32 lg:pb-8'
+            : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+        )}
+      >
         <div className="mx-auto w-full max-w-lg space-y-3">
           {!canShopAsCustomer(user) ? (
             <EmptyState
@@ -104,14 +133,23 @@ export function OrderDetailPage() {
               <AddressRow order={order} />
               <PaymentRow order={order} />
 
-              <Link
-                to={shopHref}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--store-theme,var(--md-green-700))] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-              >
-                <ShoppingBag className="size-4" strokeWidth={2} aria-hidden />
-                Continue shopping
-                <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
-              </Link>
+              <div className="hidden gap-2 pt-2 pb-6 lg:flex lg:flex-col">
+                {chatHref ? (
+                  <WhatsAppActionLink
+                    href={chatHref}
+                    className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
+                  >
+                    Chat with Owner
+                  </WhatsAppActionLink>
+                ) : null}
+                <Link
+                  to={shopHref}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Continue shopping
+                  <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
+                </Link>
+              </div>
             </>
           ) : (
             <EmptyState
@@ -121,6 +159,34 @@ export function OrderDetailPage() {
           )}
         </div>
       </main>
+
+      {showStickyFooter && order ? (
+        <StorefrontMobileActionBar className="lg:hidden">
+          <div className="flex flex-col gap-2">
+            {chatHref ? (
+              <WhatsAppActionLink
+                href={chatHref}
+                className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
+              >
+                Chat with Owner
+              </WhatsAppActionLink>
+            ) : null}
+            <Link
+              to={shopHref}
+              className={cn(
+                'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold',
+                chatHref
+                  ? 'border border-slate-200 bg-white text-slate-700'
+                  : 'bg-[var(--store-theme,var(--md-green-700))] text-white',
+              )}
+            >
+              {!chatHref ? <ShoppingBag className="size-4" strokeWidth={2} aria-hidden /> : null}
+              Continue shopping
+              <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
+            </Link>
+          </div>
+        </StorefrontMobileActionBar>
+      ) : null}
     </div>
   )
 }
@@ -136,11 +202,14 @@ function StatusCard({ order }: { order: CustomerOrder }) {
   const estimate = orderArrivalLabel(order)
   return (
     <section className={cardClass('relative overflow-hidden bg-[var(--store-theme-soft,#f3fbf6)] shadow-none')}>
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--store-theme,var(--md-green-600))]">
-        <span className="size-1.5 rounded-full bg-[var(--store-theme,var(--md-green-500))]" aria-hidden />
-        {order.status.replaceAll('_', ' ')}
-      </p>
-      <p className="mt-1.5 max-w-[16rem] text-xl font-bold leading-snug text-slate-900 sm:max-w-none sm:text-[1.35rem]">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-bold text-slate-900">Order #{order.id}</p>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-[var(--store-theme,var(--md-green-700))] ring-1 ring-[var(--store-theme-muted,rgba(16,185,129,0.25))]">
+          <span className="size-1.5 rounded-full bg-[var(--store-theme,var(--md-green-500))]" aria-hidden />
+          {orderStatusLabel(order.status)}
+        </span>
+      </div>
+      <p className="mt-2 max-w-[16rem] text-lg font-bold leading-snug text-slate-900 sm:max-w-none sm:text-xl">
         {estimate ? `Estimated delivery: ${estimate}` : 'Order received'}
       </p>
       {estimate ? <p className="mt-1 text-[13px] text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p> : null}
@@ -167,7 +236,7 @@ function StoreRow({ order, href }: { order: CustomerOrder; href: string }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-slate-900">{order.storeName}</span>
-        <span className="mt-0.5 block text-xs text-slate-500">Order #{order.id}</span>
+        <span className="mt-0.5 block text-xs text-slate-500">Back to store</span>
       </span>
     </Link>
   )
@@ -280,7 +349,9 @@ function AddressRow({ order }: { order: CustomerOrder }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-900">Delivery details</p>
-        {order.addressLine ? <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{order.addressLine}</p> : null}
+        {order.addressLine ? (
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{order.addressLine}</p>
+        ) : null}
         {name || phone ? (
           <p className="mt-0.5 text-xs text-slate-500">
             {name}
@@ -295,17 +366,17 @@ function AddressRow({ order }: { order: CustomerOrder }) {
 
 function PaymentRow({ order }: { order: CustomerOrder }) {
   const extra = paymentNotesWithoutEstimate(order.notes)
-  if (!order.paymentStatus && !extra) return null
+  const paymentLine =
+    extra || (order.paymentStatus ? paymentStatusLabel(order.paymentStatus) : '')
+  if (!paymentLine) return null
   return (
     <section className={cardClass('flex items-start gap-3')}>
       <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500">
         <CreditCard className="size-4" strokeWidth={1.75} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900">
-          {order.paymentStatus ? paymentStatusLabel(order.paymentStatus) : 'Payment'}
-        </p>
-        {extra ? <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{extra}</p> : null}
+        <p className="text-sm font-semibold text-slate-900">Payment</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{paymentLine}</p>
       </div>
     </section>
   )

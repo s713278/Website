@@ -114,23 +114,30 @@ export {
   isApiEnabled,
 } from './config'
 export type { ClientConfig } from './config'
-export { isLiveApi } from './mode'
+export { isLiveApi, usesLiveBilling } from './mode'
+export {
+  deliverLocalSimulatedPayment,
+  getLocalBillingSimulation,
+  installLocalSimulatedCheckout,
+  localBillingScenarios,
+  selectLocalBillingScenario,
+  selectLocalBillingSimulation,
+  type LocalBillingOutcome,
+  type LocalBillingScenario,
+  type LocalBillingSimulation,
+} from './services/local-billing-backend.service'
 export { useApiError } from './useApiError'
 
 /** Domain services — single access point for the app */
 export * from './services'
 
 export { mapVendorBillingStatus, rupeesToMinorPaise, VendorBillingUnavailableError } from './mappers/vendor-billing'
-export { LiveBillingUnreadableError, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart } from './mappers/live-billing'
-export type { LiveBillingHistoryRow, LiveBillingPlan, LiveBillingView } from './mappers/live-billing'
+export { LiveBillingUnreadableError, confirmingLiveBilling, mapLiveBilling, mapLiveBillingHistory, mapLiveCheckout, mapLiveLatestPayment, mapLivePlanName, mapLiveTrialEnd, mapLiveTrialStart } from './mappers/live-billing'
+export type { LiveBillingHistoryRow, LiveBillingPlan, LiveBillingView, LiveLatestPayment } from './mappers/live-billing'
 export type { BillingAction, BillingCheckoutAttempt, BillingSource, SimulatedCancellationStep, SimulatedRenewalStep, VendorBillingService, VendorBillingStatus } from './services/vendor-billing.service'
 export { billingFixtureVendorId, createVendorBillingMockService } from './services/vendor-billing-fixture.service'
 export type { BillingFixtureScenario } from './services/vendor-billing-fixture.service'
 export { billingFailure } from './services/vendor-billing-error'
 export { createVendorBillingPreviewService } from './services/vendor-billing-preview.service'
 export { createVendorBillingContextService } from './services/vendor-billing-context.service'
-export { createVendorBillingLocalTestService, LocalTestHelperUnavailableError } from './services/vendor-billing-local-test.service'
-export { daysUntil, isPrototypeState, PROTOTYPE_VENDOR_KEY, prototypeSeed, prototypeStateLabels, prototypeStates } from './fixtures/billing-prototype'
-export type { PrototypeEvent, PrototypeSeed, PrototypeState } from './fixtures/billing-prototype'
-export type { LocalTestAutoPayStatus, LocalTestScenarioState } from './services/vendor-billing-local-test.service'
 export type { BillingPreviewConfig, BillingPreviewScenario } from './services/vendor-billing-preview.service'

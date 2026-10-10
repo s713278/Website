@@ -26,8 +26,8 @@ export const pricingPlans: PricingPlan[] = [
   {
     id: 'starter',
     name: 'Mithra Social Starter',
-    price: 299,
-    originalPrice: 598,
+    price: 399,
+    originalPrice: 798,
     bestFor: 'Starting sellers',
     cta: 'Start 14-day free trial',
     available: true,

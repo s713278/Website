@@ -66,7 +66,7 @@ describe('demo fixtures survive the real mappers', () => {
         planName: 'MithraDirect monthly',
         status: 'ACTIVE',
         currency: 'INR',
-        monthlyPrice: 299,
+        monthlyPrice: 399,
         yearlyPrice: 0,
         trialEndsAt: expect.stringMatching(/Z$/),
         trialDays: 14,

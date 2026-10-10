@@ -50,6 +50,12 @@ export function supportWhatsappNumber(store: Pick<Store, 'supportWhatsapp' | 'ph
   return order || undefined
 }
 
+export function orderWhatsappNumber(store: Pick<Store, 'supportWhatsapp' | 'phone'>): string | undefined {
+  const order = store.phone?.trim()
+  if (order) return order
+  return store.supportWhatsapp?.trim() || undefined
+}
+
 export function supportHelpMessage(shopName: string) {
   return `Hi, I need help from ${shopName}`
 }

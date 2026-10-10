@@ -147,9 +147,9 @@ function StoreOrders({ storeId }: { storeId: string }) {
               </span>
               <div className="min-w-0">
                 <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
-                  Your orders
+                  My orders
                 </h1>
-                <p className="mt-0.5 text-sm text-slate-500">Track orders from {shopName}</p>
+                <p className="mt-0.5 text-sm text-slate-500">Orders from {shopName}</p>
               </div>
             </div>
           </header>
@@ -183,7 +183,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
           ) : (
             <div className="space-y-2.5">
               {visible.map((order) => (
-                <OrderCard key={order.id} order={order} storeId={storeId} />
+                <OrderCard key={order.id} order={order} storeId={storeId} store={store} />
               ))}
               {moreError ? (
                 <div className="flex flex-col items-center gap-2 pt-1">

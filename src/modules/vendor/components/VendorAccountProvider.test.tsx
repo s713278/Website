@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
-import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
@@ -55,7 +54,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
-  resetBillingPrototypeState()
 })
 
 function AccountReading() {

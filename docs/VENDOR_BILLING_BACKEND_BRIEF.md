@@ -101,7 +101,8 @@ weeks. When a non-production environment's trial is shorter than 14 days:
   first fee's P is T + one billing month whatever the trial length is;
 - set it to 14 days for production; that switch is a release blocker (section 5).
 
-The frontend assumes no trial length: it counts the free days from `trial_ends_at`.
+The frontend assumes no trial length: it counts the free days left from `trial_ends_at`, and the
+Free days card shows the length from `trial_started_at` to `trial_ends_at`.
 
 ## 3. Published contract today
 
@@ -122,7 +123,8 @@ All responses use the envelope `{ timestamp, success, status, data }`. The front
 `trial_started_at`, `trial_ends_at`, `current_period_start`, `current_period_end`,
 `next_billing_at`, `cancel_at_period_end`. It ignores `checkout_url`, `days_remaining` and display
 labels. Null fields may be omitted, except `cancel_at_period_end`, which must be a boolean on every
-read.
+read. Once published, it also reads the requested `latest_payment_id` and `latest_payment_status`
+([section 8](#8-how-the-frontend-reads-the-subscription)).
 
 **`status` values:** `TRIAL_ACTIVE`, `TRIAL_EXPIRED`, `PAYMENT_PENDING`, `ACTIVE`, `PAST_DUE`,
 `HALTED`, `CANCELLED`, `EXPIRED`. **`razorpay_status`** mirrors Razorpay: `created`,
@@ -133,10 +135,10 @@ as approved only when `razorpay_status` is `authenticated` or `active`.
 `plan_name` and `sale_price` (rupees).
 
 **History event types the app reads:** `SUBSCRIPTION_CHARGED` ("Payment received"),
-`SUBSCRIPTION_AUTHENTICATED` ("AutoPay set up"), `CANCELLATION_REQUESTED`,
+`CANCELLATION_REQUESTED`,
 `SUBSCRIPTION_CANCELLED`, each with `event_at`, `previous_status`/`new_status`,
 `external_subscription_id`, `external_payment_id` and, once added, `amount` in rupees. Other
-events (`CHECKOUT_CREATED`, `PAYMENT_AUTHORIZED`, `SUBSCRIPTION_ACTIVATED`) are ignored.
+events (`CHECKOUT_CREATED`, `SUBSCRIPTION_AUTHENTICATED`, `PAYMENT_AUTHORIZED`, `SUBSCRIPTION_ACTIVATED`) are ignored.
 
 **Vendor context.** Since 29 September 2026, `GET /v1/vendors/{vendor_id}/context` is flat
 (top-level `features` and `limits`, no `subscription` block). Billing reads nothing from it.
@@ -562,6 +564,17 @@ without a `MONTHLY` entry or a non-positive `sale_price`. A `404` reads as "not 
   `razorpay_subscription_id` → `confirm` with Checkout's three values → poll the read every 5 s for
   up to 90 s. Subscribe is never retried automatically. `confirm` is retried on 502, 503 or a
   network failure at 5, 15 and 30 s. While a payment is confirming, the app offers no second payment.
+- **Payment outcome (requested, not published).** After Checkout a failed payment reads the same as
+  one not yet confirmed (an immediate start stays `created`; Keep shop open keeps the stopped read),
+  so the app cannot end its wait. The read should add `latest_payment_id`, the Razorpay payment ID
+  of the most recent payment on the vendor's current subscription, and `latest_payment_status`, that
+  payment's raw Razorpay status in lowercase (`authorized`, `captured`, `failed`, …); both `null`
+  when there is none. The backend reports what Razorpay has told it about that payment, for example
+  through the `payment.failed` and `payment.captured` webhooks. When the field names the payment
+  Checkout just returned as `failed`, the app ends the wait, offers Pay again and says "Payment
+  failed. Try again."; without the fields it waits as today
+  ([API gaps](./API_GAPS.md#billing-read-gaps)). `authorized` also lets the app keep "Confirming
+  your payment…" across a reload.
 - **Stop the plan:** cancel. Its response (the row) replaces the view directly.
 - **Rereads:** on page load, Plan open, T, P, brief outages (5, 15, 30 s) and a gated window focus;
   [billing reads](./VENDOR_BILLING_READS_TARGET.md) owns the details.

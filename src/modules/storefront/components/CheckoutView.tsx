@@ -200,7 +200,8 @@ export function CheckoutView({
 
   const selectedPickupStore =
     pickupStores.find((storeOption) => storeOption.id === pickupStoreId) ?? pickupStores[0] ?? null
-  const pickupSlots = selectedPickupStore?.pickupSlots ?? EMPTY_DELIVERY_SLOTS
+  const storePickupSlots = selectedPickupStore?.pickupSlots ?? EMPTY_DELIVERY_SLOTS
+  const pickupSlots = storePickupSlots.length > 0 ? storePickupSlots : deliverySlots
 
   useEffect(() => {
     if (!pickupSlots.some((slot) => slot.id === pickupSlot) && pickupSlots[0]) {
@@ -419,7 +420,7 @@ export function CheckoutView({
       return
     }
 
-    const whatsappWindow = reserveWhatsAppWindow()
+    const whatsappWindow = reserveWhatsAppWindow(store.theme?.primaryColor)
     setPlacing(true)
     setError('')
     try {
@@ -500,6 +501,9 @@ export function CheckoutView({
         serviceFee: totals.service,
         total: totals.total,
         paymentLabel: selectedPaymentLabel,
+        deliveryMethodLabel: deliveryMethodLabel(deliveryMethod),
+        deliverySlotLabel: selectedPickupSlot?.label ?? selectedSlot?.label,
+        deliveryDateLabel: isStorePickup ? undefined : estimateLabel || deliveryDate || undefined,
       })
 
       const waLink = whatsappSendHref(store.phone ?? '', message)
@@ -713,37 +717,23 @@ export function CheckoutView({
 
                 {isStorePickup && pickupSlotsConfigured ? (
                   <CheckoutSection title="Pickup time" icon={CalendarDays}>
-                    <div className="space-y-2.5">
-                      {pickupSlots.map((slot) => (
-                        <ChoiceRow
-                          key={slot.id}
-                          checked={pickupSlot === slot.id}
-                          onChange={() => setPickupSlot(slot.id)}
-                          name="pickup-slot"
-                          title={slot.label}
-                          subtitle={slot.description}
-                          recommended={slot.recommended}
-                        />
-                      ))}
-                    </div>
+                    <SlotChipGrid
+                      name="pickup-slot"
+                      slots={pickupSlots}
+                      selectedId={pickupSlot}
+                      onSelect={setPickupSlot}
+                    />
                   </CheckoutSection>
                 ) : null}
 
                 {!isStorePickup && deliverySlots.length > 0 ? (
                   <CheckoutSection title="Delivery time" icon={CalendarDays}>
-                    <div className="space-y-2.5">
-                      {deliverySlots.map((slot) => (
-                        <ChoiceRow
-                          key={slot.id}
-                          checked={deliverySlot === slot.id}
-                          onChange={() => setDeliverySlot(slot.id)}
-                          name="delivery-slot"
-                          title={slot.label}
-                          subtitle={slot.description}
-                          recommended={slot.recommended}
-                        />
-                      ))}
-                    </div>
+                    <SlotChipGrid
+                      name="delivery-slot"
+                      slots={deliverySlots}
+                      selectedId={deliverySlot}
+                      onSelect={setDeliverySlot}
+                    />
                   </CheckoutSection>
                 ) : null}
 
@@ -975,6 +965,53 @@ function CheckoutSection({
         <div className="mt-3">{children}</div>
       </div>
     </section>
+  )
+}
+
+function SlotChipGrid({
+  name,
+  slots,
+  selectedId,
+  onSelect,
+}: {
+  name: string
+  slots: StorefrontCheckoutOptions['deliverySlots']
+  selectedId: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div
+      className={cn(
+        'grid gap-2',
+        slots.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
+      )}
+      role="radiogroup"
+      aria-label={name === 'pickup-slot' ? 'Pickup time' : 'Delivery time'}
+    >
+      {slots.map((slot) => {
+        const checked = selectedId === slot.id
+        return (
+          <label
+            key={slot.id}
+            className={cn(
+              'flex cursor-pointer items-center justify-center rounded-xl border px-3 py-3.5 text-center transition sm:py-4',
+              checked
+                ? 'border-[var(--store-theme,var(--md-green-500))] bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] text-[var(--store-theme,var(--md-green-800))]'
+                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300',
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              checked={checked}
+              onChange={() => onSelect(slot.id)}
+              className="sr-only"
+            />
+            <span className="text-sm font-semibold leading-none">{slot.label}</span>
+          </label>
+        )
+      })}
+    </div>
   )
 }
 
@@ -1335,25 +1372,33 @@ function PrepaidPaymentDetails({
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-sm">
-      {holder ? <p className="text-sm font-semibold text-slate-900">{holder}</p> : null}
+      {holder ? (
+        <div>
+          <p className="text-xs font-medium text-slate-500">Name</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-900">{holder}</p>
+        </div>
+      ) : null}
       {upi ? (
-        <div className={cn('flex items-center gap-2', holder ? 'mt-2' : undefined)}>
-          <p className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800">
-            {upi}
-          </p>
-          <button
-            type="button"
-            onClick={() => void copyUpi()}
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
-            aria-label={copied ? 'UPI ID copied' : 'Copy UPI ID'}
-            title={copied ? 'Copied' : 'Copy'}
-          >
-            {copied ? (
-              <Check className="size-4 text-[var(--store-theme,var(--md-green-700))]" />
-            ) : (
-              <Copy className="size-4" />
-            )}
-          </button>
+        <div className={cn(holder ? 'mt-2.5' : undefined)}>
+          <p className="text-xs font-medium text-slate-500">UPI ID</p>
+          <div className="mt-1 flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800">
+              {upi}
+            </p>
+            <button
+              type="button"
+              onClick={() => void copyUpi()}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+              aria-label={copied ? 'UPI ID copied' : 'Copy UPI ID'}
+              title={copied ? 'Copied' : 'Copy'}
+            >
+              {copied ? (
+                <Check className="size-4 text-[var(--store-theme,var(--md-green-700))]" />
+              ) : (
+                <Copy className="size-4" />
+              )}
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

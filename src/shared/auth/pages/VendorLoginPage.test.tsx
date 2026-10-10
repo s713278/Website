@@ -113,7 +113,7 @@ describe('VendorLoginPage', () => {
     renderAt('/vendor/login')
     fireEvent.change(screen.getByLabelText(/WhatsApp number/), { target: { value: '9000000000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send OTP' }))
-    fireEvent.change(await screen.findByLabelText('OTP'), { target: { value: '1234' } })
+    fireEvent.change(await screen.findByLabelText('4-digit OTP'), { target: { value: '1234' } })
     fireEvent.click(screen.getByRole('button', { name: 'Verify & continue' }))
 
     expect(await screen.findByText('Setup')).toBeTruthy()
@@ -132,7 +132,7 @@ describe('VendorLoginPage', () => {
     renderAt('/vendor/login')
     fireEvent.change(screen.getByLabelText(/WhatsApp number/), { target: { value: '9000000000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send OTP' }))
-    fireEvent.change(await screen.findByLabelText('OTP'), { target: { value: '1234' } })
+    fireEvent.change(await screen.findByLabelText('4-digit OTP'), { target: { value: '1234' } })
     fireEvent.click(screen.getByRole('button', { name: 'Verify & continue' }))
 
     // Navigated before the context answered; that read starts in the background and is not awaited.
