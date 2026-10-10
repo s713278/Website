@@ -77,11 +77,12 @@ const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes'
  *
  * `businessTypes` is listed where the step needs it, but it is a dependent read: callers
  * start it only once the profile shows a saved type. A submitted store's review screen
- * shows status only, so it needs the profile alone.
+ * shows its status; once approved that needs the profile alone, while a store awaiting
+ * review also previews its catalog as submitted (never checkout).
  */
 export function stepResources(
   step: OnboardingStep,
-  options: { submitted: boolean },
+  options: { submitted: boolean; approved: boolean },
 ): { account: readonly OnboardingResource[]; units: boolean } {
   switch (step) {
     case 1:
@@ -100,9 +101,10 @@ export function stepResources(
     case 8:
       return { account: ['checkout'], units: false }
     case 10:
-      return options.submitted
+      if (!options.submitted) return { account: [...CATALOG_CHAIN, 'checkout'], units: true }
+      return options.approved
         ? { account: ['profile'], units: false }
-        : { account: [...CATALOG_CHAIN, 'checkout'], units: true }
+        : { account: CATALOG_CHAIN, units: true }
   }
 }
 
@@ -626,22 +628,25 @@ export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
  * Whether a step can show its form: every account resource it lists has loaded and, where
  * it uses them, the units have settled. A units failure is not a block: the sample units
  * stand in. A failed resource fails the step even while another still loads, so the vendor
- * can retry at once. A submitted store's Step 10 shows status only and never blocks: a
- * failed profile just leaves the store name to its fallback.
+ * can retry at once. A submitted store's Step 10 shows its status and never blocks: it waits
+ * only for the profile to settle, a failed profile just leaves the store name to its
+ * fallback, and a pending store's catalog preview fills as its reads land.
  */
 export function stepLoadState(
   step: OnboardingStep,
   options: {
     submitted: boolean
+    approved: boolean
     resources: Readonly<Record<OnboardingResource, ResourceStatus>>
     units: ResourceStatus
   },
 ): 'loading' | 'failed' | 'loaded' {
-  const needs = stepResources(step, { submitted: options.submitted })
-  const statuses = needs.account.map((resource) => options.resources[resource])
   if (step === 10 && options.submitted) {
-    return statuses.every((status) => status === 'loaded' || status === 'failed') ? 'loaded' : 'loading'
+    const profile = options.resources.profile
+    return profile === 'loaded' || profile === 'failed' ? 'loaded' : 'loading'
   }
+  const needs = stepResources(step, options)
+  const statuses = needs.account.map((resource) => options.resources[resource])
   if (statuses.includes('failed')) return 'failed'
   if (statuses.some((status) => status !== 'loaded')) return 'loading'
   if (needs.units && (options.units === 'idle' || options.units === 'loading')) return 'loading'

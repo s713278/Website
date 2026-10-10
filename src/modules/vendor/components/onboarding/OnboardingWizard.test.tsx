@@ -872,11 +872,43 @@ describe('per-step account reads', () => {
     })
   })
 
-  it('opens a submitted store on Step 10 with the context and profile alone', async () => {
+  it('opens an approved store on Step 10 with the context and profile alone, and no preview', async () => {
     renderAccount('APPROVED')
 
     expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
     expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(document.querySelector('.onboarding-preview-stage')).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Your shop' })).toBeNull()
+  })
+
+  it('shows a pending store its status at once on Step 10 and previews the submitted catalog as it lands', async () => {
+    const categories = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorCategories>>>()
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockReturnValue(categories.promise)
+    renderAccount('PENDING')
+
+    expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
+    expect(stepSkeleton()).toBeNull()
+    const stage = document.querySelector<HTMLElement>('.onboarding-preview-stage')!
+    const count = (label: string) => within(stage).getByText(label).previousElementSibling?.textContent
+
+    await act(async () => categories.resolve([{ vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null }]))
+    await waitFor(() => expect(count('Sizes')).toBe('1'))
+    expect(count('Categories')).toBe('1')
+    expect(count('Products')).toBe('1')
+    expect(accountReadCounts()).toEqual({
+      getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1, getVendorCategories: 1,
+      getVendorProducts: 1, getVendorSkus: 1, getMeasurements: 1,
+    })
+  })
+
+  it('never blocks a pending store\'s Step 10 on a failed catalog read', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockRejectedValue(new Error('down'))
+    renderAccount('PENDING')
+
+    expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
+    await waitFor(() => expect(vi.mocked(vendorOnboardingService.getVendorSkus)).toHaveBeenCalled())
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+    expect(stepSkeleton()).toBeNull()
   })
 
   it('still shows a submitted store its status when the profile read fails', async () => {

@@ -287,6 +287,7 @@ function startAccountEntry(
     if (!context) return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
+    const approved = selectStoreIsApproved(state)
     const options = { edited: new Set(state.editedSteps), submitted }
     const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
     const has = (resource: OnboardingResource) => resource in values
@@ -338,7 +339,7 @@ function startAccountEntry(
     }
 
     const loadedSteps = ACCOUNT_STEPS.filter((step) =>
-      stepResources(step, { submitted }).account.every((resource) => applied.has(resource)))
+      stepResources(step, { submitted, approved }).account.every((resource) => applied.has(resource)))
     store().setLoadedSteps(loadedSteps)
 
     // A catalog step before the resume step, taken whole from the account (with every
@@ -389,7 +390,8 @@ function startAccountEntry(
   const requestStep = (step: OnboardingStep) => {
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const submitted = selectStoreIsSubmitted(store())
-    const needs = stepResources(step, { submitted })
+    const approved = selectStoreIsApproved(store())
+    const needs = stepResources(step, { submitted, approved })
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
@@ -414,7 +416,7 @@ function startAccountEntry(
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) => view.resources[resource] !== 'idle')
     // Units are not retried within a visit: their failure has a usable fallback.
     if (view.units !== 'idle') skip.push('units')
-    const reads = loadStepResources(vendorId, step, { submitted, withUnits: true, skip })
+    const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
     }
@@ -426,6 +428,7 @@ function startAccountEntry(
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
+    const approved = selectStoreIsApproved(state)
     const edited = new Set(state.editedSteps)
     // Anything this visit holds or is reading is left out, and so is a read that failed: it
     // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
@@ -434,7 +437,7 @@ function startAccountEntry(
       view.resources[resource] !== 'idle'
       || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
-    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
+    loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip })
   }
 
   const applyContext = (loaded: VendorContext) => {
@@ -496,7 +499,7 @@ function startAccountEntry(
     requestStep,
     prefetchStep,
     retry(step) {
-      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
+      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()), approved: selectStoreIsApproved(store()) })
       for (const resource of needs.account) {
         if (view.resources[resource] === 'failed') view.resources[resource] = 'idle'
       }
@@ -1214,8 +1217,11 @@ export function OnboardingWizard() {
     : loadView.context === 'failed' ? 'failed'
       // A sample draft has no account copy to wait for.
       : catalogSource !== 'account' ? 'loaded'
-        : stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units })
+        : stepLoadState(currentStep, { submitted: storeIsSubmitted, approved: storeIsApproved, resources: loadView.resources, units: loadView.units })
   const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
+  // An approved store's review step is its status alone: there is nothing left to preview.
+  const showPreview = !(currentStep === 10 && storeIsSubmitted && storeIsApproved)
+  const formView = showPreview ? mobileView : 'form'
 
   if (!persistenceInitialized || contextPending) {
     // One gate for both reads. Painting between them shows Step 3 to a vendor whose
@@ -1234,15 +1240,15 @@ export function OnboardingWizard() {
     <div className="onboarding-shell h-full min-h-0 overflow-hidden px-5 text-[var(--ob-ink)] [contain:paint] sm:px-8 xl:px-10">
       {/* A working tool rather than a reading page, so on desktop it sits slightly wider than the
           marketing header's measure. */}
-      <div className="ob-grid mx-auto w-full max-w-[81rem]">
+      <div className={cn('ob-grid mx-auto w-full max-w-[81rem]', !showPreview && 'min-[900px]:grid-cols-1')}>
         <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
+          {showPreview ? <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
             <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>
             <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'preview' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}><EyeIcon className="size-4" /> Your shop</button>
-          </div>
+          </div> : null}
 
           <div className="min-h-0 flex-1">
-            <main id="onboarding-form-panel" role="tabpanel" aria-labelledby="onboarding-form-tab" className={cn('h-full min-h-0 min-w-0', mobileView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
+            <main id="onboarding-form-panel" role={showPreview ? 'tabpanel' : undefined} aria-labelledby={showPreview ? 'onboarding-form-tab' : undefined} className={cn('h-full min-h-0 min-w-0', formView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
               <section className="flex h-full min-h-0 flex-col">
                 {/* The stepper, status and footer reserve the form's scrollbar gutter, so all
                     four rows share one right edge. */}
@@ -1380,11 +1386,11 @@ export function OnboardingWizard() {
                 </div> : null}
               </section>
             </main>
-            <PhonePreviewStage id="onboarding-preview-panel" labelledBy="onboarding-preview-tab" className={cn('h-full min-[900px]:hidden', mobileView === 'form' ? 'hidden' : 'flex')} />
+            {showPreview ? <PhonePreviewStage id="onboarding-preview-panel" labelledBy="onboarding-preview-tab" className={cn('h-full min-[900px]:hidden', mobileView === 'form' ? 'hidden' : 'flex')} /> : null}
           </div>
         </div>
 
-        <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" />
+        {showPreview ? <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" /> : null}
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />
