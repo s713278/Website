@@ -1021,3 +1021,112 @@ describe('per-step account reads', () => {
     expect(await screen.findByRole('button', { name: /Step 7,.*You are here/ })).toBeTruthy()
   })
 })
+
+describe('Continue prefetches the next step’s account reads', () => {
+  async function openAt(step: OnboardingStep, approvalStatus = 'PENDING', action = 'Continue') {
+    stubReferencePages()
+    renderAccount(approvalStatus, step)
+    await screen.findByRole('button', { name: new RegExp(`Step ${step},.*You are here`) })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(continueDisabled(action)).toBe(false))
+  }
+
+  it('reads Step 4’s categories while the Step 3 save is in flight, and Step 4 reuses them', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockReturnValue(save.promise)
+    await openAt(3)
+    const categories = vi.mocked(vendorOnboardingService.getVendorCategories)
+    expect(categories).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(categories).toHaveBeenCalledTimes(1))
+    expect(vendorOnboardingService.saveBusinessType).toHaveBeenCalledTimes(1)
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(categories).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads Step 5’s products but not the units on Continue; Step 5 reads the units when it opens', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveCategories').mockReturnValue(save.promise)
+    await openAt(4)
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }],
+    }), 4))
+    const products = vi.mocked(vendorOnboardingService.getVendorProducts)
+    const measurements = vi.mocked(vendorOnboardingService.getMeasurements)
+    expect(products).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(vendorOnboardingService.saveCategories).toHaveBeenCalledTimes(1))
+    expect(products).toHaveBeenCalledTimes(1)
+    expect(measurements).not.toHaveBeenCalled()
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(products).toHaveBeenCalledTimes(1)
+    expect(measurements).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads only what Step 10 still lacks on Continue from Step 9, and no units until it opens', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockReturnValue(save.promise)
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockResolvedValue(undefined)
+    await openAt(9, 'PENDING', 'Review readiness')
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1 })
+    act(() => {
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, storefront: { ...draft.storefront, businessLocation: 'Test Market' },
+      }), 9)
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review readiness' }))
+    await waitFor(() => expect(vendorOnboardingService.saveStorefront).toHaveBeenCalledTimes(1))
+    expect(accountReadCounts()).toEqual({
+      getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1,
+      getVendorCategories: 1, getVendorProducts: 1, getVendorSkus: 1, getCheckoutOptions: 1,
+    })
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    await waitFor(() => expect(vendorOnboardingService.getMeasurements).toHaveBeenCalledTimes(1))
+    expect(accountReadCounts()).toMatchObject({
+      getVendorProfile: 1, getBusinessTypes: 1,
+      getVendorCategories: 1, getVendorProducts: 1, getVendorSkus: 1, getCheckoutOptions: 1,
+    })
+  })
+
+  it('reads nothing on Continue from Step 7, whose checkout settings Step 8 already has', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openAt(7, 'APPROVED')
+    const before = accountReadCounts()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(accountReadCounts()).toEqual(before)
+  })
+
+  it('keeps a failed prefetch off the current step; the next step reads again and shows its own failure', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockReturnValue(save.promise)
+    const categories = vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockRejectedValue(new Error('down'))
+    await openAt(3)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(categories).toHaveBeenCalledTimes(1))
+    await act(async () => { await Promise.resolve() })
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    expect(categories).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+  })
+})

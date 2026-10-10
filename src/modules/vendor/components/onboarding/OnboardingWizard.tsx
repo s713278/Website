@@ -42,7 +42,6 @@ import {
   derivedResumeStep,
   isStoreSubmitted,
   loadAccountResource,
-  loadPlatformMeasurements,
   measurementCatalogsForResume,
   resolveBusinessType,
   resumeOrderWhatsapp,
@@ -50,7 +49,6 @@ import {
   savedBusinessType,
   stepLoadState,
   stepResources,
-  stepUsesMeasurementCatalog,
   type OnboardingResource,
   type ResourceStatus,
 } from '../../lib/onboarding-resume'
@@ -172,6 +170,10 @@ type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
 const NO_ISSUES: ShownIssues = { issues: [] }
 
 const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
+/** The steps whose draft each resource's applier fills. */
+const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
+  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8],
+}
 
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 
@@ -204,6 +206,8 @@ const IDLE_LOAD_VIEW: AccountLoadView = {
 type AccountEntry = {
   /** Start, or join, whatever the step needs that this visit has not read yet. */
   requestStep: (step: OnboardingStep) => void
+  /** Start the step's account reads ahead of it opening, without touching this visit's view. */
+  prefetchStep: (step: OnboardingStep) => void
   /** Re-read the context if it failed, and the step's failed resources. */
   retry: (step: OnboardingStep) => void
   cancel: () => void
@@ -420,6 +424,21 @@ function startAccountEntry(
     publish()
   }
 
+  const prefetchStep = (step: OnboardingStep) => {
+    if (cancelled || !context || store().draft.catalogSource !== 'account') return
+    const state = store()
+    const submitted = selectStoreIsSubmitted(state)
+    const edited = new Set(state.editedSteps)
+    // Anything this visit holds or is reading is left out, and so is a read that failed: it
+    // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
+    // edited step's own copy, so a resource only edited steps use is not wanted yet.
+    const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
+      view.resources[resource] !== 'idle'
+      || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
+    // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
+    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
+  }
+
   const applyContext = (loaded: VendorContext) => {
     context = loaded
     const state = store()
@@ -477,6 +496,7 @@ function startAccountEntry(
 
   return {
     requestStep,
+    prefetchStep,
     retry(step) {
       const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
       for (const resource of needs.account) {
@@ -1035,10 +1055,11 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
-    // Started alongside this step's save, so the next step's catalog is usually ready when it
-    // opens. A failure is dropped from the cache and the step's own read retries it.
-    if (liveApi && stepUsesMeasurementCatalog((step + 1) as OnboardingStep)) {
-      loadPlatformMeasurements().catch(() => {})
+    // Started alongside this step's save, so the next step's account data is usually ready
+    // when it opens. A failure is dropped from the cache and the step's own read retries it.
+    // Units are left to the step that needs them.
+    if (writesReachAccount(draft.catalogSource) && access.state === 'ready') {
+      entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
     }
     const fingerprint = stepSaveFingerprint(step, draft, runtime)
     const unchanged = fingerprint !== null && savedStepRef.current[step] === fingerprint

@@ -126,11 +126,6 @@ export function stepResources(
   }
 }
 
-/** Steps whose screen or validation reads the measurement catalog: products, sizes, review. */
-export function stepUsesMeasurementCatalog(step: OnboardingStep): boolean {
-  return step === 5 || step === 6 || step === 10
-}
-
 /** The platform measurement catalog, read at most once per session. */
 export function loadPlatformMeasurements(): Promise<MeasurementCatalog> {
   return loadMeasurementCatalog(() => vendorOnboardingService.getMeasurements())

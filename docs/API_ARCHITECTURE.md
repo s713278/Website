@@ -286,10 +286,10 @@ Measurements mean one authenticated `GET /v1/measurements/` followed by one auth
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
-Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it; it
-also starts alongside the save of the step before one of them. A failed read does not block: sizes
-fall back to the sample units and products carry no measurement metadata, and it is not retried
-within the visit.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it.
+Continue starts only the next step's missing account reads alongside its save, never the units. A
+failed read does not block: sizes fall back to the sample units and products carry no measurement
+metadata, and it is not retried within the visit.
 
 The per-resource cache (`onboarding-resource-cache`, one entry per vendor for profile, business
 types, categories, products, sizes and checkout options) is what the wizard and sign-in share. Each
