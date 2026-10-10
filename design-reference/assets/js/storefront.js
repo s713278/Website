@@ -28,11 +28,15 @@
     deliveryMethod: 'homeDelivery',
     orderId: '',
     orderMessage: '',
+    selectedOrderId: '',
     history: [],
     pendingAdd: null,
     loginReturn: null,
     addressGateOpen: false
   };
+
+  var WA_ICON =
+    '<svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
 
   function qs(name) {
     return new URLSearchParams(window.location.search).get(name) || '';
@@ -1506,6 +1510,350 @@
     }, 400);
   }
 
+  /* ——— Order History (sample design reference) ——— */
+  function formatInr(n) {
+    var num = Math.round(Number(n) || 0);
+    return '₹' + num.toLocaleString('en-IN');
+  }
+
+  function ownerWhatsApp() {
+    var draft = state.draft || {};
+    return (draft.settings && draft.settings.whatsapp) || draft.phone || '';
+  }
+
+  function ownerChatHref(order) {
+    var wa = ownerWhatsApp();
+    if (!wa || !D.whatsappLink) return '#';
+    var storeName =
+      (state.draft && state.draft.settings && state.draft.settings.storeName) || 'your shop';
+    var msg =
+      'Hi! This is about Order #' +
+      (order && order.id ? order.id : '') +
+      ' from ' +
+      storeName +
+      '.';
+    return D.whatsappLink(wa, msg);
+  }
+
+  function sampleOrders() {
+    var products = (state.draft && state.draft.products) || [];
+    function pick(i, fallbackName, fallbackIcon) {
+      var p = products[i] || products[0];
+      if (!p) {
+        return {
+          name: fallbackName,
+          icon: fallbackIcon,
+          image: '',
+          unit: '1 pcs',
+          price: 210,
+          mrp: 220
+        };
+      }
+      var sku = (p.skus && p.skus[0]) || {};
+      return {
+        name: p.name || fallbackName,
+        icon: p.icon || fallbackIcon,
+        image: p.image || '',
+        unit: sku.label || sku.unit || '1 pcs',
+        price: Number(sku.price) || 210,
+        mrp: Number(sku.mrp || sku.price) || 220
+      };
+    }
+
+    var a = pick(0, 'Biryani Masala', '🧂');
+    var b = pick(1, 'Amla Pickle', '🫙');
+    var c = pick(2, 'Mixed Vegetable Pickle', '🥗');
+    var d = pick(3, 'Gongura Pickle', '🌿');
+
+    return [
+      {
+        id: '1983',
+        status: 'Scheduled',
+        statusTone: 'scheduled',
+        items: [
+          { name: a.name, icon: a.icon, image: a.image, unit: a.unit, qty: 2, price: a.price, mrp: a.mrp },
+          { name: b.name, icon: b.icon, image: b.image, unit: b.unit, qty: 1, price: b.price, mrp: b.mrp }
+        ],
+        itemTotalMrp: 250,
+        discount: 10,
+        delivery: 100,
+        payment: 'Cash on delivery',
+        paymentLabel: 'Payment due',
+        address: 'Mayuri Nagar, Road o-27F, Hyderabad, Rangareddy, Telangana 500049',
+        recipient: 'Swamy Kunta',
+        phone: '+91 9912149049'
+      },
+      {
+        id: '1982',
+        status: 'Scheduled',
+        statusTone: 'scheduled',
+        items: [
+          { name: b.name, icon: b.icon, image: b.image, unit: '2 KG', qty: 6, price: 180, mrp: 195 },
+          { name: c.name, icon: c.icon, image: c.image, unit: '500 gr', qty: 2, price: 210, mrp: 220 },
+          { name: d.name, icon: d.icon, image: d.image, unit: '250 gr', qty: 1, price: 120, mrp: 130 },
+          { name: a.name, icon: a.icon, image: a.image, unit: a.unit, qty: 1, price: a.price, mrp: a.mrp }
+        ],
+        itemTotalMrp: 1315,
+        discount: 105,
+        delivery: 0,
+        payment: 'Cash on delivery',
+        paymentLabel: 'Payment due',
+        address: 'Mayuri Nagar, Road o-27F, Hyderabad, Rangareddy, Telangana 500049',
+        recipient: 'Swamy Kunta',
+        phone: '+91 9912149049'
+      },
+      {
+        id: '1971',
+        status: 'Delivered',
+        statusTone: 'delivered',
+        items: [
+          { name: c.name, icon: c.icon, image: c.image, unit: '500 gr', qty: 1, price: 210, mrp: 220 }
+        ],
+        itemTotalMrp: 220,
+        discount: 10,
+        delivery: 40,
+        payment: 'Paid on delivery',
+        paymentLabel: 'Payment',
+        address: 'Mayuri Nagar, Road o-27F, Hyderabad, Rangareddy, Telangana 500049',
+        recipient: 'Swamy Kunta',
+        phone: '+91 9912149049'
+      }
+    ];
+  }
+
+  function orderPayable(order) {
+    return Math.max(0, (order.itemTotalMrp || 0) - (order.discount || 0) + (order.delivery || 0));
+  }
+
+  function orderWasTotal(order) {
+    var was = (order.itemTotalMrp || 0) + (order.delivery || 0);
+    var pay = orderPayable(order);
+    return was > pay ? was : 0;
+  }
+
+  function orderThumbHtml(item) {
+    var icon = (item && item.icon) || '🫙';
+    if (item && item.image) {
+      return (
+        '<img src="' +
+        escapeHtml(item.image) +
+        '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.hidden=false">' +
+        '<span hidden aria-hidden="true">' +
+        escapeHtml(icon) +
+        '</span>'
+      );
+    }
+    return '<span aria-hidden="true">' + escapeHtml(icon) + '</span>';
+  }
+
+  function renderOrders() {
+    var root = document.getElementById('orders-list');
+    if (!root) return;
+    var orders = sampleOrders();
+    if (!orders.length) {
+      root.innerHTML =
+        '<div class="orders-empty">' +
+        '<p>No orders yet. Browse the menu and place your first WhatsApp order.</p>' +
+        '<button type="button" class="btn-primary-store is-inline" data-nav="menu">Browse menu</button>' +
+        '</div>';
+      return;
+    }
+
+    root.innerHTML = orders
+      .map(function (order) {
+        var lead = order.items[0] || {};
+        var extra = Math.max(0, order.items.length - 1);
+        var meta =
+          escapeHtml(lead.unit || '') +
+          ' · Qty ' +
+          escapeHtml(String(lead.qty || 1)) +
+          (extra ? ' · +' + extra + ' more' : '');
+        var pay = orderPayable(order);
+        var was = orderWasTotal(order);
+        var statusClass =
+          order.statusTone === 'delivered'
+            ? ' is-delivered'
+            : order.statusTone === 'cancelled'
+              ? ' is-cancelled'
+              : '';
+        return (
+          '<article class="order-card" data-order-card="' +
+          escapeHtml(order.id) +
+          '">' +
+          '<div class="order-card-top">' +
+          '<p class="order-card-id">Order #' +
+          escapeHtml(order.id) +
+          '</p>' +
+          '<span class="order-status' +
+          statusClass +
+          '"><span class="order-status-dot" aria-hidden="true"></span>' +
+          escapeHtml(order.status) +
+          '</span>' +
+          '</div>' +
+          '<div class="order-card-body">' +
+          '<div class="order-card-thumb">' +
+          orderThumbHtml(lead) +
+          '</div>' +
+          '<div class="order-card-main">' +
+          '<h3>' +
+          escapeHtml(lead.name || 'Order') +
+          '</h3>' +
+          '<p class="order-card-meta">' +
+          meta +
+          '</p>' +
+          '<p class="order-card-price">' +
+          escapeHtml(formatInr(pay)) +
+          (was
+            ? '<span class="was">' + escapeHtml(formatInr(was)) + '</span>'
+            : '') +
+          '</p>' +
+          '</div>' +
+          '</div>' +
+          '<div class="order-card-actions">' +
+          '<button type="button" class="link-btn" data-order="' +
+          escapeHtml(order.id) +
+          '">View details</button>' +
+          '<a class="order-chat-btn" href="' +
+          escapeHtml(ownerChatHref(order)) +
+          '" target="_blank" rel="noopener" aria-label="Chat with Owner on WhatsApp about order ' +
+          escapeHtml(order.id) +
+          '">' +
+          WA_ICON +
+          ' Chat with Owner</a>' +
+          '</div>' +
+          '</article>'
+        );
+      })
+      .join('');
+  }
+
+  function openOrderDetail(orderId) {
+    state.selectedOrderId = String(orderId || '');
+    renderOrderDetail();
+    showView('order-detail');
+  }
+
+  function renderOrderDetail() {
+    var root = document.getElementById('order-detail');
+    var footer = document.getElementById('order-detail-footer');
+    if (!root || !footer) return;
+
+    var orders = sampleOrders();
+    var order = orders.find(function (o) {
+      return o.id === state.selectedOrderId;
+    });
+    if (!order) order = orders[0];
+    if (!order) {
+      root.innerHTML = '<p class="orders-lead">Order not found.</p>';
+      footer.innerHTML = '';
+      return;
+    }
+    state.selectedOrderId = order.id;
+
+    var statusClass =
+      order.statusTone === 'delivered'
+        ? ' is-delivered'
+        : order.statusTone === 'cancelled'
+          ? ' is-cancelled'
+          : '';
+    var pay = orderPayable(order);
+
+    var linesHtml = (order.items || [])
+      .map(function (item) {
+        var lineTotal = (Number(item.price) || 0) * (Number(item.qty) || 1);
+        return (
+          '<div class="order-line">' +
+          '<div class="order-line-thumb">' +
+          orderThumbHtml(item) +
+          '</div>' +
+          '<div class="order-line-body">' +
+          '<h3>' +
+          escapeHtml(item.name) +
+          '</h3>' +
+          '<p class="order-line-meta">' +
+          escapeHtml(item.unit || '') +
+          ' · Qty ' +
+          escapeHtml(String(item.qty || 1)) +
+          ' x ' +
+          escapeHtml(formatInr(item.price)) +
+          (item.mrp && item.mrp > item.price
+            ? '<span class="was">' + escapeHtml(formatInr(item.mrp)) + '</span>'
+            : '') +
+          '</p>' +
+          '</div>' +
+          '<div class="order-line-total">' +
+          escapeHtml(formatInr(lineTotal)) +
+          '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+
+    root.innerHTML =
+      '<div class="order-detail-banner">' +
+      '<h2 class="store-brand-font">Order #' +
+      escapeHtml(order.id) +
+      '</h2>' +
+      '<span class="order-status' +
+      statusClass +
+      '"><span class="order-status-dot" aria-hidden="true"></span>' +
+      escapeHtml(order.status) +
+      '</span>' +
+      '</div>' +
+      '<div class="order-detail-card">' +
+      linesHtml +
+      '</div>' +
+      '<div class="order-detail-card">' +
+      '<h3 class="order-detail-card-title">' +
+      '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>' +
+      'Bill details</h3>' +
+      '<div class="order-bill-row"><span>Item total (MRP)</span><span>' +
+      escapeHtml(formatInr(order.itemTotalMrp)) +
+      '</span></div>' +
+      (order.discount
+        ? '<div class="order-bill-row is-discount"><span>Discount</span><span>- ' +
+          escapeHtml(formatInr(order.discount)) +
+          '</span></div>'
+        : '') +
+      '<div class="order-bill-row"><span>Delivery</span><span>' +
+      escapeHtml(order.delivery ? formatInr(order.delivery) : 'Free') +
+      '</span></div>' +
+      '<div class="order-bill-row is-total"><span>To pay</span><span>' +
+      escapeHtml(formatInr(pay)) +
+      '</span></div>' +
+      '</div>' +
+      '<div class="order-detail-card">' +
+      '<h3 class="order-detail-card-title">' +
+      '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
+      'Delivery details</h3>' +
+      '<p class="order-detail-text">' +
+      escapeHtml(order.address) +
+      '</p>' +
+      '<p class="order-detail-text order-detail-muted">' +
+      escapeHtml(order.recipient) +
+      ' · ' +
+      escapeHtml(order.phone) +
+      '</p>' +
+      '</div>' +
+      '<div class="order-detail-card">' +
+      '<h3 class="order-detail-card-title">' +
+      '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>' +
+      escapeHtml(order.paymentLabel || 'Payment') +
+      '</h3>' +
+      '<p class="order-detail-text">Payment: ' +
+      escapeHtml(order.payment) +
+      '</p>' +
+      '</div>';
+
+    footer.innerHTML =
+      '<a class="order-chat-btn is-block" href="' +
+      escapeHtml(ownerChatHref(order)) +
+      '" target="_blank" rel="noopener">' +
+      WA_ICON +
+      ' Chat with Owner</a>' +
+      '<button type="button" class="btn-outline" data-nav="home">Continue shopping →</button>';
+  }
+
   var eventsBound = false;
 
   /* ——— Events ——— */
@@ -1538,34 +1886,56 @@
       document.getElementById('menu-search').focus();
     });
 
-    document.querySelectorAll('[data-nav]').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        openDrawer(false);
-        var v = btn.getAttribute('data-nav');
-        if (v === 'contact') e.preventDefault();
-        if (v === 'menu') {
-          state.activeCategory = 'all';
-          showView('menu');
-          renderMenuRail();
-          renderMenuProducts();
-        } else if (v === 'cart') {
-          showView('cart');
-          renderCart();
-        } else if (v === 'contact') {
-          showView('home');
-          var contact = document.getElementById('store-contact');
-          if (contact) contact.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          try {
-            history.replaceState(null, '', '#store-contact');
-          } catch (err) {}
-        } else if (v === 'home') {
-          showView('home');
-        }
+    function navigateByAttr(btn, e) {
+      if (!btn) return false;
+      openDrawer(false);
+      var v = btn.getAttribute('data-nav');
+      if (!v) return false;
+      if (v === 'contact' && e) e.preventDefault();
+      if (v === 'menu') {
+        state.activeCategory = 'all';
+        showView('menu');
+        renderMenuRail();
+        renderMenuProducts();
+      } else if (v === 'cart') {
+        showView('cart');
+        renderCart();
+      } else if (v === 'orders') {
+        showView('orders');
+        renderOrders();
+      } else if (v === 'contact') {
+        showView('home');
+        var contact = document.getElementById('store-contact');
+        if (contact) contact.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try {
+          history.replaceState(null, '', '#store-contact');
+        } catch (err) {}
+      } else if (v === 'home') {
+        showView('home');
+      } else {
+        return false;
+      }
+      return true;
+    }
+
+    var topbar = document.querySelector('.demo-topbar');
+    if (topbar) {
+      topbar.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-nav]');
+        if (btn) navigateByAttr(btn, e);
       });
-    });
+    }
 
     document.getElementById('store-app').addEventListener('click', function (e) {
-      var t = e.target.closest('[data-cat]');
+      var navBtn = e.target.closest('[data-nav]');
+      if (navBtn && navigateByAttr(navBtn, e)) return;
+
+      var t = e.target.closest('[data-order]');
+      if (t && t.getAttribute('data-order')) {
+        openOrderDetail(t.getAttribute('data-order'));
+        return;
+      }
+      t = e.target.closest('[data-cat]');
       if (t && t.getAttribute('data-cat')) {
         state.activeCategory = t.getAttribute('data-cat');
         showView('menu');
@@ -1684,12 +2054,8 @@
     document.getElementById('btn-create-order').addEventListener('click', createOrder);
 
     document.getElementById('btn-view-order').addEventListener('click', function () {
-      alert(
-        'Order ' +
-          state.orderId +
-          '\n\n' +
-          (state.orderMessage || 'Order details sent on WhatsApp.')
-      );
+      var samples = sampleOrders();
+      openOrderDetail((samples[0] && samples[0].id) || '1983');
     });
 
     var editAddrBtn = document.getElementById('btn-edit-address');
@@ -1847,6 +2213,11 @@
       showView('menu', { replace: true });
       renderMenuRail();
       renderMenuProducts();
+    } else if (view === 'orders') {
+      showView('orders', { replace: true });
+      renderOrders();
+    } else if (view === 'order-detail') {
+      openOrderDetail(qs('order') || '1983');
     }
     if ((location.hash || '') === '#store-contact') {
       showView('home', { replace: true });

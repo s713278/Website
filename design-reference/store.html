@@ -87,6 +87,7 @@
                     <nav class="drawer-nav">
                         <button type="button" class="drawer-link" data-nav="home">Home</button>
                         <button type="button" class="drawer-link is-accent" data-nav="menu">Menu</button>
+                        <button type="button" class="drawer-link" data-nav="orders">My orders</button>
                         <button type="button" class="drawer-link" data-nav="cart">Cart</button>
                         <a href="#store-contact" class="drawer-link" data-nav="contact">Contact us</a>
                         <a href="index.html" class="drawer-link is-muted">← Back to MithraDirect</a>
@@ -325,6 +326,24 @@
                             <button type="button" class="is-muted" data-nav="home">Continue Shopping</button>
                         </div>
                     </div>
+                </section>
+
+                <!-- Order History: minimal list + full detail (sample design reference) -->
+                <section class="store-view" id="view-orders" data-view="orders">
+                    <div class="orders-panel">
+                        <div class="orders-head">
+                            <h2 class="page-title store-brand-font">My orders</h2>
+                            <p class="orders-lead">Past orders from this shop. Need a change? Chat with the owner on WhatsApp.</p>
+                        </div>
+                        <div id="orders-list" class="orders-list" aria-live="polite"></div>
+                    </div>
+                </section>
+
+                <section class="store-view no-pad" id="view-order-detail" data-view="order-detail">
+                    <div class="order-detail-scroll">
+                        <div id="order-detail" class="order-detail"></div>
+                    </div>
+                    <div class="order-detail-footer" id="order-detail-footer"></div>
                 </section>
 
                 <div class="cart-bar" id="cart-bar">

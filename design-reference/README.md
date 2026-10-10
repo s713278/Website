@@ -6,7 +6,7 @@ Frozen snapshots of the original MithraDirect static pages. Use these while rebu
 |------|---------|
 | `index.html` | Marketing homepage (hero, product loop) |
 | `index_backup.html` | Older homepage variant |
-| `store.html` | Customer storefront |
+| `store.html` | Customer storefront (incl. sample Order History + Chat with Owner) |
 | `onboarding.html` | Vendor setup / onboarding |
 | `dashboard.html` | Vendor dashboard |
 | `privacy.html` | Privacy policy |
