@@ -77,10 +77,13 @@ export function orderStatusLabel(status: string) {
     scheduled: 'Scheduled',
     pending: 'Placed',
     preparing: 'Preparing',
+    in_process: 'Preparing',
     on_the_way: 'On the way',
+    shipped: 'On the way',
     delivered: 'Delivered',
-  }
-  const key = status.toLowerCase()
+    cancelled: 'Cancelled',
+    }
+  const key = status.toLowerCase().replace(/[\s-]+/g, '_')
   return labels[key] ?? status.replaceAll('_', ' ')
 }
 

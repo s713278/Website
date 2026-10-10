@@ -55,6 +55,26 @@ describe('buildWhatsAppOrderMessage', () => {
     expect(message).toContain('*Total: ₹520*')
   })
 
+  it('includes the selected delivery slot for the vendor', () => {
+    const message = buildWhatsAppOrderMessage({
+      orderId: 'ORD-5',
+      storeName: 'Shop',
+      phone: '9876543210',
+      location: 'Miyapur',
+      lines: [{ ...line, qty: 1, lineTotal: 245 }],
+      subtotal: 245,
+      deliveryFee: 30,
+      packagingFee: 0,
+      total: 275,
+      paymentLabel: 'UPI',
+      deliveryMethodLabel: 'Home delivery',
+      deliverySlotLabel: 'Morning',
+      deliveryDateLabel: '6–8 Oct',
+    })
+
+    expect(message).toContain('Method: Home delivery · Slot: Morning · Date: 6–8 Oct')
+  })
+
   it('keeps a map pin when the address has not been split into fields', () => {
     const message = buildWhatsAppOrderMessage({
       orderId: 'ORD-2',

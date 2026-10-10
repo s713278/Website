@@ -9,7 +9,7 @@ import {
   type StoreContactAddress,
   type StoreContactLink,
 } from '@/shared/api'
-import { WhatsAppIcon } from './WhatsAppIcon'
+import { WhatsAppIcon, WhatsAppActionLink } from './WhatsAppIcon'
 
 type StoreContactBlockProps = {
   contact: StoreContact
@@ -319,16 +319,13 @@ export function StoreContactBlock({ contact, className }: StoreContactBlockProps
                 <p className="mt-0.5 text-sm text-slate-500">Chat with us on WhatsApp for quick support.</p>
               </div>
             </div>
-            <a
+            <WhatsAppActionLink
               href={phone.whatsappHref}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="mt-4 w-full bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              <WhatsAppIcon className="size-4" />
               Chat on WhatsApp
               <ArrowRight className="size-4" aria-hidden />
-            </a>
+            </WhatsAppActionLink>
           </section>
         ) : null}
 
