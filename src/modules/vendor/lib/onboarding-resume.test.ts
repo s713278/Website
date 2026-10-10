@@ -497,7 +497,7 @@ describe('the account business-type read files Step 3\'s first page', () => {
       items: types, pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
     })
 
-    const businessTypes = await loadStepResources('91', 4, { submitted: false, approved: false, withUnits: false }).businessTypes
+    const businessTypes = await loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes
 
     expect(getBusinessTypes).toHaveBeenCalledTimes(1)
     expect(businessTypes).toHaveLength(30)
@@ -517,7 +517,7 @@ describe('the account business-type read files Step 3\'s first page', () => {
   it.each([null, 'Others'])('makes no read and seeds nothing for a saved type of %s', async (saved) => {
     const getBusinessTypes = answerReads(saved)
 
-    await expect(loadStepResources('91', 4, { submitted: false, approved: false, withUnits: false }).businessTypes).resolves.toEqual([])
+    await expect(loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes).resolves.toEqual([])
 
     expect(getBusinessTypes).not.toHaveBeenCalled()
     expect(readReferenceCache(accountKey)).toBeNull()
@@ -536,23 +536,14 @@ describe('stepResources', () => {
     [8, false, ['checkout'], false],
     [9, false, ['profile', 'businessTypes'], false],
     [10, false, ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'], true],
+    [10, true, ['profile'], false],
   ] as const)('Step %i (submitted: %s) needs %j, units %s', (step, submitted, account, units) => {
-    expect(stepResources(step, { submitted, approved: false })).toEqual({ account, units })
-  })
-
-  it('previews the submitted catalog on Step 10 until approval, then reads the profile alone', () => {
-    expect(stepResources(10, { submitted: true, approved: false })).toEqual({
-      account: ['profile', 'businessTypes', 'categories', 'products', 'skus'], units: true,
-    })
-    expect(stepResources(10, { submitted: true, approved: true })).toEqual({ account: ['profile'], units: false })
-    expect(stepResources(10, { submitted: false, approved: true })).toEqual(stepResources(10, { submitted: false, approved: false }))
+    expect(stepResources(step, { submitted })).toEqual({ account, units })
   })
 
   it('gives a submitted store the same sets as anyone else on Steps 3-9', () => {
     for (const step of [3, 4, 5, 6, 7, 8, 9] as const) {
-      for (const approved of [false, true]) {
-        expect(stepResources(step, { submitted: true, approved })).toEqual(stepResources(step, { submitted: false, approved: false }))
-      }
+      expect(stepResources(step, { submitted: true })).toEqual(stepResources(step, { submitted: false }))
     }
   })
 })
@@ -649,35 +640,35 @@ describe('stepLoadState', () => {
   const with_ = (changes: Partial<Record<OnboardingResource, ResourceStatus>>) => ({ ...ALL_LOADED, ...changes })
 
   it('is loaded once every resource the step lists is, and the units have settled', () => {
-    expect(stepLoadState(6, { submitted: false, approved: false, resources: ALL_LOADED, units: 'loaded' })).toBe('loaded')
-    expect(stepLoadState(6, { submitted: false, approved: false, resources: ALL_LOADED, units: 'failed' })).toBe('loaded')
-    expect(stepLoadState(6, { submitted: false, approved: false, resources: ALL_LOADED, units: 'loading' })).toBe('loading')
-    expect(stepLoadState(4, { submitted: false, approved: false, resources: ALL_LOADED, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'loaded' })).toBe('loaded')
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'failed' })).toBe('loaded')
+    expect(stepLoadState(6, { submitted: false, resources: ALL_LOADED, units: 'loading' })).toBe('loading')
+    expect(stepLoadState(4, { submitted: false, resources: ALL_LOADED, units: 'idle' })).toBe('loaded')
   })
 
   it('waits only on what the step lists', () => {
     const checkoutOnly = { ...with_({ profile: 'idle', businessTypes: 'idle', categories: 'failed' }), checkout: 'loaded' as const }
-    expect(stepLoadState(7, { submitted: false, approved: false, resources: checkoutOnly, units: 'idle' })).toBe('loaded')
-    expect(stepLoadState(7, { submitted: false, approved: false, resources: with_({ checkout: 'loading' }), units: 'idle' })).toBe('loading')
-    expect(stepLoadState(3, { submitted: false, approved: false, resources: with_({ businessTypes: 'idle' }), units: 'idle' })).toBe('loading')
+    expect(stepLoadState(7, { submitted: false, resources: checkoutOnly, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(7, { submitted: false, resources: with_({ checkout: 'loading' }), units: 'idle' })).toBe('loading')
+    expect(stepLoadState(3, { submitted: false, resources: with_({ businessTypes: 'idle' }), units: 'idle' })).toBe('loading')
   })
 
   it('fails when a listed resource failed, even while another still loads', () => {
     const resources = with_({ categories: 'failed', products: 'loading' })
-    expect(stepLoadState(5, { submitted: false, approved: false, resources, units: 'loading' })).toBe('failed')
-    expect(stepLoadState(10, { submitted: false, approved: false, resources: with_({ checkout: 'failed' }), units: 'loaded' })).toBe('failed')
+    expect(stepLoadState(5, { submitted: false, resources, units: 'loading' })).toBe('failed')
+    expect(stepLoadState(10, { submitted: false, resources: with_({ checkout: 'failed' }), units: 'loaded' })).toBe('failed')
   })
 
-  it.each([true, false])('never blocks a submitted Step 10 (approved: %s), and waits only on the profile there', (approved) => {
+  it('never blocks a submitted Step 10, and waits only on the profile there', () => {
     const resources = with_({ profile: 'failed', skus: 'failed' })
-    expect(stepLoadState(10, { submitted: true, approved, resources, units: 'idle' })).toBe('loaded')
-    expect(stepLoadState(10, { submitted: true, approved, resources: with_({ categories: 'loading', products: 'failed' }), units: 'loading' })).toBe('loaded')
-    expect(stepLoadState(10, { submitted: true, approved, resources: with_({ profile: 'loading' }), units: 'idle' })).toBe('loading')
+    expect(stepLoadState(10, { submitted: true, resources, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(10, { submitted: true, resources: with_({ categories: 'loading', products: 'failed' }), units: 'loading' })).toBe('loaded')
+    expect(stepLoadState(10, { submitted: true, resources: with_({ profile: 'loading' }), units: 'idle' })).toBe('loading')
   })
 
   it('treats the identity steps as loaded', () => {
     const idle = with_({ profile: 'idle' })
-    expect(stepLoadState(1, { submitted: false, approved: false, resources: idle, units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(1, { submitted: false, resources: idle, units: 'idle' })).toBe('loaded')
   })
 })
 

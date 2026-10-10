@@ -297,6 +297,32 @@ describe('mapVendorOnboardingProgress', () => {
     expect(mapVendorContext({ data: { vendor_id: 1 } }).onboarding)
       .toEqual({ status: 'UNKNOWN', description: null, nextStep: null })
   })
+
+  it('reads the catalog preview when the context carries one, dropping unusable entries', () => {
+    expect(mapVendorContext({ data: { vendor_id: 1 } }).catalogPreview).toBeNull()
+    expect(mapVendorContext({ data: { vendor_id: 1, catalog_preview: [] } }).catalogPreview).toBeNull()
+    expect(mapVendorContext({
+      data: {
+        vendor_id: 1,
+        catalog_preview: {
+          categories: [{ id: 3, name: 'Juices' }, { id: 4 }, 'Snacks'],
+          products: [
+            { id: 11, name: 'Mango juice', category_id: 3, image_url: 'https://cdn.test/mango.jpg', price: 60 },
+            { id: 12, name: 'Lime soda', category_id: null, image_url: null, price: null },
+            { name: 'No id' },
+          ],
+          active_sku_count: 12,
+        },
+      },
+    }).catalogPreview).toEqual({
+      categories: [{ id: 3, name: 'Juices' }],
+      products: [
+        { id: 11, name: 'Mango juice', categoryId: 3, imageUrl: 'https://cdn.test/mango.jpg', price: 60 },
+        { id: 12, name: 'Lime soda', categoryId: null, imageUrl: null, price: null },
+      ],
+      activeSkuCount: 12,
+    })
+  })
 })
 
 describe('mapVendorProfile', () => {

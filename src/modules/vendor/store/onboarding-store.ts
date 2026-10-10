@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BusinessTypeReference } from '@/shared/api'
+import type { BusinessTypeReference, VendorCatalogPreview } from '@/shared/api'
 import { onExplicitSignOut } from '@/shared/auth/store/auth-store'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
@@ -145,6 +145,12 @@ type OnboardingStore = {
   /** Account-confirmed store submission; not persisted. */
   storeSubmission: StoreSubmission | null
   setStoreSubmission: (submission: StoreSubmission | null) => void
+  /**
+   * The context's catalog summary, for the phone preview only: it shows a catalog step the
+   * visit has not read. Never applied to the draft. Not persisted.
+   */
+  catalogPreview: VendorCatalogPreview | null
+  setCatalogPreview: (preview: VendorCatalogPreview | null) => void
   /**
    * Platform IDs already assigned on the vendor's account, and the account's own SKU ids.
    *
@@ -382,6 +388,7 @@ function emptyDraftState(
     recoveryMessage,
     pendingConflict: null,
     storeSubmission: null,
+    catalogPreview: null,
     ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
     editedSteps: [],
@@ -667,6 +674,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   measurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   productMeasurementCatalog: SAMPLE_MEASUREMENT_CATALOG,
   storeSubmission: null,
+  catalogPreview: null,
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
   editedSteps: [],
@@ -725,6 +733,10 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   setStoreSubmission(submission) {
     set({ storeSubmission: submission })
+  },
+
+  setCatalogPreview(preview) {
+    set({ catalogPreview: preview })
   },
 
   setAccountCatalog(catalog) {

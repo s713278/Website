@@ -75,12 +75,11 @@ const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes'
  *
  * `businessTypes` is listed where the step needs it, but it is a dependent read: callers
  * start it only once the profile shows a saved type. A submitted store's review screen
- * shows its status; once approved that needs the profile alone, while a store awaiting
- * review also previews its catalog as submitted (never checkout).
+ * shows status only, so it needs the profile alone.
  */
 export function stepResources(
   step: OnboardingStep,
-  options: { submitted: boolean; approved: boolean },
+  options: { submitted: boolean },
 ): { account: readonly OnboardingResource[]; units: boolean } {
   switch (step) {
     case 1:
@@ -99,10 +98,9 @@ export function stepResources(
     case 8:
       return { account: ['checkout'], units: false }
     case 10:
-      if (!options.submitted) return { account: [...CATALOG_CHAIN, 'checkout'], units: true }
-      return options.approved
+      return options.submitted
         ? { account: ['profile'], units: false }
-        : { account: CATALOG_CHAIN, units: true }
+        : { account: [...CATALOG_CHAIN, 'checkout'], units: true }
   }
 }
 
@@ -572,14 +570,13 @@ export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
  * it uses them, the units have settled. A units failure is not a block: the sample units
  * stand in. A failed resource fails the step even while another still loads, so the vendor
  * can retry at once. A submitted store's Step 10 shows its status and never blocks: it waits
- * only for the profile to settle, a failed profile just leaves the store name to its
- * fallback, and a pending store's catalog preview fills as its reads land.
+ * only for the profile to settle, and a failed profile just leaves the store name to its
+ * fallback.
  */
 export function stepLoadState(
   step: OnboardingStep,
   options: {
     submitted: boolean
-    approved: boolean
     resources: Readonly<Record<OnboardingResource, ResourceStatus>>
     units: ResourceStatus
   },

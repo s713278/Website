@@ -253,8 +253,7 @@ shows "Restoring your setup…".
 | Products (5) | Step 4's plus vendor products | Yes |
 | Sizes (6) | Step 5's plus vendor sizes | Yes |
 | Delivery, payments (7, 8) | Checkout options (one read for both) | No |
-| Review (10), store submitted and approved | Profile | No |
-| Review (10), store submitted, not approved | Step 6's | Yes |
+| Review (10), store submitted | Profile | No |
 | Review (10), not submitted | All six | Yes |
 
 The business-type catalog (one 100-item page) is read only once the profile shows a saved business
@@ -273,10 +272,15 @@ failed resources. Continue is disabled in both states, while Back and the steppe
 failed earlier step never traps the vendor. A failed read is never turned into empty data, because
 Step 6's save deletes account sizes missing from the draft and Steps 7-8 save checkout as a whole.
 A submitted store's Step 10 is the exception: it shows its status once the profile settles and never
-blocks; a failed profile leaves the store name to its fallback. An approved store's Step 10 hides
-the live preview and its counts. A store awaiting review (pending or rejected) keeps them, filled
-from its catalog reads as they land; a failed read leaves the preview partial, with no error.
-Requests time out at 15 s and then fail.
+blocks; a failed profile leaves the store name to its fallback. Requests time out at 15 s and then
+fail.
+
+The phone preview (storefront mockup and its Categories / Products / Sizes counts) is shown on every
+step. Its categories, products and sizes each come from the context's `catalog_preview` while their
+step (4, 5, 6) has been neither read this visit nor edited, and from the draft otherwise; the summary
+is never applied to the draft. The deployed context does not carry `catalog_preview` yet
+([gap](./API_GAPS.md#still-open)), so a step that has not read the catalog, such as a submitted
+Step 10, shows an empty catalog and 0 / 0 / 0.
 
 A failed context read blocks every step from 3 on: the step shows the context error above "Something
 went wrong" and Try again, which re-reads the context and then the step's resources. If the context
@@ -290,8 +294,7 @@ Measurements mean one authenticated `GET /v1/measurements/` followed by one auth
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
-Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it; a
-submitted Step 10 awaiting review reads it for the preview without waiting.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it.
 Continue starts only the next step's missing account reads alongside its save, never the units. A
 failed read does not block: sizes fall back to the sample units and products carry no measurement
 metadata, and it is not retried within the visit.

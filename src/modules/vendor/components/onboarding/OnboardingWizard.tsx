@@ -52,6 +52,7 @@ import {
   type OnboardingResource,
   type ResourceStatus,
 } from '../../lib/onboarding-resume'
+import { phonePreviewAccountParts, type PhonePreviewAccountParts } from '../../lib/phone-preview-catalog'
 import { loadStepResources } from '../../lib/onboarding-server-state'
 import { maskPhone } from '../../lib/onboarding-adapter'
 import {
@@ -102,16 +103,24 @@ const EMPTY_CONFIRM: ConfirmDialogState = {
   onConfirm: () => undefined,
 }
 
-function LivePreviewPane() {
+function LivePreviewPane({ accountParts }: { accountParts: PhonePreviewAccountParts }) {
   const draft = useOnboardingStore((state) => state.draft)
   const logoUrl = useOnboardingStore((state) => state.runtime.logoUrl)
   const bannerUrl = useOnboardingStore((state) => state.runtime.bannerUrl)
   const deferredDraft = useDeferredValue(draft)
-  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} />
+  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
 }
 
 /** The bay where the shop takes shape: the storefront as a customer will see it. */
 function PhonePreviewStage({ className, id, labelledBy }: { className?: string; id?: string; labelledBy?: string }) {
+  const catalogSource = useOnboardingStore(selectCatalogSource)
+  const catalogPreview = useOnboardingStore((state) => state.catalogPreview)
+  const loadedSteps = useOnboardingStore((state) => state.loadedSteps)
+  const editedSteps = useOnboardingStore((state) => state.editedSteps)
+  const accountParts = useMemo(
+    () => phonePreviewAccountParts({ catalogSource, catalogPreview, loadedSteps, editedSteps }),
+    [catalogSource, catalogPreview, loadedSteps, editedSteps],
+  )
   return (
     <aside
       id={id}
@@ -128,8 +137,8 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
           Private
         </span>
       </div>
-      <LivePreviewPane />
-      <PreviewStats className="shrink-0" />
+      <LivePreviewPane accountParts={accountParts} />
+      <PreviewStats className="shrink-0" accountParts={accountParts} />
     </aside>
   )
 }
@@ -287,7 +296,6 @@ function startAccountEntry(
     if (!context) return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
-    const approved = selectStoreIsApproved(state)
     const options = { edited: new Set(state.editedSteps), submitted }
     const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
     let draft = state.draft
@@ -338,7 +346,7 @@ function startAccountEntry(
     }
 
     const loadedSteps = ACCOUNT_STEPS.filter((step) =>
-      stepResources(step, { submitted, approved }).account.every((resource) => applied.has(resource)))
+      stepResources(step, { submitted }).account.every((resource) => applied.has(resource)))
     store().setLoadedSteps(loadedSteps)
 
     // A catalog step before the resume step, taken whole from the account (with every
@@ -389,8 +397,7 @@ function startAccountEntry(
   const requestStep = (step: OnboardingStep) => {
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const submitted = selectStoreIsSubmitted(store())
-    const approved = selectStoreIsApproved(store())
-    const needs = stepResources(step, { submitted, approved })
+    const needs = stepResources(step, { submitted })
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
@@ -417,7 +424,7 @@ function startAccountEntry(
     if (view.units !== 'idle') skip.push('units')
     // A failed profile stays failed until Try again, so business types do not re-read it.
     if (view.resources.profile === 'failed') skip.push('businessTypes')
-    const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip })
+    const reads = loadStepResources(vendorId, step, { submitted, withUnits: true, skip })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
     }
@@ -429,7 +436,6 @@ function startAccountEntry(
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
-    const approved = selectStoreIsApproved(state)
     const edited = new Set(state.editedSteps)
     // Anything this visit holds or is reading is left out, and so is a read that failed: it
     // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
@@ -439,7 +445,7 @@ function startAccountEntry(
       || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
     if (view.resources.profile === 'failed') skip.push('businessTypes')
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
-    loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip })
+    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
   }
 
   const applyContext = (loaded: VendorContext) => {
@@ -450,6 +456,7 @@ function startAccountEntry(
     state.setProductLimit(loaded.subscription.limits.maxProducts)
     state.setSkuLimit(loaded.subscription.limits.maxSkus)
     state.setAccountCatalog({ skuUsage: loaded.subscription.usage.skus })
+    state.setCatalogPreview(loaded.catalogPreview ?? null)
     const submitted = isStoreSubmitted({ context: loaded })
     // A submitted store still has to show its own catalog and settings on Steps 3-9,
     // so it is hydrated like any other — it just opens on the review step instead.
@@ -501,7 +508,7 @@ function startAccountEntry(
     requestStep,
     prefetchStep,
     retry(step) {
-      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()), approved: selectStoreIsApproved(store()) })
+      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
       for (const resource of needs.account) {
         if (view.resources[resource] === 'failed') view.resources[resource] = 'idle'
       }
@@ -573,6 +580,7 @@ export function OnboardingWizard() {
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
+  const setCatalogPreview = useOnboardingStore((state) => state.setCatalogPreview)
   const setProductMeasurementCatalog = useOnboardingStore((state) => state.setProductMeasurementCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
@@ -702,6 +710,7 @@ export function OnboardingWizard() {
       setSkuLimit(null)
       setStoreSubmission(null)
       setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+      setCatalogPreview(null)
       if (isLiveApi()) setProductMeasurementCatalog([])
       return
     }
@@ -716,6 +725,7 @@ export function OnboardingWizard() {
     // including ready-session mounts, vendor changes, and account reads that later fail.
     setProductMeasurementCatalog([])
     setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+    setCatalogPreview(null)
     const entry = startAccountEntry(access.vendorId, {
       setView: setLoadView,
       setContextError,
@@ -726,7 +736,7 @@ export function OnboardingWizard() {
       entry.cancel()
       if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setProductMeasurementCatalog, setLoadedSteps])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps])
 
   // Each step reads what it needs when it opens; a read already made this visit is reused.
   // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
@@ -1225,11 +1235,8 @@ export function OnboardingWizard() {
     : loadView.context === 'failed' ? 'failed'
       // A sample draft has no account copy to wait for.
       : catalogSource !== 'account' ? 'loaded'
-        : stepLoadState(currentStep, { submitted: storeIsSubmitted, approved: storeIsApproved, resources: loadView.resources, units: loadView.units })
+        : stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units })
   const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
-  // An approved store's review step is its status alone: there is nothing left to preview.
-  const showPreview = !(currentStep === 10 && storeIsSubmitted && storeIsApproved)
-  const formView = showPreview ? mobileView : 'form'
 
   if (!persistenceInitialized || contextPending) {
     // One gate for both reads. Painting between them shows Step 3 to a vendor whose
@@ -1248,15 +1255,15 @@ export function OnboardingWizard() {
     <div className="onboarding-shell h-full min-h-0 overflow-hidden px-5 text-[var(--ob-ink)] [contain:paint] sm:px-8 xl:px-10">
       {/* A working tool rather than a reading page, so on desktop it sits slightly wider than the
           marketing header's measure. */}
-      <div className={cn('ob-grid mx-auto w-full max-w-[81rem]', !showPreview && 'min-[900px]:grid-cols-1')}>
+      <div className="ob-grid mx-auto w-full max-w-[81rem]">
         <div className="flex min-h-0 min-w-0 flex-col">
-          {showPreview ? <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
+          <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
             <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>
             <button id="onboarding-preview-tab" type="button" role="tab" tabIndex={mobileView === 'preview' ? 0 : -1} aria-controls="onboarding-preview-panel" aria-selected={mobileView === 'preview'} onClick={() => setMobileView('preview')} onKeyDown={(event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); moveMobileTab('form') } }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'preview' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}><EyeIcon className="size-4" /> Your shop</button>
-          </div> : null}
+          </div>
 
           <div className="min-h-0 flex-1">
-            <main id="onboarding-form-panel" role={showPreview ? 'tabpanel' : undefined} aria-labelledby={showPreview ? 'onboarding-form-tab' : undefined} className={cn('h-full min-h-0 min-w-0', formView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
+            <main id="onboarding-form-panel" role="tabpanel" aria-labelledby="onboarding-form-tab" className={cn('h-full min-h-0 min-w-0', mobileView === 'preview' ? 'hidden min-[900px]:block' : 'block')}>
               <section className="flex h-full min-h-0 flex-col">
                 {/* The stepper, status and footer reserve the form's scrollbar gutter, so all
                     four rows share one right edge. */}
@@ -1394,11 +1401,11 @@ export function OnboardingWizard() {
                 </div> : null}
               </section>
             </main>
-            {showPreview ? <PhonePreviewStage id="onboarding-preview-panel" labelledBy="onboarding-preview-tab" className={cn('h-full min-[900px]:hidden', mobileView === 'form' ? 'hidden' : 'flex')} /> : null}
+            <PhonePreviewStage id="onboarding-preview-panel" labelledBy="onboarding-preview-tab" className={cn('h-full min-[900px]:hidden', mobileView === 'form' ? 'hidden' : 'flex')} />
           </div>
         </div>
 
-        {showPreview ? <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" /> : null}
+        <PhonePreviewStage className="hidden h-full min-[900px]:flex min-[900px]:px-0 min-[900px]:pt-4" />
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />

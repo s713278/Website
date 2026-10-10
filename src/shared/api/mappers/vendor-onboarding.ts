@@ -299,6 +299,17 @@ export type VendorSubscriptionUsage = {
   images: number | null
 }
 
+/**
+ * What the vendor's account holds, summarised for the setup phone preview. Requested from the
+ * backend (docs/API_GAPS.md); `null` until the context carries it. Display only: it never
+ * stands in for the account's catalog in a setup draft.
+ */
+export type VendorCatalogPreview = {
+  categories: { id: number; name: string }[]
+  products: { id: number; name: string; categoryId: number | null; imageUrl: string | null; price: number | null }[]
+  activeSkuCount: number
+}
+
 export type VendorContext = {
   vendorId: string
   /** Existing envelopes may omit the offset; billing validates it before use. */
@@ -346,6 +357,8 @@ export type VendorContext = {
     usage: VendorSubscriptionUsage
   }
   eligibleFeatures: string[]
+  /** Absent in hand-built contexts; the mapper always sets it. */
+  catalogPreview?: VendorCatalogPreview | null
 }
 
 export class InvalidVendorContextError extends Error {
@@ -389,6 +402,32 @@ export function mapVendorOnboardingProgress(value: unknown): VendorContext['onbo
     status: mapOnboardingStatus(onboarding.status),
     description: lenientString(onboarding.description),
     nextStep: lenientInteger(onboarding.next_step),
+  }
+}
+
+/** Lenient: an entry without a usable id and name is dropped; a missing block maps to null. */
+function mapCatalogPreview(value: unknown): VendorCatalogPreview | null {
+  if (!isRecord(value)) return null
+  const records = (list: unknown) => (Array.isArray(list) ? list.filter(isRecord) : [])
+  return {
+    categories: records(value.categories).flatMap((category) => {
+      const id = lenientInteger(category.id)
+      const name = lenientString(category.name)
+      return id !== null && name !== null ? [{ id, name }] : []
+    }),
+    products: records(value.products).flatMap((product) => {
+      const id = lenientInteger(product.id)
+      const name = lenientString(product.name)
+      if (id === null || name === null) return []
+      return [{
+        id,
+        name,
+        categoryId: lenientInteger(product.category_id),
+        imageUrl: lenientString(product.image_url),
+        price: lenientNumber(product.price),
+      }]
+    }),
+    activeSkuCount: lenientInteger(value.active_sku_count) ?? 0,
   }
 }
 
@@ -444,6 +483,7 @@ export function mapVendorContext(payload: unknown): VendorContext {
       },
     },
     eligibleFeatures: lenientStringList(features),
+    catalogPreview: mapCatalogPreview(data.catalog_preview),
   }
 }
 

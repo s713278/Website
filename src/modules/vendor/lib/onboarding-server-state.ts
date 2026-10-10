@@ -56,7 +56,7 @@ export function prefetchOnboardingLanding(
   const landing = fromSignIn !== null ? Promise.resolve(fromSignIn) : contextRead.then(backendResumeStep)
   landing
     .then((step) => {
-      if (step !== null) loadStepResources(vendorId, step, { submitted: false, approved: false, withUnits: false })
+      if (step !== null) loadStepResources(vendorId, step, { submitted: false, withUnits: false })
     })
     .catch(() => {})
 }
@@ -81,10 +81,10 @@ export type StepResourceReads = { [R in OnboardingResource]?: Promise<Onboarding
 export function loadStepResources(
   vendorId: string,
   step: OnboardingStep,
-  options: { submitted: boolean; approved: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'> },
+  options: { submitted: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'> },
 ): StepResourceReads {
   const skip = new Set(options.skip ?? [])
-  const needs = stepResources(step, options)
+  const needs = stepResources(step, { submitted: options.submitted })
   const reads: StepResourceReads = {}
   const wanted = (resource: OnboardingResource) =>
     !skip.has(resource) && peekOnboardingResource(vendorId, resource) === null

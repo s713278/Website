@@ -95,7 +95,7 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
 })
 
-function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false) {
+function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false, catalogPreview?: unknown) {
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
       vendor_id: 91, vendor_status: 'ACTIVE', approval_status: approvalStatus,
@@ -103,6 +103,7 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
       business_name: 'Test Store',
       onboarding: { status: nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS', next_step: nextStep },
       subscription: { limits: { max_categories: 3, max_products: 10, max_skus: maxSkus }, usage: { skus: skuUsage } },
+      catalog_preview: catalogPreview,
     },
   }))
   const wizard = <MemoryRouter><OnboardingWizard /></MemoryRouter>
@@ -874,47 +875,46 @@ describe('per-step account reads', () => {
     })
   })
 
-  it('opens an approved store on Step 10 with the context and profile alone, and no preview', async () => {
+  it('opens an approved store on Step 10 with the context and profile alone, and the phone preview', async () => {
     renderAccount('APPROVED')
 
     expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
     expect(screen.getByText('Share your store link.')).toBeTruthy()
     expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
-    expect(document.querySelector('.onboarding-preview-stage')).toBeNull()
-    expect(screen.queryByRole('tab', { name: 'Your shop' })).toBeNull()
+    expect(document.querySelector('.onboarding-preview-stage')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Your shop' })).toBeTruthy()
   })
 
-  it('shows a pending store its status at once on Step 10 and previews the submitted catalog as it lands', async () => {
-    const categories = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorCategories>>>()
-    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockReturnValue(categories.promise)
+  it('opens a pending store on Step 10 with the context and profile alone, and the phone preview', async () => {
     renderAccount('PENDING')
 
     expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
     expect(screen.getByText('Submitted for review. You can still add categories and products.')).toBeTruthy()
-    expect(stepSkeleton()).toBeNull()
-    const stage = document.querySelector<HTMLElement>('.onboarding-preview-stage')!
-    const count = (label: string) => within(stage).getByText(label).previousElementSibling?.textContent
-
-    await act(async () => categories.resolve([{ vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null }]))
-    await waitFor(() => expect(count('Sizes')).toBe('1'))
-    expect(count('Categories')).toBe('1')
-    expect(count('Products')).toBe('1')
-    expect(accountReadCounts()).toEqual({
-      getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1, getVendorCategories: 1,
-      getVendorProducts: 1, getVendorSkus: 1, getMeasurements: 1,
-    })
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(document.querySelector('.onboarding-preview-stage')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Your shop' })).toBeTruthy()
   })
 
-  it('never blocks a pending store\'s Step 10 on a failed catalog read', async () => {
-    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockRejectedValue(new Error('down'))
-    renderAccount('PENDING')
+  it('fills a submitted Step 10 phone preview from the context catalog summary, without reading the catalog', async () => {
+    renderAccount('APPROVED', 11, 2, 1, false, {
+      categories: [{ id: 10, name: 'Fresh Juices' }],
+      products: [{ id: 31, name: 'Mango Juice', category_id: 10, image_url: null, price: 60 }],
+      active_sku_count: 4,
+    })
 
-    expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
-    await waitFor(() => expect(vi.mocked(vendorOnboardingService.getVendorSkus)).toHaveBeenCalled())
-    expect(screen.queryByText('Something went wrong')).toBeNull()
-    expect(stepSkeleton()).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    const stage = document.querySelector<HTMLElement>('.onboarding-preview-stage:not([role])')!
+    const count = (label: string) => within(stage).getByText(label).previousElementSibling?.textContent
+    expect(count('Categories')).toBe('1')
+    expect(count('Products')).toBe('1')
+    expect(count('Sizes')).toBe('4')
+    expect(within(stage).getByText('Fresh Juices')).toBeTruthy()
+    expect(within(stage).getByText('Mango Juice')).toBeTruthy()
+    expect(within(stage).getByText('₹60')).toBeTruthy()
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(useOnboardingStore.getState().draft.categories).toEqual([])
   })
 
   it('still shows a submitted store its status when the profile read fails', async () => {

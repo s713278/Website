@@ -119,28 +119,23 @@ describe('loadStepResources', () => {
 
   it('starts only what each step lists', async () => {
     const spies = stubReads()
-    await settled(loadStepResources(VENDOR_ID, 7, { submitted: false, approved: false, withUnits: true }))
+    await settled(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true }))
     expect(called(spies)).toEqual(['checkout'])
 
     invalidateAll()
     vi.clearAllMocks()
-    await settled(loadStepResources(VENDOR_ID, 10, { submitted: true, approved: true, withUnits: true }))
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: true, withUnits: true }))
     expect(called(spies)).toEqual(['profile'])
 
     invalidateAll()
     vi.clearAllMocks()
-    await settled(loadStepResources(VENDOR_ID, 10, { submitted: true, approved: false, withUnits: true }))
-    expect(called(spies)).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus', 'units'])
-
-    invalidateAll()
-    vi.clearAllMocks()
-    await settled(loadStepResources(VENDOR_ID, 10, { submitted: false, approved: false, withUnits: true }))
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: false, withUnits: true }))
     expect(called(spies)).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'units'])
   })
 
   it('leaves the units out without withUnits', async () => {
     const spies = stubReads()
-    const reads = loadStepResources(VENDOR_ID, 6, { submitted: false, approved: false, withUnits: false })
+    const reads = loadStepResources(VENDOR_ID, 6, { submitted: false, withUnits: false })
     await settled(reads)
     expect(reads.units).toBeUndefined()
     expect(spies.units).not.toHaveBeenCalled()
@@ -148,14 +143,14 @@ describe('loadStepResources', () => {
 
   it('reads business types only after the profile shows a saved type', async () => {
     const spies = stubReads('Others')
-    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, approved: false, withUnits: true })
+    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
     await expect(reads.businessTypes).resolves.toEqual([])
     expect(spies.businessTypes).not.toHaveBeenCalled()
 
     invalidateAll()
     let answer!: (profile: VendorProfile) => void
     spies.profile.mockReturnValue(new Promise((resolve) => { answer = resolve }))
-    const pending = loadStepResources(VENDOR_ID, 3, { submitted: false, approved: false, withUnits: true })
+    const pending = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
     await Promise.resolve()
     expect(spies.businessTypes).not.toHaveBeenCalled()
     answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
@@ -166,13 +161,13 @@ describe('loadStepResources', () => {
   it('joins a read in flight, omits a resolved one and honours skip', async () => {
     const spies = stubReads()
     const inFlight = loadOnboardingResource(VENDOR_ID, 'checkout', () => vendorOnboardingService.getCheckoutOptions(VENDOR_ID))
-    const reads = loadStepResources(VENDOR_ID, 7, { submitted: false, approved: false, withUnits: true })
+    const reads = loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })
     await settled(reads)
     await inFlight
     expect(spies.checkout).toHaveBeenCalledTimes(1)
 
-    expect(loadStepResources(VENDOR_ID, 7, { submitted: false, approved: false, withUnits: true })).toEqual({})
-    const skipped = loadStepResources(VENDOR_ID, 5, { submitted: false, approved: false, withUnits: true, skip: ['categories', 'units'] })
+    expect(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })).toEqual({})
+    const skipped = loadStepResources(VENDOR_ID, 5, { submitted: false, withUnits: true, skip: ['categories', 'units'] })
     expect(Object.keys(skipped).sort()).toEqual(['businessTypes', 'products', 'profile'])
     await settled(skipped)
   })
@@ -180,7 +175,7 @@ describe('loadStepResources', () => {
   it('settles each resource on its own', async () => {
     const spies = stubReads()
     spies.categories.mockRejectedValue(new Error('down'))
-    const reads = loadStepResources(VENDOR_ID, 4, { submitted: false, approved: false, withUnits: true })
+    const reads = loadStepResources(VENDOR_ID, 4, { submitted: false, withUnits: true })
     await expect(reads.categories).rejects.toThrow('down')
     await expect(reads.profile).resolves.toMatchObject({ businessName: 'Store' })
     await expect(reads.businessTypes).resolves.toEqual([])
