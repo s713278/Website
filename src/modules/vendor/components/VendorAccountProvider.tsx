@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { deriveStoreState } from '@/modules/vendor/lib/store-state'
-import { peekVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import {
   contextSnapshotMayReplace,
   invalidateVendorContext,
@@ -41,7 +40,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
    */
   const [loaded, setLoaded] = useState<{ vendorId: string; context: VendorContext } | null>(() => {
     if (!vendorId) return null
-    const cached = peekVendorContext(vendorId) ?? peekVendorOnboardingState(vendorId)?.context
+    const cached = peekVendorContext(vendorId)
     return cached ? { vendorId, context: cached } : null
   })
   const loadedRef = useRef(loaded)

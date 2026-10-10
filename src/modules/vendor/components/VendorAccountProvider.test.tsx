@@ -6,7 +6,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
 import { resetBillingPrototypeState } from '@/modules/vendor/hooks/use-billing-prototype'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { loadVendorOnboardingState } from '@/modules/vendor/lib/onboarding-server-state'
 import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
 import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
@@ -260,5 +261,70 @@ describe('the dashboard joins the reads sign-in started', () => {
       resetLiveBilling()
       resetLiveBillingPlansForTests()
     }
+  })
+})
+
+describe('VendorAccountProvider first render', () => {
+  const resolved = mapVendorContext({
+    data: {
+      vendor_id: 'test-vendor', vendor_status: 'ACTIVE', approval_status: 'APPROVED',
+      onboarding: { status: 'COMPLETED', next_step: 11 },
+    },
+  })
+
+  beforeEach(() => {
+    vi.stubEnv('VITE_USE_API', 'true')
+    configureApiClient({ useApi: true })
+  })
+
+  afterEach(() => {
+    // Drops the snapshot, the context and the per-resource entries a test left behind.
+    invalidateVendorOnboardingState()
+  })
+
+  function renderProvider() {
+    return render(
+      <MemoryRouter>
+        <VendorAccountProvider>
+          <AccountReading />
+        </VendorAccountProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it('seeds from a context already in the context cache, with no request', async () => {
+    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(resolved)
+    await loadVendorContext('test-vendor', (id) => vendorOnboardingService.getVendorContext(id))
+    readContext.mockClear()
+
+    renderProvider()
+
+    expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(readContext).not.toHaveBeenCalled()
+  })
+
+  it('does not seed from a context only the onboarding snapshot holds', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(resolved)
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+      businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
+    })
+    vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
+      items: [], pageNumber: 0, pageSize: 100, totalElements: 0, totalPages: 0, lastPage: true,
+    })
+    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([])
+    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null)
+    vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue([])
+    await loadVendorOnboardingState('test-vendor')
+    // Leaves the snapshot in place and drops only the context cache.
+    invalidateVendorContext('test-vendor')
+    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(new Promise(() => {}))
+
+    renderProvider()
+
+    expect(screen.queryByLabelText('Account approval')).toBeNull()
+    await waitFor(() => expect(readContext).toHaveBeenCalledTimes(1))
   })
 })

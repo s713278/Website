@@ -294,12 +294,12 @@ response belonging to an entry that has already been invalidated. Submission's r
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
 
-The marketing header decides its vendor actions from the context alone. Off `/onboarding` it calls
-`loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the narrower cache so the
-dashboard opens on it, or no request when either cache already holds a resolved context (the
-dashboard's is preferred). Waiting on the full read there held the actions back until the slowest of
-its reads settled, however little the decision used them. On `/onboarding` the header shares the
-wizard's full read instead of asking for the context a second time.
+The marketing header decides its vendor actions from the context alone. On every route, `/onboarding`
+included, it calls `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
+narrower cache so the dashboard opens on it, or no request when either cache already holds a resolved
+context (the dashboard's is preferred). Waiting on the full read held the actions back until the
+slowest of its reads settled, however little the decision used them. On `/onboarding` the wizard's
+full read takes its context through the same cache, so the two share one context request.
 
 Post-sign-in routing (`resolveLandingPath`) first decides from the chosen vendor's `verify-otp`
 `vendors[]` status and onboarding when they suffice (see

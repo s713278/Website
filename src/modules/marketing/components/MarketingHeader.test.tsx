@@ -191,7 +191,27 @@ describe('MarketingHeader for a signed-in vendor', () => {
   })
 
   describe('on /onboarding', () => {
-    it('shares the wizard’s read rather than asking for the context a second time', async () => {
+    it('reads the vendor context alone, never the wizard’s setup reads', async () => {
+      const read = deferred<VendorContext>()
+      const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
+      holdSetupReads()
+      renderHeader('/onboarding')
+
+      // The header requested this module first, so its read has been issued by the time this resolves.
+      await import('@/modules/vendor/lib/onboarding-server-state')
+      read.resolve(APPROVED)
+
+      await waitFor(() => expect(shownActions()).toEqual(['Store', 'Dashboard']))
+      expect(getContext).toHaveBeenCalledTimes(1)
+      for (const setupRead of [
+        'getVendorProfile', 'getVendorCategories', 'getVendorProducts', 'getVendorSkus',
+        'getCheckoutOptions', 'getBusinessTypes', 'getMeasurements',
+      ] as const) {
+        expect(vendorOnboardingService[setupRead]).not.toHaveBeenCalled()
+      }
+    })
+
+    it('joins the wizard’s context request rather than asking for the context a second time', async () => {
       const read = deferred<VendorContext>()
       const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
       answerSetupReads()
