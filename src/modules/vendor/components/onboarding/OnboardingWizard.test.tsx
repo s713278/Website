@@ -939,6 +939,19 @@ describe('per-step account reads', () => {
     expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 2 })
   })
 
+  it('reads neither the profile again nor business types while the profile read has failed', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockRejectedValueOnce(new Error('down'))
+    renderAccount('APPROVED', 3)
+
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    await act(async () => {})
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 2, getBusinessTypes: 1 })
+  })
+
   it('keeps an edit made while its step’s read was in flight', async () => {
     const products = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
     vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockReturnValue(products.promise)

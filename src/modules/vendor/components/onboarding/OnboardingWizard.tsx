@@ -416,6 +416,8 @@ function startAccountEntry(
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) => view.resources[resource] !== 'idle')
     // Units are not retried within a visit: their failure has a usable fallback.
     if (view.units !== 'idle') skip.push('units')
+    // A failed profile stays failed until Try again, so business types do not re-read it.
+    if (view.resources.profile === 'failed') skip.push('businessTypes')
     const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
@@ -436,6 +438,7 @@ function startAccountEntry(
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
       view.resources[resource] !== 'idle'
       || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
+    if (view.resources.profile === 'failed') skip.push('businessTypes')
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
     loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip })
   }
