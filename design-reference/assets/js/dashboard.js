@@ -26,7 +26,15 @@
   var ORDERS_PAGE_SIZE = 5;
   var expandedOrders = {};
   var openOrderId = null;
+  var openProductId = null;
   var confirmingCancel = false;
+  var FEATURE_SAMPLES = [
+    { label: 'Brand', value: 'Your brand name' },
+    { label: 'Easily Digestible', value: 'Light on the stomach' },
+    { label: 'Health Benefits', value: 'Rich in vitamins' },
+    { label: 'How to Use', value: 'Best within 3 days of opening' },
+    { label: 'Ingredients', value: 'List the main ingredients' }
+  ];
   var state = {
     store: null,
     orders: [],
@@ -667,6 +675,466 @@
     });
   }
 
+  function productFeatureList(product) {
+    if (Array.isArray(product.features) && product.features.length) {
+      return product.features
+        .filter(function (f) {
+          return f && (f.label || f.value);
+        })
+        .map(function (f) {
+          return { label: String(f.label || ''), value: String(f.value || '') };
+        });
+    }
+    return [{ label: '', value: '' }];
+  }
+
+  function productImages(product) {
+    var list = [];
+    if (Array.isArray(product.images)) {
+      product.images.forEach(function (src) {
+        if (typeof src === 'string' && src && list.indexOf(src) === -1) list.push(src);
+      });
+    }
+    if (product.image && list.indexOf(product.image) === -1) list.unshift(product.image);
+    return list;
+  }
+
+  function syncProductCover(product) {
+    var images = productImages(product);
+    product.images = images;
+    product.image = images[0] || '';
+    return images;
+  }
+
+  function productThumbHtml(product) {
+    var cover = productImages(product)[0];
+    if (cover) {
+      return '<img class="dash-product-thumb" src="' + escapeHtml(cover) + '" alt="">';
+    }
+    return (
+      '<span class="dash-product-thumb dash-product-thumb-fallback" aria-hidden="true">' +
+      escapeHtml(product.icon || '▦') +
+      '</span>'
+    );
+  }
+
+  function photoManualHtml() {
+    return (
+      '<details class="dash-photo-manual">' +
+      '<summary>Where do my photos show? (quick guide)</summary>' +
+      '<div class="dash-photo-manual-body">' +
+      '<ol class="dash-photo-manual-steps">' +
+      '<li><strong>Add photos</strong> — choose several at once, or add one by one. Up to 6 square photos.</li>' +
+      '<li><strong>Cover photo</strong> — the first one (badge “Card”) is the shop listing thumbnail.</li>' +
+      '<li><strong>Details gallery</strong> — big photo on the left; thumbnails underneath for every image.</li>' +
+      '<li><strong>Highlights</strong> — short feature labels (e.g. Easily Digestible) show as chips under the photo.</li>' +
+      '<li><strong>Size</strong> — square only. Card: <strong>1000 × 1000 px</strong>. Details: <strong>1600 × 1600 px</strong>.</li>' +
+      '</ol>' +
+      '<div class="dash-photo-map" aria-hidden="true">' +
+      '<div class="dash-photo-map-card">' +
+      '<span class="dash-photo-map-label">Shop card</span>' +
+      '<div class="dash-photo-map-frame is-card"><span>1</span></div>' +
+      '<p>Cover only<br>1000 × 1000</p>' +
+      '</div>' +
+      '<div class="dash-photo-map-arrow">→</div>' +
+      '<div class="dash-photo-map-card">' +
+      '<span class="dash-photo-map-label">Details page</span>' +
+      '<div class="dash-photo-map-frame is-detail"><span>1</span><span>2</span><span>3</span></div>' +
+      '<p>Main + thumbs<br>1600 × 1600</p>' +
+      '</div>' +
+      '</div>' +
+      '<p class="dash-product-hint">Tip: photo 1 = hero shot customers see first. Photos 2–3 = packing, size, or serving.</p>' +
+      '</div></details>'
+    );
+  }
+
+  function photoStripHtml(images) {
+    if (!images.length) {
+      return '<p class="dash-product-hint" data-photo-empty>No photos yet — add your first square photo below.</p>';
+    }
+    return (
+      '<ul class="dash-photo-strip" data-photo-strip>' +
+      images
+        .map(function (src, index) {
+          return (
+            '<li class="dash-photo-chip' +
+            (index === 0 ? ' is-cover' : '') +
+            '">' +
+            '<img src="' +
+            escapeHtml(src) +
+            '" alt="Photo ' +
+            (index + 1) +
+            '">' +
+            '<span class="dash-photo-chip-badge">' +
+            (index === 0 ? 'Card' : 'Gallery') +
+            '</span>' +
+            '<div class="dash-photo-chip-actions">' +
+            (index === 0
+              ? ''
+              : '<button type="button" class="btn btn-secondary btn-sm" data-photo-cover="' +
+                index +
+                '">Make card photo</button>') +
+            '<button type="button" class="btn btn-secondary btn-sm" data-photo-save="' +
+            index +
+            '">Save image</button>' +
+            '<button type="button" class="btn btn-secondary btn-sm" data-photo-remove="' +
+            index +
+            '">Remove</button>' +
+            '</div></li>'
+          );
+        })
+        .join('') +
+      '</ul>'
+    );
+  }
+
+  function guessImageExt(src) {
+    if (/^data:image\/jpeg/i.test(src) || /^data:image\/jpg/i.test(src)) return 'jpg';
+    if (/^data:image\/webp/i.test(src)) return 'webp';
+    if (/\.jpe?g(\?|$)/i.test(src)) return 'jpg';
+    if (/\.webp(\?|$)/i.test(src)) return 'webp';
+    return 'png';
+  }
+
+  /** Download one product photo to the device (works for data URLs and http images). */
+  function saveProductImage(src, product, index) {
+    if (!src) return;
+    var base =
+      ((product && product.name) || 'product')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'product';
+    var filename = base + '-photo-' + (index + 1) + '.' + guessImageExt(src);
+
+    if (src.indexOf('data:') === 0) {
+      var link = document.createElement('a');
+      link.href = src;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+
+    if (D && typeof D.downloadQrImage === 'function') {
+      D.downloadQrImage(src, filename);
+      return;
+    }
+
+    fetch(src)
+      .then(function (res) {
+        return res.blob();
+      })
+      .then(function (blob) {
+        var objectUrl = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+      })
+      .catch(function () {
+        window.open(src, '_blank', 'noopener');
+      });
+  }
+
+  function featureRowsHtml(features) {
+    return features
+      .map(function (f, index) {
+        return (
+          '<li class="dash-feature-row">' +
+          '<div class="dash-product-field">' +
+          (index === 0 ? '<label>Label</label>' : '') +
+          '<input type="text" data-feature-label="' +
+          index +
+          '" value="' +
+          escapeHtml(f.label) +
+          '" placeholder="e.g. Brand" aria-label="Feature label ' +
+          (index + 1) +
+          '">' +
+          '</div>' +
+          '<div class="dash-product-field">' +
+          (index === 0 ? '<label>Detail</label>' : '') +
+          '<input type="text" data-feature-value="' +
+          index +
+          '" value="' +
+          escapeHtml(f.value) +
+          '" placeholder="e.g. Your brand name" aria-label="Feature detail ' +
+          (index + 1) +
+          '">' +
+          '</div>' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-feature-remove="' +
+          index +
+          '" aria-label="Remove feature ' +
+          (index + 1) +
+          '">Remove</button>' +
+          '</li>'
+        );
+      })
+      .join('');
+  }
+
+  function productEditorHtml(product) {
+    var features = productFeatureList(product);
+    var images = syncProductCover(product);
+    var samples = FEATURE_SAMPLES.map(function (sample) {
+      return (
+        '<button type="button" class="dash-feature-sample" data-feature-sample="' +
+        escapeHtml(sample.label) +
+        '">+ ' +
+        escapeHtml(sample.label) +
+        '</button>'
+      );
+    }).join('');
+
+    return (
+      '<div class="dash-product-editor" data-product-editor="' +
+      escapeHtml(product.id) +
+      '">' +
+      photoManualHtml() +
+      '<div class="dash-product-photos">' +
+      '<div class="dash-product-field">' +
+      '<label>Product photos</label>' +
+      '<p class="dash-product-hint">Pick <strong>multiple files together</strong>, or add them one by one. First photo = shop card; rest = details gallery.</p>' +
+      '</div>' +
+      photoStripHtml(images) +
+      '<div class="dash-product-photo-row">' +
+      '<div class="dash-product-field" style="flex:1;min-width:12rem">' +
+      '<label class="sr-only" for="dash-photo-' +
+      escapeHtml(product.id) +
+      '">Add product photos</label>' +
+      '<input id="dash-photo-' +
+      escapeHtml(product.id) +
+      '" type="file" accept="image/png,image/jpeg,image/webp" multiple data-product-photo aria-label="Add photos for ' +
+      escapeHtml(product.name || 'product') +
+      '">' +
+      '<p class="dash-product-hint">Square photos · Card <strong>1000 × 1000</strong> · Details <strong>1600 × 1600</strong> · PNG, JPEG, or WebP · max 6</p>' +
+      '</div></div></div>' +
+      '<div class="dash-product-field">' +
+      '<label for="dash-desc-' +
+      escapeHtml(product.id) +
+      '">Short description</label>' +
+      '<textarea id="dash-desc-' +
+      escapeHtml(product.id) +
+      '" data-product-description placeholder="What makes this product special?">' +
+      escapeHtml(product.description || '') +
+      '</textarea>' +
+      '</div>' +
+      '<div>' +
+      '<div class="dash-product-field"><label>Product features</label></div>' +
+      '<p class="dash-product-hint">Tap a sample, then edit the words for your product.</p>' +
+      '<div class="dash-feature-samples">' +
+      samples +
+      '</div>' +
+      '<ul class="dash-feature-rows" data-feature-rows>' +
+      featureRowsHtml(features) +
+      '</ul>' +
+      '<button type="button" class="btn btn-secondary btn-sm" data-feature-add style="margin-top:0.5rem">Add row</button>' +
+      '</div>' +
+      '<div class="dash-product-field">' +
+      '<label for="dash-ig-' +
+      escapeHtml(product.id) +
+      '">Instagram (optional)</label>' +
+      '<input id="dash-ig-' +
+      escapeHtml(product.id) +
+      '" type="text" data-product-instagram value="' +
+      escapeHtml(product.instagramUrl || '') +
+      '" placeholder="@yourshop or https://instagram.com/p/…">' +
+      '<p class="dash-product-hint">Link a reel or profile so customers can see how you make or use this product.</p>' +
+      '</div>' +
+      '<div class="dash-product-editor-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-product-save>Save details</button>' +
+      '<a class="btn btn-secondary btn-sm" href="store.html?view=product&amp;product=' +
+      encodeURIComponent(product.id) +
+      '" target="_blank" rel="noopener">Preview on shop</a>' +
+      '<span class="dash-product-saved" data-product-saved hidden>Saved — opens on your shop</span>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function persistStore() {
+    if (!state.store) return;
+    if (D && typeof D.saveDraft === 'function') D.saveDraft(state.store);
+    if (API && typeof API.saveRelease === 'function') {
+      try {
+        API.saveRelease(state.store);
+      } catch (e) {
+        /* prototype: draft save is enough */
+      }
+    }
+  }
+
+  function findStoreProduct(productId) {
+    return ((state.store && state.store.products) || []).find(function (p) {
+      return String(p.id) === String(productId);
+    });
+  }
+
+  function readFeatureRows(editor) {
+    var labels = editor.querySelectorAll('[data-feature-label]');
+    var rows = [];
+    labels.forEach(function (input) {
+      var index = input.getAttribute('data-feature-label');
+      var valueInput = editor.querySelector('[data-feature-value="' + index + '"]');
+      rows.push({
+        label: (input.value || '').trim(),
+        value: valueInput ? (valueInput.value || '').trim() : ''
+      });
+    });
+    return rows.filter(function (row) {
+      return row.label || row.value;
+    });
+  }
+
+  function bindProductEditor(editor, product) {
+    var rowsEl = editor.querySelector('[data-feature-rows]');
+
+    function rerenderRows(features) {
+      if (!rowsEl) return;
+      rowsEl.innerHTML = featureRowsHtml(features.length ? features : [{ label: '', value: '' }]);
+    }
+
+    editor.querySelectorAll('[data-feature-sample]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var label = btn.getAttribute('data-feature-sample');
+        var sample = FEATURE_SAMPLES.find(function (item) {
+          return item.label === label;
+        });
+        if (!sample) return;
+        var rows = readFeatureRows(editor);
+        var existing = rows.find(function (row) {
+          return row.label.toLowerCase() === sample.label.toLowerCase();
+        });
+        if (existing) {
+          if (!existing.value) existing.value = sample.value;
+        } else {
+          rows.push({ label: sample.label, value: sample.value });
+        }
+        rerenderRows(rows);
+      });
+    });
+
+    var MAX_PRODUCT_PHOTOS = 6;
+
+    editor.addEventListener('click', function (event) {
+      var add = event.target.closest('[data-feature-add]');
+      var remove = event.target.closest('[data-feature-remove]');
+      var coverBtn = event.target.closest('[data-photo-cover]');
+      var savePhoto = event.target.closest('[data-photo-save]');
+      var removePhoto = event.target.closest('[data-photo-remove]');
+      if (add) {
+        var rows = readFeatureRows(editor);
+        rows.push({ label: '', value: '' });
+        rerenderRows(rows);
+      }
+      if (remove) {
+        var idx = Number(remove.getAttribute('data-feature-remove'));
+        var next = readFeatureRows(editor).filter(function (_row, i) {
+          return i !== idx;
+        });
+        rerenderRows(next);
+      }
+      if (coverBtn) {
+        var coverIdx = Number(coverBtn.getAttribute('data-photo-cover'));
+        var coverList = productImages(product);
+        if (coverIdx > 0 && coverIdx < coverList.length) {
+          var moved = coverList.splice(coverIdx, 1)[0];
+          coverList.unshift(moved);
+          product.images = coverList;
+          syncProductCover(product);
+          persistStore();
+          renderProducts();
+        }
+      }
+      if (savePhoto) {
+        var saveIdx = Number(savePhoto.getAttribute('data-photo-save'));
+        var saveList = productImages(product);
+        if (saveIdx >= 0 && saveIdx < saveList.length) {
+          saveProductImage(saveList[saveIdx], product, saveIdx);
+        }
+      }
+      if (removePhoto) {
+        var removeIdx = Number(removePhoto.getAttribute('data-photo-remove'));
+        var nextImages = productImages(product).filter(function (_src, i) {
+          return i !== removeIdx;
+        });
+        product.images = nextImages;
+        syncProductCover(product);
+        persistStore();
+        renderProducts();
+      }
+    });
+
+    var photoInput = editor.querySelector('[data-product-photo]');
+    if (photoInput) {
+      photoInput.addEventListener('change', function () {
+        var files = photoInput.files ? Array.prototype.slice.call(photoInput.files) : [];
+        photoInput.value = '';
+        if (!files.length) return;
+        var current = productImages(product);
+        var room = Math.max(0, MAX_PRODUCT_PHOTOS - current.length);
+        if (!room) {
+          window.alert('You can add up to ' + MAX_PRODUCT_PHOTOS + ' photos per product.');
+          return;
+        }
+        var batch = files.slice(0, room);
+        var pending = batch.length;
+        batch.forEach(function (file) {
+          if (!file.type || file.type.indexOf('image/') !== 0) {
+            pending -= 1;
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var src = String(reader.result || '');
+            if (src) current.push(src);
+            pending -= 1;
+            if (pending <= 0) {
+              product.images = current.slice(0, MAX_PRODUCT_PHOTOS);
+              syncProductCover(product);
+              persistStore();
+              renderProducts();
+            }
+          };
+          reader.onerror = function () {
+            pending -= 1;
+            if (pending <= 0) {
+              product.images = current.slice(0, MAX_PRODUCT_PHOTOS);
+              syncProductCover(product);
+              persistStore();
+              renderProducts();
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+      });
+    }
+
+    var saveBtn = editor.querySelector('[data-product-save]');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        var desc = editor.querySelector('[data-product-description]');
+        var ig = editor.querySelector('[data-product-instagram]');
+        product.description = desc ? desc.value.trim() : '';
+        product.features = readFeatureRows(editor).filter(function (row) {
+          return row.label && row.value;
+        });
+        product.instagramUrl = ig ? ig.value.trim() : '';
+        persistStore();
+        var saved = editor.querySelector('[data-product-saved]');
+        if (saved) {
+          saved.hidden = false;
+          window.setTimeout(function () {
+            saved.hidden = true;
+          }, 2200);
+        }
+      });
+    }
+  }
+
   function renderProducts() {
     var products = state.store.products || [];
     var list = qs('products-list');
@@ -692,21 +1160,53 @@
             ? D.minPrice(p)
             : (p.variants && p.variants[0] && p.variants[0].price) || '—';
         var skuCount = (p.variants && p.variants.length) || 0;
+        var open = String(openProductId) === String(p.id);
         return (
-          '<li class="dash-product-item">' +
-          '<div><div class="dash-product-name">' +
+          '<li class="dash-product-item' +
+          (open ? ' is-open' : '') +
+          '" data-product-id="' +
+          escapeHtml(p.id) +
+          '">' +
+          '<button type="button" class="dash-product-summary" data-product-toggle="' +
+          escapeHtml(p.id) +
+          '" aria-expanded="' +
+          (open ? 'true' : 'false') +
+          '">' +
+          '<span class="dash-product-summary-main">' +
+          productThumbHtml(p) +
+          '<span><span class="dash-product-name">' +
           escapeHtml(p.name || 'Untitled') +
-          '</div><div class="dash-product-meta">' +
+          '</span><span class="dash-product-meta">' +
           skuCount +
-          ' SKU' +
+          ' size' +
           (skuCount === 1 ? '' : 's') +
-          '</div></div>' +
-          '<div class="dash-product-price">From ₹' +
+          (productImages(p).length ? '' : ' · Add photos') +
+          '</span></span></span>' +
+          '<span style="display:flex;align-items:center;gap:0.65rem">' +
+          '<span class="dash-product-price">From ₹' +
           escapeHtml(String(from)) +
-          '</div></li>'
+          '</span>' +
+          '<span class="dash-product-chevron" aria-hidden="true">▾</span>' +
+          '</span></button>' +
+          (open ? productEditorHtml(p) : '') +
+          '</li>'
         );
       })
       .join('');
+
+    list.querySelectorAll('[data-product-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-product-toggle');
+        openProductId = String(openProductId) === String(id) ? null : id;
+        renderProducts();
+      });
+    });
+
+    var openEditor = list.querySelector('[data-product-editor]');
+    if (openEditor && openProductId) {
+      var product = findStoreProduct(openProductId);
+      if (product) bindProductEditor(openEditor, product);
+    }
   }
 
   function renderStore() {

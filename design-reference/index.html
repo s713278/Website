@@ -26,7 +26,7 @@
 
             <nav class="nav-links" aria-label="Primary">
                 <a href="#about">About Us</a>
-                <a href="#explore">Search Stores</a>
+                <a href="search.html">Neighbourhood Market</a>
                 <a href="store.html">Store Demo</a>
                 <a href="#features">Features</a>
                 <a href="#pricing">Pricing</a>
@@ -57,7 +57,7 @@
 
         <div class="container mobile-nav" id="mobile-menu">
             <a href="#about">About Us</a>
-            <a href="#explore">Search Stores</a>
+            <a href="search.html">Neighbourhood Market</a>
             <a href="store.html">Store Demo</a>
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
@@ -328,12 +328,12 @@
             </div>
         </section>
 
-        <!-- Explore stores -->
+        <!-- Explore stores → Neighbourhood Market -->
         <section class="section section-alt" id="explore">
             <div class="container">
                 <div class="section-head">
-                    <h2>Explore Stores on MithraDirect</h2>
-                    <p>Discover neighbourhood brands — or search for stores near you.</p>
+                    <h2>Your neighbourhood market</h2>
+                    <p>Support independent kitchens, farms, and makers nearby — they keep every rupee.</p>
                 </div>
                 <div class="explore-layout">
                     <div class="store-carousel" id="store-results">
@@ -394,27 +394,30 @@
                     </div>
 
                     <aside class="search-panel">
-                        <h3>Discover Local Stores</h3>
-                        <p>Find vendors delivering to your area.</p>
-                        <form id="store-search-form" novalidate>
+                        <h3>Shops around you</h3>
+                        <p>WhatsApp orders · owners keep 100% · no marketplace cut.</p>
+                        <form id="store-search-form" action="search.html" method="get" novalidate>
                             <div class="field">
-                                <label for="search-address">Delivery address</label>
-                                <input type="text" id="search-address" name="address" placeholder="Enter your delivery address" autocomplete="street-address">
-                                <span class="field-hint">Area, landmark, or pincode</span>
+                                <label for="search-address">Near</label>
+                                <input type="text" id="search-address" name="address" placeholder="Area, landmark, or pincode" autocomplete="street-address">
+                                <span class="field-hint">We’ll show local owners delivering nearby</span>
                             </div>
-                            <button type="button" id="use-location-btn" class="btn btn-secondary btn-block" style="margin-bottom:0.75rem;">Use Current Location</button>
-                            <button type="submit" class="btn btn-primary btn-block">Search Stores</button>
+                            <button type="button" id="use-location-btn" class="btn btn-secondary btn-block" style="margin-bottom:0.75rem;">Near me</button>
+                            <button type="submit" class="btn btn-primary btn-block">Find shops near me</button>
                         </form>
+                        <p style="margin:0.85rem 0 0;font-size:0.85rem;">
+                            <a href="search.html" style="color:var(--md-green-dark);font-weight:600;">See the neighbourhood market →</a>
+                        </p>
                     </aside>
                 </div>
 
                 <div class="category-row" aria-label="Popular categories">
-                    <a href="#explore" class="category-chip"><div class="emoji">🥛</div><span>Milk &amp; Dairy</span></a>
-                    <a href="#explore" class="category-chip"><div class="emoji">🥬</div><span>Vegetables</span></a>
-                    <a href="#explore" class="category-chip"><div class="emoji">🍲</div><span>Home Food</span></a>
-                    <a href="#explore" class="category-chip"><div class="emoji">🌿</div><span>Organic</span></a>
-                    <a href="#explore" class="category-chip"><div class="emoji">🥐</div><span>Bakeries</span></a>
-                    <a href="#explore" class="category-chip"><div class="emoji">🛠️</div><span>Services</span></a>
+                    <a href="search.html?cat=dairy" class="category-chip"><div class="emoji">🥛</div><span>Milk &amp; Dairy</span></a>
+                    <a href="search.html?cat=produce" class="category-chip"><div class="emoji">🥬</div><span>Vegetables</span></a>
+                    <a href="search.html?cat=home-food" class="category-chip"><div class="emoji">🍲</div><span>Home Food</span></a>
+                    <a href="search.html?cat=produce" class="category-chip"><div class="emoji">🌿</div><span>Organic</span></a>
+                    <a href="search.html?cat=bakery" class="category-chip"><div class="emoji">🥐</div><span>Bakeries</span></a>
+                    <a href="search.html?cat=crafts" class="category-chip"><div class="emoji">🛠️</div><span>Handmade</span></a>
                 </div>
             </div>
         </section>

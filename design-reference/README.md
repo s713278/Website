@@ -4,11 +4,12 @@ Frozen snapshots of the original MithraDirect static pages. Use these while rebu
 
 | File | Surface |
 |------|---------|
-| `index.html` | Marketing homepage (hero, product loop) |
+| `index.html` | Marketing homepage (hero, product loop; `#explore` tees into market search) |
+| `search.html` | Neighbourhood Market — local discovery for independent owners |
 | `index_backup.html` | Older homepage variant |
 | `store.html` | Customer storefront (incl. sample Order History + Chat with Owner) |
 | `onboarding.html` | Vendor setup / onboarding |
-| `dashboard.html` | Vendor dashboard |
+| `dashboard.html` | Vendor dashboard (`#products` = photo / features / Instagram UX reference) |
 | `privacy.html` | Privacy policy |
 | `terms-conditions.html` | Terms |
 

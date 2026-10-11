@@ -55,6 +55,13 @@
     });
   }
 
+  function goToMarket(address) {
+    var url = 'search.html';
+    var value = (address || '').trim();
+    if (value) url += '?address=' + encodeURIComponent(value);
+    window.location.href = url;
+  }
+
   function initSearchForm() {
     var form = $('#store-search-form');
     if (!form) return;
@@ -62,24 +69,14 @@
       e.preventDefault();
       var input = $('#search-address');
       var value = (input && input.value || '').trim();
-      if (!value) {
-        showToast('Enter a delivery address to search nearby stores');
-        if (input) input.focus();
-        return;
-      }
-      var explore = $('#explore');
-      if (explore) explore.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      showToast('Showing stores near “' + value + '”');
-      $all('.store-card').forEach(function (card, i) {
-        card.style.outline = i === 0 ? '2px solid #10b981' : '';
-      });
+      goToMarket(value || '');
     });
 
     var locBtn = $('#use-location-btn');
     if (locBtn) {
       locBtn.addEventListener('click', function () {
         if (!navigator.geolocation) {
-          showToast('Location is not supported in this browser');
+          showToast('Location is not supported — enter an area instead');
           return;
         }
         locBtn.disabled = true;
@@ -87,14 +84,14 @@
         navigator.geolocation.getCurrentPosition(
           function () {
             var input = $('#search-address');
-            if (input) input.value = 'Current location';
+            if (input) input.value = 'Koramangala, Bengaluru';
             locBtn.disabled = false;
-            locBtn.textContent = 'Use Current Location';
-            showToast('Location detected — search nearby stores');
+            locBtn.textContent = 'Near me';
+            goToMarket(input ? input.value : 'Koramangala, Bengaluru');
           },
           function () {
             locBtn.disabled = false;
-            locBtn.textContent = 'Use Current Location';
+            locBtn.textContent = 'Near me';
             showToast('Could not access location. Enter an address instead.');
           },
           { timeout: 8000 }

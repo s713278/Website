@@ -1124,7 +1124,12 @@
     draft.meta = { source: 'api', version: 1, fetchedAt: new Date().toISOString() };
 
     draft.settings.storeName = src.business_name || '';
-    draft.settings.tagline = src.tagline || firstLine(src.description, 88);
+    draft.settings.tagline =
+      src.tagline != null && String(src.tagline).trim() !== ''
+        ? String(src.tagline).trim()
+        : src.tagline === ''
+          ? ''
+          : firstLine(src.description, 88);
     draft.settings.description = src.description || '';
     draft.settings.location = src.business_location || '';
     draft.settings.whatsapp = src.support_whatsapp_number || src.order_whatsapp_number || '';
@@ -1157,10 +1162,12 @@
     }
 
     draft.categories = cats.map(function (c, i) {
+      var iconUrl = isUsableMediaUrl(c.icon);
       return {
         id: String(c.id != null ? c.id : 'cat-' + i),
         name: c.name || 'Category',
-        image: isUsableMediaUrl(c.image_path || c.image),
+        image: isUsableMediaUrl(c.image_path || c.image) || iconUrl,
+        iconUrl: iconUrl,
         icon: categoryIconForName(c.name),
         description: c.description || ''
       };
@@ -1344,28 +1351,196 @@
   }
 
   /**
-   * Default static demo storefront (store.html) — Geeta's Kitchen
-   * Matches the WhatsApp checkout screen reference.
+   * Live reference storefront: SRK Traditional Foods and Pickles
+   * Mirrors GET /v1/vendors/srk_store/storefront (+ catalog products).
+   * Customer chrome is vendor-owned; no platform logo / socials.
    */
-  function seedStaticStorefront() {
-    var draft = seedGeetaKitchenDraft();
+  function seedSrkApiPayload() {
+    return {
+      vendor_id: 273,
+      store_identifier: 'srk_store',
+      business_name: 'SRK Traditional Foods and Pickles',
+      description:
+        'SRK Traditional Foods & Pickles brings you the authentic taste of traditional homemade Indian foods, prepared with carefully selected ingredients and time-honored recipes. From flavorful pickles to traditional food specialties, every product is made with a focus on freshness, quality, hygiene, and genuine homemade taste.',
+      tagline: '',
+      banner_image:
+        'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/SRK_Home_Banner.webp',
+      thumbnail_image:
+        'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/SRK_Logo.png.webp',
+      verified: true,
+      theme: {
+        primary_color: '#10b981',
+        accent_color: '#65a30d',
+        background_color: '#f0fdf4',
+        text_color: '#111827',
+        font_family: 'Outfit',
+        button_shape: 'ROUNDED',
+        card_style: 'BORDER',
+        theme_preset: 'FRESH'
+      },
+      hero_badges: ['Local business', 'Order direct'],
+      business_location: 'Hyderabad, Telangana',
+      fulfillment: {
+        home_delivery_available: true,
+        store_pickup_available: false,
+        delivery_message: 'Home delivery'
+      },
+      trust_strip: [
+        { icon: 'shield', title: 'Hygienic & safe', subtitle: 'Prepared with care' },
+        { icon: 'map-pin', title: 'Local business', subtitle: 'Made nearby' }
+      ],
+      categories: [
+        {
+          id: 152,
+          name: 'Pickles',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-pickles/mango-pickle.webp',
+          icon: 'https://img.icons8.com/external-isometric-vectorslab/68/external-Jam-Bottle-china-new-year-isometric-vectorslab-3.png'
+        },
+        {
+          id: 153,
+          name: 'Spice Powders',
+          image_path:
+            'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/catalog/traditional/traditional-spice-powders/karam-podi.webp',
+          icon: 'https://img.icons8.com/3d-fluency/94/chili-pepper.png'
+        }
+      ],
+      order_whatsapp_number: '+917207200863',
+      support_whatsapp_number: '+917207200863'
+    };
+  }
+
+  function seedSrkDraft() {
+    var draft = fromVendorStorefront(seedSrkApiPayload());
+    // Banner creative already carries the slogan — keep hero text vendor-clean.
+    draft.settings.tagline = '';
+    draft.settings.richBanner = true;
+    draft.settings.instagramUrl = '';
+    draft.settings.youtubeUrl = '';
+    draft.settings.facebookUrl = '';
+    draft.meta.source = 'seed';
     draft.isStatic = true;
+    draft.isSample = false;
+    draft.slug = 'srk_store';
+
+    function sku(id, label, price, mrp) {
+      return {
+        id: String(id),
+        label: label,
+        price: price,
+        mrp: mrp != null ? mrp : price,
+        active: true
+      };
+    }
+
+    draft.products = [
+      {
+        id: '418',
+        name: 'Amla Pickle',
+        image:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Original_Amla_Pickle.webp',
+        icon: '🫙',
+        color: PRODUCT_COLORS[0],
+        order: 0,
+        categoryId: '152',
+        rating: 4.8,
+        reviews: 42,
+        description:
+          'Amla Pickle is handcrafted using carefully selected ingredients, authentic family recipes and hygienic preparation methods.',
+        popular: true,
+        variants: [
+          sku(4153, '500 gr', 245, 250),
+          sku(4152, '1 KG', 450, 500),
+          sku(4453, '2 KG', 450, 500)
+        ]
+      },
+      {
+        id: '423',
+        name: 'Biryani Masala',
+        image:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Biryani_Masala.webp',
+        icon: '🌶️',
+        color: PRODUCT_COLORS[1],
+        order: 1,
+        categoryId: '153',
+        rating: 4.7,
+        reviews: 18,
+        description:
+          'Biryani Masala is handcrafted using carefully selected ingredients and authentic family recipes.',
+        popular: true,
+        variants: [sku(4404, '1 pcs', 30, 30)]
+      },
+      {
+        id: '424',
+        name: 'Coriander Powder',
+        image:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Corinder_Powder.webp',
+        icon: '🌶️',
+        color: PRODUCT_COLORS[2],
+        order: 2,
+        categoryId: '153',
+        rating: 4.6,
+        reviews: 12,
+        description: 'Freshly ground coriander powder for everyday cooking.',
+        popular: true,
+        variants: [sku(4502, '500 gr', 5, 5), sku(4405, '1 kg', 10, 12)]
+      },
+      {
+        id: '419',
+        name: 'Garlic Pickle',
+        image:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Garlick_Picklet.webp',
+        icon: '🫙',
+        color: PRODUCT_COLORS[3],
+        order: 3,
+        categoryId: '152',
+        rating: 4.8,
+        reviews: 31,
+        description: 'Garlic Pickle prepared in small batches with traditional recipes.',
+        popular: true,
+        variants: [sku(4407, '500 gr', 150, 150), sku(4406, '1 kg', 300, 330)]
+      },
+      {
+        id: '432',
+        name: 'Mixed Vegetable Pickle',
+        image:
+          'https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/Mixed_Vegetable_Pickle.webp',
+        icon: '🫙',
+        color: PRODUCT_COLORS[4],
+        order: 4,
+        categoryId: '152',
+        rating: 4.7,
+        reviews: 22,
+        description: 'Mixed vegetable pickle with authentic homemade taste.',
+        popular: true,
+        variants: [sku(4602, '500 gr', 210, 220)]
+      }
+    ];
+
+    draft.categories = draft.categories.map(function (c) {
+      var iconUrl =
+        c.id === '152'
+          ? 'https://img.icons8.com/external-isometric-vectorslab/68/external-Jam-Bottle-china-new-year-isometric-vectorslab-3.png'
+          : 'https://img.icons8.com/3d-fluency/94/chili-pepper.png';
+      return Object.assign({}, c, { image: c.image || iconUrl, iconUrl: iconUrl });
+    });
+
     draft.addresses = [
       {
         id: 'home',
         label: 'Home',
-        line: 'Flat 302, Green Residency, Gachibowli, Hyderabad 500032'
-      },
-      {
-        id: 'work',
-        label: 'Work',
-        line: 'HITEC City, Madhapur, Hyderabad 500081'
+        line: 'Hyderabad, Telangana'
       }
     ];
     draft.settings.address = draft.addresses[0].line;
-    draft.settings.addressWork = draft.addresses[1].line;
-    draft.settings.richBanner = true;
     return draft;
+  }
+
+  /**
+   * Default static demo storefront (store.html) — SRK (live reference).
+   */
+  function seedStaticStorefront() {
+    return seedSrkDraft();
   }
 
   /** Sample storefront: Geeta's Kitchen (reference demo) */
@@ -1398,6 +1573,9 @@
         deliveryInfo:
           opts.deliveryInfo ||
           'Home delivery available in Hyderabad. Orders prepared fresh the same day.',
+        features: opts.features || [],
+        instagramUrl: opts.instagramUrl || '',
+        images: opts.images || (opts.image ? [opts.image] : []),
         popular: !!opts.popular,
         variants: opts.variants
       };
@@ -1432,6 +1610,15 @@
         popular: true,
         description: 'Sun-cured Andhra avakaya — Homely Food, Pure Taste. 100% homemade.',
         ingredients: 'Raw mango, mustard oil, chilli powder, fenugreek, salt',
+        image: IMG.fallbacks.fresh,
+        images: [IMG.fallbacks.fresh, IMG.fallbacks.cup, IMG.fallbacks.flower, IMG.fallbacks.batch],
+        features: [
+          { label: 'Brand', value: "Geeta's Kitchen" },
+          { label: 'Easily Digestible', value: 'Light on the stomach' },
+          { label: 'Health Benefits', value: 'No artificial colours' },
+          { label: 'How to Use', value: 'Perfect with rice, curd rice, or parathas' }
+        ],
+        instagramUrl: 'https://www.instagram.com/geetas.kitchen/',
         variants: pickleSkus('sku_ava', 160)
       }),
       product({
@@ -1619,6 +1806,12 @@
         deliveryInfo:
           opts.deliveryInfo ||
           'Home delivery available in Guntur, AP. Orders prepared fresh in small batches.',
+        /** Simple label/value lines — vendor dashboard #products UX reference */
+        features: opts.features || [],
+        /** Product marketing / usage Instagram link (distinct from store settings) */
+        instagramUrl: opts.instagramUrl || '',
+        /** Gallery: first image is the shop-card cover */
+        images: opts.images || (opts.image ? [opts.image] : []),
         popular: !!opts.popular,
         variants: opts.variants
       };
@@ -1651,6 +1844,15 @@
         popular: true,
         description: 'Sun-cured Andhra avakaya-style mango pickle — Amma chethi ruchi, pure & natural.',
         ingredients: 'Raw mango, mustard oil, chilli powder, fenugreek, salt',
+        image: IMG.fallbacks.fresh,
+        images: [IMG.fallbacks.fresh, IMG.fallbacks.cup, IMG.fallbacks.flower, IMG.fallbacks.batch],
+        features: [
+          { label: 'Brand', value: "Sai Ram Home Foods" },
+          { label: 'Easily Digestible', value: 'Traditional small-batch recipe' },
+          { label: 'Health Benefits', value: 'No artificial colours' },
+          { label: 'How to Use', value: 'Perfect with rice, curd rice, or parathas' }
+        ],
+        instagramUrl: 'https://www.instagram.com/sairamhomefoods/',
         variants: pickleSkus('sku_mango', 160)
       }),
       product({
@@ -1664,6 +1866,11 @@
         popular: true,
         description: 'Tangy gongura pickle made fresh in small batches with traditional Telugu spices.',
         ingredients: 'Gongura leaves, chilli, garlic, mustard oil, salt',
+        features: [
+          { label: 'Brand', value: "Sai Ram Home Foods" },
+          { label: 'How to Use', value: 'Best within 3 days of opening' }
+        ],
+        instagramUrl: 'https://www.instagram.com/sairamhomefoods/',
         variants: pickleSkus('sku_gongura', 150)
       }),
       product({
@@ -2451,6 +2658,8 @@
     isVendorStorefrontPayload: isVendorStorefrontPayload,
     seedSvadaApiPayload: seedSvadaApiPayload,
     seedSvadaDraft: seedSvadaDraft,
+    seedSrkApiPayload: seedSrkApiPayload,
+    seedSrkDraft: seedSrkDraft,
     emptyDraft: emptyDraft,
     defaultSubscription: defaultSubscription,
     seedPickleDraft: seedPickleDraft,

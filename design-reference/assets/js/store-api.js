@@ -132,6 +132,15 @@
     if (key === 'sai-ram' || key === 'sai-ram-home-foods') {
       return D.seedSaiRamDraft();
     }
+    if (key === 'geetas-kitchen' || key === 'geeta') {
+      var geeta = D.seedGeetaKitchenDraft();
+      geeta.isStatic = true;
+      geeta.meta = Object.assign({}, geeta.meta, { source: 'seed' });
+      return geeta;
+    }
+    if (key === 'srk' || key === 'srk_store' || key === 'srk-traditional-foods') {
+      return D.seedSrkDraft();
+    }
     return D.seedStaticStorefront();
   }
 
@@ -153,7 +162,13 @@
         (onboarding.products || []).length);
 
     // Explicit brand/demo seed (always refreshes demo catalog)
-    if (brand || slug === 'geetas-kitchen' || slug === 'sai-ram-home-foods') {
+    if (
+      brand ||
+      slug === 'geetas-kitchen' ||
+      slug === 'sai-ram-home-foods' ||
+      slug === 'srk_store' ||
+      slug === 'srk'
+    ) {
       var seeded = normalizeRelease(seedByBrand(brand || slug));
       seeded.meta.source = 'seed';
       saveRelease(seeded);
@@ -182,9 +197,14 @@
       if (!slug || slug === cached.slug) {
         // Keep demo seeds in sync with latest seed catalog / contact number
         if (cached.meta && cached.meta.source === 'seed') {
-          var refreshed = normalizeRelease(seedByBrand(cached.slug || 'geetas-kitchen'));
+          // Default store.html reference is SRK; migrate older Geeta default caches.
+          var seedKey =
+            !slug && (!cached.slug || cached.slug === 'geetas-kitchen')
+              ? 'srk_store'
+              : cached.slug || 'srk_store';
+          var refreshed = normalizeRelease(seedByBrand(seedKey));
           refreshed.meta.source = 'seed';
-          if (cached.addresses && cached.addresses.length) {
+          if (cached.addresses && cached.addresses.length && seedKey !== 'srk_store') {
             refreshed.addresses = cached.addresses;
           }
           saveRelease(refreshed);
@@ -244,7 +264,7 @@
   function getRelease(opts) {
     opts = opts || {};
     var config = getConfig();
-    var slug = opts.slug || qs('slug') || 'geetas-kitchen';
+    var slug = opts.slug || qs('slug') || 'srk_store';
 
     if (!config.useRemote) {
       return Promise.resolve(getReleaseSync(opts));

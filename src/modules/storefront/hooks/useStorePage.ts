@@ -72,5 +72,15 @@ export function useStorePage(storeId: string, { network = 'network' }: { network
     return () => clearStoreTheme(root)
   }, [store])
 
+  useEffect(() => {
+    const name = store?.name?.trim()
+    if (!name) return
+    const previous = document.title
+    document.title = name
+    return () => {
+      document.title = previous
+    }
+  }, [store?.name])
+
   return { store, loading, error, wrapperRef }
 }
