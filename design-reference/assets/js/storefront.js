@@ -1535,6 +1535,30 @@
     return D.whatsappLink(wa, msg);
   }
 
+  /** Chat with Owner only while the order is still actionable (not delivered / cancelled). */
+  function canChatWithOwner(order) {
+    var tone = String((order && order.statusTone) || '').toLowerCase();
+    var status = String((order && order.status) || '').toLowerCase();
+    if (tone === 'delivered' || tone === 'cancelled') return false;
+    if (status === 'delivered' || status === 'cancelled') return false;
+    return true;
+  }
+
+  function chatWithOwnerBtnHtml(order, block) {
+    if (!canChatWithOwner(order)) return '';
+    return (
+      '<a class="order-chat-btn' +
+      (block ? ' is-block' : '') +
+      '" href="' +
+      escapeHtml(ownerChatHref(order)) +
+      '" target="_blank" rel="noopener" aria-label="Chat with Owner on WhatsApp about order ' +
+      escapeHtml(order.id) +
+      '">' +
+      WA_ICON +
+      ' Chat with Owner</a>'
+    );
+  }
+
   function sampleOrders() {
     var products = (state.draft && state.draft.products) || [];
     function pick(i, fallbackName, fallbackIcon) {
@@ -1613,6 +1637,22 @@
         discount: 10,
         delivery: 40,
         payment: 'Paid on delivery',
+        paymentLabel: 'Payment',
+        address: 'Mayuri Nagar, Road o-27F, Hyderabad, Rangareddy, Telangana 500049',
+        recipient: 'Swamy Kunta',
+        phone: '+91 9912149049'
+      },
+      {
+        id: '1964',
+        status: 'Cancelled',
+        statusTone: 'cancelled',
+        items: [
+          { name: d.name, icon: d.icon, image: d.image, unit: '250 gr', qty: 2, price: 120, mrp: 130 }
+        ],
+        itemTotalMrp: 260,
+        discount: 0,
+        delivery: 0,
+        payment: 'Not charged',
         paymentLabel: 'Payment',
         address: 'Mayuri Nagar, Road o-27F, Hyderabad, Rangareddy, Telangana 500049',
         recipient: 'Swamy Kunta',
@@ -1709,17 +1749,13 @@
           '</p>' +
           '</div>' +
           '</div>' +
-          '<div class="order-card-actions">' +
+          '<div class="order-card-actions' +
+          (canChatWithOwner(order) ? '' : ' is-single') +
+          '">' +
           '<button type="button" class="link-btn" data-order="' +
           escapeHtml(order.id) +
           '">View details</button>' +
-          '<a class="order-chat-btn" href="' +
-          escapeHtml(ownerChatHref(order)) +
-          '" target="_blank" rel="noopener" aria-label="Chat with Owner on WhatsApp about order ' +
-          escapeHtml(order.id) +
-          '">' +
-          WA_ICON +
-          ' Chat with Owner</a>' +
+          chatWithOwnerBtnHtml(order, false) +
           '</div>' +
           '</article>'
         );
@@ -1790,6 +1826,11 @@
       .join('');
 
     root.innerHTML =
+      '<div class="order-detail-nav">' +
+      '<button type="button" class="order-back-btn" data-nav="orders" aria-label="Back to My orders">' +
+      '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>' +
+      ' Back to orders</button>' +
+      '</div>' +
       '<div class="order-detail-banner">' +
       '<h2 class="store-brand-font">Order #' +
       escapeHtml(order.id) +
@@ -1846,12 +1887,9 @@
       '</div>';
 
     footer.innerHTML =
-      '<a class="order-chat-btn is-block" href="' +
-      escapeHtml(ownerChatHref(order)) +
-      '" target="_blank" rel="noopener">' +
-      WA_ICON +
-      ' Chat with Owner</a>' +
-      '<button type="button" class="btn-outline" data-nav="home">Continue shopping →</button>';
+      chatWithOwnerBtnHtml(order, true) +
+      '<button type="button" class="btn-outline" data-nav="orders">← Back to orders</button>' +
+      '<button type="button" class="link-btn order-detail-continue" data-nav="home">Continue shopping →</button>';
   }
 
   var eventsBound = false;

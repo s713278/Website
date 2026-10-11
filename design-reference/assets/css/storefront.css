@@ -2858,6 +2858,10 @@ body.addr-gate-open {
   border-top: 1px solid #f3f4f6;
 }
 
+.order-card-actions.is-single {
+  justify-content: flex-start;
+}
+
 .order-chat-btn {
   display: inline-flex;
   align-items: center;
@@ -2927,6 +2931,38 @@ body.addr-gate-open {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.order-detail-nav {
+  padding: 0 0.05rem;
+}
+
+.order-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.65rem 0.4rem 0.35rem;
+  margin: 0 0 0.15rem -0.35rem;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--store-theme, var(--md-green-dark)) 90%, #000);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border-radius: 0.65rem;
+}
+
+.order-back-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+
+.order-back-btn:hover {
+  background: color-mix(in srgb, var(--store-theme, #10b981) 10%, #fff);
+  text-decoration: underline;
 }
 
 .order-detail-banner {
@@ -3086,6 +3122,12 @@ body.addr-gate-open {
   min-height: 2.85rem;
   border-radius: 0.95rem;
   font-weight: 700;
+}
+
+.order-detail-footer .order-detail-continue {
+  align-self: center;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.5rem;
 }
 
 #view-orders.active ~ .cart-bar,
