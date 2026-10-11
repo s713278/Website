@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VendorContext } from '@/shared/api'
 import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
-import { invalidateVendorOnboardingState } from './onboarding-state-cache'
 import {
   invalidateVendorContext,
   contextSnapshotMayReplace,
@@ -96,18 +95,18 @@ describe('loadVendorContext', () => {
     await loadVendorContext('96', read)
     await loadVendorContext('97', read)
 
-    invalidateVendorOnboardingState('96')
+    invalidateVendorContext('96')
     expect(peekVendorContext('96')).toBeNull()
     expect(peekVendorContext('97')).not.toBeNull()
 
-    invalidateVendorOnboardingState()
+    invalidateVendorContext()
     expect(peekVendorContext('97')).toBeNull()
   })
 
   it('does not restore pre-write context when an older request finishes after invalidation', async () => {
     let resolveOld!: (value: VendorContext) => void
     const oldRead = loadVendorContext('96', () => new Promise((resolve) => { resolveOld = resolve }))
-    invalidateVendorOnboardingState('96')
+    invalidateVendorContext('96')
     const current = { ...contextFor('96'), vendorStatus: 'ACTIVE' }
     await loadVendorContext('96', async () => current)
 

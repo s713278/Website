@@ -11,37 +11,63 @@ import {
   StoreIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { authService, getErrorMessage, isLiveApi, vendorOnboardingService, type MeasurementCatalog } from '@/shared/api'
+import {
+  authService,
+  getErrorMessage,
+  isLiveApi,
+  vendorOnboardingService,
+  type MeasurementCatalog,
+  type VendorContext,
+} from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button } from '@/shared/components/ui'
+import { Button, LoadingSkeleton } from '@/shared/components/ui'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
 import {
-  buildResumeDraft,
-  isStoreSubmitted,
-  loadPlatformMeasurements,
-  resumePaymentDetails,
-  stepUsesMeasurementCatalog,
-  type ServerOnboardingState,
-} from '../../lib/onboarding-resume'
+  invalidateOnboardingResources,
+  peekOnboardingResource,
+  type OnboardingResourceData,
+} from '../../lib/onboarding-resource-cache'
 import {
-  invalidateVendorOnboardingState,
-  loadVendorOnboardingState,
-  peekVendorOnboardingState,
-} from '../../lib/onboarding-server-state'
+  accountResumeState,
+  applyBusinessType,
+  applyCategories,
+  applyCheckout,
+  applyProducts,
+  applyProfile,
+  applyResumeFrame,
+  applySkus,
+  backendResumeStep,
+  derivedResumeStep,
+  isStoreSubmitted,
+  loadAccountResource,
+  measurementCatalogsForResume,
+  resolveBusinessType,
+  resumeOrderWhatsapp,
+  resumePaymentDetails,
+  savedBusinessType,
+  stepLoadState,
+  stepResources,
+  type OnboardingResource,
+  type ResourceStatus,
+} from '../../lib/onboarding-resume'
+import { phonePreviewAccountParts, type PhonePreviewAccountParts } from '../../lib/phone-preview-catalog'
+import { loadStepResources } from '../../lib/onboarding-server-state'
 import { maskPhone } from '../../lib/onboarding-adapter'
 import {
+  GO_LIVE_RESOURCES,
   isLivePersistedStep,
   persistStep,
   resumedCatalogFingerprints,
+  savedResources,
   stepErrorField,
   stepSaveFingerprint,
   stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { loadVendorContext } from '../../lib/vendor-context-cache'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -77,16 +103,24 @@ const EMPTY_CONFIRM: ConfirmDialogState = {
   onConfirm: () => undefined,
 }
 
-function LivePreviewPane() {
+function LivePreviewPane({ accountParts }: { accountParts: PhonePreviewAccountParts }) {
   const draft = useOnboardingStore((state) => state.draft)
   const logoUrl = useOnboardingStore((state) => state.runtime.logoUrl)
   const bannerUrl = useOnboardingStore((state) => state.runtime.bannerUrl)
   const deferredDraft = useDeferredValue(draft)
-  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} />
+  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
 }
 
 /** The bay where the shop takes shape: the storefront as a customer will see it. */
 function PhonePreviewStage({ className, id, labelledBy }: { className?: string; id?: string; labelledBy?: string }) {
+  const catalogSource = useOnboardingStore(selectCatalogSource)
+  const catalogPreview = useOnboardingStore((state) => state.catalogPreview)
+  const loadedSteps = useOnboardingStore((state) => state.loadedSteps)
+  const editedSteps = useOnboardingStore((state) => state.editedSteps)
+  const accountParts = useMemo(
+    () => phonePreviewAccountParts({ catalogSource, catalogPreview, loadedSteps, editedSteps }),
+    [catalogSource, catalogPreview, loadedSteps, editedSteps],
+  )
   return (
     <aside
       id={id}
@@ -103,9 +137,30 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
           Private
         </span>
       </div>
-      <LivePreviewPane />
-      <PreviewStats className="shrink-0" />
+      <LivePreviewPane accountParts={accountParts} />
+      <PreviewStats className="shrink-0" accountParts={accountParts} />
     </aside>
+  )
+}
+
+/** A step's form area while the account data it needs is read. */
+function StepSkeleton() {
+  return (
+    <div role="status" aria-label="Loading this step" aria-busy="true" className="space-y-3">
+      <LoadingSkeleton className="h-10 rounded-xl" />
+      <LoadingSkeleton className="h-24 rounded-xl" />
+      <LoadingSkeleton className="h-24 rounded-xl" />
+    </div>
+  )
+}
+
+/** In place of a step's form when a read it needs failed. */
+function StepLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="space-y-3">
+      <StepNotice message="Something went wrong" />
+      <Button variant="outline" onClick={onRetry}><RotateCcwIcon /> Try again</Button>
+    </div>
   )
 }
 
@@ -121,6 +176,355 @@ type IssueRecheck = (state: OnboardingState) => ValidationIssue[]
 type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
 
 const NO_ISSUES: ShownIssues = { issues: [] }
+
+const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
+/** The steps whose draft each resource's applier fills. */
+const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
+  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8],
+}
+
+const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
+
+/**
+ * Clear what an account write made stale in the shared caches: the written resources and the
+ * vendor context (it carries `next_step`, plan usage and store state). Business types and
+ * units are platform data, so they stay.
+ */
+function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
+  invalidateOnboardingResources(vendorId, resources)
+  invalidateVendorContext(vendorId)
+}
+
+/** Where this visit's account reads stand: the context, each resource and the units. */
+type AccountLoadView = {
+  context: ResourceStatus
+  resources: Record<OnboardingResource, ResourceStatus>
+  units: ResourceStatus
+}
+
+const IDLE_LOAD_VIEW: AccountLoadView = {
+  context: 'idle',
+  resources: {
+    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle',
+  },
+  units: 'idle',
+}
+
+type AccountEntry = {
+  /** Start, or join, whatever the step needs that this visit has not read yet. */
+  requestStep: (step: OnboardingStep) => void
+  /** Start the step's account reads ahead of it opening, without touching this visit's view. */
+  prefetchStep: (step: OnboardingStep) => void
+  /** Re-read the context if it failed, and the step's failed resources. */
+  retry: (step: OnboardingStep) => void
+  cancel: () => void
+}
+
+/**
+ * One wizard visit's reads of the vendor's account, applied to the draft as each lands.
+ *
+ * The context and the profile are read at once; every other resource only when a step
+ * that needs it opens. Each result is applied the moment it lands, whatever step is on
+ * screen, through the per-resource appliers: a step with unsaved edits keeps them unless
+ * the store is submitted. Nothing is applied without a context. A result for a visit that
+ * has ended, or for another vendor, is dropped.
+ */
+function startAccountEntry(
+  vendorId: string,
+  hooks: {
+    setView: (view: AccountLoadView) => void
+    setContextError: (message: string | null) => void
+    savedSteps: { current: Partial<Record<OnboardingStep, string>> }
+  },
+): AccountEntry {
+  let cancelled = false
+  const view: AccountLoadView = { ...IDLE_LOAD_VIEW, resources: { ...IDLE_LOAD_VIEW.resources } }
+  const values: Partial<OnboardingResourceData> = {}
+  // `undefined` while unsettled; `null` after a failed read, which falls back to sample units.
+  let units: MeasurementCatalog | null | undefined
+  const applied = new Set<OnboardingResource>()
+  const vouched = new Set<OnboardingStep>()
+  let context: VendorContext | null = null
+  // The step the account resumes at, which bounds the steps a resume vouches for.
+  let resumeAt: OnboardingStep | null = null
+  // No usable pointer: the step is derived once every resource has been read.
+  let derivePending = false
+
+  const store = () => useOnboardingStore.getState()
+  const isCurrent = () => !cancelled && useAuthStore.getState().user?.vendorId === vendorId
+  const publish = () => hooks.setView({ ...view, resources: { ...view.resources } })
+
+  const landValue = <R extends OnboardingResource>(resource: R, value: OnboardingResourceData[R]) => {
+    if (view.resources[resource] === 'loaded') return
+    values[resource] = value
+    view.resources[resource] = 'loaded'
+    // What the account holds counts against the plan limits whatever the draft says.
+    if (resource === 'categories') {
+      store().setAccountCatalog({ categoryIds: values.categories!.map((category) => category.platformCategoryId) })
+    } else if (resource === 'products') {
+      store().setAccountCatalog({ productIds: values.products!.map((product) => product.platformProductId) })
+    } else if (resource === 'skus') {
+      store().setAccountCatalog({ skuIds: values.skus!.map((sku) => sku.skuId) })
+    }
+  }
+
+  const settleUnits = (catalog: MeasurementCatalog | null) => {
+    units = catalog
+    view.units = catalog ? 'loaded' : 'failed'
+    // A failed read keeps sample units for sizes and no product measurement metadata.
+    const catalogs = measurementCatalogsForResume(catalog)
+    store().setMeasurementCatalog(catalogs.measurements)
+    store().setProductMeasurementCatalog(catalogs.productMeasurementCatalog)
+  }
+
+  const applyFrame = (openAt: OnboardingStep) => {
+    const state = store()
+    const draft = applyResumeFrame(state.draft, openAt, {
+      edited: new Set(),
+      submitted: selectStoreIsSubmitted(state),
+    })
+    state.applyResumedDraft(
+      draft,
+      openAt,
+      { paymentDetails: state.runtime.paymentDetails, orderWhatsapp: '' },
+      { frameApplied: true },
+    )
+  }
+
+  /** Every applier whose inputs have landed and that has not run yet, in one draft write. */
+  const applyReady = () => {
+    if (!context) return
+    const state = store()
+    const submitted = selectStoreIsSubmitted(state)
+    const options = { edited: new Set(state.editedSteps), submitted }
+    const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
+    let draft = state.draft
+    let paymentDetails = state.runtime.paymentDetails
+    let orderWhatsapp = ''
+    const ran = (resource: OnboardingResource) => applied.add(resource)
+
+    if (!applied.has('profile') && view.resources.profile === 'loaded') {
+      draft = applyProfile(draft, values.profile!, options)
+      if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!)
+      ran('profile')
+    }
+    const businessType = view.resources.profile === 'loaded' && view.resources.businessTypes === 'loaded'
+      ? resolveBusinessType(values.profile!, values.businessTypes!)
+      : undefined
+    if (!applied.has('businessTypes') && businessType !== undefined) {
+      draft = applyBusinessType(draft, businessType, options)
+      ran('businessTypes')
+    }
+    if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
+      draft = applyCategories(draft, values.categories!, businessType, options)
+      ran('categories')
+    }
+    if (!applied.has('products') && view.resources.products === 'loaded') {
+      draft = applyProducts(draft, values.products!, options)
+      ran('products')
+    }
+    // Saved sizes are rebuilt against the units, so they wait for them (or their fallback).
+    if (!applied.has('skus') && view.resources.skus === 'loaded' && view.resources.products === 'loaded' && units !== undefined) {
+      draft = applySkus(draft, values.skus!, values.products!, measurementCatalogsForResume(units).measurements, options)
+      ran('skus')
+    }
+    if (!applied.has('checkout') && view.resources.checkout === 'loaded') {
+      draft = applyCheckout(draft, values.checkout!, options)
+      if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
+      ran('checkout')
+    }
+    if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp) {
+      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp }, { frameApplied: false })
+    }
+
+    if (derivePending && ACCOUNT_RESOURCES.every((resource) => applied.has(resource))) {
+      derivePending = false
+      resumeAt = derivedResumeStep(accountResumeState(context, values as OnboardingResourceData))
+      // Only while the vendor is still where the fallback put them, with nothing edited.
+      const latest = store()
+      if (!latest.editedSteps.length && latest.draft.currentStep === 10) applyFrame(resumeAt)
+    }
+
+    const loadedSteps = ACCOUNT_STEPS.filter((step) =>
+      stepResources(step, { submitted }).account.every((resource) => applied.has(resource)))
+    store().setLoadedSteps(loadedSteps)
+
+    // A catalog step before the resume step, taken whole from the account (with every
+    // catalog step before it), already matches it: its Continue need not save again.
+    if (resumeAt === null) return
+    const latest = store()
+    const edited = new Set(latest.editedSteps)
+    const fromAccount = new Set(loadedSteps.filter((step) => submitted || !edited.has(step)))
+    const prints = resumedCatalogFingerprints(latest.draft, resumeAt, fromAccount)
+    for (const step of [4, 5, 6] as const) {
+      const print = prints[step]
+      if (!print || vouched.has(step)) continue
+      vouched.add(step)
+      // A save this visit already set the step's fingerprint; it stands.
+      if (hooks.savedSteps.current[step]) continue
+      hooks.savedSteps.current[step] = print
+    }
+  }
+
+  const track = (resource: OnboardingResource | 'units', read: Promise<unknown>) => {
+    if (resource === 'units') view.units = 'loading'
+    else view.resources[resource] = 'loading'
+    read.then(
+      (value) => {
+        if (!isCurrent()) return
+        if (resource === 'units') settleUnits(value as MeasurementCatalog)
+        else landValue(resource, value as OnboardingResourceData[typeof resource])
+        applyReady()
+        publish()
+      },
+      () => {
+        if (!isCurrent()) return
+        if (resource === 'units') settleUnits(null)
+        else view.resources[resource] = 'failed'
+        applyReady()
+        publish()
+      },
+    )
+  }
+
+  const startProfile = () => {
+    if (view.resources.profile !== 'idle') return
+    const cached = peekOnboardingResource(vendorId, 'profile')
+    if (cached) landValue('profile', cached.value)
+    else track('profile', loadAccountResource(vendorId, 'profile'))
+  }
+
+  const requestStep = (step: OnboardingStep) => {
+    if (cancelled || !context || store().draft.catalogSource !== 'account') return
+    const submitted = selectStoreIsSubmitted(store())
+    const needs = stepResources(step, { submitted })
+    // Already-read values apply now, so a step whose data is cached never shows a skeleton.
+    for (const resource of needs.account) {
+      if (view.resources[resource] !== 'idle') continue
+      if (resource === 'businessTypes' && view.resources.profile === 'loaded') {
+        // The profile decides whether business types are needed at all.
+        if (!savedBusinessType(values.profile!)) {
+          landValue('businessTypes', [])
+          continue
+        }
+        const cached = peekOnboardingResource(vendorId, 'businessTypes')
+        if (cached) landValue('businessTypes', cached.value)
+        else track('businessTypes', loadAccountResource(vendorId, 'businessTypes'))
+        continue
+      }
+      const cached = peekOnboardingResource(vendorId, resource)
+      if (cached) landValue(resource, cached.value)
+    }
+    if (needs.units && view.units === 'idle') {
+      const known = peekMeasurementCatalog()
+      if (known) settleUnits(known)
+    }
+    const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) => view.resources[resource] !== 'idle')
+    // Units are not retried within a visit: their failure has a usable fallback.
+    if (view.units !== 'idle') skip.push('units')
+    // A failed profile stays failed until Try again, so business types do not re-read it.
+    if (view.resources.profile === 'failed') skip.push('businessTypes')
+    const reads = loadStepResources(vendorId, step, { submitted, withUnits: true, skip })
+    for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
+      track(resource, reads[resource]!)
+    }
+    applyReady()
+    publish()
+  }
+
+  const prefetchStep = (step: OnboardingStep) => {
+    if (cancelled || !context || store().draft.catalogSource !== 'account') return
+    const state = store()
+    const submitted = selectStoreIsSubmitted(state)
+    const edited = new Set(state.editedSteps)
+    // Anything this visit holds or is reading is left out, and so is a read that failed: it
+    // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
+    // edited step's own copy, so a resource only edited steps use is not wanted yet.
+    const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
+      view.resources[resource] !== 'idle'
+      || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
+    if (view.resources.profile === 'failed') skip.push('businessTypes')
+    // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
+    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
+  }
+
+  const applyContext = (loaded: VendorContext) => {
+    context = loaded
+    const state = store()
+    hooks.setContextError(null)
+    state.setCategoryLimit(loaded.subscription.limits.maxCategories)
+    state.setProductLimit(loaded.subscription.limits.maxProducts)
+    state.setSkuLimit(loaded.subscription.limits.maxSkus)
+    state.setAccountCatalog({ skuUsage: loaded.subscription.usage.skus })
+    state.setCatalogPreview(loaded.catalogPreview ?? null)
+    const submitted = isStoreSubmitted({ context: loaded })
+    // A submitted store still has to show its own catalog and settings on Steps 3-9,
+    // so it is hydrated like any other — it just opens on the review step instead.
+    state.setStoreSubmission(submitted
+      ? {
+          storeIdentifier: loaded.storeIdentifier,
+          approvalStatus: loaded.approvalStatus,
+          vendorStatus: loaded.vendorStatus,
+        }
+      : null)
+    resumeAt = submitted ? 10 : backendResumeStep(loaded)
+    // Unsaved local work is newest only while setup can still accept it: the vendor's own
+    // progress then stands. Once the store is submitted the account wins every step.
+    if (!state.editedSteps.length || submitted) {
+      // Without a usable pointer, Step 10 reads everything and the step is derived from it.
+      derivePending = resumeAt === null
+      applyFrame(resumeAt ?? 10)
+    }
+    view.context = 'loaded'
+    applyReady()
+    publish()
+  }
+
+  const readContext = () => {
+    // Sign-in or the header may have read it already: applying it now keeps the very
+    // first paint correct, instead of one frame of the un-hydrated draft.
+    const known = peekVendorContext(vendorId)
+    if (known) return applyContext(known)
+    view.context = 'loading'
+    publish()
+    loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)).then(
+      (loaded) => {
+        if (isCurrent()) applyContext(loaded)
+      },
+      (error: unknown) => {
+        if (!isCurrent()) return
+        // Every step's reads depend on the context, so no step is usable without it.
+        hooks.setContextError(getErrorMessage(error, 'Could not load your store details.'))
+        view.context = 'failed'
+        publish()
+      },
+    )
+  }
+
+  startProfile()
+  readContext()
+
+  return {
+    requestStep,
+    prefetchStep,
+    retry(step) {
+      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
+      for (const resource of needs.account) {
+        if (view.resources[resource] === 'failed') view.resources[resource] = 'idle'
+      }
+      if (view.context === 'failed') {
+        if (view.resources.profile === 'failed') view.resources.profile = 'idle'
+        startProfile()
+        // The step's reads start once the context lands.
+        readContext()
+      } else requestStep(step)
+      publish()
+    },
+    cancel() {
+      cancelled = true
+    },
+  }
+}
 
 /**
  * The Continue validation for Steps 3-10, read entirely from the given store state so a
@@ -176,11 +580,11 @@ export function OnboardingWizard() {
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
   const setStoreSubmission = useOnboardingStore((state) => state.setStoreSubmission)
   const setAccountCatalog = useOnboardingStore((state) => state.setAccountCatalog)
-  const setMeasurementCatalog = useOnboardingStore((state) => state.setMeasurementCatalog)
+  const setCatalogPreview = useOnboardingStore((state) => state.setCatalogPreview)
   const setProductMeasurementCatalog = useOnboardingStore((state) => state.setProductMeasurementCatalog)
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
-  const applyResumedDraft = useOnboardingStore((state) => state.applyResumedDraft)
+  const setLoadedSteps = useOnboardingStore((state) => state.setLoadedSteps)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
   // offering controls that cannot reach a store already under review.
@@ -227,12 +631,11 @@ export function OnboardingWizard() {
   const [issueAnnouncement, setIssueAnnouncement] = useState({ text: '', count: 0 })
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
-  // The wizard must not paint an interactive step before the account has been read:
-  // Step 3 would flash and then jump to wherever the resume actually lands.
-  const [accountState, setAccountState] = useState<'idle' | 'loading' | 'ready'>('idle')
-  // How the last measurement read settled. Setting it is also what re-renders the wizard
-  // once the catalog lands, since the store fields it fills are not subscribed to here.
-  const [measurementOutcome, setMeasurementOutcome] = useState<'loaded' | 'failed' | null>(null)
+  // Where this visit's account reads stand. The wizard must not paint an interactive step
+  // before the context has been read (Step 3 would flash and then jump to wherever the
+  // resume lands), and a step's form waits for the resources that step needs.
+  const [loadView, setLoadView] = useState<AccountLoadView>(IDLE_LOAD_VIEW)
+  const entryRef = useRef<AccountEntry | null>(null)
   // Steps 4-9 whose draft is known to match the account, as `stepSaveFingerprint` values.
   // A Continue on a matching step skips the save and the reads it makes. Anything not
   // vouched for by a save (or, for catalog steps, a resume) in this visit is absent, so it
@@ -290,155 +693,56 @@ export function OnboardingWizard() {
    * Bring the wizard in line with the vendor's account.
    *
    * The account is the record and this browser only buffers what has not reached it, so
-   * this runs on every entry — not once per browser. The one thing it will not do is
-   * overwrite edits the vendor has made and not yet saved.
+   * this runs on every entry — not once per browser. It reads the context and the profile
+   * now and each step's other resources when that step opens (below). It never overwrites
+   * a step the vendor has edited and not yet saved.
    */
   useLayoutEffect(() => {
     savedStepRef.current = {}
+    // Which steps hold account data is known only for this visit; the entry sets it again
+    // as each read lands.
+    setLoadedSteps([])
+    setLoadView(IDLE_LOAD_VIEW)
+    setContextError(null)
     if (access.state !== 'ready') {
       setCategoryLimit(null)
       setProductLimit(null)
       setSkuLimit(null)
-      setContextError(null)
       setStoreSubmission(null)
-      setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [] })
+      setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+      setCatalogPreview(null)
       if (isLiveApi()) setProductMeasurementCatalog([])
-      setAccountState('idle')
       return
     }
-    // Demo mode has no account to read; the local draft is all there is.
+    // Demo mode has no account to read; the local draft is all there is, so every step
+    // counts as loaded.
     if (!isLiveApi()) {
-      setAccountState('ready')
+      setLoadedSteps([...ACCOUNT_STEPS])
       return
     }
 
     // The store starts with the demo catalog. Clear it before a live account can paint,
     // including ready-session mounts, vendor changes, and account reads that later fail.
     setProductMeasurementCatalog([])
-
-    const apply = (server: ServerOnboardingState) => {
-      setContextError(null)
-      setCategoryLimit(server.context.subscription.limits.maxCategories)
-      setProductLimit(server.context.subscription.limits.maxProducts)
-      setSkuLimit(server.context.subscription.limits.maxSkus)
-      const accountStoreIsSubmitted = isStoreSubmitted(server)
-      // What is already on the store, and therefore counts against every plan limit — and,
-      // for categories and products, can no longer be unpicked. `skuIds` is the account's
-      // own size identity, needed for the net-zero size rule across draft-clearing paths.
-      setAccountCatalog({
-        categoryIds: server.categories.map((category) => category.platformCategoryId),
-        productIds: server.products.map((product) => product.platformProductId),
-        skuIds: server.skus.map((sku) => sku.skuId),
-        skuUsage: server.context.subscription.usage.skus,
-      })
-      // Account data, not draft — applied even when local edits win the draft below.
-      setMeasurementCatalog(server.measurements)
-      setProductMeasurementCatalog(server.productMeasurementCatalog)
-
-      // A submitted store still has to show its own catalog and settings on Steps 3-9,
-      // so it is hydrated like any other — it just opens on the review step instead.
-      setStoreSubmission(
-        accountStoreIsSubmitted
-          ? {
-              storeIdentifier: server.context.storeIdentifier,
-              approvalStatus: server.context.approvalStatus,
-              vendorStatus: server.context.vendorStatus,
-            }
-          : null,
-      )
-
-      // Unsaved local work is newest only while setup can still accept it. Once the
-      // account says the store was submitted, its snapshot wins: the vendor must land
-      // on review and see what was sent, not an un-actionable browser-only draft.
-      const current = useOnboardingStore.getState()
-      if (current.hasLocalEdits && !accountStoreIsSubmitted) return
-
-      const resumed = buildResumeDraft(server)
-      applyResumedDraft(resumed.draft, resumed.furthestVisitedStep, {
-        paymentDetails: resumePaymentDetails(server.checkout, current.runtime.paymentDetails),
-        orderWhatsapp: resumed.orderWhatsapp,
-      })
-      savedStepRef.current = resumedCatalogFingerprints(resumed.draft, resumed.furthestVisitedStep)
-    }
-
-    // Sign-in or the header may have resolved this already. Applying it here rather than
-    // waiting on the promise keeps the very first paint correct, instead of one frame of the
-    // un-hydrated draft.
-    const cached = peekVendorOnboardingState(access.vendorId)
-    if (cached) {
-      apply(cached)
-      setAccountState('ready')
-      return
-    }
-
-    let ignore = false
-    setAccountState('loading')
-
-    loadVendorOnboardingState(access.vendorId)
-      .then((server) => {
-        if (!ignore) apply(server)
-      })
-      .catch((error: unknown) => {
-        if (ignore) return
-        // The category limit has a usable fallback, but this same call decides whether a
-        // submitted store is shown at all. A vendor whose store is awaiting
-        // approval must not be handed an empty wizard with no explanation.
-        setContextError(
-          getErrorMessage(error, 'Could not load your store details. Some steps may show defaults.'),
-        )
-      })
-      .finally(() => {
-        if (!ignore) setAccountState('ready')
-      })
-
+    setAccountCatalog({ categoryIds: [], productIds: [], skuIds: [], skuUsage: null })
+    setCatalogPreview(null)
+    const entry = startAccountEntry(access.vendorId, {
+      setView: setLoadView,
+      setContextError,
+      savedSteps: savedStepRef,
+    })
+    entryRef.current = entry
     return () => {
-      ignore = true
+      entry.cancel()
+      if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setMeasurementCatalog, setProductMeasurementCatalog, applyResumedDraft])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps])
 
-  /**
-   * The measurement catalog, read when the vendor reaches a step that uses it.
-   *
-   * The account read above includes it only for a vendor who enters on Step 5 or later.
-   * One who enters on Steps 3-4 would otherwise pay for a list and a detail read per
-   * measurement on screens that never show one, or reach Step 5 still on sample units.
-   */
-  const needsMeasurements =
-    liveApi && access.state === 'ready' && accountState === 'ready' && stepUsesMeasurementCatalog(currentStep)
-  // Derived during render, not set by the effect below: a flag that flipped one effect late
-  // let the step mount on its first frame, start its own catalog read, and then be torn down
-  // (aborting that read) and remounted to send it again once the measurements landed.
-  const measurementsPending =
-    needsMeasurements && measurementOutcome !== 'failed' && peekMeasurementCatalog() === null
-  useEffect(() => {
-    if (!needsMeasurements) return
-    const apply = (catalog: MeasurementCatalog) => {
-      setMeasurementCatalog(catalog)
-      setProductMeasurementCatalog(catalog)
-    }
-    const known = peekMeasurementCatalog()
-    if (known) {
-      apply(known)
-      return
-    }
-
-    let ignore = false
-    loadPlatformMeasurements().then(
-      (catalog) => {
-        if (ignore) return
-        apply(catalog)
-        setMeasurementOutcome('loaded')
-      },
-      () => {
-        // Same fallback as a failed account read: sample units for sizes, no product
-        // measurement metadata.
-        if (!ignore) setMeasurementOutcome('failed')
-      },
-    )
-    return () => {
-      ignore = true
-    }
-  }, [needsMeasurements, setMeasurementCatalog, setProductMeasurementCatalog])
+  // Each step reads what it needs when it opens; a read already made this visit is reused.
+  // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
+  useLayoutEffect(() => {
+    if (loadView.context === 'loaded') entryRef.current?.requestStep(currentStep)
+  }, [currentStep, loadView.context, catalogSource, storeIsSubmitted])
 
   useEffect(() => {
     requestControllerRef.current?.abort()
@@ -680,7 +984,7 @@ export function OnboardingWizard() {
 
       // The account just changed, even if local navigation stopped tracking this
       // request while it was in flight. Never let a stale cache hide the submission.
-      invalidateVendorOnboardingState(access.vendorId)
+      dropWrittenAccountData(access.vendorId, GO_LIVE_RESOURCES)
       // Do not let a late response attach the previous vendor's state to a new session.
       if (useAuthStore.getState().user?.vendorId !== access.vendorId) return
       // The successful account action is enough to establish submission. Details stay
@@ -764,10 +1068,11 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
-    // Started alongside this step's save, so the next step's catalog is usually ready when it
-    // opens. A failure is dropped from the cache and the step's own read retries it.
-    if (liveApi && stepUsesMeasurementCatalog((step + 1) as OnboardingStep)) {
-      loadPlatformMeasurements().catch(() => {})
+    // Started alongside this step's save, so the next step's account data is usually ready
+    // when it opens. A failure is dropped from the cache and the step's own read retries it.
+    // Units are left to the step that needs them.
+    if (writesReachAccount(draft.catalogSource) && access.state === 'ready') {
+      entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
     }
     const fingerprint = stepSaveFingerprint(step, draft, runtime)
     const unchanged = fingerprint !== null && savedStepRef.current[step] === fingerprint
@@ -790,8 +1095,9 @@ export function OnboardingWizard() {
         await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
           if (persistenceIsCurrent()) recordAssignment(assignment)
         }, recordCreatedEntry)
-        // This step is now on the account, so a cached read from before it is stale.
-        invalidateVendorOnboardingState(access.vendorId)
+        // This step is now on the account, so a cached read from before it is stale. The
+        // open wizard keeps what it holds: the draft is now the account copy.
+        dropWrittenAccountData(access.vendorId, savedResources(step))
         if (!persistenceIsCurrent()) return
         // Read after the save: minting authored entries rewrites their ids in the draft.
         const latest = useOnboardingStore.getState()
@@ -882,7 +1188,13 @@ export function OnboardingWizard() {
     },
   })
 
-  const stepMeta = ONBOARDING_STEPS[currentStep - 1]
+  const stepMeta = currentStep === 10 && storeIsSubmitted
+    ? {
+        ...ONBOARDING_STEPS[9],
+        title: 'Your store',
+        description: storeIsApproved ? 'Share your store link.' : 'Submitted for review. You can still add categories and products.',
+      }
+    : ONBOARDING_STEPS[currentStep - 1]
   const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
   // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
   // catalog source, and once the store is submitted it is read-only and saves nothing.
@@ -916,7 +1228,17 @@ export function OnboardingWizard() {
   }
   const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted, storeIsApproved }
 
-  if (!persistenceInitialized || accountState === 'loading') {
+  // A live, signed-in step from 3 on shows its form only once what it needs has loaded.
+  const accountReadsApply = liveApi && access.state === 'ready' && catalogUnlocked && currentStep >= 3
+  const stepState = !accountReadsApply ? 'loaded'
+    // Every step's reads depend on the context, so none is usable without it.
+    : loadView.context === 'failed' ? 'failed'
+      // A sample draft has no account copy to wait for.
+      : catalogSource !== 'account' ? 'loaded'
+        : stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units })
+  const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
+
+  if (!persistenceInitialized || contextPending) {
     // One gate for both reads. Painting between them shows Step 3 to a vendor whose
     // account puts them on Step 9, and then moves the form under them.
     return (
@@ -1039,25 +1361,24 @@ export function OnboardingWizard() {
                           disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} /> : null}
-                        {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                        {measurementsPending && catalogUnlocked ? (
-                          <p className="flex items-center gap-2 text-sm text-[var(--ob-ink-soft)]">
-                            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" /> Loading measurements…
-                          </p>
-                        ) : null}
-                        {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed && !measurementsPending ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                        {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
-                          <StepNotice message={currentStep === 3
-                            ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
-                            : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
-                          />
-                        ) : null}
-                        {currentStep === 6 && catalogUnlocked && !measurementsPending ? <SkuStep issues={issues} /> : null}
-                        {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
-                        {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
-                        {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
-                        {currentStep === 10 && catalogUnlocked && !measurementsPending ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
+                        {stepState === 'loading' ? <StepSkeleton /> : null}
+                        {stepState === 'failed' ? <StepLoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
+                        {stepState === 'loaded' ? <>
+                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
+                            <StepNotice message={currentStep === 3
+                              ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
+                              : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
+                            />
+                          ) : null}
+                          {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} /> : null}
+                          {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
+                          {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
+                          {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
+                          {currentStep === 10 && catalogUnlocked ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
+                        </> : null}
                         </fieldset>
                       </div>
                     </div>
@@ -1074,7 +1395,7 @@ export function OnboardingWizard() {
                     ) : null}
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || measurementsPending} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
+                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || stepState !== 'loaded'} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
                   </div>
                 </div> : null}

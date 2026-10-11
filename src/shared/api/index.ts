@@ -97,6 +97,7 @@ export type {
   CheckoutOptionsSnapshot,
   CheckoutPaymentSnapshot,
   VendorCategoryRef,
+  VendorCatalogPreview,
   VendorContext,
   VendorProfile,
   VendorOnboardingStatus,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
-import { peekVendorAccountContext } from '@/modules/vendor/lib/onboarding-state-cache'
+import { peekVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { useVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import { isLiveApi } from '@/shared/api'
@@ -17,9 +17,9 @@ import {
  *
  * `MarketingHeader` is in every visitor's first bundle, so the account read and the
  * onboarding store are imported on demand and only for a vendor session — the same
- * rule `vendor-landing` follows. On the wizard the read is the one sign-in and the wizard
- * share. Anywhere else it is the vendor context alone, which is all the decision needs and
- * lands long before the wizard's setup reads do.
+ * rule `vendor-landing` follows. On every route, the wizard included, the read is the
+ * vendor context alone, which is all the decision needs and lands long before the wizard's
+ * setup reads do. On the wizard it joins the wizard's own context request.
  */
 export function useHeaderActions(): HeaderAction[] {
   const user = useAuthStore((state) => state.user)
@@ -39,12 +39,9 @@ export function useHeaderActions(): HeaderAction[] {
     if (!readsAccount) return
     let ignore = false
     import('@/modules/vendor/lib/onboarding-server-state')
-      .then(({ loadVendorAccountContext, loadVendorOnboardingState }) => {
-        // The wizard has its full read in flight and shares it, so waiting on it costs
-        // nothing extra there. Anywhere else asking for it would hold the actions back
-        // behind reads this decision never looks at.
+      .then(({ loadVendorAccountContext }) => {
         if (ignore) return null
-        return onWizard ? loadVendorOnboardingState(vendorId) : loadVendorAccountContext(vendorId)
+        return loadVendorAccountContext(vendorId)
       })
       .then(
         (state) => {
@@ -57,7 +54,7 @@ export function useHeaderActions(): HeaderAction[] {
     return () => {
       ignore = true
     }
-  }, [readsAccount, vendorId, onWizard])
+  }, [readsAccount, vendorId])
 
   // Follows the wizard, which is where a submission happens. Live, it only matters while
   // the wizard is on screen; demo has no account read, so the wizard is the only source.
@@ -83,8 +80,8 @@ export function useHeaderActions(): HeaderAction[] {
   }, [followsWizard])
 
   // A resolved cache entry paints the right actions on the first frame instead of after
-  // the effect above. The caches are dropped on go-live, so this never outlives it.
-  const cached = readsAccount ? peekVendorAccountContext(vendorId) : null
+  // the effect above. The context cache is dropped on go-live, so this never outlives it.
+  const cached = readsAccount ? peekVendorContext(vendorId) : null
   let account: HeaderAccountRead = { status: 'loading' }
   if (cached) account = { status: 'ready', state: { context: cached } }
   else if (read?.vendorId === vendorId) account = read.result

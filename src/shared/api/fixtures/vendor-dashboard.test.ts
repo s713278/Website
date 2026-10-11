@@ -74,6 +74,7 @@ describe('demo fixtures survive the real mappers', () => {
         usage: { categories: 1, products: 1, skus: 2, images: 0 },
       },
       eligibleFeatures: ['DASHBOARD', 'VIEW', 'CATALOG'],
+      catalogPreview: null,
     })
     expect(DEMO_VENDOR_CONTEXT.subscription).not.toHaveProperty('trial_ends_at')
   })

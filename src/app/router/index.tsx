@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RootLayout } from '@/app/layouts'
 import { ProtectedRoute } from '@/app/router/ProtectedRoute'
+import { loadVendorOverviewPage, loadVendorShell } from '@/app/router/vendor-dashboard-chunks'
 import { MarketingLayout } from '@/modules/marketing/components/MarketingLayout'
 import { MarketingHomePage } from '@/modules/marketing/pages/MarketingHomePage'
 import { NotFoundPage } from '@/modules/marketing/pages/NotFoundPage'
@@ -22,12 +23,12 @@ import { VendorLoginPage } from '@/shared/auth/pages/VendorLoginPage'
 import { Spinner } from '@/shared/components/ui'
 
 const VendorShell = lazy(() =>
-  import('@/modules/vendor/components/VendorShell').then((module) => ({
+  loadVendorShell().then((module) => ({
     default: module.VendorShell,
   })),
 )
 const VendorOverviewPage = lazy(() =>
-  import('@/modules/vendor/pages/VendorOverviewPage').then((module) => ({
+  loadVendorOverviewPage().then((module) => ({
     default: module.VendorOverviewPage,
   })),
 )

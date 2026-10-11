@@ -12,6 +12,7 @@ import type {
   VendorOrderSummary,
   VendorSize,
 } from '@/modules/vendor/types/dashboard'
+import { WORK_QUEUE_STATUSES } from '@/modules/vendor/lib/work-queue'
 import { vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { VendorOverviewPage } from './VendorOverviewPage'
@@ -299,6 +300,84 @@ describe('VendorOverviewPage status counts', () => {
 
     expect(screen.queryByRole('link', { name: 'New 0' })).toBeNull()
     expect(screen.getByText('Loading your order counts…')).toBeTruthy()
+  })
+})
+
+describe('VendorOverviewPage loading layout', () => {
+  const productsLink = () => screen.getByRole('link', { name: /^Products/ })
+  const gridOf = () => productsLink().parentElement as HTMLElement
+  const placeholders = () => Array.from(gridOf().querySelectorAll('[aria-hidden="true"]'))
+
+  it('reads the catalog while the counts are still pending', async () => {
+    stubQueue([])
+    const getInsights = vi.spyOn(vendorService, 'getInsights').mockReturnValue(new Promise(() => {}))
+    const listSizes = vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([
+      size('1', 'p1'), size('2', 'p2'),
+    ])
+
+    renderFor()
+    await settle()
+
+    expect(getInsights).toHaveBeenCalledTimes(1)
+    expect(listSizes).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('status').textContent).toBe('Loading your order counts…')
+    expect(screen.getByRole('link', { name: 'Products 2' })).toBeTruthy()
+  })
+
+  it('holds one placeholder per queue status, with Products in the last cell', async () => {
+    stubQueue([])
+    vi.spyOn(vendorService, 'getInsights').mockReturnValue(new Promise(() => {}))
+
+    renderFor()
+    await settle()
+
+    const grid = gridOf()
+    expect(placeholders()).toHaveLength(WORK_QUEUE_STATUSES.length)
+    expect(grid.children).toHaveLength(WORK_QUEUE_STATUSES.length + 1)
+    expect(grid.lastElementChild).toBe(productsLink())
+    expect(grid.querySelectorAll('a')).toHaveLength(1)
+  })
+
+  it('shows the error and the Products tile alone when the counts fail', async () => {
+    stubQueue([])
+    vi.spyOn(vendorService, 'getInsights').mockRejectedValue(new Error('Insights are down'))
+
+    renderFor()
+    await settle()
+
+    expect(screen.getByText('Insights are down')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(placeholders()).toHaveLength(0)
+    expect(gridOf().children).toHaveLength(1)
+    expect(screen.queryByRole('link', { name: /^New/ })).toBeNull()
+    expect(productsLink()).toBeTruthy()
+  })
+
+  it('shows only the Products tile when there are no insights', async () => {
+    stubQueue([])
+    vi.spyOn(vendorService, 'getInsights').mockResolvedValue(null as unknown as VendorInsights)
+
+    renderFor()
+    await settle()
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(placeholders()).toHaveLength(0)
+    expect(gridOf().children).toHaveLength(1)
+    expect(productsLink()).toBeTruthy()
+  })
+
+  it('swaps the placeholders for the status tiles in order, Products last', async () => {
+    stubQueue([])
+    stubInsights({ PENDING: 1, SCHEDULED: 1, IN_PROCESS: 3, SHIPPED: 4 })
+
+    renderFor()
+    await settle()
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText('Loading your order counts…')).toBeNull()
+    expect(placeholders()).toHaveLength(0)
+    const names = Array.from(gridOf().querySelectorAll('a')).map((a) => a.textContent)
+    expect(names).toEqual(['New 2', 'Confirmed 3', 'Out for delivery 4', 'Products 0'])
   })
 })
 

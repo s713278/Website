@@ -1,5 +1,5 @@
 import { isStoreSubmitted } from './onboarding-account-status'
-import type { ServerOnboardingState } from './onboarding-resume'
+import type { VendorContext } from '@/shared/api'
 
 /**
  * What the vendor's account says the wizard should do for them.
@@ -13,10 +13,10 @@ export type OnboardingEntry = { kind: 'submitted' } | { kind: 'resume' }
 /**
  * Deliberately carries no step. It used to expose an `openAt` derived from
  * `earliestIncompleteStep`, which nothing read — `vendorLandingPath` only ever branches
- * on `kind` — and which contradicted `resumeStep`, whose whole point is that the
+ * on `kind` — and which contradicted `backendResumeStep`, whose whole point is that the
  * backend's `next_step` is authoritative and resource-derivation is a last resort.
  * The wizard decides where to open; this decides only which route to land on.
  */
-export function resolveOnboardingEntry(state: Pick<ServerOnboardingState, 'context'>): OnboardingEntry {
+export function resolveOnboardingEntry(state: { context: VendorContext }): OnboardingEntry {
   return isStoreSubmitted(state) ? { kind: 'submitted' } : { kind: 'resume' }
 }

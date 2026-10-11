@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapVendorContext, vendorOnboardingService, type VendorContext } from '@/shared/api'
+import { mapVendorContext, vendorOnboardingService, type VendorContext, type VendorProfile } from '@/shared/api'
 import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
-import { loadMeasurementCatalog, peekMeasurementCatalog } from './measurement-catalog-cache'
-import { loadVendorAccountContext, loadVendorOnboardingState } from './onboarding-server-state'
-import { invalidateVendorOnboardingState, writeEntry } from './onboarding-state-cache'
-import type { ServerOnboardingState } from './onboarding-resume'
-import { peekVendorContext } from './vendor-context-cache'
+import { loadStepResources, loadVendorAccountContext, prefetchOnboardingLanding } from './onboarding-server-state'
+import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
+import { invalidateOnboardingResources, loadOnboardingResource } from './onboarding-resource-cache'
+import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
 
 const VENDOR_ID = '96'
 
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
+}
+
 afterEach(() => {
-  invalidateVendorOnboardingState()
+  invalidateAll()
   clearVendorHeaderHint()
   vi.restoreAllMocks()
 })
@@ -75,27 +80,6 @@ describe('loadVendorAccountContext', () => {
     expect(getContext).toHaveBeenCalledTimes(1)
   })
 
-  it('reuses a context the wizard’s read already resolved, without a request', async () => {
-    const context = contextFor(VENDOR_ID)
-    const resolved: ServerOnboardingState = {
-      context,
-      profile: null,
-      categories: [],
-      products: [],
-      skus: [],
-      checkout: null,
-      businessTypes: [],
-      measurements: [],
-      productMeasurementCatalog: [],
-    }
-    writeEntry(VENDOR_ID, { promise: Promise.resolve(resolved), resolved })
-    const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('unexpected read'))
-
-    await expect(loadVendorAccountContext(VENDOR_ID)).resolves.toEqual({ context })
-
-    expect(getContext).not.toHaveBeenCalled()
-  })
-
   it('does not keep a failed read, so the next caller asks again', async () => {
     const context = contextFor(VENDOR_ID)
     const getContext = vi
@@ -110,8 +94,96 @@ describe('loadVendorAccountContext', () => {
   })
 })
 
-describe('loadVendorOnboardingState reads only what the resume step needs', () => {
-  function contextAtStep(nextStep: number): VendorContext {
+describe('loadStepResources', () => {
+  afterEach(() => invalidateMeasurementCatalog())
+
+  function stubReads(profileType = 'Beverages') {
+    return {
+      profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+        businessName: 'Store', businessType: profileType, ownerName: '', contactPerson: '', contactNumber: '',
+      }),
+      businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
+        items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
+      }),
+      categories: vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([]),
+      products: vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([]),
+      skus: vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([]),
+      checkout: vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null),
+      units: vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG),
+    }
+  }
+
+  const settled = (reads: Partial<Record<string, Promise<unknown>>>) => Promise.allSettled(Object.values(reads))
+  const called = (spies: ReturnType<typeof stubReads>) =>
+    Object.entries(spies).filter(([, spy]) => spy.mock.calls.length).map(([name]) => name)
+
+  it('starts only what each step lists', async () => {
+    const spies = stubReads()
+    await settled(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true }))
+    expect(called(spies)).toEqual(['checkout'])
+
+    invalidateAll()
+    vi.clearAllMocks()
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: true, withUnits: true }))
+    expect(called(spies)).toEqual(['profile'])
+
+    invalidateAll()
+    vi.clearAllMocks()
+    await settled(loadStepResources(VENDOR_ID, 10, { submitted: false, withUnits: true }))
+    expect(called(spies)).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'units'])
+  })
+
+  it('leaves the units out without withUnits', async () => {
+    const spies = stubReads()
+    const reads = loadStepResources(VENDOR_ID, 6, { submitted: false, withUnits: false })
+    await settled(reads)
+    expect(reads.units).toBeUndefined()
+    expect(spies.units).not.toHaveBeenCalled()
+  })
+
+  it('reads business types only after the profile shows a saved type', async () => {
+    const spies = stubReads('Others')
+    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    await expect(reads.businessTypes).resolves.toEqual([])
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+
+    invalidateAll()
+    let answer!: (profile: VendorProfile) => void
+    spies.profile.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    const pending = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    await Promise.resolve()
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+    answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
+    await settled(pending)
+    expect(spies.businessTypes).not.toHaveBeenCalled()
+  })
+
+  it('joins a read in flight, omits a resolved one and honours skip', async () => {
+    const spies = stubReads()
+    const inFlight = loadOnboardingResource(VENDOR_ID, 'checkout', () => vendorOnboardingService.getCheckoutOptions(VENDOR_ID))
+    const reads = loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })
+    await settled(reads)
+    await inFlight
+    expect(spies.checkout).toHaveBeenCalledTimes(1)
+
+    expect(loadStepResources(VENDOR_ID, 7, { submitted: false, withUnits: true })).toEqual({})
+    const skipped = loadStepResources(VENDOR_ID, 5, { submitted: false, withUnits: true, skip: ['categories', 'units'] })
+    expect(Object.keys(skipped).sort()).toEqual(['businessTypes', 'products', 'profile'])
+    await settled(skipped)
+  })
+
+  it('settles each resource on its own', async () => {
+    const spies = stubReads()
+    spies.categories.mockRejectedValue(new Error('down'))
+    const reads = loadStepResources(VENDOR_ID, 4, { submitted: false, withUnits: true })
+    await expect(reads.categories).rejects.toThrow('down')
+    await expect(reads.profile).resolves.toMatchObject({ businessName: 'Store' })
+    await expect(reads.businessTypes).resolves.toEqual([])
+  })
+})
+
+describe('prefetchOnboardingLanding', () => {
+  function contextAtStep(nextStep: number | null): VendorContext {
     return mapVendorContext({
       data: {
         vendor_id: VENDOR_ID,
@@ -122,140 +194,106 @@ describe('loadVendorOnboardingState reads only what the resume step needs', () =
     })
   }
 
-  function answerReads(context: VendorContext, businessType: string | null) {
-    const spies = {
-      getVendorContext: vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context),
-      getVendorProfile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-        businessName: 'Green Bowl Grocers', businessType, ownerName: '', contactPerson: '', contactNumber: '',
+  function stubReads(context: VendorContext, businessType: string | null = 'Beverages') {
+    return {
+      context: vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context),
+      profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+        businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
       }),
-      getBusinessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
-        items: [], pageNumber: 0, pageSize: 100, totalElements: 0, totalPages: 0, lastPage: true,
+      businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
+        items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
       }),
-      getVendorCategories: vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([]),
-      getVendorProducts: vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([]),
-      getVendorSkus: vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([]),
-      getCheckoutOptions: vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null),
-      getMeasurements: vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG),
+      categories: vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([]),
+      products: vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockResolvedValue([]),
+      skus: vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockResolvedValue([]),
+      checkout: vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null),
+      units: vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG),
     }
-    return spies
   }
 
-  function calledReads(spies: Record<string, { mock: { calls: unknown[] } }>) {
-    return Object.entries(spies).filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name)
-  }
+  /** The prefetch is never awaited by its callers, so the test lets its chain run out. */
+  const drain = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const called = (spies: ReturnType<typeof stubReads>) =>
+    Object.entries(spies).filter(([, spy]) => spy.mock.calls.length).map(([name]) => name)
 
-  it('gives a new vendor on Step 3 their context and profile only', async () => {
-    const spies = answerReads(contextAtStep(3), null)
+  it.each([
+    [7, ['context', 'profile', 'checkout']],
+    [4, ['context', 'profile', 'businessTypes', 'categories']],
+    [12, ['context', 'profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']],
+    [1, ['context', 'profile', 'businessTypes']],
+  ])('lands on sign-in’s next_step %i, clamped like the wizard, without units', async (nextStep, expected) => {
+    const spies = stubReads(contextAtStep(null))
 
-    await loadVendorOnboardingState(VENDOR_ID)
+    expect(prefetchOnboardingLanding(VENDOR_ID, { nextStep })).toBeUndefined()
+    await drain()
 
-    expect(calledReads(spies)).toEqual(['getVendorContext', 'getVendorProfile'])
+    expect(called(spies)).toEqual(expected)
+    for (const spy of Object.values(spies)) expect(spy.mock.calls.length).toBeLessThanOrEqual(1)
   })
 
-  it('reads the business-type catalog only to match a type the vendor already saved', async () => {
-    const spies = answerReads(contextAtStep(4), 'Grocery')
+  it('reads business types on Step 4 only when the profile shows a saved type', async () => {
+    const spies = stubReads(contextAtStep(null), null)
 
-    await loadVendorOnboardingState(VENDOR_ID)
+    prefetchOnboardingLanding(VENDOR_ID, { nextStep: 4 })
+    await drain()
 
-    expect(calledReads(spies)).toEqual(['getVendorContext', 'getVendorProfile', 'getBusinessTypes', 'getVendorCategories'])
+    expect(called(spies)).toEqual(['context', 'profile', 'categories'])
   })
 
-  it('reads measurements from Step 5 on, and only once per session', async () => {
-    const spies = answerReads(contextAtStep(5), 'Grocery')
+  it('takes the landing step from the context once it resolves when sign-in has no usable pointer', async () => {
+    let answer!: (context: VendorContext) => void
+    const spies = stubReads(contextAtStep(7))
+    spies.context.mockReturnValue(new Promise((resolve) => { answer = resolve }))
 
-    const first = await loadVendorOnboardingState(VENDOR_ID)
-    // A saved step drops the vendor's snapshot; the platform catalog is not theirs to drop.
-    invalidateVendorOnboardingState(VENDOR_ID)
-    const second = await loadVendorOnboardingState(VENDOR_ID)
+    prefetchOnboardingLanding(VENDOR_ID, { nextStep: null })
+    await drain()
+    expect(called(spies)).toEqual(['context', 'profile'])
 
-    expect(spies.getMeasurements).toHaveBeenCalledTimes(1)
-    expect(spies.getVendorContext).toHaveBeenCalledTimes(2)
-    expect(second.productMeasurementCatalog).toBe(first.productMeasurementCatalog)
-    expect(peekMeasurementCatalog()).toBe(first.measurements)
+    answer(contextAtStep(7))
+    await drain()
+    expect(called(spies)).toEqual(['context', 'profile', 'checkout'])
   })
 
-  it('reuses a catalog the session already read even on a step that does not ask for it', async () => {
-    const catalog = await loadMeasurementCatalog(async () => SAMPLE_MEASUREMENT_CATALOG)
-    const spies = answerReads(contextAtStep(3), null)
+  it('starts only the context and profile with no usable pointer anywhere', async () => {
+    const spies = stubReads(contextAtStep(null))
 
-    const state = await loadVendorOnboardingState(VENDOR_ID)
+    prefetchOnboardingLanding(VENDOR_ID, {})
+    await drain()
 
-    expect(spies.getMeasurements).not.toHaveBeenCalled()
-    expect(state.productMeasurementCatalog).toBe(catalog)
+    expect(called(spies)).toEqual(['context', 'profile'])
   })
 
-  it('drops the catalog on sign-out', async () => {
-    await loadMeasurementCatalog(async () => SAMPLE_MEASUREMENT_CATALOG)
+  it('uses a context the caller already read, without a request', async () => {
+    const spies = stubReads(contextAtStep(null))
 
-    invalidateVendorOnboardingState()
+    prefetchOnboardingLanding(VENDOR_ID, { context: contextAtStep(5) })
+    await drain()
 
-    expect(peekMeasurementCatalog()).toBeNull()
+    expect(called(spies)).toEqual(['profile', 'businessTypes', 'categories', 'products'])
   })
 
-  it('does not keep a failed catalog read, so the next caller asks again', async () => {
-    const read = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(SAMPLE_MEASUREMENT_CATALOG)
+  it('writes the header hint once the context resolves', async () => {
+    stubReads(contextAtStep(null))
 
-    await expect(loadMeasurementCatalog(read)).rejects.toThrow('offline')
-    await expect(loadMeasurementCatalog(read)).resolves.toBe(SAMPLE_MEASUREMENT_CATALOG)
-    expect(read).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('loadVendorOnboardingState remembers the header hint', () => {
-  function contextWith(vendorStatus: string, nextStep: number): VendorContext {
-    return mapVendorContext({
-      data: {
-        vendor_id: VENDOR_ID,
-        vendor_status: vendorStatus,
-        approval_status: 'PENDING',
-        onboarding: { status: 'IN_PROGRESS', next_step: nextStep },
-      },
-    })
-  }
-
-  function answerProfile() {
-    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-      businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
-    })
-  }
-
-  it('from an accepted read', async () => {
-    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(contextWith('SETTING_UP', 3))
-    answerProfile()
-
-    await loadVendorOnboardingState(VENDOR_ID)
-
-    expect(readVendorHeaderHint(VENDOR_ID)).toMatchObject({
-      vendorId: VENDOR_ID, vendorStatus: 'SETTING_UP', onboarding: { nextStep: 3 },
-    })
-  })
-
-  it('not from a read a forced reload replaced, even when it lands last', async () => {
-    let resolveOld!: (value: VendorContext) => void
-    vi.spyOn(vendorOnboardingService, 'getVendorContext')
-      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
-      .mockResolvedValueOnce(contextWith('SETTING_UP', 3))
-    answerProfile()
-
-    const oldRead = loadVendorOnboardingState(VENDOR_ID)
-    await loadVendorOnboardingState(VENDOR_ID, { force: true })
-    resolveOld(contextWith('INACTIVE', 1))
-    await oldRead
-
-    expect(readVendorHeaderHint(VENDOR_ID)).toMatchObject({ vendorStatus: 'SETTING_UP', onboarding: { nextStep: 3 } })
-  })
-
-  it('not from a read that a sign-out dropped', async () => {
-    let resolveOld!: (value: VendorContext) => void
-    vi.spyOn(vendorOnboardingService, 'getVendorContext')
-      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
-    answerProfile()
-
-    const oldRead = loadVendorOnboardingState(VENDOR_ID)
-    invalidateVendorOnboardingState()
-    resolveOld(contextWith('SETTING_UP', 3))
-    await oldRead
-
+    prefetchOnboardingLanding(VENDOR_ID, { nextStep: 3 })
     expect(readVendorHeaderHint(VENDOR_ID)).toBeNull()
+    await drain()
+
+    expect(readVendorHeaderHint(VENDOR_ID)).toMatchObject({ vendorId: VENDOR_ID, vendorStatus: 'SETTING_UP' })
+  })
+
+  it('ends silently when its reads fail', async () => {
+    const spies = stubReads(contextAtStep(null))
+    for (const spy of Object.values(spies)) spy.mockRejectedValue(new Error('offline'))
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+
+    prefetchOnboardingLanding(VENDOR_ID, { nextStep: 10 })
+    prefetchOnboardingLanding('97', {})
+    await drain()
+    await drain()
+    process.off('unhandledRejection', unhandled)
+
+    expect(unhandled).not.toHaveBeenCalled()
   })
 })

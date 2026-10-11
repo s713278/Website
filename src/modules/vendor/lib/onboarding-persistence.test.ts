@@ -7,7 +7,7 @@ import {
   type SelectedProduct,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
-import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
+import { parsePersistedEnvelope, restoredEditedSteps, toPersistedDraft } from './onboarding-persistence'
 import { PENDING_ID_BASE } from './onboarding-pending-id'
 
 const businessType = { id: 7, name: 'Grocery', icon: null, displayOrder: 1 }
@@ -92,7 +92,7 @@ function envelope(draft: VendorOnboardingDraftV1, version: number = ONBOARDING_D
       updatedAt: new Date().toISOString(),
       ownerId: '91',
       furthestVisitedStep: 5,
-      hasLocalEdits: true,
+      editedSteps: [5],
       draft: toPersistedDraft(draft),
       previewSnapshot: null,
     }),
@@ -139,11 +139,21 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
     expect(parsePersistedEnvelope(envelope(unmarked))).toBeNull()
   })
 
-  it('rejects a category whose businessTypeId is not the selected business type', () => {
+  it('rejects a pending category whose businessTypeId is not the selected business type', () => {
     const wrongType = accountDraft({
-      categories: [{ ...accountCategory, businessTypeId: 8 }, pendingCategory],
+      categories: [accountCategory, { ...pendingCategory, businessTypeId: 8 }],
     })
     expect(parsePersistedEnvelope(envelope(wrongType))).toBeNull()
+  })
+
+  it('accepts a saved category that keeps another business type after a type change', () => {
+    const changedType = accountDraft({
+      business: { businessType: { ...businessType, id: 8 }, businessName: '', ownerName: '', contactPerson: '' },
+      categories: [accountCategory],
+      products: [accountProduct],
+      skus: [sku],
+    })
+    expect(parsePersistedEnvelope(envelope(changedType))).not.toBeNull()
   })
 
   it('rejects a product whose categoryId is not a selected category', () => {
@@ -208,5 +218,59 @@ describe('the sample rule is unchanged', () => {
   it('rejects a sample draft that carries a positive id', () => {
     const withPositive = sampleDraft({ products: [{ ...sampleProduct, id: 301 }] })
     expect(parsePersistedEnvelope(envelope(withPositive))).toBeNull()
+  })
+
+  it('rejects a sample category whose businessTypeId is not the selected business type', () => {
+    const wrongType = sampleDraft({ categories: [{ ...sampleCategory, businessTypeId: -102 }] })
+    expect(parsePersistedEnvelope(envelope(wrongType))).toBeNull()
+  })
+})
+
+describe('persisted edited steps', () => {
+  function withFields(fields: Record<string, unknown>) {
+    const value = envelope(accountDraft())
+    delete value.editedSteps
+    return { ...value, ...fields }
+  }
+
+  it('round-trips the edited steps', () => {
+    const parsed = parsePersistedEnvelope(withFields({ editedSteps: [4, 7, 8] }))
+
+    expect(parsed?.editedSteps).toEqual([4, 7, 8])
+    expect(parsed && restoredEditedSteps(parsed)).toEqual([4, 7, 8])
+  })
+
+  it('reads a legacy envelope that holds unsaved edits as every step edited', () => {
+    const parsed = parsePersistedEnvelope(withFields({ hasLocalEdits: true }))
+
+    expect(parsed && restoredEditedSteps(parsed)).toEqual([3, 4, 5, 6, 7, 8, 9])
+  })
+
+  it('reads a legacy envelope without either field as every step edited', () => {
+    const parsed = parsePersistedEnvelope(withFields({}))
+
+    expect(parsed && restoredEditedSteps(parsed)).toEqual([3, 4, 5, 6, 7, 8, 9])
+  })
+
+  it('reads a legacy envelope in sync with the account as nothing edited', () => {
+    const parsed = parsePersistedEnvelope(withFields({ hasLocalEdits: false }))
+
+    expect(parsed && restoredEditedSteps(parsed)).toEqual([])
+  })
+
+  it('normalises what it restores', () => {
+    const parsed = parsePersistedEnvelope(withFields({ editedSteps: [8, 2, 4, 8, 10] }))
+
+    expect(parsed && restoredEditedSteps(parsed)).toEqual([4, 8])
+  })
+
+  it('rejects edited steps that are not a list of steps', () => {
+    expect(parsePersistedEnvelope(withFields({ editedSteps: 5 }))).toBeNull()
+    expect(parsePersistedEnvelope(withFields({ editedSteps: [5, 11] }))).toBeNull()
+    expect(parsePersistedEnvelope(withFields({ editedSteps: ['5'] }))).toBeNull()
+  })
+
+  it('still rejects a non-boolean legacy flag', () => {
+    expect(parsePersistedEnvelope(withFields({ hasLocalEdits: 'yes' }))).toBeNull()
   })
 })

@@ -246,15 +246,18 @@ export type VendorOnboardingPersistedEnvelopeV1 = {
   ownerId: string | null
   furthestVisitedStep: OnboardingStep
   /**
-   * The draft holds edits that have not been written to the vendor account.
+   * Steps 3-9 whose part of the draft holds edits not yet written to the vendor account.
    *
    * The account is the record; this browser only buffers what has not reached it yet.
-   * When nothing is buffered the wizard re-reads the account on entry, so a stale or
-   * malformed local copy can never outlive one visit. When something is, the vendor's
-   * unsaved work wins and the account copy is left alone.
-   *
-   * Absent on envelopes written before this field existed — read those as `true`, which
-   * preserves whatever they hold rather than overwriting it.
+   * On entry the wizard takes the account copy for every step not listed here, so a stale
+   * local copy can never outlive one visit, while a listed step keeps the vendor's unsaved
+   * work. Once the store is submitted the account wins for every step.
+   */
+  editedSteps?: OnboardingStep[]
+  /**
+   * Legacy, read only: the single flag `editedSteps` replaced. No longer written. An
+   * envelope without `editedSteps` reads `false` as nothing edited, and `true` or absent as
+   * every step edited, which preserves whatever it holds rather than overwriting it.
    */
   hasLocalEdits?: boolean
   draft: PersistedOnboardingDraftV1

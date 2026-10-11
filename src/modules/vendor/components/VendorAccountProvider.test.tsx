@@ -1,23 +1,31 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { resolveLandingPath } from '@/app/router/vendor-landing'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
-import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
-import { invalidateVendorOnboardingState } from '@/modules/vendor/lib/onboarding-state-cache'
+import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
+import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
+import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
   configureApiClient,
+  liveBillingService,
   mapVendorContext,
   vendorOnboardingService,
   vendorOrdersService,
   vendorService,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { liveTrialSubscription, livePlans } from '@/shared/api/fixtures/live-billing-wire'
+import { LiveHeaderButton } from './LiveBillingChrome'
 import { VendorAccountProvider } from './VendorAccountProvider'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
 import type { VendorContext } from '@/shared/api'
+
+vi.mock('@/app/router/vendor-dashboard-chunks', () => ({ preloadVendorDashboard: vi.fn() }))
 
 beforeEach(() => {
   invalidateVendorContext()
@@ -98,7 +106,8 @@ describe('VendorAccountProvider store state', () => {
     firstVisit.unmount()
 
     // This is the invalidation used by the wizard after persistStep and goLive.
-    invalidateVendorOnboardingState('test-vendor')
+    invalidateOnboardingResources('test-vendor')
+    invalidateVendorContext('test-vendor')
     renderContext('ACTIVE', 'PENDING', 11)
 
     expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
@@ -199,5 +208,100 @@ describe('VendorAccountProvider billing refresh', () => {
     resolveFirst(billingContext('test-vendor', 9, 'Wrong vendor', 99))
     await waitFor(() => expect(screen.getByLabelText('Selected vendor').textContent).toBe('second_vendor'))
     expect(screen.queryByText('Wrong vendor')).toBeNull()
+  })
+})
+
+describe('the dashboard joins the reads sign-in started', () => {
+  it('makes no second context or billing request while the sign-in ones are in flight', async () => {
+    vi.stubEnv('VITE_USE_API', 'true')
+    configureApiClient({ useApi: true })
+    resetLiveBilling()
+    resetLiveBillingPlansForTests()
+    let answerContext!: (context: VendorContext) => void
+    let answerBilling!: (read: Awaited<ReturnType<typeof liveBillingService.readSubscription>>) => void
+    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockReturnValue(new Promise((resolve) => { answerContext = resolve }))
+    const readSubscription = vi.spyOn(liveBillingService, 'readSubscription')
+      .mockReturnValue(new Promise((resolve) => { answerBilling = resolve }))
+    vi.spyOn(liveBillingService, 'listPaidPlans').mockResolvedValue(livePlans)
+
+    try {
+      // Sign-in: a submitted store per the snapshot starts both reads and moves on.
+      const user = useAuthStore.getState().user!
+      await expect(resolveLandingPath(user, null, [{
+        vendorId: 'test-vendor', name: undefined, status: 'ACTIVE',
+        onboarding: { status: 'COMPLETED', description: null, nextStep: 11 },
+      }])).resolves.toBe('/vendor')
+      await import('@/modules/vendor/lib/onboarding-server-state')
+      await import('@/modules/vendor/store/live-billing')
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+      expect(readContext).toHaveBeenCalledTimes(1)
+      expect(readSubscription).toHaveBeenCalledTimes(1)
+
+      // The dashboard mounts while both are still in flight, and must join them.
+      render(
+        <MemoryRouter>
+          <VendorAccountProvider>
+            <LiveHeaderButton />
+          </VendorAccountProvider>
+        </MemoryRouter>,
+      )
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+      expect(readContext).toHaveBeenCalledTimes(1)
+
+      await act(async () => { answerContext(billingContext('test-vendor', 1, 'Plan', 1)) })
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Shop plan' })).toBeTruthy())
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+      expect(readContext).toHaveBeenCalledTimes(1)
+      expect(readSubscription).toHaveBeenCalledTimes(1)
+
+      await act(async () => { answerBilling({ kind: 'subscription', subscription: liveTrialSubscription() }) })
+    } finally {
+      resetLiveBilling()
+      resetLiveBillingPlansForTests()
+    }
+  })
+})
+
+describe('VendorAccountProvider first render', () => {
+  const resolved = mapVendorContext({
+    data: {
+      vendor_id: 'test-vendor', vendor_status: 'ACTIVE', approval_status: 'APPROVED',
+      onboarding: { status: 'COMPLETED', next_step: 11 },
+    },
+  })
+
+  beforeEach(() => {
+    vi.stubEnv('VITE_USE_API', 'true')
+    configureApiClient({ useApi: true })
+  })
+
+  afterEach(() => {
+    // Drops the context, the per-resource entries and the units a test left behind.
+    invalidateOnboardingResources()
+    invalidateVendorContext()
+    invalidateMeasurementCatalog()
+  })
+
+  function renderProvider() {
+    return render(
+      <MemoryRouter>
+        <VendorAccountProvider>
+          <AccountReading />
+        </VendorAccountProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it('seeds from a context already in the context cache, with no request', async () => {
+    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(resolved)
+    await loadVendorContext('test-vendor', (id) => vendorOnboardingService.getVendorContext(id))
+    readContext.mockClear()
+
+    renderProvider()
+
+    expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(readContext).not.toHaveBeenCalled()
   })
 })

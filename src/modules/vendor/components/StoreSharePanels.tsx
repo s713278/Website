@@ -59,10 +59,10 @@ function ShopLinkPanel({ identifier }: { identifier: string }) {
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2.5">
-        <a href={whatsApp} target="_blank" rel="noreferrer">
+        <a href={whatsApp}>
           <Button className="rounded-full">Share on WhatsApp</Button>
         </a>
-        <Link to={`/stores/${identifier}`}>
+        <Link to={`/stores/${identifier}`} target="_blank" rel="noreferrer">
           <Button variant="outline" className="rounded-full">
             Open storefront
           </Button>

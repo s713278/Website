@@ -358,8 +358,10 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     if (categories.some((category) => !isAccountEntry(category.id, category.pending))) return false
     if (products.some((product) => !isAccountEntry(product.id, product.pending))) return false
   }
+  // Saved account categories mirror the account, so they may keep a previous business type.
   if (business.businessType && categories.some(
-    (category) => category.businessTypeId !== business.businessType?.id,
+    (category) => (category.pending || value.catalogSource === 'sample') &&
+      category.businessTypeId !== business.businessType?.id,
   )) return false
   const categoryIds = new Set(categories.map((category) => category.id))
   if (products.some((product) => !categoryIds.has(product.categoryId))) return false
@@ -387,6 +389,7 @@ export function parsePersistedEnvelope(value: unknown): VendorOnboardingPersiste
     'ownerId',
     'furthestVisitedStep',
     'hasLocalEdits',
+    'editedSteps',
     'draft',
     'previewSnapshot',
   ])) return null
@@ -396,9 +399,25 @@ export function parsePersistedEnvelope(value: unknown): VendorOnboardingPersiste
   if (!isIsoDate(value.updatedAt) || !isStep(value.furthestVisitedStep)) return null
   // Optional: envelopes written before the field existed are still valid.
   if (value.hasLocalEdits !== undefined && typeof value.hasLocalEdits !== 'boolean') return null
+  if (value.editedSteps !== undefined && !(Array.isArray(value.editedSteps) && value.editedSteps.every(isStep))) return null
   if (!isPersistedDraft(value.draft)) return null
   if (value.previewSnapshot !== null && !isPreviewSnapshot(value.previewSnapshot)) return null
   return value as VendorOnboardingPersistedEnvelopeV1
+}
+
+/** Steps 3-9 only, sorted and unique: the only steps an account copy can replace. */
+export function normalizeEditedSteps(steps: Iterable<OnboardingStep>): OnboardingStep[] {
+  return [...new Set(steps)].filter((step) => step >= 3 && step <= 9).sort((a, b) => a - b)
+}
+
+/**
+ * The edited steps an envelope restores. Envelopes written before `editedSteps` existed
+ * carry the legacy flag: `false` means nothing edited; `true` or absent means every step
+ * edited, so restoring one never overwrites it with the account copy.
+ */
+export function restoredEditedSteps(envelope: VendorOnboardingPersistedEnvelopeV1): OnboardingStep[] {
+  if (envelope.editedSteps) return normalizeEditedSteps(envelope.editedSteps)
+  return envelope.hasLocalEdits === false ? [] : [3, 4, 5, 6, 7, 8, 9]
 }
 
 function safeAssetUrl(value: string | null): string | null {
