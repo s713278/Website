@@ -38,7 +38,7 @@ into a session by `applySession()`.
 |-------|---------|
 | `role` | Active session. The login screen that was used: customer or vendor. Shop cart, orders, and checkout follow this. `/vendor` and onboarding follow this. The other role on the same phone is not entered until that screen is used. |
 | `roles` | Every role the backend verified for the phone. This is not a second login. |
-| `vendors` | Vendor memberships from the response `vendors[]`. |
+| `vendors` | Vendor memberships from the response `vendors[]`: ID and name only. Each entry's `status` and `onboarding` are a sign-in snapshot used once for landing (see [Where a session lands](#where-a-session-lands)) and are never stored. |
 | `vendorId` | Set **only** when there is exactly one membership, whichever login form was used — memberships come from the backend, not from the requested role. Several memberships require an explicit `selectVendor()` choice; the first entry is never taken silently. |
 
 ## Lifecycle
@@ -106,10 +106,22 @@ It follows the login screen. A customer OTP stays on the shop (`from`, otherwise
 goes to `/vendor` when setup is already submitted, and to `/onboarding` when it is not. The same
 phone can hold both roles on the server, but one OTP does not open both sides.
 
-For a vendor it then reads the vendor context alone — one cached request, or none when a context is
+At sign-in the chosen vendor's `verify-otp` `vendors[]` entry decides first, when it carries a
+`status` and onboarding evidence (a usable `next_step`, or a known `onboarding.status`). The same
+`isStoreSubmitted` rule below applies, through `storeSubmittedAtSignIn`; no context is awaited.
+Sign-in then starts, without awaiting, the reads the destination needs through the shared caches:
+`/vendor` starts the context and the shell's billing read, `/onboarding` the context, the profile and
+the landing step's reads (from this entry's `next_step`, else the context's), so the provider, shell
+and wizard join those requests. Any missing or unknown value, a multi-vendor identity with no store
+chosen, or a context already resolved in the context cache falls back to the context path below.
+The entry is a snapshot that go-live and saved setup steps make stale: it is used only for this
+sign-in decision and never persisted, so `VendorLandingRedirect` and every later landing read the
+context.
+
+Otherwise, for a vendor it reads the vendor context alone — one cached request, or none when a context is
 already resolved — and routes on completed setup and submission. Only a vendor headed into setup also
-starts the wizard's hydration, without awaiting it. An active store with
-`onboarding.next_step: 11` goes to `/vendor`; steps 1–10 go to `/onboarding` even if the store
+starts the profile and the landing step's reads from that context, without awaiting them. An active
+store with `onboarding.next_step: 11` goes to `/vendor`; steps 1–10 go to `/onboarding` even if the store
 is active and approved. If the pointer is absent or invalid, `onboarding.status: COMPLETED`
 establishes completion; activation alone is a legacy fallback only when onboarding status is
 also absent or unknown. Approval does not establish completion. The wizard resumes at the backend step
@@ -170,8 +182,8 @@ accepted read — `{ vendorId, vendorStatus, approvalStatus, storeIdentifier, on
 description, nextStep } }` — so the first frame already shows the right buttons. The live read
 still runs and corrects it.
 
-- **Written** by the cache layer whenever a read is accepted: `loadVendorContext` and
-  `loadVendorOnboardingState`.
+- **Written** by the cache layer whenever a context read is accepted: `loadVendorContext`, which
+  every context read goes through, sign-in's included.
 - **Read** only by the marketing header, including on `/onboarding`. Precedence: resolved memory
   cache, then this session's ready read, then the record (while the read is loading or after it
   failed), then the previous fallback (loading → Dashboard, blank on `/onboarding`; failed → Log out

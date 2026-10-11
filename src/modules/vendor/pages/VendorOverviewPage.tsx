@@ -8,13 +8,14 @@ import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import {
   isoDay,
   selectWorkQueue,
+  WORK_QUEUE_STATUSES,
   workQueueStatusCounts,
   workQueueWindow,
 } from '@/modules/vendor/lib/work-queue'
 import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Spinner } from '@/shared/components'
+import { Button, Skeleton, Spinner } from '@/shared/components'
 
 /**
  * One figure and what it counts, as the shared design draws it: the label small and
@@ -32,6 +33,19 @@ function MetricTile({ to, label, value }: { to: string; label: string; value: Re
       <span className="vc-label block">{label}</span>{' '}
       <span className="font-display vc-num mt-1.5 block text-2xl font-bold">{value}</span>
     </Link>
+  )
+}
+
+/** A `MetricTile`'s frame with its two lines drawn as skeletons, so it holds the same space. */
+function MetricTilePlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="rounded-[var(--vc-radius)] border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-4 py-3.5 shadow-[var(--vc-shadow)]"
+    >
+      <Skeleton className="h-[0.84rem] w-16" />
+      <Skeleton className="mt-1.5 h-8 w-10" />
+    </div>
   )
 }
 
@@ -117,23 +131,35 @@ function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
     }
   }, [userId])
 
-  if (loading) return <Spinner label="Loading your order counts…" />
-  if (error) return <p className="text-sm text-[var(--md-danger)]">{error}</p>
-  if (!insights) return null
-
+  // The product tile renders in every state, so its read starts alongside this one rather
+  // than after it. While loading, placeholders hold the count tiles' cells so nothing moves
+  // when they arrive; an error line sits above the grid, where nothing arrives later.
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {/* New counts PENDING + SCHEDULED but links to SCHEDULED: the single-status filter
-          omits legacy PENDING rows, so its list can be shorter than the tile count. */}
-      {workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
-        <MetricTile
-          key={status}
-          to={`/vendor/orders?status=${status}`}
-          label={label}
-          value={count}
-        />
-      ))}
-      <ProductCountTile vendorId={vendorId} />
+    <div className="grid gap-3">
+      {loading ? (
+        <span role="status" className="sr-only">
+          Loading your order counts…
+        </span>
+      ) : null}
+      {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {loading
+          ? WORK_QUEUE_STATUSES.map((status) => <MetricTilePlaceholder key={status} />)
+          : null}
+        {/* New counts PENDING + SCHEDULED but links to SCHEDULED: the single-status filter
+            omits legacy PENDING rows, so its list can be shorter than the tile count. */}
+        {!loading && !error && insights
+          ? workQueueStatusCounts(insights.ordersByStatus).map(({ status, label, count }) => (
+              <MetricTile
+                key={status}
+                to={`/vendor/orders?status=${status}`}
+                label={label}
+                value={count}
+              />
+            ))
+          : null}
+        <ProductCountTile vendorId={vendorId} />
+      </div>
     </div>
   )
 }

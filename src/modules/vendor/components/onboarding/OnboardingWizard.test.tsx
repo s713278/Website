@@ -7,15 +7,29 @@ import { MemoryRouter } from 'react-router-dom'
 import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
-import { invalidateVendorOnboardingState } from '../../lib/onboarding-state-cache'
-import { loadVendorContext } from '../../lib/vendor-context-cache'
+import { invalidateMeasurementCatalog } from '../../lib/measurement-catalog-cache'
+import {
+  invalidateOnboardingResources,
+  loadOnboardingResource,
+  peekOnboardingResource,
+} from '../../lib/onboarding-resource-cache'
+import type { OnboardingResource } from '../../lib/onboarding-resume'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
+import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
+import type { OnboardingStep } from '../../types/onboarding'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
   vendorProductId: 900, skuId: 4001, priceId: 8001,
   name: 'Test Juice-1 L', size: '1 L', displayName: 'Test Juice', description: '',
   isActive: true, quantity: 1, unit: 'L', listPrice: 100, salePrice: 90,
+}
+
+function invalidateAll() {
+  invalidateOnboardingResources()
+  invalidateVendorContext()
+  invalidateMeasurementCatalog()
 }
 
 let scrollIntoView: PropertyDescriptor | undefined
@@ -33,7 +47,7 @@ beforeEach(() => {
   scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   localStorage.clear()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   useOnboardingStore.getState().abandonDraft()
   useAuthStore.getState().applySession({
     token: 'test-token', refreshToken: null,
@@ -68,7 +82,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  invalidateVendorOnboardingState()
+  invalidateAll()
   useOnboardingStore.getState().abandonDraft()
   useAuthStore.getState().clearSession()
   localStorage.clear()
@@ -81,7 +95,7 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
 })
 
-function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false) {
+function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false, catalogPreview?: unknown) {
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
       vendor_id: 91, vendor_status: 'ACTIVE', approval_status: approvalStatus,
@@ -89,6 +103,7 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
       business_name: 'Test Store',
       onboarding: { status: nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS', next_step: nextStep },
       subscription: { limits: { max_categories: 3, max_products: 10, max_skus: maxSkus }, usage: { skus: skuUsage } },
+      catalog_preview: catalogPreview,
     },
   }))
   const wizard = <MemoryRouter><OnboardingWizard /></MemoryRouter>
@@ -120,6 +135,36 @@ function fillNewSize() {
   fireEvent.change(screen.getAllByLabelText('MRP (₹)').at(-1)!, { target: { value: '180' } })
   fireEvent.change(screen.getAllByLabelText('Discounted price (₹)').at(-1)!, { target: { value: '160' } })
 }
+
+const EMPTY_PAGE = { items: [], pageNumber: 0, pageSize: 12, totalPages: 0, totalElements: 0, lastPage: true }
+
+// The reference lists Steps 4-5 show; they are not account reads.
+function stubReferencePages() {
+  vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue(EMPTY_PAGE)
+  vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(EMPTY_PAGE)
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((settle, fail) => { resolve = settle; reject = fail })
+  return { promise, resolve, reject }
+}
+
+const ACCOUNT_READS = [
+  'getVendorContext', 'getVendorProfile', 'getBusinessTypes', 'getVendorCategories',
+  'getVendorProducts', 'getVendorSkus', 'getCheckoutOptions', 'getMeasurements',
+] as const
+
+/** How many times each account read (and the units) has been requested, omitting zeros. */
+function accountReadCounts() {
+  return Object.fromEntries(ACCOUNT_READS
+    .map((name) => [name, vi.mocked(vendorOnboardingService[name]).mock.calls.length] as const)
+    .filter(([, count]) => count > 0))
+}
+
+const stepSkeleton = () => screen.queryByRole('status', { name: 'Loading this step' })
+const continueDisabled = (name = 'Continue') => screen.getByRole('button', { name }).matches(':disabled')
 
 describe('onboarding account hydration and size permissions', () => {
   it.each(['APPROVED', 'ACTIVE'])('shows the Store & Share panels and dashboard link for %s approval', async (approvalStatus) => {
@@ -279,6 +324,85 @@ describe('onboarding account hydration and size permissions', () => {
   })
 })
 
+describe('account copy per step around unsaved edits', () => {
+  const localProduct = {
+    id: 77, name: 'Local Juice', description: null, imageUrl: null,
+    measurementId: null, measurementName: null, categoryId: 10,
+  }
+
+  function seedEdited(editedSteps: OnboardingStep[]) {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        mobileVerified: true,
+        currentStep: 5,
+        completedSteps: [1, 2, 3, 4] as OnboardingStep[],
+        products: [localProduct],
+      },
+      furthestVisitedStep: 5,
+      draftOwnerId: '91',
+      editedSteps,
+    })
+  }
+
+  it('takes the account copy for unedited steps and keeps the edited one', async () => {
+    seedEdited([5])
+    renderAccount('PENDING', 6)
+
+    // Step 5's reads cover Steps 3, 4 and 9 too; Step 6's sizes wait until it opens.
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.categories.map((category) => category.id)).toEqual([10])
+    expect(state.draft.business.businessType?.id).toBe(7)
+    expect(state.draft.products).toEqual([localProduct])
+    expect(state.draft.currentStep).toBe(5)
+    expect(state.furthestVisitedStep).toBe(5)
+    expect(state.editedSteps).toEqual([5])
+    expect(state.recoveryMessage).not.toMatch(/Picked up/)
+  })
+
+  it('rebuilds the whole draft from the account when nothing is edited', async () => {
+    seedEdited([])
+    renderAccount('PENDING', 6)
+
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).toBe(6))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.categories.map((category) => category.id)).toEqual([10])
+    expect(state.draft.products.map((product) => product.id)).toEqual([31])
+    expect(state.draft.skus.map((sku) => sku.id)).toEqual(['sku-4001'])
+    expect(state.furthestVisitedStep).toBe(6)
+    expect(state.recoveryMessage).toMatch(/Picked up/)
+  })
+
+  it('lets the account win every step once the store is submitted', async () => {
+    stubReferencePages()
+    seedEdited([5])
+    renderAccount('PENDING')
+
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).toBe(10))
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+    act(() => useOnboardingStore.getState().goToStep(5))
+    await waitFor(() => expect(useOnboardingStore.getState().draft.products.map((product) => product.id)).toEqual([31]))
+  })
+
+  it('leaves a step whose read failed alone and unloaded', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockRejectedValue(new Error('down'))
+    stubReferencePages()
+    seedEdited([5])
+    renderAccount('PENDING', 9)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+
+    act(() => {
+      useOnboardingStore.setState({ furthestVisitedStep: 6 })
+      useOnboardingStore.getState().goToStep(6)
+    })
+
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9])
+    expect(useOnboardingStore.getState().draft.skus).toEqual([])
+  })
+})
+
 describe('stale validation errors', () => {
   const lastField = (label: string) => screen.getAllByLabelText(label).at(-1) as HTMLInputElement
   const fieldError = (input: HTMLInputElement) => document.getElementById(`${input.id}-error`)
@@ -397,7 +521,7 @@ describe('measurement catalog reads', () => {
       useOnboardingStore.setState({ furthestVisitedStep: 5 })
       useOnboardingStore.getState().goToStep(5)
     })
-    expect(await screen.findByText('Loading measurements…')).toBeTruthy()
+    expect(await screen.findByRole('status', { name: 'Loading this step' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Continue' }).matches(':disabled')).toBe(true)
     // Step 5 stays unmounted until the catalog lands, so its own list is not started early,
     // torn down and sent again.
@@ -405,7 +529,7 @@ describe('measurement catalog reads', () => {
     expect(productList).not.toHaveBeenCalled()
 
     await act(async () => answer(SAMPLE_MEASUREMENT_CATALOG))
-    await waitFor(() => expect(screen.queryByText('Loading measurements…')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading this step' })).toBeNull())
     expect(screen.getByRole('button', { name: 'Continue' }).matches(':disabled')).toBe(false)
     expect(useOnboardingStore.getState().productMeasurementCatalog).toBe(SAMPLE_MEASUREMENT_CATALOG)
     // At most once: the list cache is module-level, so a test that ran earlier may have filled it.
@@ -543,6 +667,8 @@ describe('Step 10 readiness issues', () => {
   it('focuses the readiness list when Submit finds issues owned by earlier steps', async () => {
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    // An unsubmitted Step 10 reads every account resource.
+    await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
     const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
@@ -562,6 +688,8 @@ describe('Step 10 store summary', () => {
   it('groups checkout settings under Checkout Options and shows WhatsApp numbers in full', async () => {
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    expect(screen.getByRole('heading', { level: 1, name: 'Review your store' })).toBeTruthy()
+    expect(screen.getByText('Check your store before submitting.')).toBeTruthy()
     act(() => {
       useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210', supportWhatsapp: '9000000001' })
     })
@@ -588,6 +716,58 @@ describe('Step 10 store summary', () => {
   })
 })
 
+const ALL_RESOURCES: readonly OnboardingResource[] = [
+  'profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout',
+]
+
+/** Fill the shared account cache for vendor 91, as an earlier visit would have. */
+async function cacheEveryResource() {
+  await Promise.all(ALL_RESOURCES.map((resource) => loadOnboardingResource('91', resource, async () => (
+    resource === 'profile' || resource === 'checkout' ? null : []
+  ))))
+}
+
+/** The resources still resolved in the shared cache for vendor 91. */
+const cachedResources = () => ALL_RESOURCES.filter((resource) => peekOnboardingResource('91', resource))
+
+describe('what a save clears from the shared account cache', () => {
+  it('drops only the categories and the context after a Step 4 save', async () => {
+    stubReferencePages()
+    const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockResolvedValue(undefined)
+    await cacheEveryResource()
+    renderAccount('APPROVED', 7)
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 4,/ }))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }],
+    }), 4))
+    expect(peekVendorContext('91')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+
+    expect(save).toHaveBeenCalledWith('91', [11])
+    expect(cachedResources()).toEqual(['profile', 'businessTypes', 'products', 'skus', 'checkout'])
+    expect(peekVendorContext('91')).toBeNull()
+  })
+
+  it('drops only the checkout settings and the context after a Step 7 save', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await cacheEveryResource()
+    renderAccount('APPROVED', 7)
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await waitFor(() => expect(peekVendorContext('91')).not.toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+
+    expect(cachedResources()).toEqual(['profile', 'businessTypes', 'categories', 'products', 'skus'])
+    expect(peekVendorContext('91')).toBeNull()
+  })
+})
+
 describe('submitting the store for review', () => {
   it('reads the submitted context back once and shares it with the dashboard', async () => {
     renderAccount('APPROVED', 10)
@@ -601,6 +781,8 @@ describe('submitting the store for review', () => {
       }))
       store.updateRuntime({ orderWhatsapp: '9876543210' })
     })
+    // An unsubmitted Step 10 reads every account resource.
+    await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
     const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
     const context = vi.mocked(vendorOnboardingService.getVendorContext)
     const readsBefore = context.mock.calls.length
@@ -609,6 +791,8 @@ describe('submitting the store for review', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
     await waitFor(() => expect(goLive).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(context.mock.calls.length).toBe(readsBefore + 1))
+    // Go-live changes everything the account holds for the vendor but the platform business types.
+    expect(cachedResources()).toEqual(['businessTypes'])
 
     // The dashboard's provider reads through the same cache, so opening it costs nothing.
     const shared = await loadVendorContext('91', vendorOnboardingService.getVendorContext)
@@ -665,5 +849,345 @@ describe('step messages', () => {
     await screen.findByRole('button', { name: /Step 8,.*You are here/ })
     expect(screen.getByText('Choose how customers pay, and pick one default.')).toBeTruthy()
     expect(screen.queryByText('Choose accepted methods and one default.')).toBeNull()
+  })
+})
+
+describe('per-step account reads', () => {
+  it('lands on Step 7 reading only the context, the profile and checkout, and reads Step 4 on opening it', async () => {
+    stubReferencePages()
+    const checkout = deferred<null>()
+    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockReturnValue(checkout.promise)
+    renderAccount('APPROVED', 7)
+
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(stepSkeleton()).toBeTruthy()
+    expect(continueDisabled()).toBe(true)
+
+    await act(async () => checkout.resolve(null))
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(continueDisabled()).toBe(false)
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 1 })
+
+    act(() => useOnboardingStore.getState().goToStep(4))
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(accountReadCounts()).toEqual({
+      getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 1, getBusinessTypes: 1, getVendorCategories: 1,
+    })
+  })
+
+  it('opens an approved store on Step 10 with the context and profile alone, and the phone preview', async () => {
+    renderAccount('APPROVED')
+
+    expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
+    expect(screen.getByText('Share your store link.')).toBeTruthy()
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(document.querySelector('.onboarding-preview-stage')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Your shop' })).toBeTruthy()
+  })
+
+  it('opens a pending store on Step 10 with the context and profile alone, and the phone preview', async () => {
+    renderAccount('PENDING')
+
+    expect(await screen.findByRole('heading', { name: 'Under review' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Your store' })).toBeTruthy()
+    expect(screen.getByText('Submitted for review. You can still add categories and products.')).toBeTruthy()
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(document.querySelector('.onboarding-preview-stage')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Your shop' })).toBeTruthy()
+  })
+
+  it('fills a submitted Step 10 phone preview from the context catalog summary, without reading the catalog', async () => {
+    renderAccount('APPROVED', 11, 2, 1, false, {
+      categories: [{ id: 10, name: 'Fresh Juices' }],
+      products: [{ id: 31, name: 'Mango Juice', category_id: 10, image_url: null, price: 60 }],
+      active_sku_count: 4,
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    const stage = document.querySelector<HTMLElement>('.onboarding-preview-stage:not([role])')!
+    const count = (label: string) => within(stage).getByText(label).previousElementSibling?.textContent
+    expect(count('Categories')).toBe('1')
+    expect(count('Products')).toBe('1')
+    expect(count('Sizes')).toBe('4')
+    expect(within(stage).getByText('Fresh Juices')).toBeTruthy()
+    expect(within(stage).getByText('Mango Juice')).toBeTruthy()
+    expect(within(stage).getByText('₹60')).toBeTruthy()
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+    expect(useOnboardingStore.getState().draft.categories).toEqual([])
+  })
+
+  it('still shows a submitted store its status when the profile read fails', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockRejectedValue(new Error('down'))
+    renderAccount('APPROVED')
+
+    expect(await screen.findByRole('heading', { name: 'Put this on your counter' })).toBeTruthy()
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+    // Nothing named the store, so the status names it by its fallback, 'your shop'. That name
+    // is only rendered in the QR image's alt text, and jsdom has no canvas to draw the QR.
+    const { draft } = useOnboardingStore.getState()
+    expect(draft.storefront.storeName).toBe('')
+    expect(draft.business.businessName).toBe('')
+  })
+
+  it('blocks a step whose read failed until Try again reads that resource alone', async () => {
+    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockRejectedValueOnce(new Error('down'))
+    renderAccount('APPROVED', 7)
+
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    expect(continueDisabled()).toBe(true)
+    expect(screen.getByRole('button', { name: 'Back' }).matches(':disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: /^Step 6,/ }).matches(':disabled')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByText('Something went wrong')).toBeNull())
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 2 })
+  })
+
+  it('reads neither the profile again nor business types while the profile read has failed', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockRejectedValueOnce(new Error('down'))
+    renderAccount('APPROVED', 3)
+
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    await act(async () => {})
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1 })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 2, getBusinessTypes: 1 })
+  })
+
+  it('keeps an edit made while its step’s read was in flight', async () => {
+    const products = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
+    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockReturnValue(products.promise)
+    stubReferencePages()
+    renderAccount('APPROVED', 5)
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    const local = {
+      id: 77, name: 'Local Juice', description: null, imageUrl: null,
+      measurementId: null, measurementName: null, categoryId: 10,
+    }
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, products: [local] }), 5))
+
+    await act(async () => products.resolve([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
+    ]))
+
+    await waitFor(() => expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([31]))
+    expect(useOnboardingStore.getState().draft.products).toEqual([local])
+    expect(useOnboardingStore.getState().editedSteps).toContain(5)
+  })
+
+  it('applies a read that lands after the vendor moved on, without disturbing the new step', async () => {
+    const products = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
+    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockReturnValue(products.promise)
+    stubReferencePages()
+    renderAccount('APPROVED', 5)
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    act(() => useOnboardingStore.getState().goToStep(4))
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+
+    await act(async () => products.resolve([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
+    ]))
+
+    expect(useOnboardingStore.getState().draft.products.map((product) => product.id)).toEqual([31])
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(4)
+    expect(stepSkeleton()).toBeNull()
+    expect(continueDisabled()).toBe(false)
+  })
+
+  it('drops a read that lands after the wizard has gone', async () => {
+    const products = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
+    vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockReturnValue(products.promise)
+    stubReferencePages()
+    renderAccount('APPROVED', 5)
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    cleanup()
+
+    await act(async () => products.resolve([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
+    ]))
+
+    expect(useOnboardingStore.getState().draft.products).toEqual([])
+    expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([])
+  })
+
+  it('opens Step 6 on sample units when the units read fails', async () => {
+    vi.spyOn(vendorOnboardingService, 'getMeasurements').mockRejectedValue(new Error('down'))
+    renderAccount('APPROVED', 6)
+
+    expect(await screen.findByRole('button', { name: 'Add another size to Test Juice' })).toBeTruthy()
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+    const state = useOnboardingStore.getState()
+    expect(state.measurementCatalog).toBe(SAMPLE_MEASUREMENT_CATALOG)
+    expect(state.productMeasurementCatalog).toEqual([])
+    expect(state.draft.skus.map((sku) => sku.id)).toEqual(['sku-4001'])
+  })
+
+  it('applies the account sizes to Step 6 after an upstream edit, so its Continue deletes none', async () => {
+    stubReferencePages()
+    renderAccount('APPROVED', 5)
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+
+    // Back on Step 4, a category change rewrites the never-loaded sizes section.
+    act(() => {
+      useOnboardingStore.getState().goToStep(4)
+      useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, skus: [] }), 4)
+      useOnboardingStore.setState({ furthestVisitedStep: 6 })
+      useOnboardingStore.getState().goToStep(6)
+    })
+
+    await waitFor(() => expect(useOnboardingStore.getState().draft.skus.map((sku) => sku.id)).toEqual(['sku-4001']))
+    expect(useOnboardingStore.getState().editedSteps).not.toContain(6)
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(vendorOnboardingService.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('blocks every step while the context is unread, and Try again reads it and the step', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValueOnce(new Error('Context is down'))
+    renderAccount('APPROVED', 7)
+
+    expect(await screen.findByText('Context is down')).toBeTruthy()
+    expect(screen.getByText('Something went wrong')).toBeTruthy()
+    expect(continueDisabled()).toBe(true)
+    expect(vendorOnboardingService.getCheckoutOptions).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    expect(screen.queryByText('Context is down')).toBeNull()
+    expect(accountReadCounts()).toEqual({ getVendorContext: 2, getVendorProfile: 1, getCheckoutOptions: 1 })
+  })
+
+  it('without a resume pointer, holds Step 10 on a failed read and derives the step once it succeeds', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockRejectedValueOnce(new Error('down'))
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
+      data: {
+        vendor_id: 91, vendor_status: 'SETTING_UP', approval_status: 'PENDING',
+        onboarding: { status: 'IN_PROGRESS', next_step: null },
+      },
+    }))
+    render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
+
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Step 10,.*You are here/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    // Saved sizes but no checkout yet: delivery is the first unfinished step.
+    expect(await screen.findByRole('button', { name: /Step 7,.*You are here/ })).toBeTruthy()
+  })
+})
+
+describe('Continue prefetches the next step’s account reads', () => {
+  async function openAt(step: OnboardingStep, approvalStatus = 'PENDING', action = 'Continue') {
+    stubReferencePages()
+    renderAccount(approvalStatus, step)
+    await screen.findByRole('button', { name: new RegExp(`Step ${step},.*You are here`) })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(continueDisabled(action)).toBe(false))
+  }
+
+  it('reads Step 4’s categories while the Step 3 save is in flight, and Step 4 reuses them', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockReturnValue(save.promise)
+    await openAt(3)
+    const categories = vi.mocked(vendorOnboardingService.getVendorCategories)
+    expect(categories).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(categories).toHaveBeenCalledTimes(1))
+    expect(vendorOnboardingService.saveBusinessType).toHaveBeenCalledTimes(1)
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(categories).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads Step 5’s products but not the units on Continue; Step 5 reads the units when it opens', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveCategories').mockReturnValue(save.promise)
+    await openAt(4)
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }],
+    }), 4))
+    const products = vi.mocked(vendorOnboardingService.getVendorProducts)
+    const measurements = vi.mocked(vendorOnboardingService.getMeasurements)
+    expect(products).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(vendorOnboardingService.saveCategories).toHaveBeenCalledTimes(1))
+    expect(products).toHaveBeenCalledTimes(1)
+    expect(measurements).not.toHaveBeenCalled()
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(products).toHaveBeenCalledTimes(1)
+    expect(measurements).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads only what Step 10 still lacks on Continue from Step 9, and no units until it opens', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockReturnValue(save.promise)
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockResolvedValue(undefined)
+    await openAt(9, 'PENDING', 'Review readiness')
+    expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1 })
+    act(() => {
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, storefront: { ...draft.storefront, businessLocation: 'Test Market' },
+      }), 9)
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review readiness' }))
+    await waitFor(() => expect(vendorOnboardingService.saveStorefront).toHaveBeenCalledTimes(1))
+    expect(accountReadCounts()).toEqual({
+      getVendorContext: 1, getVendorProfile: 1, getBusinessTypes: 1,
+      getVendorCategories: 1, getVendorProducts: 1, getVendorSkus: 1, getCheckoutOptions: 1,
+    })
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    await waitFor(() => expect(vendorOnboardingService.getMeasurements).toHaveBeenCalledTimes(1))
+    expect(accountReadCounts()).toMatchObject({
+      getVendorProfile: 1, getBusinessTypes: 1,
+      getVendorCategories: 1, getVendorProducts: 1, getVendorSkus: 1, getCheckoutOptions: 1,
+    })
+  })
+
+  it('reads nothing on Continue from Step 7, whose checkout settings Step 8 already has', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openAt(7, 'APPROVED')
+    const before = accountReadCounts()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    expect(accountReadCounts()).toEqual(before)
+  })
+
+  it('keeps a failed prefetch off the current step; the next step reads again and shows its own failure', async () => {
+    const save = deferred<undefined>()
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockReturnValue(save.promise)
+    const categories = vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockRejectedValue(new Error('down'))
+    await openAt(3)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(categories).toHaveBeenCalledTimes(1))
+    await act(async () => { await Promise.resolve() })
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    expect(await screen.findByText('Something went wrong')).toBeTruthy()
+    expect(categories).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
   })
 })

@@ -50,7 +50,7 @@ const runtime = createEmptyRuntimeState()
 
 describe('validateStep — step 6 SKUs', () => {
   it('accepts a SKU resumed from the vendor account', () => {
-    // `buildResumeDraft` mints account IDs as `sku-<serverSkuId>`. A vendor signing back
+    // `applySkus` mints account IDs as `sku-<serverSkuId>`. A vendor signing back
     // in has only these, and every one of them is a real saved SKU.
     const draft = draftWith(
       [product(1, 'Cold Pressed Juice')],
