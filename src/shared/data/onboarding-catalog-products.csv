@@ -1,0 +1,128 @@
+id,code,name,category_id,category_code,category_unique_code,business_type_id,business_type_code,icon,icon_image,sort_order
+1001,home-kitchen__meals__veg-thali,Veg Thali,101,meals,home-kitchen__meals,1,home-kitchen,🍛,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f35b.png,1
+1002,home-kitchen__meals__chicken-curry-meal,Chicken Curry Meal,101,meals,home-kitchen__meals,1,home-kitchen,🍗,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f357.png,2
+1003,home-kitchen__meals__millet-power-bowl,Millet Power Bowl,101,meals,home-kitchen__meals,1,home-kitchen,🥗,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f957.png,3
+1004,home-kitchen__meals__tiffin-combo,Tiffin Combo,101,meals,home-kitchen__meals,1,home-kitchen,🍱,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f371.png,4
+1005,home-kitchen__snacks__murukku,Murukku,102,snacks,home-kitchen__snacks,1,home-kitchen,🥨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f968.png,1
+1006,home-kitchen__snacks__mixture,Mixture,102,snacks,home-kitchen__snacks,1,home-kitchen,🥜,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f95c.png,2
+1007,home-kitchen__snacks__banana-chips,Banana Chips,102,snacks,home-kitchen__snacks,1,home-kitchen,🍌,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f34c.png,3
+1008,home-kitchen__sweets__millet-laddu,Millet Laddu,103,sweets,home-kitchen__sweets,1,home-kitchen,🍬,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36c.png,1
+1009,home-kitchen__sweets__besan-laddu,Besan Laddu,103,sweets,home-kitchen__sweets,1,home-kitchen,🍯,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36f.png,2
+1010,home-kitchen__sweets__coconut-barfi,Coconut Barfi,103,sweets,home-kitchen__sweets,1,home-kitchen,🥥,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f965.png,3
+1011,pickles__pickles__mango,Mango Pickle,104,pickles,pickles__pickles,2,pickles,🥭,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f96d.png,1
+1012,pickles__pickles__gongura,Gongura Pickle,104,pickles,pickles__pickles,2,pickles,🌿,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33f.png,2
+1013,pickles__pickles__lemon,Lemon Pickle,104,pickles,pickles__pickles,2,pickles,🍋,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f34b.png,3
+1014,pickles__pickles__garlic,Garlic Pickle,104,pickles,pickles__pickles,2,pickles,🧄,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9c4.png,4
+1015,pickles__combo-packs__trio,Pickle Trio Combo,105,combo-packs,pickles__combo-packs,2,pickles,🎁,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f381.png,1
+1016,pickles__combo-packs__family,Family Combo Pack,105,combo-packs,pickles__combo-packs,2,pickles,📦,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e6.png,2
+1017,pickles__combo-packs__gift-box,Gift Box,105,combo-packs,pickles__combo-packs,2,pickles,🎀,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f380.png,3
+1018,pickles__powders__karam-podi,Karam Podi,106,powders,pickles__powders,2,pickles,🌶️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f336.png,1
+1019,pickles__powders__idli-podi,Idli Podi,106,powders,pickles__powders,2,pickles,🥄,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f944.png,2
+1020,pickles__powders__kandi-podi,Kandi Podi,106,powders,pickles__powders,2,pickles,🫘,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fad8.png,3
+1021,pickles__powders__karivepaku,Karivepaku Kaaram,106,powders,pickles__powders,2,pickles,🍃,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f343.png,4
+1022,pickles__chutneys__coconut,Coconut Chutney,107,chutneys,pickles__chutneys,2,pickles,🥥,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f965.png,1
+1023,pickles__chutneys__tomato,Tomato Chutney,107,chutneys,pickles__chutneys,2,pickles,🍅,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f345.png,2
+1024,pickles__chutneys__ginger,Ginger Chutney,107,chutneys,pickles__chutneys,2,pickles,🫚,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fada.png,3
+1025,bakery__breads__sandwich,Sandwich Bread,108,breads,bakery__breads,3,bakery,🍞,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f35e.png,1
+1026,bakery__breads__multigrain,Multigrain Loaf,108,breads,bakery__breads,3,bakery,🌾,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33e.png,2
+1027,bakery__breads__pav,Pav Buns,108,breads,bakery__breads,3,bakery,🥐,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f950.png,3
+1028,bakery__cakes__chocolate,Chocolate Cake,109,cakes,bakery__cakes,3,bakery,🎂,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f382.png,1
+1029,bakery__cakes__butterscotch,Butterscotch Cake,109,cakes,bakery__cakes,3,bakery,🍰,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f370.png,2
+1030,bakery__cakes__cupcakes,Cupcakes,109,cakes,bakery__cakes,3,bakery,🧁,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9c1.png,3
+1031,bakery__cookies__butter,Butter Cookies,110,cookies,bakery__cookies,3,bakery,🍪,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36a.png,1
+1032,bakery__cookies__jeera,Jeera Biscuits,110,cookies,bakery__cookies,3,bakery,🥨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f968.png,2
+1033,bakery__cookies__choco-chip,Chocolate Chip Cookies,110,cookies,bakery__cookies,3,bakery,🍫,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36b.png,3
+1034,spices__masalas__garam,Garam Masala,111,masalas,spices__masalas,4,spices,🌶️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f336.png,1
+1035,spices__masalas__sambar,Sambar Powder,111,masalas,spices__masalas,4,spices,🥄,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f944.png,2
+1036,spices__masalas__biryani,Biryani Masala,111,masalas,spices__masalas,4,spices,🍛,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f35b.png,3
+1037,spices__masalas__rasam,Rasam Powder,111,masalas,spices__masalas,4,spices,🥣,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f963.png,4
+1038,spices__whole-spices__cardamom,Green Cardamom,112,whole-spices,spices__whole-spices,4,spices,🟢,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f7e2.png,1
+1039,spices__whole-spices__cloves,Cloves,112,whole-spices,spices__whole-spices,4,spices,🟤,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f7e4.png,2
+1040,spices__whole-spices__cinnamon,Cinnamon Sticks,112,whole-spices,spices__whole-spices,4,spices,🪵,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fab5.png,3
+1041,snacks__savory__mixture,Namkeen Mixture,113,savory,snacks__savory,5,snacks,🥨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f968.png,1
+1042,snacks__savory__murukku,Murukku,113,savory,snacks__savory,5,snacks,🥨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f968.png,2
+1043,snacks__savory__thattai,Thattai,113,savory,snacks__savory,5,snacks,🍘,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f358.png,3
+1044,snacks__sweets__mysore-pak,Mysore Pak,114,sweets,snacks__sweets,5,snacks,🍬,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36c.png,1
+1045,snacks__sweets__laddu,Besan Laddu,114,sweets,snacks__sweets,5,snacks,🍯,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36f.png,2
+1046,snacks__sweets__halwa,Carrot Halwa,114,sweets,snacks__sweets,5,snacks,🥕,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f955.png,3
+1047,dairy__milk__toned,Toned Milk,115,milk,dairy__milk,6,dairy,🥛,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f95b.png,1
+1048,dairy__milk__ghee,Cow Ghee,115,milk,dairy__milk,6,dairy,🧈,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9c8.png,2
+1049,dairy__milk__buttermilk,Buttermilk,115,milk,dairy__milk,6,dairy,🥤,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f964.png,3
+1050,dairy__curd__fresh-curd,Fresh Curd,116,curd,dairy__curd,6,dairy,🥣,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f963.png,1
+1051,dairy__curd__paneer,Malai Paneer,116,curd,dairy__curd,6,dairy,🧀,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9c0.png,2
+1052,dairy__curd__hung-curd,Hung Curd,116,curd,dairy__curd,6,dairy,🥛,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f95b.png,3
+1053,organic__veggies__tomato,Organic Tomato,117,veggies,organic__veggies,7,organic,🍅,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f345.png,1
+1054,organic__veggies__spinach,Palak / Spinach,117,veggies,organic__veggies,7,organic,🥬,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f96c.png,2
+1055,organic__veggies__carrot,Farm Carrot,117,veggies,organic__veggies,7,organic,🥕,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f955.png,3
+1056,organic__fruits__banana,Farm Banana,118,fruits,organic__fruits,7,organic,🍌,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f34c.png,1
+1057,organic__fruits__mango,Seasonal Mango,118,fruits,organic__fruits,7,organic,🥭,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f96d.png,2
+1058,organic__fruits__apple,Apple,118,fruits,organic__fruits,7,organic,🍎,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f34e.png,3
+1059,crafts__decor__wall-hanging,Wall Hanging,119,decor,crafts__decor,8,crafts,🖼️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f5bc.png,1
+1060,crafts__decor__diya-set,Diya Set,119,decor,crafts__decor,8,crafts,🪔,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fa94.png,2
+1061,crafts__decor__cushion,Handloom Cushion,119,decor,crafts__decor,8,crafts,🧵,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9f5.png,3
+1062,crafts__gifts__gift-hamper,Gift Hamper,120,gifts,crafts__gifts,8,crafts,🎁,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f381.png,1
+1063,crafts__gifts__handmade-card,Handmade Card,120,gifts,crafts__gifts,8,crafts,💌,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48c.png,2
+1064,crafts__gifts__keychain,Craft Keychain,120,gifts,crafts__gifts,8,crafts,🔑,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f511.png,3
+1065,florist__bouquets__rose,Rose Bouquet,121,bouquets,florist__bouquets,9,florist,🌹,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f339.png,1
+1066,florist__bouquets__mixed,Mixed Bouquet,121,bouquets,florist__bouquets,9,florist,💐,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f490.png,2
+1067,florist__bouquets__garland,Jasmine Garland,121,bouquets,florist__bouquets,9,florist,🌼,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33c.png,3
+1068,florist__plants__money-plant,Money Plant,122,plants,florist__plants,9,florist,🪴,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fab4.png,1
+1069,florist__plants__tulsi,Tulsi Plant,122,plants,florist__plants,9,florist,🌿,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33f.png,2
+1070,florist__plants__snake-plant,Snake Plant,122,plants,florist__plants,9,florist,🌱,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f331.png,3
+1071,clothing__women__kurti,Cotton Kurti,123,women,clothing__women,10,clothing,👗,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f457.png,1
+1072,clothing__women__saree,Handloom Saree,123,women,clothing__women,10,clothing,🧵,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9f5.png,2
+1073,clothing__women__dupatta,Dupatta,123,women,clothing__women,10,clothing,🧣,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9e3.png,3
+1074,clothing__men__shirt,Casual Shirt,124,men,clothing__men,10,clothing,👔,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f454.png,1
+1075,clothing__men__kurta,Cotton Kurta,124,men,clothing__men,10,clothing,👕,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f455.png,2
+1076,clothing__men__dhoti,Dhoti,124,men,clothing__men,10,clothing,🩳,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fa73.png,3
+1077,jewellery__earrings__jhumka,Jhumka Earrings,125,earrings,jewellery__earrings,11,jewellery,💎,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48e.png,1
+1078,jewellery__earrings__studs,Gold-plated Studs,125,earrings,jewellery__earrings,11,jewellery,✨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2728.png,2
+1079,jewellery__earrings__hoops,Hoop Earrings,125,earrings,jewellery__earrings,11,jewellery,⭕,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2b55.png,3
+1080,jewellery__necklaces__chain,Pendant Chain,126,necklaces,jewellery__necklaces,11,jewellery,📿,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4ff.png,1
+1081,jewellery__necklaces__choker,Temple Choker,126,necklaces,jewellery__necklaces,11,jewellery,💍,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48d.png,2
+1082,jewellery__necklaces__mangalsutra,Mangalsutra,126,necklaces,jewellery__necklaces,11,jewellery,🟡,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f7e1.png,3
+1083,beauty__skincare__face-pack,Herbal Face Pack,127,skincare,beauty__skincare,12,beauty,🌿,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33f.png,1
+1084,beauty__skincare__oil,Coconut Hair Oil,127,skincare,beauty__skincare,12,beauty,🧴,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9f4.png,2
+1085,beauty__skincare__soap,Handmade Soap,127,skincare,beauty__skincare,12,beauty,🧼,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9fc.png,3
+1086,beauty__makeup__kajal,Kajal,128,makeup,beauty__makeup,12,beauty,✒️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2712.png,1
+1087,beauty__makeup__lipstick,Lipstick,128,makeup,beauty__makeup,12,beauty,💄,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f484.png,2
+1088,beauty__makeup__bindi,Bindi Pack,128,makeup,beauty__makeup,12,beauty,🔴,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f534.png,3
+1089,stationery__notebooks__ruled,Ruled Notebook,129,notebooks,stationery__notebooks,13,stationery,📓,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4d3.png,1
+1090,stationery__notebooks__diary,Hardcover Diary,129,notebooks,stationery__notebooks,13,stationery,📔,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4d4.png,2
+1091,stationery__notebooks__sticky,Sticky Notes,129,notebooks,stationery__notebooks,13,stationery,📝,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4dd.png,3
+1092,stationery__gifts__pen-set,Pen Gift Set,130,gifts,stationery__gifts,13,stationery,✒️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2712.png,1
+1093,stationery__gifts__art-kit,Art Kit,130,gifts,stationery__gifts,13,stationery,🎨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3a8.png,2
+1094,stationery__gifts__bookmark,Bookmark Set,130,gifts,stationery__gifts,13,stationery,🔖,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f516.png,3
+1095,electronics__accessories__earphones,Wired Earphones,131,accessories,electronics__accessories,14,electronics,🎧,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3a7.png,1
+1096,electronics__accessories__charger,Phone Charger,131,accessories,electronics__accessories,14,electronics,🔌,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f50c.png,2
+1097,electronics__accessories__case,Phone Case,131,accessories,electronics__accessories,14,electronics,📱,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4f1.png,3
+1098,electronics__gadgets__power-bank,Power Bank,132,gadgets,electronics__gadgets,14,electronics,🔋,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f50b.png,1
+1099,electronics__gadgets__trimmer,Trimmer,132,gadgets,electronics__gadgets,14,electronics,🪒,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fa92.png,2
+1100,electronics__gadgets__led-lamp,LED Lamp,132,gadgets,electronics__gadgets,14,electronics,💡,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4a1.png,3
+1101,pets__pet-food__dog-kibble,Dog Kibble,133,pet-food,pets__pet-food,15,pets,🐶,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f436.png,1
+1102,pets__pet-food__cat-food,Cat Food,133,pet-food,pets__pet-food,15,pets,🐱,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f431.png,2
+1103,pets__pet-food__treats,Pet Treats,133,pet-food,pets__pet-food,15,pets,🦴,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9b4.png,3
+1104,pets__pet-care__shampoo,Pet Shampoo,134,pet-care,pets__pet-care,15,pets,🧴,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9f4.png,1
+1105,pets__pet-care__collar,Collar & Leash,134,pet-care,pets__pet-care,15,pets,🦮,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9ae.png,2
+1106,pets__pet-care__bowl,Feeding Bowl,134,pet-care,pets__pet-care,15,pets,🥣,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f963.png,3
+1107,grocery__staples__rice,Sona Masoori Rice,135,staples,grocery__staples,16,grocery,🍚,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f35a.png,1
+1108,grocery__staples__toor-dal,Toor Dal,135,staples,grocery__staples,16,grocery,🫘,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fad8.png,2
+1109,grocery__staples__atta,Wheat Atta,135,staples,grocery__staples,16,grocery,🌾,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f33e.png,3
+1110,grocery__daily__oil,Groundnut Oil,136,daily,grocery__daily,16,grocery,🫒,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fad2.png,1
+1111,grocery__daily__sugar,Sugar,136,daily,grocery__daily,16,grocery,🧂,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9c2.png,2
+1112,grocery__daily__tea,Tea Dust,136,daily,grocery__daily,16,grocery,🍵,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f375.png,3
+1113,meat__chicken__curry-cut,Curry Cut Chicken,137,chicken,meat__chicken,17,meat,🍗,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f357.png,1
+1114,meat__chicken__boneless,Boneless Chicken,137,chicken,meat__chicken,17,meat,🍖,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f356.png,2
+1115,meat__chicken__eggs,Farm Eggs,137,chicken,meat__chicken,17,meat,🥚,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f95a.png,3
+1116,meat__seafood__rohu,Rohu Fish,138,seafood,meat__seafood,17,meat,🐟,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f41f.png,1
+1117,meat__seafood__prawns,Prawns,138,seafood,meat__seafood,17,meat,🦐,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f990.png,2
+1118,meat__seafood__crab,Crab,138,seafood,meat__seafood,17,meat,🦀,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f980.png,3
+1119,others__general__starter,Starter Item,139,general,others__general,18,others,📦,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e6.png,1
+1120,others__general__daily,Daily Essential,139,general,others__general,18,others,🛒,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6d2.png,2
+1121,others__general__custom,Custom Product,139,general,others__general,18,others,✨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2728.png,3
+1122,others__bestsellers__house-special,House Special,140,bestsellers,others__bestsellers,18,others,⭐,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2b50.png,1
+1123,others__bestsellers__most-ordered,Most Ordered,140,bestsellers,others__bestsellers,18,others,🔥,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png,2
+1124,others__bestsellers__combo,Combo Deal,140,bestsellers,others__bestsellers,18,others,🎁,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f381.png,3
+1125,others__new-arrivals__this-week,This Week's New,141,new-arrivals,others__new-arrivals,18,others,🆕,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f195.png,1
+1126,others__new-arrivals__limited,Limited Batch,141,new-arrivals,others__new-arrivals,18,others,⏳,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/23f3.png,2
+1127,others__new-arrivals__seasonal,Seasonal Pick,141,new-arrivals,others__new-arrivals,18,others,🍂,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f342.png,3

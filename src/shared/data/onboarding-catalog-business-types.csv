@@ -1,0 +1,19 @@
+id,code,name,icon,icon_image,keywords,sort_order
+1,home-kitchen,Home Kitchen,🏠,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3e0.png,home cooked meals tiffin catering food,1
+2,pickles,Pickles & Homemade,🫙,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fad9.png,pickle achar podi chutney homemade,2
+3,bakery,Bakery,🥐,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f950.png,cake bread pastry cookies bakery,3
+4,spices,Spices & Masalas,🌶️,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f336.png,spice masala powder seasonings,4
+5,snacks,Snacks & Sweets,🍬,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f36c.png,snacks sweets namkeen mithai,5
+6,dairy,Dairy & Fresh,🥛,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f95b.png,milk curd paneer ghee dairy,6
+7,organic,Organic Produce,🥬,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f96c.png,organic vegetables fruits farm,7
+8,crafts,Handmade Crafts,🧵,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9f5.png,craft handmade decor gifts art,8
+9,florist,Florist & Plants,🌸,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f338.png,flowers plants bouquet nursery,9
+10,clothing,Clothing & Apparel,👗,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f457.png,clothes fashion boutique garments,10
+11,jewellery,Jewellery,💍,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48d.png,jewellery jewelry ornaments gold silver,11
+12,beauty,Beauty & Wellness,💅,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f485.png,beauty salon spa cosmetics wellness,12
+13,stationery,Stationery & Books,📚,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4da.png,books stationery gifts office,13
+14,electronics,Electronics,🔌,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f50c.png,electronics mobiles accessories gadgets,14
+15,pets,Pet Supplies,🐾,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f43e.png,pets dogs cats food accessories,15
+16,grocery,Grocery & Kirana,🛒,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6d2.png,grocery kirana provisions staples,16
+17,meat,Meat & Seafood,🐟,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f41f.png,meat chicken fish seafood,17
+18,others,Others,✨,https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2728.png,other custom general miscellaneous any business,18
