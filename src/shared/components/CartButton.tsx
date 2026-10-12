@@ -2,14 +2,13 @@ import { Link } from 'react-router-dom'
 import { ShoppingCart } from 'lucide-react'
 
 /**
- * The cart icon every header shows. The caller decides where it goes (the cart, or the
- * customer login for a live shopper who is not signed in) and which count may be shown.
+ * The cart icon every header shows. The caller decides whether it shows at all (only where
+ * the session can hold a cart) and which cart it opens.
  */
-export function CartButton({ to, state, count }: { to: string; state?: unknown; count: number }) {
+export function CartButton({ to, count }: { to: string; count: number }) {
   return (
     <Link
       to={to}
-      state={state}
       className="relative inline-flex size-11 shrink-0 items-center justify-center overflow-visible rounded-full text-slate-700 transition hover:bg-slate-100"
       aria-label={`Cart${count ? `, ${count} items` : ''}`}
     >

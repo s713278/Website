@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
+import { ChevronDown, Menu, X } from 'lucide-react'
 import logoDarkMd from '@/assets/logo_dark_md.png'
-import { AccountMenu, Button } from '@/shared/components'
+import { AccountMenu } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 import { useHeaderActions } from '../hooks/useHeaderActions'
-import { isOnboardingPath, type HeaderAction } from '../lib/header-actions'
+import { HeaderActionButton } from './HeaderActionButton'
 
 const NAV = [
   { label: 'About Us', href: '#about' },
@@ -22,44 +22,6 @@ function BrandMark() {
         alt="Mithra Direct — Shop Local, Support Local, Grow Together"
         className="h-10 w-auto sm:h-11"
       />
-    </Link>
-  )
-}
-
-function HeaderActionButton({
-  action,
-  mobile,
-  onNavigate,
-}: {
-  action: HeaderAction
-  mobile?: boolean
-  onNavigate?: () => void
-}) {
-  const primary = action.emphasis === 'primary'
-  const { pathname } = useLocation()
-  const button = (
-    <Button
-      variant={primary ? 'primary' : 'outline'}
-      fullWidth={mobile}
-      className={cn(
-        'h-10 rounded-full px-5 font-medium',
-        // The default outline border is #e2e8f0, which vanishes on the white header.
-        !primary && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
-      )}
-    >
-      {action.label}
-      {primary ? <ChevronRight className="size-4 opacity-80" /> : null}
-    </Button>
-  )
-  // From the wizard, Dashboard is where the vendor goes next, so it replaces the page.
-  const sameTab = action.label === 'Dashboard' && isOnboardingPath(pathname)
-  return (
-    <Link
-      to={action.to}
-      {...(sameTab ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
-      onClick={onNavigate}
-    >
-      {button}
     </Link>
   )
 }
@@ -149,7 +111,7 @@ export function MarketingHeader() {
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-3 xl:flex">
               {actions.map((action) => (
-                <HeaderActionButton key={action.label} action={action} />
+                <HeaderActionButton key={action.label} action={action} newTab />
               ))}
             </div>
             <AccountMenu onSignOut={() => setOpen(false)} />
@@ -183,6 +145,7 @@ export function MarketingHeader() {
               key={action.label}
               action={action}
               mobile
+              newTab
               onNavigate={() => setOpen(false)}
             />
           ))}

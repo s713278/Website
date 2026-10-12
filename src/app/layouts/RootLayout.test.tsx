@@ -3,7 +3,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { authService, configureApiClient } from '@/shared/api'
+import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
+import { clearVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
+import {
+  authService,
+  configureApiClient,
+  mapVendorContext,
+  vendorOnboardingService,
+} from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { User } from '@/shared/types'
 import { RootLayout } from './index'
@@ -19,6 +26,21 @@ const VENDOR: User = {
   vendors: [{ vendorId: 'test-vendor', name: 'Green Bowl Grocers' }], vendorId: 'test-vendor',
 }
 
+const APPROVED = mapVendorContext({
+  data: {
+    vendor_id: 'test-vendor',
+    vendor_status: 'ACTIVE',
+    approval_status: 'APPROVED',
+    store_identifier: 'green-bowl',
+    onboarding: { status: 'COMPLETED', next_step: 11 },
+  },
+})
+
+function goLive() {
+  vi.stubEnv('VITE_USE_API', 'true')
+  configureApiClient({ useApi: true })
+}
+
 function signIn(user: User) {
   useAuthStore.getState().applySession({ token: 'test-token', refreshToken: null, user })
 }
@@ -30,6 +52,7 @@ function renderLayout(path = '/stores') {
         <Route element={<RootLayout />}>
           <Route path="/stores" element={<h1>Stores page</h1>} />
           <Route path="/orders" element={<h1>Orders page</h1>} />
+          <Route path="/onboarding" element={<h1>Onboarding page</h1>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -50,6 +73,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  invalidateVendorContext()
+  clearVendorHeaderHint()
   useAuthStore.getState().clearSession()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -67,15 +92,93 @@ describe('RootLayout mobile menu', () => {
   })
 
   it('closes once a link in it takes the shopper to another page', () => {
-    signIn(CUSTOMER)
     renderLayout()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
-    // The bar and the menu each render the links; the menu's copy is the last one.
-    fireEvent.click(screen.getAllByRole('link', { name: 'Orders' }).at(-1)!)
+    // The bar and the menu each render the actions; the menu's copy is the last one.
+    fireEvent.click(screen.getAllByRole('link', { name: 'Get started' }).at(-1)!)
 
-    expect(screen.getByRole('heading', { name: 'Orders page' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Onboarding page' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open menu' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('lists the constructive action first', () => {
+    renderLayout()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+    const menuLinks = [...document.querySelectorAll('#general-header-menu a')].map((a) => a.textContent?.trim())
+
+    expect(menuLinks).toEqual(['Get started', 'Sign in'])
+  })
+
+  it('is not offered to a signed-in customer, who has no action to put in it', () => {
+    signIn(CUSTOMER)
+    renderLayout()
+
+    expect(screen.queryByRole('button', { name: 'Open menu' })).toBeNull()
+  })
+})
+
+/** Each destination's links, by href, so a duplicate in the bar shows up as a second entry. */
+function hrefsOf(name: string | RegExp) {
+  return screen.queryAllByRole('link', { name }).map((link) => link.getAttribute('href'))
+}
+
+describe('RootLayout destinations', () => {
+  it('keeps Stores in the bar for everyone, active on /stores', () => {
+    renderLayout('/stores')
+
+    const stores = screen.getByRole('link', { name: 'Stores' })
+    expect(stores.getAttribute('href')).toBe('/stores')
+    expect(stores.getAttribute('aria-current')).toBe('page')
+  })
+
+  it('offers a signed-out shopper customer Sign in and Get started, in place', () => {
+    renderLayout()
+
+    expect(new Set(hrefsOf('Sign in'))).toEqual(new Set(['/login']))
+    expect(new Set(hrefsOf('Get started'))).toEqual(new Set(['/onboarding']))
+    expect(screen.getAllByRole('link', { name: 'Get started' })[0].getAttribute('target')).toBeNull()
+    expect(hrefsOf('Open store')).toEqual([])
+  })
+
+  it('hides the cart from a live guest, who cannot hold one', () => {
+    goLive()
+    renderLayout()
+
+    expect(screen.queryByRole('link', { name: /^Cart/ })).toBeNull()
+    expect(new Set(hrefsOf('Sign in'))).toEqual(new Set(['/login']))
+  })
+
+  it('gives a customer Stores and the cart, and leaves My orders to the account menu', () => {
+    signIn(CUSTOMER)
+    renderLayout()
+
+    expect(hrefsOf(/^Cart/)).toEqual(['/cart'])
+    for (const gone of ['Home', 'Orders', 'Get started', 'Sign in']) expect(hrefsOf(gone)).toEqual([])
+  })
+
+  it('offers an unfinished vendor Continue setup, with Dashboard only in the account menu', () => {
+    signIn(VENDOR)
+    renderLayout()
+
+    expect(new Set(hrefsOf('Continue setup'))).toEqual(new Set(['/onboarding']))
+    for (const gone of ['Store setup', 'Dashboard', 'Home']) expect(hrefsOf(gone)).toEqual([])
+    expect(screen.queryByRole('link', { name: /^Cart/ })).toBeNull()
+  })
+
+  it('offers an approved vendor their Store, in place', async () => {
+    goLive()
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    signIn(VENDOR)
+    renderLayout()
+    // The header requested this module first, so its read has been issued by the time this resolves.
+    await import('@/modules/vendor/lib/onboarding-server-state')
+
+    await waitFor(() => expect(new Set(hrefsOf('Store'))).toEqual(new Set(['/stores/green-bowl'])))
+    expect(screen.getAllByRole('link', { name: 'Store' })[0].getAttribute('target')).toBeNull()
+    for (const gone of ['Store setup', 'Dashboard', 'Continue setup']) expect(hrefsOf(gone)).toEqual([])
+    expect(screen.queryByRole('link', { name: /^Cart/ })).toBeNull()
   })
 })
 
@@ -105,7 +208,7 @@ describe('RootLayout header controls', () => {
   })
 
   it('closes the open mobile menu when the account menu signs out', async () => {
-    signIn(CUSTOMER)
+    signIn(VENDOR)
     renderLayout()
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
 

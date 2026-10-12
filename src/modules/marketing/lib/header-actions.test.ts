@@ -11,7 +11,7 @@ const SIGNED_OUT = [
 ]
 const CONTINUE_SETUP = [{ label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
 const CHECK_STATUS = [{ label: 'Check status', to: '/onboarding', emphasis: 'primary' }]
-const DASHBOARD = { label: 'Dashboard', to: '/vendor', emphasis: 'primary' }
+const GET_STARTED = [{ label: 'Get started', to: '/onboarding', emphasis: 'primary' }]
 const STORE = { label: 'Store', to: '/stores/sk-organic-store', emphasis: 'secondary' }
 
 function ready(
@@ -54,9 +54,10 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ user: null }))).toEqual(SIGNED_OUT)
     })
 
-    it('treats a customer-only session like a signed-out visitor', () => {
+    // Their own account menu sits beside the actions, so a vendor Sign in would be a second login.
+    it('offers a signed-in customer Get started only', () => {
       expect(resolveHeaderActions(live({ user: { roles: ['customer'], vendorId: undefined } }))).toEqual(
-        SIGNED_OUT,
+        GET_STARTED,
       )
     })
 
@@ -65,20 +66,22 @@ describe('resolveHeaderActions', () => {
         resolveHeaderActions(
           live({ user: { roles: ['customer'], vendorId: undefined }, account: { status: 'loading' } }),
         ),
-      ).toEqual(SIGNED_OUT)
+      ).toEqual(GET_STARTED)
     })
   })
 
   describe('live vendor', () => {
-    it('offers Dashboard while the account read is in flight, never leaving a vendor without a way in', () => {
-      expect(resolveHeaderActions(live({ account: { status: 'loading' } }))).toEqual([DASHBOARD])
+    // The account menu offers Dashboard meanwhile, so the vendor is never left without a way in.
+    it('offers nothing while the account read is in flight', () => {
+      expect(resolveHeaderActions(live({ account: { status: 'loading' } }))).toEqual([])
     })
 
-    it('offers the very button an approved store ends up with, so that case does not change', () => {
-      const whileLoading = resolveHeaderActions(live({ account: { status: 'loading' } }))
-      const approved = resolveHeaderActions(live())
-
-      expect(approved.at(-1)).toEqual(whileLoading[0])
+    // The account menu owns Dashboard; the actions never repeat it.
+    it('never offers Dashboard among the actions', () => {
+      for (const account of [SETTING_UP, SUBMITTED_PENDING, SUBMITTED_APPROVED, { status: 'loading' } as const]) {
+        const labels = resolveHeaderActions(live({ account })).map((a) => a.label)
+        expect(labels).not.toContain('Dashboard')
+      }
     })
 
     // The account menu beside these actions owns Sign out for every signed-in vendor.
@@ -105,21 +108,18 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ account: SETTING_UP }))).toEqual(CONTINUE_SETUP)
     })
 
-    it('shows Store and Dashboard once the store is submitted and approved', () => {
-      expect(resolveHeaderActions(live())).toEqual([STORE, DASHBOARD])
+    it('shows Store once the store is submitted and approved', () => {
+      expect(resolveHeaderActions(live())).toEqual([STORE])
     })
 
     it('accepts ACTIVE as an approved value, as the wizard does', () => {
-      expect(resolveHeaderActions(live({ account: ready('ACTIVE', 'ACTIVE', 11) }))).toEqual([
-        STORE,
-        DASHBOARD,
-      ])
+      expect(resolveHeaderActions(live({ account: ready('ACTIVE', 'ACTIVE', 11) }))).toEqual([STORE])
     })
 
-    it('omits Store when the approved account has no store identifier', () => {
+    it('offers nothing when the approved account has no store identifier', () => {
       expect(
         resolveHeaderActions(live({ account: ready('ACTIVE', 'APPROVED', 11, null) })),
-      ).toEqual([DASHBOARD])
+      ).toEqual([])
     })
 
     it('shows Check status for a submitted store that is still pending', () => {
@@ -137,14 +137,14 @@ describe('resolveHeaderActions', () => {
 
     it('does not treat a pending store as approved', () => {
       const labels = resolveHeaderActions(live({ account: SUBMITTED_PENDING })).map((a) => a.label)
-      expect(labels).not.toContain('Dashboard')
+      expect(labels).not.toContain('Store')
     })
   })
 
   describe('on /onboarding', () => {
     const onboarding = { pathname: '/onboarding' }
 
-    it('offers nothing while the account read is in flight, as the wizard owns the page', () => {
+    it('offers nothing while the account read is in flight', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'loading' } }))).toEqual([])
     })
 
@@ -164,8 +164,8 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SUBMITTED_PENDING }))).toEqual([])
     })
 
-    it('still shows Store and Dashboard', () => {
-      expect(resolveHeaderActions(live(onboarding))).toEqual([STORE, DASHBOARD])
+    it('still shows Store', () => {
+      expect(resolveHeaderActions(live(onboarding))).toEqual([STORE])
     })
 
     it('still offers vendor login to a signed-out visitor', () => {
@@ -185,7 +185,7 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(before)).toEqual([])
       // Submitted, approval not read back yet: Check status is hidden on this page.
       expect(resolveHeaderActions({ ...before, submission: justSubmitted })).toEqual([])
-      expect(resolveHeaderActions({ ...before, submission: approved })).toEqual([STORE, DASHBOARD])
+      expect(resolveHeaderActions({ ...before, submission: approved })).toEqual([STORE])
     })
 
     it('trusts the wizard over a stale account read that said approved', () => {
@@ -213,7 +213,7 @@ describe('resolveHeaderActions', () => {
             },
           }),
         ),
-      ).toEqual([STORE, DASHBOARD])
+      ).toEqual([STORE])
     })
   })
 

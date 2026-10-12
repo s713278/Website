@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/app/router/role-home'
-import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { canHoldCart, customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { storeContactHeaderProps } from '@/modules/storefront/lib/store-contact'
 import {
   isStoreContactPath,
@@ -100,15 +100,9 @@ function HeaderActions({
   logoUrl?: string
 }) {
   const user = useAuthStore((s) => s.user)
-  const badge = visibleCartCount(user, cartCount)
   const shop = { name: storeName, logoUrl }
   const ordersHref = storeId ? storeOrdersPath(storeId) : '/orders'
   const login = customerLoginLink(storeId ? storePath(storeId) : '/', shop)
-  const cartLink = linkFromNavTarget(
-    canShopAsCustomer(user) || !isLiveApi()
-      ? cartHref
-      : { pathname: login.to, state: { ...login.state, from: cartHref } },
-  )
 
   return (
     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
@@ -131,7 +125,8 @@ function HeaderActions({
         ordersHref={ordersHref}
       />
 
-      <CartButton to={cartLink.to} state={cartLink.state} count={badge} />
+      {/* A live guest or vendor session cannot hold a cart; Sign in beside it is their way in. */}
+      {canHoldCart(user) ? <CartButton to={cartHref} count={cartCount} /> : null}
     </div>
   )
 }

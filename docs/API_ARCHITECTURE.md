@@ -316,8 +316,9 @@ response belonging to an entry that has already been invalidated. Submission's r
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
 
-The marketing header decides its vendor actions from the context alone. On every route, `/onboarding`
-included, it calls `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
+The marketing header and the general header (`RootLayout`) decide a vendor's actions from the context
+alone, through `useHeaderActions`. On every route, `/onboarding` included, it calls
+`loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the
 context cache so the dashboard opens on it, or no request when that cache already holds a resolved
 context. On `/onboarding` the wizard reads its context through the same cache, so the two share one
 context request.

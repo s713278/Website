@@ -1,4 +1,4 @@
-import { homePathForRole, loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
+import { loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
 import { isApprovalGranted, isStoreSubmitted } from '@/modules/vendor/lib/onboarding-account-status'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import type { VendorContext } from '@/shared/api'
@@ -12,7 +12,7 @@ import type { User } from '@/shared/types'
  * API or onboarding-store graph.
  */
 export type HeaderAction = {
-  label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
+  label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store'
   to: string
   emphasis: 'secondary' | 'primary'
 }
@@ -38,17 +38,16 @@ export type HeaderActionsInput = {
 }
 
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
-const VENDOR_HOME_HREF = homePathForRole('vendor')
 
-const DASHBOARD: HeaderAction = { label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' }
+const GET_STARTED: HeaderAction = { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
   { label: 'Sign in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
-  { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
+  GET_STARTED,
 ]
 
 /** React Router matches `/onboarding/` too, so a trailing slash is still this page. */
-export function isOnboardingPath(pathname: string): boolean {
+function isOnboardingPath(pathname: string): boolean {
   return pathname.replace(/\/+$/, '') === VENDOR_ONBOARDING_HREF
 }
 
@@ -78,17 +77,16 @@ function submittedStore(input: HeaderActionsInput): StoreSubmission | null | und
 }
 
 export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] {
-  if (!input.user?.roles.includes('vendor')) return SIGNED_OUT
+  if (!input.user) return SIGNED_OUT
+  // A signed-in customer's own account menu sits beside these, so no vendor Sign in.
+  if (!input.user.roles.includes('vendor')) return [GET_STARTED]
 
   const store = submittedStore(input)
   const onOnboarding = isOnboardingPath(input.pathname)
 
-  // The account has not answered yet, and a vendor must never be left with no way in.
-  // Dashboard suits every state: it opens the setup prompt for an unfinished store and the
-  // status for a pending one. It is also the button an approved store ends up with, so that
-  // case does not change when the read lands. On the wizard the vendor is already on the page
-  // that owns what happens next, so nothing is offered until the account is known.
-  if (store === undefined) return onOnboarding ? [] : [DASHBOARD]
+  // The account has not answered yet. Nothing is offered until it does: the account menu
+  // beside these actions always offers Dashboard, so a vendor is never left with no way in.
+  if (store === undefined) return []
 
   // These two link to the wizard, which is where the vendor already is on /onboarding.
   const toOnboarding = (label: 'Continue setup' | 'Check status'): HeaderAction[] =>
@@ -100,10 +98,7 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   // into an approved one the way the dashboard does.
   if (!isApprovalGranted(store.approvalStatus)) return toOnboarding('Check status')
 
-  const actions: HeaderAction[] = []
-  if (store.storeIdentifier) {
-    actions.push({ label: 'Store', to: `/stores/${store.storeIdentifier}`, emphasis: 'secondary' })
-  }
-  actions.push(DASHBOARD)
-  return actions
+  // Dashboard is the account menu's, never repeated here.
+  if (!store.storeIdentifier) return []
+  return [{ label: 'Store', to: `/stores/${store.storeIdentifier}`, emphasis: 'secondary' }]
 }
