@@ -12,7 +12,7 @@ import type { User } from '@/shared/types'
  * API or onboarding-store graph.
  */
 export type HeaderAction = {
-  label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store'
+  label: 'Sign in' | 'Open store' | 'Continue setup' | 'Check status' | 'Store'
   to: string
   emphasis: 'secondary' | 'primary'
 }
@@ -39,11 +39,11 @@ export type HeaderActionsInput = {
 
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
 
-const GET_STARTED: HeaderAction = { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }
+const OPEN_STORE: HeaderAction = { label: 'Open store', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
   { label: 'Sign in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
-  GET_STARTED,
+  OPEN_STORE,
 ]
 
 /** React Router matches `/onboarding/` too, so a trailing slash is still this page. */
@@ -79,7 +79,7 @@ function submittedStore(input: HeaderActionsInput): StoreSubmission | null | und
 export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] {
   if (!input.user) return SIGNED_OUT
   // A signed-in customer's own account menu sits beside these, so no vendor Sign in.
-  if (!input.user.roles.includes('vendor')) return [GET_STARTED]
+  if (!input.user.roles.includes('vendor')) return [OPEN_STORE]
 
   const store = submittedStore(input)
   const onOnboarding = isOnboardingPath(input.pathname)

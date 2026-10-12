@@ -17,6 +17,7 @@ export { DeliveryAddressPicker } from './DeliveryAddressPicker'
 export { LocationMap } from './LocationMap'
 export { AccountMenu } from './AccountMenu'
 export { CartButton } from './CartButton'
+export { HeaderButton } from './HeaderButton'
 
 export { Button as ShadcnButton, buttonVariants } from '@/components/ui/button'
 export { Badge as ShadcnBadge, badgeVariants } from '@/components/ui/badge'

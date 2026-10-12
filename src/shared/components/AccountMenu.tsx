@@ -34,7 +34,7 @@ export function AccountMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 outline-none transition hover:bg-slate-200 focus-visible:ring-2 focus-visible:ring-[var(--store-theme,var(--md-green-600))]/40"
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 outline-none transition hover:bg-slate-200 focus-visible:ring-2 focus-visible:ring-[var(--store-theme,var(--md-green-600))]/40"
         aria-label="Account"
         title="Account"
       >

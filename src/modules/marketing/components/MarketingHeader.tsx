@@ -117,7 +117,7 @@ export function MarketingHeader() {
             <AccountMenu onSignOut={() => setOpen(false)} />
             <button
               type="button"
-              className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 xl:hidden"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-slate-200 xl:hidden"
               aria-label={open ? 'Close menu' : 'Open menu'}
               onClick={() => setOpen((v) => !v)}
             >

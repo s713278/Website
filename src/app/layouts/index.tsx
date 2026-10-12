@@ -26,10 +26,10 @@ function Brand() {
   )
 }
 
-/** Shopper pages sign in as a customer; Get started is the same onboarding the marketing header offers. */
+/** Shopper pages sign in as a customer; Open store is the same onboarding the marketing header offers. */
 const SIGNED_OUT_ACTIONS: HeaderAction[] = [
   { label: 'Sign in', to: loginPathForRole('customer'), emphasis: 'secondary' },
-  { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
+  { label: 'Open store', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
 ]
 
 function linkClass({ isActive }: { isActive: boolean }) {
@@ -73,17 +73,17 @@ export function RootLayout() {
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {showCart && <CartButton to="/cart" count={cartCount} />}
               <div className="hidden items-center gap-2 lg:flex">
                 {actions.map((action) => (
                   <HeaderActionButton key={action.label} action={action} />
                 ))}
               </div>
               <AccountMenu onSignOut={closeMenu} />
+              {showCart && <CartButton to="/cart" count={cartCount} />}
               {actions.length > 0 && (
                 <button
                   type="button"
-                  className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 lg:hidden"
+                  className="inline-flex size-10 items-center justify-center rounded-full border border-slate-200 lg:hidden"
                   aria-label={open ? 'Close menu' : 'Open menu'}
                   aria-expanded={open}
                   aria-controls="general-header-menu"

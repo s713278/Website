@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Search } from 'lucide-react'
+import { ChevronLeft, Phone, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import { canHoldCart, customerLoginLink } from '@/modules/storefront/lib/cart-nav'
@@ -16,7 +17,7 @@ import {
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { Store } from '@/modules/storefront/types'
-import { AccountMenu, CartButton } from '@/shared/components'
+import { AccountMenu, CartButton, HeaderButton } from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
 type StorefrontHeaderProps = {
@@ -34,21 +35,24 @@ type StorefrontHeaderProps = {
 }
 
 const BACK_BUTTON_CLASS =
-  'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100'
+  'inline-flex size-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100'
 
 function ContactUsLink({ href, active }: { href: string; active: boolean }) {
   return (
     <Link
       to={href}
       aria-current={active ? 'page' : undefined}
+      aria-label="Contact us"
+      // Below sm an icon, so the shop name keeps its room beside Sign in.
       className={cn(
-        'relative inline-flex h-11 min-h-11 shrink-0 items-center justify-center rounded-full px-3.5 text-sm font-semibold transition',
+        'relative inline-flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition sm:w-auto sm:px-3.5',
         active
           ? 'bg-[var(--store-theme,var(--md-green-800))] text-white ring-2 ring-[var(--store-theme,var(--md-green-700))]/35 ring-offset-2 ring-offset-white'
           : 'bg-[var(--store-theme,var(--md-green-700))] text-white hover:opacity-90',
       )}
     >
-      Contact us
+      <Phone className="size-[1.125rem] sm:hidden" strokeWidth={1.75} aria-hidden />
+      <span className="hidden sm:inline">Contact us</span>
     </Link>
   )
 }
@@ -69,13 +73,9 @@ function AccountControl({
 
   if (!canShopAsCustomer(user)) {
     return (
-      <Link
-        to={loginTo}
-        state={signInState}
-        className="inline-flex h-11 min-h-11 shrink-0 items-center rounded-full border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-      >
+      <HeaderButton to={loginTo} state={signInState} emphasis="secondary">
         Sign in
-      </Link>
+      </HeaderButton>
     )
   }
 
@@ -83,6 +83,7 @@ function AccountControl({
 }
 
 function HeaderActions({
+  contact,
   searchOpen,
   onToggleSearch,
   cartCount = 0,
@@ -91,6 +92,7 @@ function HeaderActions({
   storeName,
   logoUrl,
 }: {
+  contact: ReactNode
   searchOpen: boolean
   onToggleSearch: () => void
   cartCount?: number
@@ -103,14 +105,20 @@ function HeaderActions({
   const shop = { name: storeName, logoUrl }
   const ordersHref = storeId ? storeOrdersPath(storeId) : '/orders'
   const login = customerLoginLink(storeId ? storePath(storeId) : '/', shop)
+  const account = (
+    <AccountControl loginTo={login.to} loginState={login.state} ordersHref={ordersHref} />
+  )
+  // Search first and the cart last. Sign in sits before Contact us; the account menu, an icon
+  // like the cart, sits after it.
+  const signedIn = canShopAsCustomer(user)
 
   return (
-    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+    <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
       <button
         type="button"
         onClick={onToggleSearch}
         className={cn(
-          'inline-flex size-11 items-center justify-center rounded-full text-slate-700 transition',
+          'inline-flex size-10 items-center justify-center rounded-full text-slate-700 transition',
           searchOpen ? 'bg-slate-100 text-slate-800' : 'hover:bg-slate-100',
         )}
         aria-label={searchOpen ? 'Close search' : 'Search products'}
@@ -119,11 +127,9 @@ function HeaderActions({
         <Search className="size-[1.125rem]" strokeWidth={1.75} />
       </button>
 
-      <AccountControl
-        loginTo={login.to}
-        loginState={login.state}
-        ordersHref={ordersHref}
-      />
+      {signedIn ? null : account}
+      {contact}
+      {signedIn ? account : null}
 
       {/* A live guest or vendor session cannot hold a cart; Sign in beside it is their way in. */}
       {canHoldCart(user) ? <CartButton to={cartHref} count={cartCount} /> : null}
@@ -203,24 +209,25 @@ export function StorefrontHeader({
               logoUrl={logoUrl}
               pending={storeLoading && !logoUrl}
               variant="full"
-              className="[&_p:first-child]:text-sm [&_p:first-child]:sm:text-base"
+              // Below sm the actions leave the name ~85px, so it wraps to two lines before truncating.
+              className="[&_p:first-child]:max-sm:line-clamp-2 [&_p:first-child]:max-sm:whitespace-normal [&_p:first-child]:max-sm:break-words [&_p:first-child]:max-sm:text-[13px] [&_p:first-child]:sm:text-base"
             />
           </Link>
 
-          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 lg:gap-6">
-            {publishedContactHref ? (
-              <ContactUsLink href={publishedContactHref} active={contactActive} />
-            ) : null}
-            <HeaderActions
-              searchOpen={searchOpen}
-              onToggleSearch={handleSearch}
-              cartCount={cartCount}
-              cartHref={cartHref}
-              storeId={shopId}
-              storeName={storeName}
-              logoUrl={logoUrl}
-            />
-          </div>
+          <HeaderActions
+            contact={
+              publishedContactHref ? (
+                <ContactUsLink href={publishedContactHref} active={contactActive} />
+              ) : null
+            }
+            searchOpen={searchOpen}
+            onToggleSearch={handleSearch}
+            cartCount={cartCount}
+            cartHref={cartHref}
+            storeId={shopId}
+            storeName={storeName}
+            logoUrl={logoUrl}
+          />
         </div>
       </div>
     </header>

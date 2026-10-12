@@ -81,7 +81,7 @@ function answerSetupReads() {
   vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue([])
 }
 
-const ACTIONS = ['Sign in', 'Get started', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Sign out']
+const ACTIONS = ['Sign in', 'Open store', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Sign out']
 
 /**
  * The header's right-hand actions, in order. Each one is in the DOM twice, once for the bar and
@@ -372,10 +372,10 @@ describe('MarketingHeader account menu', () => {
     renderHeader()
 
     expect(screen.queryByRole('button', { name: 'Account' })).toBeNull()
-    expect(shownActions()).toEqual(['Sign in', 'Get started'])
+    expect(shownActions()).toEqual(['Sign in', 'Open store'])
   })
 
-  it('sits beside Get started alone for a signed-in customer, with no vendor Sign in', () => {
+  it('sits beside Open store alone for a signed-in customer, with no vendor Sign in', () => {
     useAuthStore.getState().applySession({
       token: 'test-token',
       refreshToken: null,
@@ -388,6 +388,6 @@ describe('MarketingHeader account menu', () => {
     renderHeader()
 
     expect(screen.getByRole('button', { name: 'Account' })).toBeTruthy()
-    expect(shownActions()).toEqual(['Get started'])
+    expect(shownActions()).toEqual(['Open store'])
   })
 })

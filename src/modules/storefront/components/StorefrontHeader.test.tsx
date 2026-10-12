@@ -56,3 +56,41 @@ describe('StorefrontHeader cart', () => {
     expect(screen.getByRole('link', { name: 'Cart, 2 items' }).getAttribute('href')).toBe('/stores/test-store/cart')
   })
 })
+
+/** The header's controls after the shop logo, left to right. */
+function actionOrder() {
+  return [...document.querySelectorAll('header a, header button')]
+    .map((el) => el.getAttribute('aria-label') ?? el.textContent?.trim())
+    .filter((name) => name !== 'Go back' && name !== 'Green Bowl Grocers')
+}
+
+describe('StorefrontHeader actions', () => {
+  it('runs Search, Sign in, Contact us for a live guest', () => {
+    setMode(true)
+    renderHeader()
+
+    expect(actionOrder()).toEqual(['Search products', 'Sign in', 'Contact us'])
+  })
+
+  it('runs Search, Contact us, account, cart for a live customer', () => {
+    setMode(true)
+    useAuthStore.getState().applySession({ token: 'test-token', refreshToken: null, user: CUSTOMER })
+    renderHeader()
+
+    expect(actionOrder()).toEqual(['Search products', 'Contact us', 'Account', 'Cart, 2 items'])
+  })
+
+  it('keeps the cart last for a demo guest', () => {
+    setMode(false)
+    renderHeader()
+
+    expect(actionOrder().at(-1)).toBe('Cart, 2 items')
+  })
+
+  it('leads from the shop home back to the store directory', () => {
+    setMode(false)
+    renderHeader()
+
+    expect(screen.getByRole('link', { name: 'Go back' }).getAttribute('href')).toBe('/stores')
+  })
+})

@@ -96,7 +96,7 @@ describe('RootLayout mobile menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
     // The bar and the menu each render the actions; the menu's copy is the last one.
-    fireEvent.click(screen.getAllByRole('link', { name: 'Get started' }).at(-1)!)
+    fireEvent.click(screen.getAllByRole('link', { name: 'Open store' }).at(-1)!)
 
     expect(screen.getByRole('heading', { name: 'Onboarding page' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open menu' }).getAttribute('aria-expanded')).toBe('false')
@@ -108,7 +108,7 @@ describe('RootLayout mobile menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
     const menuLinks = [...document.querySelectorAll('#general-header-menu a')].map((a) => a.textContent?.trim())
 
-    expect(menuLinks).toEqual(['Get started', 'Sign in'])
+    expect(menuLinks).toEqual(['Open store', 'Sign in'])
   })
 
   it('is not offered to a signed-in customer, who has no action to put in it', () => {
@@ -133,13 +133,12 @@ describe('RootLayout destinations', () => {
     expect(stores.getAttribute('aria-current')).toBe('page')
   })
 
-  it('offers a signed-out shopper customer Sign in and Get started, in place', () => {
+  it('offers a signed-out shopper customer Sign in and Open store, in place', () => {
     renderLayout()
 
     expect(new Set(hrefsOf('Sign in'))).toEqual(new Set(['/login']))
-    expect(new Set(hrefsOf('Get started'))).toEqual(new Set(['/onboarding']))
-    expect(screen.getAllByRole('link', { name: 'Get started' })[0].getAttribute('target')).toBeNull()
-    expect(hrefsOf('Open store')).toEqual([])
+    expect(new Set(hrefsOf('Open store'))).toEqual(new Set(['/onboarding']))
+    expect(screen.getAllByRole('link', { name: 'Open store' })[0].getAttribute('target')).toBeNull()
   })
 
   it('hides the cart from a live guest, who cannot hold one', () => {
@@ -155,7 +154,7 @@ describe('RootLayout destinations', () => {
     renderLayout()
 
     expect(hrefsOf(/^Cart/)).toEqual(['/cart'])
-    for (const gone of ['Home', 'Orders', 'Get started', 'Sign in']) expect(hrefsOf(gone)).toEqual([])
+    for (const gone of ['Home', 'Orders', 'Open store', 'Sign in']) expect(hrefsOf(gone)).toEqual([])
   })
 
   it('offers an unfinished vendor Continue setup, with Dashboard only in the account menu', () => {

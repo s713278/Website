@@ -7,11 +7,11 @@ import {
 
 const SIGNED_OUT = [
   { label: 'Sign in', to: '/vendor/login', emphasis: 'secondary' },
-  { label: 'Get started', to: '/onboarding', emphasis: 'primary' },
+  { label: 'Open store', to: '/onboarding', emphasis: 'primary' },
 ]
 const CONTINUE_SETUP = [{ label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
 const CHECK_STATUS = [{ label: 'Check status', to: '/onboarding', emphasis: 'primary' }]
-const GET_STARTED = [{ label: 'Get started', to: '/onboarding', emphasis: 'primary' }]
+const OPEN_STORE = [{ label: 'Open store', to: '/onboarding', emphasis: 'primary' }]
 const STORE = { label: 'Store', to: '/stores/sk-organic-store', emphasis: 'secondary' }
 
 function ready(
@@ -55,9 +55,9 @@ describe('resolveHeaderActions', () => {
     })
 
     // Their own account menu sits beside the actions, so a vendor Sign in would be a second login.
-    it('offers a signed-in customer Get started only', () => {
+    it('offers a signed-in customer Open store only', () => {
       expect(resolveHeaderActions(live({ user: { roles: ['customer'], vendorId: undefined } }))).toEqual(
-        GET_STARTED,
+        OPEN_STORE,
       )
     })
 
@@ -66,7 +66,7 @@ describe('resolveHeaderActions', () => {
         resolveHeaderActions(
           live({ user: { roles: ['customer'], vendorId: undefined }, account: { status: 'loading' } }),
         ),
-      ).toEqual(GET_STARTED)
+      ).toEqual(OPEN_STORE)
     })
   })
 
