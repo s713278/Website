@@ -8,12 +8,14 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 import {
   isOnboardingPath,
   resolveHeaderActions,
+  resolveMenuStoreHref,
   type HeaderAccountRead,
   type HeaderAction,
 } from '../lib/header-actions'
 
 /**
- * The header's right-hand actions for the current session and vendor account.
+ * The header's right-hand actions for the current session and vendor account, and the
+ * storefront the account menu offers once Dashboard has taken the bar.
  *
  * `MarketingHeader` is in every visitor's first bundle, so the account read and the
  * onboarding store are imported on demand and only for a vendor session — the same
@@ -21,7 +23,7 @@ import {
  * vendor context alone, which is all the decision needs and lands long before the wizard's
  * setup reads do. On the wizard it joins the wizard's own context request.
  */
-export function useHeaderActions(): HeaderAction[] {
+export function useHeaderActions(): { actions: HeaderAction[]; storeHref: string | null } {
   const user = useAuthStore((state) => state.user)
   const { pathname } = useLocation()
   const live = isLiveApi()
@@ -92,5 +94,6 @@ export function useHeaderActions(): HeaderAction[] {
     account = { status: 'ready', state: { context: hint } }
   }
 
-  return resolveHeaderActions({ user, live, account, submission, pathname })
+  const input = { user, live, account, submission, pathname }
+  return { actions: resolveHeaderActions(input), storeHref: resolveMenuStoreHref(input) }
 }

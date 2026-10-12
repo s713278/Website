@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ClipboardList, LayoutDashboard, LogOut, User } from 'lucide-react'
+import { ClipboardList, LayoutDashboard, LogOut, Store, User } from 'lucide-react'
 import { homePathForRole } from '@/app/router/role-home'
 import {
   DropdownMenu,
@@ -15,13 +15,17 @@ import { accountLabel } from '@/shared/lib/account-label'
 /**
  * The signed-in account's avatar menu, shared by every header. Renders nothing signed out;
  * each header keeps its own Sign in link for that. `onSignOut` lets a header close its own
- * mobile menu, which would otherwise stay open showing the signed-out actions.
+ * mobile menu, which would otherwise stay open showing the signed-out actions. A vendor's
+ * `storeHref` replaces Dashboard once the header shows Dashboard in its bar instead; it opens in a
+ * new tab, so the vendor's own page stays put.
  */
 export function AccountMenu({
   ordersHref = '/orders',
+  storeHref,
   onSignOut,
 }: {
   ordersHref?: string
+  storeHref?: string | null
   onSignOut?: () => void
 }) {
   const user = useAuthStore((s) => s.user)
@@ -50,7 +54,12 @@ export function AccountMenu({
           </>
         ) : null}
         <DropdownMenuItem asChild>
-          {vendor ? (
+          {vendor && storeHref ? (
+            <Link to={storeHref} target="_blank" rel="noopener noreferrer">
+              <Store />
+              Store
+            </Link>
+          ) : vendor ? (
             <Link to={homePathForRole('vendor')}>
               <LayoutDashboard />
               Dashboard

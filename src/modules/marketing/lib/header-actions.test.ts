@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveHeaderActions,
+  resolveMenuStoreHref,
   type HeaderAccountRead,
   type HeaderActionsInput,
 } from './header-actions'
@@ -12,7 +13,7 @@ const SIGNED_OUT = [
 const CONTINUE_SETUP = [{ label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
 const CHECK_STATUS = [{ label: 'Check status', to: '/onboarding', emphasis: 'primary' }]
 const OPEN_STORE = [{ label: 'Open store', to: '/onboarding', emphasis: 'primary' }]
-const STORE = { label: 'Store', to: '/stores/sk-organic-store', emphasis: 'secondary' }
+const DASHBOARD = { label: 'Dashboard', to: '/vendor', emphasis: 'primary' }
 
 function ready(
   vendorStatus: string,
@@ -76,9 +77,9 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ account: { status: 'loading' } }))).toEqual([])
     })
 
-    // The account menu owns Dashboard; the actions never repeat it.
-    it('never offers Dashboard among the actions', () => {
-      for (const account of [SETTING_UP, SUBMITTED_PENDING, SUBMITTED_APPROVED, { status: 'loading' } as const]) {
+    // Until the store is live, the account menu owns Dashboard and the actions never repeat it.
+    it('offers Dashboard among the actions only once the store is live', () => {
+      for (const account of [SETTING_UP, SUBMITTED_PENDING, { status: 'loading' } as const]) {
         const labels = resolveHeaderActions(live({ account })).map((a) => a.label)
         expect(labels).not.toContain('Dashboard')
       }
@@ -108,12 +109,12 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ account: SETTING_UP }))).toEqual(CONTINUE_SETUP)
     })
 
-    it('shows Store once the store is submitted and approved', () => {
-      expect(resolveHeaderActions(live())).toEqual([STORE])
+    it('shows Dashboard once the store is submitted and approved', () => {
+      expect(resolveHeaderActions(live())).toEqual([DASHBOARD])
     })
 
     it('accepts ACTIVE as an approved value, as the wizard does', () => {
-      expect(resolveHeaderActions(live({ account: ready('ACTIVE', 'ACTIVE', 11) }))).toEqual([STORE])
+      expect(resolveHeaderActions(live({ account: ready('ACTIVE', 'ACTIVE', 11) }))).toEqual([DASHBOARD])
     })
 
     it('offers nothing when the approved account has no store identifier', () => {
@@ -137,7 +138,7 @@ describe('resolveHeaderActions', () => {
 
     it('does not treat a pending store as approved', () => {
       const labels = resolveHeaderActions(live({ account: SUBMITTED_PENDING })).map((a) => a.label)
-      expect(labels).not.toContain('Store')
+      expect(labels).not.toContain('Dashboard')
     })
   })
 
@@ -164,8 +165,8 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SUBMITTED_PENDING }))).toEqual([])
     })
 
-    it('still shows Store', () => {
-      expect(resolveHeaderActions(live(onboarding))).toEqual([STORE])
+    it('still shows Dashboard', () => {
+      expect(resolveHeaderActions(live(onboarding))).toEqual([DASHBOARD])
     })
 
     it('still offers vendor login to a signed-out visitor', () => {
@@ -185,7 +186,7 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(before)).toEqual([])
       // Submitted, approval not read back yet: Check status is hidden on this page.
       expect(resolveHeaderActions({ ...before, submission: justSubmitted })).toEqual([])
-      expect(resolveHeaderActions({ ...before, submission: approved })).toEqual([STORE])
+      expect(resolveHeaderActions({ ...before, submission: approved })).toEqual([DASHBOARD])
     })
 
     it('trusts the wizard over a stale account read that said approved', () => {
@@ -213,7 +214,7 @@ describe('resolveHeaderActions', () => {
             },
           }),
         ),
-      ).toEqual([STORE])
+      ).toEqual([DASHBOARD])
     })
   })
 
@@ -271,5 +272,32 @@ describe('resolveHeaderActions', () => {
     it('still offers vendor login when signed out', () => {
       expect(resolveHeaderActions(demo({ user: null }))).toEqual(SIGNED_OUT)
     })
+  })
+})
+
+// Once Dashboard takes the bar, the account menu offers the storefront in its place.
+describe('resolveMenuStoreHref', () => {
+  it('links the storefront of a live store', () => {
+    expect(resolveMenuStoreHref(live())).toBe('/stores/sk-organic-store')
+  })
+
+  it.each([
+    ['signed out', live({ user: null })],
+    ['a customer session', live({ user: { role: 'customer', vendorId: '91' } })],
+    ['a read in flight', live({ account: { status: 'loading' } })],
+    ['a failed read', live({ account: { status: 'failed' } })],
+    ['unfinished setup', live({ account: SETTING_UP })],
+    ['a store awaiting approval', live({ account: SUBMITTED_PENDING })],
+    ['an approved store with no identifier', live({ account: ready('ACTIVE', 'APPROVED', 11, null) })],
+  ])('leaves Dashboard in the menu for %s', (_name, input) => {
+    expect(resolveMenuStoreHref(input)).toBeNull()
+  })
+
+  it('is offered exactly when Dashboard is among the actions', () => {
+    for (const account of [SETTING_UP, SUBMITTED_PENDING, SUBMITTED_APPROVED, ready('ACTIVE', 'APPROVED', 11, null)]) {
+      const input = live({ account })
+      const dashboardInBar = resolveHeaderActions(input).some((a) => a.label === 'Dashboard')
+      expect(resolveMenuStoreHref(input) !== null).toBe(dashboardInBar)
+    }
   })
 })

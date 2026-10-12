@@ -144,7 +144,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
   // The setup reads are held open for good. A header that waited for them, as the wizard does,
   // would never get past its first paint.
   it.each([
-    ['an approved store', APPROVED, ['Store']],
+    ['an approved store', APPROVED, ['Dashboard']],
     ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
     ['unfinished setup', SETTING_UP, ['Continue setup']],
   ] as const)('settles on %s once the vendor context lands, without the setup reads', async (_name, context, expected) => {
@@ -163,10 +163,10 @@ describe('MarketingHeader for a signed-in vendor', () => {
     holdSetupReads()
     renderHeader()
 
-    await waitFor(() => expect(shownActions()).toEqual(['Store']))
-    const store = screen.getAllByRole('link', { name: 'Store' })[0]
-    expect(store.getAttribute('href')).toBe('/stores/sk-organic-store')
-    expect(store.getAttribute('target')).toBe('_blank')
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
+    const dashboard = screen.getAllByRole('link', { name: 'Dashboard' })[0]
+    expect(dashboard.getAttribute('href')).toBe('/vendor')
+    expect(dashboard.getAttribute('target')).toBe('_blank')
   })
 
   it('starts no read once the header is gone', async () => {
@@ -207,7 +207,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       await import('@/modules/vendor/lib/onboarding-server-state')
       read.resolve(APPROVED)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Store']))
+      await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
       expect(getContext).toHaveBeenCalledTimes(1)
       for (const setupRead of [
         'getVendorProfile', 'getVendorCategories', 'getVendorProducts', 'getVendorSkus',
@@ -233,7 +233,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       read.resolve(APPROVED)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Store']))
+      await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
       expect(getContext).toHaveBeenCalledTimes(1)
     })
 
@@ -251,7 +251,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
   // live read lands, and the live read still wins once it does.
   describe('with a remembered account state', () => {
     it.each([
-      ['an approved store', APPROVED, ['Store']],
+      ['an approved store', APPROVED, ['Dashboard']],
       ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
       ['unfinished setup', SETTING_UP, ['Continue setup']],
     ] as const)('paints %s on the first frame while the read is pending', (_name, context, expected) => {
@@ -270,7 +270,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
       holdSetupReads()
       renderHeader()
-      expect(shownActions()).toEqual(['Store'])
+      expect(shownActions()).toEqual(['Dashboard'])
 
       read.resolve(SETTING_UP)
 
@@ -287,7 +287,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       await waitFor(() => expect(getContext).toHaveBeenCalled())
       // Lets the rejection reach the header and its state update render.
       await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-      expect(shownActions()).toEqual(['Store'])
+      expect(shownActions()).toEqual(['Dashboard'])
     })
 
     it('ignores a state remembered for another vendor', () => {
@@ -317,7 +317,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
         </MemoryRouter>,
       )
 
-      expect(shownActions()).toEqual(['Store'])
+      expect(shownActions()).toEqual(['Dashboard'])
       expect(new Set(seen)).toEqual(new Set(['/onboarding']))
     })
   })
@@ -359,11 +359,26 @@ describe('MarketingHeader account menu', () => {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
     holdSetupReads()
     renderHeader()
-    await waitFor(() => expect(shownActions()).toEqual(['Store']))
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
 
     openAccountMenu()
 
     expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy()
+  })
+
+  // Dashboard has taken the bar, so the menu offers the storefront instead of repeating it.
+  it('offers a live store’s vendor their Store, in a new tab, in place of Dashboard', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    holdSetupReads()
+    renderHeader()
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
+
+    openAccountMenu()
+
+    const store = screen.getByRole('menuitem', { name: 'Store' })
+    expect(store.getAttribute('href')).toBe('/stores/sk-organic-store')
+    expect(store.getAttribute('target')).toBe('_blank')
+    expect(screen.queryByRole('menuitem', { name: 'Dashboard' })).toBeNull()
   })
 
   it('is absent when signed out', () => {

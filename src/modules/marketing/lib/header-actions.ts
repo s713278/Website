@@ -1,4 +1,4 @@
-import { loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
+import { homePathForRole, loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
 import { isApprovalGranted, isStoreSubmitted } from '@/modules/vendor/lib/onboarding-account-status'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import type { VendorContext } from '@/shared/api'
@@ -12,7 +12,7 @@ import type { User } from '@/shared/types'
  * API or onboarding-store graph.
  */
 export type HeaderAction = {
-  label: 'Sign in' | 'Open store' | 'Continue setup' | 'Check status' | 'Store'
+  label: 'Sign in' | 'Open store' | 'Continue setup' | 'Check status' | 'Dashboard'
   to: string
   emphasis: 'secondary' | 'primary'
 }
@@ -38,6 +38,8 @@ export type HeaderActionsInput = {
 }
 
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
+
+const DASHBOARD: HeaderAction = { label: 'Dashboard', to: homePathForRole('vendor'), emphasis: 'primary' }
 
 const OPEN_STORE: HeaderAction = { label: 'Open store', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }
 
@@ -87,7 +89,7 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   const onOnboarding = isOnboardingPath(input.pathname)
 
   // The account has not answered yet. Nothing is offered until it does: the account menu
-  // beside these actions always offers Dashboard, so a vendor is never left with no way in.
+  // beside these actions offers Dashboard until then, so a vendor is never left with no way in.
   if (store === undefined) return []
 
   // These two link to the wizard, which is where the vendor already is on /onboarding.
@@ -100,7 +102,19 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   // into an approved one the way the dashboard does.
   if (!isApprovalGranted(store.approvalStatus)) return toOnboarding('Check status')
 
-  // Dashboard is the account menu's, never repeated here.
-  if (!store.storeIdentifier) return []
-  return [{ label: 'Store', to: `/stores/${store.storeIdentifier}`, emphasis: 'secondary' }]
+  // A live store's vendor works from the dashboard, so it takes the bar and the storefront
+  // moves to the account menu (`resolveMenuStoreHref`). Without a storefront to swap in, the
+  // menu keeps Dashboard and it is never offered twice.
+  return store.storeIdentifier ? [DASHBOARD] : []
+}
+
+/**
+ * The storefront the account menu offers in place of Dashboard, once Dashboard is in the bar.
+ * `null` leaves the menu offering Dashboard.
+ */
+export function resolveMenuStoreHref(input: HeaderActionsInput): string | null {
+  if (input.user?.role !== 'vendor') return null
+  const store = submittedStore(input)
+  if (!store || !isApprovalGranted(store.approvalStatus) || !store.storeIdentifier) return null
+  return `/stores/${store.storeIdentifier}`
 }

@@ -31,7 +31,7 @@ export function MarketingHeader() {
   const [resourcesOpen, setResourcesOpen] = useState(false)
   // The onboarding wizard mounts this header, so these follow the vendor's account rather
   // than showing a login link to someone part-way through store setup.
-  const actions = useHeaderActions()
+  const { actions, storeHref } = useHeaderActions()
 
   // On the landing page the hero runs underneath the header, so at the top of the page the
   // header lets its background through. Once the page scrolls (or the menu opens over it) it
@@ -114,7 +114,7 @@ export function MarketingHeader() {
                 <HeaderActionButton key={action.label} action={action} newTab />
               ))}
             </div>
-            <AccountMenu onSignOut={() => setOpen(false)} />
+            <AccountMenu storeHref={storeHref} onSignOut={() => setOpen(false)} />
             <button
               type="button"
               className="inline-flex size-10 items-center justify-center rounded-full border border-slate-200 xl:hidden"

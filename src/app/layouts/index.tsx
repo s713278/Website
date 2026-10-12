@@ -44,11 +44,10 @@ export function RootLayout() {
   const cartCount = useCartStore((s) => s.itemCount())
   // Signed in, only a customer session shops here; signed out, only demo carts exist.
   const showCart = user ? canShopAsCustomer(user) : canHoldCart(user)
-  // Per-account places (Dashboard, My orders) live in the account menu alone, so the bar
-  // offers at most one account-state action: a vendor's comes from their account, the same
-  // as on the marketing header, and a signed-in customer has none.
-  const vendorActions = useHeaderActions()
-  const actions = !user ? SIGNED_OUT_ACTIONS : user.role === 'vendor' ? vendorActions : []
+  // The bar offers at most one account-state action: a vendor's comes from their account, the
+  // same as on the marketing header, and a signed-in customer's My orders is in the account menu.
+  const vendorHeader = useHeaderActions()
+  const actions = !user ? SIGNED_OUT_ACTIONS : user.role === 'vendor' ? vendorHeader.actions : []
   const menuActions = [
     ...actions.filter((action) => action.emphasis === 'primary'),
     ...actions.filter((action) => action.emphasis !== 'primary'),
@@ -78,7 +77,7 @@ export function RootLayout() {
                   <HeaderActionButton key={action.label} action={action} />
                 ))}
               </div>
-              <AccountMenu onSignOut={closeMenu} />
+              <AccountMenu storeHref={vendorHeader.storeHref} onSignOut={closeMenu} />
               {showCart && <CartButton to="/cart" count={cartCount} />}
               {actions.length > 0 && (
                 <button

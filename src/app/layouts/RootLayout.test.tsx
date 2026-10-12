@@ -178,7 +178,7 @@ describe('RootLayout destinations', () => {
     expect(screen.queryByRole('link', { name: /^Cart/ })).toBeNull()
   })
 
-  it('offers an approved vendor their Store, in place', async () => {
+  it('offers an approved vendor Dashboard in place, and their Store in a new tab from the account menu', async () => {
     goLive()
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
     signIn(VENDOR)
@@ -186,10 +186,17 @@ describe('RootLayout destinations', () => {
     // The header requested this module first, so its read has been issued by the time this resolves.
     await import('@/modules/vendor/lib/onboarding-server-state')
 
-    await waitFor(() => expect(new Set(hrefsOf('Store'))).toEqual(new Set(['/stores/green-bowl'])))
-    expect(screen.getAllByRole('link', { name: 'Store' })[0].getAttribute('target')).toBeNull()
-    for (const gone of ['Store setup', 'Dashboard', 'Continue setup']) expect(hrefsOf(gone)).toEqual([])
+    await waitFor(() => expect(new Set(hrefsOf('Dashboard'))).toEqual(new Set(['/vendor'])))
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0].getAttribute('target')).toBeNull()
+    for (const gone of ['Store setup', 'Store', 'Continue setup']) expect(hrefsOf(gone)).toEqual([])
     expect(screen.queryByRole('link', { name: /^Cart/ })).toBeNull()
+
+    openAccountMenu()
+
+    const store = screen.getByRole('menuitem', { name: 'Store' })
+    expect(store.getAttribute('href')).toBe('/stores/green-bowl')
+    expect(store.getAttribute('target')).toBe('_blank')
+    expect(screen.queryByRole('menuitem', { name: 'Dashboard' })).toBeNull()
   })
 })
 
