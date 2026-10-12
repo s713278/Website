@@ -6,11 +6,11 @@ import {
 } from './header-actions'
 
 const SIGNED_OUT = [
-  { label: 'Log in', to: '/vendor/login', emphasis: 'secondary' },
+  { label: 'Sign in', to: '/vendor/login', emphasis: 'secondary' },
   { label: 'Get started', to: '/onboarding', emphasis: 'primary' },
 ]
-const LOG_OUT = { label: 'Log out', emphasis: 'secondary' }
-// A vendor whose setup is unfinished can always leave, so Log out rides with Continue setup.
+const LOG_OUT = { label: 'Sign out', emphasis: 'secondary' }
+// A vendor whose setup is unfinished can always leave, so Sign out rides with Continue setup.
 const CONTINUE_SETUP = [LOG_OUT, { label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
 const CHECK_STATUS = [{ label: 'Check status', to: '/onboarding', emphasis: 'primary' }]
 const DASHBOARD = { label: 'Dashboard', to: '/vendor', emphasis: 'primary' }
@@ -83,10 +83,10 @@ describe('resolveHeaderActions', () => {
       expect(approved.at(-1)).toEqual(whileLoading[0])
     })
 
-    it('offers no Log out to a vendor whose store is submitted', () => {
+    it('offers no Sign out to a vendor whose store is submitted', () => {
       for (const account of [SUBMITTED_PENDING, SUBMITTED_APPROVED]) {
         const labels = resolveHeaderActions(live({ account })).map((a) => a.label)
-        expect(labels).not.toContain('Log out')
+        expect(labels).not.toContain('Sign out')
       }
     })
 
@@ -149,11 +149,11 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'loading' } }))).toEqual([])
     })
 
-    it('hides Continue setup, which would link to the current page, but keeps Log out', () => {
+    it('hides Continue setup, which would link to the current page, but keeps Sign out', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SETTING_UP }))).toEqual([LOG_OUT])
     })
 
-    it('hides Continue setup after a failed read, but keeps Log out', () => {
+    it('hides Continue setup after a failed read, but keeps Sign out', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'failed' } }))).toEqual([
         LOG_OUT,
       ])
@@ -165,7 +165,7 @@ describe('resolveHeaderActions', () => {
       ])
     })
 
-    it('hides Check status and offers no Log out once the store is submitted', () => {
+    it('hides Check status and offers no Sign out once the store is submitted', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SUBMITTED_PENDING }))).toEqual([])
     })
 

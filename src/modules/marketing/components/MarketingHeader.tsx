@@ -50,7 +50,7 @@ function HeaderActionButton({
         !primary && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
       )}
       onClick={
-        action.label === 'Log out'
+        action.label === 'Sign out'
           ? () => {
               onNavigate?.()
               onLogOut()
@@ -62,7 +62,7 @@ function HeaderActionButton({
       {primary ? <ChevronRight className="size-4 opacity-80" /> : null}
     </Button>
   )
-  if (action.label === 'Log out') return button
+  if (action.label === 'Sign out') return button
   // From the wizard, Dashboard is where the vendor goes next, so it replaces the page.
   const sameTab = action.label === 'Dashboard' && isOnboardingPath(pathname)
   return (

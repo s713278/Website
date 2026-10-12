@@ -296,7 +296,7 @@ export async function verifyOtp(input: OtpVerifyInput): Promise<OtpAuthSession> 
   try {
     const parsed = parseTokenResponse(res)
     if (!parsed.accessToken) {
-      throw toApiError(new Error('Login response missing access token'), '/v1/auth/verify-otp')
+      throw toApiError(new Error('Sign-in response missing access token'), '/v1/auth/verify-otp')
     }
 
     const data = (unwrapData(res) || {}) as VerifyOtpData
@@ -350,7 +350,7 @@ export async function refreshToken() {
 export async function login(input: LoginInput): Promise<AuthSession> {
   if (isLiveApi()) {
     throw toApiError(
-      new Error('Live API uses OTP login. Call requestOtp / verifyOtp.'),
+      new Error('Live API uses OTP sign-in. Call requestOtp / verifyOtp.'),
       '/auth/login',
       400,
     )

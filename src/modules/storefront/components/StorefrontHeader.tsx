@@ -122,7 +122,7 @@ function AccountControl({
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => void logout()}>
           <LogOut />
-          Log out
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

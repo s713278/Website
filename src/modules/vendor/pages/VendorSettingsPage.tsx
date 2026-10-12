@@ -89,7 +89,7 @@ function LivePlanName() {
 /**
  * Who is signed in, and the way out.
  *
- * Log out lives here rather than in a header menu, following the shared design. That trades
+ * Sign out lives here rather than in a header menu, following the shared design. That trades
  * one tap for a screen that can say what logging out actually does — which matters on a
  * shared counter device, where the vendor's real question is whether their catalog goes
  * with them.
@@ -124,7 +124,7 @@ function AccountPanel() {
         className="mt-3.5 w-full max-w-64 rounded-full border-red-200 text-[var(--md-danger)] hover:border-red-400 hover:bg-red-50 hover:text-red-800"
         onClick={() => void logout()}
       >
-        Log out
+        Sign out
       </Button>
     </DashboardPanel>
   )

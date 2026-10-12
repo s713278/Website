@@ -444,7 +444,7 @@ In-flight add/qty writes are tracked per SKU so switching pack size shows a load
 stale Add.
 Mutations for one vendor run in a queue so an older snapshot cannot wipe a later add. A missing
 cart *line* ("specified item was not found") refreshes that vendor's cart; it does not clear it.
-Logout increments a write epoch and drops `md-cart`, so a late response cannot refill the
+Sign-out increments a write epoch and drops `md-cart`, so a late response cannot refill the
 previous identity's cart. After the next customer OTP, `StorefrontLayout` only applies a
 pending add-to-cart. Live cart GET belongs to the shop home and cart pages (checkout hydrates
 only when that vendor has no local lines). Demo actions update Zustand directly. The package's

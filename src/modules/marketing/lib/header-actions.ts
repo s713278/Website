@@ -13,12 +13,12 @@ import type { User } from '@/shared/types'
  */
 export type HeaderAction =
   | {
-      label: 'Log in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
+      label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
       to: string
       emphasis: 'secondary' | 'primary'
     }
   // Ends the session rather than navigating, so it has no destination.
-  | { label: 'Log out'; emphasis: 'secondary' }
+  | { label: 'Sign out'; emphasis: 'secondary' }
 
 /** The part of the account read this decision needs. */
 type AccountSnapshot = {
@@ -43,11 +43,11 @@ export type HeaderActionsInput = {
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
 const VENDOR_HOME_HREF = homePathForRole('vendor')
 
-const LOG_OUT: HeaderAction = { label: 'Log out', emphasis: 'secondary' }
+const LOG_OUT: HeaderAction = { label: 'Sign out', emphasis: 'secondary' }
 const DASHBOARD: HeaderAction = { label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
-  { label: 'Log in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
+  { label: 'Sign in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
   { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
 ]
 
@@ -99,7 +99,7 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
     onOnboarding ? [] : [{ label, to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }]
 
   // Only a vendor with unfinished setup is offered a way out here. A submitted store has
-  // its dashboard, which owns Log out, and nothing half-built to walk away from.
+  // its dashboard, which owns Sign out, and nothing half-built to walk away from.
   if (!store) return [LOG_OUT, ...toOnboarding('Continue setup')]
   // Raw approval, not `deriveStoreState`: the header must not coerce a pending store
   // into an approved one the way the dashboard does.

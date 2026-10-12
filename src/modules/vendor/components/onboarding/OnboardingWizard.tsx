@@ -1179,7 +1179,7 @@ export function OnboardingWizard() {
   const confirmStartOver = () => requestConfirmation({
     title: 'Start over?',
     description:
-      'You will be logged out. Your saved details are safe.',
+      'You will be signed out. Your saved details are safe.',
     confirmLabel: 'Start over',
     tone: 'danger',
     onConfirm: () => {

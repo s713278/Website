@@ -80,7 +80,7 @@ function answerSetupReads() {
   vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue([])
 }
 
-const ACTIONS = ['Log in', 'Get started', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Log out']
+const ACTIONS = ['Sign in', 'Get started', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Sign out']
 
 /**
  * The header's right-hand actions, in order. Each one is in the DOM twice, once for the bar and
@@ -145,7 +145,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
   it.each([
     ['an approved store', APPROVED, ['Store', 'Dashboard']],
     ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-    ['unfinished setup', SETTING_UP, ['Log out', 'Continue setup']],
+    ['unfinished setup', SETTING_UP, ['Sign out', 'Continue setup']],
   ] as const)('settles on %s once the vendor context lands, without the setup reads', async (_name, context, expected) => {
     const read = deferred<VendorContext>()
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
@@ -193,7 +193,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       renderHeader()
 
-      expect(shownActions()).toEqual(['Log out', 'Continue setup'])
+      expect(shownActions()).toEqual(['Sign out', 'Continue setup'])
     })
   })
 
@@ -254,7 +254,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
     it.each([
       ['an approved store', APPROVED, ['Store', 'Dashboard']],
       ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-      ['unfinished setup', SETTING_UP, ['Log out', 'Continue setup']],
+      ['unfinished setup', SETTING_UP, ['Sign out', 'Continue setup']],
     ] as const)('paints %s on the first frame while the read is pending', (_name, context, expected) => {
       rememberVendorHeaderHint(context)
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
@@ -275,7 +275,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       read.resolve(SETTING_UP)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
+      await waitFor(() => expect(shownActions()).toEqual(['Sign out', 'Continue setup']))
     })
 
     it('keeps the remembered actions when the live read fails', async () => {
@@ -323,12 +323,12 @@ describe('MarketingHeader for a signed-in vendor', () => {
     })
   })
 
-  it('falls back to Log out and Continue setup when the read fails and nothing is remembered', async () => {
+  it('falls back to Sign out and Continue setup when the read fails and nothing is remembered', async () => {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
     holdSetupReads()
 
     renderHeader()
 
-    await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
+    await waitFor(() => expect(shownActions()).toEqual(['Sign out', 'Continue setup']))
   })
 })

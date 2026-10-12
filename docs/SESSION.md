@@ -73,7 +73,7 @@ into a session by `applySession()`.
    accepted the credentials, so they are alive; clearing would destroy a working refresh token over a
    response-shape surprise
 7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
-8. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
+8. **Sign-out** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
    handler registered through `onExplicitSignOut()`. Customer cleanup clears `md-cart` memory and
    persist storage, pending add, and in-flight cart writes. The public storefront cache stays so
    `/login` can still show that shop's name and logo. The next customer OTP loads that identity's
@@ -186,7 +186,7 @@ still runs and corrects it.
   every context read goes through, sign-in's included.
 - **Read** only by the marketing header, including on `/onboarding`. Precedence: resolved memory
   cache, then this session's ready read, then the record (while the read is loading or after it
-  failed), then the previous fallback (loading → Dashboard, blank on `/onboarding`; failed → Log out
+  failed), then the previous fallback (loading → Dashboard, blank on `/onboarding`; failed → Sign out
   + Continue setup). It only selects links; it never navigates. The wizard and route gates never
   read it. Demo mode makes no account read, so it is unaffected.
 - **Cleared** by `onExplicitSignOut` in `AppProviders.tsx`. Involuntary session loss keeps it; the
