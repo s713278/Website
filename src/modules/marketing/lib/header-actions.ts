@@ -11,14 +11,11 @@ import type { User } from '@/shared/types'
  * this imports only erased types and the account-status predicates, never the resume,
  * API or onboarding-store graph.
  */
-export type HeaderAction =
-  | {
-      label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
-      to: string
-      emphasis: 'secondary' | 'primary'
-    }
-  // Ends the session rather than navigating, so it has no destination.
-  | { label: 'Sign out'; emphasis: 'secondary' }
+export type HeaderAction = {
+  label: 'Sign in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
+  to: string
+  emphasis: 'secondary' | 'primary'
+}
 
 /** The part of the account read this decision needs. */
 type AccountSnapshot = {
@@ -43,7 +40,6 @@ export type HeaderActionsInput = {
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
 const VENDOR_HOME_HREF = homePathForRole('vendor')
 
-const LOG_OUT: HeaderAction = { label: 'Sign out', emphasis: 'secondary' }
 const DASHBOARD: HeaderAction = { label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
@@ -98,9 +94,8 @@ export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] 
   const toOnboarding = (label: 'Continue setup' | 'Check status'): HeaderAction[] =>
     onOnboarding ? [] : [{ label, to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }]
 
-  // Only a vendor with unfinished setup is offered a way out here. A submitted store has
-  // its dashboard, which owns Sign out, and nothing half-built to walk away from.
-  if (!store) return [LOG_OUT, ...toOnboarding('Continue setup')]
+  // Sign out is not an action here: the header's account menu offers it to every vendor.
+  if (!store) return toOnboarding('Continue setup')
   // Raw approval, not `deriveStoreState`: the header must not coerce a pending store
   // into an approved one the way the dashboard does.
   if (!isApprovalGranted(store.approvalStatus)) return toOnboarding('Check status')

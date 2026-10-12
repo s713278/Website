@@ -15,6 +15,8 @@ export { QuantityStepper } from './QuantityStepper'
 export { DeliveryAddressCard } from './DeliveryAddressCard'
 export { DeliveryAddressPicker } from './DeliveryAddressPicker'
 export { LocationMap } from './LocationMap'
+export { AccountMenu } from './AccountMenu'
+export { CartButton } from './CartButton'
 
 export { Button as ShadcnButton, buttonVariants } from '@/components/ui/button'
 export { Badge as ShadcnBadge, badgeVariants } from '@/components/ui/badge'

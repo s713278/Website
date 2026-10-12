@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
 import logoDarkMd from '@/assets/logo_dark_md.png'
-import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button } from '@/shared/components'
+import { AccountMenu, Button } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 import { useHeaderActions } from '../hooks/useHeaderActions'
 import { isOnboardingPath, type HeaderAction } from '../lib/header-actions'
@@ -31,12 +30,10 @@ function HeaderActionButton({
   action,
   mobile,
   onNavigate,
-  onLogOut,
 }: {
   action: HeaderAction
   mobile?: boolean
   onNavigate?: () => void
-  onLogOut: () => void
 }) {
   const primary = action.emphasis === 'primary'
   const { pathname } = useLocation()
@@ -49,20 +46,11 @@ function HeaderActionButton({
         // The default outline border is #e2e8f0, which vanishes on the white header.
         !primary && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
       )}
-      onClick={
-        action.label === 'Sign out'
-          ? () => {
-              onNavigate?.()
-              onLogOut()
-            }
-          : undefined
-      }
     >
       {action.label}
       {primary ? <ChevronRight className="size-4 opacity-80" /> : null}
     </Button>
   )
-  if (action.label === 'Sign out') return button
   // From the wizard, Dashboard is where the vendor goes next, so it replaces the page.
   const sameTab = action.label === 'Dashboard' && isOnboardingPath(pathname)
   return (
@@ -82,7 +70,6 @@ export function MarketingHeader() {
   // The onboarding wizard mounts this header, so these follow the vendor's account rather
   // than showing a login link to someone part-way through store setup.
   const actions = useHeaderActions()
-  const logout = useAuthStore((state) => state.logout)
 
   // On the landing page the hero runs underneath the header, so at the top of the page the
   // header lets its background through. Once the page scrolls (or the menu opens over it) it
@@ -158,24 +145,23 @@ export function MarketingHeader() {
             </nav>
           </div>
 
-          <div className="hidden items-center gap-3 xl:flex">
-            {actions.map((action) => (
-              <HeaderActionButton
-                key={action.label}
-                action={action}
-                onLogOut={() => void logout()}
-              />
-            ))}
+          {/* The account menu stays in the bar at every width, beside the menu button. */}
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3 xl:flex">
+              {actions.map((action) => (
+                <HeaderActionButton key={action.label} action={action} />
+              ))}
+            </div>
+            <AccountMenu onSignOut={() => setOpen(false)} />
+            <button
+              type="button"
+              className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 xl:hidden"
+              aria-label={open ? 'Close menu' : 'Open menu'}
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
           </div>
-
-          <button
-            type="button"
-            className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 xl:hidden"
-            aria-label={open ? 'Close menu' : 'Open menu'}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
         </div>
       </div>
 
@@ -198,7 +184,6 @@ export function MarketingHeader() {
               action={action}
               mobile
               onNavigate={() => setOpen(false)}
-              onLogOut={() => void logout()}
             />
           ))}
         </div>

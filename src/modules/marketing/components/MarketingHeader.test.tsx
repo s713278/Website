@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
 import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
@@ -9,6 +9,7 @@ import { loadVendorAccountContext } from '@/modules/vendor/lib/onboarding-server
 import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { clearVendorHeaderHint, rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import {
+  authService,
   configureApiClient,
   mapVendorContext,
   vendorOnboardingService,
@@ -115,7 +116,7 @@ beforeEach(() => {
     user: {
       id: 'test-user', name: 'Test Vendor', email: 'vendor@example.test',
       role: 'vendor', roles: ['vendor'],
-      vendors: [{ vendorId: VENDOR_ID }], vendorId: VENDOR_ID,
+      vendors: [{ vendorId: VENDOR_ID, name: 'Green Bowl Grocers' }], vendorId: VENDOR_ID,
     },
   })
 })
@@ -145,7 +146,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
   it.each([
     ['an approved store', APPROVED, ['Store', 'Dashboard']],
     ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-    ['unfinished setup', SETTING_UP, ['Sign out', 'Continue setup']],
+    ['unfinished setup', SETTING_UP, ['Continue setup']],
   ] as const)('settles on %s once the vendor context lands, without the setup reads', async (_name, context, expected) => {
     const read = deferred<VendorContext>()
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
@@ -193,7 +194,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       renderHeader()
 
-      expect(shownActions()).toEqual(['Sign out', 'Continue setup'])
+      expect(shownActions()).toEqual(['Continue setup'])
     })
   })
 
@@ -254,7 +255,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
     it.each([
       ['an approved store', APPROVED, ['Store', 'Dashboard']],
       ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-      ['unfinished setup', SETTING_UP, ['Sign out', 'Continue setup']],
+      ['unfinished setup', SETTING_UP, ['Continue setup']],
     ] as const)('paints %s on the first frame while the read is pending', (_name, context, expected) => {
       rememberVendorHeaderHint(context)
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
@@ -275,7 +276,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       read.resolve(SETTING_UP)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Sign out', 'Continue setup']))
+      await waitFor(() => expect(shownActions()).toEqual(['Continue setup']))
     })
 
     it('keeps the remembered actions when the live read fails', async () => {
@@ -323,12 +324,56 @@ describe('MarketingHeader for a signed-in vendor', () => {
     })
   })
 
-  it('falls back to Sign out and Continue setup when the read fails and nothing is remembered', async () => {
+  it('falls back to Continue setup when the read fails and nothing is remembered', async () => {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
     holdSetupReads()
 
     renderHeader()
 
-    await waitFor(() => expect(shownActions()).toEqual(['Sign out', 'Continue setup']))
+    await waitFor(() => expect(shownActions()).toEqual(['Continue setup']))
+  })
+})
+
+describe('MarketingHeader account menu', () => {
+  /** Radix opens the menu on a key press; jsdom has no pointer events for its trigger. */
+  function openAccountMenu() {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account' }), { key: 'Enter' })
+    return screen.getByRole('menu')
+  }
+
+  it('is labelled with the vendor’s store name and offers Dashboard and Sign out', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+    holdSetupReads()
+    const signOut = vi.spyOn(authService, 'signOut').mockResolvedValue()
+    renderHeader()
+
+    const menu = openAccountMenu()
+
+    expect(menu.textContent).toContain('Green Bowl Grocers')
+    expect(screen.queryAllByText(/Welcome/)).toHaveLength(0)
+    expect(screen.getByRole('menuitem', { name: 'Dashboard' }).getAttribute('href')).toBe('/vendor')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    await waitFor(() => expect(useAuthStore.getState().user).toBeNull())
+    expect(signOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Sign out to a vendor whose store is submitted, which the actions do not', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    holdSetupReads()
+    renderHeader()
+    await waitFor(() => expect(shownActions()).toEqual(['Store', 'Dashboard']))
+
+    openAccountMenu()
+
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy()
+  })
+
+  it('is absent when signed out', () => {
+    useAuthStore.getState().clearSession()
+
+    renderHeader()
+
+    expect(screen.queryByRole('button', { name: 'Account' })).toBeNull()
+    expect(shownActions()).toEqual(['Sign in', 'Get started'])
   })
 })

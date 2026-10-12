@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ClipboardList, ChevronLeft, LogOut, Search, ShoppingCart, User } from 'lucide-react'
+import { ChevronLeft, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import { customerLoginLink, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
@@ -16,14 +16,7 @@ import {
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { Store } from '@/modules/storefront/types'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/components'
+import { AccountMenu, CartButton } from '@/shared/components'
 import { StoreBrandLogo } from './StoreBrandLogo'
 
 type StorefrontHeaderProps = {
@@ -71,7 +64,6 @@ function AccountControl({
 }) {
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const from = `${location.pathname}${location.search}`
   const signInState = { ...loginState, from }
 
@@ -87,46 +79,7 @@ function AccountControl({
     )
   }
 
-  const name = user.name?.trim()
-  const placeholder = !name || name === 'User' || name === 'Vendor'
-  const label = placeholder
-    ? user.phone
-      ? `+91 ${user.phone}`
-      : ''
-    : name
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 outline-none transition hover:bg-slate-200 focus-visible:ring-2 focus-visible:ring-[var(--store-theme,var(--md-green-600))]/40"
-        aria-label="Account"
-        title="Account"
-      >
-        <User className="size-[1.125rem]" strokeWidth={1.75} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
-        {label ? (
-          <>
-            <DropdownMenuLabel className="px-2 py-1.5">
-              <p className="truncate text-sm font-semibold text-slate-900">{label}</p>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuItem asChild>
-          <Link to={ordersHref}>
-            <ClipboardList />
-            My orders
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => void logout()}>
-          <LogOut />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
+  return <AccountMenu ordersHref={ordersHref} />
 }
 
 function HeaderActions({
@@ -178,19 +131,7 @@ function HeaderActions({
         ordersHref={ordersHref}
       />
 
-      <Link
-        to={cartLink.to}
-        state={cartLink.state}
-        className="relative inline-flex size-11 shrink-0 items-center justify-center overflow-visible rounded-full text-slate-700 transition hover:bg-slate-100"
-        aria-label={`Cart${badge ? `, ${badge} items` : ''}`}
-      >
-        <ShoppingCart className="size-[1.125rem]" strokeWidth={1.75} />
-        {badge > 0 ? (
-          <span className="absolute right-1.5 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--store-theme,var(--md-green-600))] px-0.5 text-[9px] font-bold leading-none text-white">
-            {badge > 9 ? '9+' : badge}
-          </span>
-        ) : null}
-      </Link>
+      <CartButton to={cartLink.to} state={cartLink.state} count={badge} />
     </div>
   )
 }

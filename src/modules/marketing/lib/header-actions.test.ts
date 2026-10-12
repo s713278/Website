@@ -9,9 +9,7 @@ const SIGNED_OUT = [
   { label: 'Sign in', to: '/vendor/login', emphasis: 'secondary' },
   { label: 'Get started', to: '/onboarding', emphasis: 'primary' },
 ]
-const LOG_OUT = { label: 'Sign out', emphasis: 'secondary' }
-// A vendor whose setup is unfinished can always leave, so Sign out rides with Continue setup.
-const CONTINUE_SETUP = [LOG_OUT, { label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
+const CONTINUE_SETUP = [{ label: 'Continue setup', to: '/onboarding', emphasis: 'primary' }]
 const CHECK_STATUS = [{ label: 'Check status', to: '/onboarding', emphasis: 'primary' }]
 const DASHBOARD = { label: 'Dashboard', to: '/vendor', emphasis: 'primary' }
 const STORE = { label: 'Store', to: '/stores/sk-organic-store', emphasis: 'secondary' }
@@ -83,8 +81,9 @@ describe('resolveHeaderActions', () => {
       expect(approved.at(-1)).toEqual(whileLoading[0])
     })
 
-    it('offers no Sign out to a vendor whose store is submitted', () => {
-      for (const account of [SUBMITTED_PENDING, SUBMITTED_APPROVED]) {
+    // The account menu beside these actions owns Sign out for every signed-in vendor.
+    it('never offers Sign out among the actions', () => {
+      for (const account of [SETTING_UP, SUBMITTED_PENDING, SUBMITTED_APPROVED, { status: 'failed' } as const]) {
         const labels = resolveHeaderActions(live({ account })).map((a) => a.label)
         expect(labels).not.toContain('Sign out')
       }
@@ -149,23 +148,19 @@ describe('resolveHeaderActions', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'loading' } }))).toEqual([])
     })
 
-    it('hides Continue setup, which would link to the current page, but keeps Sign out', () => {
-      expect(resolveHeaderActions(live({ ...onboarding, account: SETTING_UP }))).toEqual([LOG_OUT])
+    it('hides Continue setup, which would link to the current page', () => {
+      expect(resolveHeaderActions(live({ ...onboarding, account: SETTING_UP }))).toEqual([])
     })
 
-    it('hides Continue setup after a failed read, but keeps Sign out', () => {
-      expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'failed' } }))).toEqual([
-        LOG_OUT,
-      ])
+    it('hides Continue setup after a failed read', () => {
+      expect(resolveHeaderActions(live({ ...onboarding, account: { status: 'failed' } }))).toEqual([])
     })
 
     it('treats a trailing slash as the same page', () => {
-      expect(resolveHeaderActions(live({ pathname: '/onboarding/', account: SETTING_UP }))).toEqual([
-        LOG_OUT,
-      ])
+      expect(resolveHeaderActions(live({ pathname: '/onboarding/', account: SETTING_UP }))).toEqual([])
     })
 
-    it('hides Check status and offers no Sign out once the store is submitted', () => {
+    it('hides Check status once the store is submitted', () => {
       expect(resolveHeaderActions(live({ ...onboarding, account: SUBMITTED_PENDING }))).toEqual([])
     })
 
@@ -187,9 +182,8 @@ describe('resolveHeaderActions', () => {
         vendorStatus: 'ACTIVE',
       }
 
-      expect(resolveHeaderActions(before)).toEqual([LOG_OUT])
-      // Submitted, approval not read back yet: Check status is hidden on this page, and a
-      // submitted store has nothing left to abandon.
+      expect(resolveHeaderActions(before)).toEqual([])
+      // Submitted, approval not read back yet: Check status is hidden on this page.
       expect(resolveHeaderActions({ ...before, submission: justSubmitted })).toEqual([])
       expect(resolveHeaderActions({ ...before, submission: approved })).toEqual([STORE, DASHBOARD])
     })
@@ -257,7 +251,7 @@ describe('resolveHeaderActions', () => {
     })
 
     it('hides Continue setup and Check status on /onboarding', () => {
-      expect(resolveHeaderActions(demo({ pathname: '/onboarding' }))).toEqual([LOG_OUT])
+      expect(resolveHeaderActions(demo({ pathname: '/onboarding' }))).toEqual([])
       expect(
         resolveHeaderActions(
           demo({

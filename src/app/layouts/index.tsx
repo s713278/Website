@@ -6,7 +6,7 @@ import { canShopAsCustomer, homePathForUser, loginPathForRole } from '@/app/rout
 import { cartNavTarget, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button } from '@/shared/components'
+import { AccountMenu, Button, CartButton } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
 function Brand() {
@@ -32,7 +32,6 @@ function linkClass({ isActive }: { isActive: boolean }) {
 
 export function RootLayout() {
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const cartCount = visibleCartCount(user, useCartStore((s) => s.itemCount()))
   const cartLink = linkFromNavTarget(cartNavTarget(user))
   // The menu belongs to the page it was opened on, so following any link in it closes it.
@@ -56,19 +55,6 @@ export function RootLayout() {
   function accountActions(mobile?: boolean) {
     return user ? (
       <>
-        <span className={cn('text-sm text-slate-500', mobile ? 'px-3' : 'hidden xl:inline')}>Welcome, {user.name}</span>
-        <Button
-          size="sm"
-          className="h-10"
-          variant="secondary"
-          fullWidth={mobile}
-          onClick={() => {
-            closeMenu()
-            void logout()
-          }}
-        >
-          Sign out
-        </Button>
         {user.role === 'vendor' ? (
           <NavLink to="/onboarding" onClick={closeMenu}>
             <Button size="sm" className="h-10" variant="ghost" fullWidth={mobile}>Store setup</Button>
@@ -95,7 +81,7 @@ export function RootLayout() {
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 border-b border-emerald-100/70 bg-white/95 backdrop-blur">
         {/* Below `lg` a signed-in vendor's links and actions no longer fit beside the logo, so
-            they move into the menu. Cart stays in the bar: it is the one shoppers reach for. */}
+            they move into the menu. Cart and the account menu stay in the bar. */}
         <div className="marketing-gutter">
           <div className="marketing-measure flex h-(--header-height) items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-6">
@@ -104,11 +90,10 @@ export function RootLayout() {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {(canShopAsCustomer(user) || !user) && (
-                <NavLink to={cartLink.to} state={cartLink.state} className={linkClass} onClick={closeMenu}>
-                  Cart{cartCount ? ` (${cartCount})` : ''}
-                </NavLink>
+                <CartButton to={cartLink.to} state={cartLink.state} count={cartCount} />
               )}
               <div className="hidden items-center gap-2 lg:flex">{accountActions()}</div>
+              <AccountMenu onSignOut={closeMenu} />
               <button
                 type="button"
                 className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 lg:hidden"
