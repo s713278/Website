@@ -10,6 +10,7 @@ beforeEach(() => {
 afterEach(() => {
   configureApiClient({ useApi: false })
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
 })
 
@@ -135,6 +136,7 @@ describe('liveBillingService writes and lists', () => {
 
 describe('liveBillingService in local development demo mode', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_USE_API', 'false')
     configureApiClient({ useApi: false })
   })
 

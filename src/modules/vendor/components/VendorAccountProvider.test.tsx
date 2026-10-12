@@ -30,6 +30,8 @@ vi.mock('@/app/router/vendor-dashboard-chunks', () => ({ preloadVendorDashboard:
 beforeEach(() => {
   invalidateVendorContext()
   vi.stubEnv('DEV', false)
+  vi.stubEnv('VITE_USE_API', 'true')
+  configureApiClient({ useApi: true })
   vi.spyOn(vendorOrdersService, 'list').mockResolvedValue({
     orders: [], page: 0, totalPages: 0, totalElements: 0, lastPage: true,
   })
