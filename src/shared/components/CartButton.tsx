@@ -10,7 +10,7 @@ export function CartButton({ to, count }: { to: string; count: number }) {
     <Link
       to={to}
       className="relative inline-flex size-10 shrink-0 items-center justify-center overflow-visible rounded-full text-slate-700 transition hover:bg-slate-100"
-      aria-label={`Cart${count ? `, ${count} items` : ''}`}
+      aria-label={`Cart${count ? `, ${count} ${count === 1 ? 'item' : 'items'}` : ''}`}
     >
       <ShoppingCart className="size-[1.125rem]" strokeWidth={1.75} />
       {count > 0 ? (

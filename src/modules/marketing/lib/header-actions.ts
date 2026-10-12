@@ -28,7 +28,7 @@ export type HeaderAccountRead =
   | { status: 'ready'; state: AccountSnapshot }
 
 export type HeaderActionsInput = {
-  user: Pick<User, 'roles' | 'vendorId'> | null
+  user: Pick<User, 'role' | 'vendorId'> | null
   live: boolean
   /** Only consulted for a live vendor with a `vendorId`. */
   account: HeaderAccountRead
@@ -47,7 +47,7 @@ const SIGNED_OUT: HeaderAction[] = [
 ]
 
 /** React Router matches `/onboarding/` too, so a trailing slash is still this page. */
-function isOnboardingPath(pathname: string): boolean {
+export function isOnboardingPath(pathname: string): boolean {
   return pathname.replace(/\/+$/, '') === VENDOR_ONBOARDING_HREF
 }
 
@@ -78,8 +78,10 @@ function submittedStore(input: HeaderActionsInput): StoreSubmission | null | und
 
 export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] {
   if (!input.user) return SIGNED_OUT
-  // A signed-in customer's own account menu sits beside these, so no vendor Sign in.
-  if (!input.user.roles.includes('vendor')) return [OPEN_STORE]
+  // A signed-in customer's own account menu sits beside these, so no vendor Sign in. The
+  // active role decides, as it does for the account menu: a customer session on a phone
+  // that is also a vendor has not entered the vendor side (docs/SESSION.md).
+  if (input.user.role !== 'vendor') return [OPEN_STORE]
 
   const store = submittedStore(input)
   const onOnboarding = isOnboardingPath(input.pathname)

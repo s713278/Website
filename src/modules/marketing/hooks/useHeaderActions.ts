@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
 import { peekVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { useVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import type { StoreSubmission } from '@/modules/vendor/types/onboarding'
 import { isLiveApi } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import {
+  isOnboardingPath,
   resolveHeaderActions,
   type HeaderAccountRead,
   type HeaderAction,
@@ -25,10 +25,10 @@ export function useHeaderActions(): HeaderAction[] {
   const user = useAuthStore((state) => state.user)
   const { pathname } = useLocation()
   const live = isLiveApi()
-  const isVendor = user?.roles.includes('vendor') ?? false
+  const isVendor = user?.role === 'vendor'
   const vendorId = user?.vendorId ?? null
   const readsAccount = live && isVendor && vendorId !== null
-  const onWizard = pathname.replace(/\/+$/, '') === VENDOR_ONBOARDING_HREF
+  const onWizard = isOnboardingPath(pathname)
 
   const [read, setRead] = useState<{ vendorId: string; result: HeaderAccountRead } | null>(null)
   const [submission, setSubmission] = useState<StoreSubmission | null>(null)

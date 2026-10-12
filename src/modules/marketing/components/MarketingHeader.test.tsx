@@ -390,4 +390,24 @@ describe('MarketingHeader account menu', () => {
     expect(screen.getByRole('button', { name: 'Account' })).toBeTruthy()
     expect(shownActions()).toEqual(['Open store'])
   })
+
+  // The other role on the same phone is not entered until its login screen is used.
+  it('treats a customer session on a vendor’s phone as a customer, without reading the account', async () => {
+    const read = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    useAuthStore.getState().applySession({
+      token: 'test-token',
+      refreshToken: null,
+      user: {
+        id: 'test-user', name: 'Test Vendor', email: 'vendor@example.test',
+        role: 'customer', roles: ['customer', 'vendor'],
+        vendors: [{ vendorId: VENDOR_ID, name: 'Green Bowl Grocers' }], vendorId: VENDOR_ID,
+      },
+    })
+
+    renderHeader()
+    await import('@/modules/vendor/lib/onboarding-server-state')
+
+    expect(shownActions()).toEqual(['Open store'])
+    expect(read).not.toHaveBeenCalled()
+  })
 })

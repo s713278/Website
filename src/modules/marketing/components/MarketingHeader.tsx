@@ -119,6 +119,8 @@ export function MarketingHeader() {
               type="button"
               className="inline-flex size-10 items-center justify-center rounded-full border border-slate-200 xl:hidden"
               aria-label={open ? 'Close menu' : 'Open menu'}
+              aria-expanded={open}
+              aria-controls="marketing-header-menu"
               onClick={() => setOpen((v) => !v)}
             >
               {open ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -127,7 +129,10 @@ export function MarketingHeader() {
         </div>
       </div>
 
-      <div className={cn('marketing-gutter border-t border-slate-100 bg-white py-4 xl:hidden', !open && 'hidden')}>
+      <div
+        id="marketing-header-menu"
+        className={cn('marketing-gutter border-t border-slate-100 bg-white py-4 xl:hidden', !open && 'hidden')}
+      >
         <div className="marketing-measure flex flex-col gap-3 text-sm font-medium text-slate-700">
           {NAV.map((item) =>
             'to' in item ? (

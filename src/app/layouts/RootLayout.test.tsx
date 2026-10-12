@@ -157,6 +157,18 @@ describe('RootLayout destinations', () => {
     for (const gone of ['Home', 'Orders', 'Open store', 'Sign in']) expect(hrefsOf(gone)).toEqual([])
   })
 
+  it('does not read the vendor account for a customer session on a vendor’s phone', async () => {
+    goLive()
+    const read = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    signIn({ ...VENDOR, role: 'customer', roles: ['customer', 'vendor'] })
+    renderLayout()
+    await import('@/modules/vendor/lib/onboarding-server-state')
+
+    expect(hrefsOf(/^Cart/)).toEqual(['/cart'])
+    expect(hrefsOf('Store')).toEqual([])
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it('offers an unfinished vendor Continue setup, with Dashboard only in the account menu', () => {
     signIn(VENDOR)
     renderLayout()

@@ -187,7 +187,7 @@ still runs and corrects it.
 - **Read** only through `useHeaderActions`, by the marketing header (including on `/onboarding`) and
   the general header. Precedence: resolved memory cache, then this session's ready read, then the
   record (while the read is loading or after it failed), then the fallback (loading → no action;
-  failed → Continue setup). It only selects links; it never navigates. The wizard and route gates
+  failed → Continue setup, or no action on `/onboarding`, where the vendor already is). It only selects links; it never navigates. The wizard and route gates
   never read it. Demo mode makes no account read, so it is unaffected.
 - **Cleared** by `onExplicitSignOut` in `AppProviders.tsx`. Involuntary session loss keeps it; the
   `vendorId` ownership check stops it applying to another vendor.

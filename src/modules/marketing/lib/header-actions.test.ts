@@ -39,7 +39,7 @@ const SUBMITTED_PENDING = ready('ACTIVE', 'PENDING', 11)
 
 function live(overrides: Partial<HeaderActionsInput> = {}): HeaderActionsInput {
   return {
-    user: { roles: ['vendor'], vendorId: '91' },
+    user: { role: 'vendor', vendorId: '91' },
     live: true,
     account: SUBMITTED_APPROVED,
     submission: null,
@@ -56,7 +56,7 @@ describe('resolveHeaderActions', () => {
 
     // Their own account menu sits beside the actions, so a vendor Sign in would be a second login.
     it('offers a signed-in customer Open store only', () => {
-      expect(resolveHeaderActions(live({ user: { roles: ['customer'], vendorId: undefined } }))).toEqual(
+      expect(resolveHeaderActions(live({ user: { role: 'customer', vendorId: undefined } }))).toEqual(
         OPEN_STORE,
       )
     })
@@ -64,7 +64,7 @@ describe('resolveHeaderActions', () => {
     it('does not read the account for a customer who has no vendor role', () => {
       expect(
         resolveHeaderActions(
-          live({ user: { roles: ['customer'], vendorId: undefined }, account: { status: 'loading' } }),
+          live({ user: { role: 'customer', vendorId: undefined }, account: { status: 'loading' } }),
         ),
       ).toEqual(OPEN_STORE)
     })
@@ -99,7 +99,7 @@ describe('resolveHeaderActions', () => {
     it('shows Continue setup, without reading, when no store has been chosen', () => {
       expect(
         resolveHeaderActions(
-          live({ user: { roles: ['vendor'], vendorId: undefined }, account: { status: 'loading' } }),
+          live({ user: { role: 'vendor', vendorId: undefined }, account: { status: 'loading' } }),
         ),
       ).toEqual(CONTINUE_SETUP)
     })
@@ -264,7 +264,7 @@ describe('resolveHeaderActions', () => {
 
     it('shows Continue setup even for a vendor with no vendorId', () => {
       expect(
-        resolveHeaderActions(demo({ user: { roles: ['vendor'], vendorId: undefined } })),
+        resolveHeaderActions(demo({ user: { role: 'vendor', vendorId: undefined } })),
       ).toEqual(CONTINUE_SETUP)
     })
 
