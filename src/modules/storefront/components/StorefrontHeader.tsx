@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Phone, Search } from 'lucide-react'
+import { ChevronLeft, Phone, Search, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import { canHoldCart, customerLoginLink } from '@/modules/storefront/lib/cart-nav'
@@ -73,8 +73,15 @@ function AccountControl({
 
   if (!canShopAsCustomer(user)) {
     return (
-      <HeaderButton to={loginTo} state={signInState} emphasis="secondary">
-        Sign in
+      // Below sm an outlined icon, so the shop name keeps its room; the label stays for screen readers.
+      <HeaderButton
+        to={loginTo}
+        state={signInState}
+        emphasis="secondary"
+        className="max-sm:size-10 max-sm:px-0"
+      >
+        <User className="size-[1.125rem] sm:hidden" strokeWidth={1.75} aria-hidden />
+        <span className="max-sm:sr-only">Sign in</span>
       </HeaderButton>
     )
   }

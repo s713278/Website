@@ -15,6 +15,7 @@ export function HeaderButton({
   newTab,
   fullWidth,
   onClick,
+  className,
   children,
 }: {
   to: string
@@ -23,6 +24,7 @@ export function HeaderButton({
   newTab?: boolean
   fullWidth?: boolean
   onClick?: () => void
+  className?: string
   children: ReactNode
 }) {
   const primary = emphasis === 'primary'
@@ -35,6 +37,7 @@ export function HeaderButton({
         'h-10 rounded-full px-5 font-medium',
         // The default outline border is #e2e8f0, which vanishes on the white header.
         !primary && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
+        className,
       )}
     >
       <Link
