@@ -1,5 +1,4 @@
 import { canShopAsCustomer, loginPathForRole } from '@/app/router/role-home'
-import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { isLiveApi } from '@/shared/api'
 import type { User } from '@/shared/types'
 
@@ -8,13 +7,6 @@ export type CustomerLoginState = {
   shopName?: string
   shopLogoUrl?: string
 }
-
-export type CartNavTarget =
-  | string
-  | {
-      pathname: string
-      state: CustomerLoginState
-    }
 
 /** Same target add-to-cart uses: `/login` plus `from` so the shop logo can show. */
 export function customerLoginLink(
@@ -33,27 +25,14 @@ export function customerLoginLink(
   }
 }
 
-export function linkFromNavTarget(target: CartNavTarget): { to: string; state?: CustomerLoginState } {
-  if (typeof target === 'string') return { to: target }
-  return { to: target.pathname, state: target.state }
-}
-
 /**
- * Live customer session → cart. Anyone else (guest or vendor session) → customer login.
+ * Whether this session can hold a customer cart, and so whether a header shows the cart icon.
+ * Live, only a customer session can: a guest or vendor session is sent to customer login by
+ * add-to-cart instead. Demo carts are local, so anyone can.
  * A vendor login is not a customer session, even for the same phone.
  */
-export function cartNavTarget(
-  user: User | null | undefined,
-  storeId?: string,
-): CartNavTarget {
-  const cartPath = storeId ? storeCartPath(storeId) : '/cart'
-  if (isLiveApi() && !canShopAsCustomer(user)) {
-    return {
-      pathname: loginPathForRole('customer'),
-      state: { from: cartPath },
-    }
-  }
-  return cartPath
+export function canHoldCart(user: User | null | undefined): boolean {
+  return !isLiveApi() || canShopAsCustomer(user)
 }
 
 /** Live guests and vendor sessions must not see the customer cart badge. */
@@ -61,6 +40,5 @@ export function visibleCartCount(
   user: User | null | undefined,
   count: number,
 ): number {
-  if (isLiveApi() && !canShopAsCustomer(user)) return 0
-  return count
+  return canHoldCart(user) ? count : 0
 }

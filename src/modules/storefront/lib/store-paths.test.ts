@@ -19,10 +19,10 @@ describe('storeContactPath', () => {
 })
 
 describe('storeBackFallback', () => {
-  it('is hidden on the shop home', () => {
+  it('goes to the store directory from the shop home', () => {
     expect(isStoreHomePath('/stores/273')).toBe(true)
     expect(isStoreHomePath('/stores/273?search=1')).toBe(true)
-    expect(storeBackFallback('/stores/273')).toBeNull()
+    expect(storeBackFallback('/stores/273')).toBe('/stores')
   })
 
   it('returns one step up on nested shop pages', () => {

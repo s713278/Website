@@ -26,12 +26,13 @@ export function storeIdFromPath(path: string | undefined): string | null {
 }
 
 /**
- * Parent for the inner-page Back control (shared link, refresh).
- * Nested flows go one step up; everything else to the shop.
+ * Parent for the Back control (shared link, refresh).
+ * The shop home goes to the store directory; nested flows go one step up; everything else to the shop.
  */
 export function storeBackFallback(path: string | undefined): string | null {
   const shopId = storeIdFromPath(path)
-  if (!shopId || isStoreHomePath(path)) return null
+  if (!shopId) return null
+  if (isStoreHomePath(path)) return '/stores'
 
   const pathname = (path ?? '').split('?')[0] ?? ''
   const query = (path ?? '').split('?')[1] ?? ''

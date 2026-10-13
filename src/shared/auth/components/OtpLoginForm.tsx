@@ -146,7 +146,7 @@ export function OtpLoginForm({
               <img
                 src={logoDarkMd}
                 alt="Mithra Direct — Shop Local, Support Local, Grow Together"
-                className="h-9 w-auto"
+                className="h-10 w-auto sm:h-11"
               />
             </Link>
           )}

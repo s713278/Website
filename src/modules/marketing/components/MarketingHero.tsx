@@ -257,7 +257,7 @@ export function MarketingHero() {
 
   return (
     <section
-      className="relative isolate -mt-[5.0625rem] overflow-hidden pt-[5.0625rem] xl:-mt-[5.5625rem] xl:pt-[5.5625rem]"
+      className="relative isolate -mt-[calc(var(--header-height)+1px)] overflow-hidden pt-[calc(var(--header-height)+1px)]"
       id="top"
     >
       {/* The section reaches up under the sticky header (its height is the negative margin,
@@ -294,7 +294,7 @@ export function MarketingHero() {
         />
       </div>
 
-      <div className="marketing-measure marketing-gutter box-content grid items-center gap-12 py-12 [--hero-py:clamp(2rem,6svh,4.5rem)] xl:[--hero-py:clamp(1.5rem,4svh,3.5rem)] md:min-h-[calc(100svh_-_5.0625rem_-_2*var(--hero-py))] md:grid-cols-[1.05fr_0.95fr] md:gap-10 md:py-(--hero-py) xl:min-h-[calc(100svh_-_5.5625rem_-_2*var(--hero-py))]">
+      <div className="marketing-measure marketing-gutter box-content grid items-center gap-12 py-12 [--hero-py:clamp(2rem,6svh,4.5rem)] xl:[--hero-py:clamp(1.5rem,4svh,3.5rem)] md:min-h-[calc(100svh_-_var(--header-height)_-_1px_-_2*var(--hero-py))] md:grid-cols-[1.05fr_0.95fr] md:gap-10 md:py-(--hero-py)">
         <div>
           <h1 className="font-display text-4xl font-bold leading-[1.12] tracking-[-0.02em] text-slate-900 md:text-[2.6rem] lg:text-5xl xl:text-[3.25rem] [@media(min-width:84rem)_and_(min-height:800px)]:text-[3.625rem] [@media(min-width:84rem)_and_(min-height:910px)]:text-[4rem]">
             Launch your{' '}

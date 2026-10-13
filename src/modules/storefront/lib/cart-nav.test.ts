@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import type { User } from '@/shared/types'
-import { cartNavTarget, customerLoginLink, visibleCartCount } from './cart-nav'
+import { canHoldCart, customerLoginLink, visibleCartCount } from './cart-nav'
 
 vi.mock('@/shared/api', () => ({
   isLiveApi: () => true,
@@ -47,20 +47,18 @@ describe('canShopAsCustomer', () => {
   })
 })
 
-describe('cartNavTarget', () => {
-  it('sends a vendor session to customer login', () => {
-    expect(cartNavTarget(signedInVendor, '273')).toEqual({
-      pathname: '/login',
-      state: { from: '/stores/273/cart' },
-    })
+describe('canHoldCart in live mode', () => {
+  it('lets only a customer session hold a cart', () => {
+    expect(canHoldCart({ role: 'customer', roles: ['customer'] } as User)).toBe(true)
+  })
+
+  it('hides the cart and its badge from a vendor session', () => {
+    expect(canHoldCart(signedInVendor)).toBe(false)
     expect(visibleCartCount(signedInVendor, 2)).toBe(0)
   })
 
-  it('sends a logged-out visitor to login and hides the badge', () => {
-    expect(cartNavTarget(null, '273')).toEqual({
-      pathname: '/login',
-      state: { from: '/stores/273/cart' },
-    })
+  it('hides the cart and its badge from a signed-out visitor', () => {
+    expect(canHoldCart(null)).toBe(false)
     expect(visibleCartCount(null, 2)).toBe(0)
   })
 })

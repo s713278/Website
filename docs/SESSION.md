@@ -73,7 +73,7 @@ into a session by `applySession()`.
    accepted the credentials, so they are alive; clearing would destroy a working refresh token over a
    response-shape surprise
 7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
-8. **Logout** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
+8. **Sign-out** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
    handler registered through `onExplicitSignOut()`. Customer cleanup clears `md-cart` memory and
    persist storage, pending add, and in-flight cart writes. The public storefront cache stays so
    `/login` can still show that shop's name and logo. The next customer OTP loads that identity's
@@ -175,20 +175,20 @@ clears it, and the ownership check covers every other path — the header ignore
 
 ### Temporary: vendor header hint — TEMP(vendor-header-hint)
 
-**Purpose.** The marketing header picks its vendor buttons from the live vendor context read. Until
-that read lands it showed a Dashboard placeholder, which then flipped to Continue setup for
-unfinished vendors. A persisted Zustand store (`md-vendor-header-hint`) now remembers the last
-accepted read — `{ vendorId, vendorStatus, approvalStatus, storeIdentifier, onboarding: { status,
+**Purpose.** The marketing header and the general header (`RootLayout`) pick a vendor's buttons from
+the live vendor context read. Until that read lands they show no action; the account menu offers
+Dashboard meanwhile. A persisted Zustand store (`md-vendor-header-hint`) remembers the last accepted
+read — `{ vendorId, vendorStatus, approvalStatus, storeIdentifier, onboarding: { status,
 description, nextStep } }` — so the first frame already shows the right buttons. The live read
 still runs and corrects it.
 
 - **Written** by the cache layer whenever a context read is accepted: `loadVendorContext`, which
   every context read goes through, sign-in's included.
-- **Read** only by the marketing header, including on `/onboarding`. Precedence: resolved memory
-  cache, then this session's ready read, then the record (while the read is loading or after it
-  failed), then the previous fallback (loading → Dashboard, blank on `/onboarding`; failed → Log out
-  + Continue setup). It only selects links; it never navigates. The wizard and route gates never
-  read it. Demo mode makes no account read, so it is unaffected.
+- **Read** only through `useHeaderActions`, by the marketing header (including on `/onboarding`) and
+  the general header. Precedence: resolved memory cache, then this session's ready read, then the
+  record (while the read is loading or after it failed), then the fallback (loading → no action;
+  failed → Continue setup, or no action on `/onboarding`, where the vendor already is). It only selects links; it never navigates. The wizard and route gates
+  never read it. Demo mode makes no account read, so it is unaffected.
 - **Cleared** by `onExplicitSignOut` in `AppProviders.tsx`. Involuntary session loss keeps it; the
   `vendorId` ownership check stops it applying to another vendor.
 - **Accepted risk:** an out-of-date record (for example, a store suspended elsewhere) can show a
@@ -202,6 +202,7 @@ Files:
 - `src/modules/marketing/hooks/useHeaderActions.ts`
 - `src/app/providers/AppProviders.tsx`
 - `src/modules/marketing/components/MarketingHeader.test.tsx`
+- `src/app/layouts/index.tsx` (general header, a second consumer of `useHeaderActions`)
 
 **Removal** — required before any caching layer (Zustand + TanStack Query) starts:
 

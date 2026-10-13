@@ -11,14 +11,11 @@ import type { User } from '@/shared/types'
  * this imports only erased types and the account-status predicates, never the resume,
  * API or onboarding-store graph.
  */
-export type HeaderAction =
-  | {
-      label: 'Log in' | 'Get started' | 'Continue setup' | 'Check status' | 'Store' | 'Dashboard'
-      to: string
-      emphasis: 'secondary' | 'primary'
-    }
-  // Ends the session rather than navigating, so it has no destination.
-  | { label: 'Log out'; emphasis: 'secondary' }
+export type HeaderAction = {
+  label: 'Sign in' | 'Open store' | 'Continue setup' | 'Check status' | 'Dashboard'
+  to: string
+  emphasis: 'secondary' | 'primary'
+}
 
 /** The part of the account read this decision needs. */
 type AccountSnapshot = {
@@ -31,7 +28,7 @@ export type HeaderAccountRead =
   | { status: 'ready'; state: AccountSnapshot }
 
 export type HeaderActionsInput = {
-  user: Pick<User, 'roles' | 'vendorId'> | null
+  user: Pick<User, 'role' | 'vendorId'> | null
   live: boolean
   /** Only consulted for a live vendor with a `vendorId`. */
   account: HeaderAccountRead
@@ -41,14 +38,14 @@ export type HeaderActionsInput = {
 }
 
 const VENDOR_LOGIN_HREF = loginPathForRole('vendor')
-const VENDOR_HOME_HREF = homePathForRole('vendor')
 
-const LOG_OUT: HeaderAction = { label: 'Log out', emphasis: 'secondary' }
-const DASHBOARD: HeaderAction = { label: 'Dashboard', to: VENDOR_HOME_HREF, emphasis: 'primary' }
+const DASHBOARD: HeaderAction = { label: 'Dashboard', to: homePathForRole('vendor'), emphasis: 'primary' }
+
+const OPEN_STORE: HeaderAction = { label: 'Open store', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }
 
 const SIGNED_OUT: HeaderAction[] = [
-  { label: 'Log in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
-  { label: 'Get started', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
+  { label: 'Sign in', to: VENDOR_LOGIN_HREF, emphasis: 'secondary' },
+  OPEN_STORE,
 ]
 
 /** React Router matches `/onboarding/` too, so a trailing slash is still this page. */
@@ -82,33 +79,42 @@ function submittedStore(input: HeaderActionsInput): StoreSubmission | null | und
 }
 
 export function resolveHeaderActions(input: HeaderActionsInput): HeaderAction[] {
-  if (!input.user?.roles.includes('vendor')) return SIGNED_OUT
+  if (!input.user) return SIGNED_OUT
+  // A signed-in customer's own account menu sits beside these, so no vendor Sign in. The
+  // active role decides, as it does for the account menu: a customer session on a phone
+  // that is also a vendor has not entered the vendor side (docs/SESSION.md).
+  if (input.user.role !== 'vendor') return [OPEN_STORE]
 
   const store = submittedStore(input)
   const onOnboarding = isOnboardingPath(input.pathname)
 
-  // The account has not answered yet, and a vendor must never be left with no way in.
-  // Dashboard suits every state: it opens the setup prompt for an unfinished store and the
-  // status for a pending one. It is also the button an approved store ends up with, so that
-  // case does not change when the read lands. On the wizard the vendor is already on the page
-  // that owns what happens next, so nothing is offered until the account is known.
-  if (store === undefined) return onOnboarding ? [] : [DASHBOARD]
+  // The account has not answered yet. Nothing is offered until it does: the account menu
+  // beside these actions offers Dashboard until then, so a vendor is never left with no way in.
+  if (store === undefined) return []
 
   // These two link to the wizard, which is where the vendor already is on /onboarding.
   const toOnboarding = (label: 'Continue setup' | 'Check status'): HeaderAction[] =>
     onOnboarding ? [] : [{ label, to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' }]
 
-  // Only a vendor with unfinished setup is offered a way out here. A submitted store has
-  // its dashboard, which owns Log out, and nothing half-built to walk away from.
-  if (!store) return [LOG_OUT, ...toOnboarding('Continue setup')]
+  // Sign out is not an action here: the header's account menu offers it to every vendor.
+  if (!store) return toOnboarding('Continue setup')
   // Raw approval, not `deriveStoreState`: the header must not coerce a pending store
   // into an approved one the way the dashboard does.
   if (!isApprovalGranted(store.approvalStatus)) return toOnboarding('Check status')
 
-  const actions: HeaderAction[] = []
-  if (store.storeIdentifier) {
-    actions.push({ label: 'Store', to: `/stores/${store.storeIdentifier}`, emphasis: 'secondary' })
-  }
-  actions.push(DASHBOARD)
-  return actions
+  // A live store's vendor works from the dashboard, so it takes the bar and the storefront
+  // moves to the account menu (`resolveMenuStoreHref`). Without a storefront to swap in, the
+  // menu keeps Dashboard and it is never offered twice.
+  return store.storeIdentifier ? [DASHBOARD] : []
+}
+
+/**
+ * The storefront the account menu offers in place of Dashboard, once Dashboard is in the bar.
+ * `null` leaves the menu offering Dashboard.
+ */
+export function resolveMenuStoreHref(input: HeaderActionsInput): string | null {
+  if (input.user?.role !== 'vendor') return null
+  const store = submittedStore(input)
+  if (!store || !isApprovalGranted(store.approvalStatus) || !store.storeIdentifier) return null
+  return `/stores/${store.storeIdentifier}`
 }
