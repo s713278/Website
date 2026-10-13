@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
@@ -26,12 +26,23 @@ import {
 } from '@/modules/storefront/lib/order-owner-chat'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
-import { storeOrderPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { storeOrderPath, storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, EmptyState, Spinner } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
+
+/** Filled primary CTA — vendor theme (falls back to brand green). */
+const primaryCtaClass =
+  'w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90'
+
+/** Outlined secondary CTA — same vendor theme. */
+const secondaryCtaClass =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-800))] hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.1))]'
+
+const textCtaClass =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline'
 
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
@@ -80,15 +91,37 @@ export function OrderDetailPage() {
 
   const shopName = store?.name ?? order?.storeName ?? 'Order details'
   const shopHref = storePath(storeId)
+  const ordersHref = storeOrdersPath(storeId)
   const login = customerLoginLink(storeOrderPath(storeId, orderId), {
     name: shopName,
     logoUrl: store?.theme?.logoImage,
   })
   const chatHref =
     order && store && canChatAboutOrder(order.status)
-      ? orderOwnerChatHref(store, order.id, shopName)
+      ? orderOwnerChatHref(store, order.id)
       : null
   const showStickyFooter = Boolean(order)
+
+  // Top text link + bottom stack (matches design): Chat → Back → Continue shopping.
+  // max-w-lg keeps sticky CTAs aligned with the page column on wide phones/tablets.
+  const actionStack = (
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-2">
+      {chatHref ? (
+        <WhatsAppActionLink href={chatHref} className={primaryCtaClass}>
+          Chat with Owner
+        </WhatsAppActionLink>
+      ) : null}
+      <Link to={ordersHref} className={secondaryCtaClass}>
+        <ArrowLeft className="size-4" strokeWidth={2} aria-hidden />
+        Back to orders
+      </Link>
+      <Link to={shopHref} className={textCtaClass}>
+        {!chatHref ? <ShoppingBag className="size-4" strokeWidth={2} aria-hidden /> : null}
+        Continue shopping
+        <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
+      </Link>
+    </div>
+  )
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
@@ -105,12 +138,20 @@ export function OrderDetailPage() {
           'store-shell-inner flex-1 py-4 sm:py-6',
           showStickyFooter
             ? chatHref
-              ? 'pb-40 sm:pb-44 lg:pb-8'
-              : 'pb-28 sm:pb-32 lg:pb-8'
+              ? 'pb-44 sm:pb-48 lg:pb-8'
+              : 'pb-36 sm:pb-40 lg:pb-8'
             : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
         )}
       >
         <div className="mx-auto w-full max-w-lg space-y-3">
+          <Link
+            to={ordersHref}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+          >
+            <ArrowLeft className="size-4" strokeWidth={2} aria-hidden />
+            Back to orders
+          </Link>
+
           {!canShopAsCustomer(user) ? (
             <EmptyState
               title="Sign in to see this order"
@@ -133,59 +174,24 @@ export function OrderDetailPage() {
               <AddressRow order={order} />
               <PaymentRow order={order} />
 
-              <div className="hidden gap-2 pt-2 pb-6 lg:flex lg:flex-col">
-                {chatHref ? (
-                  <WhatsAppActionLink
-                    href={chatHref}
-                    className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
-                  >
-                    Chat with Owner
-                  </WhatsAppActionLink>
-                ) : null}
-                <Link
-                  to={shopHref}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Continue shopping
-                  <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
-                </Link>
-              </div>
+              <div className="hidden pt-2 pb-6 lg:block">{actionStack}</div>
             </>
           ) : (
             <EmptyState
               title={orderError || 'Order not found'}
               description="This order may belong to another account."
+              action={
+                <Link to={ordersHref}>
+                  <Button variant="outline">Back to orders</Button>
+                </Link>
+              }
             />
           )}
         </div>
       </main>
 
       {showStickyFooter && order ? (
-        <StorefrontMobileActionBar className="lg:hidden">
-          <div className="flex flex-col gap-2">
-            {chatHref ? (
-              <WhatsAppActionLink
-                href={chatHref}
-                className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
-              >
-                Chat with Owner
-              </WhatsAppActionLink>
-            ) : null}
-            <Link
-              to={shopHref}
-              className={cn(
-                'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold',
-                chatHref
-                  ? 'border border-slate-200 bg-white text-slate-700'
-                  : 'bg-[var(--store-theme,var(--md-green-700))] text-white',
-              )}
-            >
-              {!chatHref ? <ShoppingBag className="size-4" strokeWidth={2} aria-hidden /> : null}
-              Continue shopping
-              <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
-            </Link>
-          </div>
-        </StorefrontMobileActionBar>
+        <StorefrontMobileActionBar>{actionStack}</StorefrontMobileActionBar>
       ) : null}
     </div>
   )

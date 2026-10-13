@@ -31,11 +31,8 @@ export function OrderCard({ order, storeId, store }: OrderCardProps) {
   const detailHref = shopId ? storeOrderPath(shopId, order.id) : '/orders'
   const extraItems = Math.max(0, order.items.length - 1)
   const estimate = orderArrivalLabel(order)
-  const shopName = store?.name ?? order.storeName
   const chatHref =
-    canChatAboutOrder(order.status) && store
-      ? orderOwnerChatHref(store, order.id, shopName)
-      : null
+    canChatAboutOrder(order.status) && store ? orderOwnerChatHref(store, order.id) : null
 
   return (
     <article className="rounded-xl bg-white p-3.5 ring-1 ring-slate-100 sm:p-4">
@@ -72,24 +69,21 @@ export function OrderCard({ order, storeId, store }: OrderCardProps) {
         </p>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Link
+          to={detailHref}
+          className="inline-flex min-h-11 items-center justify-center px-0 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+        >
+          View details
+        </Link>
         {chatHref ? (
           <WhatsAppActionLink
             href={chatHref}
-            className="min-h-11 flex-1 border border-[var(--store-theme,var(--md-green-600))] bg-white text-[var(--store-theme,var(--md-green-800))] hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.1))] sm:flex-none"
+            className="bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
           >
             Chat with Owner
           </WhatsAppActionLink>
         ) : null}
-        <Link
-          to={detailHref}
-          className={cn(
-            'inline-flex min-h-11 items-center justify-center px-3 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline',
-            chatHref ? 'sm:px-2' : 'min-h-8 px-0',
-          )}
-        >
-          View details
-        </Link>
       </div>
     </article>
   )
