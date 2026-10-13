@@ -149,7 +149,9 @@ function StoreOrders({ storeId }: { storeId: string }) {
                 <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
                   My orders
                 </h1>
-                <p className="mt-0.5 text-sm text-slate-500">Orders from {shopName}</p>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Past orders from this shop. For open orders, chat with the owner on WhatsApp.
+                </p>
               </div>
             </div>
           </header>
