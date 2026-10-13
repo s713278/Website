@@ -893,22 +893,17 @@
 
 /*Storefront shell */
 .store-shell {
-  --store-shell-max: 76rem;
   color: var(--store-ink, var(--md-ink));
   background: var(--store-bg, #f8fafc);
 }
 
+/* The marketing gutter and measure, so the storefront keeps the same page edges as the rest of
+   the app. */
 .store-shell-inner {
   width: 100%;
-  max-width: var(--store-shell-max);
+  max-width: calc(var(--marketing-measure) + 2 * var(--marketing-gutter));
   margin-inline: auto;
-  padding-inline: 1rem;
-}
-
-@media (min-width: 640px) {
-  .store-shell-inner {
-    padding-inline: 1.25rem;
-  }
+  padding-inline: var(--marketing-gutter);
 }
 
 .store-category-scroller {

@@ -1252,10 +1252,8 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="onboarding-shell h-full min-h-0 overflow-hidden px-5 text-[var(--ob-ink)] [contain:paint] sm:px-8 xl:px-10">
-      {/* A working tool rather than a reading page, so on desktop it sits slightly wider than the
-          marketing header's measure. */}
-      <div className="ob-grid mx-auto w-full max-w-[81rem]">
+    <div className="onboarding-shell h-full min-h-0 overflow-hidden marketing-gutter text-[var(--ob-ink)] [contain:paint]">
+      <div className="ob-grid marketing-measure w-full">
         <div className="flex min-h-0 min-w-0 flex-col">
           <div className="grid shrink-0 grid-cols-2 gap-1 py-2 min-[900px]:hidden" role="tablist" aria-label="Onboarding view">
             <button id="onboarding-form-tab" type="button" role="tab" tabIndex={mobileView === 'form' ? 0 : -1} aria-controls="onboarding-form-panel" aria-selected={mobileView === 'form'} onClick={() => setMobileView('form')} onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); moveMobileTab('preview') } }} className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ob-ink-soft)] outline-none transition-colors focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]', mobileView === 'form' && 'bg-[var(--ob-sheet)] text-[var(--ob-ink)] shadow-sm')}>Set up</button>

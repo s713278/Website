@@ -110,7 +110,7 @@ export function StoreListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="marketing-measure marketing-gutter box-content py-8">
       <PageHeader
         title="Stores near you"
         subtitle={`Showing stores for ${location.label}`}
