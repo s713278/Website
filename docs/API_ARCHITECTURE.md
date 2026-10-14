@@ -263,10 +263,9 @@ successful read also files Step 3's unsearched first page in the catalog referen
 an existing entry), so the step's first visit makes no request. Each onboarding catalog (business
 types, categories, products) shows nine items at a time: the first **Show more** press reveals the
 next nine, reading the next page only when loaded items run short, and only after that press do
-later sets load as the list end scrolls into view. Category and product search filters loaded
-items in the browser, so while one is active each further set loads only on a press, never on
-scroll. A first-time vendor's checkout 404 arrives as
-`null`, meaning no settings yet, not a failure.
+later sets load as the list end scrolls into view. Category and product search filters loaded items
+in the browser, so while one is active each further set loads only on a press, never on scroll. A
+first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not a failure.
 
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
 step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is

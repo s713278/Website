@@ -206,7 +206,7 @@ describe('category step messages', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Show more categories' }))
 
     expect((await screen.findByRole('status')).textContent).toBe('Loading more categories.')
-    expect(screen.getByRole('button', { name: 'Show more categories' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Show more categories' }).getAttribute('aria-disabled')).toBe('true')
     expect(document.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3)
 
     await act(async () => resolveMore({ items: [category(4502)], pageNumber: 1, pageSize: 9, totalElements: 2, totalPages: 2, lastPage: true }))
@@ -436,7 +436,7 @@ describe('catalog lists in sets of nine', () => {
 
     const card = await screen.findByRole('button', { name: /Business 5401/ })
     expect(card.matches(':disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Show more business types' }).matches(':disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Show more business types' }).getAttribute('aria-disabled')).toBe('false')
   })
 
   it('moves focus to the list when a press reveals locked business types', async () => {
@@ -532,16 +532,106 @@ describe('catalog lists in sets of nine', () => {
 
     fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
     fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Show more categories' }).matches(':disabled')).toBe(false))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show more categories' }).getAttribute('aria-disabled')).toBe('false'))
     expect(read).toHaveBeenCalledTimes(2)
 
-    act(() => observers.filter((observer) => !observer.disconnected).forEach((observer) =>
-      observer.callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)))
-    expect(read).toHaveBeenCalledTimes(2)
+    // Unlike the unfiltered list, the press leaves the button in place and builds no scroll marker.
+    expect(observers).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
     await waitFor(() => expect(read).toHaveBeenCalledTimes(3))
     expect(read.mock.calls.map((call) => call[0]?.pageNumber)).toEqual([0, 1, 2])
+  })
+
+  it('keeps focus on Show more when a search press reveals no new match', async () => {
+    emptyReferenceCache()
+    let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getCategories>>) => void = () => undefined
+    vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5861, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve }))
+    setCatalogDraft(58, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5861/ })
+
+    fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
+    const button = screen.getByRole('button', { name: 'Show more categories' })
+    button.focus()
+    fireEvent.click(button)
+
+    expect((await screen.findByRole('status')).textContent).toBe('Loading more categories.')
+    expect(document.activeElement).toBe(button)
+    await act(async () => resolveMore({ items: ids(5870, 9).map(category), pageNumber: 1, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false }))
+    expect(button.getAttribute('aria-disabled')).toBe('false')
+    expect(document.activeElement).toBe(button)
+
+    // The spent press must not hand focus to a match that appears later where it pointed.
+    const search = screen.getByLabelText('Search category')
+    search.focus()
+    act(() => { useOnboardingStore.getState().addPendingCategory({ name: 'Pickles', businessTypeId: 58 }) })
+    expect(screen.getByRole('button', { name: /Pickles/ })).toBeTruthy()
+    expect(document.activeElement).toBe(search)
+  })
+
+  it('returns focus to the search when a press reveals no match and the list ends', async () => {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5881, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false })
+      .mockResolvedValueOnce({ items: ids(5890, 9).map(category), pageNumber: 1, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: true })
+    setCatalogDraft(58, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5881/ })
+
+    fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
+    const button = screen.getByRole('button', { name: 'Show more categories' })
+    button.focus()
+    fireEvent.click(button)
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more categories' })).toBeNull())
+    expect(document.activeElement).toBe(screen.getByLabelText('Search category'))
+  })
+
+  it('leaves focus alone when a tap that never focused Show more ends the list without a match', async () => {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5901, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false })
+      .mockResolvedValueOnce({ items: ids(5910, 9).map(category), pageNumber: 1, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: true })
+    setCatalogDraft(59, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5901/ })
+
+    fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
+    // iOS Safari: a tapped button never takes focus.
+    expect(document.activeElement).toBe(document.body)
+    fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more categories' })).toBeNull())
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('drops a pending press when the search changes, so returning to it focuses no card', async () => {
+    emptyReferenceCache()
+    let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getCategories>>) => void = () => undefined
+    vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5921, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve }))
+    setCatalogDraft(59, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5921/ })
+
+    const search = screen.getByLabelText('Search category')
+    fireEvent.change(search, { target: { value: 'category 595' } })
+    const button = screen.getByRole('button', { name: 'Show more categories' })
+    button.focus()
+    fireEvent.click(button)
+    expect((await screen.findByRole('status')).textContent).toBe('Loading more categories.')
+
+    search.focus()
+    fireEvent.change(search, { target: { value: 'zz' } })
+    await act(async () => resolveMore({ items: ids(5950, 9).map(category), pageNumber: 1, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false }))
+    fireEvent.change(search, { target: { value: 'category 595' } })
+
+    expect(await screen.findByRole('button', { name: /Category 5950/ })).toBeTruthy()
+    expect(document.activeElement).toBe(search)
   })
 
   it('does not load again when the step re-renders with the end of the list in view', async () => {

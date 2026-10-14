@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ToggleEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject, type ToggleEvent } from 'react'
 import {
   CheckIcon,
   RefreshCwIcon,
@@ -57,19 +57,24 @@ function catalogChoiceState(
  * arrives. A ticked card from a loaded page stays where it is. Show more reveals the next set,
  * reading the next page only when the loaded items run short.
  */
-function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPage, loadMore, resetKey, matches }: {
+function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPage, loadingMore, loadMore, resetKey, matches, endFocusRef }: {
   items: T[]
   chosen: T[]
   size: number
   lastPage: boolean
+  loadingMore: boolean
   loadMore: () => void
   /** A change (a new search) starts again from the first set. */
   resetKey: string
   matches: (item: T) => boolean
+  /** Takes focus when a press reveals no card and its button leaves with the list's end. */
+  endFocusRef?: RefObject<HTMLElement | null>
 }) {
   const [leading] = useState(chosen)
   const [shown, setShown] = useState({ key: resetKey, count: size })
-  const [focusAt, setFocusAt] = useState<{ key: string; index: number } | null>(null)
+  const [focusAt, setFocusAt] = useState<{ key: string; index: number; hadFocus: boolean } | null>(null)
+  // A new search drops a pending press, so returning to the old one cannot focus a late card.
+  if (focusAt && focusAt.key !== resetKey) setFocusAt(null)
   const chosenIds = new Set(chosen.map((item) => item.id))
   // A dropped pending entry no longer exists anywhere, so it leaves; a real reference stays.
   const pinned = leading.filter((item) => !isPendingId(item.id) || chosenIds.has(item.id))
@@ -79,21 +84,34 @@ function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPag
   const all = appendMissingReferenceItems(appendMissingReferenceItems(added, pinned), items).filter(matches)
   const count = shown.key === resetKey ? shown.count : size
   const hasMore = all.length > count || !lastPage
-  const showMore = (pressed: boolean) => {
+  /** `hadFocus`: the button held focus as it was pressed (a tap on iOS Safari never focuses it). */
+  const showMore = (pressed: boolean, hadFocus = false) => {
     if (!hasMore) return
     // The first card this press reveals; a search with nothing shown yet focuses its first match.
-    if (pressed) setFocusAt({ key: resetKey, index: Math.min(count, all.length) })
+    if (pressed) setFocusAt({ key: resetKey, index: Math.min(count, all.length), hadFocus })
     setShown({ key: resetKey, count: count + size })
     if (all.length < count + size && !lastPage) loadMore()
   }
+  const focusIndex = focusAt?.key === resetKey ? focusAt.index : null
+  const revealed = focusIndex !== null && all.length > focusIndex
+  // A press is settled once its card shows or its read ends without one; a card that mounts
+  // there later must not take focus. Without a card, focus stays on the button if it remains.
+  const settled = focusIndex !== null && (revealed || !loadingMore)
+  // Only focus the button lost as it left may move; a tap that never focused it leaves the page be.
+  const hadFocus = focusAt?.hadFocus === true
+  useEffect(() => {
+    if (!settled) return
+    setFocusAt(null)
+    if (!revealed && hadFocus && document.activeElement === document.body) endFocusRef?.current?.focus()
+  }, [settled, revealed, hadFocus, endFocusRef])
   return {
     /** Key the Show more control by this, so a new list brings the button back. */
     key: resetKey,
     visible: all.slice(0, count),
     hasMore,
     showMore,
-    /** The first card a press revealed; it takes focus as it mounts. */
-    focusIndex: focusAt?.key === resetKey ? focusAt.index : null,
+    /** The first card a pending press reveals; it takes focus as it mounts. */
+    focusIndex,
   }
 }
 
@@ -195,6 +213,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
     chosen: selected ? [selected] : [],
     size: ONBOARDING_CONFIG.businessTypePageSize,
     lastPage: references.lastPage,
+    loadingMore: references.loadingMore,
     loadMore: references.loadMore,
     resetKey: `${draft.catalogSource}:${references.committedQuery}`,
     // The server filters its own pages; a chosen type it did not return must match too.
@@ -358,14 +377,18 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   const businessTypeId = draft.business.businessType?.id ?? null
   const references = useCategoryReferences(draft.catalogSource, businessTypeId)
   const query = search.trim().toLowerCase()
+  const searchRef = useRef<HTMLInputElement>(null)
   const sets = useCatalogSets({
     items: references.items,
     chosen: draft.categories,
     size: ONBOARDING_CONFIG.categoryPageSize,
     lastPage: references.lastPage,
+    loadingMore: references.loadingMore,
     loadMore: references.loadMore,
     resetKey: `${draft.catalogSource}:${businessTypeId}:${query}`,
     matches: (item) => item.name.toLowerCase().includes(query),
+    // A search that runs out leaves the vendor to refine it.
+    endFocusRef: searchRef,
   })
   const loadedItems = sets.visible
 
@@ -421,6 +444,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
           <input
+            ref={searchRef}
             id="category-search"
             type="search"
             value={search}
@@ -525,14 +549,18 @@ function ProductCategoryPicker({
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
+  const searchRef = useRef<HTMLInputElement>(null)
   const sets = useCatalogSets<ProductReference>({
     items: references.items,
     chosen: selectedForCategory,
     size: ONBOARDING_CONFIG.productPageSize,
     lastPage: references.lastPage,
+    loadingMore: references.loadingMore,
     loadMore: references.loadMore,
     resetKey: `${draft.catalogSource}:${query}`,
     matches: (item) => item.name.toLowerCase().includes(query),
+    // A search that runs out leaves the vendor to refine it.
+    endFocusRef: searchRef,
   })
   const items = sets.visible
 
@@ -597,6 +625,7 @@ function ProductCategoryPicker({
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
             <input
+              ref={searchRef}
               id={searchId}
               type="search"
               value={search}

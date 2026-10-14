@@ -237,16 +237,21 @@ export function ChoiceCard({
 /**
  * The next-set action under a catalog grid. The first press is the vendor's; after it the
  * button gives way to an invisible marker, and each next set loads when the marker scrolls
- * into view. The press moves focus to the first card it reveals, since the button leaves. Without IntersectionObserver the button stays. Key it by the list it pages so
- * a new search starts with the button again.
+ * into view. The press moves focus to the first card it reveals, since the button leaves.
+ * With `pressOnly`, or without IntersectionObserver, the button stays and every set needs a
+ * press. A disabled button stays focusable, so a press that reveals no card keeps focus on
+ * it. Key it by the list it pages so a new search starts with the button again.
  */
 export function LoadMoreButton({ label, disabled, pressOnly = false, onClick }: {
   label: string
   disabled: boolean
   /** Keep the button and load only on presses, as while a search filters loaded pages client-side. */
   pressOnly?: boolean
-  /** `pressed` is true for the vendor's press, false for a load the scroll triggered. */
-  onClick: (pressed: boolean) => void
+  /**
+   * `pressed` is true for the vendor's press, false for a load the scroll triggered; `hadFocus`
+   * says whether the button held focus as it was pressed.
+   */
+  onClick: (pressed: boolean, hadFocus?: boolean) => void
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [armed, setArmed] = useState(false)
@@ -271,11 +276,13 @@ export function LoadMoreButton({ label, disabled, pressOnly = false, onClick }: 
       <Button
         variant="outline"
         size="sm"
-        className="rounded-full border-[var(--ob-brand)]/40 px-5 text-[var(--md-green-800)] hover:border-[var(--ob-brand)] hover:bg-[var(--ob-brand-soft)] dark:text-emerald-200"
-        disabled={disabled}
-        onClick={() => {
+        className="rounded-full border-[var(--ob-brand)]/40 px-5 text-[var(--md-green-800)] hover:border-[var(--ob-brand)] hover:bg-[var(--ob-brand-soft)] aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-emerald-200"
+        // Not `disabled`: that would drop the focus of a vendor waiting on the next set.
+        aria-disabled={disabled}
+        onClick={(event) => {
+          if (disabled) return
           setArmed(true)
-          onClick(true)
+          onClick(true, document.activeElement === event.currentTarget)
         }}
       >
         {label}
