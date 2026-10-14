@@ -20,6 +20,7 @@ export const ONBOARDING_CONFIG = {
   maxPersistedCategories: 50,
   businessTypePageSize: 9,
   categoryPageSize: 9,
+  productPageSize: 9,
   businessTypeSearchDebounceMs: 650,
   draftSaveDelayMs: 1200,
 } as const

@@ -93,7 +93,7 @@ import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
 import { PreviewStats } from './PreviewStats'
-import type { RequestConfirmation } from './StepPrimitives'
+import { CatalogLoading, type RequestConfirmation } from './StepPrimitives'
 
 const EMPTY_CONFIRM: ConfirmDialogState = {
   open: false,
@@ -143,13 +143,20 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
   )
 }
 
-/** A step's form area while the account data it needs is read. */
-function StepSkeleton() {
+/** A step's form area while the account data it needs is read. Catalog steps 3–5 draw the
+    same card grid their own list read shows next, so the two loads read as one. */
+function StepSkeleton({ step }: { step: OnboardingStep }) {
   return (
     <div role="status" aria-label="Loading this step" aria-busy="true" className="space-y-3">
       <LoadingSkeleton className="h-10 rounded-xl" />
-      <LoadingSkeleton className="h-24 rounded-xl" />
-      <LoadingSkeleton className="h-24 rounded-xl" />
+      {step === 3 || step === 4 ? (
+        <CatalogLoading size="choice" />
+      ) : step === 5 ? (
+        <CatalogLoading size="product" />
+      ) : <>
+        <LoadingSkeleton className="h-24 rounded-xl" />
+        <LoadingSkeleton className="h-24 rounded-xl" />
+      </>}
     </div>
   )
 }
@@ -1354,15 +1361,16 @@ export function OnboardingWizard() {
                             without. Categories/products and approved size additions stay interactive so the catalog
                             can still grow within plan limits; Step 10 is the landing step and stays
                             interactive too. The notices above carry the sign-out action, which
-                            stays available because it is the only route backwards. */}
+                            stays available because it is the only route backwards. Step 3 locks
+                            only its cards, so its list can still be searched and paged. */}
                         <fieldset
-                          disabled={submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
+                          disabled={currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {stepState === 'loading' ? <StepSkeleton /> : null}
+                        {stepState === 'loading' ? <StepSkeleton step={currentStep} /> : null}
                         {stepState === 'failed' ? <StepLoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
                         {stepState === 'loaded' ? <>
-                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
                           {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                           {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                           {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (

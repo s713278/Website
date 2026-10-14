@@ -93,7 +93,7 @@ export function businessTypeCacheKey(mode: CatalogSource, query: string): string
 /**
  * File Step 3's first unsearched page from a wider read of the same list, so the step's
  * first visit costs no request. `page` must be page 0 of the unfiltered list sorted by id
- * ascending. Later pages are left to the step's infinite scroll, and an entry the step
+ * ascending. Later pages are left to the step's Show more button, and an entry the step
  * already holds is never replaced.
  */
 export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(

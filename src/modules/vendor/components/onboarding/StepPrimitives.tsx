@@ -1,4 +1,4 @@
-import type { ReactNode, ToggleEvent } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type ToggleEvent } from 'react'
 import { AlertTriangleIcon, CheckIcon, ChevronRightIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, LoadingSkeleton } from '@/shared/components/ui'
@@ -179,6 +179,7 @@ export function ChoiceCard({
   id,
   leading,
   footer,
+  autoFocus,
 }: {
   selected: boolean
   title: string
@@ -191,6 +192,7 @@ export function ChoiceCard({
   leading?: ReactNode
   /** Extra detail under the title, such as a product's measurement chips. */
   footer?: ReactNode
+  autoFocus?: boolean
 }) {
   const muted = disabled || inactive
   return (
@@ -200,6 +202,7 @@ export function ChoiceCard({
       aria-pressed={selected}
       aria-disabled={inactive || undefined}
       disabled={disabled}
+      autoFocus={autoFocus}
       onClick={onClick}
       className={cn(
         // Chosen is an emerald outline plus a mint fill, as in the design reference.
@@ -231,19 +234,71 @@ export function ChoiceCard({
   )
 }
 
+/**
+ * The next-set action under a catalog grid. The first press is the vendor's; after it the
+ * button gives way to an invisible marker, and each next set loads when the marker scrolls
+ * into view. The press moves focus to the first card it reveals, since the button leaves. Without IntersectionObserver the button stays. Key it by the list it pages so
+ * a new search starts with the button again.
+ */
+export function LoadMoreButton({ label, disabled, onClick }: {
+  label: string
+  disabled: boolean
+  /** `pressed` is true for the vendor's press, false for a load the scroll triggered. */
+  onClick: (pressed: boolean) => void
+}) {
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [armed, setArmed] = useState(false)
+  const autoLoad = armed && typeof IntersectionObserver !== 'undefined'
+  // Read at fire time, so a re-render does not rebuild the observer and fire it again.
+  const loadOnScroll = useEffectEvent(() => onClick(false))
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!autoLoad || disabled || !sentinel) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) loadOnScroll()
+    }, { root: document.getElementById('onboarding-form-scroll') })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [autoLoad, disabled])
+
+  if (autoLoad) return <div ref={sentinelRef} className="h-px w-full" aria-hidden="true" />
+
+  return (
+    <div className="flex justify-center pt-1">
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full border-[var(--ob-brand)]/40 px-5 text-[var(--md-green-800)] hover:border-[var(--ob-brand)] hover:bg-[var(--ob-brand-soft)] dark:text-emerald-200"
+        disabled={disabled}
+        onClick={() => {
+          setArmed(true)
+          onClick(true)
+        }}
+      >
+        {label}
+      </Button>
+    </div>
+  )
+}
+
+/** Placeholder tile heights, matched to the cards each catalog grid renders. */
+const catalogTileHeight = {
+  choice: 'h-32 @min-[30rem]:h-26',
+  product: 'h-36 @min-[30rem]:h-32',
+}
+
 export function CatalogLoading({
   count = 6,
-  cardClassName,
-  className = 'grid gap-3 @min-[32rem]:grid-cols-2',
+  size,
 }: {
   count?: number
-  cardClassName?: string
-  className?: string
+  size: keyof typeof catalogTileHeight
 }) {
   return (
-    <div className={className}>
+    <div className={choiceGrid}>
       {Array.from({ length: count }, (_, index) => (
-        <LoadingSkeleton key={index} className={cn('h-24 rounded-xl', cardClassName)} />
+        <LoadingSkeleton key={index} className={cn('rounded-xl', catalogTileHeight[size])} />
       ))}
     </div>
   )
