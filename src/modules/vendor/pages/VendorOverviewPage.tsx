@@ -15,7 +15,7 @@ import {
 import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Skeleton, Spinner } from '@/shared/components'
+import { Button, LoadingSkeleton, Spinner } from '@/shared/components'
 
 /**
  * One figure and what it counts, as the shared design draws it: the label small and
@@ -43,8 +43,8 @@ function MetricTilePlaceholder() {
       aria-hidden="true"
       className="rounded-[var(--vc-radius)] border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-4 py-3.5 shadow-[var(--vc-shadow)]"
     >
-      <Skeleton className="h-[0.84rem] w-16" />
-      <Skeleton className="mt-1.5 h-8 w-10" />
+      <LoadingSkeleton className="h-[0.84rem] w-16" />
+      <LoadingSkeleton className="mt-1.5 h-8 w-10" />
     </div>
   )
 }

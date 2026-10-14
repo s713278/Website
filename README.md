@@ -140,6 +140,10 @@ with fallback coordinates.
 | `npm run fetch:openapi` | Fetch backend Swagger into `packages/api-client/openapi.json` |
 | `npm run generate:api` | Generate `packages/api-client/src/schema.d.ts` |
 
+`npm run build` needs devDependencies: besides Vite, Tailwind, and TypeScript,
+`src/styles/global.css` imports `shadcn/tailwind.css` at build time. An install that omits them
+(`NODE_ENV=production`, `npm ci --omit=dev`) breaks the build.
+
 The [verification baseline in AGENTS.md](./AGENTS.md#verification) defines completion checks for
 source and documentation changes. [docs/TESTING.md](./docs/TESTING.md) owns the test tiers, writing
 rules, and limits; full journeys still need an app run because there is no end-to-end runner.

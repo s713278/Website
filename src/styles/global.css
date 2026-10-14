@@ -137,8 +137,13 @@
      and a deep soft shadow, with a slimmer bezel than the reference's 10px. The
      reference can hard-code its size because its whole page scrolls; this bay does
      not, so the phone takes whatever height is going and holds the 1:2 ratio. */
-  .onboarding-phone {
+  /* On every direct child, so the label row can match the phone's width. Container units
+     resolve against the stage, the nearest size container of each child. */
+  .onboarding-preview-stage > * {
     --phone-w: min(17.5rem, 100cqw, calc((100cqh - 7rem) / 2));
+  }
+
+  .onboarding-phone {
     flex: none;
     width: var(--phone-w);
     height: calc(var(--phone-w) * 2);
@@ -146,7 +151,9 @@
     border-radius: 2rem;
     background: #fff;
     overflow: hidden;
-    box-shadow: 0 25px 50px rgba(15, 23, 42, 0.18);
+    /* Reaches ~8px past the sides, inside the stage's 1rem padding, so the scroll
+       container never cuts it. */
+    box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.28);
   }
 
 }
@@ -156,10 +163,11 @@
    the storefront preview inside the shell still owns its own vendor theming via
    [data-store-mode]. */
 .onboarding-shell {
-  /* One plane. The stepper, the form and the preview bay are all transparent and sit on
-     this single tinted ground — matching design-reference/onboarding.html, where every
-     one of those zones computes to rgba(0,0,0,0) and only the phone carries a shadow.
-     Anything raised (inputs, choice cards) reads white against it. */
+  /* One plane. The stepper and the form are transparent and sit on this single tinted
+     ground, as in design-reference/onboarding.html; only the phone carries a shadow.
+     Departure from the reference: on desktop a hairline sets off the preview bay
+     (`.ob-bay`) so the phone centres in a space it visibly owns. Anything raised
+     (inputs, choice cards) reads white against it. */
   --ob-canvas-base: #f8fafc;
   --ob-canvas: #eef3f1;
   --ob-sheet: #ffffff;
@@ -171,9 +179,11 @@
   --ob-brand-soft: rgba(5, 150, 105, 0.09);
   --ob-pending: #b6c6bf;
 
+  /* Lets the preview bay measure how far it is from the shell's edge (`cqw`). */
+  container-type: inline-size;
+
   background:
     radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
-    radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
     var(--ob-canvas-base);
 }
 
@@ -993,10 +1003,22 @@
 
   @media (min-width: 900px) {
     .ob-grid {
-      /* The track is the phone's own width (17.5rem), so the phone's right edge is the
-         wizard's right edge. */
-      grid-template-columns: minmax(0, 1fr) clamp(15rem, 22vw, 17.5rem);
-      column-gap: clamp(2rem, 4vw, 4rem);
+      /* The track is the phone's width (17.5rem); `.ob-bay` widens the panel around it.
+         The 16.5rem floor keeps the three preview counts inside the bay's padding. */
+      --ob-column-gap: clamp(2rem, 4vw, 4rem);
+      grid-template-columns: minmax(0, 1fr) clamp(16.5rem, 22vw, 17.5rem);
+      column-gap: var(--ob-column-gap);
+    }
+
+    /* The preview bay is its own panel on the same ground: it starts halfway across the
+       column gap behind a hairline and runs out to the shell's right edge through the
+       gutter and the measure's side margin, so its contents centre in the space it owns.
+       100cqw is the shell's content width (the shell is the nearest inline container). */
+    .ob-bay {
+      --ob-bay-bleed: calc(var(--marketing-gutter) + (100cqw - min(100cqw, var(--marketing-measure))) / 2);
+      margin-inline: calc(var(--ob-column-gap) / -2) calc(-1 * var(--ob-bay-bleed));
+      justify-content: safe center;
+      border-left: 1px solid var(--ob-line);
     }
   }
 }

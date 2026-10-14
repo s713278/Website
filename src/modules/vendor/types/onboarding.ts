@@ -20,6 +20,7 @@ export const ONBOARDING_CONFIG = {
   maxPersistedCategories: 50,
   businessTypePageSize: 9,
   categoryPageSize: 9,
+  productPageSize: 9,
   businessTypeSearchDebounceMs: 650,
   draftSaveDelayMs: 1200,
 } as const
@@ -302,7 +303,7 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   saveNote?: string
 }> = [
   { step: 1, short: 'Phone', title: 'Your WhatsApp number', description: 'Enter the number customers can use to contact you.' },
-  { step: 2, short: 'Verify', title: 'Verify your number', description: 'Enter the code sent to WhatsApp.' },
+  { step: 2, short: 'Verify', title: 'Enter the OTP', description: 'Sent on WhatsApp to your number.' },
   { step: 3, short: 'Business', title: 'Choose your business type', description: 'Pick the option that best matches what you sell. Can’t find yours? Choose Others.', emphasis: 'Others' },
   { step: 4, short: 'Categories', title: 'Pick Categories', description: 'Choose up to {categoryLimit} — start small, add more later from your dashboard.', saveNote: 'Saved categories can’t be removed here.' },
   { step: 5, short: 'Products', title: 'Pick Products', description: 'Choose the products you sell.', saveNote: 'Saved products can only be made inactive.' },

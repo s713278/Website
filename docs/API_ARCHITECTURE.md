@@ -260,7 +260,11 @@ The business-type catalog (one 100-item page) is read only once the profile show
 type, because it exists to map that saved name back to the reference Step 3 stores; a vendor who has
 not chosen one, like every new vendor on Step 3, skips it, and Step 3 lists its own page. A
 successful read also files Step 3's unsearched first page in the catalog reference cache (never over
-an existing entry), so the step's first visit makes no request; later pages still load on scroll. A
+an existing entry), so the step's first visit makes no request. Each onboarding catalog (business
+types, categories, products) shows nine items at a time: the first **Show more** press reveals the
+next nine, reading the next page only when loaded items run short, and only after that press do
+later sets load as the list end scrolls into view. Category and product search filters loaded items
+in the browser, so while one is active each further set loads only on a press, never on scroll. A
 first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not a failure.
 
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever

@@ -216,7 +216,7 @@ type SkuGroupId = number | 'other'
 
 function SkuHeaderRow() {
   return (
-    <div aria-hidden="true" className={cn(SKU_ROW_GRID, 'mb-1.5 px-0.5 text-[0.7rem] leading-tight text-[var(--ob-ink-soft)]')}>
+    <div aria-hidden="true" className={cn(SKU_ROW_GRID, 'mb-1.5 items-end px-0.5 text-[0.7rem] leading-tight text-[var(--ob-ink-soft)]')}>
       <span>Qty</span>
       <span>Unit</span>
       <span>MRP</span>

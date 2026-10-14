@@ -69,6 +69,7 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Ownership and lifecycle for vendor-authored catalog entries | Letting a vendor control what they add to the shared catalog | Vendor tokens can create categories and products, but the entries are shared immediately and have no vendor ownership, delete-own or moderation lifecycle. Detailed below. |
 | Removing an assigned product | Deselecting a product at Step 5 | `PATCH /v1/vendors/{vendor_id}/delete/products` returns **403 for a vendor** (Admin/Customer_Care only), so assignment is additive. The wizard refuses the deselection and says removal needs support, rather than silently doing nothing. |
 | Removing an assigned category | Deselecting a category at Step 4 | **No endpoint exists at all** — verified by exhaustive enumeration, not by guessing routes. `PATCH /categories` appends and `417`s on an already-assigned id. Same treatment as products: the wizard refuses the deselection. |
+| Keyword search for onboarding catalogs | Searching the whole category and product catalogs at Steps 4 and 5 | No usable vendor keyword filter; see the [backend request](#backend-request-keyword-search-for-onboarding-catalogs). Search filters only the pages already loaded, and while a search is active more pages load only on Show more. |
 | Per-SKU fulfillment updates | Saving legacy drafts with changed delivery/pickup flags | The updated SKU PATCH still omits these flags. Only this legacy case retains delete-then-create; current Step 6 has no per-size fulfillment controls. See [updated SKU contract](#updated-sku-contract). |
 | Structured SKU create response | Recording new size IDs without rereading every SKU page after a Step 6 create | `POST /v1/vendors/{vendor_id}/skus` is documented only as a generic `APIResponseObject`, with no response example. On 3 October 2026 dev answered a grouped create with `data: {"id": 3, "message": "[5120, 5121, 5122] SKU(s) created successfully."}`: `id` is the count of sizes created, the SKU IDs appear only inside the message text, and no `price_id` is returned. The frontend does not parse that message. Step 6 rereads `GET /v1/vendors/{vendor_id}/products/skus` after any create to recover SKU and price IDs. The backend should return the created SKUs as structured data (`sku_id`, `price_id`, `quantity_value`, `unit` per size) and document it in the contract. |
 | Creating a SKU while under review | Adding a size to a product after a store is submitted | `POST /v1/vendors/{vendor_id}/skus` has returned **`417`** while approval is `PENDING`. Step 6 stays read-only for submitted pending vendors; real `approval_status: APPROVED` reopens size additions within plan limits. Categories/products remain additive in either case. The dashboard's temporary approval coercion is not used here. See [Step 6 behavior](./API_ARCHITECTURE.md#vendor-setup-sizes-step-6). |
@@ -321,6 +322,27 @@ The deployed business-types operation fails when `sortBy=display_order` (the res
 reports status 500; the current HTTP status is 417). The onboarding reference hook therefore
 requests `sortBy=id&sortOrder=ASC`, which returns HTTP 200. Do not restore `display_order` sorting
 unless the backend behavior is fixed and verified.
+
+### Backend request: keyword search for onboarding catalogs
+
+Verified on dev 14 October 2026. Step 3 (business types) searches server-side through `keyword`
+and needs nothing. Steps 4 (categories) and 5 (products) have no vendor-usable search:
+
+| Operation | Verified result |
+|-----------|-----------------|
+| `GET /v1/categories/` | No keyword parameter (`pageNumber`, `pageSize`, `sortBy`, `sortOrder`, `business_type_id` only). `keyword`, `search`, `name` and `q` are silently ignored; the full list returns. |
+| `GET /v1/categories/{category_id}/products` | Ignores `keyword`. |
+| `GET /v1/categories/{category_id}/products/search` | Unauthenticated **403**; without `keyword` **500**. With a vendor token it matches only the exact, case-sensitive full name, and a no-match is **400** `Products not found with keyword: …` instead of an empty page. Items lack the list's `icon`, `measurement_id` and `measurement_name`. 0.3–12 s. |
+| `GET /v1/categories/products/keyword/{keyword}` | Documented Admin/Customer_Care only; a vendor token gets **417** from a server-side SpEL error in its authorization check. |
+
+**Needed:** a vendor-usable (or public, like the lists) keyword filter for categories within a
+business type and products within a category: case-insensitive partial match, the list endpoints'
+envelope, pagination and item shape, and an empty `200` page for no match. Simplest: accept
+`keyword` on the existing list endpoints.
+
+**Interim:** Steps 4 and 5 filter the loaded pages (nine at a time) in the browser; while a search
+is active, more pages load only when Show more is pressed, not on scroll. Remove once the backend
+filter ships and is verified.
 
 ### Resolved contract alignment: public storefront identifiers
 

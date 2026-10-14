@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react'
-import {
-  ArrowRightIcon,
-  InfoIcon,
-  Loader2Icon,
-  MessageCircleIcon,
-} from 'lucide-react'
-import { DEMO_OTP, isLiveApi } from '@/shared/api'
+import { CircleCheck, MessageCircle } from 'lucide-react'
+import { DEMO_OTP, isLiveApi, isValidMobile, OTP_LENGTH } from '@/shared/api'
 import { Button } from '@/shared/components/ui'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
-import { FieldError, FieldLabel, Hint } from './StepPrimitives'
+import { FieldError } from './StepPrimitives'
 import { OtpInput } from './OtpInput'
 
 type StepProps = {
@@ -19,9 +14,15 @@ type StepProps = {
   onContinue: () => void
 }
 
+// Steps 1 and 2 are the same job as /vendor/login, so they share its field, cells, button
+// and link treatment (OtpLoginForm); only the wording speaks to a first-time vendor.
+const linkClass =
+  'rounded font-semibold text-[var(--md-green-700)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-green-600)] dark:text-[var(--md-green-500)]'
+
 export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps) {
   const phone = useOnboardingStore((state) => state.runtime.phone)
   const updatePhone = useOnboardingStore((state) => state.updatePhone)
+  const invalid = issues.some((item) => item.field === 'phone')
 
   const changePhone = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 10)
@@ -29,23 +30,30 @@ export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps
   }
 
   return (
-    <div className="space-y-5">
-      {/* Step 1 asks for exactly one thing, so the field is the whole screen rather
-          than a small input under a stack of explanation. */}
+    <div className="mx-auto w-full max-w-[24rem] pt-2">
       <form
-        className="max-w-2xl"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault()
           onContinue()
         }}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
-            <FieldLabel htmlFor="phone">WhatsApp mobile number</FieldLabel>
-            <div className="flex overflow-hidden rounded-xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] transition-[border-color,box-shadow] focus-within:border-[var(--ob-brand)] focus-within:ring-3 focus-within:ring-[var(--ob-brand-soft)]">
-              <span className="ob-numeric grid min-w-14 place-items-center border-r border-[var(--ob-line)] bg-[var(--ob-canvas)] px-3 text-base font-semibold text-[var(--ob-ink-soft)]">
-                +91
-              </span>
+        <div
+          className={
+            'flex h-16 items-center rounded-2xl border bg-[var(--ob-sheet)] transition-colors focus-within:ring-4 motion-reduce:transition-none ' +
+            (invalid
+              ? 'border-destructive focus-within:ring-destructive/15'
+              : 'border-slate-300 focus-within:border-[var(--md-green-600)] focus-within:ring-[var(--md-green-600)]/15 dark:border-[var(--ob-line)]')
+          }
+        >
+          <MessageCircle className="mx-4 size-5 shrink-0 text-[var(--ob-ink-soft)]" aria-hidden />
+          <span className="h-8 w-px shrink-0 bg-[var(--ob-line)]" aria-hidden />
+          <div className="flex min-w-0 flex-1 flex-col justify-center px-3">
+            <label className="text-xs text-[var(--ob-ink-soft)]" htmlFor="phone">
+              WhatsApp number
+            </label>
+            <div className="flex items-baseline gap-1.5 text-base font-medium tabular-nums">
+              <span className="text-[var(--ob-ink-soft)]">+91</span>
               <input
                 id="phone"
                 type="tel"
@@ -54,29 +62,29 @@ export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps
                 value={phone}
                 maxLength={10}
                 disabled={busy}
-                aria-invalid={issues.some((item) => item.field === 'phone') || undefined}
-                aria-describedby={issues.some((item) => item.field === 'phone') ? 'phone-error' : undefined}
-                placeholder="9876543210"
+                aria-invalid={invalid || undefined}
+                aria-describedby={['phone-help', invalid ? 'phone-error' : null].filter(Boolean).join(' ')}
+                placeholder="10-digit number"
                 onChange={(event) => changePhone(event.target.value)}
-                className="ob-numeric h-14 min-w-0 flex-1 bg-transparent px-4 text-xl font-semibold tracking-[0.04em] text-[var(--ob-ink)] outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--ob-pending)]"
+                className="min-w-0 flex-1 bg-transparent text-[var(--ob-ink)] caret-[var(--md-green-700)] outline-none placeholder:font-normal placeholder:normal-nums placeholder:text-[var(--ob-ink-soft)]"
               />
             </div>
-            <FieldError issues={issues} field="phone" />
           </div>
-          <Button type="submit" className="h-14 shrink-0 px-6 sm:min-w-52" disabled={busy}>
-            {busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}
-            Send code on WhatsApp
-            {!busy ? <ArrowRightIcon /> : null}
-          </Button>
+          {isValidMobile(phone) ? (
+            <CircleCheck className="mr-4 size-5 shrink-0 fill-[var(--md-green-600)] text-white" aria-hidden />
+          ) : null}
         </div>
+        <FieldError issues={issues} field="phone" />
+        <p id="phone-help" className="mt-2 text-sm text-[var(--ob-ink-soft)]">
+          {isLiveApi()
+            ? `We’ll send a ${OTP_LENGTH}-digit OTP to this number on WhatsApp.`
+            : <>Demo mode: enter <strong className="font-semibold text-[var(--ob-ink)]">{DEMO_OTP}</strong> as the OTP.</>}
+        </p>
+        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={busy}>
+          {busy ? 'Sending OTP…' : 'Send OTP'}
+        </Button>
       </form>
-
-      <Hint icon={<MessageCircleIcon className="size-4" />}>
-        {isLiveApi()
-          ? 'We send a four-digit code to this number on WhatsApp.'
-          : <>Demo mode: enter <strong>{DEMO_OTP}</strong> to continue.</>}
-      </Hint>
-      {statusMessage ? <p role="status" className="text-sm font-medium text-[var(--ob-brand)]">{statusMessage}</p> : null}
+      {statusMessage ? <p role="status" className={busy ? 'sr-only' : 'mt-4 text-sm font-medium text-[var(--ob-brand)]'}>{statusMessage}</p> : null}
     </div>
   )
 }
@@ -87,12 +95,12 @@ export function OtpStep({
   statusMessage,
   onContinue,
   onResend,
-  onChangePhone,
-}: StepProps & { onResend: () => Promise<boolean>; onChangePhone: () => void }) {
+}: StepProps & { onResend: () => Promise<boolean> }) {
   const otpDigits = useOnboardingStore((state) => state.runtime.otpDigits)
-  const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
   const updateRuntime = useOnboardingStore((state) => state.updateRuntime)
   const [seconds, setSeconds] = useState(30)
+  const [resending, setResending] = useState(false)
+  const invalid = issues.some((item) => item.field === 'otp-0')
 
   useEffect(() => {
     if (seconds <= 0) return
@@ -101,56 +109,78 @@ export function OtpStep({
   }, [seconds])
 
   const resend = async () => {
-    if (await onResend()) setSeconds(30)
+    setResending(true)
+    try {
+      if (await onResend()) setSeconds(30)
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
-    <div className="space-y-5">
-      <Hint tone="brand" icon={<InfoIcon className="size-4 text-[var(--ob-brand)]" />}>
-        {isLiveApi()
-          ? <>Enter the four-digit code sent to {maskedPhone ?? 'your number'} on WhatsApp.</>
-          : <>Demo mode: enter <strong>{DEMO_OTP}</strong> to continue.</>}
-      </Hint>
-
+    <div className="mx-auto w-full max-w-[24rem] pt-2">
       <form
-        className="max-w-2xl"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault()
           onContinue()
         }}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-0">
-            <FieldLabel htmlFor="otp-0">Four-digit code</FieldLabel>
-            <OtpInput
-              value={otpDigits}
-              onChange={(value) => updateRuntime({ otpDigits: value })}
-              disabled={busy}
-              invalid={issues.some((item) => item.field === 'otp-0')}
-            />
-            <FieldError issues={issues} field="otp-0" />
-          </div>
-          <Button type="submit" className="h-14 shrink-0 px-6 sm:min-w-48" disabled={busy}>
-            {busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}
-            Verify and continue
-            {!busy ? <ArrowRightIcon /> : null}
-          </Button>
-        </div>
+        <OtpInput
+          value={otpDigits}
+          onChange={(value) => updateRuntime({ otpDigits: value })}
+          disabled={busy}
+          invalid={invalid}
+          describedBy="otp-sent-to"
+        />
+        <div className="text-center"><FieldError issues={issues} field="otp-0" /></div>
+        {isLiveApi() ? null : (
+          <p className="mt-2 text-center text-sm text-[var(--ob-ink-soft)]">
+            Demo mode: enter <strong className="font-semibold text-[var(--ob-ink)]">{DEMO_OTP}</strong> as the OTP.
+          </p>
+        )}
+        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={busy}>
+          {busy && !resending ? 'Verifying…' : 'Verify & continue'}
+        </Button>
+        <p className="mt-5 text-center text-sm text-[var(--ob-ink-soft)]">
+          Didn’t get it?{' '}
+          <button
+            type="button"
+            className={`${linkClass} inline-flex min-h-11 items-center disabled:font-medium disabled:text-[var(--ob-ink-soft)] disabled:no-underline`}
+            disabled={busy || seconds > 0}
+            onClick={() => void resend()}
+          >
+            {seconds > 0 ? `Resend OTP in ${seconds}s` : resending ? 'Sending OTP…' : 'Resend OTP'}
+          </button>
+        </p>
       </form>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Button type="button" variant="ghost" size="sm" className="-ml-3" onClick={onChangePhone}>
-          Change number
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={busy || seconds > 0} onClick={() => void resend()}>
-          Resend code
-        </Button>
-        <span className="text-[var(--ob-ink-soft)]" aria-live="polite">
-          {seconds > 0 ? `Available in ${seconds}s` : 'Ready to resend'}
-        </span>
-      </div>
-
-      {statusMessage ? <p role="status" className="text-sm font-medium text-primary">{statusMessage}</p> : null}
+      {statusMessage ? <p role="status" className={busy ? 'sr-only' : 'mt-2 text-sm font-medium text-[var(--ob-brand)]'}>{statusMessage}</p> : null}
     </div>
+  )
+}
+
+/** Step 2's lead under the wizard heading, worded and laid out as on /vendor/login. */
+export function OtpSentTo({ busy, onChangePhone }: { busy: boolean; onChangePhone: () => void }) {
+  const phone = useOnboardingStore((state) => state.runtime.phone)
+  const maskedPhone = useOnboardingStore((state) => state.draft.maskedPhone)
+  // The typed number lives only in memory; after a reload only the masked one survives.
+  const shown = phone.length === 10 ? `+91 ${phone.slice(0, 5)} ${phone.slice(5)}` : maskedPhone
+
+  return (
+    <p id="otp-sent-to" className="mt-2 text-balance text-[0.9375rem] leading-relaxed text-[var(--ob-ink-soft)]">
+      <span className="block">
+        Sent on WhatsApp to{' '}
+        <span className="whitespace-nowrap font-medium tabular-nums text-[var(--ob-ink)]">{shown ?? 'your number'}</span>
+      </span>
+      <button
+        type="button"
+        className={`${linkClass} inline-flex min-h-11 items-center disabled:text-[var(--ob-ink-soft)]`}
+        disabled={busy}
+        onClick={onChangePhone}
+      >
+        Change number
+      </button>
+    </p>
   )
 }
