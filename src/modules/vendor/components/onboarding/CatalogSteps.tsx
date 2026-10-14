@@ -50,11 +50,12 @@ function catalogChoiceState(
 }
 
 /**
- * A catalog list shown one set of `size` at a time. What the vendor had already chosen when
- * the list mounted leads the first set and keeps its place, so a saved choice shows without
- * paging and never jumps when its own page arrives. One added later that no loaded page holds
- * (an authored entry) follows it, so it shows at once. Show more reveals the next set, reading
- * the next page only when the loaded items run short.
+ * A catalog list shown one set of `size` at a time. A choice added after the list mounted that
+ * no loaded page holds (an authored entry) leads, newest first, so it shows at once however many
+ * choices were already saved. What the vendor had already chosen when the list mounted follows
+ * and keeps its place, so a saved choice shows without paging and never jumps when its own page
+ * arrives. A ticked card from a loaded page stays where it is. Show more reveals the next set,
+ * reading the next page only when the loaded items run short.
  */
 function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPage, loadMore, resetKey, matches }: {
   items: T[]
@@ -73,13 +74,15 @@ function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPag
   // A dropped pending entry no longer exists anywhere, so it leaves; a real reference stays.
   const pinned = leading.filter((item) => !isPendingId(item.id) || chosenIds.has(item.id))
   const itemIds = new Set(items.map((item) => item.id))
-  const unlisted = chosen.filter((item) => !itemIds.has(item.id))
-  const all = appendMissingReferenceItems(appendMissingReferenceItems(pinned, unlisted), items).filter(matches)
+  const leadingIds = new Set(leading.map((item) => item.id))
+  const added = chosen.filter((item) => !itemIds.has(item.id) && !leadingIds.has(item.id)).reverse()
+  const all = appendMissingReferenceItems(appendMissingReferenceItems(added, pinned), items).filter(matches)
   const count = shown.key === resetKey ? shown.count : size
   const hasMore = all.length > count || !lastPage
   const showMore = (pressed: boolean) => {
     if (!hasMore) return
-    if (pressed) setFocusAt({ key: resetKey, index: count })
+    // The first card this press reveals; a search with nothing shown yet focuses its first match.
+    if (pressed) setFocusAt({ key: resetKey, index: Math.min(count, all.length) })
     setShown({ key: resetKey, count: count + size })
     if (all.length < count + size && !lastPage) loadMore()
   }
@@ -468,10 +471,12 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
       ) : null}
       {references.loadingMore ? <CatalogLoading count={3} size="choice" /> : null}
       <FieldError issues={issues} field="categories" />
-      {sets.hasMore && loadedItems.length ? (
+      {sets.hasMore ? (
         <LoadMoreButton
           key={sets.key}
           label="Show more categories"
+          // A search filters loaded pages, so scrolling past few matches could read the whole catalog.
+          pressOnly={Boolean(query)}
           disabled={references.loading || references.loadingMore || Boolean(references.error)}
           onClick={sets.showMore}
         />
@@ -654,10 +659,12 @@ function ProductCategoryPicker({
           </div>
         ) : null}
         {references.loadingMore ? <CatalogLoading count={3} size="product" /> : null}
-        {sets.hasMore && items.length ? (
+        {sets.hasMore ? (
           <LoadMoreButton
             key={sets.key}
             label="Show more products"
+            // A search filters loaded pages, so scrolling past few matches could read the whole catalog.
+            pressOnly={Boolean(query)}
             disabled={references.loading || references.loadingMore || Boolean(references.error)}
             onClick={sets.showMore}
           />

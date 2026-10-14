@@ -473,6 +473,77 @@ describe('catalog lists in sets of nine', () => {
     expect(screen.getAllByRole('button', { name: /Category (\d+|authored)/ })).toHaveLength(9)
   })
 
+  it('leads with a newly authored category when nine choices were already saved', async () => {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValueOnce({
+      items: ids(5901, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false,
+    })
+    setCatalogDraft(53, ids(5990, 9).map(category))
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5990/ })
+
+    act(() => { useOnboardingStore.getState().addPendingCategory({ name: 'Category authored', businessTypeId: 53 }) })
+
+    expect(shownNames(/Category (\d+|authored)/)).toEqual(['Category authored', ...ids(5990, 8).map((id) => `Category ${id}`)])
+  })
+
+  it('still offers Show more when a search matches nothing loaded, and loads the next page', async () => {
+    emptyReferenceCache()
+    const read = vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5801, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false })
+      .mockResolvedValueOnce({
+        items: [...ids(5810, 8).map(category), { ...category(5818), name: 'Pickles' }],
+        pageNumber: 1, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: true,
+      })
+    setCatalogDraft(58, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5801/ })
+
+    fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
+
+    expect(screen.getByText('No categories found')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
+
+    const match = await screen.findByRole('button', { name: /Pickles/ })
+    expect(read.mock.calls.map((call) => call[0]?.pageNumber)).toEqual([0, 1])
+    expect(document.activeElement).toBe(match)
+    expect(screen.queryByText('No categories found')).toBeNull()
+  })
+
+  it('loads only on presses while a search is active, never on scroll', async () => {
+    emptyReferenceCache()
+    const observers: Array<{ callback: IntersectionObserverCallback; disconnected: boolean }> = []
+    vi.stubGlobal('IntersectionObserver', class {
+      entry: { callback: IntersectionObserverCallback; disconnected: boolean }
+      constructor(callback: IntersectionObserverCallback) {
+        this.entry = { callback, disconnected: false }
+        observers.push(this.entry)
+      }
+      observe() {}
+      disconnect() { this.entry.disconnected = true }
+    })
+    const read = vi.spyOn(vendorOnboardingService, 'getCategories')
+      .mockResolvedValueOnce({ items: ids(5831, 9).map(category), pageNumber: 0, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockResolvedValueOnce({ items: ids(5840, 9).map(category), pageNumber: 1, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockResolvedValueOnce({ items: ids(5849, 9).map(category), pageNumber: 2, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: true })
+    setCatalogDraft(58, [])
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Category 5831/ })
+
+    fireEvent.change(screen.getByLabelText('Search category'), { target: { value: 'pickles' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show more categories' }).matches(':disabled')).toBe(false))
+    expect(read).toHaveBeenCalledTimes(2)
+
+    act(() => observers.filter((observer) => !observer.disconnected).forEach((observer) =>
+      observer.callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)))
+    expect(read).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(3))
+    expect(read.mock.calls.map((call) => call[0]?.pageNumber)).toEqual([0, 1, 2])
+  })
+
   it('does not load again when the step re-renders with the end of the list in view', async () => {
     emptyReferenceCache()
     const observers: Array<{ callback: IntersectionObserverCallback; disconnected: boolean }> = []

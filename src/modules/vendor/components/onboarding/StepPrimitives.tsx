@@ -240,15 +240,17 @@ export function ChoiceCard({
  * into view. The press moves focus to the first card it reveals, since the button leaves. Without IntersectionObserver the button stays. Key it by the list it pages so
  * a new search starts with the button again.
  */
-export function LoadMoreButton({ label, disabled, onClick }: {
+export function LoadMoreButton({ label, disabled, pressOnly = false, onClick }: {
   label: string
   disabled: boolean
+  /** Keep the button and load only on presses, as while a search filters loaded pages client-side. */
+  pressOnly?: boolean
   /** `pressed` is true for the vendor's press, false for a load the scroll triggered. */
   onClick: (pressed: boolean) => void
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [armed, setArmed] = useState(false)
-  const autoLoad = armed && typeof IntersectionObserver !== 'undefined'
+  const autoLoad = armed && !pressOnly && typeof IntersectionObserver !== 'undefined'
   // Read at fire time, so a re-render does not rebuild the observer and fire it again.
   const loadOnScroll = useEffectEvent(() => onClick(false))
 
