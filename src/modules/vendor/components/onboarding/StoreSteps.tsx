@@ -17,6 +17,7 @@ import {
   TypeIcon,
   UploadIcon,
 } from 'lucide-react'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { Button, Input } from '@/shared/components/ui'
 import { storefrontUrl } from '@/shared/lib/store-link'
@@ -221,8 +222,12 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
           <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
           <Input id="owner-name" label="Owner name" value={draft.business.ownerName} minLength={3} error={issues.find((item) => item.field === 'owner-name')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, ownerName: event.target.value } }), 9)} placeholder="Full name" />
           <Input id="contact-person" label="Contact person" value={draft.business.contactPerson} minLength={3} error={issues.find((item) => item.field === 'contact-person')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, contactPerson: event.target.value } }), 9)} placeholder="Who should customers speak with?" />
-          <div>
-            <FieldLabel htmlFor="tagline" optional>Tagline</FieldLabel>
+          {/* Built like the shared Input's label (gap, not margin; one-line leading) so this
+              field's box lines up with Contact person beside it. */}
+          <div className="grid gap-1.5">
+            <Label htmlFor="tagline">
+              Tagline <span className="-ml-0.5 font-normal text-[var(--ob-ink-soft)]">(optional)</span>
+            </Label>
             <div className="flex items-start gap-2">
               <Input id="tagline" value={store.tagline} maxLength={120} error={issues.find((item) => item.field === 'tagline')?.message} onChange={(event) => updateStore({ tagline: event.target.value })} placeholder="Traditional • Natural • Homemade" />
               <TaglineExamplesDialog

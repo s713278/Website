@@ -7,9 +7,10 @@ type OtpInputProps = {
   onChange: (value: OtpDigits) => void
   disabled?: boolean
   invalid?: boolean
+  describedBy?: string
 }
 
-export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) {
+export function OtpInput({ value, onChange, disabled, invalid, describedBy }: OtpInputProps) {
   const refs = useRef<Array<HTMLInputElement | null>>([])
   const requestedFocusRef = useRef<number | null>(null)
   const digits = value
@@ -80,7 +81,7 @@ export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) 
   }
 
   return (
-    <div className="flex gap-2.5" aria-label="Four-digit verification code">
+    <div role="group" className="grid grid-cols-4 gap-3" aria-label="4-digit OTP">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -94,7 +95,7 @@ export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) 
           disabled={disabled}
           aria-label={`Code digit ${index + 1}`}
           aria-invalid={invalid || undefined}
-          aria-describedby={invalid ? 'otp-0-error' : undefined}
+          aria-describedby={[describedBy, invalid ? 'otp-0-error' : null].filter(Boolean).join(' ') || undefined}
           onChange={(event) => setDigit(index, event.target.value)}
           onKeyDown={(event) => onKeyDown(event, index)}
           onPaste={(event) => onPaste(event, index)}
@@ -112,8 +113,10 @@ export function OtpInput({ value, onChange, disabled, invalid }: OtpInputProps) 
             if (digit) event.currentTarget.select()
           }}
           className={cn(
-            'ob-numeric size-14 rounded-xl border bg-[var(--ob-sheet)] text-center text-2xl font-semibold text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] sm:size-16 focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]',
-            invalid ? 'border-destructive' : 'border-[var(--ob-line)]',
+            // Matches the /vendor/login cells: Poppins digits, and selection hidden because the
+            // focus ring already marks the cell the next digit replaces.
+            'h-16 w-full min-w-0 rounded-2xl border bg-[var(--ob-sheet)] text-center font-display text-3xl font-semibold tabular-nums text-[var(--ob-ink)] caret-transparent outline-none transition-colors selection:bg-transparent motion-reduce:transition-none focus:border-[var(--md-green-600)] focus:ring-4 focus:ring-[var(--md-green-600)]/15',
+            invalid ? 'border-destructive' : digit ? 'border-slate-400 dark:border-white/30' : 'border-slate-300 dark:border-[var(--ob-line)]',
           )}
         />
       ))}

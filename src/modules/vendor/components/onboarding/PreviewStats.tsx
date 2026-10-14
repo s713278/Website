@@ -26,8 +26,9 @@ export function PreviewStats({ className, accountParts = {} }: { className?: str
     { key: 'sizes', label: 'Sizes', value: accountParts.sizes ?? configured },
   ]
 
+  // Equal columns keep the three numbers evenly spaced; "Categories" needs ~5.4rem of each.
   return (
-    <dl className={cn('grid w-full max-w-[17.5rem] grid-cols-3 gap-2 text-center', className)}>
+    <dl className={cn('grid w-full max-w-[17.5rem] grid-cols-3 gap-x-2 text-center', className)}>
       {stats.map((stat) => (
         <div key={stat.key}>
           <dd className="ob-numeric font-display text-lg leading-none font-bold text-[var(--ob-ink)]">{stat.value}</dd>
