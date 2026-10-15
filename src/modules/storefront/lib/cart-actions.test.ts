@@ -56,6 +56,7 @@ function snapshot(items: Array<{ skuId: string; cartItemId: string; name: string
     lines,
     summary: {
       itemsTotal: lines.reduce((sum, line) => sum + (line.lineTotal ?? 0), 0),
+      itemsSubTotal: lines.reduce((sum, line) => sum + (line.lineTotal ?? 0), 0),
       deliveryCharges: 0,
       discount: 0,
       serviceCharge: 0,

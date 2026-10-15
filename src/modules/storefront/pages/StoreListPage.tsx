@@ -11,13 +11,27 @@ import {
   saveLocation,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
-import { Badge, Button, Card, EmptyState, Input, PageHeader, SearchField, Spinner } from '@/shared/components'
+import { Badge, Button, Card, EmptyState, Input, PageHeader, SearchField } from '@/shared/components'
 import {
   isSearchActive,
   isSearchApiReady,
   matchesSearchQuery,
   searchUiMinChars,
 } from '@/shared/lib/search-query'
+import { Skeleton } from '@/components/ui/skeleton'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
+
+function StoreCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-100 bg-white" aria-hidden>
+      <Skeleton className="h-36 w-full rounded-none" />
+      <div className="space-y-2 p-4">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+    </div>
+  )
+}
 
 export function StoreListPage() {
   const [query, setQuery] = useState('')
@@ -35,6 +49,7 @@ export function StoreListPage() {
   const minChars = searchUiMinChars(isLiveApi())
   const searchActive = isSearchActive(keyword, minChars)
   const useApiSearch = isSearchApiReady(keyword)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -73,7 +88,7 @@ export function StoreListPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [keyword, searchActive, useApiSearch, location])
+  }, [keyword, searchActive, useApiSearch, location, reloadKey])
 
   function applyLocation(next: CustomerLocation) {
     saveLocation(next)
@@ -147,9 +162,26 @@ export function StoreListPage() {
         minChars={minChars}
       />
 
-      {loading ? <Spinner label="Loading stores…" /> : null}
-      {!loading && error ? (
-        <EmptyState title="Something went wrong" description={error} />
+     {loading ? (
+        <div className="space-y-4" aria-busy="true">
+          <LoadingStatus
+            loading={loading}
+            label={searchActive ? 'Searching stores…' : 'Loading stores…'}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, i) => (
+              <StoreCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+     {!loading && error ? (
+        <EmptyState
+          title="Could not load stores"
+          description={error}
+          action={<Button onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>}
+        />
       ) : null}
       {!loading && !error && stores.length === 0 ? (
         <EmptyState
@@ -164,7 +196,7 @@ export function StoreListPage() {
       {!loading && !error && stores.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {stores.map((store) => (
-            <Link key={store.id} to={`/stores/${store.id}`}>
+           <Link key={store.id} to={`/stores/${store.id}`} state={{ storeName: store.name }}>
               <Card className="h-full overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-lg">
                 <div
                   className="relative flex h-36 items-end p-4 text-white"

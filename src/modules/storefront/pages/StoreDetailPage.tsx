@@ -34,16 +34,19 @@ import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSu
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
 
 const SEARCH_DEBOUNCE_MS = 250
 
 export function StoreDetailPage() {
   const { storeId = 'r1' } = useParams()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading, error,reload, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
 
   return (
     <StorePageStates
+      storeId={storeId}
+      onRetry={reload}
       wrapperRef={wrapperRef}
       loading={loading}
       error={error}
@@ -96,6 +99,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   const searchNeedle = isSearchActive(searchDraft, minChars) ? draftTrimmed : ''
   const searching = Boolean(searchNeedle)
   const skuSearch = useStoreSkuSearch(store.id, searchNeedle)
+  const productsLoading = searching ? skuSearch.loading : products.loading
 
   const browseProducts = searching ? skuSearch.items : products.items
 
@@ -230,21 +234,28 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
               ) : null}
             </div>
           ) : (
-            <CategoryBrowseSection
-              storeId={store.id}
-              storeName={store.name}
-              categories={categories}
-              products={browseProducts}
-              categoryFilter={categoryFilter}
-              query={searchDraft}
-              searching={searching}
-              searchTooShort={searchTooShort}
-              onCategoryChange={selectCategory}
-              hasMore={searching ? false : !products.lastPage}
-              loading={searching ? skuSearch.loading : products.loading}
-              loadingMore={!searching && products.loadingMore}
-              onLoadMore={searching ? undefined : products.loadMore}
-            />
+            <>
+    <LoadingStatus
+      loading={productsLoading}
+      label={searching ? 'Searching…' : 'Loading products…'}
+      onRetry={searching ? undefined : () => products.reload()}
+    />
+    <CategoryBrowseSection
+      storeId={store.id}
+      storeName={store.name}
+      categories={categories}
+      products={browseProducts}
+      categoryFilter={categoryFilter}
+      query={searchDraft}
+      searching={searching}
+      searchTooShort={searchTooShort}
+      onCategoryChange={selectCategory}
+      hasMore={searching ? false : !products.lastPage}
+      loading={searching ? skuSearch.loading : products.loading}
+      loadingMore={!searching && products.loadingMore}
+      onLoadMore={searching ? undefined : products.loadMore}
+    />
+  </>
           )
         ) : (
           <>
@@ -294,6 +305,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
                   </button>
                 </div>
               ) : (
+               <>
                 <ProductGrid
                   storeId={store.id}
                   storeName={store.name}
@@ -306,6 +318,7 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
                   emptyTitle="No products match"
                   emptyDescription="No items in this category yet."
                 />
+               </>
               )}
             </section>
           </>

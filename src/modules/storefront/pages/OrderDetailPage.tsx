@@ -29,9 +29,11 @@ import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
 import { storeOrderPath, storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, EmptyState, Spinner } from '@/shared/components'
+import { Button, EmptyState } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
+import { StoreBone } from '@/modules/storefront/components/store-skeleton-bone'
 
 /** Filled primary CTA — vendor theme (falls back to brand green). */
 const primaryCtaClass =
@@ -43,7 +45,7 @@ const secondaryCtaClass =
 
 const textCtaClass =
   'inline-flex min-h-11 w-full items-center justify-center gap-2 px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline'
-
+const ORDER_NOT_FOUND = 'Order not found'
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
   const user = useAuthStore((s) => s.user)
@@ -51,6 +53,7 @@ export function OrderDetailPage() {
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [orderError, setOrderError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!orderId) return
@@ -62,17 +65,18 @@ export function OrderDetailPage() {
     }
     let cancelled = false
     setOrderLoading(true)
+    setOrderError('')
     void ordersService
       .getMyOrder(user?.id, orderId)
       .then((data) => {
         if (cancelled) return
         if (data?.storeId && data.storeId !== storeId) {
           setOrder(null)
-          setOrderError('Order not found')
+          setOrderError(ORDER_NOT_FOUND)
           return
         }
         setOrder(data)
-        if (!data) setOrderError('Order not found')
+        if (!data) setOrderError(ORDER_NOT_FOUND)
       })
       .catch((err) => {
         if (!cancelled) setOrderError(getErrorMessage(err, 'Could not load this order'))
@@ -83,7 +87,7 @@ export function OrderDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [orderId, storeId, user])
+  }, [orderId, storeId, user, reloadKey])
 
   const itemCount = useCartStore((s) => s.itemCount(storeId))
 
@@ -163,8 +167,34 @@ export function OrderDetailPage() {
               }
             />
           ) : orderLoading ? (
-            <div className="py-16">
-              <Spinner label="Loading order…" />
+            <div className="space-y-3" aria-busy="true">
+              <span className="sr-only">Loading order…</span>
+              <LoadingStatus
+                loading={orderLoading}
+                label="Loading order…"
+                onRetry={() => setReloadKey((k) => k + 1)}
+              />
+              <div className="overflow-hidden rounded-[1.5rem] bg-[var(--store-theme-soft,#f3fbf6)] p-4" aria-hidden>
+                <div className="flex items-center gap-2">
+                  <StoreBone className="h-4 w-24" />
+                  <StoreBone className="h-5 w-20 rounded-full" />
+                </div>
+                <StoreBone className="mt-3 h-6 w-48" />
+                <StoreBone className="mt-2 h-3 w-36" />
+              </div>
+              <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_1px_10px_rgba(15,23,42,0.05)]" aria-hidden>
+                <StoreBone className="h-4 w-20" />
+                <div className="mt-3 flex gap-3">
+                  <StoreBone className="size-14 shrink-0 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <StoreBone className="h-4 w-36" />
+                    <StoreBone className="h-3 w-24" />
+                  </div>
+                </div>
+                <StoreBone className="mt-4 h-3 w-full" />
+                <StoreBone className="mt-2 h-3 w-40" />
+              </div>
+              <StoreBone className="h-16 w-full rounded-[1.5rem]" />
             </div>
           ) : order ? (
             <>
@@ -177,15 +207,24 @@ export function OrderDetailPage() {
               <div className="hidden pt-2 pb-6 lg:block">{actionStack}</div>
             </>
           ) : (
-            <EmptyState
-              title={orderError || 'Order not found'}
-              description="This order may belong to another account."
-              action={
-                <Link to={ordersHref}>
-                  <Button variant="outline">Back to orders</Button>
-                </Link>
-              }
-            />
+             <EmptyState
+                title={orderError || ORDER_NOT_FOUND}
+                description={
+                  orderError === ORDER_NOT_FOUND || !orderError
+                    ? 'This order may belong to another account.'
+                    : 'Check your internet connection and try again.'
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {orderError && orderError !== ORDER_NOT_FOUND ? (
+                      <Button onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>
+                    ) : null}
+                    <Link to={ordersHref}>
+                      <Button variant="outline">Back to orders</Button>
+                    </Link>
+                  </div>
+                }
+              />
           )}
         </div>
       </main>
@@ -311,10 +350,17 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
             <dl className="mt-3 space-y-2.5 text-sm">
               <BillRow label="Item total (MRP)" value={formatCurrency(bill.grossAmount)} />
               {bill.discount > 0 ? (
-                <BillRow label="Discount" value={`- ${formatCurrency(bill.discount)}`} accent />
+                <BillRow label="Product discount" value={`−${formatCurrency(bill.discount)}`} accent />
+              ) : null}
+              {bill.orderSubTotal > 0 &&
+              (bill.discount > 0 || bill.orderSubTotal !== bill.grossAmount) ? (
+                <BillRow
+                  label="Subtotal after discount"
+                  value={formatCurrency(bill.orderSubTotal)}
+                />
               ) : null}
               <BillRow
-                label="Delivery"
+                label={deliveryMethodLabel(order.deliveryMethod) || 'Delivery'}
                 value={bill.deliveryCharges > 0 ? formatCurrency(bill.deliveryCharges) : 'Free'}
                 accent={bill.deliveryCharges === 0}
               />
@@ -323,20 +369,15 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
               ) : null}
               {bill.taxAmount > 0 ? <BillRow label="Tax" value={formatCurrency(bill.taxAmount)} /> : null}
             </dl>
-            <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-3 text-sm font-bold">
-              <span>To pay</span>
-              <ProductPrice
-                price={bill.amount}
-                listPrice={bill.grossAmount > bill.amount ? bill.grossAmount : undefined}
-                size="sm"
-                saleClassName="text-sm font-bold text-[var(--store-theme,var(--md-green-600))]"
-              />
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+              <span>Order total</span>
+              <span className="text-base tabular-nums">{formatCurrency(bill.amount)}</span>
             </div>
           </>
         ) : (
-          <div className="mt-3 flex justify-between text-sm font-bold">
-            <span>To pay</span>
-            <span className="text-[var(--store-theme,var(--md-green-600))]">{formatCurrency(order.total)}</span>
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+            <span>Order total</span>
+            <span className="text-base tabular-nums">{formatCurrency(order.total)}</span>
           </div>
         )}
       </div>

@@ -350,6 +350,7 @@ export type MappedCustomerOrder = {
   bill?: {
     itemsCount: number
     grossAmount: number
+    orderSubTotal: number
     discount: number
     deliveryCharges: number
     serviceCharge: number
@@ -413,14 +414,19 @@ function mapOrderBill(raw: Record<string, unknown> | null) {
   if (!raw) return undefined
   const amount = asMoney(raw.amount)
   if (amount == null && asMoney(raw.gross_amount) == null) return undefined
+  const grossAmount = asMoney(raw.gross_amount) ?? 0
+  const discount = asMoney(raw.discount) ?? 0
+  const orderSubTotal =
+    asMoney(raw.order_sub_total ?? raw.items_sub_total) ?? Math.max(0, grossAmount - discount)
   return {
     itemsCount: Math.max(0, Math.floor(asMoney(raw.items_count) ?? 0)),
-    grossAmount: asMoney(raw.gross_amount) ?? 0,
-    discount: asMoney(raw.discount) ?? 0,
+    grossAmount,
+    orderSubTotal,
+    discount,
     deliveryCharges: asMoney(raw.delivery_charges) ?? 0,
     serviceCharge: asMoney(raw.service_charge) ?? 0,
     taxAmount: asMoney(raw.tax_amount) ?? 0,
-    amount: amount ?? asMoney(raw.gross_amount) ?? 0,
+    amount: amount ?? grossAmount,
   }
 }
 

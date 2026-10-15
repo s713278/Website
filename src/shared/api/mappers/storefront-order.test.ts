@@ -230,6 +230,7 @@ describe('mapCustomerOrder', () => {
       bill: {
         itemsCount: 0,
         grossAmount: 0,
+        orderSubTotal: 0,
         discount: 0,
         deliveryCharges: 0,
         serviceCharge: 0,
@@ -265,6 +266,7 @@ describe('mapCustomerOrder', () => {
           items_count: 3,
           gross_amount: 660,
           discount: 30,
+          order_sub_total: 630,
           delivery_charges: 0,
           service_charge: 0,
           tax_amount: 0,
@@ -295,7 +297,13 @@ describe('mapCustomerOrder', () => {
       deliveryMethod: 'HOME_DELIVERY',
       addressLine: 'Mirdoddi, Telangana 502108, India',
       customerMobile: '9898989898',
-      bill: { itemsCount: 3, grossAmount: 660, discount: 30, amount: 630 },
+      bill: {
+        itemsCount: 3,
+        grossAmount: 660,
+        discount: 30,
+        orderSubTotal: 630,
+        amount: 630,
+      },
       items: [
         {
           name: 'Mixed Vegetable Pickle',

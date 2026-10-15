@@ -354,6 +354,7 @@ describe('priceDetailsFromSummary', () => {
   it('uses unique line count, not summed quantity', () => {
     const details = priceDetailsFromSummary({
       itemsTotal: 820,
+      itemsSubTotal: 820,
       deliveryCharges: 0,
       discount: 0,
       serviceCharge: 0,
@@ -364,5 +365,6 @@ describe('priceDetailsFromSummary', () => {
     expect(details.itemCount).toBe(2)
     expect(details.lineCount).toBe(2)
     expect(details.total).toBe(820)
+    expect(details.itemsSubTotal).toBe(820)
   })
 })
