@@ -425,18 +425,18 @@ export function useProductReferences(
         return {
           items: [],
           pageNumber: 0,
-          pageSize: 12,
+          pageSize: ONBOARDING_CONFIG.productPageSize,
           totalElements: 0,
           totalPages: 0,
           lastPage: true,
         }
       }
       if (mode === 'sample') {
-        return getSampleProducts(categoryId, pageNumber, 12)
+        return getSampleProducts(categoryId, pageNumber, ONBOARDING_CONFIG.productPageSize)
       }
       return vendorOnboardingService.getProductsByCategory(
         categoryId,
-        { pageNumber, pageSize: 12, sortBy: 'name', sortOrder: 'ASC' },
+        { pageNumber, pageSize: ONBOARDING_CONFIG.productPageSize, sortBy: 'name', sortOrder: 'ASC' },
         { signal },
       )
     },

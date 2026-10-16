@@ -29,8 +29,6 @@ export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreC
 
   if (count <= 0 || hiddenForCount === count) return null
 
-  const cartLink = linkFromNavTarget(cartNavTarget(user, storeId))
-
   return (
     <div
       className={cn(
@@ -50,8 +48,7 @@ export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreC
           <p className="text-sm font-bold tabular-nums">{formatCurrency(subtotal)}</p>
         </div>
         <Link
-          to={cartLink.to}
-          state={cartLink.state}
+          to={storeCartPath(storeId)}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-[var(--store-theme,var(--md-green-800))] transition hover:bg-white/95 active:scale-[0.98]"
         >
           Go to Cart

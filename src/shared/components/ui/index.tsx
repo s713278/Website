@@ -142,5 +142,5 @@ export function Spinner({ label = 'Loading…' }: { label?: string }) {
 }
 
 export function LoadingSkeleton({ className }: { className?: string }) {
-  return <Skeleton className={cn('h-24 w-full', className)} />
+  return <Skeleton className={cn('h-24 w-full bg-foreground/15', className)} />
 }

@@ -1,7 +1,7 @@
 /**
  * @mithra/api-client
  *
- * OpenAPI: https://subscriptionapp-wgf8.onrender.com/api/v3/api-docs
+ * OpenAPI: https://qa.mithradirect.com/api/v3/api-docs
  * Regenerate: `pnpm --filter @mithra/api-client sync`
  */
 

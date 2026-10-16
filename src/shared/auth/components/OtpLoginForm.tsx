@@ -146,7 +146,7 @@ export function OtpLoginForm({
               <img
                 src={logoDarkMd}
                 alt="Mithra Direct — Shop Local, Support Local, Grow Together"
-                className="h-9 w-auto"
+                className="h-10 w-auto sm:h-11"
               />
             </Link>
           )}
@@ -242,11 +242,13 @@ export function OtpLoginForm({
             ) : (
               <>
                 <p id="otp-sent-to" className="mt-2 text-balance text-center text-[0.9375rem] leading-relaxed text-[var(--md-muted)]">
-                  <span className="md-login-sent-label">Sent on WhatsApp to </span>
-                  <span className="whitespace-nowrap font-medium tabular-nums text-[var(--md-ink)]">
-                    +91 {phone.slice(0, 5)} {phone.slice(5)}
+                  {/* Number on one line, the link below it: the same structure as the setup wizard. */}
+                  <span className="block">
+                    <span className="md-login-sent-label">Sent on WhatsApp to </span>
+                    <span className="whitespace-nowrap font-medium tabular-nums text-[var(--md-ink)]">
+                      +91 {phone.slice(0, 5)} {phone.slice(5)}
+                    </span>
                   </span>
-                  .{' '}
                   <button
                     type="button"
                     className={`${linkClass} inline-flex min-h-11 items-center disabled:text-[var(--md-muted)]`}
@@ -301,7 +303,7 @@ export function OtpLoginForm({
                     </div>
                   </div>
                   {error ? (
-                    <p id={errorId} role="alert" className="mt-2 text-sm text-[var(--md-danger)]">
+                    <p id={errorId} role="alert" className="mt-2 text-center text-sm text-[var(--md-danger)]">
                       {error}
                     </p>
                   ) : null}

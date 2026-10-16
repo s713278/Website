@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
 import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
@@ -9,6 +9,7 @@ import { loadVendorAccountContext } from '@/modules/vendor/lib/onboarding-server
 import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { clearVendorHeaderHint, rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
 import {
+  authService,
   configureApiClient,
   mapVendorContext,
   vendorOnboardingService,
@@ -80,7 +81,7 @@ function answerSetupReads() {
   vi.spyOn(vendorOnboardingService, 'getMeasurements').mockResolvedValue([])
 }
 
-const ACTIONS = ['Log in', 'Get started', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Log out']
+const ACTIONS = ['Sign in', 'Open store', 'Continue setup', 'Check status', 'Store', 'Dashboard', 'Sign out']
 
 /**
  * The header's right-hand actions, in order. Each one is in the DOM twice, once for the bar and
@@ -115,7 +116,7 @@ beforeEach(() => {
     user: {
       id: 'test-user', name: 'Test Vendor', email: 'vendor@example.test',
       role: 'vendor', roles: ['vendor'],
-      vendors: [{ vendorId: VENDOR_ID }], vendorId: VENDOR_ID,
+      vendors: [{ vendorId: VENDOR_ID, name: 'Green Bowl Grocers' }], vendorId: VENDOR_ID,
     },
   })
 })
@@ -130,22 +131,22 @@ afterEach(() => {
 })
 
 describe('MarketingHeader for a signed-in vendor', () => {
-  it('offers Dashboard from the first paint, before the account has loaded', () => {
+  // The account menu offers Dashboard meanwhile, so the vendor still has a way in.
+  it('offers no action before the account has loaded', () => {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
     holdSetupReads()
 
     renderHeader()
 
-    expect(shownActions()).toEqual(['Dashboard'])
-    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0].getAttribute('href')).toBe('/vendor')
+    expect(shownActions()).toEqual([])
   })
 
   // The setup reads are held open for good. A header that waited for them, as the wizard does,
   // would never get past its first paint.
   it.each([
-    ['an approved store', APPROVED, ['Store', 'Dashboard']],
+    ['an approved store', APPROVED, ['Dashboard']],
     ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-    ['unfinished setup', SETTING_UP, ['Log out', 'Continue setup']],
+    ['unfinished setup', SETTING_UP, ['Continue setup']],
   ] as const)('settles on %s once the vendor context lands, without the setup reads', async (_name, context, expected) => {
     const read = deferred<VendorContext>()
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
@@ -157,17 +158,15 @@ describe('MarketingHeader for a signed-in vendor', () => {
     await waitFor(() => expect(shownActions()).toEqual(expected))
   })
 
-  it('keeps Dashboard in place when an approved store lands, rather than swapping it', async () => {
-    const read = deferred<VendorContext>()
-    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
+  it('opens an action in a new tab, leaving the landing page in place', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
     holdSetupReads()
     renderHeader()
-    const before = screen.getAllByRole('link', { name: 'Dashboard' })[0]
 
-    read.resolve(APPROVED)
-
-    await waitFor(() => expect(shownActions()).toEqual(['Store', 'Dashboard']))
-    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBe(before)
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
+    const dashboard = screen.getAllByRole('link', { name: 'Dashboard' })[0]
+    expect(dashboard.getAttribute('href')).toBe('/vendor')
+    expect(dashboard.getAttribute('target')).toBe('_blank')
   })
 
   it('starts no read once the header is gone', async () => {
@@ -186,14 +185,14 @@ describe('MarketingHeader for a signed-in vendor', () => {
     it.each([
       ['sign-in', () => loadVendorAccountContext(VENDOR_ID)],
       ['the dashboard', () => loadVendorContext(VENDOR_ID, (id) => vendorOnboardingService.getVendorContext(id))],
-    ] as const)('paints the answer on the first frame, with no Dashboard to correct, after %s', async (_name, read) => {
+    ] as const)('paints the answer on the first frame, with nothing to correct, after %s', async (_name, read) => {
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(SETTING_UP)
       answerSetupReads()
       await read()
 
       renderHeader()
 
-      expect(shownActions()).toEqual(['Log out', 'Continue setup'])
+      expect(shownActions()).toEqual(['Continue setup'])
     })
   })
 
@@ -208,7 +207,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       await import('@/modules/vendor/lib/onboarding-server-state')
       read.resolve(APPROVED)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Store', 'Dashboard']))
+      await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
       expect(getContext).toHaveBeenCalledTimes(1)
       for (const setupRead of [
         'getVendorProfile', 'getVendorCategories', 'getVendorProducts', 'getVendorSkus',
@@ -234,7 +233,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       read.resolve(APPROVED)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Store', 'Dashboard']))
+      await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
       expect(getContext).toHaveBeenCalledTimes(1)
     })
 
@@ -252,9 +251,9 @@ describe('MarketingHeader for a signed-in vendor', () => {
   // live read lands, and the live read still wins once it does.
   describe('with a remembered account state', () => {
     it.each([
-      ['an approved store', APPROVED, ['Store', 'Dashboard']],
+      ['an approved store', APPROVED, ['Dashboard']],
       ['a submitted store awaiting approval', vendorContext('ACTIVE', 'PENDING', 11), ['Check status']],
-      ['unfinished setup', SETTING_UP, ['Log out', 'Continue setup']],
+      ['unfinished setup', SETTING_UP, ['Continue setup']],
     ] as const)('paints %s on the first frame while the read is pending', (_name, context, expected) => {
       rememberVendorHeaderHint(context)
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
@@ -271,11 +270,11 @@ describe('MarketingHeader for a signed-in vendor', () => {
       vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(read.promise)
       holdSetupReads()
       renderHeader()
-      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+      expect(shownActions()).toEqual(['Dashboard'])
 
       read.resolve(SETTING_UP)
 
-      await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
+      await waitFor(() => expect(shownActions()).toEqual(['Continue setup']))
     })
 
     it('keeps the remembered actions when the live read fails', async () => {
@@ -288,7 +287,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
       await waitFor(() => expect(getContext).toHaveBeenCalled())
       // Lets the rejection reach the header and its state update render.
       await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+      expect(shownActions()).toEqual(['Dashboard'])
     })
 
     it('ignores a state remembered for another vendor', () => {
@@ -298,7 +297,7 @@ describe('MarketingHeader for a signed-in vendor', () => {
 
       renderHeader()
 
-      expect(shownActions()).toEqual(['Dashboard'])
+      expect(shownActions()).toEqual([])
     })
 
     it('paints the remembered actions on /onboarding and stays there', () => {
@@ -318,17 +317,112 @@ describe('MarketingHeader for a signed-in vendor', () => {
         </MemoryRouter>,
       )
 
-      expect(shownActions()).toEqual(['Store', 'Dashboard'])
+      expect(shownActions()).toEqual(['Dashboard'])
       expect(new Set(seen)).toEqual(new Set(['/onboarding']))
     })
   })
 
-  it('falls back to Log out and Continue setup when the read fails and nothing is remembered', async () => {
+  it('falls back to Continue setup when the read fails and nothing is remembered', async () => {
     vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('offline'))
     holdSetupReads()
 
     renderHeader()
 
-    await waitFor(() => expect(shownActions()).toEqual(['Log out', 'Continue setup']))
+    await waitFor(() => expect(shownActions()).toEqual(['Continue setup']))
+  })
+})
+
+describe('MarketingHeader account menu', () => {
+  /** Radix opens the menu on a key press; jsdom has no pointer events for its trigger. */
+  function openAccountMenu() {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account' }), { key: 'Enter' })
+    return screen.getByRole('menu')
+  }
+
+  it('is labelled with the vendor’s store name and offers Dashboard and Sign out', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(neverSettles())
+    holdSetupReads()
+    const signOut = vi.spyOn(authService, 'signOut').mockResolvedValue()
+    renderHeader()
+
+    const menu = openAccountMenu()
+
+    expect(menu.textContent).toContain('Green Bowl Grocers')
+    expect(screen.queryAllByText(/Welcome/)).toHaveLength(0)
+    expect(screen.getByRole('menuitem', { name: 'Dashboard' }).getAttribute('href')).toBe('/vendor')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    await waitFor(() => expect(useAuthStore.getState().user).toBeNull())
+    expect(signOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Sign out to a vendor whose store is submitted, which the actions do not', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    holdSetupReads()
+    renderHeader()
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
+
+    openAccountMenu()
+
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy()
+  })
+
+  // Dashboard has taken the bar, so the menu offers the storefront instead of repeating it.
+  it('offers a live store’s vendor their Store, in a new tab, in place of Dashboard', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    holdSetupReads()
+    renderHeader()
+    await waitFor(() => expect(shownActions()).toEqual(['Dashboard']))
+
+    openAccountMenu()
+
+    const store = screen.getByRole('menuitem', { name: 'Store' })
+    expect(store.getAttribute('href')).toBe('/stores/sk-organic-store')
+    expect(store.getAttribute('target')).toBe('_blank')
+    expect(screen.queryByRole('menuitem', { name: 'Dashboard' })).toBeNull()
+  })
+
+  it('is absent when signed out', () => {
+    useAuthStore.getState().clearSession()
+
+    renderHeader()
+
+    expect(screen.queryByRole('button', { name: 'Account' })).toBeNull()
+    expect(shownActions()).toEqual(['Sign in', 'Open store'])
+  })
+
+  it('sits beside Open store alone for a signed-in customer, with no vendor Sign in', () => {
+    useAuthStore.getState().applySession({
+      token: 'test-token',
+      refreshToken: null,
+      user: {
+        id: 'test-customer', name: 'Test Customer', email: 'customer@example.test',
+        role: 'customer', roles: ['customer'], vendors: [],
+      },
+    })
+
+    renderHeader()
+
+    expect(screen.getByRole('button', { name: 'Account' })).toBeTruthy()
+    expect(shownActions()).toEqual(['Open store'])
+  })
+
+  // The other role on the same phone is not entered until its login screen is used.
+  it('treats a customer session on a vendor’s phone as a customer, without reading the account', async () => {
+    const read = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(APPROVED)
+    useAuthStore.getState().applySession({
+      token: 'test-token',
+      refreshToken: null,
+      user: {
+        id: 'test-user', name: 'Test Vendor', email: 'vendor@example.test',
+        role: 'customer', roles: ['customer', 'vendor'],
+        vendors: [{ vendorId: VENDOR_ID, name: 'Green Bowl Grocers' }], vendorId: VENDOR_ID,
+      },
+    })
+
+    renderHeader()
+    await import('@/modules/vendor/lib/onboarding-server-state')
+
+    expect(shownActions()).toEqual(['Open store'])
+    expect(read).not.toHaveBeenCalled()
   })
 })

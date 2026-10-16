@@ -5,7 +5,6 @@ import { useAuthStore } from '@/shared/auth/store/auth-store'
 /** OTP is signup. /register is a stable vendor-setup entry. */
 export function RegisterPage() {
   const user = useAuthStore((s) => s.user)
-  console.log('Registerpage user',user)
   if (user) return <Navigate to={homePathForUser(user)} replace />
   return <Navigate to={loginPathForRole('vendor')} replace />
 }

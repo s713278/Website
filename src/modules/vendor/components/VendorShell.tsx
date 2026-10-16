@@ -18,7 +18,7 @@ import type { PrototypeTone } from '@/modules/vendor/lib/billing-prototype-card'
 import { liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
 import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import { usesLiveBilling } from '@/shared/api'
-import { Button } from '@/shared/components'
+import { Button, HeaderButton } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
 /**
@@ -108,7 +108,9 @@ function BrandMark() {
         <img
           src={logoDarkMd}
           alt="Mithra Direct — Shop Local, Support Local, Grow Together"
-          className="h-8 w-auto"
+          // The marketing header's h-11 lockup is ~205px wide, which would fill the ~208px
+          // content box of the 15.5rem rail at `lg`; h-10 (~186px) fits it and the drawer.
+          className="h-10 w-auto"
         />
       </Link>
       <p className="mt-1.5 text-xs font-semibold tracking-wide text-[var(--md-muted)]">
@@ -313,13 +315,15 @@ function VendorChrome() {
 
       <div className="flex min-w-0 flex-col pb-24 lg:pb-8">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-t-[3px] border-b border-t-[var(--md-green-500)] border-b-[var(--vc-edge)] bg-[var(--vc-bar-bg)] px-[var(--vc-gutter)] py-3 backdrop-blur">
+          {/* Left, unlike the marketing and general headers' right-hand menu: this opens the
+              side rail, which slides in from the left, not a menu of header actions. */}
           <button
             type="button"
             onClick={() => setNavOpen(true)}
             aria-label="Open menu"
             aria-expanded={navOpen}
             aria-controls="vendor-rail"
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--vc-edge)] bg-white text-[var(--md-ink)] transition hover:bg-slate-50 lg:hidden"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--vc-edge)] bg-white text-[var(--md-ink)] transition hover:bg-slate-50 lg:hidden"
           >
             <Menu className="size-5" aria-hidden />
           </button>
@@ -338,7 +342,7 @@ function VendorChrome() {
           <div className="flex shrink-0 items-center gap-3">
             <Link
               to="/onboarding"
-              className="hidden text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)] sm:block"
+              className="hidden text-sm font-semibold text-[var(--vc-tint-ink)] underline decoration-[var(--vc-tint-ink)]/35 underline-offset-4 transition hover:decoration-[var(--vc-tint-ink)] sm:block"
             >
               Setup
             </Link>
@@ -352,11 +356,9 @@ function VendorChrome() {
             {live ? (
               <LiveHeaderButton />
             ) : (
-              <Link to="/vendor/plan">
-                <Button size="sm" className="rounded-full">
-                  Your plan
-                </Button>
-              </Link>
+              <HeaderButton to="/vendor/plan" emphasis="primary">
+                Your plan
+              </HeaderButton>
             )}
           </div>
         </header>

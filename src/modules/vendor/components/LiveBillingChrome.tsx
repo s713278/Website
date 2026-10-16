@@ -1,9 +1,8 @@
-import { Link } from 'react-router-dom'
 import { BillingStateBanner } from '@/modules/vendor/components/BillingStateBanner'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { liveBillingWording, type LiveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
 import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
-import { Button } from '@/shared/components/ui'
+import { HeaderButton } from '@/shared/components'
 
 /*
   The Live API billing banner and header button. Messaging only: both read the billing read Plan
@@ -30,10 +29,8 @@ export function LiveShellBanner() {
 export function LiveHeaderButton() {
   const label = useLiveBillingChrome()?.header ?? 'Shop plan'
   return (
-    <Link to="/vendor/plan">
-      <Button size="sm" variant={label === 'Shop plan' ? 'outline' : 'primary'} className="rounded-full">
-        {label}
-      </Button>
-    </Link>
+    <HeaderButton to="/vendor/plan" emphasis={label === 'Shop plan' ? 'secondary' : 'primary'}>
+      {label}
+    </HeaderButton>
   )
 }
