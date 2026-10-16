@@ -139,9 +139,26 @@ export function StoreCartView({
                     <dt className="text-slate-600">Item total (MRP)</dt>
                     <dd className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</dd>
                   </div>
+                  {totals.discount > 0 ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-600">Product discount</dt>
+                      <dd className="font-semibold text-[var(--store-theme,var(--md-green-700))]">
+                        −{formatCurrency(totals.discount)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {totals.itemsSubTotal > 0 &&
+                  (totals.discount > 0 || totals.itemsSubTotal !== totals.subtotal) ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-600">Subtotal after discount</dt>
+                      <dd className="font-semibold text-slate-900">
+                        {formatCurrency(totals.itemsSubTotal)}
+                      </dd>
+                    </div>
+                  ) : null}
                   {showDelivery ? (
                     <div className="flex justify-between gap-3">
-                      <dt className="text-slate-600">Delivery</dt>
+                      <dt className="text-slate-600">Home delivery</dt>
                       <dd
                         className={cn(
                           'font-semibold',
@@ -154,26 +171,18 @@ export function StoreCartView({
                       </dd>
                     </div>
                   ) : null}
-                  {totals.discount > 0 ? (
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-600">Discount</dt>
-                      <dd className="font-semibold text-emerald-700">
-                        −{formatCurrency(totals.discount)}
-                      </dd>
-                    </div>
-                  ) : null}
                   {totals.service > 0 ? (
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-600">Service charge</dt>
                       <dd className="font-semibold text-slate-900">{formatCurrency(totals.service)}</dd>
                     </div>
                   ) : null}
-                  <div className="flex justify-between gap-3 border-t border-dashed border-slate-200 pt-3">
-                    <dt className="text-base font-bold text-slate-900">Total</dt>
-                    <dd>
-                      <p className="text-right text-base font-bold text-slate-900">
-                        {formatCurrency(totals.total)}
-                      </p>
+                  <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3">
+                    <dt className="text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+                      Order total
+                    </dt>
+                    <dd className="text-base font-bold tabular-nums text-[var(--store-theme,var(--md-green-800))]">
+                      {formatCurrency(totals.total)}
                     </dd>
                   </div>
                 </dl>

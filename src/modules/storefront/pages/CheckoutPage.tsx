@@ -9,7 +9,7 @@ import { syncVendorCart } from '@/modules/storefront/lib/cart-actions'
 import { storeCartPath, storeCheckoutPath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
-import { catalogService, type StorefrontCheckoutOptions } from '@/shared/api'
+import { catalogService, isApiError, type StorefrontCheckoutOptions } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /** Store checkout at `/stores/:storeId/checkout`. `/checkout` redirects here. */
@@ -38,7 +38,8 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
   const [checkoutUnavailable, setCheckoutUnavailable] = useState(false)
   const storeLines = lines.filter((line) => line.storeId === storeId)
   const [cartReady, setCartReady] = useState(() => storeLines.length > 0 || !shopper)
-
+  const [optionsFailed, setOptionsFailed] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   useEffect(() => {
     if (cartHydrated.current || !canShopAsCustomer(user)) return
     if (storeLines.length > 0) {
@@ -54,31 +55,32 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
   }, [store?.name, storeId, storeLines.length, user])
 
   useEffect(() => {
-    let cancelled = false
-    setOptionsLoading(true)
-    setCheckoutUnavailable(false)
+  let cancelled = false
+  setOptionsLoading(true)
+  setCheckoutUnavailable(false)
+  setOptionsFailed(false)
 
-    void catalogService
-      .getStoreCheckoutOptions(storeId)
-      .then((options) => {
-        if (cancelled) return
-        setCheckoutOptions(options)
-        setCheckoutUnavailable(false)
-      })
-      .catch(() => {
-        if (cancelled) return
-        // Vendor has no delivery config — show customer-friendly empty state (not API copy).
-        setCheckoutOptions(null)
-        setCheckoutUnavailable(true)
-      })
-      .finally(() => {
-        if (!cancelled) setOptionsLoading(false)
-      })
+  void catalogService
+    .getStoreCheckoutOptions(storeId)
+    .then((options) => {
+      if (!cancelled) setCheckoutOptions(options)
+    })
+    .catch((err) => {
+      if (cancelled) return
+      setCheckoutOptions(null)
+      const connectionIssue =
+        !isApiError(err) || err.kind === 'network' || err.kind === 'timeout'
+      if (connectionIssue) setOptionsFailed(true)
+      else setCheckoutUnavailable(true)
+    })
+    .finally(() => {
+      if (!cancelled) setOptionsLoading(false)
+    })
 
-    return () => {
-      cancelled = true
-    }
-  }, [storeId])
+  return () => {
+    cancelled = true
+  }
+}, [storeId, reloadKey])
 
   if (!loading && !optionsLoading && cartReady && storeLines.length === 0) {
     return <Navigate to={storeCartPath(storeId)} replace />
@@ -88,10 +90,12 @@ function CheckoutForStore({ storeId }: { storeId: string }) {
 
   return (
     <StorePageStates
-      wrapperRef={wrapperRef}
-      loading={pageLoading}
-      error={error}
-      ready={Boolean(store)}
+       storeId={storeId}
+       onRetry={() => setReloadKey((k) => k + 1)}
+       wrapperRef={wrapperRef}
+       loading={pageLoading}
+       error={optionsFailed ? 'Check your internet connection and try again.' : error}
+       ready={Boolean(store) && !optionsFailed}
       loadingLabel="Loading checkout…"
       emptyTitle="Store not found"
       emptyDescription="This store may be offline."

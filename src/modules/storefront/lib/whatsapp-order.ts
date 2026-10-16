@@ -16,6 +16,7 @@ type WhatsAppOrderInput = {
   zipCode?: string
   lines: CartLine[]
   subtotal: number
+ itemsSubTotal?: number
   deliveryFee: number
   packagingFee: number
   discount?: number
@@ -152,16 +153,28 @@ function itemBlock(line: CartLine, index: number) {
 }
 
 function paymentBlock(input: WhatsAppOrderInput) {
+  const discount = input.discount ?? 0
+  const itemsSubTotal = input.itemsSubTotal ?? 0
+  const showItemsSubTotal =
+    itemsSubTotal > 0 && (discount > 0 || itemsSubTotal !== input.subtotal)
+  const deliveryLabel = input.deliveryMethodLabel?.trim() || 'Home delivery'
   const fees = [
     `Item total (MRP): ${formatCurrency(input.subtotal)}`,
-    input.deliveryFee > 0 ? `Delivery: ${formatCurrency(input.deliveryFee)}` : null,
+    discount > 0 ? `Product discount: −${formatCurrency(discount)}` : null,
+    showItemsSubTotal
+      ? `Subtotal after discount: ${formatCurrency(itemsSubTotal)}`
+      : null,
+    input.deliveryFee > 0 ? `${deliveryLabel}: ${formatCurrency(input.deliveryFee)}` : null,
     input.packagingFee > 0 ? `Packaging: ${formatCurrency(input.packagingFee)}` : null,
     (input.serviceFee ?? 0) > 0 ? `Service charge: ${formatCurrency(input.serviceFee ?? 0)}` : null,
-    (input.discount ?? 0) > 0 ? `Discount: −${formatCurrency(input.discount ?? 0)}` : null,
   ]
     .filter((row): row is string => Boolean(row))
     .join(' · ')
-  return [`Method: ${input.paymentLabel}`, fees, `*Total: ${formatCurrency(input.total)}*`].join('\n')
+  return [
+    `Method: ${input.paymentLabel}`,
+    fees,
+    `*Order total: ${formatCurrency(input.total)}*`,
+  ].join('\n')
 }
 
 function fulfillmentBlock(input: WhatsAppOrderInput) {

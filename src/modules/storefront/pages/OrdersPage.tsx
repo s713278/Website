@@ -16,6 +16,34 @@ import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { Button, EmptyState, Spinner } from '@/shared/components'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
+import { StoreBone } from '@/modules/storefront/components/store-skeleton-bone'
+
+function OrderCardSkeleton() {
+  return (
+    <div
+      className="rounded-xl bg-white p-3.5 ring-1 ring-slate-100 sm:p-4"
+      aria-hidden
+    >
+      <div className="flex items-center justify-between gap-3">
+        <StoreBone className="h-3 w-24" />
+        <StoreBone className="h-5 w-20 rounded-full" />
+      </div>
+      <div className="mt-2.5 flex gap-3">
+        <StoreBone className="size-12 shrink-0 rounded-lg sm:size-14" />
+        <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+          <StoreBone className="h-4 w-40" />
+          <StoreBone className="h-3 w-28" />
+          <StoreBone className="h-3 w-16" />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <StoreBone className="h-4 w-20" />
+        <StoreBone className="h-10 w-36 rounded-full" />
+      </div>
+    </div>
+  )
+}
 
 export function OrdersPage() {
   const { storeId: paramStoreId } = useParams()
@@ -40,6 +68,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
   const [moreError, setMoreError] = useState('')
   const sentinelRef = useRef<HTMLDivElement>(null)
   const loadMoreLock = useRef(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -77,7 +106,7 @@ function StoreOrders({ storeId }: { storeId: string }) {
     return () => {
       cancelled = true
     }
-  }, [storeId, user])
+  }, [storeId, user, reloadKey])
 
   const loadMore = useCallback(async () => {
     if (loadMoreLock.current || loadingMore || lastPage || ordersLoading) return
@@ -149,7 +178,9 @@ function StoreOrders({ storeId }: { storeId: string }) {
                 <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
                   My orders
                 </h1>
-                <p className="mt-0.5 text-sm text-slate-500">Orders from {shopName}</p>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Past orders from this shop. For open orders, chat with the owner on WhatsApp.
+                </p>
               </div>
             </div>
           </header>
@@ -165,11 +196,23 @@ function StoreOrders({ storeId }: { storeId: string }) {
               }
             />
           ) : ordersLoading ? (
-            <div className="py-16">
-              <Spinner label="Loading orders…" />
+            <div className="space-y-2.5" aria-busy="true">
+              <span className="sr-only">Loading orders…</span>
+              <LoadingStatus
+                loading={ordersLoading}
+                label="Loading orders…"
+                onRetry={() => setReloadKey((k) => k + 1)}
+              />
+              {Array.from({ length: 3 }, (_, i) => (
+                <OrderCardSkeleton key={i} />
+              ))}
             </div>
           ) : ordersError ? (
-            <EmptyState title="Could not load orders" description={ordersError} />
+            <EmptyState
+              title="Could not load orders"
+              description={ordersError}
+              action={<Button onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>}
+            />
           ) : visible.length === 0 ? (
             <EmptyState
               title="No orders yet"

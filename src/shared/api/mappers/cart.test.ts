@@ -71,6 +71,7 @@ describe('mapCartPayload', () => {
         ],
         cart_summary: {
           items_total: 735,
+          items_sub_total: 720,
           delivery_charges: 0,
           discount: 15,
           service_charge: 0,
@@ -88,5 +89,21 @@ describe('mapCartPayload', () => {
       qty: 3,
       lineTotal: 735,
     })
+    expect(snap.summary.itemsSubTotal).toBe(720)
+    expect(snap.summary.discount).toBe(15)
+  })
+
+  it('falls back to items_total minus discount when items_sub_total is missing', () => {
+    const snap = mapCartPayload({
+      cart_id: 1,
+      vendor_id: 10,
+      items: [],
+      cart_summary: {
+        items_total: 100,
+        discount: 10,
+        grand_total: 90,
+      },
+    })
+    expect(snap.summary.itemsSubTotal).toBe(90)
   })
 })

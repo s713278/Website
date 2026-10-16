@@ -106,6 +106,7 @@ export type Store = {
 }
 export type CartSummary = {
   itemsTotal: number
+  itemsSubTotal: number
   deliveryCharges: number
   discount: number
   serviceCharge: number

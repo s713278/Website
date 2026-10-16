@@ -43,8 +43,8 @@ describe('OrderCard', () => {
     expect(screen.getByText('View details')).toBeTruthy()
     const chat = screen.getByRole('link', { name: /Chat with Owner/i })
     expect(chat.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/9888888888\?text=/)
-    expect(decodeURIComponent(chat.getAttribute('href')!.split('text=')[1]!)).toContain(
-      'Order #1983 from SRK Foods',
+    expect(decodeURIComponent(chat.getAttribute('href')!.split('text=')[1]!)).toBe(
+      'Hi! This is about Order #1983.',
     )
   })
 

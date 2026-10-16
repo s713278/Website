@@ -21,10 +21,8 @@ describe('canChatAboutOrder', () => {
 })
 
 describe('orderOwnerChatMessage', () => {
-  it('prefills order-scoped WhatsApp copy', () => {
-    expect(orderOwnerChatMessage('1983', 'SRK Traditional Foods')).toBe(
-      'Hi! This is about Order #1983 from SRK Traditional Foods.',
-    )
+  it('prefills order-scoped WhatsApp copy without the store name', () => {
+    expect(orderOwnerChatMessage('1985')).toBe('Hi! This is about Order #1985.')
   })
 })
 
@@ -33,19 +31,20 @@ describe('orderOwnerChatHref', () => {
     const href = orderOwnerChatHref(
       { supportWhatsapp: '919111111111', phone: '9888888888' },
       '1983',
-      'SRK Foods',
     )
     expect(href).toMatch(/^https:\/\/wa\.me\/9888888888\?text=/)
-    expect(decodeURIComponent(href!.split('text=')[1]!)).toContain('Order #1983')
+    expect(decodeURIComponent(href!.split('text=')[1]!)).toBe(
+      'Hi! This is about Order #1983.',
+    )
   })
 
   it('falls back to support WhatsApp when order number is missing', () => {
-    const href = orderOwnerChatHref({ supportWhatsapp: '919111111111' }, '12', 'Shop')
+    const href = orderOwnerChatHref({ supportWhatsapp: '919111111111' }, '12')
     expect(href).toMatch(/^https:\/\/wa\.me\/919111111111\?text=/)
   })
 
   it('returns null when no owner number', () => {
-    expect(orderOwnerChatHref({}, '1', 'Shop')).toBeNull()
-    expect(orderOwnerChatHref(null, '1', 'Shop')).toBeNull()
+    expect(orderOwnerChatHref({}, '1')).toBeNull()
+    expect(orderOwnerChatHref(null, '1')).toBeNull()
   })
 })

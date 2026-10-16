@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
@@ -26,13 +26,26 @@ import {
 } from '@/modules/storefront/lib/order-owner-chat'
 import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
-import { storeOrderPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { storeOrderPath, storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, EmptyState, Spinner } from '@/shared/components'
+import { Button, EmptyState } from '@/shared/components'
 import { formatCurrency } from '@/shared/lib/utils'
 import { cn } from '@/lib/utils'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
+import { StoreBone } from '@/modules/storefront/components/store-skeleton-bone'
 
+/** Filled primary CTA — vendor theme (falls back to brand green). */
+const primaryCtaClass =
+  'w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90'
+
+/** Outlined secondary CTA — same vendor theme. */
+const secondaryCtaClass =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-[var(--store-theme,var(--md-green-600))] bg-white px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-800))] hover:bg-[var(--store-theme-soft,rgba(16,185,129,0.1))]'
+
+const textCtaClass =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 px-4 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline'
+const ORDER_NOT_FOUND = 'Order not found'
 export function OrderDetailPage() {
   const { storeId = '', orderId = '' } = useParams()
   const user = useAuthStore((s) => s.user)
@@ -40,6 +53,7 @@ export function OrderDetailPage() {
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [orderLoading, setOrderLoading] = useState(true)
   const [orderError, setOrderError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!orderId) return
@@ -51,17 +65,18 @@ export function OrderDetailPage() {
     }
     let cancelled = false
     setOrderLoading(true)
+    setOrderError('')
     void ordersService
       .getMyOrder(user?.id, orderId)
       .then((data) => {
         if (cancelled) return
         if (data?.storeId && data.storeId !== storeId) {
           setOrder(null)
-          setOrderError('Order not found')
+          setOrderError(ORDER_NOT_FOUND)
           return
         }
         setOrder(data)
-        if (!data) setOrderError('Order not found')
+        if (!data) setOrderError(ORDER_NOT_FOUND)
       })
       .catch((err) => {
         if (!cancelled) setOrderError(getErrorMessage(err, 'Could not load this order'))
@@ -72,7 +87,7 @@ export function OrderDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [orderId, storeId, user])
+  }, [orderId, storeId, user, reloadKey])
 
   const itemCount = useCartStore((s) => s.itemCount(storeId))
 
@@ -80,15 +95,37 @@ export function OrderDetailPage() {
 
   const shopName = store?.name ?? order?.storeName ?? 'Order details'
   const shopHref = storePath(storeId)
+  const ordersHref = storeOrdersPath(storeId)
   const login = customerLoginLink(storeOrderPath(storeId, orderId), {
     name: shopName,
     logoUrl: store?.theme?.logoImage,
   })
   const chatHref =
     order && store && canChatAboutOrder(order.status)
-      ? orderOwnerChatHref(store, order.id, shopName)
+      ? orderOwnerChatHref(store, order.id)
       : null
   const showStickyFooter = Boolean(order)
+
+  // Top text link + bottom stack (matches design): Chat → Back → Continue shopping.
+  // max-w-lg keeps sticky CTAs aligned with the page column on wide phones/tablets.
+  const actionStack = (
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-2">
+      {chatHref ? (
+        <WhatsAppActionLink href={chatHref} className={primaryCtaClass}>
+          Chat with Owner
+        </WhatsAppActionLink>
+      ) : null}
+      <Link to={ordersHref} className={secondaryCtaClass}>
+        <ArrowLeft className="size-4" strokeWidth={2} aria-hidden />
+        Back to orders
+      </Link>
+      <Link to={shopHref} className={textCtaClass}>
+        {!chatHref ? <ShoppingBag className="size-4" strokeWidth={2} aria-hidden /> : null}
+        Continue shopping
+        <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
+      </Link>
+    </div>
+  )
 
   return (
     <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
@@ -105,12 +142,20 @@ export function OrderDetailPage() {
           'store-shell-inner flex-1 py-4 sm:py-6',
           showStickyFooter
             ? chatHref
-              ? 'pb-40 sm:pb-44 lg:pb-8'
-              : 'pb-28 sm:pb-32 lg:pb-8'
+              ? 'pb-44 sm:pb-48 lg:pb-8'
+              : 'pb-36 sm:pb-40 lg:pb-8'
             : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
         )}
       >
         <div className="mx-auto w-full max-w-lg space-y-3">
+          <Link
+            to={ordersHref}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+          >
+            <ArrowLeft className="size-4" strokeWidth={2} aria-hidden />
+            Back to orders
+          </Link>
+
           {!canShopAsCustomer(user) ? (
             <EmptyState
               title="Sign in to see this order"
@@ -122,8 +167,34 @@ export function OrderDetailPage() {
               }
             />
           ) : orderLoading ? (
-            <div className="py-16">
-              <Spinner label="Loading order…" />
+            <div className="space-y-3" aria-busy="true">
+              <span className="sr-only">Loading order…</span>
+              <LoadingStatus
+                loading={orderLoading}
+                label="Loading order…"
+                onRetry={() => setReloadKey((k) => k + 1)}
+              />
+              <div className="overflow-hidden rounded-[1.5rem] bg-[var(--store-theme-soft,#f3fbf6)] p-4" aria-hidden>
+                <div className="flex items-center gap-2">
+                  <StoreBone className="h-4 w-24" />
+                  <StoreBone className="h-5 w-20 rounded-full" />
+                </div>
+                <StoreBone className="mt-3 h-6 w-48" />
+                <StoreBone className="mt-2 h-3 w-36" />
+              </div>
+              <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_1px_10px_rgba(15,23,42,0.05)]" aria-hidden>
+                <StoreBone className="h-4 w-20" />
+                <div className="mt-3 flex gap-3">
+                  <StoreBone className="size-14 shrink-0 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <StoreBone className="h-4 w-36" />
+                    <StoreBone className="h-3 w-24" />
+                  </div>
+                </div>
+                <StoreBone className="mt-4 h-3 w-full" />
+                <StoreBone className="mt-2 h-3 w-40" />
+              </div>
+              <StoreBone className="h-16 w-full rounded-[1.5rem]" />
             </div>
           ) : order ? (
             <>
@@ -133,59 +204,33 @@ export function OrderDetailPage() {
               <AddressRow order={order} />
               <PaymentRow order={order} />
 
-              <div className="hidden gap-2 pt-2 pb-6 lg:flex lg:flex-col">
-                {chatHref ? (
-                  <WhatsAppActionLink
-                    href={chatHref}
-                    className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
-                  >
-                    Chat with Owner
-                  </WhatsAppActionLink>
-                ) : null}
-                <Link
-                  to={shopHref}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Continue shopping
-                  <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
-                </Link>
-              </div>
+              <div className="hidden pt-2 pb-6 lg:block">{actionStack}</div>
             </>
           ) : (
-            <EmptyState
-              title={orderError || 'Order not found'}
-              description="This order may belong to another account."
-            />
+             <EmptyState
+                title={orderError || ORDER_NOT_FOUND}
+                description={
+                  orderError === ORDER_NOT_FOUND || !orderError
+                    ? 'This order may belong to another account.'
+                    : 'Check your internet connection and try again.'
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {orderError && orderError !== ORDER_NOT_FOUND ? (
+                      <Button onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>
+                    ) : null}
+                    <Link to={ordersHref}>
+                      <Button variant="outline">Back to orders</Button>
+                    </Link>
+                  </div>
+                }
+              />
           )}
         </div>
       </main>
 
       {showStickyFooter && order ? (
-        <StorefrontMobileActionBar className="lg:hidden">
-          <div className="flex flex-col gap-2">
-            {chatHref ? (
-              <WhatsAppActionLink
-                href={chatHref}
-                className="w-full bg-[var(--store-theme,var(--md-green-700))] text-white shadow-sm hover:opacity-90"
-              >
-                Chat with Owner
-              </WhatsAppActionLink>
-            ) : null}
-            <Link
-              to={shopHref}
-              className={cn(
-                'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold',
-                chatHref
-                  ? 'border border-slate-200 bg-white text-slate-700'
-                  : 'bg-[var(--store-theme,var(--md-green-700))] text-white',
-              )}
-            >
-              {!chatHref ? <ShoppingBag className="size-4" strokeWidth={2} aria-hidden /> : null}
-              Continue shopping
-              <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
-            </Link>
-          </div>
-        </StorefrontMobileActionBar>
+        <StorefrontMobileActionBar>{actionStack}</StorefrontMobileActionBar>
       ) : null}
     </div>
   )
@@ -305,10 +350,17 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
             <dl className="mt-3 space-y-2.5 text-sm">
               <BillRow label="Item total (MRP)" value={formatCurrency(bill.grossAmount)} />
               {bill.discount > 0 ? (
-                <BillRow label="Discount" value={`- ${formatCurrency(bill.discount)}`} accent />
+                <BillRow label="Product discount" value={`−${formatCurrency(bill.discount)}`} accent />
+              ) : null}
+              {bill.orderSubTotal > 0 &&
+              (bill.discount > 0 || bill.orderSubTotal !== bill.grossAmount) ? (
+                <BillRow
+                  label="Subtotal after discount"
+                  value={formatCurrency(bill.orderSubTotal)}
+                />
               ) : null}
               <BillRow
-                label="Delivery"
+                label={deliveryMethodLabel(order.deliveryMethod) || 'Delivery'}
                 value={bill.deliveryCharges > 0 ? formatCurrency(bill.deliveryCharges) : 'Free'}
                 accent={bill.deliveryCharges === 0}
               />
@@ -317,20 +369,15 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
               ) : null}
               {bill.taxAmount > 0 ? <BillRow label="Tax" value={formatCurrency(bill.taxAmount)} /> : null}
             </dl>
-            <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-3 text-sm font-bold">
-              <span>To pay</span>
-              <ProductPrice
-                price={bill.amount}
-                listPrice={bill.grossAmount > bill.amount ? bill.grossAmount : undefined}
-                size="sm"
-                saleClassName="text-sm font-bold text-[var(--store-theme,var(--md-green-600))]"
-              />
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+              <span>Order total</span>
+              <span className="text-base tabular-nums">{formatCurrency(bill.amount)}</span>
             </div>
           </>
         ) : (
-          <div className="mt-3 flex justify-between text-sm font-bold">
-            <span>To pay</span>
-            <span className="text-[var(--store-theme,var(--md-green-600))]">{formatCurrency(order.total)}</span>
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+            <span>Order total</span>
+            <span className="text-base tabular-nums">{formatCurrency(order.total)}</span>
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../mode', () => ({ isLiveApi: vi.fn(() => true) }))
 
 const getProduct = vi.fn()
+const listProducts = vi.fn()
 
 vi.mock('@mithra/api-client', async () => {
   const actual = await vi.importActual<typeof import('@mithra/api-client')>('@mithra/api-client')
@@ -11,17 +12,19 @@ vi.mock('@mithra/api-client', async () => {
     storefrontService: {
       ...actual.storefrontService,
       getProduct: (...args: unknown[]) => getProduct(...args),
+      listProducts: (...args: unknown[]) => listProducts(...args),
     },
   }
 })
 
 const { ApiError } = await import('@mithra/api-client')
 const { isLiveApi } = await import('../mode')
-const { getStorefrontProduct } = await import('./catalog.service')
+const { getStorefrontProduct, listStoreProducts } = await import('./catalog.service')
 
 beforeEach(() => {
   vi.mocked(isLiveApi).mockReturnValue(true)
   getProduct.mockReset()
+  listProducts.mockReset()
 })
 
 describe('getStorefrontProduct', () => {
@@ -95,5 +98,47 @@ describe('getStorefrontProduct', () => {
 
     await expect(getStorefrontProduct('273', '418')).rejects.toMatchObject({ status: 401 })
     expect(getProduct).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('listStoreProducts', () => {
+  it('shares one request when home mounts twice with the same page', async () => {
+    let release: (value: unknown) => void = () => undefined
+    listProducts.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve
+      }),
+    )
+
+    const first = listStoreProducts('273', { pageNumber: 0, pageSize: 6 })
+    const second = listStoreProducts('273', { pageNumber: 0, pageSize: 6 })
+    release({
+      success: true,
+      data: {
+        result: [
+          {
+            vendor_product_id: 418,
+            product_name: 'Amla Pickle',
+            active: true,
+            default_sku_id: 4153,
+            variants: [{ sku_id: 4153, quantity_value: 500, unit: 'gr', sale_price: 245, active: true }],
+          },
+        ],
+        page_number: 0,
+        page_size: 6,
+        total_elements: 1,
+        total_pages: 1,
+        last_page: true,
+      },
+    })
+
+    const [a, b] = await Promise.all([first, second])
+    expect(listProducts).toHaveBeenCalledTimes(1)
+    expect(listProducts).toHaveBeenCalledWith('273', {
+      page_number: 0,
+      page_size: 6,
+    })
+    expect(a.items).toHaveLength(1)
+    expect(b.items).toEqual(a.items)
   })
 })

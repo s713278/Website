@@ -30,6 +30,7 @@ export type CustomerOrderItem = {
 export type CustomerOrderBill = {
   itemsCount: number
   grossAmount: number
+  orderSubTotal: number
   discount: number
   deliveryCharges: number
   serviceCharge: number

@@ -114,7 +114,7 @@ export function useStoreProducts(storeId: string, options: Options = {}) {
           setNextPage(pageNumber + 1)
           setError(null)
           finish()
-          if (mode === 'replace') warmCatalog(storeId)
+          if (mode === 'replace' && !page.lastPage) warmCatalog(storeId)
         } catch (err) {
           if (id !== requestId.current) return
 
