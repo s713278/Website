@@ -2364,7 +2364,7 @@ export interface paths {
         };
         /**
          * Order History API
-         * @description Accessed by logged in user only.
+         * @description Accessed by logged in user only. Optionally filter by <code>vendor_id</code> to return orders for a single vendor; omit it to return all orders.
          */
         get: operations["getUserOrderHistory"];
         put?: never;
@@ -2388,6 +2388,7 @@ export interface paths {
          *     <br><br><b>Query parameters:</b>
          *     <br>• <code>page</code> — page number (0-indexed, default: 0)
          *     <br>• <code>size</code> — page size (default: 20)
+         *     <br>• <code>vendor_id</code> — optional; filter orders to a single vendor
          *     <br><br><b>Response structure:</b>
          *     <br>• <code>result[]</code> — array of order history items
          *     <br>• <code>page_number</code> — current page number
@@ -2395,7 +2396,7 @@ export interface paths {
          *     <br>• <code>total_elements</code> — total number of orders
          *     <br>• <code>total_pages</code> — total number of pages
          *     <br>• <code>last_page</code> — boolean indicating if this is the last page
-         *     <br><br>Each order history item includes: <code>order_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,
+         *     <br><br>Each order history item includes: <code>order_id</code>, <code>vendor_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,
          *     <code>order_status</code>, <code>payment_status</code>, <code>amount</code>, <code>delivery_charge</code>, <code>discount</code>,
          *     <code>items[]</code> (enriched with SKU data), <code>shipment</code> (tracking info), and <code>order_amount</code> (nested financial summary).
          */
@@ -2449,6 +2450,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Order History by Date Range API
+         * @description Returns order history for a user within a delivery-date range. Optionally filter by <code>vendor_id</code> to return orders for a single vendor.
+         */
         get: operations["getOrderHistoryByDateRange"];
         put?: never;
         post?: never;
@@ -3984,6 +3989,7 @@ export interface components {
             /** Format: int32 */
             items_count?: number;
             gross_amount?: number;
+            order_sub_total?: number;
             discount?: number;
             delivery_charges?: number;
             service_charge?: number;
@@ -5481,67 +5487,6 @@ export interface components {
             status?: number;
             /** @description Data */
             data?: components["schemas"]["StorefrontContactUsResponse"];
-        };
-        APIResponsePaginationResponseOrderDetailsDTO: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["PaginationResponseOrderDetailsDTO"];
-        };
-        OrderDetailsDTO: {
-            /** Format: int64 */
-            order_id?: number;
-            /** Format: int64 */
-            subscription_id?: number;
-            /** Format: date */
-            delivery_date?: string;
-            vendor_name?: string;
-            sku_name?: string;
-            size?: string;
-            /** Format: int32 */
-            quantity?: number;
-            /** Format: double */
-            unit_price?: number;
-            items?: components["schemas"]["OrderItemDTO"][];
-            amount?: number;
-            delivery_charge?: number;
-            items_total?: number;
-            total_discount?: number;
-            order_amount?: components["schemas"]["OrderAmountDTO"];
-            /** @enum {string} */
-            order_status?: "PENDING" | "SCHEDULED" | "IN_PROCESS" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-            /** @enum {string} */
-            payment_type?: "CASH_ON_DELIVERY" | "PRE_PAID" | "ONLINE" | "IN_STORE_PAYMENT";
-            /** @enum {string} */
-            payment_status?: "DUE" | "PAID";
-            shipment?: components["schemas"]["ShipmentDTO"];
-        };
-        PaginationResponseOrderDetailsDTO: {
-            result?: components["schemas"]["OrderDetailsDTO"][];
-            /** Format: int32 */
-            page_number?: number;
-            /** Format: int32 */
-            page_size?: number;
-            /** Format: int64 */
-            total_elements?: number;
-            /** Format: int32 */
-            total_pages?: number;
-            last_page?: boolean;
-            meta_data?: {
-                [key: string]: string;
-            };
         };
         SocialAccountResponse: {
             /** Format: int64 */
@@ -7559,6 +7504,7 @@ export interface operations {
                 end_date: string;
                 user_id: number;
                 email: string;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -10079,7 +10025,9 @@ export interface operations {
     };
     getUserOrderHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                vendor_id?: number;
+            };
             header?: never;
             path: {
                 user_id: number;
@@ -10088,13 +10036,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -10104,6 +10061,7 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
+                vendor_id?: number;
             };
             header?: never;
             path: {
@@ -10113,13 +10071,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Paginated order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponsePaginationResponseOrderDetailsDTO"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -10130,6 +10097,7 @@ export interface operations {
                 start_date: string;
                 end_date: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -10156,6 +10124,7 @@ export interface operations {
                 /** @example 2025-01-30 */
                 end_date: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -10182,6 +10151,7 @@ export interface operations {
                 /** @example 2025-04-10 */
                 endDate: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -10189,13 +10159,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["OrderDetailsDTO"][];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

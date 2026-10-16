@@ -4057,6 +4057,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -9148,7 +9157,7 @@
           "04. Customer Order API"
         ],
         "summary": "Order History API",
-        "description": "Accessed by logged in user only.",
+        "description": "Accessed by logged in user only. Optionally filter by <code>vendor_id</code> to return orders for a single vendor; omit it to return all orders.",
         "operationId": "getUserOrderHistory",
         "parameters": [
           {
@@ -9159,15 +9168,38 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Order history fetched successfully",
             "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+              "application/json": {
+                "examples": {
+                  "Order history": {
+                    "$ref": "#/components/examples/Resp_User_Order_History_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authorization failed",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Authorization Error": {
+                    "$ref": "#/components/examples/Resp_Authentication_Failed"
+                  }
                 }
               }
             }
@@ -9186,7 +9218,7 @@
           "04. Customer Order API"
         ],
         "summary": "Paginated Order History API",
-        "description": "Returns paginated order history for a user. Use this endpoint for large order lists to improve performance.\n<br><br><b>Query parameters:</b>\n<br>• <code>page</code> — page number (0-indexed, default: 0)\n<br>• <code>size</code> — page size (default: 20)\n<br><br><b>Response structure:</b>\n<br>• <code>result[]</code> — array of order history items\n<br>• <code>page_number</code> — current page number\n<br>• <code>page_size</code> — items per page\n<br>• <code>total_elements</code> — total number of orders\n<br>• <code>total_pages</code> — total number of pages\n<br>• <code>last_page</code> — boolean indicating if this is the last page\n<br><br>Each order history item includes: <code>order_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,\n<code>order_status</code>, <code>payment_status</code>, <code>amount</code>, <code>delivery_charge</code>, <code>discount</code>,\n<code>items[]</code> (enriched with SKU data), <code>shipment</code> (tracking info), and <code>order_amount</code> (nested financial summary).\n",
+        "description": "Returns paginated order history for a user. Use this endpoint for large order lists to improve performance.\n<br><br><b>Query parameters:</b>\n<br>• <code>page</code> — page number (0-indexed, default: 0)\n<br>• <code>size</code> — page size (default: 20)\n<br>• <code>vendor_id</code> — optional; filter orders to a single vendor\n<br><br><b>Response structure:</b>\n<br>• <code>result[]</code> — array of order history items\n<br>• <code>page_number</code> — current page number\n<br>• <code>page_size</code> — items per page\n<br>• <code>total_elements</code> — total number of orders\n<br>• <code>total_pages</code> — total number of pages\n<br>• <code>last_page</code> — boolean indicating if this is the last page\n<br><br>Each order history item includes: <code>order_id</code>, <code>vendor_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,\n<code>order_status</code>, <code>payment_status</code>, <code>amount</code>, <code>delivery_charge</code>, <code>discount</code>,\n<code>items[]</code> (enriched with SKU data), <code>shipment</code> (tracking info), and <code>order_amount</code> (nested financial summary).\n",
         "operationId": "getUserOrderHistoryPaged",
         "parameters": [
           {
@@ -9217,15 +9249,38 @@
               "format": "int32",
               "default": 20
             }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Paginated order history fetched successfully",
             "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponsePaginationResponseOrderDetailsDTO"
+              "application/json": {
+                "examples": {
+                  "Paginated order history": {
+                    "$ref": "#/components/examples/Resp_User_Order_History_Paged_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authorization failed",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Authorization Error": {
+                    "$ref": "#/components/examples/Resp_Authentication_Failed"
+                  }
                 }
               }
             }
@@ -9268,6 +9323,15 @@
             "name": "user_id",
             "in": "query",
             "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64"
@@ -9332,6 +9396,15 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -9359,6 +9432,8 @@
         "tags": [
           "04. Customer Order API"
         ],
+        "summary": "Order History by Date Range API",
+        "description": "Returns order history for a user within a delivery-date range. Optionally filter by <code>vendor_id</code> to return orders for a single vendor.",
         "operationId": "getOrderHistoryByDateRange",
         "parameters": [
           {
@@ -9391,17 +9466,37 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "vendor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Order history fetched successfully",
             "content": {
-              "*/*": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/OrderDetailsDTO"
+              "application/json": {
+                "examples": {
+                  "Order history (date range)": {
+                    "$ref": "#/components/examples/Resp_User_Order_History_Date_Range_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authorization failed",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Authorization Error": {
+                    "$ref": "#/components/examples/Resp_Authentication_Failed"
                   }
                 }
               }
@@ -12729,6 +12824,9 @@
           "gross_amount": {
             "type": "number"
           },
+          "order_sub_total": {
+            "type": "number"
+          },
           "discount": {
             "type": "number"
           },
@@ -15325,154 +15423,6 @@
           }
         }
       },
-      "APIResponsePaginationResponseOrderDetailsDTO": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Response message",
-            "example": "Customer registered successfully"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "integer",
-            "format": "int32",
-            "description": "HTTP Status Code",
-            "example": 201
-          },
-          "data": {
-            "$ref": "#/components/schemas/PaginationResponseOrderDetailsDTO",
-            "description": "Data"
-          }
-        }
-      },
-      "OrderDetailsDTO": {
-        "type": "object",
-        "properties": {
-          "order_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "subscription_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "delivery_date": {
-            "type": "string",
-            "format": "date"
-          },
-          "vendor_name": {
-            "type": "string"
-          },
-          "sku_name": {
-            "type": "string"
-          },
-          "size": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "unit_price": {
-            "type": "number",
-            "format": "double"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrderItemDTO"
-            }
-          },
-          "amount": {
-            "type": "number"
-          },
-          "delivery_charge": {
-            "type": "number"
-          },
-          "items_total": {
-            "type": "number"
-          },
-          "total_discount": {
-            "type": "number"
-          },
-          "order_amount": {
-            "$ref": "#/components/schemas/OrderAmountDTO"
-          },
-          "order_status": {
-            "type": "string",
-            "enum": [
-              "PENDING",
-              "SCHEDULED",
-              "IN_PROCESS",
-              "SHIPPED",
-              "DELIVERED",
-              "CANCELLED"
-            ]
-          },
-          "payment_type": {
-            "type": "string",
-            "enum": [
-              "CASH_ON_DELIVERY",
-              "PRE_PAID",
-              "ONLINE",
-              "IN_STORE_PAYMENT"
-            ]
-          },
-          "payment_status": {
-            "type": "string",
-            "enum": [
-              "DUE",
-              "PAID"
-            ]
-          },
-          "shipment": {
-            "$ref": "#/components/schemas/ShipmentDTO"
-          }
-        }
-      },
-      "PaginationResponseOrderDetailsDTO": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrderDetailsDTO"
-            }
-          },
-          "page_number": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_elements": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "total_pages": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "last_page": {
-            "type": "boolean"
-          },
-          "meta_data": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "SocialAccountResponse": {
         "type": "object",
         "properties": {
@@ -16533,6 +16483,131 @@
           "razorpay_signature": "9ef4d0f0e5f4a8f3e3e8f5b2f1c9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7"
         }
       },
+      "Resp_User_Order_History_Success": {
+        "value": {
+          "timestamp": "2026-10-07T09:30:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": [
+            {
+              "order_id": 1720,
+              "subscription_id": 2053,
+              "delivery_date": "20-Apr-2026",
+              "vendor_id": 91,
+              "vendor_name": "FreshMart",
+              "sku_name": "Organic Milk - 1L",
+              "size": "1L",
+              "quantity": 2,
+              "unit_price": 9.99,
+              "items": [
+                {
+                  "order_item_id": 1801,
+                  "sku_id": 1452,
+                  "sku_name": "Organic Milk - 1L",
+                  "size": "1L",
+                  "image_path": "/images/sku/1452.jpg",
+                  "quantity": 2,
+                  "list_price": 9.99,
+                  "sale_price": 9.99,
+                  "unit_price": 9.99,
+                  "line_total": 19.98,
+                  "discount": 0,
+                  "state_tax": 0,
+                  "federal_tax": 0,
+                  "total_amount": 19.98
+                },
+                {
+                  "order_item_id": 1802,
+                  "sku_id": 1460,
+                  "sku_name": "Brown Eggs - 12pk",
+                  "size": "12pk",
+                  "image_path": "/images/sku/1460.jpg",
+                  "quantity": 1,
+                  "list_price": 9.99,
+                  "sale_price": 9.99,
+                  "unit_price": 9.99,
+                  "line_total": 9.99,
+                  "discount": 0,
+                  "state_tax": 0,
+                  "federal_tax": 0,
+                  "total_amount": 9.99
+                }
+              ],
+              "amount": 59.97,
+              "delivery_charge": 30,
+              "items_total": 59.97,
+              "total_discount": 0,
+              "order_amount": {
+                "items_count": 3,
+                "gross_amount": 29.97,
+                "discount": 0,
+                "delivery_charges": 30,
+                "service_charge": 0,
+                "tax_amount": 0,
+                "amount": 59.97
+              },
+              "order_status": "PENDING",
+              "payment_type": "CASH_ON_DELIVERY",
+              "payment_status": "DUE",
+              "shipment": null
+            },
+            {
+              "order_id": 6353,
+              "subscription_id": null,
+              "delivery_date": "12-Apr-2026",
+              "vendor_id": 127,
+              "vendor_name": "SK Organic Store",
+              "sku_name": "Amla Pickle - 500g",
+              "size": "500g",
+              "quantity": 1,
+              "unit_price": 245,
+              "items": [
+                {
+                  "order_item_id": 5101,
+                  "sku_id": 4153,
+                  "sku_name": "Amla Pickle - 500g",
+                  "size": "500g",
+                  "image_path": "/images/sku/4153.jpg",
+                  "quantity": 1,
+                  "list_price": 250,
+                  "sale_price": 245,
+                  "unit_price": 245,
+                  "line_total": 245,
+                  "discount": 5,
+                  "state_tax": 0,
+                  "federal_tax": 0,
+                  "total_amount": 245
+                }
+              ],
+              "amount": 245,
+              "delivery_charge": 0,
+              "items_total": 245,
+              "total_discount": 5,
+              "order_amount": {
+                "items_count": 1,
+                "gross_amount": 250,
+                "discount": 5,
+                "delivery_charges": 0,
+                "service_charge": 0,
+                "tax_amount": 0,
+                "amount": 245
+              },
+              "order_status": "DELIVERED",
+              "payment_type": "PRE_PAID",
+              "payment_status": "PAID",
+              "shipment": {
+                "courier_partner": "DTDC",
+                "courier_partner_code": "DTDC",
+                "tracking_number": "DTDC123456789",
+                "tracking_url": "https://dtdc.com/track/DTDC123456789",
+                "status": "DELIVERED",
+                "shipped_at": "2026-04-10T08:15:00Z",
+                "updated_at": "2026-04-12T17:40:00Z"
+              }
+            }
+          ]
+        }
+      },
       "Resp_Vendor_Subscription_Unauthorized": {
         "value": {
           "success": false,
@@ -16796,6 +16871,56 @@
           "measurement_unit_id": 1
         }
       },
+      "Resp_User_Order_History_Date_Range_Success": {
+        "value": [
+          {
+            "order_id": 1720,
+            "subscription_id": 2053,
+            "delivery_date": "20-Apr-2026",
+            "vendor_id": 91,
+            "vendor_name": "FreshMart",
+            "sku_name": "Organic Milk - 1L",
+            "size": "1L",
+            "quantity": 2,
+            "unit_price": 9.99,
+            "items": [
+              {
+                "order_item_id": 1801,
+                "sku_id": 1452,
+                "sku_name": "Organic Milk - 1L",
+                "size": "1L",
+                "image_path": "/images/sku/1452.jpg",
+                "quantity": 2,
+                "list_price": 9.99,
+                "sale_price": 9.99,
+                "unit_price": 9.99,
+                "line_total": 19.98,
+                "discount": 0,
+                "state_tax": 0,
+                "federal_tax": 0,
+                "total_amount": 19.98
+              }
+            ],
+            "amount": 29.97,
+            "delivery_charge": 30,
+            "items_total": 29.97,
+            "total_discount": 0,
+            "order_amount": {
+              "items_count": 3,
+              "gross_amount": 29.97,
+              "discount": 0,
+              "delivery_charges": 30,
+              "service_charge": 0,
+              "tax_amount": 0,
+              "amount": 59.97
+            },
+            "order_status": "PENDING",
+            "payment_type": "CASH_ON_DELIVERY",
+            "payment_status": "DUE",
+            "shipment": null
+          }
+        ]
+      },
       "Resp_Authentication_Failed": {
         "value": {
           "success": false,
@@ -16850,6 +16975,68 @@
                 "on_sale": true
               }
             ]
+          }
+        }
+      },
+      "Resp_User_Order_History_Paged_Success": {
+        "value": {
+          "timestamp": "2026-10-07T09:30:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "result": [
+              {
+                "order_id": 1720,
+                "subscription_id": 2053,
+                "delivery_date": "20-Apr-2026",
+                "vendor_id": 91,
+                "vendor_name": "FreshMart",
+                "sku_name": "Organic Milk - 1L",
+                "size": "1L",
+                "quantity": 2,
+                "unit_price": 9.99,
+                "items": [
+                  {
+                    "order_item_id": 1801,
+                    "sku_id": 1452,
+                    "sku_name": "Organic Milk - 1L",
+                    "size": "1L",
+                    "image_path": "/images/sku/1452.jpg",
+                    "quantity": 2,
+                    "list_price": 9.99,
+                    "sale_price": 9.99,
+                    "unit_price": 9.99,
+                    "line_total": 19.98,
+                    "discount": 0,
+                    "state_tax": 0,
+                    "federal_tax": 0,
+                    "total_amount": 19.98
+                  }
+                ],
+                "amount": 29.97,
+                "delivery_charge": 30,
+                "items_total": 29.97,
+                "total_discount": 0,
+                "order_amount": {
+                  "items_count": 3,
+                  "gross_amount": 29.97,
+                  "discount": 0,
+                  "delivery_charges": 30,
+                  "service_charge": 0,
+                  "tax_amount": 0,
+                  "amount": 59.97
+                },
+                "order_status": "PENDING",
+                "payment_type": "CASH_ON_DELIVERY",
+                "payment_status": "DUE",
+                "shipment": null
+              }
+            ],
+            "page_number": 0,
+            "page_size": 20,
+            "total_elements": 14,
+            "total_pages": 1,
+            "last_page": true
           }
         }
       },
