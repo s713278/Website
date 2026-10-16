@@ -2,7 +2,7 @@
 
 Endpoints the frontend wants that the backend doesn't have yet, plus the interim workarounds.
 
-Tracked against [Swagger](https://subscriptionapp-wgf8.onrender.com/api/swagger-ui/index.html).
+Tracked against [Swagger](https://qa.mithradirect.com/api/swagger-ui/index.html).
 Claims below were checked against `packages/api-client/openapi.json` (117 paths when first checked;
 123 since the billing endpoints were added) and the `src/`
 tree. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md) for how the API layer is put together.

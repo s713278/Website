@@ -4,7 +4,7 @@ export function getApiBaseUrl(override?: string): string {
   if (override) return override.replace(/\/$/, '');
   const meta = (typeof import.meta !== 'undefined' ? import.meta : undefined) as EnvLike | undefined;
   const fromVite = meta?.env?.VITE_API_BASE_URL;
-  return (fromVite || 'https://subscriptionapp-wgf8.onrender.com/api').replace(/\/$/, '');
+  return (fromVite || 'https://qa.mithradirect.com/api').replace(/\/$/, '');
 }
 
 export type ClientConfig = {
