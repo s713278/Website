@@ -415,10 +415,11 @@ describe('catalog lists in sets of nine', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
     expect(await screen.findByRole('button', { name: /Category 5318/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Show more categories' })).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Category 5310/ }))
+    // Focus and the scroll observer both arrive in passive effects, after the cards render.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Category 5310/ })))
 
+    await waitFor(() => expect(observers.filter((observer) => !observer.disconnected)).toHaveLength(1))
     const live = observers.filter((observer) => !observer.disconnected)
-    expect(live).toHaveLength(1)
     act(() => live[0].callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver))
 
     expect(await screen.findByRole('button', { name: /Category 5327/ })).toBeTruthy()
@@ -452,7 +453,7 @@ describe('catalog lists in sets of nine', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
 
     await screen.findByRole('button', { name: /Business 5518/ })
-    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Business type choices' }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Business type choices' })))
   })
 
   it('shows a category the vendor authors at once, even with nine already shown', async () => {
@@ -506,7 +507,7 @@ describe('catalog lists in sets of nine', () => {
 
     const match = await screen.findByRole('button', { name: /Pickles/ })
     expect(read.mock.calls.map((call) => call[0]?.pageNumber)).toEqual([0, 1])
-    expect(document.activeElement).toBe(match)
+    await waitFor(() => expect(document.activeElement).toBe(match))
     expect(screen.queryByText('No categories found')).toBeNull()
   })
 
@@ -587,7 +588,7 @@ describe('catalog lists in sets of nine', () => {
     fireEvent.click(button)
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more categories' })).toBeNull())
-    expect(document.activeElement).toBe(screen.getByLabelText('Search category'))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Search category')))
   })
 
   it('leaves focus alone when a tap that never focused Show more ends the list without a match', async () => {
@@ -654,6 +655,8 @@ describe('catalog lists in sets of nine', () => {
     await screen.findByRole('button', { name: /Category 5701/ })
     fireEvent.click(screen.getByRole('button', { name: 'Show more categories' }))
     await screen.findByRole('button', { name: /Category 5718/ })
+    // The observer is built in a passive effect; count it only once it exists.
+    await waitFor(() => expect(observers).toHaveLength(1))
     const built = observers.length
 
     act(() => useOnboardingStore.getState().updateDraft((current) => ({ ...current }), 4))
