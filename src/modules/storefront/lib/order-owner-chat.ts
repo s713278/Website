@@ -8,21 +8,18 @@ export function canChatAboutOrder(status: string): boolean {
   return key !== 'DELIVERED' && key !== 'CANCELLED' && key !== 'CANCELED'
 }
 
-export function orderOwnerChatMessage(orderId: string, storeName: string): string {
-  const id = orderId.trim()
-  const shop = storeName.trim() || 'the store'
-  return `Hi! This is about Order #${id} from ${shop}.`
+export function orderOwnerChatMessage(orderId: string): string {
+  return `Hi! This is about Order #${orderId.trim()}.`
 }
 
 /**
  * Order-scoped WhatsApp: `order_whatsapp_number` (`store.phone`), same wa.me helper as Contact us.
-  */
+ */
 export function orderOwnerChatHref(
   store: Pick<Store, 'supportWhatsapp' | 'phone'> | null | undefined,
   orderId: string,
-  storeName: string,
 ): string | null {
   const phone = store ? orderWhatsappNumber(store) : undefined
   if (!phone) return null
-  return whatsappHref(phone, orderOwnerChatMessage(orderId, storeName))
+  return whatsappHref(phone, orderOwnerChatMessage(orderId))
 }

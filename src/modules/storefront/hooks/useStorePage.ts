@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback,useEffect, useRef, useState } from 'react'
 import { catalogService, getErrorMessage } from '@/shared/api'
 import type { Store } from '@/modules/storefront/types'
 import { applyStoreTheme, clearStoreTheme } from '@/shared/lib/theme'
+
 
 /** Session cache so back-nav to store/cart is instant (Blinkit-style). */
 const storeCache = new Map<string, Store>()
@@ -23,6 +24,21 @@ export function peekLastCachedStoreId(): string | null {
  */
 export type StorePageNetwork = 'network' | 'cache-first' | 'cache-only'
 
+const IDENTITY_KEY = 'store-identity:v1'
+export type StoreIdentity = { name?: string; logoUrl?: string }
+
+/** Name and logo for the loading header: live cache first, then last visit. */
+export function peekStoreIdentity(storeId: string): StoreIdentity | null {
+  const hit = storeCache.get(storeId)
+  if (hit) return { name: hit.name, logoUrl: hit.theme?.logoImage }
+  try {
+    const all = JSON.parse(localStorage.getItem(IDENTITY_KEY) ?? '{}') as Record<string, StoreIdentity>
+    return all[storeId] ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Load store data and apply vendor theme on a page wrapper. */
 export function useStorePage(storeId: string, { network = 'network' }: { network?: StorePageNetwork } = {}) {
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -30,6 +46,8 @@ export function useStorePage(storeId: string, { network = 'network' }: { network
   const [store, setStore] = useState<Store | null>(cached)
   const [loading, setLoading] = useState(!cached && network !== 'cache-only')
   const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
   useEffect(() => {
     let cancelled = false
@@ -63,7 +81,7 @@ export function useStorePage(storeId: string, { network = 'network' }: { network
     return () => {
       cancelled = true
     }
-  }, [storeId, network])
+  }, [storeId, network, reloadKey])
 
   useEffect(() => {
     const root = wrapperRef.current
@@ -82,5 +100,5 @@ export function useStorePage(storeId: string, { network = 'network' }: { network
     }
   }, [store?.name])
 
-  return { store, loading, error, wrapperRef }
+  return { store, loading, error, reload, wrapperRef }
 }

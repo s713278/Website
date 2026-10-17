@@ -129,6 +129,7 @@ export function storeCartLines(lines: CartLine[], storeId: string) {
 export function priceDetailsFromSummary(summary: CartSummary) {
   return {
     subtotal: summary.itemsTotal,
+    itemsSubTotal: summary.itemsSubTotal,
     delivery: summary.deliveryCharges,
     discount: summary.discount,
     service: summary.serviceCharge,

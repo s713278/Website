@@ -17,15 +17,19 @@ export function ProductDetailPage() {
 
   const itemCount = useCartStore((s) => s.itemCount(storeId))
 
-  const { store, loading: storeLoading, error: storeError, wrapperRef } = useStorePage(
-    storeId,
-    { network: 'cache-first' },
-  )
+  const {
+    store,
+    loading: storeLoading,
+    error: storeError,
+    reload: reloadStore,
+    wrapperRef,
+  } = useStorePage(storeId, { network: 'cache-first' })
   const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
 
   const [product, setProduct] = useState<Product | null>(null)
   const [productLoading, setProductLoading] = useState(true)
   const [productError, setProductError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (shopClosed) {
@@ -66,12 +70,17 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [storeId, productId, shopClosed])
+  }, [storeId, productId, shopClosed, reloadKey])
   const loading = shopClosed ? storeLoading : storeLoading || productLoading
   const error = shopClosed ? storeError : storeError || productError
 
   return (
     <StorePageStates
+      storeId={storeId}
+      onRetry={() => {
+        reloadStore()
+        setReloadKey((k) => k + 1)
+      }}
       wrapperRef={wrapperRef}
       loading={loading}
       error={error}

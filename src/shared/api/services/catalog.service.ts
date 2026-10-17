@@ -250,20 +250,25 @@ function sliceProductPage(
   }
 }
 
-/**
- * GET /v1/vendors/{id}/storefront/products — paginated catalog for home + browse.
- * Uses numeric `category_id` when known; otherwise filters client-side by category name.
- */
-export async function listStoreProducts(
+const STOREFRONT_RETAIN_MS = 1500
+const storeProductsByKey = new Map<string, Promise<ProductPage>>()
+
+function storeProductsCacheKey(
   storeId: string,
-  params: ListStoreProductsParams = {},
+  pageNumber: number,
+  pageSize: number,
+  categoryFilter?: CategoryFilter,
+) {
+  const { categoryId, categoryName } = parseCategoryFilter(categoryFilter)
+  return `${storeId}|${pageNumber}|${pageSize}|${categoryId ?? ''}|${categoryName ?? ''}`
+}
+
+async function loadStoreProducts(
+  storeId: string,
+  pageNumber: number,
+  pageSize: number,
+  categoryFilter?: CategoryFilter,
 ): Promise<ProductPage> {
-  const pageNumber = params.pageNumber ?? 0
-  const pageSize = params.pageSize ?? 10
-  const categoryFilter =
-    params.categoryFilter && params.categoryFilter !== ALL_CATEGORY
-      ? params.categoryFilter
-      : undefined
   const { categoryId, categoryName } = parseCategoryFilter(categoryFilter)
 
   if (!isLiveApi()) {
@@ -300,7 +305,29 @@ export async function listStoreProducts(
   return sliceProductPage(filtered, pageNumber, pageSize)
 }
 
-const STOREFRONT_RETAIN_MS = 1500
+export function listStoreProducts(
+  storeId: string,
+  params: ListStoreProductsParams = {},
+): Promise<ProductPage> {
+  const pageNumber = params.pageNumber ?? 0
+  const pageSize = params.pageSize ?? 10
+  const categoryFilter =
+    params.categoryFilter && params.categoryFilter !== ALL_CATEGORY
+      ? params.categoryFilter
+      : undefined
+  const key = storeProductsCacheKey(storeId, pageNumber, pageSize, categoryFilter)
+  const existing = storeProductsByKey.get(key)
+  if (existing) return existing
+
+  const pending = loadStoreProducts(storeId, pageNumber, pageSize, categoryFilter).finally(() => {
+    globalThis.setTimeout(() => {
+      if (storeProductsByKey.get(key) === pending) storeProductsByKey.delete(key)
+    }, STOREFRONT_RETAIN_MS)
+  })
+  storeProductsByKey.set(key, pending)
+  return pending
+}
+
 const storefrontById = new Map<string, Promise<Store | null>>()
 
 async function loadLiveStore(storeId: string): Promise<Store | null> {

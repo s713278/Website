@@ -21,6 +21,7 @@ export function summaryFromLines(lines: CartLine[]): CartSummary {
   const totalQuantity = lines.reduce((sum, line) => sum + line.qty, 0)
   return {
     itemsTotal,
+    itemsSubTotal: itemsTotal,
     deliveryCharges: 0,
     discount: 0,
     serviceCharge: 0,
