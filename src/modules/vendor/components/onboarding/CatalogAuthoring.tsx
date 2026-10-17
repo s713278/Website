@@ -14,7 +14,7 @@ import { fieldShell } from './StepPrimitives'
  * One name field and one button, always in view, as in the design reference. The step
  * already explains what is saved; repeating it here made a quick add read like a form.
  */
-export function AuthorCategoryForm({ onAdded }: { onAdded: () => void }) {
+export function AuthorCategoryForm({ onAdded }: { onAdded: (entry: { id: number; name: string }) => void }) {
   const businessTypeId = useOnboardingStore(
     (state) => state.draft.business.businessType?.id ?? null,
   )
@@ -34,9 +34,9 @@ export function AuthorCategoryForm({ onAdded }: { onAdded: () => void }) {
     }
     if (atLimit || businessTypeId === null) return
 
-    addPendingCategory({ name: trimmedName, businessTypeId })
+    const id = addPendingCategory({ name: trimmedName, businessTypeId })
     setName('')
-    onAdded()
+    onAdded({ id, name: trimmedName })
   }
 
   return (
@@ -83,7 +83,7 @@ export function AuthorProductForm({
 }: {
   categoryId: number
   categoryName: string
-  onAdded: () => void
+  onAdded: (entry: { id: number; name: string }) => void
 }) {
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const addPendingProduct = useOnboardingStore((state) => state.addPendingProduct)
@@ -112,7 +112,7 @@ export function AuthorProductForm({
     }
     if (!selectedMeasurement || atLimit) return
 
-    addPendingProduct({
+    const id = addPendingProduct({
       name: trimmedName,
       categoryId,
       measurementId: selectedMeasurement.id,
@@ -120,7 +120,7 @@ export function AuthorProductForm({
       description: null,
     })
     setName('')
-    onAdded()
+    onAdded({ id, name: trimmedName })
   }
 
   return (
