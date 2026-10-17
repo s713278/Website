@@ -1,140 +1,92 @@
-export type PlanFeatureValue = boolean | string
-
-export type PricingPlan = {
-  id: 'starter' | 'growth' | 'pro'
+export type StarterFeature = {
   name: string
-  price: number
-  originalPrice: number
-  bestFor: string
-  cta: string
-  available: boolean
-  featured: boolean
-  to?: string
+  /** Qualifier such as Basic or Standard, when the plan does not include the full capability. */
+  note?: string
 }
 
-export type PricingFeatureRow = {
-  feature: string
-  values: PlanFeatureValue[]
+export type StarterFeatureGroup = {
+  title: string
+  summary: string
+  features: StarterFeature[]
+}
+
+export const starterPlan = {
+  id: 'starter' as const,
+  name: 'Mithra Social Starter',
+  price: 399,
+  originalPrice: 899,
+  trial: '14-Day Free Trial',
+  cta: 'Start 14-day free trial',
+  to: '/onboarding',
 }
 
 export function formatPlanPrice(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`
 }
 
-/** Landing pricing cards — prices after 50% off (monthly, before taxes). */
-export const pricingPlans: PricingPlan[] = [
+export function planSavings(originalPrice: number, price: number): number {
+  return originalPrice - price
+}
+
+/**
+ * Capabilities that shipped with Mithra Social Starter. Other plans are not offered,
+ * so rows that were only on those plans are omitted.
+ */
+export const starterFeatureGroups: StarterFeatureGroup[] = [
   {
-    id: 'starter',
-    name: 'Mithra Social Starter',
-    price: 399,
-    originalPrice: 798,
-    bestFor: 'Starting sellers',
-    cta: 'Start 14-day free trial',
-    available: true,
-    featured: true,
-    to: '/onboarding',
+    title: 'A shop that looks like yours',
+    summary: 'Customers open your store on their phone, with your name and your photos.',
+    features: [
+      { name: 'Digital Storefront' },
+      { name: 'Mobile-First Store' },
+      { name: 'MithraDirect Store URL' },
+      { name: 'Business Profile' },
+      { name: 'Logo & Store Banner' },
+      { name: 'Store QR Code' },
+      { name: 'Basic SEO' },
+    ],
   },
   {
-    id: 'growth',
-    name: 'Mithra Social Growth',
-    price: 699,
-    originalPrice: 1398,
-    bestFor: 'Growing businesses',
-    cta: 'Coming soon',
-    available: false,
-    featured: false,
+    title: 'Orders on WhatsApp and Instagram',
+    summary: 'Buyers stay in the apps they already use. You still get the order.',
+    features: [
+      { name: 'WhatsApp Ordering' },
+      { name: 'WhatsApp Business Link' },
+      { name: 'Instagram Integration' },
+      { name: 'Facebook Integration' },
+      { name: 'Order Notifications' },
+      { name: 'Customer Orders' },
+      { name: 'Order Management' },
+      { name: 'Repeat Orders' },
+      { name: 'COD / Online Payments' },
+    ],
   },
   {
-    id: 'pro',
-    name: 'Mithra Business Pro',
-    price: 999,
-    originalPrice: 1998,
-    bestFor: 'Established businesses',
-    cta: 'Coming soon',
-    available: false,
-    featured: false,
+    title: 'Products, prices, and delivery',
+    summary: 'Add what you sell, set the price, and say how far you deliver.',
+    features: [
+      { name: 'Product Catalog' },
+      { name: 'Product Categories' },
+      { name: 'Product Images' },
+      { name: 'Product Descriptions' },
+      { name: 'SKU & Pricing Management' },
+      { name: 'Basic Inventory / Availability' },
+      { name: 'Delivery & Service Area' },
+    ],
+  },
+  {
+    title: 'A simple view of the business',
+    summary: 'See what sold, without learning a new tool.',
+    features: [
+      { name: 'Basic Sales Dashboard' },
+      { name: 'Customer Management', note: 'Basic' },
+      { name: 'AI Product Descriptions', note: 'Basic' },
+      { name: 'AI Catalog Assistance', note: 'Basic' },
+      { name: 'Priority Support', note: 'Standard' },
+    ],
   },
 ]
 
-/** Feature comparison table columns follow `pricingPlans` order. */
-export const pricingFeatureRows: PricingFeatureRow[] = [
-  { feature: '14-Day Free Trial', values: [true, true, true] },
-  { feature: 'Digital Storefront', values: [true, true, true] },
-  { feature: 'MithraDirect Store URL', values: [true, true, true] },
-  { feature: 'Mobile-First Store', values: [true, true, true] },
-  { feature: 'Business Profile', values: [true, true, true] },
-  { feature: 'Logo & Store Banner', values: [true, true, true] },
-  { feature: 'Product Catalog', values: [true, true, true] },
-  { feature: 'Product Categories', values: [true, true, true] },
-  { feature: 'Product Images', values: [true, true, true] },
-  { feature: 'Product Descriptions', values: [true, true, true] },
-  { feature: 'SKU & Pricing Management', values: [true, true, true] },
-  { feature: 'Basic Inventory / Availability', values: [true, true, true] },
-  { feature: 'Customer Orders', values: [true, true, true] },
-  { feature: 'Order Management', values: [true, true, true] },
-  { feature: 'WhatsApp Ordering', values: [true, true, true] },
-  { feature: 'COD / Online Payments', values: [true, true, true] },
-  { feature: 'Delivery & Service Area', values: [true, true, true] },
-  { feature: 'Instagram Integration', values: [true, true, true] },
-  { feature: 'Facebook Integration', values: [true, true, true] },
-  { feature: 'WhatsApp Business Link', values: [true, true, true] },
-  { feature: 'Store QR Code', values: [true, true, true] },
-  { feature: 'Order Notifications', values: [true, true, true] },
-  {
-    feature: 'Customer Management',
-    values: ['Basic', 'Advanced', 'Advanced'],
-  },
-  { feature: 'Repeat Orders', values: [true, true, true] },
-  { feature: 'Basic Sales Dashboard', values: [true, true, true] },
-  { feature: 'Basic SEO', values: [true, 'Advanced', 'Advanced'] },
-  {
-    feature: 'AI Product Descriptions',
-    values: ['Basic', 'Advanced', 'Advanced'],
-  },
-  {
-    feature: 'AI Catalog Assistance',
-    values: ['Basic', 'Advanced', 'Advanced'],
-  },
-  { feature: 'Featured Products', values: [false, true, true] },
-  { feature: 'Promotional Banners', values: [false, true, true] },
-  { feature: 'Coupons & Discounts', values: [false, true, true] },
-  { feature: 'Offers & Promotions', values: [false, true, true] },
-  {
-    feature: 'Advanced Product Search & Filters',
-    values: [false, true, true],
-  },
-  { feature: 'Customer Segmentation', values: [false, true, true] },
-  { feature: 'Product Performance Analytics', values: [false, true, true] },
-  { feature: 'Advanced Sales Analytics', values: [false, true, true] },
-  { feature: 'Customer / Order Analytics', values: [false, true, true] },
-  { feature: 'Abandoned Order Tracking', values: [false, true, true] },
-  { feature: 'Marketing Campaigns', values: [false, true, true] },
-  { feature: 'WhatsApp Campaign Support', values: [false, true, true] },
-  { feature: 'Bulk Product Management', values: [false, true, true] },
-  { feature: 'Bulk Price Updates', values: [false, true, true] },
-  { feature: 'Advanced Store Branding', values: [false, true, true] },
-  { feature: 'Staff Users', values: [false, false, true] },
-  { feature: 'Staff Roles & Permissions', values: [false, false, true] },
-  { feature: 'Advanced Inventory', values: [false, false, true] },
-  {
-    feature: 'Advanced Delivery Configuration',
-    values: [false, false, true],
-  },
-  { feature: 'Advanced Business Reports', values: [false, false, true] },
-  { feature: 'Report Export', values: [false, false, true] },
-  { feature: 'Customer Lifetime Value', values: [false, false, true] },
-  { feature: 'Repeat Purchase Analytics', values: [false, false, true] },
-  { feature: 'Advanced AI Catalog Management', values: [false, false, true] },
-  {
-    feature: 'Multi-Channel Business Management',
-    values: [false, false, true],
-  },
-  {
-    feature: 'Priority Support',
-    values: ['Standard', 'Priority', 'Priority'],
-  },
-  {
-    feature: 'Best For',
-    values: ['Starting sellers', 'Growing businesses', 'Established businesses'],
-  },
-]
+export function starterIncludedFeatureNames(): string[] {
+  return [starterPlan.trial, ...starterFeatureGroups.flatMap((group) => group.features.map((feature) => feature.name))]
+}

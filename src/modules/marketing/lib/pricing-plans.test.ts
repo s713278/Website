@@ -1,22 +1,65 @@
 import { describe, expect, it } from 'vitest'
-import { formatPlanPrice, pricingFeatureRows, pricingPlans } from './pricing-plans'
+import {
+  formatPlanPrice,
+  planSavings,
+  starterFeatureGroups,
+  starterIncludedFeatureNames,
+  starterPlan,
+} from './pricing-plans'
 
-describe('pricing plans', () => {
-  it('shows discounted monthly prices at half the listed original', () => {
-    for (const plan of pricingPlans) {
-      expect(plan.originalPrice).toBe(plan.price * 2)
-    }
+describe('starter plan', () => {
+  it('offers only Mithra Social Starter at 399 after a discount from 899', () => {
+    expect(starterPlan).toMatchObject({
+      id: 'starter',
+      name: 'Mithra Social Starter',
+      price: 399,
+      originalPrice: 899,
+    })
+    expect(planSavings(starterPlan.originalPrice, starterPlan.price)).toBe(500)
   })
 
-  it('keeps only Mithra Social Starter available', () => {
-    expect(pricingPlans.filter((plan) => plan.available).map((plan) => plan.id)).toEqual(['starter'])
-  })
-
-  it('covers every comparison column for each feature', () => {
-    expect(pricingFeatureRows.every((row) => row.values.length === pricingPlans.length)).toBe(true)
+  it('keeps the starter capabilities, including qualified ones', () => {
+    expect(starterIncludedFeatureNames()).toEqual([
+      '14-Day Free Trial',
+      'Digital Storefront',
+      'Mobile-First Store',
+      'MithraDirect Store URL',
+      'Business Profile',
+      'Logo & Store Banner',
+      'Store QR Code',
+      'Basic SEO',
+      'WhatsApp Ordering',
+      'WhatsApp Business Link',
+      'Instagram Integration',
+      'Facebook Integration',
+      'Order Notifications',
+      'Customer Orders',
+      'Order Management',
+      'Repeat Orders',
+      'COD / Online Payments',
+      'Product Catalog',
+      'Product Categories',
+      'Product Images',
+      'Product Descriptions',
+      'SKU & Pricing Management',
+      'Basic Inventory / Availability',
+      'Delivery & Service Area',
+      'Basic Sales Dashboard',
+      'Customer Management',
+      'AI Product Descriptions',
+      'AI Catalog Assistance',
+      'Priority Support',
+    ])
+    expect(starterFeatureGroups.flatMap((group) => group.features).filter((feature) => feature.note)).toEqual([
+      { name: 'Customer Management', note: 'Basic' },
+      { name: 'AI Product Descriptions', note: 'Basic' },
+      { name: 'AI Catalog Assistance', note: 'Basic' },
+      { name: 'Priority Support', note: 'Standard' },
+    ])
   })
 
   it('formats rupee amounts with Indian grouping', () => {
+    expect(formatPlanPrice(899)).toBe('₹899')
     expect(formatPlanPrice(1398)).toBe('₹1,398')
   })
 })

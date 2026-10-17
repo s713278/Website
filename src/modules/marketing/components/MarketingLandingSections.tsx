@@ -22,12 +22,11 @@ import {
   Wheat,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { cn } from '@/lib/utils'
 import {
   formatPlanPrice,
-  pricingFeatureRows,
-  pricingPlans,
-  type PlanFeatureValue,
+  planSavings,
+  starterFeatureGroups,
+  starterPlan,
 } from '@/modules/marketing/lib/pricing-plans'
 import { Button, ShadcnInput } from '@/shared/components'
 import {
@@ -185,32 +184,13 @@ const testimonials = [
   },
 ]
 
-function PlanFeatureMark({ value }: { value: PlanFeatureValue }) {
-  if (value === true) {
-    return (
-      <span className="inline-flex justify-center">
-        <Check className="size-5 stroke-[2.5] text-emerald-600" aria-hidden />
-        <span className="sr-only">Included</span>
-      </span>
-    )
-  }
-  if (value === false) {
-    return (
-      <span className="text-slate-400" aria-label="Not included">
-        —
-      </span>
-    )
-  }
-  return <span className="font-medium text-slate-800">{value}</span>
-}
-
 function SectionHeader({ title, copy }: { title: string; copy: string }) {
   return (
     <header className="mx-auto max-w-3xl text-center">
-      <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
+      <h2 className="text-balance font-display text-[1.75rem] font-extrabold leading-tight tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
         {title}
       </h2>
-      <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
+      <p className="mt-3 text-pretty text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
     </header>
   )
 }
@@ -985,108 +965,93 @@ export function TestimonialsSection() {
   )
 }
 
-export function PricingSection() {
+function StarterTrialLink() {
   return (
-    <SectionShell id="pricing" className="bg-slate-50">
+    <Link
+      to={starterPlan.to}
+      className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-center font-bold text-white transition hover:bg-emerald-700"
+    >
+      {starterPlan.cta}
+    </Link>
+  )
+}
+
+export function PricingSection() {
+  const savings = planSavings(starterPlan.originalPrice, starterPlan.price)
+
+  return (
+    <SectionShell id="pricing" className="overflow-x-clip bg-slate-50 !py-12 sm:!py-24">
       <SectionHeader
-        title="Simple, transparent pricing"
-        copy="Mithra Social Starter is available now. Growth and Business Pro are planned for later. Every plan includes a 14-day free trial."
+        title="One plan for your whole shop"
+        copy="No tiers to compare. Pay one monthly price for the store, and keep every rupee your customers pay you."
       />
-      <p className="mt-3 text-center text-sm text-slate-500">
-        Prices shown after 50% off. Monthly charges before taxes.
-      </p>
-      <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-3">
-        {pricingPlans.map((plan) => (
-          <article
-            key={plan.id}
-            className={cn(
-              'relative flex flex-col rounded-3xl bg-white p-7',
-              plan.featured ? 'border-2 border-emerald-500 shadow-xl shadow-emerald-100' : 'border border-slate-200',
-              !plan.available && 'opacity-90',
+      <div className="mt-8 grid min-w-0 items-start gap-5 sm:mt-12 sm:gap-6 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] lg:gap-8">
+        <article className="min-w-0 rounded-3xl border-2 border-emerald-500 bg-white p-5 shadow-xl shadow-emerald-100 sm:p-7 lg:sticky lg:top-28">
+          <p className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-800">
+            Save {formatPlanPrice(savings)}
+          </p>
+          <h3 className="font-display mt-4 text-balance text-xl font-bold text-slate-950 sm:text-2xl">
+            {starterPlan.name}
+          </h3>
+          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
+            For home kitchens, farms, and neighbourhood shops that want their own customers.
+          </p>
+          <p className="mt-5 text-base font-medium text-slate-400">
+            <span className="sr-only">Was </span>
+            <s className="line-through">{formatPlanPrice(starterPlan.originalPrice)}</s>
+          </p>
+          <p className="mt-1 flex flex-wrap items-end gap-x-1.5 gap-y-1">
+            <span className="sr-only">Now </span>
+            <strong className="font-display text-4xl font-extrabold leading-none tracking-tight text-slate-950 sm:text-5xl">
+              {formatPlanPrice(starterPlan.price)}
+            </strong>
+            <span className="pb-1 text-sm font-medium text-slate-500">/month</span>
+          </p>
+          <p className="mt-2 text-sm text-slate-500">About ₹13 a day · monthly, before taxes</p>
+          <div className="mt-5">
+            <StarterTrialLink />
+          </div>
+          <ul className="mt-4 grid gap-2 text-sm text-slate-700">
+            {[starterPlan.trial, '0% commission on your sales', 'Your name, logo, and customers stay yours'].map(
+              (promise) => (
+                <li key={promise} className="flex min-w-0 items-start gap-2">
+                  <Check className="mt-0.5 size-4 shrink-0 stroke-[2.5] text-emerald-600" aria-hidden />
+                  <span className="min-w-0">{promise}</span>
+                </li>
+              ),
             )}
-          >
-            <span
-              className={cn(
-                'absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full px-4 py-1.5 text-xs font-bold text-white',
-                plan.available ? 'bg-emerald-600' : 'bg-slate-500',
-              )}
-            >
-              {plan.available ? 'Available now' : 'Coming soon'}
-            </span>
-            <h3 className="font-display text-xl font-bold text-slate-950">{plan.name}</h3>
-            <p className="mt-2 text-sm font-semibold text-emerald-700">50% off</p>
-            <p className="mt-4 text-sm font-medium text-slate-400 line-through">
-              {formatPlanPrice(plan.originalPrice)}
-            </p>
-            <p className="mt-1 flex items-end gap-1">
-              <strong className="font-display text-4xl font-extrabold tracking-tight text-slate-950">
-                {formatPlanPrice(plan.price)}
-              </strong>
-              <span className="pb-1 text-sm text-slate-500">/month</span>
-            </p>
-            <p className="mt-1 text-xs text-slate-500">before taxes</p>
-            <p className="my-7 flex-1 text-sm leading-6 text-slate-600">Best for {plan.bestFor.toLowerCase()}.</p>
-            {plan.available && plan.to ? (
-              <Link
-                to={plan.to}
-                className="rounded-full bg-emerald-600 px-5 py-3 text-center font-bold text-white transition hover:bg-emerald-700"
-              >
-                {plan.cta}
-              </Link>
-            ) : (
-              <span className="cursor-not-allowed rounded-full border-2 border-slate-200 px-5 py-3 text-center font-bold text-slate-400">
-                {plan.cta}
-              </span>
-            )}
-          </article>
-        ))}
-      </div>{' '}
-      <div className="relative mt-14 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] border-collapse text-left">
-          <caption className="sr-only">Feature comparison across MithraDirect plans</caption>
-          <thead>
-            <tr className="bg-slate-50 text-sm text-slate-950">
-              <th scope="col" className="sticky left-0 z-10 bg-slate-50 px-5 py-5 font-bold">
-                Feature
-              </th>
-              {pricingPlans.map((plan) => (
-                <th
-                  key={plan.id}
-                  scope="col"
-                  className={cn(
-                    'px-5 py-5 text-center font-bold',
-                    plan.featured ? 'bg-emerald-50 text-emerald-800' : '',
-                  )}
-                >
-                  {plan.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pricingFeatureRows.map((row) => (
-              <tr key={row.feature} className="border-t border-slate-100">
-                <th
-                  scope="row"
-                  className="sticky left-0 z-10 bg-white px-5 py-4 text-left text-sm font-medium text-slate-900 sm:text-base"
-                >
-                  {row.feature}
-                </th>
-                {pricingPlans.map((plan, index) => (
-                  <td
-                    key={`${row.feature}-${plan.id}`}
-                    className={cn(
-                      'px-5 py-4 text-center text-sm sm:text-base',
-                      plan.featured ? 'bg-emerald-50/70 text-emerald-800' : 'text-slate-700',
-                    )}
-                  >
-                    <PlanFeatureMark value={row.values[index] ?? false} />
-                  </td>
-                ))}
-              </tr>
+          </ul>
+          <p className="mt-3 text-center text-xs text-slate-500">Set up with your phone number. No coding.</p>
+        </article>
+
+        <div className="min-w-0">
+          <h3 className="font-display text-balance text-lg font-bold text-slate-950 sm:text-xl">Everything in this plan</h3>
+          <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
+            The tools a neighbourhood seller uses to share a store and take orders.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 sm:mt-5">
+            {starterFeatureGroups.map((group) => (
+              <article key={group.title} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                <h4 className="font-display text-balance text-base font-bold text-slate-950">{group.title}</h4>
+                <p className="mt-1 text-pretty text-sm leading-6 text-slate-500">{group.summary}</p>
+                <ul className="mt-3 grid gap-2">
+                  {group.features.map((feature) => (
+                    <li key={feature.name} className="flex min-w-0 items-start gap-2 text-sm leading-6 text-slate-700">
+                      <Check className="mt-0.5 size-4 shrink-0 stroke-[2.5] text-emerald-600" aria-hidden />
+                      <span className="min-w-0 break-words">
+                        {feature.name}
+                        {feature.note ? <span className="text-slate-500"> · {feature.note}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
             ))}
-          </tbody>
-        </table>
+          </div>
+          <div className="mt-5 lg:hidden">
+            <StarterTrialLink />
+          </div>
+        </div>
       </div>
     </SectionShell>
   )

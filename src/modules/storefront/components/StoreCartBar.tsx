@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, X } from 'lucide-react'
-import { cartNavTarget, linkFromNavTarget, visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { visibleCartCount } from '@/modules/storefront/lib/cart-nav'
+import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { formatCurrency } from '@/shared/lib/utils'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { cn } from '@/lib/utils'
@@ -16,7 +17,7 @@ type StoreCartBarProps = {
 
 /**
  * Sticky catalog CTA — count + total + Go to Cart.
- * Logged-out live users are sent to login first.
+ * Hidden for live guests and vendor sessions, who cannot hold a customer cart.
   */
 export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreCartBarProps) {
   const user = useAuthStore((s) => s.user)
