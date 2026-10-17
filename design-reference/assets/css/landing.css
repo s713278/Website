@@ -684,6 +684,13 @@ body.landing-page {
   font-size: 0.9rem;
 }
 
+.feature-plans a {
+  color: var(--md-green-dark);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .feature-plans ul {
   list-style: none;
   margin: 0;
@@ -1037,193 +1044,348 @@ body.landing-page {
   color: var(--md-muted);
 }
 
-/* Pricing */
-.pricing-grid {
+/* Pricing — one plan, stacked until the screen can hold the offer beside the list */
+.pricing-layout,
+.pricing-offer,
+.pricing-included,
+.pricing-group {
+  min-width: 0;
+}
+
+#pricing .section-head h2,
+.pricing-offer h3,
+.pricing-included > h3,
+.pricing-group h4 {
+  text-wrap: balance;
+}
+
+#pricing .section-head p,
+.pricing-audience,
+.pricing-group p {
+  text-wrap: pretty;
+}
+
+.pricing-layout {
   display: grid;
-  gap: 1rem;
-  align-items: stretch;
+  gap: 1.25rem;
+  align-items: start;
 }
 
-.price-card {
-  position: relative;
+.pricing-offer {
   background: #fff;
-  border: 1px solid var(--md-border);
-  border-radius: 1.15rem;
-  padding: 1.5rem 1.25rem;
-  display: flex;
-  flex-direction: column;
+  border: 2px solid var(--md-green);
+  border-radius: 1.35rem;
+  padding: 1.35rem 1.2rem 1.25rem;
+  box-shadow: var(--shadow-brand);
 }
 
-.price-card.popular {
-  border-color: var(--md-green);
-  box-shadow: var(--shadow-md);
-  transform: none;
-}
-
-.popular-badge {
-  position: absolute;
-  top: -0.7rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: linear-gradient(135deg, var(--md-green), var(--md-green-dark));
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.3rem 0.75rem;
-  border-radius: 9999px;
-  white-space: nowrap;
-}
-
-.price-card h3 {
-  margin: 0.25rem 0 0.35rem;
-  font-size: 1.2rem;
-}
-
-.price {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--md-ink);
-  margin: 0.25rem 0 0.85rem;
-}
-
-.price span {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--md-muted);
-}
-
-.price .was {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--md-muted);
-  text-decoration: line-through;
-  margin-right: 0.35rem;
-}
-
-.pricing-fineprint {
-  margin: 0.5rem 0 0;
-  color: var(--md-muted);
-  font-size: 0.9rem;
-}
-
-.price-off {
+.pricing-save {
+  display: inline-flex;
   margin: 0;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--md-green-dark);
-}
-
-.price-tax {
-  margin: -0.5rem 0 0;
-  font-size: 0.75rem;
-  color: var(--md-muted);
-}
-
-.price-best {
-  margin: 0 0 1.25rem;
-  flex: 1;
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.price-card.future {
-  opacity: 0.92;
-}
-
-.coming-soon-badge {
-  position: absolute;
-  top: -0.7rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #64748b;
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.3rem 0.75rem;
-  border-radius: 9999px;
-  white-space: nowrap;
-}
-
-.price-card .btn[aria-disabled='true'] {
-  pointer-events: none;
-  opacity: 0.65;
-}
-
-.pricing-compare-wrap {
-  margin-top: 2.5rem;
-  overflow-x: auto;
-  border: 1px solid var(--md-border);
-  border-radius: 1.15rem;
-  background: #fff;
-}
-
-.pricing-compare {
-  width: 100%;
-  min-width: 44rem;
-  border-collapse: collapse;
-}
-
-.pricing-compare th,
-.pricing-compare td {
-  padding: 0.85rem 1rem;
-  font-size: 0.9rem;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.pricing-compare thead th {
-  background: var(--md-surface-alt);
-  font-weight: 700;
-}
-
-.pricing-compare tbody tr {
-  border-top: 1px solid var(--md-border);
-}
-
-.pricing-compare th:first-child,
-.pricing-compare td:first-child {
-  text-align: left;
-  position: sticky;
-  left: 0;
-  background: #fff;
-  font-weight: 600;
-  z-index: 1;
-}
-
-.pricing-compare thead th:first-child {
-  background: var(--md-surface-alt);
-}
-
-.pricing-compare .plan-current {
-  background: color-mix(in srgb, var(--md-green) 10%, #fff);
+  background: var(--md-green-soft);
   color: var(--md-green-deep);
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius-pill);
+}
+
+.pricing-offer h3 {
+  margin: 0.85rem 0 0;
+  font-size: 1.35rem;
+}
+
+.pricing-audience {
+  margin: 0.4rem 0 0;
+  color: #4b5563;
+  font-size: 0.92rem;
+}
+
+.pricing-was {
+  margin: 1.1rem 0 0;
+  color: var(--md-muted);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.pricing-was s {
+  text-decoration: line-through;
+}
+
+.pricing-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.45rem;
+  margin: 0.15rem 0 0;
+}
+
+.pricing-amount strong {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 3.15rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--md-ink);
+}
+
+.pricing-amount > span:last-child {
+  color: var(--md-muted);
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
-.pricing-compare thead th.plan-current {
+.pricing-daily {
+  margin: 0.35rem 0 0;
   color: var(--md-green-dark);
+  font-size: 0.82rem;
+  font-weight: 750;
 }
 
-.price-list {
+.pricing-meta {
+  margin: 0.25rem 0 0;
+  color: var(--md-muted);
+  font-size: 0.85rem;
+}
+
+.pricing-promises,
+.pricing-group ul {
   list-style: none;
-  margin: 0 0 1.25rem;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.55rem;
-  flex: 1;
+  gap: 0.4rem;
 }
 
-.price-list li {
+.pricing-offer .btn,
+.pricing-included-cta {
+  min-height: 2.75rem;
+  width: 100%;
+}
+
+.pricing-offer .btn {
+  margin-top: 1.05rem;
+}
+
+.pricing-promises {
+  margin: 0.9rem 0 0;
+}
+
+.pricing-promises li,
+.pricing-group li {
   display: flex;
+  align-items: flex-start;
   gap: 0.45rem;
-  font-size: 0.88rem;
+  min-width: 0;
   color: #374151;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
-.price-list li::before {
+.pricing-promises li::before,
+.pricing-group li::before {
   content: '✓';
   color: var(--md-green-dark);
-  font-weight: 700;
+  font-weight: 800;
+}
+
+.pricing-included > h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.pricing-included > p {
+  margin: 0.35rem 0 0;
+  color: var(--md-muted);
+  font-size: 0.92rem;
+}
+
+.pricing-groups {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pricing-group {
+  background: #fff;
+  border: 1px solid var(--md-border);
+  border-radius: 1rem;
+  padding: 1rem 1.05rem 1.1rem;
+}
+
+.pricing-group h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pricing-group p {
+  margin: 0.25rem 0 0.7rem;
+  color: var(--md-muted);
+  font-size: 0.82rem;
+}
+
+.pricing-group-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.pricing-group-head > div {
+  min-width: 0;
+}
+
+.pricing-group-icon {
+  display: grid;
+  flex: 0 0 2.6rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #ede9fe;
+  font-size: 1.25rem;
+}
+
+.pricing-group-icon-social {
+  background: #dcfce7;
+  color: #047857;
+  font-weight: 800;
+}
+
+.pricing-group-icon-product {
+  background: #ffedd5;
+  color: #ea580c;
+  font-size: 1.4rem;
+}
+
+.pricing-group-icon-insights {
+  background: #dbeafe;
+  color: #2563eb;
+  font-size: 1.4rem;
+}
+
+.pricing-store-preview,
+.pricing-social-icons,
+.pricing-product-preview,
+.pricing-chart {
+  margin-top: 0.85rem;
+}
+
+.pricing-store-preview {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.pricing-store-phone {
+  display: grid;
+  width: 4.4rem;
+  gap: 0.22rem;
+  padding: 0.45rem;
+  border: 2px solid #111827;
+  border-radius: 0.7rem;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.pricing-store-phone strong {
+  color: var(--md-green-dark);
+  font-size: 0.55rem;
+  text-align: center;
+}
+
+.pricing-store-phone span {
+  height: 0.65rem;
+  border-radius: 0.18rem;
+  background: var(--md-green-soft);
+}
+
+.pricing-qr {
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border: 1px solid var(--md-border);
+  background: #fff;
+  font-size: 1.7rem;
+}
+
+.pricing-social-icons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.pricing-social-icons img,
+.pricing-social-whatsapp {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.pricing-social-whatsapp {
+  display: grid;
+  place-items: center;
+  background: #16a34a;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.pricing-product-preview {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  width: 7rem;
+  margin-left: auto;
+  padding: 0.55rem;
+  border: 1px solid var(--md-border);
+  border-radius: 0.65rem;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  font-size: 0.62rem;
+}
+
+.pricing-product-preview span {
+  grid-column: 1 / -1;
+  color: var(--md-muted);
+}
+
+.pricing-product-preview em {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--md-green);
+  color: #fff;
+  font-style: normal;
+}
+
+.pricing-chart {
+  display: flex;
+  height: 2.5rem;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 0.2rem;
+}
+
+.pricing-chart span {
+  width: 0.45rem;
+  border-radius: 0.15rem 0.15rem 0 0;
+  background: var(--md-green);
+}
+
+.pricing-chart span:nth-child(1) { height: 28%; }
+.pricing-chart span:nth-child(2) { height: 48%; }
+.pricing-chart span:nth-child(3) { height: 40%; }
+.pricing-chart span:nth-child(4) { height: 72%; }
+.pricing-chart span:nth-child(5) { height: 100%; }
+
+.pricing-included-cta {
+  margin-top: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .pricing-included-cta {
+    display: none;
+  }
 }
 
 /* CTA banner */
@@ -1381,7 +1543,7 @@ body.landing-page {
   }
 
   .feature-plans {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .category-row {
@@ -1398,6 +1560,26 @@ body.landing-page {
 
   .newsletter-form input {
     flex: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  #pricing.section {
+    padding-block: 3rem;
+  }
+
+  #pricing .section-head {
+    margin-bottom: 1.25rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .pricing-groups {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pricing-group:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1461,14 +1643,6 @@ body.landing-page {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .pricing-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .price-card.popular {
-    transform: scale(1.03);
-  }
-
   .footer-grid {
     grid-template-columns: 1.4fr 1fr 1fr 1.3fr;
   }
@@ -1481,6 +1655,16 @@ body.landing-page {
 
   .audience-grid {
     grid-template-columns: repeat(6, 1fr);
+  }
+
+  .pricing-layout {
+    grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .pricing-offer {
+    position: sticky;
+    top: calc(var(--header-h) + 1rem);
   }
 
   .float-share {
@@ -1532,7 +1716,6 @@ body.landing-page {
   }
 
   .store-carousel,
-  .pricing-grid,
   .testimonial-grid,
   .steps {
     grid-template-columns: 1fr;
@@ -1557,5 +1740,127 @@ body.landing-page {
   .phone-mock,
   .float-card {
     animation: none;
+  }
+}
+
+/* Targeted UX refinements: Features and Pricing sections only */
+#features .section-head h2,
+#pricing .section-head h2 {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#features .section-head p,
+#pricing .section-head p {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#features .feature-card h3 {
+  line-height: 1.3;
+}
+
+#features .features-pricing-link {
+  margin: 1.35rem 0 0;
+  text-align: center;
+  color: var(--md-muted);
+  font-size: 0.92rem;
+}
+
+#features .features-pricing-link a {
+  color: var(--md-green-dark);
+  font-weight: 700;
+  text-underline-offset: 0.18em;
+}
+
+#pricing .pricing-save {
+  margin-bottom: 0.15rem;
+}
+
+#pricing .pricing-meta {
+  line-height: 1.5;
+}
+
+#pricing .pricing-offer .btn {
+  font-weight: 750;
+}
+
+#pricing .pricing-disclaimer {
+  margin: 1rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--md-border);
+  color: var(--md-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 480px) {
+  #pricing.section {
+    padding-block: 2.5rem;
+  }
+
+  #pricing .section-head h2 {
+    font-size: clamp(1.3rem, 7vw, 1.65rem);
+  }
+
+  #pricing .section-head p {
+    font-size: 0.9rem;
+  }
+
+  #pricing .pricing-offer {
+    padding: 1.15rem 1rem;
+    border-radius: 1rem;
+  }
+
+  #pricing .pricing-amount strong {
+    font-size: clamp(2.35rem, 12vw, 3rem);
+  }
+
+  #pricing .pricing-meta {
+    font-size: 0.8rem;
+  }
+
+  #pricing .pricing-offer .btn {
+    min-height: 3rem;
+    padding-inline: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  #pricing .pricing-promises li,
+  #pricing .pricing-group li {
+    font-size: 0.84rem;
+  }
+
+  #pricing .pricing-included > h3 {
+    font-size: 1.12rem;
+  }
+
+  #pricing .pricing-group {
+    padding: 0.9rem;
+    border-radius: 0.85rem;
+  }
+
+  #pricing .pricing-group-head {
+    gap: 0.6rem;
+  }
+
+  #pricing .pricing-group-icon {
+    flex-basis: 2.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1rem;
+  }
+
+  #pricing .pricing-store-preview,
+  #pricing .pricing-social-icons,
+  #pricing .pricing-product-preview,
+  #pricing .pricing-chart {
+    margin-top: 0.65rem;
+  }
+
+  #pricing .pricing-disclaimer {
+    font-size: 0.73rem;
   }
 }
