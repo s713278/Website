@@ -38,7 +38,7 @@ function CartForStore({ storeId }: { storeId: string }) {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
-  const { store, loading, error, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const { store, loading, error, reload, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
   const storeClosed = store ? isStoreClosedForSubscription(store.subscriptionStatus) : false
   const lines = useCartStore((s) => s.lines)
   const itemCount = useCartStore((s) => s.itemCount(storeId))
@@ -93,6 +93,8 @@ function CartForStore({ storeId }: { storeId: string }) {
 
   return (
     <StorePageStates
+      storeId={storeId}
+      onRetry={reload}
       wrapperRef={wrapperRef}
       loading={loading && !store}
       error={error}

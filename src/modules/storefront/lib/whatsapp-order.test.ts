@@ -51,8 +51,32 @@ describe('buildWhatsAppOrderMessage', () => {
     expect(message).toContain('Price: ₹245')
     expect(message).toContain('Amount: ₹490')
     expect(message).toContain('Method: Cash on Delivery')
-    expect(message).toContain('Delivery: ₹30')
-    expect(message).toContain('*Total: ₹520*')
+    expect(message).toContain('Home delivery: ₹30')
+    expect(message).toContain('*Order total: ₹520*')
+  })
+
+  it('includes subtotal after discount when cart summary has a discount', () => {
+    const message = buildWhatsAppOrderMessage({
+      orderId: 'ORD-92',
+      storeName: 'SRK Traditional Foods',
+      phone: '9876543210',
+      location: 'Miyapur',
+      lines: [line],
+      subtotal: 500,
+      itemsSubTotal: 490,
+      deliveryFee: 30,
+      packagingFee: 0,
+      discount: 10,
+      total: 520,
+      paymentLabel: 'Cash on Delivery',
+      deliveryMethodLabel: 'Home delivery',
+    })
+
+    expect(message).toContain('Item total (MRP): ₹500')
+    expect(message).toContain('Product discount: −₹10')
+    expect(message).toContain('Subtotal after discount: ₹490')
+    expect(message).toContain('Home delivery: ₹30')
+    expect(message).toContain('*Order total: ₹520*')
   })
 
   it('includes the selected delivery slot for the vendor', () => {

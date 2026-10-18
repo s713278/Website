@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 import { visibleCartCount } from '@/modules/storefront/lib/cart-nav'
 import { storeCartPath } from '@/modules/storefront/lib/store-paths'
 import { formatCurrency } from '@/shared/lib/utils'
@@ -16,12 +17,18 @@ type StoreCartBarProps = {
 
 /**
  * Sticky catalog CTA — count + total + Go to Cart.
- * Hidden for live guests and vendor sessions, whose visible count is 0.
- */
+ * Hidden for live guests and vendor sessions, who cannot hold a customer cart.
+  */
 export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreCartBarProps) {
   const user = useAuthStore((s) => s.user)
   const count = visibleCartCount(user, itemCount)
-  if (count <= 0) return null
+  const [hiddenForCount, setHiddenForCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    setHiddenForCount(null)
+  }, [count])
+
+  if (count <= 0 || hiddenForCount === count) return null
 
   return (
     <div
@@ -31,7 +38,7 @@ export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreC
       )}
     >
       <div
-        className="pointer-events-auto flex w-full max-w-md items-center justify-between gap-3 rounded-2xl bg-[var(--store-theme,var(--md-green-700))] px-4 py-3 text-white shadow-[0_14px_30px_rgba(6,95,70,0.35)]"
+        className="pointer-events-auto relative flex w-full max-w-md items-center justify-between gap-3 rounded-2xl bg-[var(--store-theme,var(--md-green-700))] px-4 py-3 pr-11 text-white shadow-[0_14px_30px_rgba(6,95,70,0.35)]"
         role="status"
         aria-live="polite"
       >
@@ -48,6 +55,14 @@ export function StoreCartBar({ storeId, itemCount, subtotal, className }: StoreC
           Go to Cart
           <ArrowRight className="size-3.5" strokeWidth={2.5} aria-hidden />
         </Link>
+        <button
+          type="button"
+          onClick={() => setHiddenForCount(count)}
+          aria-label="Dismiss cart bar"
+          className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full text-white/85 transition hover:bg-white/15 hover:text-white"
+        >
+          <X className="size-3.5" strokeWidth={2.5} aria-hidden />
+        </button>
       </div>
     </div>
   )

@@ -495,6 +495,7 @@ export function CheckoutView({
         zipCode: selected?.zipCode,
         lines,
         subtotal: totals.subtotal,
+        itemsSubTotal: totals.itemsSubTotal,
         deliveryFee: totals.delivery,
         packagingFee: totals.packaging,
         discount: totals.discount,
@@ -572,7 +573,7 @@ export function CheckoutView({
           >
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-8">
               <section className="space-y-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.04)] sm:p-7">
-                <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.65rem]">
+                <h1 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-[1.35rem]">
                   Review Order
                 </h1>
 
@@ -807,26 +808,47 @@ export function CheckoutView({
 
                   <dl className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-sm">
                     <SummaryRow label="Item total (MRP)" value={formatCurrency(totals.subtotal)} />
-                    <SummaryRow
-                      label="Delivery"
-                      value={totals.delivery > 0 ? formatCurrency(totals.delivery) : 'Free'}
-                      emphasize={totals.delivery === 0}
-                    />
                     {totals.discount > 0 ? (
                       <SummaryRow
-                        label="Discount"
+                        label="Product discount"
                         value={`−${formatCurrency(totals.discount)}`}
                         emphasize
                       />
                     ) : null}
+                    {totals.itemsSubTotal > 0 &&
+                    (totals.discount > 0 || totals.itemsSubTotal !== totals.subtotal) ? (
+                      <SummaryRow
+                        label="Subtotal after discount"
+                        value={formatCurrency(totals.itemsSubTotal)}
+                      />
+                    ) : null}
+                    <SummaryRow
+                      label={isStorePickup ? 'Store pickup' : 'Home delivery'}
+                      value={
+                        isStorePickup
+                          ? 'Free'
+                          : totals.delivery > 0
+                            ? formatCurrency(totals.delivery)
+                            : 'Free'
+                      }
+                      hint={
+                        !isStorePickup &&
+                        (checkoutOptions?.shipping.freeDeliveryThreshold ?? 0) > 0
+                          ? `Free above ${formatCurrency(checkoutOptions!.shipping.freeDeliveryThreshold!)}`
+                          : undefined
+                      }
+                      emphasize={totals.delivery === 0 || isStorePickup}
+                    />
                     {totals.service > 0 ? (
                       <SummaryRow label="Service charge" value={formatCurrency(totals.service)} />
                     ) : null}
                   </dl>
 
-                  <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-4">
-                    <span className="text-sm font-semibold text-slate-900">Total</span>
-                    <p className="text-2xl font-bold text-[var(--store-theme,var(--md-green-700))]">
+                  <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3">
+                    <span className="text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+                      Order total
+                    </span>
+                    <p className="text-lg font-bold tabular-nums text-[var(--store-theme,var(--md-green-800))]">
                       {formatCurrency(totals.total)}
                     </p>
                   </div>
@@ -1449,18 +1471,23 @@ function ConsentRow({
 function SummaryRow({
   label,
   value,
+  hint,
   emphasize,
 }: {
   label: string
   value: string
+  hint?: string
   emphasize?: boolean
 }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="min-w-0 text-slate-600">
+        <span className="block">{label}</span>
+        {hint ? <span className="mt-0.5 block text-xs font-normal text-slate-400">{hint}</span> : null}
+      </dt>
       <dd
         className={cn(
-          'font-semibold',
+          'shrink-0 font-semibold',
           emphasize ? 'text-[var(--store-theme,var(--md-green-700))]' : 'text-slate-900',
         )}
       >

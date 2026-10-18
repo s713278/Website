@@ -2,13 +2,32 @@ import { StoreBone } from './store-skeleton-bone'
 import { ProductGridSkeleton } from './ProductGridSkeleton'
 
 /** Header chrome shared by all storefront pages. */
-export function StoreHeaderSkeleton({ compact = false }: { compact?: boolean }) {
+export type SkeletonIdentity = { storeName?: string; logoUrl?: string }
+
+/** Header chrome shared by all storefront pages. Real name/logo replace bones once known. */
+export function StoreHeaderSkeleton({
+  compact = false,
+  storeName,
+  logoUrl,
+}: { compact?: boolean } & SkeletonIdentity) {
   return (
     <header className="border-b border-slate-100 bg-white" aria-hidden>
       <div className="store-shell-inner flex h-14 items-center justify-between gap-3 sm:h-16">
         <div className="flex min-w-0 items-center gap-2.5">
-          <StoreBone className="size-9 shrink-0 rounded-full sm:size-10" />
-          <StoreBone className="h-4 w-24 sm:w-32" />
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="size-9 shrink-0 rounded-full object-cover sm:size-10" />
+          ) : storeName ? (
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] text-sm font-bold text-[var(--store-theme,var(--md-green-700))] sm:size-10">
+              {storeName.charAt(0).toUpperCase()}
+            </span>
+          ) : (
+            <StoreBone className="size-9 shrink-0 rounded-full sm:size-10" />
+          )}
+          {storeName ? (
+            <span className="truncate text-sm font-bold text-slate-900 sm:text-base">{storeName}</span>
+          ) : (
+            <StoreBone className="h-4 w-24 sm:w-32" />
+          )}
         </div>
         {!compact ? (
           <div className="hidden items-center gap-1 md:flex">
@@ -49,10 +68,13 @@ function CategoryRowSkeleton() {
 }
 
 /** Store home — hero, service bar, categories, product grid. */
-export function StoreHomeSkeleton() {
+export function StoreHomeSkeleton({
+  storeName,
+  logoUrl,
+}: SkeletonIdentity) {
   return (
     <>
-      <StoreHeaderSkeleton />
+      <StoreHeaderSkeleton storeName={storeName} logoUrl={logoUrl} />
       <main className="store-shell-inner flex flex-col gap-5 py-5 sm:gap-6 sm:py-6">
         <StoreBone className="min-h-[220px] w-full rounded-2xl sm:min-h-[250px] lg:min-h-[280px]" />
         <div className="grid gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:grid-cols-3 sm:gap-4">
@@ -86,10 +108,17 @@ export function StoreHomeSkeleton() {
 }
 
 /** Sub-pages — compact header + content blocks (cart, checkout, PDP, etc.). */
-export function StorePanelSkeleton() {
+export function StorePanelSkeleton({
+  storeName,
+  logoUrl,
+}: SkeletonIdentity) {
   return (
     <>
-      <StoreHeaderSkeleton compact />
+      <StoreHeaderSkeleton
+        compact
+        storeName={storeName}
+        logoUrl={logoUrl}
+      />
       <main className="store-shell-inner flex flex-col gap-4 py-5 sm:gap-5 sm:py-6">
         <StoreBone className="h-6 w-40" />
         <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4">
@@ -112,6 +141,9 @@ export function StorePanelSkeleton() {
 
 export type StorePageSkeletonLayout = 'home' | 'panel'
 
-export function StorePageSkeleton({ layout = 'panel' }: { layout?: StorePageSkeletonLayout }) {
-  return layout === 'home' ? <StoreHomeSkeleton /> : <StorePanelSkeleton />
+export function StorePageSkeleton({
+  layout = 'panel',
+  ...identity
+}: { layout?: StorePageSkeletonLayout } & SkeletonIdentity) {
+  return layout === 'home' ? <StoreHomeSkeleton {...identity} /> : <StorePanelSkeleton {...identity} />
 }

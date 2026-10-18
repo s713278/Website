@@ -37,10 +37,17 @@ function httpUrl(value: unknown): string | undefined {
 
 function mapSummary(raw: unknown): CartSummary {
   const s = asRecord(raw) ?? {}
+  const itemsTotal = asNumber(s.items_total)
+  const discount = asNumber(s.discount)
+  const itemsSubTotal =
+    s.items_sub_total != null && s.items_sub_total !== ''
+      ? asNumber(s.items_sub_total)
+      : Math.max(0, itemsTotal - discount)
   return {
-    itemsTotal: asNumber(s.items_total),
+    itemsTotal,
+    itemsSubTotal,
     deliveryCharges: asNumber(s.delivery_charges),
-    discount: asNumber(s.discount),
+    discount,
     serviceCharge: asNumber(s.service_charge),
     grandTotal: asNumber(s.grand_total),
     itemsCount: asNumber(s.items_count),
@@ -102,6 +109,7 @@ export function emptyCartSnapshot(vendorId?: string, _storeName = ''): CartSnaps
     lines: [],
     summary: {
       itemsTotal: 0,
+      itemsSubTotal: 0,
       deliveryCharges: 0,
       discount: 0,
       serviceCharge: 0,

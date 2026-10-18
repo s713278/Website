@@ -16,12 +16,17 @@ import { catalogService, getErrorMessage, hasStoreContactContent, type StoreCont
 export function StoreContactPage() {
   const { storeId = '' } = useParams()
   const itemCount = useCartStore((s) => s.itemCount(storeId))
-  const { store, loading: storeLoading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const {
+    store,
+    loading: storeLoading,
+    reload: reloadStore,
+    wrapperRef,
+  } = useStorePage(storeId, { network: 'cache-first' })
   const [contact, setContact] = useState<StoreContact | null>(null)
   const [contactLoading, setContactLoading] = useState(true)
   const [contactError, setContactError] = useState('')
   const shopClosed = Boolean(store && isStoreClosedForSubscription(store.subscriptionStatus))
-
+  const [reloadKey, setReloadKey] = useState(0)
   useEffect(() => {
     if (shopClosed) {
       setContactLoading(false)
@@ -48,7 +53,7 @@ export function StoreContactPage() {
     return () => {
       cancelled = true
     }
-  }, [storeId, shopClosed])
+  }, [storeId, shopClosed, reloadKey])
 
   const shown = hasStoreContactContent(contact) ? contact : null
   const shopHref = storePath(storeId)
@@ -59,6 +64,8 @@ export function StoreContactPage() {
 
   return (
     <StorePageStates
+      storeId={storeId}
+      onRetry={() => { reloadStore(); setReloadKey((k) => k + 1) }}
       wrapperRef={wrapperRef}
       loading={contactLoading || storeLoading}
       error={shown ? '' : contactError}

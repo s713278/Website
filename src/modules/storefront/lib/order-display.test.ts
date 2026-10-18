@@ -22,6 +22,7 @@ describe('order MRP', () => {
       bill: {
         itemsCount: 3,
         grossAmount: 660,
+        orderSubTotal: 630,
         discount: 30,
         deliveryCharges: 0,
         serviceCharge: 0,
