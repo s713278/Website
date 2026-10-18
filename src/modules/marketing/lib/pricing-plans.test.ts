@@ -1,19 +1,39 @@
 import { describe, expect, it } from 'vitest'
-import { formatPlanPrice, pricingFeatureRows, pricingPlans } from './pricing-plans'
+import {
+  formatPlanPrice,
+  planSavings,
+  starterFeatureGroups,
+  starterIncludedFeatureNames,
+  starterPlan,
+} from './pricing-plans'
 
 describe('pricing plans', () => {
-  it('shows discounted monthly prices at half the listed original', () => {
-    for (const plan of pricingPlans) {
-      expect(plan.originalPrice).toBe(plan.price * 2)
-    }
+  it('offers Starter at ₹399 against ₹899, saving ₹500', () => {
+    expect(starterPlan.price).toBe(399)
+    expect(starterPlan.originalPrice).toBe(899)
+    expect(planSavings(starterPlan)).toBe(500)
   })
 
-  it('keeps only Mithra Social Starter available', () => {
-    expect(pricingPlans.filter((plan) => plan.available).map((plan) => plan.id)).toEqual(['starter'])
+  it('routes the trial to onboarding', () => {
+    expect(starterPlan.to).toBe('/onboarding')
   })
 
-  it('covers every comparison column for each feature', () => {
-    expect(pricingFeatureRows.every((row) => row.values.length === pricingPlans.length)).toBe(true)
+  it('advertises every Starter capability once, grouped by vendor job', () => {
+    expect(starterFeatureGroups.map((group) => group.title)).toEqual([
+      'Your own branded store',
+      'Share and take orders',
+      'Manage products and orders',
+      'Understand your sales',
+    ])
+    const names = starterIncludedFeatureNames()
+    expect(names).toHaveLength(11)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names).toContain('Shareable store link and QR code')
+    expect(names).toContain('WhatsApp ordering and order notifications')
+  })
+
+  it('keeps qualified capabilities labelled Basic', () => {
+    expect(starterIncludedFeatureNames()).toContain('Basic sales dashboard')
   })
 
   it('formats rupee amounts with Indian grouping', () => {

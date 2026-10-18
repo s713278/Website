@@ -2,8 +2,10 @@ import type { ComponentType, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowRight,
+  ArrowUpRight,
   Banknote,
   Camera,
+  ChartColumn,
   Check,
   Clock,
   Croissant,
@@ -12,9 +14,11 @@ import {
   MapPin,
   MessageCircle,
   Milk,
+  Package,
   Palette,
   Play,
   Puzzle,
+  QrCode,
   Search,
   Sprout,
   Star,
@@ -23,11 +27,13 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { FacebookLogo, InstagramLogo, WhatsAppLogo } from '@/modules/marketing/components/ChannelLogos'
 import {
   formatPlanPrice,
-  pricingFeatureRows,
-  pricingPlans,
-  type PlanFeatureValue,
+  planSavings,
+  starterFeatureGroups,
+  starterPlan,
+  type StarterFeatureGroup,
 } from '@/modules/marketing/lib/pricing-plans'
 import { Button, ShadcnInput } from '@/shared/components'
 import {
@@ -185,26 +191,7 @@ const testimonials = [
   },
 ]
 
-function PlanFeatureMark({ value }: { value: PlanFeatureValue }) {
-  if (value === true) {
-    return (
-      <span className="inline-flex justify-center">
-        <Check className="size-5 stroke-[2.5] text-emerald-600" aria-hidden />
-        <span className="sr-only">Included</span>
-      </span>
-    )
-  }
-  if (value === false) {
-    return (
-      <span className="text-slate-400" aria-label="Not included">
-        —
-      </span>
-    )
-  }
-  return <span className="font-medium text-slate-800">{value}</span>
-}
-
-function SectionHeader({ title, copy }: { title: string; copy: string }) {
+function SectionHeader({ title, copy }: { title: ReactNode; copy: ReactNode }) {
   return (
     <header className="mx-auto max-w-3xl text-center">
       <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
@@ -985,108 +972,182 @@ export function TestimonialsSection() {
   )
 }
 
+const featureGroupStyles: Record<StarterFeatureGroup['id'], { icon: Icon; tile: string }> = {
+  store: { icon: Store, tile: 'bg-violet-100 text-violet-600' },
+  channels: { icon: ArrowUpRight, tile: 'bg-green-100 text-emerald-700' },
+  catalog: { icon: Package, tile: 'bg-orange-100 text-orange-600' },
+  insights: { icon: ChartColumn, tile: 'bg-blue-100 text-blue-600' },
+}
+
+function StarterTrialLink({ className = '' }: { className?: string }) {
+  return (
+    <Link
+      to={starterPlan.to}
+      className={cn(
+        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 px-3 py-3 text-center text-[0.85rem] font-bold text-white shadow-[0_8px_20px_rgba(16,185,129,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(16,185,129,0.35)] min-[481px]:px-6 min-[481px]:text-[0.95rem]',
+        className,
+      )}
+    >
+      {starterPlan.cta} <ArrowRight className="size-4 shrink-0" aria-hidden />
+    </Link>
+  )
+}
+
+function FeatureGroupArt({ id }: { id: StarterFeatureGroup['id'] }) {
+  if (id === 'store') {
+    return (
+      <div className="flex items-end justify-end gap-[0.45rem]">
+        <div className="grid w-[4.4rem] gap-[0.22rem] rounded-[0.7rem] border-2 border-gray-900 bg-white p-[0.45rem] shadow-sm">
+          <strong className="text-center text-[0.55rem] text-emerald-600">Your Store</strong>
+          <span className="h-[0.65rem] rounded-[0.18rem] bg-emerald-50" />
+          <span className="h-[0.65rem] rounded-[0.18rem] bg-emerald-50" />
+          <span className="h-[0.65rem] rounded-[0.18rem] bg-emerald-50" />
+        </div>
+        <span className="grid size-[2.1rem] place-items-center border border-gray-200 bg-white">
+          <QrCode className="size-6 text-gray-900" aria-hidden />
+        </span>
+      </div>
+    )
+  }
+  if (id === 'channels') {
+    return (
+      <div className="flex justify-end gap-[0.4rem]">
+        <WhatsAppLogo className="size-[1.85rem]" />
+        <InstagramLogo className="size-[1.85rem]" />
+        <FacebookLogo className="size-[1.85rem]" />
+      </div>
+    )
+  }
+  if (id === 'catalog') {
+    return (
+      <div className="ml-auto grid w-28 grid-cols-[1fr_auto] items-center rounded-[0.65rem] border border-gray-200 bg-white p-[0.55rem] text-[0.62rem] shadow-sm">
+        <span className="col-span-full text-gray-500">Product</span>
+        <strong className="text-gray-900">₹250</strong>
+        <span className="rounded bg-emerald-500 px-[0.3rem] py-[0.1rem] text-white">Add</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex h-10 items-end justify-end gap-[0.2rem]">
+      {['h-[28%]', 'h-[48%]', 'h-[40%]', 'h-[72%]', 'h-full'].map((height, index) => (
+        <span key={index} className={cn('w-[0.45rem] rounded-t-[0.15rem] bg-emerald-500', height)} />
+      ))}
+    </div>
+  )
+}
+
+function PricingCheckItem({ children }: { children: ReactNode }) {
+  return (
+    <li className="flex min-w-0 items-start gap-[0.45rem] text-[0.84rem] text-gray-700 [overflow-wrap:anywhere] min-[481px]:text-[0.9rem]">
+      <Check className="mt-[0.2rem] size-[0.9rem] shrink-0 stroke-[3] text-emerald-600" aria-hidden />
+      <span className="min-w-0">{children}</span>
+    </li>
+  )
+}
+
 export function PricingSection() {
+  const savings = planSavings(starterPlan)
   return (
     <SectionShell id="pricing" className="bg-slate-50">
       <SectionHeader
-        title="Simple, transparent pricing"
-        copy="Mithra Social Starter is available now. Growth and Business Pro are planned for later. Every plan includes a 14-day free trial."
+        title={
+          <>
+            Your own online store
+            <br />
+            One simple plan
+          </>
+        }
+        copy={
+          <>
+            Everything you need to present your products, share your store, and{' '}
+            <br className="hidden md:inline" />
+            manage customer orders — for one monthly price.
+          </>
+        }
       />
-      <p className="mt-3 text-center text-sm text-slate-500">
-        Prices shown after 50% off. Monthly charges before taxes.
-      </p>
-      <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-3">
-        {pricingPlans.map((plan) => (
-          <article
-            key={plan.id}
-            className={cn(
-              'relative flex flex-col rounded-3xl bg-white p-7',
-              plan.featured ? 'border-2 border-emerald-500 shadow-xl shadow-emerald-100' : 'border border-slate-200',
-              !plan.available && 'opacity-90',
-            )}
-          >
-            <span
-              className={cn(
-                'absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full px-4 py-1.5 text-xs font-bold text-white',
-                plan.available ? 'bg-emerald-600' : 'bg-slate-500',
-              )}
-            >
-              {plan.available ? 'Available now' : 'Coming soon'}
+      <div className="mt-6 grid min-w-0 items-start gap-5 sm:mt-10 lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] lg:gap-6">
+        <article className="min-w-0 rounded-2xl border-2 border-emerald-500 bg-white px-4 py-[1.15rem] shadow-[0_12px_40px_rgba(16,185,129,0.12)] min-[481px]:rounded-[1.35rem] min-[481px]:px-[1.2rem] min-[481px]:pt-[1.35rem] min-[481px]:pb-5 lg:sticky lg:top-[calc(var(--header-height)+1rem)]">
+          <p className="mb-[0.15rem] inline-flex rounded-full bg-emerald-50 px-[0.7rem] py-[0.35rem] text-xs font-extrabold text-emerald-900">
+            {starterPlan.trialDays} days free to try
+          </p>
+          <h3 className="mt-[0.85rem] text-balance font-display text-[1.35rem] font-bold text-gray-900">
+            {starterPlan.name}
+          </h3>
+          <p className="mt-[0.4rem] text-pretty text-[0.92rem] text-gray-600">{starterPlan.audience}</p>
+          <p className="mt-[1.1rem] flex flex-wrap items-center gap-2 text-[1.05rem] font-medium text-gray-500">
+            <span className="sr-only">Original price </span>
+            <s>{formatPlanPrice(starterPlan.originalPrice)}</s>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-extrabold text-amber-900">
+              Save {formatPlanPrice(savings)}
             </span>
-            <h3 className="font-display text-xl font-bold text-slate-950">{plan.name}</h3>
-            <p className="mt-2 text-sm font-semibold text-emerald-700">50% off</p>
-            <p className="mt-4 text-sm font-medium text-slate-400 line-through">
-              {formatPlanPrice(plan.originalPrice)}
-            </p>
-            <p className="mt-1 flex items-end gap-1">
-              <strong className="font-display text-4xl font-extrabold tracking-tight text-slate-950">
-                {formatPlanPrice(plan.price)}
-              </strong>
-              <span className="pb-1 text-sm text-slate-500">/month</span>
-            </p>
-            <p className="mt-1 text-xs text-slate-500">before taxes</p>
-            <p className="my-7 flex-1 text-sm leading-6 text-slate-600">Best for {plan.bestFor.toLowerCase()}.</p>
-            {plan.available && plan.to ? (
-              <Link
-                to={plan.to}
-                className="rounded-full bg-emerald-600 px-5 py-3 text-center font-bold text-white transition hover:bg-emerald-700"
-              >
-                {plan.cta}
-              </Link>
-            ) : (
-              <span className="cursor-not-allowed rounded-full border-2 border-slate-200 px-5 py-3 text-center font-bold text-slate-400">
-                {plan.cta}
-              </span>
-            )}
-          </article>
-        ))}
-      </div>{' '}
-      <div className="relative mt-14 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] border-collapse text-left">
-          <caption className="sr-only">Feature comparison across MithraDirect plans</caption>
-          <thead>
-            <tr className="bg-slate-50 text-sm text-slate-950">
-              <th scope="col" className="sticky left-0 z-10 bg-slate-50 px-5 py-5 font-bold">
-                Feature
-              </th>
-              {pricingPlans.map((plan) => (
-                <th
-                  key={plan.id}
-                  scope="col"
-                  className={cn(
-                    'px-5 py-5 text-center font-bold',
-                    plan.featured ? 'bg-emerald-50 text-emerald-800' : '',
-                  )}
-                >
-                  {plan.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pricingFeatureRows.map((row) => (
-              <tr key={row.feature} className="border-t border-slate-100">
-                <th
-                  scope="row"
-                  className="sticky left-0 z-10 bg-white px-5 py-4 text-left text-sm font-medium text-slate-900 sm:text-base"
-                >
-                  {row.feature}
-                </th>
-                {pricingPlans.map((plan, index) => (
-                  <td
-                    key={`${row.feature}-${plan.id}`}
-                    className={cn(
-                      'px-5 py-4 text-center text-sm sm:text-base',
-                      plan.featured ? 'bg-emerald-50/70 text-emerald-800' : 'text-slate-700',
-                    )}
-                  >
-                    <PlanFeatureMark value={row.values[index] ?? false} />
-                  </td>
-                ))}
-              </tr>
+          </p>
+          <p className="mt-[0.15rem] flex flex-wrap items-baseline gap-x-[0.45rem] gap-y-[0.35rem]">
+            <span className="sr-only">Price </span>
+            <strong className="font-display text-[clamp(2.35rem,12vw,3rem)] leading-none font-bold tracking-[-0.03em] text-gray-900 min-[481px]:text-[clamp(2.5rem,6vw,3.15rem)]">
+              {formatPlanPrice(starterPlan.price)}
+            </strong>
+            <span className="text-[0.95rem] font-semibold text-gray-500">/month</span>
+          </p>
+          <p className="mt-[0.35rem] text-[0.82rem] font-bold text-emerald-600">
+            About {formatPlanPrice(starterPlan.approxDailyPrice)} a day
+          </p>
+          <p className="mt-1 text-[0.8rem] leading-normal text-gray-500 min-[481px]:text-[0.85rem]">
+            {starterPlan.trialDays}-day free trial · Monthly billing after trial · Before applicable taxes
+          </p>
+          <StarterTrialLink className="mt-[1.05rem]" />
+          <ul className="mt-[0.9rem] grid gap-[0.4rem]">
+            {starterPlan.highlights.map((highlight) => (
+              <PricingCheckItem key={highlight}>{highlight}</PricingCheckItem>
             ))}
-          </tbody>
-        </table>
+          </ul>
+        </article>
+        <div className="min-w-0">
+          <h3 className="text-balance font-display text-[1.12rem] font-bold text-gray-900 min-[481px]:text-xl">
+            Everything you need to start selling online
+          </h3>
+          <p className="mt-[0.35rem] text-pretty text-[0.92rem] text-gray-500">
+            Share your store with customers and manage your products and orders in one place.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {starterFeatureGroups.map((group) => {
+              const { icon: GroupIcon, tile } = featureGroupStyles[group.id]
+              return (
+                <article
+                  key={group.id}
+                  className="flex min-w-0 flex-col rounded-[0.85rem] border border-gray-200 bg-white p-[0.9rem] min-[481px]:rounded-2xl min-[481px]:px-[1.05rem] min-[481px]:pt-4 min-[481px]:pb-[1.1rem]"
+                >
+                  <div className="flex items-start gap-[0.6rem] min-[481px]:gap-3">
+                    <span
+                      className={cn(
+                        'grid size-9 shrink-0 place-items-center rounded-full min-[481px]:size-[2.6rem]',
+                        tile,
+                      )}
+                    >
+                      <GroupIcon className="size-4 min-[481px]:size-5" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="text-balance font-display text-base font-bold text-gray-900">{group.title}</h4>
+                      <p className="mt-1 mb-[0.7rem] text-pretty text-[0.82rem] text-gray-500">{group.copy}</p>
+                    </div>
+                  </div>
+                  <ul className="grid gap-[0.4rem]">
+                    {group.features.map((feature) => (
+                      <PricingCheckItem key={feature}>{feature}</PricingCheckItem>
+                    ))}
+                  </ul>
+                  <div className="mt-auto pt-[0.65rem] min-[481px]:pt-[0.85rem]" aria-hidden>
+                    <FeatureGroupArt id={group.id} />
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+          <StarterTrialLink className="mt-4 lg:hidden" />
+          <p className="mt-4 border-t border-gray-200 pt-[0.85rem] text-pretty text-[0.73rem] leading-[1.55] text-gray-500 min-[481px]:text-[0.78rem]">
+            *MithraDirect charges no commission on sales. Payment-provider and other third-party fees may still apply.
+            Vendors manage their own products, pricing, payments, fulfilment, delivery, returns, and customer service.
+          </p>
+        </div>
       </div>
     </SectionShell>
   )
