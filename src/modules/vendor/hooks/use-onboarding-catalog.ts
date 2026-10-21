@@ -14,6 +14,8 @@ import {
 } from '../data/onboarding-sample'
 import {
   businessTypeCacheKey,
+  categoryReferenceCacheKey,
+  productReferenceCacheKey,
   readReferenceCache,
   writeReferenceCache,
 } from '../lib/onboarding-catalog-cache'
@@ -116,6 +118,36 @@ function useBusinessTypeSearch(delayMs: number) {
   }
 }
 
+/** First-page reads in flight, by cache key; an entry leaves as its read settles. */
+const firstPageReads = new Map<string, Promise<ReferencePage<{ id: number }>>>()
+
+/**
+ * Read a list's first page into the cache its step paints from, joining a read of the same
+ * key already in flight instead of sending another. A failure caches nothing and rejects.
+ */
+function readFirstPageOnce<T extends { id: number }>(
+  cacheKey: string,
+  loadPage: () => Promise<ReferencePage<T>>,
+): Promise<ReferencePage<T>> {
+  const pending = firstPageReads.get(cacheKey)
+  if (pending) return pending as Promise<ReferencePage<T>>
+  const read: Promise<ReferencePage<T>> = loadPage()
+    .then((page) => {
+      writeReferenceCache(cacheKey, page, false)
+      return page
+    })
+    .finally(() => {
+      if (firstPageReads.get(cacheKey) === read) firstPageReads.delete(cacheKey)
+    })
+  firstPageReads.set(cacheKey, read)
+  return read
+}
+
+/** Lets each test start with no read in flight, so one left pending cannot answer the next test. */
+export function resetFirstPageReadsForTests() {
+  firstPageReads.clear()
+}
+
 /** `enabled: false` shows a cached page but holds the first request until it turns true. */
 function usePagedReference<T extends { id: number }>(
   cacheKey: string,
@@ -163,7 +195,9 @@ function usePagedReference<T extends { id: number }>(
     })
 
     try {
-      const page = await loadPageRef.current(pageNumber, controller.signal)
+      // A step's own read of this first page may be in flight already: join it.
+      const joined = append ? undefined : firstPageReads.get(requestKey) as Promise<ReferencePage<T>> | undefined
+      const page = await (joined ?? loadPageRef.current(pageNumber, controller.signal))
       if (
         controller.signal.aborted ||
         requestRef.current !== controller ||
@@ -379,37 +413,102 @@ export function useBusinessTypeReferences(
   }
 }
 
+/** One page of a business type's category list, as every Step 4 reader requests it. */
+async function loadCategoryReferencePage(
+  mode: CatalogSource,
+  businessTypeId: number | null,
+  pageNumber: number,
+  signal?: AbortSignal,
+): Promise<ReferencePage<CategoryReference>> {
+  if (businessTypeId === null) {
+    return {
+      items: [],
+      pageNumber: 0,
+      pageSize: ONBOARDING_CONFIG.categoryPageSize,
+      totalElements: 0,
+      totalPages: 0,
+      lastPage: true,
+    }
+  }
+  if (mode === 'sample') {
+    return getSampleCategories(businessTypeId, pageNumber, ONBOARDING_CONFIG.categoryPageSize)
+  }
+  return vendorOnboardingService.getCategories(
+    {
+      business_type_id: businessTypeId,
+      pageNumber,
+      pageSize: ONBOARDING_CONFIG.categoryPageSize,
+      sortBy: 'id',
+      sortOrder: 'ASC',
+    },
+    { signal },
+  )
+}
+
+/**
+ * Read a business type's first category page into the cache Step 4 paints from as it
+ * mounts, so the step shows it without a request of its own. A failure caches nothing
+ * and rejects; the step then reads, and retries, the page itself.
+ */
+export async function readCategoryReferenceFirstPage(
+  mode: CatalogSource,
+  businessTypeId: number,
+): Promise<void> {
+  await readFirstPageOnce(
+    categoryReferenceCacheKey(mode, businessTypeId),
+    () => loadCategoryReferencePage(mode, businessTypeId, 0),
+  )
+}
+
 export function useCategoryReferences(
   mode: CatalogSource,
   businessTypeId: number | null,
 ): PagedReferenceResult<CategoryReference> {
   return usePagedReference(
-    `category:${mode}:${businessTypeId ?? 'none'}`,
-    async (pageNumber, signal) => {
-      if (businessTypeId === null) {
-        return {
-          items: [],
-          pageNumber: 0,
-          pageSize: ONBOARDING_CONFIG.categoryPageSize,
-          totalElements: 0,
-          totalPages: 0,
-          lastPage: true,
-        }
-      }
-      if (mode === 'sample') {
-        return getSampleCategories(businessTypeId, pageNumber, ONBOARDING_CONFIG.categoryPageSize)
-      }
-      return vendorOnboardingService.getCategories(
-        {
-          business_type_id: businessTypeId,
-          pageNumber,
-          pageSize: ONBOARDING_CONFIG.categoryPageSize,
-          sortBy: 'id',
-          sortOrder: 'ASC',
-        },
-        { signal },
-      )
-    },
+    categoryReferenceCacheKey(mode, businessTypeId),
+    (pageNumber, signal) => loadCategoryReferencePage(mode, businessTypeId, pageNumber, signal),
+  )
+}
+
+/** One page of a category's product list, as every Step 5 reader requests it. */
+async function loadProductReferencePage(
+  mode: CatalogSource,
+  categoryId: number,
+  pageNumber: number,
+  signal?: AbortSignal,
+): Promise<ReferencePage<ProductReference>> {
+  if (isPendingId(categoryId)) {
+    return {
+      items: [],
+      pageNumber: 0,
+      pageSize: ONBOARDING_CONFIG.productPageSize,
+      totalElements: 0,
+      totalPages: 0,
+      lastPage: true,
+    }
+  }
+  if (mode === 'sample') {
+    return getSampleProducts(categoryId, pageNumber, ONBOARDING_CONFIG.productPageSize)
+  }
+  return vendorOnboardingService.getProductsByCategory(
+    categoryId,
+    { pageNumber, pageSize: ONBOARDING_CONFIG.productPageSize, sortBy: 'name', sortOrder: 'ASC' },
+    { signal },
+  )
+}
+
+/**
+ * Read a category panel's first product page into the cache its panel paints from as it
+ * mounts, so the panel shows it without a request of its own. A failure caches nothing
+ * and rejects; the panel then reads, and retries, the page itself.
+ */
+export async function readProductReferenceFirstPage(
+  mode: CatalogSource,
+  categoryId: number,
+): Promise<void> {
+  await readFirstPageOnce(
+    productReferenceCacheKey(mode, categoryId),
+    () => loadProductReferencePage(mode, categoryId, 0),
   )
 }
 
@@ -419,27 +518,8 @@ export function useProductReferences(
   enabled = true,
 ): PagedReferenceResult<ProductReference> {
   return usePagedReference(
-    `product:${mode}:${categoryId}`,
-    async (pageNumber, signal) => {
-      if (isPendingId(categoryId)) {
-        return {
-          items: [],
-          pageNumber: 0,
-          pageSize: ONBOARDING_CONFIG.productPageSize,
-          totalElements: 0,
-          totalPages: 0,
-          lastPage: true,
-        }
-      }
-      if (mode === 'sample') {
-        return getSampleProducts(categoryId, pageNumber, ONBOARDING_CONFIG.productPageSize)
-      }
-      return vendorOnboardingService.getProductsByCategory(
-        categoryId,
-        { pageNumber, pageSize: ONBOARDING_CONFIG.productPageSize, sortBy: 'name', sortOrder: 'ASC' },
-        { signal },
-      )
-    },
+    productReferenceCacheKey(mode, categoryId),
+    (pageNumber, signal) => loadProductReferencePage(mode, categoryId, pageNumber, signal),
     enabled,
   )
 }

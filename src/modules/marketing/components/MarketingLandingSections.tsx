@@ -22,12 +22,6 @@ import {
   Wheat,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import {
-  formatPlanPrice,
-  planSavings,
-  starterFeatureGroups,
-  starterPlan,
-} from '@/modules/marketing/lib/pricing-plans'
 import { Button, ShadcnInput } from '@/shared/components'
 import {
   catalogService,
@@ -184,18 +178,18 @@ const testimonials = [
   },
 ]
 
-function SectionHeader({ title, copy }: { title: string; copy: string }) {
+export function SectionHeader({ title, copy }: { title: ReactNode; copy: ReactNode }) {
   return (
     <header className="mx-auto max-w-3xl text-center">
-      <h2 className="text-balance font-display text-[1.75rem] font-extrabold leading-tight tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
+      <h2 className="text-balance font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
         {title}
       </h2>
-      <p className="mt-3 text-pretty text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
+      <p className="mt-3 text-balance text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
     </header>
   )
 }
 
-function SectionShell({
+export function SectionShell({
   children,
   className = '',
   id,
@@ -228,7 +222,7 @@ export function TrustedBySection() {
             </span>
             <div>
               <h3 className="font-display text-base font-bold text-slate-950">{seller.title}</h3>
-              <p className="mt-1 text-sm text-slate-500">{seller.copy}</p>
+              <p className="mt-1 text-pretty text-sm text-slate-500">{seller.copy}</p>
             </div>
           </article>
         ))}
@@ -256,7 +250,7 @@ export function FeaturesSection() {
                 <FeatureIcon className="size-6" aria-hidden />
               </span>
               <h3 className="font-display mt-5 text-xl font-bold text-slate-950">{feature.title}</h3>
-              <p className="mt-2 leading-7 text-slate-600">{feature.copy}</p>
+              <p className="mt-2 text-pretty leading-7 text-slate-600">{feature.copy}</p>
             </article>
           )
         })}
@@ -283,7 +277,7 @@ export function HowItWorksSection() {
               {index + 1}
             </span>
             <h3 className="font-display mt-5 text-lg font-bold text-slate-950">{step.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{step.copy}</p>
+            <p className="mt-2 text-balance text-sm leading-6 text-slate-600">{step.copy}</p>
           </article>
         ))}
       </div>
@@ -594,10 +588,10 @@ export function ExploreStoresSection() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600 sm:text-sm">
             Stores near you
           </p>
-          <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
+          <h2 className="mt-3 text-balance font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
             Your neighbourhood, now delivering
           </h2>
-          <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">
+          <p className="mt-3 text-balance text-base leading-7 text-slate-600 sm:text-lg">
             Set your area and meet the local makers who deliver to your door.
           </p>
         </header>
@@ -617,7 +611,7 @@ export function ExploreStoresSection() {
               <p className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-emerald-700">
                 {location ? 'Delivering to' : 'Set your delivery point'}
               </p>
-              <p className="truncate font-display text-base font-bold text-slate-950 sm:text-lg">
+              <p className="line-clamp-2 font-display text-base leading-snug font-bold text-slate-950 sm:text-lg">
                 {location?.label ??
                   (locating
                     ? 'Finding your location…'
@@ -838,7 +832,7 @@ export function ExploreStoresSection() {
         ) : null}
 
         <div className="mt-10">
-          <p className="text-center text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
             Browse by category
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -885,7 +879,12 @@ export function ComparisonSection() {
     <SectionShell className="bg-slate-50">
       <SectionHeader
         title="MithraDirect vs Others"
-        copy="See why local sellers choose a WhatsApp-first, zero-commission platform."
+        copy={
+          <>
+            See why local sellers choose a <span className="whitespace-nowrap">WhatsApp-first</span>, zero-commission
+            platform.
+          </>
+        }
       />
       <div className="mt-10 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] border-collapse text-left">
@@ -946,7 +945,7 @@ export function TestimonialsSection() {
                 <Star key={index} className="size-4 fill-current" aria-hidden />
               ))}
             </div>
-            <blockquote className="mt-5 flex-1 text-base leading-7 text-slate-800">
+            <blockquote className="mt-5 flex-1 text-pretty text-base leading-7 text-slate-800">
               “{testimonial.quote}”
             </blockquote>
             <figcaption className="mt-6 flex items-center gap-3">
@@ -965,106 +964,14 @@ export function TestimonialsSection() {
   )
 }
 
-function StarterTrialLink() {
-  return (
-    <Link
-      to={starterPlan.to}
-      className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-center font-bold text-white transition hover:bg-emerald-700"
-    >
-      {starterPlan.cta}
-    </Link>
-  )
-}
-
-export function PricingSection() {
-  const savings = planSavings(starterPlan.originalPrice, starterPlan.price)
-
-  return (
-    <SectionShell id="pricing" className="overflow-x-clip bg-slate-50 !py-12 sm:!py-24">
-      <SectionHeader
-        title="One plan for your whole shop"
-        copy="No tiers to compare. Pay one monthly price for the store, and keep every rupee your customers pay you."
-      />
-      <div className="mt-8 grid min-w-0 items-start gap-5 sm:mt-12 sm:gap-6 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] lg:gap-8">
-        <article className="min-w-0 rounded-3xl border-2 border-emerald-500 bg-white p-5 shadow-xl shadow-emerald-100 sm:p-7 lg:sticky lg:top-28">
-          <p className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-800">
-            Save {formatPlanPrice(savings)}
-          </p>
-          <h3 className="font-display mt-4 text-balance text-xl font-bold text-slate-950 sm:text-2xl">
-            {starterPlan.name}
-          </h3>
-          <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
-            For home kitchens, farms, and neighbourhood shops that want their own customers.
-          </p>
-          <p className="mt-5 text-base font-medium text-slate-400">
-            <span className="sr-only">Was </span>
-            <s className="line-through">{formatPlanPrice(starterPlan.originalPrice)}</s>
-          </p>
-          <p className="mt-1 flex flex-wrap items-end gap-x-1.5 gap-y-1">
-            <span className="sr-only">Now </span>
-            <strong className="font-display text-4xl font-extrabold leading-none tracking-tight text-slate-950 sm:text-5xl">
-              {formatPlanPrice(starterPlan.price)}
-            </strong>
-            <span className="pb-1 text-sm font-medium text-slate-500">/month</span>
-          </p>
-          <p className="mt-2 text-sm text-slate-500">About ₹13 a day · monthly, before taxes</p>
-          <div className="mt-5">
-            <StarterTrialLink />
-          </div>
-          <ul className="mt-4 grid gap-2 text-sm text-slate-700">
-            {[starterPlan.trial, '0% commission on your sales', 'Your name, logo, and customers stay yours'].map(
-              (promise) => (
-                <li key={promise} className="flex min-w-0 items-start gap-2">
-                  <Check className="mt-0.5 size-4 shrink-0 stroke-[2.5] text-emerald-600" aria-hidden />
-                  <span className="min-w-0">{promise}</span>
-                </li>
-              ),
-            )}
-          </ul>
-          <p className="mt-3 text-center text-xs text-slate-500">Set up with your phone number. No coding.</p>
-        </article>
-
-        <div className="min-w-0">
-          <h3 className="font-display text-balance text-lg font-bold text-slate-950 sm:text-xl">Everything in this plan</h3>
-          <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
-            The tools a neighbourhood seller uses to share a store and take orders.
-          </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 sm:mt-5">
-            {starterFeatureGroups.map((group) => (
-              <article key={group.title} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-                <h4 className="font-display text-balance text-base font-bold text-slate-950">{group.title}</h4>
-                <p className="mt-1 text-pretty text-sm leading-6 text-slate-500">{group.summary}</p>
-                <ul className="mt-3 grid gap-2">
-                  {group.features.map((feature) => (
-                    <li key={feature.name} className="flex min-w-0 items-start gap-2 text-sm leading-6 text-slate-700">
-                      <Check className="mt-0.5 size-4 shrink-0 stroke-[2.5] text-emerald-600" aria-hidden />
-                      <span className="min-w-0 break-words">
-                        {feature.name}
-                        {feature.note ? <span className="text-slate-500"> · {feature.note}</span> : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-          <div className="mt-5 lg:hidden">
-            <StarterTrialLink />
-          </div>
-        </div>
-      </div>
-    </SectionShell>
-  )
-}
-
 export function InvitationSection() {
   return (
     <section className="marketing-gutter bg-white py-16 sm:py-20">
       <div className="marketing-measure overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-600 px-6 py-12 text-center text-white sm:px-12">
-        <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h2 className="text-balance font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
           Ready to Grow Your Business?
         </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-emerald-50 sm:text-lg">
+        <p className="mx-auto mt-3 max-w-2xl text-balance text-base leading-7 text-emerald-50 sm:text-lg">
           Create your online store today and start receiving WhatsApp orders from Instagram & nearby customers.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

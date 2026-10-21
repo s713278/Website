@@ -8,6 +8,8 @@ import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, typ
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
 import { invalidateMeasurementCatalog } from '../../lib/measurement-catalog-cache'
+import { resetFirstPageReadsForTests } from '../../hooks/use-onboarding-catalog'
+import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
 import {
   invalidateOnboardingResources,
   loadOnboardingResource,
@@ -17,7 +19,7 @@ import type { OnboardingResource } from '../../lib/onboarding-resume'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
-import type { OnboardingStep } from '../../types/onboarding'
+import { ONBOARDING_CONFIG, type OnboardingStep } from '../../types/onboarding'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
@@ -28,6 +30,7 @@ const savedSize: VendorSkuRef = {
 
 function invalidateAll() {
   invalidateOnboardingResources()
+  resetFirstPageReadsForTests()
   invalidateVendorContext()
   invalidateMeasurementCatalog()
 }
@@ -163,7 +166,7 @@ function accountReadCounts() {
     .filter(([, count]) => count > 0))
 }
 
-const stepSkeleton = () => screen.queryByRole('status', { name: 'Loading this step' })
+const stepSpinner = () => screen.queryByRole('status', { name: 'Loading this step' })
 const continueDisabled = (name = 'Continue') => screen.getByRole('button', { name }).matches(':disabled')
 
 describe('onboarding account hydration and size permissions', () => {
@@ -860,18 +863,194 @@ describe('per-step account reads', () => {
     renderAccount('APPROVED', 7)
 
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
-    expect(stepSkeleton()).toBeTruthy()
+    expect(stepSpinner()).toBeTruthy()
     expect(continueDisabled()).toBe(true)
 
     await act(async () => checkout.resolve(null))
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(continueDisabled()).toBe(false)
     expect(accountReadCounts()).toEqual({ getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 1 })
 
     act(() => useOnboardingStore.getState().goToStep(4))
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(accountReadCounts()).toEqual({
       getVendorContext: 1, getVendorProfile: 1, getCheckoutOptions: 1, getBusinessTypes: 1, getVendorCategories: 1,
+    })
+  })
+
+  describe('Step 4’s first category list', () => {
+    const category = (id: number, name: string) => ({ id, businessTypeId: 7, name, description: null, icon: null, imageUrl: null, displayOrder: id })
+    const listed = { ...EMPTY_PAGE, pageSize: ONBOARDING_CONFIG.categoryPageSize, totalPages: 1, totalElements: 1, items: [category(11, 'Smoothies')] }
+
+    beforeEach(() => {
+      // The reference cache is module-level; 48 other keys push an earlier test's categories out.
+      for (let index = 0; index < 48; index++) writeReferenceCache(`test-filler:${index}`, EMPTY_PAGE, false)
+    })
+
+    it('reads the saved categories and the first list page at once, showing one spinner until both land', async () => {
+      const saved = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorCategories>>>()
+      const getVendorCategories = vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockReturnValue(saved.promise)
+      const list = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getCategories>>>()
+      const getCategories = vi.spyOn(vendorOnboardingService, 'getCategories').mockReturnValue(list.promise)
+      renderAccount('PENDING', 4)
+
+      await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+      expect(stepSpinner()).toBeTruthy()
+      // The list's read starts while the saved categories are still being read.
+      await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(1))
+      expect(getVendorCategories).toHaveBeenCalledTimes(1)
+      expect(getCategories.mock.calls[0][0]).toMatchObject({ business_type_id: 7, pageNumber: 0, pageSize: ONBOARDING_CONFIG.categoryPageSize })
+
+      await act(async () => saved.resolve([{ vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null }]))
+      expect(stepSpinner()).toBeTruthy()
+      expect(screen.queryByLabelText('Search category')).toBeNull()
+      expect(document.querySelector('[data-slot="skeleton"]')).toBeNull()
+
+      await act(async () => list.resolve(listed))
+      expect(await screen.findByRole('button', { name: /Juices/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Smoothies/ })).toBeTruthy()
+      expect(stepSpinner()).toBeNull()
+      expect(screen.queryByRole('status', { name: 'Loading categories' })).toBeNull()
+      expect(screen.getByLabelText('Search category')).toBeTruthy()
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(getCategories).toHaveBeenCalledTimes(1)
+    })
+
+    it('opens the step when the list’s read fails, the step reading it once more and showing only the error until Try again', async () => {
+      const getCategories = vi.spyOn(vendorOnboardingService, 'getCategories')
+        .mockRejectedValueOnce(new Error('Categories are down'))
+        .mockRejectedValueOnce(new Error('Categories are down'))
+        .mockResolvedValueOnce(listed)
+      renderAccount('PENDING', 4)
+
+      expect(await screen.findByText('Something went wrong')).toBeTruthy()
+      expect(screen.queryByText('Categories are down')).toBeNull()
+      expect(stepSpinner()).toBeNull()
+      expect(continueDisabled()).toBe(false)
+      expect(screen.queryByRole('button', { name: /Smoothies/ })).toBeNull()
+      // The step's read failed and cached nothing, so the step read the page itself.
+      expect(getCategories).toHaveBeenCalledTimes(2)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByRole('button', { name: /Smoothies/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Juices/ })).toBeTruthy()
+      expect(screen.queryByText('Something went wrong')).toBeNull()
+      expect(getCategories).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  describe('Step 3’s business types', () => {
+    const type = (id: number) => ({ id, name: `Type ${id}`, icon: null, displayOrder: id })
+
+    beforeEach(() => {
+      // The reference cache is module-level; 48 other keys push an earlier test's types out.
+      for (let index = 0; index < 48; index++) writeReferenceCache(`test-filler:${index}`, EMPTY_PAGE, false)
+    })
+
+    it('reads the full list alongside the profile with no saved type, and the step makes no first-page request', async () => {
+      const profile = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProfile>>>()
+      vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockReturnValue(profile.promise)
+      const getBusinessTypes = vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
+        .mockResolvedValueOnce({
+          items: Array.from({ length: 12 }, (_, index) => type(index + 1)),
+          pageNumber: 0, pageSize: 100, totalPages: 1, totalElements: 12, lastPage: true,
+        })
+        .mockResolvedValueOnce({ items: [type(10), type(11), type(12)], pageNumber: 1, pageSize: 9, totalPages: 2, totalElements: 12, lastPage: true })
+        .mockResolvedValueOnce({ items: [type(5)], pageNumber: 0, pageSize: 9, totalPages: 1, totalElements: 1, lastPage: true })
+      renderAccount('PENDING', 3)
+
+      await screen.findByRole('button', { name: /Step 3,.*You are here/ })
+      // Both start before the profile answers.
+      await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
+      expect(vendorOnboardingService.getVendorProfile).toHaveBeenCalledTimes(1)
+      expect(getBusinessTypes.mock.calls[0][0]).toEqual({ pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' })
+      expect(stepSpinner()).toBeTruthy()
+
+      await act(async () => profile.resolve({
+        businessName: 'Test Store', businessType: 'Others', ownerName: 'Test Vendor', contactPerson: 'Test Vendor', contactNumber: '',
+      }))
+      expect(await screen.findByRole('button', { name: /Type 9$/ })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Type 10$/ })).toBeNull()
+      expect(stepSpinner()).toBeNull()
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(getBusinessTypes).toHaveBeenCalledTimes(1)
+
+      // Show more reads the step's own page 1 of nine.
+      fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
+      expect(await screen.findByRole('button', { name: /Type 12$/ })).toBeTruthy()
+      expect(getBusinessTypes.mock.calls[1][0]).toMatchObject({ pageNumber: 1, pageSize: 9 })
+
+      fireEvent.change(screen.getByLabelText('Search business type'), { target: { value: 'type 5' } })
+      fireEvent.submit(screen.getByRole('search'))
+      await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(3))
+      expect(getBusinessTypes.mock.calls[2][0]).toMatchObject({ keyword: 'type 5', pageNumber: 0, pageSize: 9 })
+      expect(await screen.findByRole('button', { name: /Type 5$/ })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Type 12$/ })).toBeNull()
+    })
+  })
+
+  describe('Step 5’s default panel', () => {
+    const reference = (id: number, name: string) => ({
+      id, name, description: null, icon: null, imageUrl: null, measurementId: null, measurementName: 'COUNT',
+    })
+    const listed = { ...EMPTY_PAGE, totalPages: 1, totalElements: 1, items: [reference(32, 'Apple Juice')] }
+    const panel = () => within(document.getElementById('category-products-10')!)
+
+    beforeEach(() => {
+      // The reference cache is module-level; 48 other keys push an earlier test's products out.
+      for (let index = 0; index < 48; index++) writeReferenceCache(`test-filler:${index}`, EMPTY_PAGE, false)
+    })
+
+    it('reads the saved products and the panel’s first page at once, then paints both together', async () => {
+      const saved = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
+      const getVendorProducts = vi.spyOn(vendorOnboardingService, 'getVendorProducts').mockReturnValue(saved.promise)
+      const list = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getProductsByCategory>>>()
+      const getProducts = vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockReturnValue(list.promise)
+      renderAccount('PENDING', 5)
+
+      await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+      expect(stepSpinner()).toBeTruthy()
+      // The panel's read starts while the saved products are still being read.
+      await waitFor(() => expect(getProducts).toHaveBeenCalledTimes(1))
+      expect(getVendorProducts).toHaveBeenCalledTimes(1)
+      expect(getProducts.mock.calls[0][0]).toBe(10)
+
+      await act(async () => saved.resolve([
+        { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
+      ]))
+      expect(stepSpinner()).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Test Juice/ })).toBeNull()
+
+      await act(async () => list.resolve(listed))
+      expect(await screen.findByRole('button', { name: /Test Juice/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Apple Juice/ })).toBeTruthy()
+      expect(stepSpinner()).toBeNull()
+      expect(panel().queryByRole('status', { name: 'Loading products' })).toBeNull()
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(getProducts).toHaveBeenCalledTimes(1)
+    })
+
+    it('opens the step when the panel’s read fails, the panel showing only its error until a retry lists every product', async () => {
+      const getProducts = vi.spyOn(vendorOnboardingService, 'getProductsByCategory')
+        .mockRejectedValueOnce(new Error('Products are down'))
+        .mockRejectedValueOnce(new Error('Products are down'))
+        .mockResolvedValueOnce(listed)
+      renderAccount('PENDING', 5)
+
+      await screen.findByText('Something went wrong')
+      expect(panel().getByText('Something went wrong')).toBeTruthy()
+      expect(screen.queryByText('Products are down')).toBeNull()
+      expect(stepSpinner()).toBeNull()
+      expect(continueDisabled()).toBe(false)
+      expect(screen.queryByRole('button', { name: /Test Juice/ })).toBeNull()
+      expect(screen.queryByLabelText('Search in Juices')).toBeNull()
+      // The step's read failed and cached nothing, so the panel read the page itself.
+      expect(getProducts).toHaveBeenCalledTimes(2)
+
+      fireEvent.click(panel().getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByRole('button', { name: /Apple Juice/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Test Juice/ })).toBeTruthy()
+      expect(getProducts).toHaveBeenCalledTimes(3)
     })
   })
 
@@ -986,7 +1165,7 @@ describe('per-step account reads', () => {
     renderAccount('APPROVED', 5)
     await screen.findByRole('button', { name: /Step 5,.*You are here/ })
     act(() => useOnboardingStore.getState().goToStep(4))
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
 
     await act(async () => products.resolve([
       { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
@@ -994,7 +1173,7 @@ describe('per-step account reads', () => {
 
     expect(useOnboardingStore.getState().draft.products.map((product) => product.id)).toEqual([31])
     expect(useOnboardingStore.getState().draft.currentStep).toBe(4)
-    expect(stepSkeleton()).toBeNull()
+    expect(stepSpinner()).toBeNull()
     expect(continueDisabled()).toBe(false)
   })
 
@@ -1088,7 +1267,7 @@ describe('Continue prefetches the next step’s account reads', () => {
     stubReferencePages()
     renderAccount(approvalStatus, step)
     await screen.findByRole('button', { name: new RegExp(`Step ${step},.*You are here`) })
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     await waitFor(() => expect(continueDisabled(action)).toBe(false))
   }
 
@@ -1105,7 +1284,7 @@ describe('Continue prefetches the next step’s account reads', () => {
 
     await act(async () => save.resolve(undefined))
     await screen.findByRole('button', { name: /Step 4,.*You are here/ })
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(categories).toHaveBeenCalledTimes(1)
   })
 
@@ -1128,7 +1307,7 @@ describe('Continue prefetches the next step’s account reads', () => {
 
     await act(async () => save.resolve(undefined))
     await screen.findByRole('button', { name: /Step 5,.*You are here/ })
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(products).toHaveBeenCalledTimes(1)
     expect(measurements).toHaveBeenCalledTimes(1)
   })
@@ -1169,7 +1348,7 @@ describe('Continue prefetches the next step’s account reads', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('button', { name: /Step 8,.*You are here/ })
-    await waitFor(() => expect(stepSkeleton()).toBeNull())
+    await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(accountReadCounts()).toEqual(before)
   })
 

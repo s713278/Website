@@ -1,8 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type ToggleEvent } from 'react'
-import { AlertTriangleIcon, CheckIcon, ChevronRightIcon, DatabaseIcon, RefreshCwIcon } from 'lucide-react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type Ref, type ToggleEvent } from 'react'
+import { CheckIcon, ChevronRightIcon, DatabaseIcon, RotateCcwIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button, LoadingSkeleton } from '@/shared/components/ui'
+import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@/shared/components/ui'
 import type { ValidationIssue } from '../../types/onboarding'
+import { StepNotice } from './AccessNotice'
 import type { ConfirmDialogState } from './ConfirmDialog'
 
 export type RequestConfirmation = (
@@ -180,6 +182,7 @@ export function ChoiceCard({
   leading,
   footer,
   autoFocus,
+  ref,
 }: {
   selected: boolean
   title: string
@@ -193,10 +196,12 @@ export function ChoiceCard({
   /** Extra detail under the title, such as a product's measurement chips. */
   footer?: ReactNode
   autoFocus?: boolean
+  ref?: Ref<HTMLButtonElement>
 }) {
   const muted = disabled || inactive
   return (
     <button
+      ref={ref}
       id={id}
       type="button"
       aria-pressed={selected}
@@ -291,50 +296,52 @@ export function LoadMoreButton({ label, disabled, pressOnly = false, onClick }: 
   )
 }
 
-/** Placeholder tile heights, matched to the cards each catalog grid renders. */
-const catalogTileHeight = {
-  choice: 'h-32 @min-[30rem]:h-26',
-  product: 'h-36 @min-[30rem]:h-32',
+/** The shadcn spinner without its own status role, for a place that names the wait itself. */
+export function QuietSpinner({ className }: { className?: string }) {
+  return (
+    <Spinner
+      role={undefined}
+      aria-label={undefined}
+      aria-hidden="true"
+      className={cn('text-[var(--ob-ink-soft)] motion-reduce:animate-none', className)}
+    />
+  )
 }
 
-export function CatalogLoading({
-  count = 6,
-  size,
-}: {
-  count?: number
-  size: keyof typeof catalogTileHeight
-}) {
+/**
+ * A step's body while its first reads load. The wizard's step read and a catalog step's
+ * first list read both draw this, in the same place, so the two loads read as one.
+ */
+export function StepLoading({ label = 'Loading this step' }: { label?: string }) {
   return (
-    <div className={choiceGrid}>
-      {Array.from({ length: count }, (_, index) => (
-        <LoadingSkeleton key={index} className={cn('rounded-xl', catalogTileHeight[size])} />
-      ))}
+    <div role="status" aria-label={label} aria-busy="true" className="grid min-h-72 place-items-center">
+      <QuietSpinner className="size-8" />
     </div>
   )
 }
 
+/** Below a list while its next page loads; the list's own sr-only status names the wait. */
+export function LoadingMore() {
+  return (
+    <div className="flex justify-center py-2">
+      <QuietSpinner className="size-6" />
+    </div>
+  )
+}
+
+/** A catalog list's first read failed: the same words and action as a step's own failed read. */
 export function CatalogError({
-  message,
   onRetry,
   onUseSample,
 }: {
-  message: string
   onRetry: () => void
   onUseSample?: () => void
 }) {
   return (
-    <div className="rounded-xl border-l-2 border-l-amber-500 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100" role="alert">
-      <div className="flex gap-3">
-        <AlertTriangleIcon className="mt-0.5 size-5 shrink-0" />
-        <div>
-          <h3 className="font-display text-sm font-semibold">Live catalog unavailable</h3>
-          <p className="mt-1 text-sm leading-6">{message}</p>
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          <RefreshCwIcon /> Retry live catalog
-        </Button>
+    <div role="alert" className="space-y-3">
+      <StepNotice message="Something went wrong" />
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={onRetry}><RotateCcwIcon /> Try again</Button>
         {onUseSample ? (
           <Button size="sm" onClick={onUseSample}>
             <DatabaseIcon /> Use sample catalog

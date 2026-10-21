@@ -256,11 +256,13 @@ shows "Restoring your setup…".
 | Review (10), store submitted | Profile | No |
 | Review (10), not submitted | All six | Yes |
 
-The business-type catalog (one 100-item page) is read only once the profile shows a saved business
-type, because it exists to map that saved name back to the reference Step 3 stores; a vendor who has
-not chosen one, like every new vendor on Step 3, skips it, and Step 3 lists its own page. A
-successful read also files Step 3's unsearched first page in the catalog reference cache (never over
-an existing entry), so the step's first visit makes no request. Each onboarding catalog (business
+The business-type catalog (one 100-item page) maps a saved business type name back to the reference
+Step 3 stores. On Step 3, and in a prefetch for it, it is read at once alongside the profile, saved
+type or not; on Steps 4-6, 9 and 10 it is read only once the profile shows a saved type, and skipped
+otherwise. A successful read also files Step 3's unsearched first page (its first nine items, with
+**Show more** still reading page 1 of nine) in the catalog reference cache (never over an existing
+entry), so the step's first visit makes no request of its own. If an earlier step this visit already
+skipped the read, Step 3 lists its own first page. Each onboarding catalog (business
 types, categories, products) shows nine items at a time: the first **Show more** press reveals the
 next nine, reading the next page only when loaded items run short, and only after that press do
 later sets load as the list end scrolls into view. Category and product search filters loaded items
@@ -270,7 +272,8 @@ first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
 step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
 applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
-change; a save does not reset it. A step shows a form-shaped skeleton until its reads have loaded,
+change; a save does not reset it. A step shows a spinner until its reads have loaded (Steps 3-4
+keep the same spinner until their first reference list arrives, so the two reads show as one load),
 and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
 failed resources. Continue is disabled in both states, while Back and the stepper stay usable, so a
 failed earlier step never traps the vendor. A failed read is never turned into empty data, because
@@ -278,6 +281,16 @@ Step 6's save deletes account sizes missing from the draft and Steps 7-8 save ch
 A submitted store's Step 10 is the exception: it shows its status once the profile settles and never
 blocks; a failed profile leaves the store name to its fallback. Requests time out at 15 s and then
 fail.
+
+On opening, Step 4 also reads its business type's first category page, and Step 5 its default
+(first) category panel's first product page, alongside the step's account reads, into the reference
+cache the list paints from; the step's spinner waits for both, and the list then makes no request of
+its own. Each starts as soon as its input is applied (the business type for Step 4, the categories for
+Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not
+cached: the list reads it again itself, and shows "Something went wrong" with **Try again** if that
+fails too. A first-page read in flight is shared by key, so a second prefetch or a list that mounts
+meanwhile joins it instead of sending another request. Every product panel, including one opened later (read once, on first
+open), shows only its spinner or its error, with no saved products, until its first page arrives.
 
 The phone preview (storefront mockup and its Categories / Products / Sizes counts) is shown on every
 step. Its categories, products and sizes each come from the context's `catalog_preview` while their
@@ -298,7 +311,7 @@ Measurements mean one authenticated `GET /v1/measurements/` followed by one auth
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
-Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their skeleton waits for it.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their spinner waits for it.
 Continue starts only the next step's missing account reads alongside its save, never the units. A
 failed read does not block: sizes fall back to the sample units and products carry no measurement
 metadata, and it is not retried within the visit.

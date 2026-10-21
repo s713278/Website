@@ -65,6 +65,14 @@ const customer = {
   vendors: [],
 } as User
 
+/** The price-breakdown row for a label; radio labels can share the text, so match the `dt`. */
+function summaryRow(label: string) {
+  return screen
+    .getAllByText(label)
+    .find((el) => el.closest('dt'))
+    ?.closest('div')
+}
+
 function renderCheckout(
   lines: CartLine[] = [line],
   options: StorefrontCheckoutOptions = checkoutOptions,
@@ -124,12 +132,13 @@ describe('CheckoutView', () => {
     }
 
     const under = renderCheckout([{ ...line, price: 245, qty: 1, lineTotal: 245 }], options)
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('₹100')
+    expect(summaryRow('Home delivery')?.textContent).toContain('₹100')
+    expect(summaryRow('Home delivery')?.textContent).toContain('Free above ₹500')
     expect(screen.getAllByText('₹345').length).toBeGreaterThan(0)
     under.unmount()
 
     renderCheckout([{ ...line, price: 500, qty: 1, lineTotal: 500 }], options)
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('Free')
+    expect(summaryRow('Home delivery')?.textContent).toContain('Free')
     expect(screen.getAllByText('₹500').length).toBeGreaterThan(0)
   })
 
@@ -151,7 +160,7 @@ describe('CheckoutView', () => {
     expect(screen.getByText('In-store')).toBeTruthy()
     expect(screen.getByText('Contact: +91 9111111111')).toBeTruthy()
     expect(screen.queryByText('Delivering here')).toBeNull()
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('Free')
+    expect(summaryRow('Store pickup')?.textContent).toContain('Free')
     expect(
       screen.getByText(/This store has not configured pickup times yet/),
     ).toBeTruthy()

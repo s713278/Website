@@ -1,7 +1,7 @@
-import { Camera, Mail, Play } from 'lucide-react'
+import type { ComponentType } from 'react'
 import { Link } from 'react-router-dom'
 import logoLightMd from '@/assets/logo_light_md.png'
-import { Button, ShadcnInput } from '@/shared/components'
+import { InstagramLogo, WhatsAppLogo, YouTubeLogo } from './ChannelLogos'
 
 const footerGroups = [
   {
@@ -22,70 +22,73 @@ const footerGroups = [
       ['Partner With Us', 'mailto:mithradirect@gmail.com'],
     ],
   },
+  {
+    title: 'Help',
+    links: [
+      ['Support', 'mailto:mithradirect@gmail.com?subject=Support'],
+      ['Privacy Policy', 'mailto:mithradirect@gmail.com?subject=Privacy'],
+      ['Terms & Conditions', 'mailto:mithradirect@gmail.com?subject=Terms'],
+    ],
+  },
 ]
+
+const socials: { label: string; href: string; Logo: ComponentType<{ className?: string; tone?: 'current' }> }[] = [
+  { label: 'MithraDirect on Instagram', href: 'https://www.instagram.com/mithradirect/', Logo: InstagramLogo },
+  { label: 'MithraDirect on YouTube', href: 'https://www.youtube.com/@MithraDirect', Logo: YouTubeLogo },
+  { label: 'Chat with MithraDirect on WhatsApp', href: 'https://wa.me/919912149049', Logo: WhatsAppLogo },
+]
+
+const focusRing =
+  'rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300'
 
 export function MarketingFooter() {
   return (
-    <footer className="marketing-gutter bg-slate-950 py-14 text-slate-300 sm:py-16">
+    <footer className="marketing-gutter bg-[#0b1220] pt-12 pb-6 text-sm text-slate-400">
       <div className="marketing-measure">
-        <div className="grid gap-10 md:grid-cols-2 xl:grid-cols-[1.35fr_0.85fr_0.85fr_1.15fr]">
-          <div>
-            <Link
-              to="/"
-              aria-label="MithraDirect home"
-              className="inline-block py-2"
-            >
+        {/* Phones put the brand on its own row and the link groups two across; from `md` everything
+            shares one row, as in the design reference. */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-x-8">
+          <div className="col-span-2 sm:col-span-3 md:col-span-1">
+            <Link to="/" aria-label="MithraDirect home" className={`inline-block ${focusRing}`}>
               <img
                 src={logoLightMd}
                 alt="MithraDirect — Shop Local, Support Local, Grow Together"
-                className="h-12 w-auto"
+                className="h-10 w-auto"
               />
             </Link>
-            <p className="mt-4 max-w-sm leading-7 text-slate-400">
+            <p className="mt-3 max-w-72 leading-6 text-pretty">
               India’s hyperlocal commerce platform for neighbourhood businesses — Instagram ready,
               WhatsApp first, zero commission.
             </p>
-            <div className="mt-6 flex gap-3">
-              <a
-                href="https://www.instagram.com/mithradirect/"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="MithraDirect on Instagram"
-                className="flex size-11 items-center justify-center rounded-full bg-slate-800 transition hover:bg-emerald-600"
-              >
-                <Camera className="size-5" aria-hidden />
-              </a>
-              <a
-                href="https://www.youtube.com/@MithraDirect"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="MithraDirect on YouTube"
-                className="flex size-11 items-center justify-center rounded-full bg-slate-800 transition hover:bg-emerald-600"
-              >
-                <Play className="size-5 fill-current" aria-hidden />
-              </a>
-              <a
-                href="mailto:mithradirect@gmail.com"
-                aria-label="Email MithraDirect"
-                className="flex size-11 items-center justify-center rounded-full bg-slate-800 transition hover:bg-emerald-600"
-              >
-                <Mail className="size-5" aria-hidden />
-              </a>
-            </div>
+            <ul className="mt-4 flex gap-2.5">
+              {socials.map(({ label, href, Logo }) => (
+                <li key={label}>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    className="flex size-9 items-center justify-center rounded-full bg-white/6 text-slate-300 transition-colors hover:bg-emerald-500/35 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                  >
+                    <Logo tone="current" className="size-4" />
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {footerGroups.map((group) => (
             <nav key={group.title} aria-label={group.title}>
-              <h2 className="font-display font-bold text-white">{group.title}</h2>
-              <ul className="mt-4 space-y-3 text-slate-400">
+              <h2 className="font-display text-[0.95rem] font-semibold text-white">{group.title}</h2>
+              <ul className="mt-3 space-y-2 leading-6">
                 {group.links.map(([label, href]) => (
                   <li key={label}>
                     {href.startsWith('/') ? (
-                      <Link to={href} className="transition hover:text-emerald-400">
+                      <Link to={href} className={`transition-colors hover:text-emerald-200 ${focusRing}`}>
                         {label}
                       </Link>
                     ) : (
-                      <a href={href} className="transition hover:text-emerald-400">
+                      <a href={href} className={`transition-colors hover:text-emerald-200 ${focusRing}`}>
                         {label}
                       </a>
                     )}
@@ -94,51 +97,10 @@ export function MarketingFooter() {
               </ul>
             </nav>
           ))}
-
-          <div>
-            <h2 className="font-display font-bold text-white">Stay Connected</h2>
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <label className="sr-only" htmlFor="marketing-email">
-                Email address
-              </label>
-              <ShadcnInput
-                id="marketing-email"
-                type="email"
-                placeholder="Enter your email"
-                className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 outline-none placeholder:text-slate-500 focus:border-emerald-500"
-              />
-              <Button
-                type="button"
-                className="rounded-full bg-emerald-600 px-5 py-3 font-bold text-white transition hover:bg-emerald-500"
-              >
-                Subscribe
-              </Button>
-            </div>
-            <nav aria-label="Legal" className="mt-6 flex flex-col gap-3 text-slate-400">
-              <a
-                href="mailto:mithradirect@gmail.com?subject=Privacy"
-                className="hover:text-emerald-400"
-              >
-                Privacy Policy
-              </a>
-              <a
-                href="mailto:mithradirect@gmail.com?subject=Terms"
-                className="hover:text-emerald-400"
-              >
-                Terms & Conditions
-              </a>
-              <a
-                href="mailto:mithradirect@gmail.com?subject=Support"
-                className="hover:text-emerald-400"
-              >
-                Support
-              </a>
-            </nav>
-          </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-3 border-t border-slate-800 pt-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 MithraDirect. All rights reserved.</p>
+        <div className="mt-9 flex flex-col gap-1 border-t border-white/8 pt-5 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} MithraDirect. All rights reserved.</p>
           <p>Made for India’s local businesses</p>
         </div>
       </div>

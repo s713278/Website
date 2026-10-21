@@ -1,92 +1,79 @@
-export type StarterFeature = {
+export type StarterPlan = {
   name: string
-  /** Qualifier such as Basic or Standard, when the plan does not include the full capability. */
-  note?: string
+  audience: string
+  price: number
+  originalPrice: number
+  approxDailyPrice: number
+  trialDays: number
+  cta: string
+  to: string
+  highlights: string[]
 }
 
 export type StarterFeatureGroup = {
+  id: 'store' | 'channels' | 'catalog' | 'insights'
   title: string
-  summary: string
-  features: StarterFeature[]
-}
-
-export const starterPlan = {
-  id: 'starter' as const,
-  name: 'Mithra Social Starter',
-  price: 399,
-  originalPrice: 899,
-  trial: '14-Day Free Trial',
-  cta: 'Start 14-day free trial',
-  to: '/onboarding',
+  copy: string
+  features: string[]
 }
 
 export function formatPlanPrice(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`
 }
 
-export function planSavings(originalPrice: number, price: number): number {
-  return originalPrice - price
+/** Landing offer — the only plan marketed. Monthly charges before taxes. */
+export const starterPlan: StarterPlan = {
+  name: 'Mithra Social Starter',
+  audience: 'For home businesses, Instagram and WhatsApp sellers, farmers, and neighbourhood shops.',
+  price: 399,
+  originalPrice: 899,
+  approxDailyPrice: 13,
+  trialDays: 14,
+  cta: 'Start Your 14-Day Free Trial',
+  to: '/onboarding',
+  highlights: [
+    '0% MithraDirect sales commission*',
+    'Your business name, logo, and customer relationships stay yours',
+    'Set up with your phone number — no coding required',
+  ],
 }
 
-/**
- * Capabilities that shipped with Mithra Social Starter. Other plans are not offered,
- * so rows that were only on those plans are omitted.
- */
+export function planSavings(plan: Pick<StarterPlan, 'price' | 'originalPrice'>): number {
+  return plan.originalPrice - plan.price
+}
+
+/** Starter capabilities grouped by vendor job, in display order. */
 export const starterFeatureGroups: StarterFeatureGroup[] = [
   {
-    title: 'A shop that looks like yours',
-    summary: 'Customers open your store on their phone, with your name and your photos.',
+    id: 'store',
+    title: 'Your own branded store',
+    copy: 'Give customers a simple, mobile-friendly place to browse your business and products.',
     features: [
-      { name: 'Digital Storefront' },
-      { name: 'Mobile-First Store' },
-      { name: 'MithraDirect Store URL' },
-      { name: 'Business Profile' },
-      { name: 'Logo & Store Banner' },
-      { name: 'Store QR Code' },
-      { name: 'Basic SEO' },
+      'Digital storefront and business profile',
+      'Logo, store banner, and product images',
+      'Shareable store link and QR code',
     ],
   },
   {
-    title: 'Orders on WhatsApp and Instagram',
-    summary: 'Buyers stay in the apps they already use. You still get the order.',
-    features: [
-      { name: 'WhatsApp Ordering' },
-      { name: 'WhatsApp Business Link' },
-      { name: 'Instagram Integration' },
-      { name: 'Facebook Integration' },
-      { name: 'Order Notifications' },
-      { name: 'Customer Orders' },
-      { name: 'Order Management' },
-      { name: 'Repeat Orders' },
-      { name: 'COD / Online Payments' },
-    ],
+    id: 'channels',
+    title: 'Share and take orders',
+    copy: 'Help customers find your store through the channels they already use.',
+    features: ['WhatsApp ordering and order notifications', 'Share your store on Instagram and Facebook'],
   },
   {
-    title: 'Products, prices, and delivery',
-    summary: 'Add what you sell, set the price, and say how far you deliver.',
-    features: [
-      { name: 'Product Catalog' },
-      { name: 'Product Categories' },
-      { name: 'Product Images' },
-      { name: 'Product Descriptions' },
-      { name: 'SKU & Pricing Management' },
-      { name: 'Basic Inventory / Availability' },
-      { name: 'Delivery & Service Area' },
-    ],
+    id: 'catalog',
+    title: 'Manage products and orders',
+    copy: 'Keep your catalogue, pricing, and order information organized.',
+    features: ['Product catalogue and SKU pricing', 'Product availability and images', 'Order management in one place'],
   },
   {
-    title: 'A simple view of the business',
-    summary: 'See what sold, without learning a new tool.',
-    features: [
-      { name: 'Basic Sales Dashboard' },
-      { name: 'Customer Management', note: 'Basic' },
-      { name: 'AI Product Descriptions', note: 'Basic' },
-      { name: 'AI Catalog Assistance', note: 'Basic' },
-      { name: 'Priority Support', note: 'Standard' },
-    ],
+    id: 'insights',
+    title: 'Understand your sales',
+    copy: 'See a simple view of orders and how your business is doing.',
+    features: ['Basic sales dashboard', 'Order activity at a glance', 'Customer relationships stay yours'],
   },
 ]
 
 export function starterIncludedFeatureNames(): string[] {
-  return [starterPlan.trial, ...starterFeatureGroups.flatMap((group) => group.features.map((feature) => feature.name))]
+  return starterFeatureGroups.flatMap((group) => group.features)
 }
