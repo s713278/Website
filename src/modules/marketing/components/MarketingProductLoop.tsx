@@ -30,12 +30,12 @@ export function MarketingProductLoop() {
       className="border-y border-slate-200 bg-white py-4"
       aria-label="Product demo path"
     >
-      <div className="marketing-measure marketing-gutter box-content flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="marketing-measure marketing-gutter box-content flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
         <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
           See the product loop
         </p>
 
-        <div className="flex flex-1 flex-wrap items-center justify-center gap-2 md:gap-3">
+        <div className="-mx-2 flex flex-1 flex-wrap items-center gap-2 md:gap-3 lg:mx-0 lg:justify-center">
           {steps.map((step, index) => (
             <div key={step.num} className="flex items-center gap-2 md:gap-3">
               {index > 0 ? (

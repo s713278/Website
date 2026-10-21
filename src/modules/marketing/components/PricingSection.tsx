@@ -131,7 +131,7 @@ function PricingCheckItem({ children }: { children: ReactNode }) {
   return (
     <li className="flex min-w-0 items-start gap-[0.45rem] text-[0.84rem] text-gray-700 [overflow-wrap:anywhere] min-[481px]:text-[0.9rem]">
       <Check className="mt-[0.2rem] size-[0.9rem] shrink-0 stroke-[3] text-emerald-600" aria-hidden />
-      <span className="min-w-0">{children}</span>
+      <span className="min-w-0 text-pretty">{children}</span>
     </li>
   )
 }
@@ -288,7 +288,7 @@ export function PricingSection() {
         </div>
         <p
           data-pricing-footnote
-          className="mt-12 text-pretty text-[0.73rem] leading-[1.55] text-gray-500 min-[481px]:text-[0.78rem] md:text-center"
+          className="mt-12 text-pretty text-[0.73rem] leading-[1.55] text-gray-500 min-[481px]:text-[0.78rem] md:mx-auto md:max-w-3xl md:text-balance md:text-center"
         >
           *MithraDirect charges no commission on sales. Payment-provider and other third-party fees may still apply.
           Vendors manage their own products, pricing, payments, fulfilment, delivery, returns, and customer service.

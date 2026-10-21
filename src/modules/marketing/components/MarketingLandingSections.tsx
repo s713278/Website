@@ -181,10 +181,10 @@ const testimonials = [
 export function SectionHeader({ title, copy }: { title: ReactNode; copy: ReactNode }) {
   return (
     <header className="mx-auto max-w-3xl text-center">
-      <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
+      <h2 className="text-balance font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
         {title}
       </h2>
-      <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
+      <p className="mt-3 text-balance text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
     </header>
   )
 }
@@ -222,7 +222,7 @@ export function TrustedBySection() {
             </span>
             <div>
               <h3 className="font-display text-base font-bold text-slate-950">{seller.title}</h3>
-              <p className="mt-1 text-sm text-slate-500">{seller.copy}</p>
+              <p className="mt-1 text-pretty text-sm text-slate-500">{seller.copy}</p>
             </div>
           </article>
         ))}
@@ -250,7 +250,7 @@ export function FeaturesSection() {
                 <FeatureIcon className="size-6" aria-hidden />
               </span>
               <h3 className="font-display mt-5 text-xl font-bold text-slate-950">{feature.title}</h3>
-              <p className="mt-2 leading-7 text-slate-600">{feature.copy}</p>
+              <p className="mt-2 text-pretty leading-7 text-slate-600">{feature.copy}</p>
             </article>
           )
         })}
@@ -277,7 +277,7 @@ export function HowItWorksSection() {
               {index + 1}
             </span>
             <h3 className="font-display mt-5 text-lg font-bold text-slate-950">{step.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{step.copy}</p>
+            <p className="mt-2 text-balance text-sm leading-6 text-slate-600">{step.copy}</p>
           </article>
         ))}
       </div>
@@ -588,10 +588,10 @@ export function ExploreStoresSection() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600 sm:text-sm">
             Stores near you
           </p>
-          <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
+          <h2 className="mt-3 text-balance font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">
             Your neighbourhood, now delivering
           </h2>
-          <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">
+          <p className="mt-3 text-balance text-base leading-7 text-slate-600 sm:text-lg">
             Set your area and meet the local makers who deliver to your door.
           </p>
         </header>
@@ -611,7 +611,7 @@ export function ExploreStoresSection() {
               <p className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-emerald-700">
                 {location ? 'Delivering to' : 'Set your delivery point'}
               </p>
-              <p className="truncate font-display text-base font-bold text-slate-950 sm:text-lg">
+              <p className="line-clamp-2 font-display text-base leading-snug font-bold text-slate-950 sm:text-lg">
                 {location?.label ??
                   (locating
                     ? 'Finding your location…'
@@ -832,7 +832,7 @@ export function ExploreStoresSection() {
         ) : null}
 
         <div className="mt-10">
-          <p className="text-center text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
             Browse by category
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -879,7 +879,12 @@ export function ComparisonSection() {
     <SectionShell className="bg-slate-50">
       <SectionHeader
         title="MithraDirect vs Others"
-        copy="See why local sellers choose a WhatsApp-first, zero-commission platform."
+        copy={
+          <>
+            See why local sellers choose a <span className="whitespace-nowrap">WhatsApp-first</span>, zero-commission
+            platform.
+          </>
+        }
       />
       <div className="mt-10 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] border-collapse text-left">
@@ -940,7 +945,7 @@ export function TestimonialsSection() {
                 <Star key={index} className="size-4 fill-current" aria-hidden />
               ))}
             </div>
-            <blockquote className="mt-5 flex-1 text-base leading-7 text-slate-800">
+            <blockquote className="mt-5 flex-1 text-pretty text-base leading-7 text-slate-800">
               “{testimonial.quote}”
             </blockquote>
             <figcaption className="mt-6 flex items-center gap-3">
@@ -963,10 +968,10 @@ export function InvitationSection() {
   return (
     <section className="marketing-gutter bg-white py-16 sm:py-20">
       <div className="marketing-measure overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-600 px-6 py-12 text-center text-white sm:px-12">
-        <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h2 className="text-balance font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
           Ready to Grow Your Business?
         </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-emerald-50 sm:text-lg">
+        <p className="mx-auto mt-3 max-w-2xl text-balance text-base leading-7 text-emerald-50 sm:text-lg">
           Create your online store today and start receiving WhatsApp orders from Instagram & nearby customers.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
