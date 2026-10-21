@@ -119,6 +119,203 @@
   max-width: var(--marketing-measure);
 }
 
+/* Pricing deck. usePricingStage sets data-pricing-stage on the section while stage mode applies and
+   measures the heading block (--pricing-head-h), the tallest card (--pricing-card-h) and, on
+   desktop, the plan card (--pricing-plan-h); without the attribute the cards stay an ordinary
+   stack. In the deck the heading block and every card are sticky: the heading pins first and each
+   card lands one peek below the card before it, so the cards pile up under their heading rather
+   than swap. The cards share one height and every margin box (the heading's included) ends on the
+   same line, so the whole deck, and on desktop the plan card beside it, releases on the scroll that
+   lands the last card. The 3s are the four cards' three landings. On tablet the deck hangs under
+   the header, leaving the rest of the viewport for the cards still arriving; on desktop it centres
+   beside the plan card. Screen only, so print stays static. */
+@media screen {
+  [data-pricing-stage] {
+    --pricing-peek: 14px;
+    --pricing-head: var(--pricing-head-h, 0px);
+    --pricing-card-min: max(
+      var(--pricing-card-h, 0px),
+      var(--pricing-plan-h, 0px) - var(--pricing-head) - 3 * var(--pricing-peek)
+    );
+    --pricing-stack-h: calc(var(--pricing-card-min) + 3 * var(--pricing-peek));
+    --pricing-pinned-h: calc(var(--pricing-head) + var(--pricing-stack-h));
+    --pricing-pin-top: calc(var(--header-height) + 1.5rem);
+    --pricing-deck-top: calc(var(--pricing-pin-top) + var(--pricing-head));
+  }
+
+  [data-pricing-stage='desktop'] {
+    --pricing-pin-top: max(calc(var(--header-height) + 1rem), calc((100svh - var(--pricing-pinned-h)) / 2));
+  }
+
+  [data-pricing-stage='desktop'] [data-pricing-plan] {
+    top: var(--pricing-pin-top);
+    min-height: var(--pricing-pinned-h);
+  }
+
+  /* The heading's margin box reaches the deck's landed bottom, so it releases with the last card;
+     the deck's matching negative margin keeps the flow spacing unchanged. */
+  [data-pricing-stage] [data-pricing-head] {
+    position: sticky;
+    top: var(--pricing-pin-top);
+    margin-bottom: var(--pricing-stack-h);
+  }
+
+  /* Flex, not grid: a sticky grid item could only travel inside its own row. */
+  [data-pricing-stage] [data-pricing-cards] {
+    display: flex;
+    flex-direction: column;
+    margin-top: calc(-1 * var(--pricing-stack-h));
+  }
+
+  [data-pricing-stage] [data-pricing-card] {
+    --pricing-card-i: 0;
+    position: sticky;
+    top: calc(var(--pricing-deck-top) + var(--pricing-card-i) * var(--pricing-peek));
+    min-height: var(--pricing-card-min);
+    margin-bottom: calc((3 - var(--pricing-card-i)) * var(--pricing-peek));
+    transform-origin: 50% 0;
+    /* The upward shadow falls on the card beneath, so each landing reads as one sheet over another. */
+    box-shadow:
+      0 -1px 2px rgba(15, 23, 42, 0.04),
+      0 -16px 36px -22px rgba(15, 23, 42, 0.2),
+      0 2px 6px rgba(15, 23, 42, 0.04),
+      0 20px 48px -12px rgba(15, 23, 42, 0.06);
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(2) {
+    --pricing-card-i: 1;
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(3) {
+    --pricing-card-i: 2;
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(4) {
+    --pricing-card-i: 3;
+  }
+
+  /* Where scroll-driven animations exist, each card eases into its slot and its landing presses
+     every card beneath back one step under a veil. A landing runs from the arriving card's top
+     meeting the bottom of the card before it to its sticky top, measured from the moment its top
+     enters the viewport (cover 0%). Over that stretch the card's offset is
+     D * (t - ease(t)): an eased lift composited with a linear return, where D is the stretch and
+     ease(t) = t + t² - t³ (the bezier below). The card enters at page speed, gathers slightly, and
+     decelerates to rest on its slot; the cards beneath recede on the same curve. */
+  @supports (animation-timeline: view()) {
+    [data-pricing-stage] [data-pricing-cards] {
+      --pricing-land-ease: cubic-bezier(0.3333, 0.3333, 0.6667, 1);
+      --pricing-land-d: calc(var(--pricing-card-min) - var(--pricing-peek));
+      --pricing-arrive-from: calc(100svh - var(--pricing-deck-top) - var(--pricing-card-min));
+      --pricing-arrive-2: cover var(--pricing-arrive-from) cover calc(100svh - var(--pricing-deck-top) - var(--pricing-peek));
+      --pricing-arrive-3: cover calc(var(--pricing-arrive-from) - var(--pricing-peek)) cover
+        calc(100svh - var(--pricing-deck-top) - 2 * var(--pricing-peek));
+      --pricing-arrive-4: cover calc(var(--pricing-arrive-from) - 2 * var(--pricing-peek)) cover
+        calc(100svh - var(--pricing-deck-top) - 3 * var(--pricing-peek));
+      timeline-scope: --pricing-card-2, --pricing-card-3, --pricing-card-4;
+    }
+
+    [data-pricing-stage] [data-pricing-card] {
+      animation-duration: auto;
+      animation-fill-mode: both;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(1) {
+      animation-name: pricing-card-recede, pricing-card-recede, pricing-card-recede;
+      animation-timeline: --pricing-card-2, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-2), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease);
+      animation-composition: replace, add, add;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(2) {
+      view-timeline: --pricing-card-2 block;
+      animation-name: pricing-card-lift, pricing-card-return, pricing-card-recede, pricing-card-recede;
+      animation-timeline: --pricing-card-2, --pricing-card-2, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-2), var(--pricing-arrive-2), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear, var(--pricing-land-ease);
+      animation-composition: replace, add, replace, add;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(3) {
+      view-timeline: --pricing-card-3 block;
+      animation-name: pricing-card-lift, pricing-card-return, pricing-card-recede;
+      animation-timeline: --pricing-card-3, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-3), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear, var(--pricing-land-ease);
+      animation-composition: replace, add, replace;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(4) {
+      view-timeline: --pricing-card-4 block;
+      animation-name: pricing-card-lift, pricing-card-return;
+      animation-timeline: --pricing-card-4, --pricing-card-4;
+      animation-range: var(--pricing-arrive-4), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear;
+      animation-composition: replace, add;
+    }
+
+    /* A veil of the section ground settles over each card as the next lands, so the half-covered
+       copy recedes instead of competing with the card arriving over it. */
+    [data-pricing-stage] [data-pricing-card]:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--md-bg);
+      pointer-events: none;
+      animation: pricing-card-veil var(--pricing-land-ease) both;
+      animation-timeline: --pricing-card-2;
+      animation-range: var(--pricing-arrive-2);
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(2)::after {
+      animation-timeline: --pricing-card-3;
+      animation-range: var(--pricing-arrive-3);
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(3)::after {
+      animation-timeline: --pricing-card-4;
+      animation-range: var(--pricing-arrive-4);
+    }
+  }
+
+  @keyframes pricing-card-lift {
+    from {
+      translate: 0 0;
+    }
+    to {
+      translate: 0 calc(-1 * var(--pricing-land-d));
+    }
+  }
+
+  @keyframes pricing-card-return {
+    from {
+      translate: 0 0;
+    }
+    to {
+      translate: 0 var(--pricing-land-d);
+    }
+  }
+
+  @keyframes pricing-card-recede {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes pricing-card-veil {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 0.75;
+    }
+  }
+}
+
 @layer components {
   /* The bay the shop takes shape in: phone above, a short count below. */
   .onboarding-preview-stage {

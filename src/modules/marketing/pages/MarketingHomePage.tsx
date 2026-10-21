@@ -7,13 +7,15 @@ import {
   FeaturesSection,
   HowItWorksSection,
   InvitationSection,
-  PricingSection,
   TestimonialsSection,
   TrustedBySection,
 } from '@/modules/marketing/components/MarketingLandingSections'
 import { MarketingProductLoop } from '@/modules/marketing/components/MarketingProductLoop'
+import { PricingSection } from '@/modules/marketing/components/PricingSection'
+import { useSmoothScroll } from '@/modules/marketing/hooks/useSmoothScroll'
 
 export function MarketingHomePage() {
+  useSmoothScroll()
   return (
     <>
       <MarketingHero />
