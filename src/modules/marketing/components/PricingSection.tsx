@@ -224,9 +224,9 @@ export function PricingSection() {
           }
           copy={
             <>
-              Everything you need to present your products, share your store, and{' '}
+              Put your shop online, share it with customers, and manage orders from one place.{' '}
               <br className="hidden md:inline" />
-              manage customer orders — for one monthly price.
+              Start with a {starterPlan.trialDays}-day free trial, then pay one flat monthly price.
             </>
           }
         />
@@ -274,13 +274,10 @@ export function PricingSection() {
             </div>
           </article>
           <div className="min-w-0">
-            <div data-pricing-head className="pb-7">
-              <h3 className="text-balance font-display text-xl leading-7 font-semibold tracking-[-0.2px] text-slate-900">
-                Everything you need to start selling online
+            <div data-pricing-head className="pb-5">
+              <h3 className="font-display text-xl leading-7 font-semibold tracking-[-0.2px] text-slate-900">
+                What’s included
               </h3>
-              <p className="mt-1 text-pretty text-sm leading-[22px] text-slate-600">
-                Share your store with customers and manage your products and orders in one place.
-              </p>
             </div>
             <div data-pricing-cards className="grid gap-4 md:gap-6">
               {starterFeatureGroups.map((group) => (

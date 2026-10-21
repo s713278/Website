@@ -18,18 +18,23 @@ describe('resolveStageMode', () => {
 
 describe('planBarVisible', () => {
   it('hides the bar while the plan card is on screen', () => {
-    expect(planBarVisible({ planCardBottom: 200, footnoteTop: 3000, viewportHeight: 844 })).toBe(false)
+    expect(planBarVisible({ topInset: 0, planCardBottom: 200, footnoteTop: 3000, viewportHeight: 844 })).toBe(false)
   })
 
   it('shows the bar once the plan card has scrolled above the viewport', () => {
-    expect(planBarVisible({ planCardBottom: -1, footnoteTop: 2000, viewportHeight: 844 })).toBe(true)
+    expect(planBarVisible({ topInset: 0, planCardBottom: -1, footnoteTop: 2000, viewportHeight: 844 })).toBe(true)
+  })
+
+  it('shows the bar as soon as the plan card slides under the sticky header', () => {
+    expect(planBarVisible({ topInset: 68, planCardBottom: 69, footnoteTop: 2000, viewportHeight: 844 })).toBe(false)
+    expect(planBarVisible({ topInset: 68, planCardBottom: 68, footnoteTop: 2000, viewportHeight: 844 })).toBe(true)
   })
 
   it('hides the bar once the footnote enters', () => {
-    expect(planBarVisible({ planCardBottom: -900, footnoteTop: 800, viewportHeight: 844 })).toBe(false)
+    expect(planBarVisible({ topInset: 0, planCardBottom: -900, footnoteTop: 800, viewportHeight: 844 })).toBe(false)
   })
 
   it('hides the bar above the section', () => {
-    expect(planBarVisible({ planCardBottom: 1500, footnoteTop: 4000, viewportHeight: 844 })).toBe(false)
+    expect(planBarVisible({ topInset: 0, planCardBottom: 1500, footnoteTop: 4000, viewportHeight: 844 })).toBe(false)
   })
 })

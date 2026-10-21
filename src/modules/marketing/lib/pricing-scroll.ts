@@ -11,7 +11,15 @@ export function resolveStageMode(input: { stageQuery: boolean; desktop: boolean 
   return input.desktop ? 'desktop' : 'tablet'
 }
 
-/** The bar shows once the plan card is above the viewport and until the footnote enters it. */
-export function planBarVisible(input: { planCardBottom: number; footnoteTop: number; viewportHeight: number }): boolean {
-  return input.planCardBottom <= 0 && input.footnoteTop > input.viewportHeight
+/**
+ * The bar shows once the plan card has slid under the sticky header (its bottom at or above
+ * `topInset`, the header's bottom edge) and until the footnote enters the viewport.
+ */
+export function planBarVisible(input: {
+  planCardBottom: number
+  topInset: number
+  footnoteTop: number
+  viewportHeight: number
+}): boolean {
+  return input.planCardBottom <= input.topInset && input.footnoteTop > input.viewportHeight
 }

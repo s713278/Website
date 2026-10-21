@@ -44,10 +44,9 @@ describe('PricingSection', () => {
     const section = container.querySelector('section#pricing')
     expect(section).not.toBeNull()
     expect(section?.classList.contains('scroll-mt-24')).toBe(true)
-    expect(screen.getByText('Everything you need to start selling online')).toBeTruthy()
-    expect(
-      screen.getByText('Share your store with customers and manage your products and orders in one place.'),
-    ).toBeTruthy()
+    expect(screen.getByText(/Put your shop online, share it with customers, and manage orders from one place/)).toBeTruthy()
+    expect(screen.getByText(/Start with a 14-day free trial, then pay one flat monthly price\./)).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'What’s included' })).toBeTruthy()
     expect(screen.getByText(/charges no commission on sales/)).toBeTruthy()
   })
 
@@ -268,11 +267,17 @@ describe('PricingSection deck', () => {
 type IntersectionCallback = (entries: Array<Partial<IntersectionObserverEntry>>) => void
 
 function stubIntersectionObserver() {
-  const instances: Array<{ callback: IntersectionCallback; targets: Element[]; disconnected: boolean }> = []
+  type Instance = {
+    callback: IntersectionCallback
+    options?: IntersectionObserverInit
+    targets: Element[]
+    disconnected: boolean
+  }
+  const instances: Instance[] = []
   class CapturingObserver {
-    instance: { callback: IntersectionCallback; targets: Element[]; disconnected: boolean }
-    constructor(callback: IntersectionCallback) {
-      this.instance = { callback, targets: [], disconnected: false }
+    instance: Instance
+    constructor(callback: IntersectionCallback, options?: IntersectionObserverInit) {
+      this.instance = { callback, options, targets: [], disconnected: false }
       instances.push(this.instance)
     }
     observe(target: Element) {
@@ -293,11 +298,20 @@ function stubIntersectionObserver() {
     const instance = instances.at(-1)!
     act(() => {
       instance.callback(
-        targets.map((target) => ({ target, rootBounds: { height: viewportHeight } as DOMRectReadOnly })),
+        targets.map((target) => ({ target, rootBounds: { bottom: viewportHeight } as DOMRectReadOnly })),
       )
     })
   }
   return { fire, instances }
+}
+
+/** Mounts a stand-in for the site header's bar row with the given bottom edge. */
+function stubHeaderBar(bottom: number) {
+  const bar = document.createElement('div')
+  bar.setAttribute('data-marketing-header-bar', '')
+  vi.spyOn(bar, 'getBoundingClientRect').mockImplementation(() => ({ top: 0, bottom }) as DOMRect)
+  document.body.prepend(bar)
+  return bar
 }
 
 /** Stubs live layout for the plan card and footnote; returns a setter for the next frame. */
@@ -327,6 +341,7 @@ describe('PricingSection plan bar', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    document.querySelector('[data-marketing-header-bar]')?.remove()
   })
 
   it('keeps the bar inert until the plan card has scrolled away', async () => {
@@ -361,6 +376,47 @@ describe('PricingSection plan bar', () => {
     geometry.set({ planBottom: 1500, footnoteTop: 4000 })
     io.fire([section], 844)
     await waitFor(() => expectBarHidden(bar, true))
+  })
+
+  it('shows the bar as soon as the plan card slides under the sticky header', async () => {
+    stubHeaderBar(68)
+    const io = stubIntersectionObserver()
+    const { container } = renderPricing()
+    const bar = container.querySelector<HTMLElement>('[data-pricing-bar]')!
+    const geometry = stubBarGeometry(container)
+    expect(io.instances.at(-1)!.options?.rootMargin).toBe('-68px 0px 0px 0px')
+    geometry.set({ planBottom: 69, footnoteTop: 2000 })
+    io.fire([geometry.plan], 844)
+    await waitFor(() => expectBarHidden(bar, true))
+    geometry.set({ planBottom: 68, footnoteTop: 2000 })
+    io.fire([geometry.plan], 844)
+    await waitFor(() => expectBarHidden(bar, false))
+  })
+
+  it('re-roots the observer when the header bar changes height', () => {
+    const header = stubHeaderBar(64)
+    let resize = () => {}
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resize = callback
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+    const io = stubIntersectionObserver()
+    renderPricing()
+    const first = io.instances.at(-1)!
+    expect(first.options?.rootMargin).toBe('-64px 0px 0px 0px')
+    resize()
+    expect(io.instances.at(-1)).toBe(first)
+    vi.spyOn(header, 'getBoundingClientRect').mockImplementation(() => ({ top: 0, bottom: 68 }) as DOMRect)
+    resize()
+    expect(first.disconnected).toBe(true)
+    expect(io.instances.at(-1)!.options?.rootMargin).toBe('-68px 0px 0px 0px')
   })
 
   it('shows the plan summary from existing plan data', () => {

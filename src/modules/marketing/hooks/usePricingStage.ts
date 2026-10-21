@@ -78,11 +78,16 @@ export function usePricingStage(root: RefObject<HTMLElement | null>): void {
 }
 
 /**
- * Whether the compact plan bar (below `lg`) should show: once the plan card has scrolled above the
- * viewport, and not while the footnote is on screen. An IntersectionObserver only reports targets
- * whose intersecting state flipped, so a remembered rect goes stale after an instant jump (Home,
- * End, an anchor). The callback therefore reads live geometry, and the section itself is observed
- * too: any jump that changes the bar's state crosses a plan card, footnote or section edge.
+ * Whether the compact plan bar (below `lg`) should show: once the plan card has slid under the
+ * sticky site header, and not while the footnote is on screen. The observer's root starts at the
+ * header's bottom edge (a negative top `rootMargin`), so it fires the moment the card's trial button
+ * disappears behind the header; the header bar is re-measured on resize because `--header-height`
+ * changes at `40rem`. The header's mobile menu is excluded by measuring only its bar row.
+ *
+ * An IntersectionObserver only reports targets whose intersecting state flipped, so a remembered
+ * rect goes stale after an instant jump (Home, End, an anchor). The callback therefore reads live
+ * geometry, and the section itself is observed too: any jump that changes the bar's state crosses
+ * a plan card, footnote or section edge.
  */
 export function usePlanBarVisible(root: RefObject<HTMLElement | null>): boolean {
   const [visible, setVisible] = useState(false)
@@ -92,20 +97,41 @@ export function usePlanBarVisible(root: RefObject<HTMLElement | null>): boolean 
     const plan = section.querySelector('[data-pricing-plan]')
     const footnote = section.querySelector('[data-pricing-footnote]')
     if (!plan || !footnote) return
+    const headerBar = document.querySelector('[data-marketing-header-bar]')
 
-    const observer = new IntersectionObserver((entries) => {
-      setVisible(
-        planBarVisible({
-          planCardBottom: plan.getBoundingClientRect().bottom,
-          footnoteTop: footnote.getBoundingClientRect().top,
-          viewportHeight: entries[0]?.rootBounds?.height ?? window.innerHeight,
-        }),
+    let observer: IntersectionObserver | null = null
+    let topInset = -1
+
+    function observe() {
+      const nextInset = Math.max(0, Math.ceil(headerBar?.getBoundingClientRect().bottom ?? 0))
+      if (nextInset === topInset) return
+      topInset = nextInset
+      observer?.disconnect()
+      observer = new IntersectionObserver(
+        (entries) => {
+          setVisible(
+            planBarVisible({
+              planCardBottom: plan!.getBoundingClientRect().bottom,
+              topInset,
+              footnoteTop: footnote!.getBoundingClientRect().top,
+              viewportHeight: entries[0]?.rootBounds?.bottom ?? window.innerHeight,
+            }),
+          )
+        },
+        { rootMargin: `-${topInset}px 0px 0px 0px` },
       )
-    })
-    observer.observe(section)
-    observer.observe(plan)
-    observer.observe(footnote)
-    return () => observer.disconnect()
+      observer.observe(section!)
+      observer.observe(plan!)
+      observer.observe(footnote!)
+    }
+
+    observe()
+    const resizeObserver = headerBar && typeof ResizeObserver === 'function' ? new ResizeObserver(observe) : null
+    if (headerBar) resizeObserver?.observe(headerBar)
+    return () => {
+      resizeObserver?.disconnect()
+      observer?.disconnect()
+    }
   }, [root])
   return visible
 }
