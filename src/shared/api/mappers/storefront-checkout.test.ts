@@ -141,7 +141,11 @@ describe('mapStorefrontCheckoutOptions', () => {
         id: '10',
         name: 'Main Store',
         address: '123 Main St, Hyderabad',
+        latitude: null,
+        longitude: null,
         readyInMinutes: 30,
+        contactName: null,
+        contactPhone: null,
         pickupSlots: [
           {
             id: 'pickup-slot-0-Morning',
@@ -155,6 +159,55 @@ describe('mapStorefrontCheckoutOptions', () => {
       },
     ])
     expect(mapped?.pickupMessage).toBe('Pickup is free.')
+  })
+
+  it('maps nested pickup address, coordinates, and contact', () => {
+    const mapped = mapStorefrontCheckoutOptions({
+      success: true,
+      data: {
+        delivery_methods: ['STORE_PICKUP'],
+        pickup_options: {
+          stores: [
+            {
+              id: 7,
+              name: 'Karimnagar',
+              address: {
+                fullAddress:
+                  '1st Floor, H.no:10-3-603/1, Rd.no:4, near Dmart, Meher Baba Nagar, Vavilalapally, Karimnagar, Telangana 505001, India',
+                addressLine1: '1st Floor, H.no:10-3-603/1',
+                city: 'Karimnagar',
+              },
+              latitude: 18.458436,
+              longitude: 79.118518,
+              ready_in_minutes: 30,
+              pickup_slots: ['Morning', 'Evening'],
+              contact: { name: 'Ramana', phone: '6304333175' },
+            },
+          ],
+          pickup_message: 'Pickup is free. Your order will be ready for pickup.',
+        },
+        payment_options: [{ id: 1, type: 'CASH_ON_DELIVERY', label: 'COD', default: true }],
+        delivery_slots: [],
+      },
+    })
+
+    expect(mapped?.pickupStores).toEqual([
+      {
+        id: '7',
+        name: 'Karimnagar',
+        address:
+          '1st Floor, H.no:10-3-603/1, Rd.no:4, near Dmart, Meher Baba Nagar, Vavilalapally, Karimnagar, Telangana 505001, India',
+        latitude: 18.458436,
+        longitude: 79.118518,
+        readyInMinutes: 30,
+        contactName: 'Ramana',
+        contactPhone: '6304333175',
+        pickupSlots: [
+          { id: 'pickup-slot-0-Morning', label: 'Morning' },
+          { id: 'pickup-slot-1-Evening', label: 'Evening' },
+        ],
+      },
+    ])
   })
 
   it('still accepts older available_delivery_dates examples', () => {

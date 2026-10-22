@@ -124,12 +124,16 @@ describe('CheckoutView', () => {
     }
 
     const under = renderCheckout([{ ...line, price: 245, qty: 1, lineTotal: 245 }], options)
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('₹100')
+    expect(
+      screen.getAllByText('Home delivery').some((el) => el.closest('div')?.textContent?.includes('₹100')),
+    ).toBe(true)
     expect(screen.getAllByText('₹345').length).toBeGreaterThan(0)
     under.unmount()
 
     renderCheckout([{ ...line, price: 500, qty: 1, lineTotal: 500 }], options)
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('Free')
+    expect(
+      screen.getAllByText('Home delivery').some((el) => el.closest('div')?.textContent?.includes('Free')),
+    ).toBe(true)
     expect(screen.getAllByText('₹500').length).toBeGreaterThan(0)
   })
 
@@ -151,7 +155,9 @@ describe('CheckoutView', () => {
     expect(screen.getByText('In-store')).toBeTruthy()
     expect(screen.getByText('Contact: +91 9111111111')).toBeTruthy()
     expect(screen.queryByText('Delivering here')).toBeNull()
-    expect(screen.getByText('Delivery').closest('div')?.textContent).toContain('Free')
+    expect(
+      screen.getAllByText('Store pickup').some((el) => el.closest('div')?.textContent?.includes('Free')),
+    ).toBe(true)
     expect(
       screen.getByText(/This store has not configured pickup times yet/),
     ).toBeTruthy()
@@ -198,7 +204,11 @@ describe('CheckoutView', () => {
           id: '10',
           name: 'Main Store',
           address: '123 Main St',
+          latitude: 18.458436,
+          longitude: 79.118518,
           readyInMinutes: 30,
+          contactName: 'Ramana',
+          contactPhone: '6304333175',
           pickupSlots: [
             {
               id: 'pickup-slot-0-Morning',
@@ -216,6 +226,9 @@ describe('CheckoutView', () => {
 
     expect(screen.getByText('Pickup time')).toBeTruthy()
     expect(screen.getByRole('radio', { name: /Morning/i })).toBeTruthy()
+    expect(screen.getByText('Contact: Ramana · +91 6304333175')).toBeTruthy()
+    const maps = screen.getByRole('link', { name: /Open in Maps/i })
+    expect(maps.getAttribute('href')).toContain('18.458436%2C79.118518')
     fireEvent.click(screen.getByRole('radio', { name: /Evening/i }))
 
     fireEvent.click(screen.getAllByRole('button', { name: /Create Order & Send On WhatsApp/ })[0]!)

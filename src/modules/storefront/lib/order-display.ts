@@ -44,18 +44,36 @@ export function deliveryMethodLabel(method?: string) {
 
 export const DELIVERY_ESTIMATE_NOTE = 'May arrive a little earlier or later.'
 
+export function isStorePickupOrder(order: Pick<CustomerOrder, 'deliveryMethod'>) {
+  return order.deliveryMethod?.trim().toUpperCase() === 'STORE_PICKUP'
+}
+
 export function deliveryEstimateFromNotes(notes?: string) {
   const match = notes?.match(/Estimated delivery:\s*([^·\n]+)/i)
   const label = match?.[1]?.trim()
   return label || ''
 }
 
-/** Range from checkout notes, else a single known delivery_date — never a made-up window. */
-export function orderArrivalLabel(order: Pick<CustomerOrder, 'notes' | 'deliveryDate'>) {
+/** Pickup ready time / slot, else delivery estimate from notes or delivery_date. */
+export function orderArrivalLabel(
+  order: Pick<CustomerOrder, 'notes' | 'deliveryDate' | 'deliveryMethod' | 'readyInMinutes' | 'pickupSlot'>,
+) {
+  if (isStorePickupOrder(order)) {
+    const parts: string[] = []
+    if (order.readyInMinutes != null) {
+      parts.push(`Ready in about ${order.readyInMinutes} minutes`)
+    }
+    if (order.pickupSlot?.trim()) parts.push(order.pickupSlot.trim())
+    if (parts.length > 0) return parts.join(' · ')
+  }
   return (
     deliveryEstimateFromNotes(order.notes) ||
     (order.deliveryDate ? formatDeliveryEstimate([order.deliveryDate]) : '')
   )
+}
+
+export function orderArrivalHeading(order: Pick<CustomerOrder, 'deliveryMethod'>) {
+  return isStorePickupOrder(order) ? 'Pickup' : 'Estimated delivery'
 }
 
 export function paymentNotesWithoutEstimate(notes?: string) {

@@ -75,6 +75,8 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
             onSelect={setSelectedId}
             className="mt-2.5"
           />
+        ) : selected.unit ? (
+          <p className="mt-2.5 text-xs font-medium text-slate-500">{selected.unit}</p>
         ) : null}
       </div>
     </article>

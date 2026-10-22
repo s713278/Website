@@ -4,6 +4,7 @@ import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { WhatsAppActionLink } from '@/modules/storefront/components/WhatsAppIcon'
 import {
+  orderArrivalHeading,
   orderArrivalLabel,
   orderItemsSummary,
   orderMrpTotal,
@@ -65,7 +66,7 @@ export function OrderCard({ order, storeId, store }: OrderCardProps) {
 
       {estimate ? (
         <p className="mt-2 text-xs font-medium leading-snug text-slate-700">
-          Estimated delivery: {estimate}
+          {orderArrivalHeading(order)}: {estimate}
         </p>
       ) : null}
 
