@@ -16,6 +16,14 @@ test command because it binds a loopback socket and reopens a durable store.
 
 There is **no end-to-end runner**. Full-journey behaviour is still verified by running the app.
 
+### Worker cap
+
+`vitest.config.ts` sets `maxWorkers: 6`. At Vitest's default of one worker per core, a 12-core
+machine saturated its own CPU: jsdom renders slowed until Testing Library queries passed their 1 s
+`findBy*`/`waitFor` default or the 5 s test timeout, and every full run failed 1–3 different tests.
+With six workers, five consecutive runs passed in the same ~60 s. Fix a load flake by capping
+contention, not by raising a timeout for one file — a larger timeout hides real slowness.
+
 ## Local billing helper HTTP test
 
 The helper is the local Razorpay Test stand-in for the backend's billing API that development demo
@@ -50,7 +58,7 @@ logic suites are never slowed by a DOM they do not touch:
 // @vitest-environment jsdom
 ```
 
-Four rules, each with its reason:
+Five rules, each with its reason:
 
 1. **Clean up by hand.** Vitest globals are off, so Testing Library's automatic cleanup never
    registers itself. Without an explicit `afterEach(cleanup)` the previous render stays mounted and
@@ -67,6 +75,10 @@ Four rules, each with its reason:
 4. **Change the session through `applySession()` / `clearSession()`.** A test that writes to the
    auth store directly takes a path production never takes, and can pass while the real one is
    broken.
+
+5. **Wait for what an effect does.** A `findBy*` resolves on the render that shows an element;
+   focus moves and observers built in passive effects can land after it. Assert them inside
+   `waitFor`, or the test passes on an idle machine and fails under load.
 
 ## Controlling response order
 

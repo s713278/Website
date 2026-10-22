@@ -4,6 +4,7 @@ import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-hea
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { loadStepResources, loadVendorAccountContext, prefetchOnboardingLanding } from './onboarding-server-state'
 import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
+import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
 import { invalidateOnboardingResources, loadOnboardingResource } from './onboarding-resource-cache'
 import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
 
@@ -143,19 +144,44 @@ describe('loadStepResources', () => {
 
   it('reads business types only after the profile shows a saved type', async () => {
     const spies = stubReads('Others')
-    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    const reads = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: true })
     await expect(reads.businessTypes).resolves.toEqual([])
     expect(spies.businessTypes).not.toHaveBeenCalled()
 
     invalidateAll()
     let answer!: (profile: VendorProfile) => void
     spies.profile.mockReturnValue(new Promise((resolve) => { answer = resolve }))
-    const pending = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    const pending = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: true })
     await Promise.resolve()
     expect(spies.businessTypes).not.toHaveBeenCalled()
     answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
     await settled(pending)
     expect(spies.businessTypes).not.toHaveBeenCalled()
+  })
+
+  it('reads Step 3’s business types alongside the profile, with no saved type, and files the step’s first page', async () => {
+    // The reference cache is module-level; 48 other keys push an earlier test's seed out.
+    for (let index = 0; index < 48; index++) {
+      writeReferenceCache(`test-filler:${index}`, { items: [], pageNumber: 0, pageSize: 9, totalPages: 0, totalElements: 0, lastPage: true }, false)
+    }
+    const spies = stubReads('Others')
+    spies.businessTypes.mockResolvedValue({
+      items: Array.from({ length: 12 }, (_, index) => ({ id: index + 1, name: `Type ${index + 1}`, icon: null, displayOrder: index })),
+      pageNumber: 0, pageSize: 100, totalPages: 1, totalElements: 12, lastPage: true,
+    })
+    let answer!: (profile: VendorProfile) => void
+    spies.profile.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    const reads = loadStepResources(VENDOR_ID, 3, { submitted: false, withUnits: true })
+    await Promise.resolve()
+    expect(spies.profile).toHaveBeenCalledTimes(1)
+    expect(spies.businessTypes).toHaveBeenCalledTimes(1)
+    expect(spies.businessTypes.mock.calls[0][0]).toEqual({ pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' })
+
+    answer({ businessName: 'Store', businessType: 'Others', ownerName: '', contactPerson: '', contactNumber: '' })
+    await settled(reads)
+    await expect(reads.businessTypes).resolves.toHaveLength(12)
+    expect(readReferenceCache(businessTypeCacheKey('account', ''))).toMatchObject({ pageNumber: 0, lastPage: false })
+    expect(readReferenceCache(businessTypeCacheKey('account', ''))?.items.map((item) => item.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
   })
 
   it('joins a read in flight, omits a resolved one and honours skip', async () => {

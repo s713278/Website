@@ -74,7 +74,8 @@ const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes'
  * The account resources a step needs to show and save, and whether it needs the platform units.
  *
  * `businessTypes` is listed where the step needs it, but it is a dependent read: callers
- * start it only once the profile shows a saved type. A submitted store's review screen
+ * start it only once the profile shows a saved type, except on Step 3, which lists every
+ * type and reads them alongside the profile. A submitted store's review screen
  * shows status only, so it needs the profile alone.
  */
 export function stepResources(

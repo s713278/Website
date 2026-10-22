@@ -19,10 +19,12 @@ import {
   type VendorContext,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, LoadingSkeleton } from '@/shared/components/ui'
+import { Button } from '@/shared/components/ui'
+import { readCategoryReferenceFirstPage, readProductReferenceFirstPage } from '../../hooks/use-onboarding-catalog'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
+import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache } from '../../lib/onboarding-catalog-cache'
 import {
   invalidateOnboardingResources,
   peekOnboardingResource,
@@ -92,7 +94,7 @@ import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
 import { PreviewStats } from './PreviewStats'
-import { CatalogLoading, type RequestConfirmation } from './StepPrimitives'
+import { QuietSpinner, StepLoading, type RequestConfirmation } from './StepPrimitives'
 
 const EMPTY_CONFIRM: ConfirmDialogState = {
   open: false,
@@ -138,22 +140,18 @@ function PhonePreviewStage({ className, id, labelledBy }: { className?: string; 
   )
 }
 
-/** A step's form area while the account data it needs is read. Catalog steps 3–5 draw the
-    same card grid their own list read shows next, so the two loads read as one. */
-function StepSkeleton({ step }: { step: OnboardingStep }) {
-  return (
-    <div role="status" aria-label="Loading this step" aria-busy="true" className="space-y-3">
-      <LoadingSkeleton className="h-10 rounded-xl" />
-      {step === 3 || step === 4 ? (
-        <CatalogLoading size="choice" />
-      ) : step === 5 ? (
-        <CatalogLoading size="product" />
-      ) : <>
-        <LoadingSkeleton className="h-24 rounded-xl" />
-        <LoadingSkeleton className="h-24 rounded-xl" />
-      </>}
-    </div>
-  )
+/**
+ * Step 4 also waits for its first category page, and Step 5 for its default panel's first
+ * product page, so saved and listed choices paint together. A failed page does not hold
+ * the step: the step's own list reads it again and shows a second failure.
+ */
+function waitsForFirstList(
+  state: 'loading' | 'failed' | 'loaded',
+  step: OnboardingStep,
+  view: AccountLoadView,
+): 'loading' | 'failed' | 'loaded' {
+  const list = step === 4 ? view.categoryList : step === 5 ? view.productPanel : 'loaded'
+  return state === 'loaded' && (list === 'idle' || list === 'loading') ? 'loading' : state
 }
 
 /** In place of a step's form when a read it needs failed. */
@@ -197,11 +195,16 @@ function dropWrittenAccountData(vendorId: string, resources: readonly Onboarding
   invalidateVendorContext(vendorId)
 }
 
-/** Where this visit's account reads stand: the context, each resource and the units. */
+/**
+ * Where this visit's account reads stand: the context, each resource and the units, and
+ * the first reference page Step 4 or Step 5 shows, which is read alongside them.
+ */
 type AccountLoadView = {
   context: ResourceStatus
   resources: Record<OnboardingResource, ResourceStatus>
   units: ResourceStatus
+  categoryList: ResourceStatus
+  productPanel: ResourceStatus
 }
 
 const IDLE_LOAD_VIEW: AccountLoadView = {
@@ -210,6 +213,8 @@ const IDLE_LOAD_VIEW: AccountLoadView = {
     profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle',
   },
   units: 'idle',
+  categoryList: 'idle',
+  productPanel: 'idle',
 }
 
 type AccountEntry = {
@@ -251,6 +256,11 @@ function startAccountEntry(
   let resumeAt: OnboardingStep | null = null
   // No usable pointer: the step is derived once every resource has been read.
   let derivePending = false
+  // Step 4 or 5 is open, so its first list page is wanted; and the list each was read for.
+  let categoryListWanted = false
+  let categoryListKey: string | null = null
+  let productPanelWanted = false
+  let productPanelKey: string | null = null
 
   const store = () => useOnboardingStore.getState()
   const isCurrent = () => !cancelled && useAuthStore.getState().user?.vendorId === vendorId
@@ -368,6 +378,85 @@ function startAccountEntry(
     }
   }
 
+  /**
+   * Step 5's default (first) panel's first product page, read alongside the step's account
+   * reads into the cache the panel paints from, so the step opens with saved and listed
+   * products at once and the panel makes no request of its own. It starts once the
+   * categories are applied, since they name the panel. A failure does not block the step:
+   * it caches nothing, and the panel reads and retries the page itself.
+   */
+  const startProductPanel = () => {
+    const { catalogSource: mode, categories } = store().draft
+    if (!productPanelWanted || mode !== 'account' || !applied.has('categories')) return
+    const first = categories[0]
+    if (!first) {
+      productPanelKey = null
+      view.productPanel = 'loaded'
+      return
+    }
+    const key = productReferenceCacheKey(mode, first.id)
+    // Running already, or failed this visit: the panel's own read takes a failure over.
+    if (key === productPanelKey && (view.productPanel === 'loading' || view.productPanel === 'failed')) return
+    productPanelKey = key
+    if (readReferenceCache(key)) {
+      view.productPanel = 'loaded'
+      return
+    }
+    view.productPanel = 'loading'
+    readProductReferenceFirstPage(mode, first.id).then(
+      () => {
+        if (!isCurrent() || productPanelKey !== key) return
+        view.productPanel = 'loaded'
+        publish()
+      },
+      () => {
+        if (!isCurrent() || productPanelKey !== key) return
+        view.productPanel = 'failed'
+        publish()
+      },
+    )
+  }
+
+  /**
+   * Step 4's first category page, read alongside the step's account reads into the cache the
+   * step paints from, so it opens with saved and listed categories at once and makes no
+   * request of its own. It starts once the business type is applied, since it names the
+   * list. A failure does not block the step: it caches nothing, and the step reads, and
+   * retries, the page itself.
+   */
+  const startCategoryList = () => {
+    const { catalogSource: mode, business } = store().draft
+    if (!categoryListWanted || mode !== 'account' || !applied.has('businessTypes')) return
+    const businessTypeId = business.businessType?.id ?? null
+    if (businessTypeId === null) {
+      // The step asks for a business type first and reads nothing.
+      categoryListKey = null
+      view.categoryList = 'loaded'
+      return
+    }
+    const key = categoryReferenceCacheKey(mode, businessTypeId)
+    // Running already, or failed this visit: the step's own read takes a failure over.
+    if (key === categoryListKey && (view.categoryList === 'loading' || view.categoryList === 'failed')) return
+    categoryListKey = key
+    if (readReferenceCache(key)) {
+      view.categoryList = 'loaded'
+      return
+    }
+    view.categoryList = 'loading'
+    readCategoryReferenceFirstPage(mode, businessTypeId).then(
+      () => {
+        if (!isCurrent() || categoryListKey !== key) return
+        view.categoryList = 'loaded'
+        publish()
+      },
+      () => {
+        if (!isCurrent() || categoryListKey !== key) return
+        view.categoryList = 'failed'
+        publish()
+      },
+    )
+  }
+
   const track = (resource: OnboardingResource | 'units', read: Promise<unknown>) => {
     if (resource === 'units') view.units = 'loading'
     else view.resources[resource] = 'loading'
@@ -377,6 +466,8 @@ function startAccountEntry(
         if (resource === 'units') settleUnits(value as MeasurementCatalog)
         else landValue(resource, value as OnboardingResourceData[typeof resource])
         applyReady()
+        startCategoryList()
+        startProductPanel()
         publish()
       },
       () => {
@@ -404,8 +495,9 @@ function startAccountEntry(
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
       if (resource === 'businessTypes' && view.resources.profile === 'loaded') {
-        // The profile decides whether business types are needed at all.
-        if (!savedBusinessType(values.profile!)) {
+        // Step 3 lists every type, so its read also files the step's first page. Elsewhere
+        // the profile decides whether business types are needed at all.
+        if (step !== 3 && !savedBusinessType(values.profile!)) {
           landValue('businessTypes', [])
           continue
         }
@@ -431,6 +523,10 @@ function startAccountEntry(
       track(resource, reads[resource]!)
     }
     applyReady()
+    categoryListWanted = step === 4
+    productPanelWanted = step === 5
+    startCategoryList()
+    startProductPanel()
     publish()
   }
 
@@ -1239,7 +1335,11 @@ export function OnboardingWizard() {
     : loadView.context === 'failed' ? 'failed'
       // A sample draft has no account copy to wait for.
       : catalogSource !== 'account' ? 'loaded'
-        : stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units })
+        : waitsForFirstList(
+          stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units }),
+          currentStep,
+          loadView,
+        )
   const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
 
   if (!persistenceInitialized || contextPending) {
@@ -1248,7 +1348,7 @@ export function OnboardingWizard() {
     return (
       <div className="onboarding-shell grid h-full min-h-0 place-items-center text-sm text-[var(--ob-ink-soft)]">
         <span className="flex items-center gap-2">
-          <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+          <QuietSpinner className="size-5" />
           {persistenceInitialized ? 'Restoring your setup…' : 'Restoring browser draft…'}
         </span>
       </div>
@@ -1371,7 +1471,7 @@ export function OnboardingWizard() {
                           disabled={currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {stepState === 'loading' ? <StepSkeleton step={currentStep} /> : null}
+                        {stepState === 'loading' ? <StepLoading /> : null}
                         {stepState === 'failed' ? <StepLoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
                         {stepState === 'loaded' ? <>
                           {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}

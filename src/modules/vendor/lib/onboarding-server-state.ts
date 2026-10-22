@@ -73,7 +73,9 @@ export type StepResourceReads = { [R in OnboardingResource]?: Promise<Onboarding
  * from the cache. Defaults to none.
  *
  * Business types are a dependent read: they start only once the profile shows a saved
- * type, and resolve to `[]` without a request when it shows none.
+ * type, and resolve to `[]` without a request when it shows none. Step 3 is the exception:
+ * it lists every type, so it reads them at once alongside the profile, and the read files
+ * the step's first page whether or not a type is saved.
  *
  * Never rejects as a whole. Each promise settles on its own, and an unobserved failure is
  * not reported as unhandled: the cache has already dropped it so the next caller retries.
@@ -95,8 +97,10 @@ export function loadStepResources(
   }
   if (needs.account.includes('businessTypes') && wanted('businessTypes')) {
     const profile = peekOnboardingResource(vendorId, 'profile')
-    reads.businessTypes = (profile ? Promise.resolve(profile.value) : loadAccountResource(vendorId, 'profile'))
-      .then((value) => savedBusinessType(value) ? loadAccountResource(vendorId, 'businessTypes') : [])
+    reads.businessTypes = step === 3
+      ? loadAccountResource(vendorId, 'businessTypes')
+      : (profile ? Promise.resolve(profile.value) : loadAccountResource(vendorId, 'profile'))
+        .then((value) => savedBusinessType(value) ? loadAccountResource(vendorId, 'businessTypes') : [])
   }
   if (options.withUnits && needs.units && !skip.has('units') && peekMeasurementCatalog() === null) {
     reads.units = loadPlatformMeasurements()

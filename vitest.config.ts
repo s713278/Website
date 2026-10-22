@@ -12,6 +12,9 @@ import viteConfig from './vite.config'
  *
  * The app config is merged rather than copied so the `@` and `@mithra/api-client`
  * aliases stay defined in one place.
+ *
+ * Workers are capped because the default (one per core) saturates the CPU and pushes jsdom
+ * queries past their timeouts; see docs/TESTING.md.
  */
 export default mergeConfig(
   viteConfig,
@@ -19,6 +22,7 @@ export default mergeConfig(
     test: {
       environment: 'node',
       include: ['src/**/*.test.{ts,tsx}'],
+      maxWorkers: 6,
     },
   }),
 )

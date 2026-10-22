@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject, type ToggleEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref, type RefObject, type ToggleEvent } from 'react'
 import {
   CheckIcon,
   RefreshCwIcon,
@@ -30,7 +30,7 @@ import {
 } from '../../store/onboarding-store'
 import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
 import { AuthorCategoryForm, AuthorProductForm } from './CatalogAuthoring'
-import { CatalogError, CatalogLoading, CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, LoadMoreButton, type RequestConfirmation } from './StepPrimitives'
+import { CatalogError, CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, LoadingMore, LoadMoreButton, StepLoading, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -197,6 +197,18 @@ function BusinessTypeIcon({ src }: { src: string | null }) {
   )
 }
 
+/**
+ * Whether a list's first read is still running (or, for a caller that also passes its error,
+ * has not yet succeeded). Until it settles, a step shows only the spinner the wizard's own
+ * step read showed, so the two loads read as one. A later read (a search, a retry) keeps the
+ * controls in place, so an input in use is never unmounted.
+ */
+function useFirstLoad(pending: boolean) {
+  const [settled, setSettled] = useState(!pending)
+  if (!settled && !pending) setSettled(true)
+  return !settled
+}
+
 export function BusinessStep({ issues, onUseSample: offerSample, readOnly = false }: Omit<CatalogStepProps, 'confirm'> & {
   /** A submitted store: the saved type stays put, but the list can still be browsed. */
   readOnly?: boolean
@@ -206,6 +218,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   const onUseSample = readOnly ? undefined : offerSample
   const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
   const references = useBusinessTypeReferences(draft.catalogSource)
+  const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const selected = draft.business.businessType
   const referenceIds = new Set(references.items.map((item) => item.id))
   const sets = useCatalogSets({
@@ -229,12 +242,18 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   }, [readOnly, sets.focusIndex])
   const initialError = Boolean(references.error && !references.items.length)
   const incrementalError = Boolean(references.error && references.items.length)
-  const showInitialSkeleton = references.loading || (
+  const listLoading = references.loading || (
     references.searchPending && !items.length
   )
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
     if (selected?.id !== businessType.id) changeBusinessType(businessType)
+  }
+
+  if (firstLoad) {
+    return references.error && draft.catalogSource === 'account'
+      ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
+      : <StepLoading />
   }
 
   return (
@@ -266,7 +285,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
           </div>
         </form>
         {initialError && draft.catalogSource === 'account' ? (
-          <CatalogError message={references.error ?? 'The live business catalog could not be loaded.'} onRetry={references.retry} onUseSample={onUseSample} />
+          <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
         ) : null}
         {!references.loading && !references.error && !references.searchPending && !items.length ? (
           <EmptyState
@@ -276,7 +295,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
               : 'Try a broader search.'}
           />
         ) : null}
-        {showInitialSkeleton || items.length ? (
+        {listLoading || items.length ? (
           <div
             ref={choicesRef}
             id="business-type"
@@ -286,9 +305,9 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
             className="outline-none"
             aria-busy={references.loading || references.loadingMore}
           >
-            {showInitialSkeleton ? <CatalogLoading size="choice" /> : null}
+            {listLoading ? <StepLoading label="Loading business types" /> : null}
             {items.length ? (
-              <fieldset disabled={readOnly} className={cn(choiceGrid, 'min-w-0 border-0 p-0', showInitialSkeleton && 'mt-3')}>
+              <fieldset disabled={readOnly} className={cn(choiceGrid, 'min-w-0 border-0 p-0', listLoading && 'mt-3')}>
                 {items.map((item, index) => (
                   <ChoiceCard
                     key={item.id}
@@ -303,7 +322,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
             ) : null}
             {references.loadingMore && !references.searchPending ? (
               <div className="mt-3">
-                <CatalogLoading count={3} size="choice" />
+                <LoadingMore />
               </div>
             ) : null}
             {incrementalError ? (
@@ -344,6 +363,35 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   )
 }
 
+/**
+ * Brings a card the vendor just authored into view and announces it. Its form sits below the
+ * list while the new entry leads it, so the card can land far above the form. The ref attaches
+ * only once the card is in the rendered list (after the add has also cleared the search), then
+ * lets go, so a later render or a ticked card never scrolls. `nearest` leaves a card that is
+ * already in view where it is.
+ */
+function useRevealAuthored(loadingMore: boolean) {
+  const [targetId, setTargetId] = useState<number | null>(null)
+  const [announcement, setAnnouncement] = useState<string | null>(null)
+  // A later read takes the status over; the add must not be announced again once it ends.
+  if (loadingMore && announcement) setAnnouncement(null)
+  const reveal = useCallback((node: HTMLElement | null) => {
+    if (!node) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' })
+    setTargetId(null)
+  }, [])
+  return {
+    revealAuthored: ({ id, name }: { id: number; name: string }) => {
+      setTargetId(id)
+      setAnnouncement(`Added ${name}`)
+    },
+    revealRef: (id: number) => (id === targetId ? reveal : undefined),
+    /** Shares the list's one status region, so two regions never announce at once. */
+    announcement,
+  }
+}
+
 /** How long a refused tap's note stays up. It answers one tap, so it must not outstay it. */
 const REFUSAL_NOTE_MS = 4000
 
@@ -376,8 +424,10 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   )
   const businessTypeId = draft.business.businessType?.id ?? null
   const references = useCategoryReferences(draft.catalogSource, businessTypeId)
+  const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const query = search.trim().toLowerCase()
   const searchRef = useRef<HTMLInputElement>(null)
+  const { revealAuthored, revealRef, announcement } = useRevealAuthored(references.loadingMore)
   const sets = useCatalogSets({
     items: references.items,
     chosen: draft.categories,
@@ -435,6 +485,11 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   if (!businessTypeId) {
     return <EmptyState title="Choose a business type first" description="Return to Step 3 so the catalog can load matching categories." />
   }
+  if (firstLoad) {
+    return references.error && draft.catalogSource === 'account'
+      ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
+      : <StepLoading />
+  }
 
   return (
     <div className="space-y-4">
@@ -456,8 +511,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           />
         </div>
       </div>
-      {references.loading ? <CatalogLoading size="choice" /> : null}
-      {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.loading ? <StepLoading label="Loading categories" /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
@@ -470,6 +525,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
             return (
               <ChoiceCard
                 key={category.id}
+                ref={revealRef(category.id)}
                 autoFocus={index === sets.focusIndex}
                 selected={choice.chosen}
                 inactive={atLimit}
@@ -493,7 +549,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           })}
         </div>
       ) : null}
-      {references.loadingMore ? <CatalogLoading count={3} size="choice" /> : null}
+      {references.loadingMore ? <LoadingMore /> : null}
       <FieldError issues={issues} field="categories" />
       {sets.hasMore ? (
         <LoadMoreButton
@@ -505,13 +561,19 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           onClick={sets.showMore}
         />
       ) : null}
-      {references.loadingMore || (!sets.hasMore && loadedItems.length) ? (
-        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {references.loadingMore ? 'Loading more categories.' : 'All categories are loaded.'}
-        </p>
-      ) : null}
+      {/* Always mounted, so an add announces even when no other status was showing. */}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {references.loadingMore
+          ? 'Loading more categories.'
+          : announcement ?? (!sets.hasMore && loadedItems.length ? 'All categories are loaded.' : null)}
+      </p>
       {createControlVisible ? (
-        <AuthorCategoryForm onAdded={() => setSearch('')} />
+        <AuthorCategoryForm
+          onAdded={(entry) => {
+            setSearch('')
+            revealAuthored(entry)
+          }}
+        />
       ) : null}
     </div>
   )
@@ -543,6 +605,10 @@ function ProductCategoryPicker({
   const [opened, setOpened] = useState(open)
   if (open && !opened) setOpened(true)
   const references = useProductReferences(draft.catalogSource, categoryId, opened)
+  // Until the panel's first page has arrived it shows only its spinner, or only its error,
+  // so saved and listed products appear together. It never hides again once shown, so
+  // the search box is not unmounted under a vendor typing in it.
+  const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const [search, setSearch] = useState('')
   const [blocked, setBlocked] = useRefusalNote()
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
@@ -550,6 +616,7 @@ function ProductCategoryPicker({
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
   const searchRef = useRef<HTMLInputElement>(null)
+  const { revealAuthored, revealRef, announcement } = useRevealAuthored(references.loadingMore)
   const sets = useCatalogSets<ProductReference>({
     items: references.items,
     chosen: selectedForCategory,
@@ -617,93 +684,104 @@ function ProductCategoryPicker({
       meta={selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
       count={selectedCount}
     >
-      {/* Search lives in the panel, not the summary: a click inside the summary row
-          would collapse the group the vendor is trying to search. */}
-      <div className="space-y-3">
-        <div>
-          <FieldLabel htmlFor={searchId}>Search in {categoryName}</FieldLabel>
-          <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
-            <input
-              ref={searchRef}
-              id={searchId}
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Try a name, e.g. tomato"
-              autoComplete="off"
-              className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+      {firstLoad ? (
+        references.error && draft.catalogSource === 'account'
+          ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
+          : <StepLoading label="Loading products" />
+      ) : (
+        /* Search lives in the panel, not the summary: a click inside the summary row
+            would collapse the group the vendor is trying to search. */
+        <div className="space-y-3">
+          <div>
+            <FieldLabel htmlFor={searchId}>Search in {categoryName}</FieldLabel>
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute top-3.5 left-3 size-4 text-[var(--ob-ink-soft)]" />
+              <input
+                ref={searchRef}
+                id={searchId}
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Try a name, e.g. tomato"
+                autoComplete="off"
+                className="h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] pr-3 pl-9 text-sm outline-none focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)]"
+              />
+            </div>
+          </div>
+          {blocked ? <StepNotice tone="info" message={blocked} /> : null}
+          {references.loading ? <StepLoading label="Loading products" /> : null}
+          {references.error && draft.catalogSource === 'account' ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} /> : null}
+          {!references.loading && !references.error && !items.length ? (
+            <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
+          ) : null}
+          {items.length ? (
+            <div className={choiceGrid}>
+              {items.map((product, index) => {
+                const choice = catalogChoiceState(draft.products, product.id)
+                const onStore = choice.chosen && isProductAssigned(product.id)
+                const atLimit = !choice.chosen && productLimitReached
+                const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
+                const units = measurementSummary.additionalUnitCount
+                  ? [...measurementSummary.units, `+${measurementSummary.additionalUnitCount}`]
+                  : measurementSummary.units
+                if (choice.pending) {
+                  return <PendingProductCard key={product.id} ref={revealRef(product.id)} productId={product.id} onRemove={() => toggle(product)} />
+                }
+                return (
+                  <ChoiceCard
+                    key={product.id}
+                    ref={revealRef(product.id)}
+                    autoFocus={index === sets.focusIndex}
+                    selected={choice.chosen}
+                    inactive={atLimit}
+                    title={product.name}
+                    description={onStore ? 'Saved to your store' : null}
+                    leading={(
+                      <ReferenceThumb
+                        iconSrc={product.icon}
+                        imageSrc={product.imageUrl}
+                        fallbackSrc={productFallbackImage}
+                        className="@min-[30rem]:size-10"
+                      />
+                    )}
+                    footer={<MeasurementChips measurement={measurementSummary.measurement} units={units} />}
+                    onClick={() => toggle(product)}
+                  />
+                )
+              })}
+            </div>
+          ) : null}
+          {references.loadingMore ? <LoadingMore /> : null}
+          {sets.hasMore ? (
+            <LoadMoreButton
+              key={sets.key}
+              label="Show more products"
+              // A search filters loaded pages, so scrolling past few matches could read the whole catalog.
+              pressOnly={Boolean(query)}
+              disabled={references.loading || references.loadingMore || Boolean(references.error)}
+              onClick={sets.showMore}
             />
-          </div>
-        </div>
-        {createControlVisible ? (
-          <div className="border-t border-[var(--ob-line-soft)] pt-3">
-            <AuthorProductForm
-              categoryId={categoryId}
-              categoryName={categoryName}
-              onAdded={() => setSearch('')}
-            />
-          </div>
-        ) : null}
-        {blocked ? <StepNotice tone="info" message={blocked} /> : null}
-        {references.loading ? <CatalogLoading size="product" /> : null}
-        {references.error && draft.catalogSource === 'account' ? <CatalogError message={references.error} onRetry={references.retry} onUseSample={onUseSample} /> : null}
-        {!references.loading && !references.error && !items.length ? (
-          <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
-        ) : null}
-        {items.length ? (
-          <div className={choiceGrid}>
-            {items.map((product, index) => {
-              const choice = catalogChoiceState(draft.products, product.id)
-              const onStore = choice.chosen && isProductAssigned(product.id)
-              const atLimit = !choice.chosen && productLimitReached
-              const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
-              const units = measurementSummary.additionalUnitCount
-                ? [...measurementSummary.units, `+${measurementSummary.additionalUnitCount}`]
-                : measurementSummary.units
-              if (choice.pending) {
-                return <PendingProductCard key={product.id} productId={product.id} onRemove={() => toggle(product)} />
-              }
-              return (
-                <ChoiceCard
-                  key={product.id}
-                  autoFocus={index === sets.focusIndex}
-                  selected={choice.chosen}
-                  inactive={atLimit}
-                  title={product.name}
-                  description={onStore ? 'Saved to your store' : null}
-                  leading={(
-                    <ReferenceThumb
-                      iconSrc={product.icon}
-                      imageSrc={product.imageUrl}
-                      fallbackSrc={productFallbackImage}
-                      className="@min-[30rem]:size-10"
-                    />
-                  )}
-                  footer={<MeasurementChips measurement={measurementSummary.measurement} units={units} />}
-                  onClick={() => toggle(product)}
-                />
-              )
-            })}
-          </div>
-        ) : null}
-        {references.loadingMore ? <CatalogLoading count={3} size="product" /> : null}
-        {sets.hasMore ? (
-          <LoadMoreButton
-            key={sets.key}
-            label="Show more products"
-            // A search filters loaded pages, so scrolling past few matches could read the whole catalog.
-            pressOnly={Boolean(query)}
-            disabled={references.loading || references.loadingMore || Boolean(references.error)}
-            onClick={sets.showMore}
-          />
-        ) : null}
-        {references.loadingMore || (!sets.hasMore && items.length) ? (
+          ) : null}
+          {/* Always mounted, so an add announces even when no other status was showing. */}
           <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-            {references.loadingMore ? 'Loading more products.' : 'All products are loaded.'}
+            {references.loadingMore
+              ? 'Loading more products.'
+              : announcement ?? (!sets.hasMore && items.length ? 'All products are loaded.' : null)}
           </p>
-        ) : null}
-      </div>
+          {createControlVisible ? (
+            <div className="border-t border-[var(--ob-line-soft)] pt-3">
+              <AuthorProductForm
+                categoryId={categoryId}
+                categoryName={categoryName}
+                onAdded={(entry) => {
+                  setSearch('')
+                  revealAuthored(entry)
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
     </CategoryPanel>
   )
 }
@@ -714,7 +792,7 @@ function ProductCategoryPicker({
  * The whole card stays the remove target: a full-size button sits under the picker,
  * since a select cannot live inside a button.
  */
-function PendingProductCard({ productId, onRemove }: { productId: number; onRemove: () => void }) {
+function PendingProductCard({ productId, onRemove, ref }: { productId: number; onRemove: () => void; ref?: Ref<HTMLDivElement> }) {
   const product = useOnboardingStore((state) => state.draft.products.find((item) => item.id === productId))
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const setPendingProductMeasurement = useOnboardingStore((state) => state.setPendingProductMeasurement)
@@ -723,7 +801,7 @@ function PendingProductCard({ productId, onRemove }: { productId: number; onRemo
   const selectId = `pending-product-measurement-${productId}`
 
   return (
-    <div className="relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5">
+    <div ref={ref} className="relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5">
       <button
         type="button"
         aria-pressed="true"

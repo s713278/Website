@@ -90,6 +90,16 @@ export function businessTypeCacheKey(mode: CatalogSource, query: string): string
   ].join(':')
 }
 
+/** Step 4's key for one business type's category list. */
+export function categoryReferenceCacheKey(mode: CatalogSource, businessTypeId: number | null): string {
+  return `category:${mode}:${businessTypeId ?? 'none'}`
+}
+
+/** Step 5's key for one category panel's product list. */
+export function productReferenceCacheKey(mode: CatalogSource, categoryId: number): string {
+  return `product:${mode}:${categoryId}`
+}
+
 /**
  * File Step 3's first unsearched page from a wider read of the same list, so the step's
  * first visit costs no request. `page` must be page 0 of the unfiltered list sorted by id

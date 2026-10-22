@@ -59,7 +59,7 @@ export function MarketingHeader() {
           actions need about 1050px, more than the 960px a 1024 viewport leaves, so the menu
           button takes over until `xl`. */}
       <div className="marketing-gutter">
-        <div className="marketing-measure flex h-(--header-height) items-center justify-between gap-6">
+        <div data-marketing-header-bar className="marketing-measure flex h-(--header-height) items-center justify-between gap-6">
           {/* Logo and links read as one group; the actions stand apart on the right. */}
           <div className="flex items-center gap-10">
             <BrandMark />
