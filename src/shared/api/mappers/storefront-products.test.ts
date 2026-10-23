@@ -262,4 +262,69 @@ describe('mapStorefrontProductPage SKU search rows', () => {
 
     expect(page.items[0]?.name).toBe('Hyderabadi Biryani')
   })
+
+  it('keeps single-variant products like Biryani Masala and Mixed Vegetable Pickle', () => {
+    const page = mapStorefrontProductPage({
+      result: [
+        {
+          vendor_product_id: 423,
+          product_name: 'Biryani Masala',
+          category_id: 153,
+          category_name: 'Spice Powders',
+          active: true,
+          starting_at: 30,
+          default_sku_id: 4404,
+          variants_count: 1,
+          variants: [
+            {
+              sku_id: 4404,
+              quantity_value: 1,
+              unit: 'pcs',
+              active: true,
+              sale_price: 30,
+              list_price: 30,
+              on_sale: false,
+            },
+          ],
+        },
+        {
+          vendor_product_id: 432,
+          product_name: 'Mixed Vegetable Pickle',
+          category_id: 152,
+          category_name: 'Pickles',
+          active: true,
+          starting_at: 210,
+          default_sku_id: 4602,
+          variants_count: 1,
+          variants: [
+            {
+              sku_id: 4602,
+              quantity_value: 500,
+              unit: 'gr',
+              active: true,
+              sale_price: 210,
+              list_price: 220,
+              on_sale: true,
+            },
+          ],
+        },
+      ],
+      page_number: 0,
+      page_size: 6,
+      total_elements: 2,
+      total_pages: 1,
+      last_page: true,
+    })
+
+    expect(page.items.map((product) => product.name)).toEqual([
+      'Biryani Masala',
+      'Mixed Vegetable Pickle',
+    ])
+    expect(page.items[0]?.variants).toEqual([
+      expect.objectContaining({ id: '4404', unit: '1 pcs', price: 30 }),
+    ])
+    expect(page.items[1]?.variants).toEqual([
+      expect.objectContaining({ id: '4602', unit: '500 gr', price: 210 }),
+    ])
+  })
 })

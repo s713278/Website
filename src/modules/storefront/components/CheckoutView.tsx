@@ -43,6 +43,7 @@ import {
   storeOrderSuccessPath,
   storePath,
 } from '@/modules/storefront/lib/store-paths'
+import { mapsSearchUrl } from '@/modules/storefront/lib/store-contact'
 import {
   buildWhatsAppOrderMessage,
   openWhatsAppChat,
@@ -264,9 +265,23 @@ export function CheckoutView({
   const selectedPayment = paymentOptions.find((option) => option.id === payment)
   const selectedPaymentLabel = selectedPayment?.label ?? 'Payment'
   const needsDeliveryAddress = !isStorePickup
-  const storePickupPhone = (store.phone || store.supportWhatsapp || '')
+  const storePickupPhone = (
+    selectedPickupStore?.contactPhone ||
+    store.phone ||
+    store.supportWhatsapp ||
+    ''
+  )
     .replace(/\D/g, '')
     .slice(-10)
+  const pickupMapsHref = selectedPickupStore
+    ? mapsSearchUrl({
+        label: selectedPickupStore.address ?? selectedPickupStore.name,
+        latitude:
+          selectedPickupStore.latitude != null ? String(selectedPickupStore.latitude) : undefined,
+        longitude:
+          selectedPickupStore.longitude != null ? String(selectedPickupStore.longitude) : undefined,
+      })
+    : undefined
 
   const canPlace =
     (needsDeliveryAddress ? Boolean(selected) : true) &&
@@ -706,8 +721,27 @@ export function CheckoutView({
                           Ready in about {selectedPickupStore.readyInMinutes} minutes
                         </p>
                       ) : null}
-                      {storePickupPhone.length === 10 ? (
-                        <p className="mt-1.5 text-xs text-slate-500">Contact: +91 {storePickupPhone}</p>
+                      {selectedPickupStore?.contactName || storePickupPhone.length === 10 ? (
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          Contact:{' '}
+                          {[
+                            selectedPickupStore?.contactName,
+                            storePickupPhone.length === 10 ? `+91 ${storePickupPhone}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      ) : null}
+                      {pickupMapsHref ? (
+                        <a
+                          href={pickupMapsHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-[var(--store-theme,var(--md-green-700))] hover:underline"
+                        >
+                          <MapPin className="size-3.5 shrink-0" aria-hidden />
+                          Open in Maps
+                        </a>
                       ) : null}
                     </div>
                     {!pickupSlotsConfigured ? (
@@ -843,10 +877,10 @@ export function CheckoutView({
                       <SummaryRow label="Service charge" value={formatCurrency(totals.service)} />
                     ) : null}
                   </dl>
-
+                  <div className="mt-4 border-t border-slate-200" />
                   <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3">
                     <span className="text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
-                      Order total
+                      Estimated Total
                     </span>
                     <p className="text-lg font-bold tabular-nums text-[var(--store-theme,var(--md-green-800))]">
                       {formatCurrency(totals.total)}

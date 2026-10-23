@@ -343,6 +343,9 @@ export type MappedCustomerOrder = {
   paymentStatus?: string
   deliveryDate?: string
   deliveryMethod?: string
+  pickupStoreId?: string
+   pickupSlot?: string
+   readyInMinutes?: number
   notes?: string
   customerName?: string
   customerMobile?: string
@@ -458,6 +461,15 @@ export function mapCustomerOrder(raw: unknown): MappedCustomerOrder | null {
     ...(asString(item.payment_status) ? { paymentStatus: asString(item.payment_status)! } : {}),
     ...(asString(item.delivery_date) ? { deliveryDate: asString(item.delivery_date)! } : {}),
     ...(asString(item.delivery_method) ? { deliveryMethod: asString(item.delivery_method)! } : {}),
+    ...(asString(item.pickup_store_id ?? item.pickupStoreId)
+      ? { pickupStoreId: asString(item.pickup_store_id ?? item.pickupStoreId)! }
+      : {}),
+    ...(asString(item.pickup_slot ?? item.pickupSlot ?? item.slot)
+      ? { pickupSlot: asString(item.pickup_slot ?? item.pickupSlot ?? item.slot)! }
+      : {}),
+    ...(asNonNegativeInt(item.ready_in_minutes ?? item.readyInMinutes) != null
+      ? { readyInMinutes: asNonNegativeInt(item.ready_in_minutes ?? item.readyInMinutes)! }
+      : {}),
     ...(asString(item.notes) ? { notes: asString(item.notes)! } : {}),
     ...(asString(item.customer_name) ? { customerName: asString(item.customer_name)! } : {}),
     ...(asString(item.customer_mobile) ? { customerMobile: asString(item.customer_mobile)! } : {}),

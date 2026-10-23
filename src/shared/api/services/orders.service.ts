@@ -50,6 +50,9 @@ export type CustomerOrder = {
   paymentStatus?: string
   deliveryDate?: string
   deliveryMethod?: string
+  pickupStoreId?: string
+  pickupSlot?: string
+  readyInMinutes?: number
   notes?: string
   customerName?: string
   customerMobile?: string

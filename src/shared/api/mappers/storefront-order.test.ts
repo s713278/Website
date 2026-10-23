@@ -240,6 +240,32 @@ describe('mapCustomerOrder', () => {
     })
   })
 
+  it('maps STORE_PICKUP fulfillment fields from history/detail', () => {
+    expect(
+      mapCustomerOrderDetail({
+        data: {
+          order_id: 2001,
+          vendor_id: 7,
+          store_name: 'Raj Healthy Bites',
+          order_status: 'PENDING',
+          created_at: '2026-10-21T21:48:04',
+          delivery_method: 'STORE_PICKUP',
+          pickup_store_id: 7,
+          ready_in_minutes: 30,
+          slot: 'Morning',
+          order_amount: { amount: 120, delivery_charges: 0 },
+          order_items: [],
+        },
+      }),
+    ).toMatchObject({
+      id: '2001',
+      deliveryMethod: 'STORE_PICKUP',
+      pickupStoreId: '7',
+      readyInMinutes: 30,
+      pickupSlot: 'Morning',
+    })
+  })
+
   it('maps live customer order detail fields for the storefront page', () => {
     const mapped = mapCustomerOrderDetail({
       success: true,

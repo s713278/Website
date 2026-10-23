@@ -26,8 +26,13 @@ export type StorefrontPickupStore = {
   /** Vendor store id — sent as `pickup_address_id` on from-cart. */
   id: string
   name: string
+  /** Human-readable pickup address (`fullAddress` or string address). */
   address: string | null
+  latitude: number | null
+  longitude: number | null
   readyInMinutes: number | null
+  contactName: string | null
+  contactPhone: string | null
   /** Configured slots from `pickup_options.stores[].pickup_slots` (e.g. Morning, Evening). */
   pickupSlots: StorefrontCheckoutSlot[]
 }
@@ -148,6 +153,22 @@ function mapPickupSlot(value: unknown, index: number): StorefrontCheckoutSlot | 
   return mapCheckoutSlot(value, index, 'pickup-slot')
 }
 
+/** Nested `address` object or a plain address string from pickup_options.stores[]. */
+function mapPickupAddress(value: unknown): string | null {
+  const asText = asString(value)
+  if (asText) return asText
+  const row = asRecord(value)
+  if (!row) return null
+  return (
+    asString(row.fullAddress) ??
+    asString(row.full_address) ??
+    asString(row.addressLine1) ??
+    asString(row.address_line_1) ??
+    asString(row.address1) ??
+    null
+  )
+}
+
 function mapPickupStore(value: unknown, index: number): StorefrontPickupStore | null {
   const row = asRecord(value)
   if (!row) return null
@@ -158,11 +179,16 @@ function mapPickupStore(value: unknown, index: number): StorefrontPickupStore | 
     : Array.isArray(row.pickupSlots)
       ? row.pickupSlots
       : []
+  const contact = asRecord(row.contact) ?? {}
   return {
     id,
     name: asString(row.name) ?? `Store ${index + 1}`,
-    address: asString(row.address),
+    address: mapPickupAddress(row.address),
+    latitude: asNumber(row.latitude) ?? asNumber(row.lat),
+    longitude: asNumber(row.longitude) ?? asNumber(row.lng) ?? asNumber(row.lon),
     readyInMinutes: asNumber(row.ready_in_minutes) ?? asNumber(row.readyInMinutes),
+    contactName: asString(contact.name) ?? asString(row.contact_name),
+    contactPhone: asString(contact.phone) ?? asString(row.contact_phone) ?? asString(row.phone),
     pickupSlots: slotsRaw
       .map(mapPickupSlot)
       .filter((slot): slot is StorefrontCheckoutSlot => slot != null),

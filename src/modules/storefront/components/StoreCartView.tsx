@@ -133,7 +133,7 @@ export function StoreCartView({
 
             <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
               <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5">
-                <h2 className="text-base font-bold text-slate-900">Price Details</h2>
+                <h2 className="text-base font-bold text-slate-900">Cart Summary</h2>
                 <dl className="mt-4 space-y-2.5 text-sm">
                   <div className="flex justify-between gap-3">
                     <dt className="text-slate-600">Item total (MRP)</dt>
@@ -177,14 +177,15 @@ export function StoreCartView({
                       <dd className="font-semibold text-slate-900">{formatCurrency(totals.service)}</dd>
                     </div>
                   ) : null}
+                  <div className="my-3 border-t border-slate-200" />
                   <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3">
-                    <dt className="text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
-                      Order total
-                    </dt>
-                    <dd className="text-base font-bold tabular-nums text-[var(--store-theme,var(--md-green-800))]">
-                      {formatCurrency(totals.total)}
-                    </dd>
-                  </div>
+                  <dt className="text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
+                    Estimated Total
+                  </dt>
+                  <dd className="text-base font-bold tabular-nums text-[var(--store-theme,var(--md-green-800))]">
+                    {formatCurrency(totals.total)}
+                  </dd>
+                </div>
                 </dl>
               </div>
 
@@ -205,7 +206,7 @@ export function StoreCartView({
       {storeLines.length > 0 ? (
         <StorefrontMobileActionBar>
           <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-            <span className="font-medium text-slate-600">Total</span>
+            <span className="font-medium text-slate-600">Estimated Total</span>
             <span className="text-lg font-bold text-slate-900">{formatCurrency(totals.total)}</span>
           </div>
           <Button

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CreditCard, Home, MapPin, Receipt, ShoppingBag, Store, Truck } from 'lucide-react'
 import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
@@ -13,7 +13,9 @@ import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
 import {
   DELIVERY_ESTIMATE_NOTE,
   deliveryMethodLabel,
+  isStorePickupOrder,
   lineMrpTotal,
+  orderArrivalHeading,
   orderArrivalLabel,
   orderStatusLabel,
   paymentNotesWithoutEstimate,
@@ -245,6 +247,8 @@ function cardClass(extra?: string) {
 
 function StatusCard({ order }: { order: CustomerOrder }) {
   const estimate = orderArrivalLabel(order)
+  const pickup = isStorePickupOrder(order)
+  const ArrivalIcon = pickup ? Store : Truck
   return (
     <section className={cardClass('relative overflow-hidden bg-[var(--store-theme-soft,#f3fbf6)] shadow-none')}>
       <div className="flex flex-wrap items-center gap-2">
@@ -255,16 +259,22 @@ function StatusCard({ order }: { order: CustomerOrder }) {
         </span>
       </div>
       <p className="mt-2 max-w-[16rem] text-lg font-bold leading-snug text-slate-900 sm:max-w-none sm:text-xl">
-        {estimate ? `Estimated delivery: ${estimate}` : 'Order received'}
+        {estimate ? `${orderArrivalHeading(order)}: ${estimate}` : 'Order received'}
       </p>
-      {estimate ? <p className="mt-1 text-[13px] text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p> : null}
+      {estimate && !pickup ? (
+        <p className="mt-1 text-[13px] text-slate-500">{DELIVERY_ESTIMATE_NOTE}</p>
+      ) : null}
       {order.deliveryMethod ? (
         <p className="mt-2 flex items-center gap-1.5 text-[13px] text-slate-500">
-          <Home className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          {pickup ? (
+            <Store className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          ) : (
+            <Home className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          )}
           {deliveryMethodLabel(order.deliveryMethod)}
         </p>
       ) : null}
-      <Truck
+      <ArrivalIcon
         className="pointer-events-none absolute right-4 top-5 size-12 text-[var(--store-theme,var(--md-green-500))] sm:right-6 sm:size-14"
         strokeWidth={1.5}
         aria-hidden
@@ -369,14 +379,15 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
               ) : null}
               {bill.taxAmount > 0 ? <BillRow label="Tax" value={formatCurrency(bill.taxAmount)} /> : null}
             </dl>
+           <div className="mt-4 border-t border-slate-200" />
             <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
-              <span>Order total</span>
+              <span>Estimated Total</span>
               <span className="text-base tabular-nums">{formatCurrency(bill.amount)}</span>
             </div>
           </>
         ) : (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.12))] px-3.5 py-3 text-sm font-bold text-[var(--store-theme,var(--md-green-800))]">
-            <span>Order total</span>
+            <span>Estimated Total</span>
             <span className="text-base tabular-nums">{formatCurrency(order.total)}</span>
           </div>
         )}
@@ -386,20 +397,41 @@ function ItemsAndBillCard({ order }: { order: CustomerOrder }) {
 }
 
 function AddressRow({ order }: { order: CustomerOrder }) {
-  if (!order.addressLine && !order.customerMobile && !order.customerName) return null
+  const pickup = isStorePickupOrder(order)
+  const pickupMeta = [
+    order.readyInMinutes != null ? `Ready in about ${order.readyInMinutes} minutes` : null,
+    order.pickupSlot?.trim() || null,
+  ].filter(Boolean)
+  if (
+    !order.addressLine &&
+    !order.customerMobile &&
+    !order.customerName &&
+    !(pickup && pickupMeta.length > 0)
+  ) {
+    return null
+  }
   const name = order.customerName && order.customerName !== 'User' ? order.customerName : null
   const phone = order.customerMobile ? `+91 ${order.customerMobile}` : null
   return (
     <section className={cardClass('flex items-start gap-3')}>
       <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500">
-        <MapPin className="size-4" strokeWidth={1.75} aria-hidden />
+        {pickup ? (
+          <Store className="size-4" strokeWidth={1.75} aria-hidden />
+        ) : (
+          <MapPin className="size-4" strokeWidth={1.75} aria-hidden />
+        )}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900">Delivery details</p>
+        <p className="text-sm font-semibold text-slate-900">
+          {pickup ? 'Pickup details' : 'Delivery details'}
+        </p>
+        {pickup && pickupMeta.length > 0 ? (
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{pickupMeta.join(' · ')}</p>
+        ) : null}
         {order.addressLine ? (
           <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{order.addressLine}</p>
         ) : null}
-        {name || phone ? (
+        {!pickup && (name || phone) ? (
           <p className="mt-0.5 text-xs text-slate-500">
             {name}
             {name && phone ? ' · ' : null}

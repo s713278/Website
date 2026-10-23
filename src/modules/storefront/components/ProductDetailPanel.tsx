@@ -139,6 +139,10 @@ export function ProductDetailPanel({
                 tone="solid"
                 className="mt-5"
               />
+            ) : selected.unit ? (
+              <p className="mt-5 text-sm font-medium text-slate-600">
+                Pack size · {selected.unit}
+              </p>
             ) : null}
 
             <div className="mt-5 flex flex-wrap items-center gap-2.5">

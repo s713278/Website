@@ -57,4 +57,15 @@ describe('OrderCard', () => {
     renderCard({ ...baseOrder, status: 'CANCELLED' })
     expect(screen.queryByRole('link', { name: /Chat with Owner/i })).toBeNull()
   })
+
+  it('shows pickup ready time instead of delivery estimate', () => {
+    renderCard({
+      ...baseOrder,
+      deliveryMethod: 'STORE_PICKUP',
+      readyInMinutes: 30,
+      pickupSlot: 'Evening',
+    })
+    expect(screen.getByText('Pickup: Ready in about 30 minutes · Evening')).toBeTruthy()
+    expect(screen.queryByText(/Estimated delivery:/)).toBeNull()
+  })
 })
