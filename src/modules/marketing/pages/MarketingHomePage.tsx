@@ -3,7 +3,7 @@ import { MarketingFooter } from '@/modules/marketing/components/MarketingFooter'
 import {
   AudienceSection,
   ComparisonSection,
-  ExploreStoresSection,
+  // ExploreStoresSection, // Hidden for the first production phase; restore with the <ExploreStoresSection /> usage below.
   FeaturesSection,
   HowItWorksSection,
   InvitationSection,
@@ -23,7 +23,8 @@ export function MarketingHomePage() {
       <TrustedBySection />
       <FeaturesSection />
       <HowItWorksSection />
-      <ExploreStoresSection />
+      {/* Hidden for the first production phase (uses location, links to /stores). Restore with the import above. */}
+      {/* <ExploreStoresSection /> */}
       <AudienceSection />
       <div id="comparison" className="scroll-mt-24">
         <ComparisonSection />

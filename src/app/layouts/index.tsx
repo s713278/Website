@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
+// import { NavLink } from 'react-router-dom' // Restore with the "Stores" nav link below.
 import { Menu, X } from 'lucide-react'
 import logoDarkMd from '@/assets/logo_dark_md.png'
 import { canShopAsCustomer, loginPathForRole, VENDOR_ONBOARDING_HREF } from '@/app/router/role-home'
@@ -32,12 +33,13 @@ const SIGNED_OUT_ACTIONS: HeaderAction[] = [
   { label: 'Open store', to: VENDOR_ONBOARDING_HREF, emphasis: 'primary' },
 ]
 
-function linkClass({ isActive }: { isActive: boolean }) {
-  return cn(
-    'rounded-lg px-3 py-2.5 text-sm font-medium transition',
-    isActive ? 'bg-[var(--md-green-50)] text-[var(--md-green-800)]' : 'text-slate-600 hover:bg-slate-100',
-  )
-}
+// Only used by the "Stores" nav link below, hidden for the first production phase.
+// function linkClass({ isActive }: { isActive: boolean }) {
+//   return cn(
+//     'rounded-lg px-3 py-2.5 text-sm font-medium transition',
+//     isActive ? 'bg-[var(--md-green-50)] text-[var(--md-green-800)]' : 'text-slate-600 hover:bg-slate-100',
+//   )
+// }
 
 export function RootLayout() {
   const user = useAuthStore((s) => s.user)
@@ -67,9 +69,11 @@ export function RootLayout() {
           <div className="marketing-measure flex h-(--header-height) items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-6">
               <Brand />
+              {/* Hidden for the first production phase; /stores stays reachable by URL.
               <nav className="flex items-center gap-1">
                 <NavLink to="/stores" className={linkClass} onClick={closeMenu}>Stores</NavLink>
               </nav>
+              */}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="hidden items-center gap-2 lg:flex">

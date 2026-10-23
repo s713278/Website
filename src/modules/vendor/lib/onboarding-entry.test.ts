@@ -165,7 +165,7 @@ describe('resumePathAfterLogin', () => {
 
   it('does not send a customer login into vendor setup', () => {
     const dual: User = { ...vendor, role: 'customer', roles: ['customer', 'vendor'] }
-    expect(resumePathAfterLogin(dual, null, resolveOnboardingEntry(state('INACTIVE', 'PENDING')))).toBe('/')
+    expect(resumePathAfterLogin(dual, null, resolveOnboardingEntry(state('INACTIVE', 'PENDING')))).toBe('/stores')
   })
 
   it('returns a customer to the shop after login, not the cart page', () => {
@@ -182,6 +182,6 @@ describe('resumePathAfterLogin', () => {
     expect(resumePathAfterLogin(customer, '/stores/273')).toBe('/stores/273')
     expect(resumePathAfterLogin(customer, '/stores/273/products/12')).toBe('/stores/273/products/12')
     expect(resumePathAfterLogin(customer, '/cart')).toBe('/')
-    expect(resumePathAfterLogin(customer, null)).toBe('/')
+    expect(resumePathAfterLogin(customer, null)).toBe('/stores')
   })
 })
