@@ -408,13 +408,13 @@ export function readinessIssues(
 }
 
 /**
- * What a submitted store may still validate: catalog limits and new size details.
+ * What a submitted store may still validate: catalog limits and size details.
  *
  * A submitted store is with an administrator, so the whole-store readiness checks in
  * `validateStep` do not apply here — reporting "every product needs a size" on a store
  * that is already submitted blocks the vendor on a problem they were never asked to fix
  * and cannot (existing entries are read-only). Step 6 reaches this only after approval;
- * it checks new sizes against their siblings without requiring every product to be priced.
+ * it checks each size against its siblings without requiring every product to be priced.
  */
 export function additiveCatalogIssues(
   step: OnboardingStep,
@@ -436,12 +436,13 @@ export function additiveCatalogIssues(
     for (const product of draft.products) {
       const siblings = draft.skus.filter((sku) => sku.productId === product.id)
       const measurement = expectedMeasurementFor(product, measurementCatalog)
-      const additionIssues = siblings
-        .filter((size) => !isAccountSkuId(size.id))
-        .flatMap((sku) => validateDraftSku(sku, siblings, measurement))
-      issues.push(...additionIssues)
+      // Saved sizes are editable after approval, so they are validated too. Their measurement
+      // is not: Step 6 does not reconcile a submitted store's saved sizes to their product.
+      const sizeIssues = siblings.flatMap((sku) =>
+        validateDraftSku(sku, siblings, isAccountSkuId(sku.id) ? undefined : measurement))
+      issues.push(...sizeIssues)
       // Saved sizes can be switched off after approval, so a product must still keep one on.
-      if (siblings.length && !additionIssues.length && !siblings.some((sku) => sku.active)) {
+      if (siblings.length && !sizeIssues.length && !siblings.some((sku) => sku.active)) {
         issues.push(issue(6, `product-${product.id}`, `Turn on at least one size for ${product.name}.`))
       }
     }

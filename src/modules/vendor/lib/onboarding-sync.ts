@@ -7,6 +7,7 @@ import {
   type CheckoutPaymentInput,
   type SkuCreateInput,
   type StorefrontConfigInput,
+  type VendorProductRef,
   type VendorSkuRef,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -20,6 +21,7 @@ import type {
   VendorOnboardingDraftV1,
 } from '../types/onboarding'
 import type { OnboardingResource } from './onboarding-resume'
+import { peekOnboardingResource } from './onboarding-resource-cache'
 import { serverSkuIdOf } from './onboarding-sku-id'
 
 /**
@@ -721,6 +723,10 @@ const sameUnit = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 /**
  * `knownSkuIds` are the account sizes this visit already knows, including switched-off ones
  * the SKU list no longer returns; see `readUnlistedSkus`.
+ *
+ * `cachedProducts` is this visit's read of the vendor's products, if it holds one. It stands in
+ * for a fresh read when it maps every product the draft's sizes use. A product assigned since
+ * is missing from it (a Step 5 save also clears it), so the save then reads the account.
  */
 export async function persistSkus(
   vendorId: string,
@@ -728,6 +734,7 @@ export async function persistSkus(
   onAssigned: OnAssigned,
   service: SkuPersistenceService = vendorOnboardingService,
   knownSkuIds: readonly number[] = [],
+  cachedProducts?: VendorProductRef[],
 ): Promise<void> {
   const owner = useAuthStore.getState().user
   const assertOwner = () => {
@@ -737,15 +744,17 @@ export async function persistSkus(
     }
   }
   assertOwner()
-  const [products, listedSkus] = await Promise.all([
-    service.getVendorProducts(vendorId),
+  const cachedIds = cachedProducts ? vendorProductIdByPlatformId(cachedProducts) : null
+  const cacheCovers = cachedIds != null && [...draft.products.map((product) => product.id),
+    ...draft.skus.map((sku) => sku.productId)].every((productId) => cachedIds.has(productId))
+  const [vendorProductIds, listedSkus] = await Promise.all([
+    cacheCovers ? cachedIds : service.getVendorProducts(vendorId).then(vendorProductIdByPlatformId),
     service.getVendorSkus(vendorId),
   ])
   assertOwner()
   const unlistedSkus = await readUnlistedSkus(vendorId, draft.skus, knownSkuIds, listedSkus, service)
   assertOwner()
   const serverSkus = [...listedSkus, ...unlistedSkus]
-  const vendorProductIds = vendorProductIdByPlatformId(products)
   const plan = planSkuWrites(draft, serverSkus, vendorProductIds)
   for (const { sku, existing } of plan.updates) {
     if ((sku.listPrice !== existing.listPrice || sku.salePrice !== existing.salePrice) && existing.priceId == null) {
@@ -855,10 +864,13 @@ export async function persistStep(
 
   // Category and product writes only ever assign (PATCH is additive; a vendor cannot
   // unassign — 403, Admin only). Sizes reconcile the draft against the account. A store under
-  // review never persists Step 6; an approved store does, for new sizes and on/off changes.
+  // review never persists Step 6; an approved store does, as in setup.
   if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
   if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
-  if (step === 6) return persistSkus(vendorId, draft, onAssigned, vendorOnboardingService, knownSkuIds)
+  if (step === 6) {
+    return persistSkus(vendorId, draft, onAssigned, vendorOnboardingService, knownSkuIds,
+      peekOnboardingResource(vendorId, 'products')?.value)
+  }
 
   // Steps 7 and 8 share one payload, and payment_options replaces the existing set,
   // so both always send the complete current configuration.

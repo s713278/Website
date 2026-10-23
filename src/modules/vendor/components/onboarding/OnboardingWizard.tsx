@@ -649,12 +649,20 @@ const OTP_INCOMPLETE: ValidationIssue = { step: 2, field: 'otp-0', message: 'Ent
 const otpIssues: IssueRecheck = (state) => state.runtime.otpDigits.some((digit) => !digit) ? [OTP_INCOMPLETE] : []
 
 /**
- * A submitted store is read-only except for categories/products, approved size additions,
+ * A submitted store is read-only except for categories/products, an approved store's sizes,
  * and the Step 10 status view. The Continue handler and the
  * `fieldset` guard both read this one predicate so they cannot drift out of lockstep.
  */
 function submittedStepIsReadOnly(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
   return submitted && step < 10 && !isAdditiveCatalogStep(step, approved)
+}
+
+/**
+ * An approved store's Step 6 saves without moving on: Steps 7-9 are read-only for it, so a
+ * sizes update has nowhere useful to continue to. The vendor leaves by the stepper or Step 10.
+ */
+function savesInPlace(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
+  return submitted && approved && step === 6
 }
 
 export function OnboardingWizard() {
@@ -688,6 +696,9 @@ export function OnboardingWizard() {
   // offering controls that cannot reach a store already under review.
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
   const storeIsApproved = useOnboardingStore(selectStoreIsApproved)
+  // Every draft edit marks its step edited and a synced save clears it, so this is what
+  // retires a "Changes saved." confirmation once the vendor edits again.
+  const currentStepEdited = useOnboardingStore((state) => state.editedSteps.includes(state.draft.currentStep))
   const categoryLimit = useOnboardingStore(selectCategoryLimit)
   const adoptVerifiedSession = useOnboardingStore((state) => state.adoptVerifiedSession)
   const revokeVerifiedSession = useOnboardingStore((state) => state.revokeVerifiedSession)
@@ -1168,10 +1179,11 @@ export function OnboardingWizard() {
     if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
+    const inPlace = savesInPlace(step, storeIsSubmitted, storeIsApproved)
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.
-    // Units are left to the step that needs them.
-    if (writesReachAccount(draft.catalogSource) && access.state === 'ready') {
+    // Units are left to the step that needs them. A save in place opens no next step.
+    if (!inPlace && writesReachAccount(draft.catalogSource) && access.state === 'ready') {
       entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
     }
     const fingerprint = stepSaveFingerprint(step, draft, runtime)
@@ -1227,7 +1239,8 @@ export function OnboardingWizard() {
     // `syncedWithAccount` must reflect whether this step actually reached the account.
     // Demo and sample mode skip the write, and claiming otherwise lets the next account
     // read overwrite work the vendor can still see on screen.
-    completeStep(step, (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
+    completeStep(step, inPlace ? step : (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
+    if (inPlace) setStatusMessage('Changes saved.')
   }
 
   const handleContinue = async () => {
@@ -1310,9 +1323,12 @@ export function OnboardingWizard() {
   // in-browser preview (demo or sample). Mirrors the branch in `handleCatalogContinue`, so
   // the button label, the confirmation, and the actual effect can never disagree.
   const step10SubmitsToAccount = writesReachAccount(catalogSource) && access.state === 'ready'
+  const stepSavesInPlace = savesInPlace(currentStep, storeIsSubmitted, storeIsApproved)
   // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send OTP'
     : currentStep === 2 ? 'Verify & continue'
+      // An approved store's Step 6 saves without moving on, so the label promises no continue.
+      : stepSavesInPlace ? 'Save changes'
       // A submitted store only writes on the additive catalog steps; everywhere else
       // Continue is pure navigation, so the label must not promise a save.
       : storeIsSubmitted ? (isAdditiveCatalogStep(currentStep, storeIsApproved) ? 'Save and continue' : 'Continue')
@@ -1463,7 +1479,7 @@ export function OnboardingWizard() {
                         {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
                             hold for every control on the locked steps (3, 7, 8, 9), and threading
                             a flag through those step components is a rule anything new can be added
-                            without. Categories/products and approved size additions stay interactive so the catalog
+                            without. Categories/products and an approved store's sizes stay interactive so the catalog
                             can still grow within plan limits; Step 10 is the landing step and stays
                             interactive too. The notices above carry the sign-out action, which
                             stays available because it is the only route backwards. Step 3 locks
@@ -1502,6 +1518,13 @@ export function OnboardingWizard() {
                       <p className="flex min-w-0 basis-full items-center gap-1.5 text-xs leading-5 text-[var(--ob-ink-soft)] sm:mr-auto sm:basis-0 sm:grow">
                         <InfoIcon className="size-3.5 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
                         <span>{saveNote}</span>
+                      </p>
+                    ) : null}
+                    {/* Mounted empty while the step saves in place, so a screen reader announces
+                        the confirmation when its text arrives. */}
+                    {stepSavesInPlace ? (
+                      <p role="status" className="min-w-0 grow text-sm font-medium leading-5 text-[var(--ob-brand)]">
+                        {!busy && !currentStepEdited ? statusMessage : null}
                       </p>
                     ) : null}
                     <div className="flex items-center gap-2">

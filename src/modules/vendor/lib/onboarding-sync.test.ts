@@ -498,6 +498,37 @@ describe('persistSkus saves', () => {
     }
   }
 
+  it('plans against cached vendor products that cover every draft product, without reading them', async () => {
+    const api = service()
+    const cached = [{ vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Orange Juice', measurementId: null }]
+
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, quantity: 2 })])),
+      () => undefined, api, [], cached)
+
+    expect(api.getVendorProducts).not.toHaveBeenCalled()
+    expect(api.updateSku).toHaveBeenCalledWith('v1', 4021, { quantity: 2, unit: 'L', active: true })
+  })
+
+  it('reads vendor products when the cached read misses a draft product', async () => {
+    const api = service()
+    api.getVendorProducts.mockResolvedValue([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Orange Juice', measurementId: null },
+      { vendorProductId: 901, platformProductId: 32, platformCategoryId: 10, name: 'Milk', measurementId: null },
+    ])
+    api.getVendorSkus.mockResolvedValueOnce([account({ skuId: 4021 })]).mockResolvedValue([
+      account({ skuId: 4021 }), account({ skuId: 4023, vendorProductId: 901 }),
+    ])
+    const cached = [{ vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Orange Juice', measurementId: null }]
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'sku-4021', productId: 31 }),
+      draft({ id: 'draft-sku-32-1', productId: 32 }),
+    ], [product(31), product(32)])), () => undefined, api, [], cached)
+
+    expect(api.getVendorProducts).toHaveBeenCalledOnce()
+    expect(api.createSkus).toHaveBeenCalledWith('v1', expect.anything(), 901)
+  })
+
   it('creates two sizes of one vendor product in one request and binds both saved IDs', async () => {
     const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
     api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([

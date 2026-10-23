@@ -135,6 +135,12 @@ async function openSizes() {
   return screen.findByRole('button', { name: 'Add another size to Test Juice' })
 }
 
+// An approved store's Step 6 save confirms in place and keeps the vendor on the step.
+async function expectSavedInPlace() {
+  expect((await screen.findByText('Changes saved.')).closest('[role="status"]')).toBeTruthy()
+  expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+}
+
 function fillNewSize() {
   fireEvent.change(screen.getAllByLabelText('Quantity').at(-1)!, { target: { value: '2' } })
   fireEvent.change(screen.getAllByLabelText('MRP (₹)').at(-1)!, { target: { value: '180' } })
@@ -214,19 +220,94 @@ describe('onboarding account hydration and size permissions', () => {
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
   })
 
-  it('renders approved saved sizes as read-only rows with a working status switch', async () => {
+  it('renders approved saved sizes as editable rows with a working status switch', async () => {
     renderAccount('APPROVED')
     await openSizes()
 
     const card = screen.getByRole('group', { name: 'Test Juice, 1 L size' })
-    expect(within(card).getByText('1 L')).toBeTruthy()
-    expect(within(card).getByText('₹100')).toBeTruthy()
-    expect(within(card).getByText('₹90')).toBeTruthy()
-    expect(screen.queryByLabelText('Quantity')).toBeNull()
+    expect((within(card).getByLabelText('Quantity') as HTMLInputElement).value).toBe('1')
+    expect((within(card).getByLabelText('Unit') as HTMLSelectElement).value).toBe('L')
+    expect((within(card).getByLabelText('MRP (₹)') as HTMLInputElement).value).toBe('100')
+    expect((within(card).getByLabelText('Discounted price (₹)') as HTMLInputElement).value).toBe('90')
 
     const activeSwitch = within(card).getByRole('switch', { name: '1 L status: active' })
     expect(activeSwitch.matches(':disabled')).toBe(false)
     expect(within(card).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
+  })
+
+  it('saves an approved saved size quantity, unit and price edit in place', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+    const card = screen.getByRole('group', { name: 'Test Juice, 1 L size' })
+    fireEvent.change(within(card).getByLabelText('Quantity'), { target: { value: '500' } })
+    fireEvent.change(within(card).getByLabelText('Unit'), { target: { value: 'ml' } })
+    fireEvent.change(within(card).getByLabelText('MRP (₹)'), { target: { value: '60' } })
+    fireEvent.change(within(card).getByLabelText('Discounted price (₹)'), { target: { value: '55' } })
+    const productReads = vi.mocked(vendorOnboardingService.getVendorProducts).mock.calls.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await expectSavedInPlace()
+    // Step 6 already read the products, so the save maps them without reading again.
+    expect(vendorOnboardingService.getVendorProducts).toHaveBeenCalledTimes(productReads)
+    expect(vendorOnboardingService.updateSku).toHaveBeenCalledWith('91', 4001, { quantity: 500, unit: 'ml', active: true })
+    expect(vendorOnboardingService.updateSkuPrice).toHaveBeenCalledWith(4001, 8001, { listPrice: 60, salePrice: 55 })
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('keeps an approved store on Step 6 after a save, with no next-step read', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+    fireEvent.change(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByLabelText('MRP (₹)'), { target: { value: '110' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await expectSavedInPlace()
+    expect(vendorOnboardingService.updateSkuPrice).toHaveBeenCalledWith(4001, 8001, { listPrice: 110, salePrice: 90 })
+    expect(screen.getByRole('button', { name: /Step 6,.*You are here/ })).toBeTruthy()
+    expect(vendorOnboardingService.getCheckoutOptions).not.toHaveBeenCalled()
+    const state = useOnboardingStore.getState()
+    expect(state.editedSteps).not.toContain(6)
+    expect(state.draft.completedSteps).toContain(6)
+  })
+
+  it('stays on Step 6 and writes nothing when an approved store saves unchanged sizes', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await expectSavedInPlace()
+    for (const write of ['createSkus', 'updateSku', 'updateSkuStatus', 'updateSkuPrice', 'deleteSku'] as const) {
+      expect(vendorOnboardingService[write]).not.toHaveBeenCalled()
+    }
+    expect(vendorOnboardingService.getCheckoutOptions).not.toHaveBeenCalled()
+  })
+
+  it('removes the saved confirmation once the vendor edits Step 6 again', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await expectSavedInPlace()
+
+    fireEvent.change(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByLabelText('MRP (₹)'), { target: { value: '120' } })
+
+    expect(screen.queryByText('Changes saved.')).toBeNull()
+  })
+
+  it('keeps the vendor on Step 6 and displays a rejected saved size edit', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+    fireEvent.change(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByLabelText('Quantity'), { target: { value: '2' } })
+    vi.mocked(vendorOnboardingService.updateSku).mockRejectedValue(new Error('Please check the input request and try again.'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Please check the input request and try again.'))
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.deleteSku).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
   })
 
   it('saves an approved saved size switched off with a status-only update', async () => {
@@ -237,9 +318,9 @@ describe('onboarding account hydration and size permissions', () => {
     await openSizes()
     fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await expectSavedInPlace()
     expect(vendorOnboardingService.updateSkuStatus).toHaveBeenCalledWith('91', 4001, false)
     expect(vendorOnboardingService.updateSku).not.toHaveBeenCalled()
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
@@ -256,9 +337,9 @@ describe('onboarding account hydration and size permissions', () => {
     })
     fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 2 L size' })).getByRole('button', { name: 'Remove 2 L' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await expectSavedInPlace()
     expect(vendorOnboardingService.deleteSku).toHaveBeenCalledOnce()
     expect(vendorOnboardingService.deleteSku).toHaveBeenCalledWith('91', 4002)
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
@@ -273,7 +354,7 @@ describe('onboarding account hydration and size permissions', () => {
     await openSizes()
     fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(document.body.textContent).toContain('Turn on at least one size for Test Juice.'))
     expect(vendorOnboardingService.updateSkuStatus).not.toHaveBeenCalled()
@@ -331,12 +412,11 @@ describe('onboarding account hydration and size permissions', () => {
     expect(add.matches(':disabled')).toBe(true)
   })
 
-  it('saves an approved size addition, locks saved sizes and enforces the plan limit', async () => {
+  it('saves an approved size addition, leaves the saved size untouched and enforces the plan limit', async () => {
     renderAccount('APPROVED')
     const add = await openSizes()
     expect(add.matches(':disabled')).toBe(false)
     expect(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
-    expect(screen.queryByLabelText('Quantity')).toBeNull()
     fireEvent.click(add)
     fillNewSize()
     expect(add.matches(':disabled')).toBe(true)
@@ -347,9 +427,9 @@ describe('onboarding account hydration and size permissions', () => {
       ])
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    await expectSavedInPlace()
     expect(vendorOnboardingService.createSkus).toHaveBeenCalledOnce()
     expect(vendorOnboardingService.createSkus).toHaveBeenCalledWith('91', expect.objectContaining({
       sizes: [{ quantity: 2, unit: 'L', measurementType: 'VOLUME', listPrice: 180, salePrice: 160 }],
@@ -366,7 +446,7 @@ describe('onboarding account hydration and size permissions', () => {
     fillNewSize()
     vi.mocked(vendorOnboardingService.createSkus).mockRejectedValue(new Error('Could not create size'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     // The failure is shown inline on Step 6, once, and never in a wizard-level summary.
     await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size'))
@@ -477,7 +557,7 @@ describe('stale validation errors', () => {
     fillNewSize()
     fireEvent.change(lastField('Discounted price (₹)'), { target: { value: '200' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     const price = lastField('Discounted price (₹)')
     await waitFor(() => expect(fieldError(price)?.textContent).toBe('Discounted price cannot exceed MRP.'))
@@ -505,7 +585,7 @@ describe('stale validation errors', () => {
     fireEvent.change(lastField('Quantity'), { target: { value: '' } })
     fireEvent.change(lastField('Discounted price (₹)'), { target: { value: '200' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(fieldError(lastField('Quantity'))?.textContent).toBe('Required field.'))
     // Each field error renders directly below its own input.
@@ -528,7 +608,7 @@ describe('stale validation errors', () => {
     expect(screen.queryByText('MRP can have at most two decimal places.')).toBeNull()
     expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(fieldError(lastField('MRP (₹)'))?.textContent).toBe('MRP can have at most two decimal places.'))
     expect(fieldError(lastField('Discounted price (₹)'))?.textContent).toBe('Discounted price cannot exceed MRP.')
@@ -541,7 +621,7 @@ describe('stale validation errors', () => {
     fillNewSize()
     vi.mocked(vendorOnboardingService.createSkus).mockRejectedValue(new Error('Could not create size'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size'))
     expectNoSummary()
@@ -1391,6 +1471,23 @@ describe('Continue prefetches the next step’s account reads', () => {
       getVendorProfile: 1, getBusinessTypes: 1,
       getVendorCategories: 1, getVendorProducts: 1, getVendorSkus: 1, getCheckoutOptions: 1,
     })
+  })
+
+  it('reads Step 7’s checkout settings while a setup store’s Step 6 save is in flight, then moves on', async () => {
+    const save = deferred<undefined>()
+    vi.mocked(vendorOnboardingService.updateSkuPrice).mockReturnValue(save.promise)
+    await openAt(6)
+    fireEvent.change(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByLabelText('MRP (₹)'), { target: { value: '110' } })
+    const checkout = vi.mocked(vendorOnboardingService.getCheckoutOptions)
+    expect(checkout).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(vendorOnboardingService.updateSkuPrice).toHaveBeenCalledTimes(1))
+    expect(checkout).toHaveBeenCalledTimes(1)
+
+    await act(async () => save.resolve(undefined))
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(screen.queryByText('Changes saved.')).toBeNull()
   })
 
   it('reads nothing on Continue from Step 7, whose checkout settings Step 8 already has', async () => {

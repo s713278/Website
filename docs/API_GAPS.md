@@ -326,8 +326,13 @@ parameter could not be typed. The 23 October 2026 probe reproduced both and foun
 `{"features": {}, "is_active": false|true}` succeeds in both directions. As an approved temporary
 workaround, an on/off change to a saved size therefore sends exactly that body; the empty object
 overwrites any stored features, which the app never reads or writes. Remove the `features` field
-when the backend treats omitted features as unchanged. Quantity and unit edits keep their existing
-PATCH and still fail on the deployed backend. Removal (including, for an approved store, a saved
+when the backend treats omitted features as unchanged. Quantity and unit edits, in setup and on an
+approved store, keep their existing PATCH and still fail on the deployed backend; the wizard shows
+the error and keeps the vendor on Step 6. A 23 October 2026 probe table fits one rule: the PATCH
+accepts `unit` only when it equals, ignoring case, a measurement's whole comma-joined `unit` string
+from `GET /v1/measurements/` (for example `pcs,dozen`), from any measurement, and saves it verbatim.
+No real unit of a multi-unit measurement can pass, including the size's current one. The backend
+should check `unit` against the split units of the size's own product measurement. Removal (including, for an approved store, a saved
 size while its product keeps another) uses `DELETE`, a hard delete that frees the size; re-adding
 it creates a new SKU ID, and its effect on existing orders that reference the size is unverified.
 The frontend never silently replaces a SKU when an update fails. Isolated tests validate the contract and error

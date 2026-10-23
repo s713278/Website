@@ -229,32 +229,19 @@ function SkuHeaderRow() {
 }
 
 /**
- * A submitted account size, shown in the same columns as an editable row but as text.
- * Quantity and unit share one cell so the size reads as one value ("1 L"). Only its status
- * switch and remove action can work, and only when their handlers are given; `lastSize`
- * makes the remove action inert, as on an editable row.
+ * A saved size of a store under review, shown in the same columns as an editable row but as
+ * text. Quantity and unit share one cell so the size reads as one value ("1 L"). Its status
+ * switch and remove action stay disabled until approval.
  */
-function SkuReadOnlyRow({
-  sku,
-  heading,
-  lastSize,
-  onStatusChange,
-  onRemove,
-}: {
-  sku: DraftSku
-  heading: string
-  lastSize: boolean
-  onStatusChange?: (active: boolean) => void
-  onRemove?: () => void
-}) {
+function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   return (
     <div className={cn(SKU_ROW_GRID, 'min-h-9 px-0.5 text-[0.8rem] text-[var(--ob-ink)]', !sku.active && 'opacity-55')}>
       <span className="col-span-2 truncate font-semibold">{`${sku.quantity ?? '—'} ${sku.unit}`}</span>
       {/* The header row is hidden from assistive tech, so each price names itself. */}
       <span className="truncate"><span className="sr-only">MRP </span><span>{formatSkuPrice(sku.listPrice)}</span></span>
       <span className="truncate"><span className="sr-only">Discounted price </span><span>{formatSkuPrice(sku.salePrice)}</span></span>
-      <SkuStatusSwitch heading={heading} active={sku.active} disabled={!onStatusChange} onChange={onStatusChange} />
-      <SkuRemoveButton heading={heading} active={sku.active} disabled={!onRemove} inert={Boolean(onRemove) && lastSize} onClick={onRemove} />
+      <SkuStatusSwitch heading={heading} active={sku.active} disabled />
+      <SkuRemoveButton heading={heading} active={sku.active} disabled />
     </div>
   )
 }
@@ -386,20 +373,12 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     const heading = skuHeading(sku, index)
     // Product-qualified so two products' "1 L" sizes stay distinguishable.
     const groupLabel = `${product.name}, ${heading} size`
-    // Saved sizes stay locked after submission and use the read-only row; approved vendors
-    // can still fill and remove the new sizes they add before saving them, and switch saved
-    // sizes on or off or remove one while its product keeps another. Quantity, unit and
-    // price of saved sizes stay read-only.
-    if (storeIsSubmitted && isAccountSkuId(sku.id)) {
+    // A store under review keeps its saved sizes locked in the read-only row. An approved
+    // store edits saved sizes in place, like the new sizes it adds.
+    if (storeIsSubmitted && !storeIsApproved && isAccountSkuId(sku.id)) {
       return (
-        <fieldset key={sku.id} disabled={!storeIsApproved} className="min-w-0 border-0 p-0" aria-label={groupLabel}>
-          <SkuReadOnlyRow
-            sku={sku}
-            heading={heading}
-            lastSize={productSkus.length <= 1}
-            onStatusChange={storeIsApproved ? (active) => updateSku(sku.id, { active }) : undefined}
-            onRemove={storeIsApproved ? () => removeSku(sku) : undefined}
-          />
+        <fieldset key={sku.id} disabled className="min-w-0 border-0 p-0" aria-label={groupLabel}>
+          <SkuReadOnlyRow sku={sku} heading={heading} />
         </fieldset>
       )
     }

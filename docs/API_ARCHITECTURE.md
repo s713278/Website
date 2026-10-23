@@ -312,7 +312,8 @@ the deployed list omits `unit_options`; an individual failed detail retains its 
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
 Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their spinner waits for it.
-Continue starts only the next step's missing account reads alongside its save, never the units. A
+Continue starts only the next step's missing account reads alongside its save, never the units
+(an approved store's Step 6 save stays on the step and starts none). A
 failed read does not block: sizes fall back to the sample units and products carry no measurement
 metadata, and it is not retried within the visit.
 
@@ -360,17 +361,20 @@ usual and the wizard retries it.
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
 sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
 wire values are accepted for compatibility); pending vendors keep a
-read-only step. Previously saved sizes remain locked after submission, except that an approved
-store can switch them on or off and remove one while its product keeps another; a product's only
-size cannot be removed. The controls and Continue handler use the same approval-aware
-rule, and saving validates new size details, duplicates, at least one switched-on size per product
+read-only step with saved sizes locked. An approved store edits saved sizes in place as in setup
+(quantity, unit, prices, on/off) and can remove one while its product keeps another; a product's
+only size cannot be removed. The controls and Continue handler use the same approval-aware
+rule, and saving validates size details, duplicates, at least one switched-on size per product
 with sizes, and the projected account total against the context's `limits.max_skus` (top level since the flat
 context of 29 September 2026; the demo seed's nested `subscription.limits` is still read). When
 the context sends `subscription.usage.skus`, any usage missing from the SKU list is added, so
 unlisted inactive sizes still consume capacity; the flat context sends no usage, so in Live API
 that count is zero. That count survives subsequent additions in the same visit. It does not demand pricing
-for unrelated products already on a submitted account. Completed approved stores also offer a
-Sizes shortcut from Step 10. Unfinished accounts retain the normal editable setup flow; their
+for unrelated products already on a submitted account. An approved store's Step 6 button reads
+Save changes: a save (or a press with nothing changed, which writes nothing) keeps the vendor on
+Step 6 with a "Changes saved." status line and starts no next-step prefetch, so Step 7's checkout
+settings are not read; the vendor leaves by the stepper or Step 10. Completed approved stores also
+offer a Sizes shortcut from Step 10. Unfinished accounts retain the normal editable setup flow; their
 entry decision is documented in [SESSION.md](./SESSION.md#where-a-session-lands).
 
 The September 2026 OpenAPI contract separates a size's numeric `quantity_value` and `unit`.
@@ -388,7 +392,10 @@ off after the reread confirms its ID. Grouping happens after
 reconciliation, so existing sizes are excluded from creation, including sizes recovered on retry.
 
 Account reads load every SKU page before reconciliation, reject incomplete pagination, and retain
-`price_id` for repricing. The shared measurement mapper prefers the separate fields and accepts
+`price_id` for repricing. Each save reads the SKU list afresh. The vendor products that map platform
+product IDs to vendor product IDs come from the visit's cached products read when it covers every
+product the draft's sizes use; otherwise, as after a Step 5 save clears it, the save reads them
+too. The shared measurement mapper prefers the separate fields and accepts
 legacy `sku_size` labels for older responses and demo fixtures. Vendor and storefront size labels
 use the same mapping so fractional quantities remain visible.
 
