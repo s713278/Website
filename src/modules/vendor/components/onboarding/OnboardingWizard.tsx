@@ -1192,9 +1192,10 @@ export function OnboardingWizard() {
         // Each write reports what it put on the account, so a step that fails part way
         // still records the part that landed. SKU creates also reread their saved IDs.
         // Submitted stores reach this for categories/products and, once approved, sizes.
+        // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
         await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
           if (persistenceIsCurrent()) recordAssignment(assignment)
-        }, recordCreatedEntry)
+        }, recordCreatedEntry, state.accountCatalog.skuIds)
         // This step is now on the account, so a cached read from before it is stale. The
         // open wizard keeps what it holds: the draft is now the account copy.
         dropWrittenAccountData(access.vendorId, savedResources(step))

@@ -360,9 +360,11 @@ usual and the wizard retries it.
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
 sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
 wire values are accepted for compatibility); pending vendors keep a
-read-only step. Previously saved sizes remain locked after submission. The controls and Continue
-handler use the same approval-aware rule, and saving validates new size details, duplicates and
-the projected account total against the context's `limits.max_skus` (top level since the flat
+read-only step. Previously saved sizes remain locked after submission, except that an approved
+store can switch them on or off and remove one while its product keeps another; a product's only
+size cannot be removed. The controls and Continue handler use the same approval-aware
+rule, and saving validates new size details, duplicates, at least one switched-on size per product
+with sizes, and the projected account total against the context's `limits.max_skus` (top level since the flat
 context of 29 September 2026; the demo seed's nested `subscription.limits` is still read). When
 the context sends `subscription.usage.skus`, any usage missing from the SKU list is added, so
 unlisted inactive sizes still consume capacity; the flat context sends no usage, so in Live API
@@ -379,8 +381,10 @@ does not configure subscriptions: new sizes send `subscription_eligible: false` 
 `eligible_sub_plans`, as the updated contract permits.
 
 New sizes of the same vendor product share one POST with multiple `price_list` entries when
-their availability, home-delivery, and pickup flags match. Different products or flag values
-use separate requests because those fields apply to the entire request. Grouping happens after
+their home-delivery and pickup flags match. Different products or flag values use separate
+requests because those fields apply to the entire request. Every size is created active, because
+the list read omits inactive sizes and could not confirm one; a size meant to be off is switched
+off after the reread confirms its ID. Grouping happens after
 reconciliation, so existing sizes are excluded from creation, including sizes recovered on retry.
 
 Account reads load every SKU page before reconciliation, reject incomplete pagination, and retain
@@ -388,8 +392,10 @@ Account reads load every SKU page before reconciliation, reject incomplete pagin
 legacy `sku_size` labels for older responses and demo fixtures. Vendor and storefront size labels
 use the same mapping so fractional quantities remain visible.
 
-Quantity, unit, and availability edits use `PATCH /v1/vendors/{vendor_id}/skus/{sku_id}`; quantity
-and unit are sent together, while product details and features are omitted and preserved. Prices
+Quantity, unit, and availability edits use `PATCH /v1/vendors/{vendor_id}/skus/{sku_id}`. A
+quantity or unit change sends both with the status, omitting product details and features. An
+on/off change alone sends `{"features": {}, "is_active": …}`, the approved temporary body the
+deployed backend accepts. Prices
 use `PUT /v1/sku/price/{price_id}` with `sku_id`, `list_price`, and `sale_price`. These edits retain
 the SKU ID and its subscriptions. A missing price record blocks repricing before any writes. A
 partial failure stays visible; retry reads current account values and writes only remaining changes.
@@ -401,6 +407,13 @@ message, with no price IDs, so the reread stays ("Structured SKU create response
 successful create did not return an ID. Matching uses product, quantity, and unit, never a stale product-derived name.
 Conflicting new drafts must reload instead of taking over an existing size. The wizard records
 returned identities only while the initiating session and step remain current.
+
+The SKU list omits switched-off sizes. Before planning, a size the draft references, or one this
+visit already knew (the account's known size IDs), that the list lacks is read by ID with
+`GET /v1/vendors/{vendor_id}/skus/{sku_id}`, plus its price record for a draft size. A draft size is
+then updated in place instead of re-created, and a removed one is deleted; a size that no longer
+exists is dropped. Those sizes stay in the reported account set. A reload rebuilds Step 6 from the
+list, so switched-off sizes then disappear; see [API_GAPS.md](./API_GAPS.md#updated-sku-contract).
 
 The final read must confirm every new size before Step 6 succeeds. If a successful response leaves
 a size missing, the wizard retains the confirmed IDs and shows a save error. A failed batch may
@@ -420,7 +433,9 @@ storefront plus business-details writes for Step 9. These steps are vouched for 
 this visit, never by a resume, because the account's stored checkout options and storefront need
 not match the payload a resumed draft would send.
 
-Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Step 6
+Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Removal
+uses `DELETE /v1/vendors/{vendor_id}/skus/{sku_id}`, a hard delete: re-adding the same size creates
+a new SKU ID. Its effect on existing orders that reference the size is unverified. Step 6
 has no fulfillment controls; old drafts can still carry those flags, which the PATCH contract
 cannot update. That remaining exception and the limits of live verification are recorded in
 [API_GAPS.md](./API_GAPS.md#updated-sku-contract).

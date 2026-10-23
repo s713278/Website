@@ -652,21 +652,28 @@ export async function persistProducts(
 
 type SkuPersistenceService = Pick<
   typeof vendorOnboardingService,
-  'getVendorProducts' | 'getVendorSkus' | 'createSkus' | 'deleteSku' | 'updateSku' | 'updateSkuPrice'
+  | 'getVendorProducts' | 'getVendorSkus' | 'getVendorSku' | 'createSkus' | 'deleteSku'
+  | 'updateSku' | 'updateSkuStatus' | 'updateSkuPrice'
 >
 
-/** Request-level flags apply to every price entry, so only compatible sizes share a POST. */
+/**
+ * Request-level flags apply to every price entry, so only compatible sizes share a POST.
+ *
+ * Every size is created active: the SKU list omits switched-off sizes, so an inactive create
+ * could never be confirmed by the re-read. A size meant to be off is switched off once its ID
+ * is confirmed. See docs/API_GAPS.md.
+ */
 function groupSkuCreates(creates: SkuWritePlan['creates']) {
   const groups = new Map<string, { vendorProductId: number; input: SkuCreateInput }>()
   for (const { sku, vendorProductId } of creates) {
     if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
-    const key = [vendorProductId, sku.active, sku.homeDelivery, sku.storePickup].join('|')
+    const key = [vendorProductId, sku.homeDelivery, sku.storePickup].join('|')
     let group = groups.get(key)
     if (!group) {
       group = {
         vendorProductId,
         input: {
-          active: sku.active,
+          active: true,
           homeDelivery: sku.homeDelivery,
           storePickup: sku.storePickup,
           sizes: [],
@@ -685,11 +692,42 @@ function groupSkuCreates(creates: SkuWritePlan['creates']) {
   return [...groups.values()]
 }
 
+/**
+ * Saved sizes the SKU list leaves out, read one at a time by id.
+ *
+ * The list omits switched-off sizes (docs/API_GAPS.md), yet they still hold their quantity and
+ * unit, so re-creating one fails. Any id the draft references or the visit already knew
+ * (`knownSkuIds`) that the list lacks is read here: a draft size is then matched and updated
+ * rather than re-created, and one the vendor removed can still be deleted. Only draft sizes
+ * need their price record. A size that no longer exists is left out.
+ */
+async function readUnlistedSkus(
+  vendorId: string,
+  draftSkus: DraftSku[],
+  knownSkuIds: readonly number[],
+  listed: VendorSkuRef[],
+  service: Pick<SkuPersistenceService, 'getVendorSku'>,
+): Promise<VendorSkuRef[]> {
+  const listedIds = new Set(listed.map((sku) => sku.skuId))
+  const referenced = new Set(draftSkus.map((sku) => serverSkuIdOf(sku.id)).filter((id): id is number => id != null))
+  const unlisted = [...new Set([...referenced, ...knownSkuIds])].filter((id) => !listedIds.has(id))
+  const found = await Promise.all(unlisted.map((skuId) =>
+    service.getVendorSku(vendorId, skuId, { withPrice: referenced.has(skuId) })))
+  return found.filter((sku): sku is VendorSkuRef => sku != null)
+}
+
+const sameUnit = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/**
+ * `knownSkuIds` are the account sizes this visit already knows, including switched-off ones
+ * the SKU list no longer returns; see `readUnlistedSkus`.
+ */
 export async function persistSkus(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   service: SkuPersistenceService = vendorOnboardingService,
+  knownSkuIds: readonly number[] = [],
 ): Promise<void> {
   const owner = useAuthStore.getState().user
   const assertOwner = () => {
@@ -699,11 +737,14 @@ export async function persistSkus(
     }
   }
   assertOwner()
-  const [products, serverSkus] = await Promise.all([
+  const [products, listedSkus] = await Promise.all([
     service.getVendorProducts(vendorId),
     service.getVendorSkus(vendorId),
   ])
   assertOwner()
+  const unlistedSkus = await readUnlistedSkus(vendorId, draft.skus, knownSkuIds, listedSkus, service)
+  assertOwner()
+  const serverSkus = [...listedSkus, ...unlistedSkus]
   const vendorProductIds = vendorProductIdByPlatformId(products)
   const plan = planSkuWrites(draft, serverSkus, vendorProductIds)
   for (const { sku, existing } of plan.updates) {
@@ -721,10 +762,12 @@ export async function persistSkus(
   for (const { sku, existing } of plan.updates) {
     assertOwner()
     if (sku.quantity == null || sku.listPrice == null || sku.salePrice == null) continue
-    if (sku.quantity !== existing.quantity || sku.unit !== existing.unit || sku.active !== existing.isActive) {
+    if (sku.quantity !== existing.quantity || !sameUnit(sku.unit, existing.unit)) {
       await service.updateSku(vendorId, existing.skuId, {
         quantity: sku.quantity, unit: sku.unit, active: sku.active,
       })
+    } else if (sku.active !== existing.isActive) {
+      await service.updateSkuStatus(vendorId, existing.skuId, sku.active)
     }
     if ((sku.listPrice !== existing.listPrice || sku.salePrice !== existing.salePrice) && existing.priceId != null) {
       assertOwner()
@@ -747,12 +790,18 @@ export async function persistSkus(
   assertOwner()
   const finalSkus = plan.creates.length || plan.deletes.length
     ? await service.getVendorSkus(vendorId)
-    : serverSkus
+    : listedSkus
   assertOwner()
   const finalByIdentity = new Map(finalSkus.map((sku) => [
     skuIdentity(sku.vendorProductId, sku.quantity, sku.unit), sku.skuId,
   ]))
-  const finalIds = new Set(finalSkus.map((sku) => sku.skuId))
+  // A switched-off size is missing from the list but still on the account, so the sizes read
+  // by id and those updated here stay known unless this save deleted them.
+  const finalIds = new Set([
+    ...finalSkus.map((sku) => sku.skuId),
+    ...unlistedSkus.map((sku) => sku.skuId),
+    ...plan.updates.map(({ existing }) => existing.skuId),
+  ].filter((skuId) => !plan.deletes.includes(skuId)))
   const updatedIds = new Map(plan.updates.map(({ sku, existing }) => [sku.id, existing.skuId]))
   const skuIdByDraftId: Record<string, number> = {}
   for (const sku of draft.skus) {
@@ -764,6 +813,13 @@ export async function persistSkus(
     if (savedId != null) skuIdByDraftId[sku.id] = savedId
   }
   onAssigned({ skuIds: [...finalIds], skuIdByDraftId })
+  // Reported first, so a failure here leaves a bound, active size that a retry switches off.
+  for (const { sku } of plan.creates) {
+    const savedId = skuIdByDraftId[sku.id]
+    if (sku.active || savedId == null) continue
+    assertOwner()
+    await service.updateSkuStatus(vendorId, savedId, false)
+  }
   if (plan.creates.some(({ sku }) => skuIdByDraftId[sku.id] == null)) {
     throw new Error('We could not confirm every new size was saved. Try saving again.')
   }
@@ -787,6 +843,7 @@ export async function persistStep(
   runtime: OnboardingRuntimeState,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
+  knownSkuIds: readonly number[] = [],
 ): Promise<void> {
   if (step === 3) {
     const businessType = draft.business.businessType
@@ -797,12 +854,11 @@ export async function persistStep(
   }
 
   // Category and product writes only ever assign (PATCH is additive; a vendor cannot
-  // unassign — 403, Admin only). Sizes reconcile the draft against the account. A submitted
-  // store never persists Step 6 — it is read-only while under review — so the reconcile
-  // here only ever runs for a store still in setup.
+  // unassign — 403, Admin only). Sizes reconcile the draft against the account. A store under
+  // review never persists Step 6; an approved store does, for new sizes and on/off changes.
   if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
   if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
-  if (step === 6) return persistSkus(vendorId, draft, onAssigned)
+  if (step === 6) return persistSkus(vendorId, draft, onAssigned, vendorOnboardingService, knownSkuIds)
 
   // Steps 7 and 8 share one payload, and payment_options replaces the existing set,
   // so both always send the complete current configuration.

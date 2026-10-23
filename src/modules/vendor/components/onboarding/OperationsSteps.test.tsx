@@ -499,9 +499,64 @@ describe('SkuStep read-only size row', () => {
     expect(cell('₹90', 'Discounted price')).toMatch(/^Discounted price:? ?₹90$/)
     expect(cell('₹100', 'MRP')).toMatch(/^MRP:? ?₹100$/)
     expect(follows(within(row).getByText('₹100'), within(row).getByText('₹90'))).toBe(true)
-    // Saved sizes cannot be removed here, but their cross is disabled rather than inert.
+    // A product's only size cannot be removed, so its cross is inert, as on an editable row.
+    const remove = within(row).getByRole('button', { name: /^Remove / })
+    expect(remove.matches(':disabled')).toBe(true)
+    expect(remove.className).toContain('pointer-events-none')
+  })
+})
+
+describe('SkuStep saved size status after submission', () => {
+  const saved: DraftSku = { ...sizeFor(productA.id, { listPrice: 100, salePrice: 90 }), id: accountSkuId(4001) }
+
+  it('lets an approved store switch a saved size off while its other fields stay read-only', () => {
+    seedDraft([productA], [saved], [fruits])
+    useOnboardingStore.getState().setStoreSubmission({ storeIdentifier: 'test-store', approvalStatus: 'APPROVED', vendorStatus: 'ACTIVE' })
+    render(<SkuStep issues={[]} />)
+
+    const row = within(panel(fruits.id)).getByRole('group', { name: /^Apples, .+ size$/ })
+    const status = within(row).getByRole('switch')
+    expect(status.matches(':disabled')).toBe(false)
+    fireEvent.click(status)
+
+    expect(useOnboardingStore.getState().draft.skus[0]).toMatchObject({ id: accountSkuId(4001), active: false })
+    expect(within(row).queryByLabelText('Quantity')).toBeNull()
+  })
+
+  it('lets an approved store remove a saved size only while its product keeps another', () => {
+    const second: DraftSku = { ...saved, id: accountSkuId(4002), quantity: 2 }
+    const butterSize: DraftSku = { ...sizeFor(productB.id, { listPrice: 50, salePrice: 45 }), id: accountSkuId(4003) }
+    seedDraft([productA, productB], [saved, second, butterSize])
+    useOnboardingStore.getState().setStoreSubmission({ storeIdentifier: 'test-store', approvalStatus: 'APPROVED', vendorStatus: 'ACTIVE' })
+    render(<SkuStep issues={[]} />)
+
+    const butter = within(panel(dairy.id)).getByRole('button', { name: /^Remove / })
+    expect(butter.matches(':disabled')).toBe(true)
+    expect(butter.className).toContain('pointer-events-none')
+
+    const removes = within(panel(fruits.id)).getAllByRole('button', { name: /^Remove / })
+    expect(removes).toHaveLength(2)
+    expect(removes.every((button) => !button.matches(':disabled'))).toBe(true)
+    fireEvent.click(removes[1])
+
+    expect(useOnboardingStore.getState().draft.skus.map((sku) => sku.id)).toEqual([accountSkuId(4001), accountSkuId(4003)])
+    // The product's remaining size is now its only one, so it cannot be removed too.
+    const remaining = within(panel(fruits.id)).getByRole('button', { name: /^Remove / })
+    expect(remaining.matches(':disabled')).toBe(true)
+  })
+
+  it('keeps saved size controls disabled while the store is under review', () => {
+    seedDraft([productA], [saved, { ...saved, id: accountSkuId(4002), quantity: 2 }], [fruits])
+    useOnboardingStore.getState().setStoreSubmission({ storeIdentifier: 'test-store', approvalStatus: 'PENDING', vendorStatus: 'ACTIVE' })
+    render(<SkuStep issues={[]} />)
+
+    const [row] = within(panel(fruits.id)).getAllByRole('group', { name: /^Apples, .+ size$/ })
+    const status = within(row).getByRole('switch')
+    expect(status.matches(':disabled')).toBe(true)
+    expect(status.getAttribute('title')).toBe('Sizes and prices unlock after approval.')
     const remove = within(row).getByRole('button', { name: /^Remove / })
     expect(remove.matches(':disabled')).toBe(true)
     expect(remove.className).not.toContain('pointer-events-none')
+    expect(remove.getAttribute('title')).toBe('Sizes and prices unlock after approval.')
   })
 })

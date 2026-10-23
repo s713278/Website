@@ -79,6 +79,8 @@ beforeEach(() => {
   vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(null)
   vi.spyOn(vendorOnboardingService, 'createSkus').mockResolvedValue(undefined)
   vi.spyOn(vendorOnboardingService, 'updateSku').mockResolvedValue(undefined)
+  vi.spyOn(vendorOnboardingService, 'updateSkuStatus').mockResolvedValue(undefined)
+  vi.spyOn(vendorOnboardingService, 'getVendorSku').mockResolvedValue(null)
   vi.spyOn(vendorOnboardingService, 'updateSkuPrice').mockResolvedValue(undefined)
   vi.spyOn(vendorOnboardingService, 'deleteSku').mockResolvedValue(undefined)
 })
@@ -212,7 +214,7 @@ describe('onboarding account hydration and size permissions', () => {
     expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
   })
 
-  it('renders approved saved sizes as read-only rows', async () => {
+  it('renders approved saved sizes as read-only rows with a working status switch', async () => {
     renderAccount('APPROVED')
     await openSizes()
 
@@ -223,11 +225,61 @@ describe('onboarding account hydration and size permissions', () => {
     expect(screen.queryByLabelText('Quantity')).toBeNull()
 
     const activeSwitch = within(card).getByRole('switch', { name: '1 L status: active' })
-    expect(activeSwitch.matches(':disabled')).toBe(true)
+    expect(activeSwitch.matches(':disabled')).toBe(false)
     expect(within(card).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
   })
 
-  it('keeps inactive approved sizes visibly muted without enabling actions', async () => {
+  it('saves an approved saved size switched off with a status-only update', async () => {
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([savedSize, {
+      ...savedSize, skuId: 4002, priceId: 8002, size: '2 L', quantity: 2,
+    }])
+    renderAccount('APPROVED')
+    await openSizes()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(vendorOnboardingService.updateSkuStatus).toHaveBeenCalledWith('91', 4001, false)
+    expect(vendorOnboardingService.updateSku).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('deletes an approved saved size the vendor removed, and sends nothing else', async () => {
+    const second = { ...savedSize, skuId: 4002, priceId: 8002, size: '2 L', quantity: 2 }
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([savedSize, second])
+    renderAccount('APPROVED')
+    await openSizes()
+    vi.mocked(vendorOnboardingService.deleteSku).mockImplementation(async () => {
+      vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([savedSize])
+    })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 2 L size' })).getByRole('button', { name: 'Remove 2 L' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(vendorOnboardingService.deleteSku).toHaveBeenCalledOnce()
+    expect(vendorOnboardingService.deleteSku).toHaveBeenCalledWith('91', 4002)
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.updateSku).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.updateSkuStatus).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.updateSkuPrice).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().accountCatalog.skuIds).toEqual([4001])
+  })
+
+  it('keeps an approved product from switching off its only size', async () => {
+    renderAccount('APPROVED')
+    await openSizes()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await waitFor(() => expect(document.body.textContent).toContain('Turn on at least one size for Test Juice.'))
+    expect(vendorOnboardingService.updateSkuStatus).not.toHaveBeenCalled()
+  })
+
+  it('keeps inactive approved sizes visibly muted without enabling removal', async () => {
     vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([{
       ...savedSize,
       isActive: false,
@@ -283,7 +335,7 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED')
     const add = await openSizes()
     expect(add.matches(':disabled')).toBe(false)
-    expect(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('switch', { name: '1 L status: active' }).matches(':disabled')).toBe(true)
+    expect(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByRole('button', { name: 'Remove 1 L' }).matches(':disabled')).toBe(true)
     expect(screen.queryByLabelText('Quantity')).toBeNull()
     fireEvent.click(add)
     fillNewSize()

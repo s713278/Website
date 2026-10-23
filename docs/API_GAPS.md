@@ -294,21 +294,44 @@ account in September 2026; a multi-size create and a failed batch still need liv
 
 A September 2026 live probe on an approved account accepted an inactive size creation, increasing
 `subscription.usage.skus`, but neither `GET /vendors/{id}/products/skus` (including a product filter)
-nor the unfiltered vendor SKU search returned it. The product-detail read exposes no SKU IDs.
-Creation's response is not mapped to IDs by the app service, so this leaves an inactive create
-unconfirmable through the current reconciliation path. Backend should provide an owner-only read
-including inactive sizes and document created IDs in the response. Do not report such a save as
-confirmed or infer a SKU ID. Plan-limit checks include the usage omitted from the list only when
-the context sends `subscription.usage`; the flat context of 29 September 2026 does not.
+nor the unfiltered vendor SKU search returned it. A 23 October 2026 probe, on both a setup and an
+approved vendor, confirmed that both reads omit every `is_active: false` size, however it got that
+way, while `GET /v1/vendors/{vendor_id}/skus/{sku_id}` still returns it (its `product_id` is the
+vendor product ID; no price) and `GET /v1/sku/price/{sku_id}` returns its price record. A hidden size
+still holds the unique key (vendor product, quantity, unit), so creating the same size again fails
+with `417 Unable to create a new sku.`; only `DELETE` frees it. The backend should provide an
+owner-only list read that includes inactive sizes and document created IDs in the create response.
+The frontend never parses the create message or infers a SKU ID. Plan-limit checks include the usage
+omitted from the list only when the context sends `subscription.usage`; the flat context of
+29 September 2026 does not.
+
+Approved temporary workarounds, all in Step 6's save:
+
+- **Inactive create.** A new size is always created active, so the list reread can confirm its ID,
+  then switched off with the status update below. A failed switch-off stays visible, and the retry
+  switches off the now-bound size. Remove when the list read includes the owner's inactive sizes or
+  the create returns structured IDs ("Structured SKU create response" above).
+- **Hidden sizes.** A size the draft references, or one this visit already knew, that the list
+  omits is read by ID (and, for a draft size, its price record), so a later save updates it rather
+  than re-creating it and a size the vendor removed is still deleted. A reload or a fresh entry to
+  setup rebuilds Step 6 from the list, so switched-off sizes disappear from the wizard; the vendor
+  cannot then switch them back on or remove them, and re-adding the same quantity and unit fails as
+  above. Remove when the list read includes the owner's inactive sizes.
 
 The revised PATCH promises to preserve omitted fields, including features. A September 2026 live
 probe against both an approved and a pending completed vendor still found two deployed failures:
 including the quantity and unit from the current read returned `400 Unsupported measurement unit`,
 while sending only `is_active` returned `417` with a JDBC error because the omitted `features`
-parameter could not be typed. Neither request changed the size. The frontend therefore keeps
-existing size status and removal controls read-only until the backend accepts a safe partial update;
-it does not invent a `features` payload or silently replace a SKU when the update fails. Isolated
-tests validate the new contract and error paths, not the backend's deployment.
+parameter could not be typed. The 23 October 2026 probe reproduced both and found that
+`{"features": {}, "is_active": false|true}` succeeds in both directions. As an approved temporary
+workaround, an on/off change to a saved size therefore sends exactly that body; the empty object
+overwrites any stored features, which the app never reads or writes. Remove the `features` field
+when the backend treats omitted features as unchanged. Quantity and unit edits keep their existing
+PATCH and still fail on the deployed backend. Removal (including, for an approved store, a saved
+size while its product keeps another) uses `DELETE`, a hard delete that frees the size; re-adding
+it creates a new SKU ID, and its effect on existing orders that reference the size is unverified.
+The frontend never silently replaces a SKU when an update fails. Isolated tests validate the contract and error
+paths, not the backend's deployment.
 
 Per-size delivery/pickup flags remain absent from PATCH and from the documented reads. Legacy
 drafts with an explicit flag change retain their existing delete/create behavior, with its

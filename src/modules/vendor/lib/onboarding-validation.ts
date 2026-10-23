@@ -436,8 +436,13 @@ export function additiveCatalogIssues(
     for (const product of draft.products) {
       const siblings = draft.skus.filter((sku) => sku.productId === product.id)
       const measurement = expectedMeasurementFor(product, measurementCatalog)
-      for (const sku of siblings.filter((size) => !isAccountSkuId(size.id))) {
-        issues.push(...validateDraftSku(sku, siblings, measurement))
+      const additionIssues = siblings
+        .filter((size) => !isAccountSkuId(size.id))
+        .flatMap((sku) => validateDraftSku(sku, siblings, measurement))
+      issues.push(...additionIssues)
+      // Saved sizes can be switched off after approval, so a product must still keep one on.
+      if (siblings.length && !additionIssues.length && !siblings.some((sku) => sku.active)) {
+        issues.push(issue(6, `product-${product.id}`, `Turn on at least one size for ${product.name}.`))
       }
     }
     return issues

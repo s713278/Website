@@ -15,6 +15,7 @@ import {
   selectProjectedSkuTotal,
   selectSkuLimit,
   selectSkuLimitReached,
+  selectStoreIsApproved,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
@@ -134,7 +135,7 @@ function SkuStatusSwitch({
       role="switch"
       aria-checked={active}
       aria-label={`${heading} status: ${active ? 'active' : 'inactive'}`}
-      title={disabled ? 'Size status changes are temporarily unavailable' : `${active ? 'Deactivate' : 'Activate'} ${heading}`}
+      title={disabled ? 'Sizes and prices unlock after approval.' : `${active ? 'Deactivate' : 'Activate'} ${heading}`}
       disabled={disabled}
       onClick={() => onChange?.(!active)}
       className={cn(
@@ -174,7 +175,7 @@ function SkuRemoveButton({
     <button
       type="button"
       aria-label={`Remove ${heading}`}
-      title={inert ? undefined : disabled ? 'Removing sizes is temporarily unavailable' : `Remove ${heading}`}
+      title={inert ? undefined : disabled ? 'Sizes and prices unlock after approval.' : `Remove ${heading}`}
       disabled={disabled || inert}
       onClick={onClick}
       className={cn(
@@ -229,17 +230,31 @@ function SkuHeaderRow() {
 
 /**
  * A submitted account size, shown in the same columns as an editable row but as text.
- * Quantity and unit share one cell so the size reads as one value ("1 L").
+ * Quantity and unit share one cell so the size reads as one value ("1 L"). Only its status
+ * switch and remove action can work, and only when their handlers are given; `lastSize`
+ * makes the remove action inert, as on an editable row.
  */
-function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
+function SkuReadOnlyRow({
+  sku,
+  heading,
+  lastSize,
+  onStatusChange,
+  onRemove,
+}: {
+  sku: DraftSku
+  heading: string
+  lastSize: boolean
+  onStatusChange?: (active: boolean) => void
+  onRemove?: () => void
+}) {
   return (
     <div className={cn(SKU_ROW_GRID, 'min-h-9 px-0.5 text-[0.8rem] text-[var(--ob-ink)]', !sku.active && 'opacity-55')}>
       <span className="col-span-2 truncate font-semibold">{`${sku.quantity ?? '—'} ${sku.unit}`}</span>
       {/* The header row is hidden from assistive tech, so each price names itself. */}
       <span className="truncate"><span className="sr-only">MRP </span><span>{formatSkuPrice(sku.listPrice)}</span></span>
       <span className="truncate"><span className="sr-only">Discounted price </span><span>{formatSkuPrice(sku.salePrice)}</span></span>
-      <SkuStatusSwitch heading={heading} active={sku.active} disabled />
-      <SkuRemoveButton heading={heading} active={sku.active} disabled />
+      <SkuStatusSwitch heading={heading} active={sku.active} disabled={!onStatusChange} onChange={onStatusChange} />
+      <SkuRemoveButton heading={heading} active={sku.active} disabled={!onRemove} inert={Boolean(onRemove) && lastSize} onClick={onRemove} />
     </div>
   )
 }
@@ -253,6 +268,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
   const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
   const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
+  const storeIsApproved = useOnboardingStore(selectStoreIsApproved)
   // Products are grouped under their category; any product whose category is not in the
   // draft lands in a trailing "Other products" group rather than disappearing.
   const hasOrphanProducts = draft.products.some(
@@ -371,13 +387,19 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     // Product-qualified so two products' "1 L" sizes stay distinguishable.
     const groupLabel = `${product.name}, ${heading} size`
     // Saved sizes stay locked after submission and use the read-only row; approved vendors
-    // can still fill and remove the new sizes they add before saving them. The deployed
-    // PATCH still fails for active changes in both approval states, so these controls
-    // display the current state without suggesting that the unavailable write works.
+    // can still fill and remove the new sizes they add before saving them, and switch saved
+    // sizes on or off or remove one while its product keeps another. Quantity, unit and
+    // price of saved sizes stay read-only.
     if (storeIsSubmitted && isAccountSkuId(sku.id)) {
       return (
-        <fieldset key={sku.id} disabled className="min-w-0 border-0 p-0" aria-label={groupLabel}>
-          <SkuReadOnlyRow sku={sku} heading={heading} />
+        <fieldset key={sku.id} disabled={!storeIsApproved} className="min-w-0 border-0 p-0" aria-label={groupLabel}>
+          <SkuReadOnlyRow
+            sku={sku}
+            heading={heading}
+            lastSize={productSkus.length <= 1}
+            onStatusChange={storeIsApproved ? (active) => updateSku(sku.id, { active }) : undefined}
+            onRemove={storeIsApproved ? () => removeSku(sku) : undefined}
+          />
         </fieldset>
       )
     }

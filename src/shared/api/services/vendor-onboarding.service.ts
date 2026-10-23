@@ -21,11 +21,13 @@ import {
   mapProductCreateRequest,
   mapProductPage,
   mapSkuCreateRequest,
+  mapSkuStatusUpdateRequest,
   mapSkuUpdateRequest,
   mapStorefrontConfigRequest,
   mapVendorCategories,
   mapVendorContext,
   mapVendorProducts,
+  mapVendorSkuDetail,
   mapVendorSkuPage,
   mapVendorProfile,
   mapCheckoutOptionsResponse,
@@ -192,6 +194,34 @@ async function getVendorSkus(
   }
 }
 
+/**
+ * One saved size by id, including a switched-off one the SKU list omits. `null` when the size
+ * no longer exists. `withPrice` also reads its price record, which a price write needs; a size
+ * without one comes back with no price id.
+ */
+async function getVendorSku(
+  vendorId: number | string,
+  skuId: number,
+  { withPrice = false }: { withPrice?: boolean } = {},
+): Promise<VendorSkuRef | null> {
+  let info: unknown
+  try {
+    info = await apiVendorsService.getSku(vendorId, skuId)
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) return null
+    throw error
+  }
+  let price: unknown = null
+  if (withPrice) {
+    try {
+      price = await apiPricesService.getSkuPrice(skuId)
+    } catch (error) {
+      if (!isApiError(error) || (error.status !== 400 && error.status !== 404)) throw error
+    }
+  }
+  return mapVendorSkuDetail(info, price)
+}
+
 /* --- Platform catalog authoring ------------------------------------------
  * A vendor authoring their own catalog creates the entry in the shared platform
  * catalog first (below), then assigns the returned platform id to their store through
@@ -241,6 +271,11 @@ async function createSkus(
 /** PATCH /v1/vendors/{vendor_id}/skus/{sku_id} preserves fields omitted from the body. */
 async function updateSku(vendorId: number | string, skuId: number, input: SkuUpdateInput): Promise<void> {
   await apiVendorsService.updateSku(vendorId, skuId, mapSkuUpdateRequest(input))
+}
+
+/** PATCH /v1/vendors/{vendor_id}/skus/{sku_id} — on/off only; see `mapSkuStatusUpdateRequest`. */
+async function updateSkuStatus(vendorId: number | string, skuId: number, active: boolean): Promise<void> {
+  await apiVendorsService.updateSku(vendorId, skuId, mapSkuStatusUpdateRequest(active))
 }
 
 /** Price writes address the price record, with the owning SKU in the body. */
@@ -319,12 +354,14 @@ export const vendorOnboardingService = {
   getVendorCategories,
   getVendorProducts,
   getVendorSkus,
+  getVendorSku,
   getVendorProfile,
   createCategory,
   createProduct,
   assignProducts,
   createSkus,
   updateSku,
+  updateSkuStatus,
   updateSkuPrice,
   deleteSku,
   getCheckoutOptions,

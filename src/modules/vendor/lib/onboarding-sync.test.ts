@@ -434,8 +434,10 @@ describe('persistSkus reports the account SKU identity', () => {
         createSkus: async () => {
           created = true
         },
+        getVendorSku: async () => null,
         deleteSku: async () => undefined,
         updateSku: async () => undefined,
+        updateSkuStatus: async () => undefined,
         updateSkuPrice: async () => undefined,
       },
     )
@@ -460,8 +462,10 @@ describe('persistSkus reports the account SKU identity', () => {
           return [account({ skuId: 4001 })]
         },
         createSkus: async () => undefined,
+        getVendorSku: async () => null,
         deleteSku: async () => undefined,
         updateSku: async () => undefined,
+        updateSkuStatus: async () => undefined,
         updateSkuPrice: async () => undefined,
       },
     )
@@ -485,9 +489,11 @@ describe('persistSkus saves', () => {
         name: 'Orange Juice', measurementId: null,
       }]),
       getVendorSkus: vi.fn(async () => [account({ skuId: 4021 })]),
+      getVendorSku: vi.fn(async (_vendorId: number | string, _skuId: number, _options?: { withPrice?: boolean }): Promise<VendorSkuRef | null> => null),
       createSkus: vi.fn(async () => undefined),
       deleteSku: vi.fn(async () => undefined),
       updateSku: vi.fn(async () => undefined),
+      updateSkuStatus: vi.fn(async () => undefined),
       updateSkuPrice: vi.fn(async () => undefined),
     }
   }
@@ -555,13 +561,12 @@ describe('persistSkus saves', () => {
   })
 
   it.each([
-    { field: 'availability', changed: { active: false }, flags: { is_active: false, home_delivery: true, store_pickup: true } },
     { field: 'delivery', changed: { homeDelivery: false }, flags: { is_active: true, home_delivery: false, store_pickup: true } },
     { field: 'pickup', changed: { storePickup: false }, flags: { is_active: true, home_delivery: true, store_pickup: false } },
   ])('keeps different $field settings in separate requests for the same product', async ({ changed, flags }) => {
     const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
     api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2, isActive: changed.active ?? true }),
+      account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2 }),
       account({ skuId: 4023, quantity: 3 }),
     ])
     const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })
@@ -578,6 +583,134 @@ describe('persistSkus saves', () => {
       ] }),
       expect.objectContaining({ product_id: 900, ...flags, price_list: [expect.objectContaining({ quantity_value: 2 })] }),
     ])
+  })
+
+  it('creates a size meant to be off as active, then switches it off once its ID is confirmed', async () => {
+    const api = { ...service(), createSkus: vendorOnboardingService.createSkus }
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      account({ skuId: 4021 }), account({ skuId: 4022, quantity: 2 }),
+    ])
+    const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31 }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2, active: false }),
+    ])), assigned, api)
+
+    // One request, every size active: an inactive create would vanish from the re-read.
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls[0][1]).toMatchObject({ is_active: true, price_list: [
+      expect.objectContaining({ quantity_value: 1 }), expect.objectContaining({ quantity_value: 2 }),
+    ] })
+    expect(assigned).toHaveBeenCalledWith({
+      skuIds: [4021, 4022], skuIdByDraftId: { 'draft-sku-31-1': 4021, 'draft-sku-31-2': 4022 },
+    })
+    expect(api.updateSkuStatus).toHaveBeenCalledTimes(1)
+    expect(api.updateSkuStatus).toHaveBeenCalledWith('v1', 4022, false)
+    expect(assigned.mock.invocationCallOrder[0]).toBeLessThan(api.updateSkuStatus.mock.invocationCallOrder[0])
+  })
+
+  it('reports a failed switch-off after a create, and the retry only switches it off', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValueOnce([]).mockResolvedValueOnce([account({ skuId: 4022, quantity: 2 })])
+    api.updateSkuStatus.mockRejectedValueOnce(new Error('Status failed'))
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', draftWith(shown([
+      draft({ id: 'draft-sku-31-1', productId: 31, quantity: 2, active: false }),
+    ])), assigned, api)).rejects.toThrow('Status failed')
+    expect(assigned).toHaveBeenCalledWith({ skuIds: [4022], skuIdByDraftId: { 'draft-sku-31-1': 4022 } })
+
+    // The store rebinds the draft row to the saved ID; the size is still on in the list.
+    api.getVendorSkus.mockResolvedValue([account({ skuId: 4022, quantity: 2 })])
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'sku-4022', productId: 31, quantity: 2, active: false }),
+    ])), assigned, api)
+
+    expect(api.createSkus).toHaveBeenCalledTimes(1)
+    expect(api.updateSkuStatus).toHaveBeenCalledTimes(2)
+    expect(api.updateSkuStatus).toHaveBeenLastCalledWith('v1', 4022, false)
+    expect(api.updateSku).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('matches a switched-off size the list omits by reading it by ID, instead of creating it again', async () => {
+    const api = service()
+    api.getVendorSku.mockResolvedValue(account({ skuId: 4022, quantity: 2, isActive: false }))
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'sku-4021', productId: 31 }),
+      draft({ id: 'sku-4022', productId: 31, quantity: 2, active: false }),
+    ])), assigned, api)
+
+    expect(api.getVendorSku).toHaveBeenCalledTimes(1)
+    expect(api.getVendorSku).toHaveBeenCalledWith('v1', 4022, { withPrice: true })
+    expect(api.createSkus).not.toHaveBeenCalled()
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(api.updateSkuStatus).not.toHaveBeenCalled()
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    // Still known, so a later removal in this visit can delete it.
+    expect(assigned).toHaveBeenCalledWith({
+      skuIds: [4021, 4022], skuIdByDraftId: { 'sku-4021': 4021, 'sku-4022': 4022 },
+    })
+  })
+
+  it('switches a hidden size back on', async () => {
+    const api = service()
+    api.getVendorSku.mockResolvedValue(account({ skuId: 4022, quantity: 2, isActive: false }))
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'sku-4021', productId: 31 }),
+      draft({ id: 'sku-4022', productId: 31, quantity: 2 }),
+    ])), () => undefined, api)
+
+    expect(api.updateSkuStatus).toHaveBeenCalledWith('v1', 4022, true)
+    expect(api.createSkus).not.toHaveBeenCalled()
+  })
+
+  it('deletes a known hidden size the vendor removed, reading it by ID without its price', async () => {
+    const api = service()
+    api.getVendorSku.mockResolvedValue(account({ skuId: 4022, quantity: 2, isActive: false }))
+    api.getVendorSkus.mockResolvedValueOnce([account({ skuId: 4021 })]).mockResolvedValueOnce([account({ skuId: 4021 })])
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31 })])), assigned, api, [4021, 4022])
+
+    expect(api.getVendorSku).toHaveBeenCalledWith('v1', 4022, { withPrice: false })
+    expect(api.deleteSku).toHaveBeenCalledWith('v1', 4022)
+    expect(assigned).toHaveBeenCalledWith({ skuIds: [4021], skuIdByDraftId: { 'sku-4021': 4021 } })
+  })
+
+  it('leaves a known hidden size alone when it is gone or belongs to a product the wizard is not showing', async () => {
+    const api = service()
+    api.getVendorSku.mockImplementation(async (_vendorId, skuId) =>
+      skuId === 4023 ? account({ skuId: 4023, vendorProductId: 901, isActive: false }) : null)
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31 })])), assigned, api, [4021, 4022, 4023])
+
+    expect(api.getVendorSku).toHaveBeenCalledTimes(2)
+    expect(api.deleteSku).not.toHaveBeenCalled()
+    expect(assigned).toHaveBeenCalledWith({ skuIds: [4021, 4023], skuIdByDraftId: { 'sku-4021': 4021 } })
+  })
+
+  it('keeps a size switched off in this save known after a create re-read omits it', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValueOnce([account({ skuId: 4021 })])
+      .mockResolvedValueOnce([account({ skuId: 4022, quantity: 2 })])
+    const assigned = vi.fn()
+
+    await persistSkus('v1', draftWith(shown([
+      draft({ id: 'sku-4021', productId: 31, active: false }),
+      draft({ id: 'draft-sku-31-2', productId: 31, quantity: 2 }),
+    ])), assigned, api)
+
+    expect(api.updateSkuStatus).toHaveBeenCalledWith('v1', 4021, false)
+    expect(assigned).toHaveBeenCalledWith({
+      skuIds: [4022, 4021], skuIdByDraftId: { 'sku-4021': 4021, 'draft-sku-31-2': 4022 },
+    })
   })
 
   it('retries only missing sizes after a batch saves one size then fails', async () => {
@@ -645,6 +778,25 @@ describe('persistSkus saves', () => {
     expect(api.updateSku).not.toHaveBeenCalled()
     expect(api.deleteSku).not.toHaveBeenCalled()
     expect(api.createSkus).not.toHaveBeenCalled()
+  })
+
+  it('switches a saved size off with a status-only update', async () => {
+    const api = service()
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, active: false })])), () => undefined, api)
+
+    expect(api.updateSkuStatus).toHaveBeenCalledWith('v1', 4021, false)
+    expect(api.updateSku).not.toHaveBeenCalled()
+    expect(api.updateSkuPrice).not.toHaveBeenCalled()
+    expect(api.getVendorSku).not.toHaveBeenCalled()
+  })
+
+  it('treats a unit that differs only in case as unchanged when switching a size off', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValue([account({ skuId: 4021, unit: 'l' })])
+    await persistSkus('v1', draftWith(shown([draft({ id: 'sku-4021', productId: 31, active: false })])), () => undefined, api)
+
+    expect(api.updateSkuStatus).toHaveBeenCalledWith('v1', 4021, false)
+    expect(api.updateSku).not.toHaveBeenCalled()
   })
 
   it('updates size and availability together without touching price or subscriptions', async () => {
