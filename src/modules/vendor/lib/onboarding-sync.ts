@@ -788,7 +788,15 @@ export async function persistSkus(
 
   for (const { input, vendorProductId } of groupSkuCreates(plan.creates)) {
     assertOwner()
-    await service.createSkus(vendorId, input, vendorProductId)
+    try {
+      await service.createSkus(vendorId, input, vendorProductId)
+    } catch (error) {
+      // A 417 here is almost always a duplicate the plan could not see: a switched-off size the
+      // list omits and this visit never knew. The backend copy names no size. See docs/API_GAPS.md.
+      if (!isApiError(error) || error.status !== 417) throw error
+      const name = plan.creates.find((create) => create.vendorProductId === vendorProductId)?.sku.name
+      throw new Error(`“${name}” may already have one of these sizes, possibly switched off. Try a different quantity or unit.`, { cause: error })
+    }
   }
 
   // Report the account's current SKU identity so cumulative size capacity stays right for

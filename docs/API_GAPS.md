@@ -288,9 +288,17 @@ been removed because the contract explicitly permits no subscription plans.
 
 Creation accepts multiple `price_list` entries, but its generic response does not document a
 created-ID mapping or batch atomicity. The frontend confirms all new sizes through the account
-read and reconciles before retrying. The backend should document per-size results or guarantee
-atomic batch behavior. A single active-size create and read-back passed on an approved live test
-account in September 2026; a multi-size create and a failed batch still need live verification.
+read and reconciles before retrying. A 24 October 2026 probe on a setup vendor found a one-product
+batch all-or-nothing: three valid sizes were created together, while a batch with one bad entry
+created none (read back by list and by ID), whatever its position. A size duplicating a visible
+size, a switched-off size, or another entry answered `417` with `user_message: "Unable to create a
+new sku."` and the SQL unique-key error in `failure_reason`; Step 6 replaces any create `417` with
+a message naming the product and a possible switched-off duplicate. A quantity of `0` answered
+`400`, and a missing list price `417` with a not-null constraint error. The create accepted a sale
+price above the list price and an unknown unit, both of which Step 6 validation already blocks.
+Step 6 sends one create per product, so a save adding sizes to several products can still
+partially succeed across products; the retry recovers through the account read. The backend should
+document the atomicity and answer a duplicate with a plain-language message.
 
 A September 2026 live probe on an approved account accepted an inactive size creation, increasing
 `subscription.usage.skus`, but neither `GET /vendors/{id}/products/skus` (including a product filter)

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getHttp, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
+import { ApiError, getHttp, vendorOnboardingService, type VendorSkuRef } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import type { User } from '@/shared/types'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
@@ -770,6 +770,26 @@ describe('persistSkus saves', () => {
       skuIds: [4021, 4022], skuIdByDraftId: { 'draft-sku-31-1': 4021, 'draft-sku-31-2': 4022 },
     })
     expect(api.deleteSku).not.toHaveBeenCalled()
+  })
+
+  it('names the product when a create is refused as a likely duplicate', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValue([])
+    api.createSkus.mockRejectedValue(new ApiError('Unable to create a new sku.', 417))
+    const assigned = vi.fn()
+
+    await expect(persistSkus('v1', draftWith(shown([draft({ id: 'draft-sku-31-1', productId: 31 })])), assigned, api))
+      .rejects.toThrow('“Orange Juice” may already have one of these sizes, possibly switched off. Try a different quantity or unit.')
+    expect(assigned).not.toHaveBeenCalled()
+  })
+
+  it('keeps other create failures as they are', async () => {
+    const api = service()
+    api.getVendorSkus.mockResolvedValue([])
+    api.createSkus.mockRejectedValue(new ApiError('Quantity must be positive.', 400))
+
+    await expect(persistSkus('v1', draftWith(shown([draft({ id: 'draft-sku-31-1', productId: 31 })])), () => undefined, api))
+      .rejects.toThrow('Quantity must be positive.')
   })
 
   it('stops before the next batch when the active vendor changes during a create', async () => {

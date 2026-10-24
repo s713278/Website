@@ -408,7 +408,7 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED', 11, 2, 2)
     const add = await openSizes()
     expect(screen.getByText('Approved')).toBeTruthy()
-    expect(screen.getByText('You can add to your catalog; saved setup is locked.')).toBeTruthy()
+    expect(screen.getByText('You can add to your catalog and edit sizes; other setup is locked.')).toBeTruthy()
     expect(add.matches(':disabled')).toBe(true)
   })
 
