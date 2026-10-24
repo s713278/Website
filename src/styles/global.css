@@ -734,9 +734,12 @@
     .md-login form {
       margin-top: 1rem;
     }
-    .md-login .md-login-phone-field,
-    .md-login .md-login-otp-cell {
+    .md-login .md-login-phone-field {
       height: 3.5rem;
+    }
+    .md-login .md-login-otp-cell {
+      width: 3rem;
+      height: 3rem;
     }
     .md-login form > button[type="submit"] {
       height: 2.75rem;
@@ -774,6 +777,9 @@
     .md-login .md-login-phone-field,
     .md-login .md-login-otp-cell {
       height: 2.75rem;
+    }
+    .md-login .md-login-otp-cell {
+      width: 2.75rem;
     }
     .md-login form > button[type="submit"] {
       margin-top: 0.5rem;
