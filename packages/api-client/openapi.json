@@ -20,7 +20,7 @@
   },
   "servers": [
     {
-      "url": "https://subscriptionapp-wgf8.onrender.com/api",
+      "url": "https://qa.mithradirect.com/api",
       "description": "Generated server url"
     }
   ],
