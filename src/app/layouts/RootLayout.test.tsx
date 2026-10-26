@@ -125,12 +125,11 @@ function hrefsOf(name: string | RegExp) {
 }
 
 describe('RootLayout destinations', () => {
-  it('keeps Stores in the bar for everyone, active on /stores', () => {
+  // The Stores link is hidden for the first production phase; restore with the nav link in the layout.
+  it('does not link to Stores while it is hidden', () => {
     renderLayout('/stores')
 
-    const stores = screen.getByRole('link', { name: 'Stores' })
-    expect(stores.getAttribute('href')).toBe('/stores')
-    expect(stores.getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('link', { name: 'Stores' })).toBeNull()
   })
 
   it('offers a signed-out shopper customer Sign in and Open store, in place', () => {

@@ -17,8 +17,9 @@ export const platformService = {
   getMeasurement: (id: number | string, config: { signal?: AbortSignal } = {}) =>
     apiGet<ApiEnvelope>(`/v1/measurements/${id}`, config),
 
+  /** Authenticated: the deployed read answers 401 without the vendor's token. */
   getSkuPrice: (skuId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`, { skipAuth: true }),
+    apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`),
   updateSkuPrice: (priceId: number | string, body: components['schemas']['SkuPriceUpdateRequest']) =>
     apiPut<ApiEnvelope>(`/v1/sku/price/${priceId}`, body),
 };

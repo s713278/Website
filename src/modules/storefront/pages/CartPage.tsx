@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag } from 'lucide-react'
 import { StoreCartView } from '@/modules/storefront/components/StoreCartView'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
@@ -17,7 +17,7 @@ import { canShopAsCustomer } from '@/app/router/role-home'
 import { storeCartPath, storePath } from '@/modules/storefront/lib/store-paths'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
-import { Button } from '@/shared/components'
+// import { Button } from '@/shared/components' // Restore with the "Browse stores" button in EmptyCart.
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 
 /** Store cart at `/stores/:storeId/cart`. `/cart` redirects here when the cart has items. */
@@ -155,9 +155,12 @@ function EmptyCart() {
       </span>
       <h1 className="mt-4 text-xl font-bold text-slate-900">Your cart is empty</h1>
       <p className="mt-2 text-sm text-slate-600">Add items from a store to get started.</p>
+      {/* Hidden for the first production phase; /stores stays reachable by URL. Restore with
+          `Link` in the react-router-dom import and `Button` above.
       <Link to="/stores" className="mt-5 inline-block">
         <Button className="rounded-lg px-6">Browse stores</Button>
       </Link>
+      */}
     </div>
   )
 }

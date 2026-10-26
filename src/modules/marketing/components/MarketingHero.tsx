@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/shared/components'
-import { publicSiteOrigin } from '@/shared/lib/store-link'
 import { createHeroOrderFeed, type HeroOrderFeed } from '@/modules/marketing/lib/hero-order-feed'
+import { WhatsAppLogo } from './ChannelLogos'
 import { HeroCartBadge, HeroOrderToasts } from './HeroOrderToasts'
 
 const trustItems = [
@@ -104,7 +104,7 @@ function ShareIcon({ children }: { children: ReactNode }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="size-3.5"
+      className="size-5"
       aria-hidden
     >
       {children}
@@ -112,8 +112,20 @@ function ShareIcon({ children }: { children: ReactNode }) {
   )
 }
 
-const shareButton =
-  'inline-flex size-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600'
+/* Decorative for now: nothing links out or copies. The tooltip is CSS-only, so it shows on hover. */
+function ShareBadge({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span
+      aria-hidden
+      className="group relative inline-flex size-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"
+    >
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+        {label}
+      </span>
+    </span>
+  )
+}
 
 /* The storefront a vendor ends up with, shown the way a customer holds it. The screen is
    deliberately taller than its content so the product grid reads as scrolled, not boxed in. */
@@ -251,7 +263,6 @@ function HeroBackdrop() {
 }
 
 export function MarketingHero() {
-  const [linkCopied, setLinkCopied] = useState(false)
   // Created once and never set: a feed tick re-renders only its subscribers, not the hero.
   const [feed] = useState(createHeroOrderFeed)
 
@@ -311,6 +322,7 @@ export function MarketingHero() {
                 Start Your Store Free
               </Button>
             </Link>
+            {/* Hidden for the first production phase (/stores is hidden); restore with the block below.
             <Link
               to="/stores"
               className="inline-flex h-12 items-center gap-2 rounded-full border-2 border-emerald-600 bg-white px-5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
@@ -320,6 +332,7 @@ export function MarketingHero() {
               </svg>
               View Demo Store
             </Link>
+            */}
           </div>
 
           <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
@@ -371,47 +384,22 @@ export function MarketingHero() {
 
               <div className="absolute -bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-white/90 py-1.5 pl-4 pr-1.5 shadow-[0_18px_40px_-16px_rgba(6,78,59,0.45)] ring-1 ring-slate-900/5 backdrop-blur">
                 <span className="text-[11px] font-semibold text-slate-700">Share your store</span>
-                <a href="#" aria-label="Share on WhatsApp" title="WhatsApp" className={shareButton}>
-                  <ShareIcon>
-                    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
-                  </ShareIcon>
-                </a>
-                <a
-                  href="https://www.instagram.com/mithradirect/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Open Instagram"
-                  title="Instagram"
-                  className={shareButton}
-                >
+                <ShareBadge label="Share on WhatsApp">
+                  <WhatsAppLogo tone="current" className="size-4.25" />
+                </ShareBadge>
+                <ShareBadge label="Share on Instagram">
                   <ShareIcon>
                     <rect x="3" y="3" width="18" height="18" rx="5" />
                     <circle cx="12" cy="12" r="4" />
                     <path d="M17.5 6.5h.01" />
                   </ShareIcon>
-                </a>
-                <button
-                  type="button"
-                  aria-label={linkCopied ? 'Store link copied' : 'Copy store link'}
-                  title={linkCopied ? 'Copied' : 'Copy store link'}
-                  className={shareButton}
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(`${publicSiteOrigin()}/stores`)
-                    setLinkCopied(true)
-                    window.setTimeout(() => setLinkCopied(false), 1600)
-                  }}
-                >
+                </ShareBadge>
+                <ShareBadge label="Copy store link">
                   <ShareIcon>
-                    {linkCopied ? (
-                      <path d="M5 13l4 4L19 7" />
-                    ) : (
-                      <>
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                      </>
-                    )}
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </ShareIcon>
-                </button>
+                </ShareBadge>
               </div>
             </div>
           </div>

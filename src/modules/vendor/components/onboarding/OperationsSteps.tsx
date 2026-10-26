@@ -15,6 +15,7 @@ import {
   selectProjectedSkuTotal,
   selectSkuLimit,
   selectSkuLimitReached,
+  selectStoreIsApproved,
   selectStoreIsSubmitted,
   useOnboardingStore,
 } from '../../store/onboarding-store'
@@ -134,7 +135,7 @@ function SkuStatusSwitch({
       role="switch"
       aria-checked={active}
       aria-label={`${heading} status: ${active ? 'active' : 'inactive'}`}
-      title={disabled ? 'Size status changes are temporarily unavailable' : `${active ? 'Deactivate' : 'Activate'} ${heading}`}
+      title={disabled ? 'Sizes and prices unlock after approval.' : `${active ? 'Deactivate' : 'Activate'} ${heading}`}
       disabled={disabled}
       onClick={() => onChange?.(!active)}
       className={cn(
@@ -174,7 +175,7 @@ function SkuRemoveButton({
     <button
       type="button"
       aria-label={`Remove ${heading}`}
-      title={inert ? undefined : disabled ? 'Removing sizes is temporarily unavailable' : `Remove ${heading}`}
+      title={inert ? undefined : disabled ? 'Sizes and prices unlock after approval.' : `Remove ${heading}`}
       disabled={disabled || inert}
       onClick={onClick}
       className={cn(
@@ -228,8 +229,9 @@ function SkuHeaderRow() {
 }
 
 /**
- * A submitted account size, shown in the same columns as an editable row but as text.
- * Quantity and unit share one cell so the size reads as one value ("1 L").
+ * A saved size of a store under review, shown in the same columns as an editable row but as
+ * text. Quantity and unit share one cell so the size reads as one value ("1 L"). Its status
+ * switch and remove action stay disabled until approval.
  */
 function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   return (
@@ -253,6 +255,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
   const projectedSkus = useOnboardingStore(selectProjectedSkuTotal)
   const skuLimitReached = useOnboardingStore(selectSkuLimitReached)
   const storeIsSubmitted = useOnboardingStore(selectStoreIsSubmitted)
+  const storeIsApproved = useOnboardingStore(selectStoreIsApproved)
   // Products are grouped under their category; any product whose category is not in the
   // draft lands in a trailing "Other products" group rather than disappearing.
   const hasOrphanProducts = draft.products.some(
@@ -370,11 +373,9 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     const heading = skuHeading(sku, index)
     // Product-qualified so two products' "1 L" sizes stay distinguishable.
     const groupLabel = `${product.name}, ${heading} size`
-    // Saved sizes stay locked after submission and use the read-only row; approved vendors
-    // can still fill and remove the new sizes they add before saving them. The deployed
-    // PATCH still fails for active changes in both approval states, so these controls
-    // display the current state without suggesting that the unavailable write works.
-    if (storeIsSubmitted && isAccountSkuId(sku.id)) {
+    // A store under review keeps its saved sizes locked in the read-only row. An approved
+    // store edits saved sizes in place, like the new sizes it adds.
+    if (storeIsSubmitted && !storeIsApproved && isAccountSkuId(sku.id)) {
       return (
         <fieldset key={sku.id} disabled className="min-w-0 border-0 p-0" aria-label={groupLabel}>
           <SkuReadOnlyRow sku={sku} heading={heading} />

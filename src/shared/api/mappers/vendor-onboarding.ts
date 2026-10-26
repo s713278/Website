@@ -739,6 +739,33 @@ export function mapVendorSkus(payload: unknown): VendorSkuRef[] {
   })
 }
 
+/**
+ * One size read by id — `GET /v1/vendors/{vendor_id}/skus/{sku_id}`, whose `product_id` is
+ * the vendor product id — with its optional price record from `GET /v1/sku/price/{sku_id}`.
+ * The SKU list omits switched-off sizes; this read still returns them. See docs/API_GAPS.md.
+ */
+export function mapVendorSkuDetail(skuPayload: unknown, pricePayload: unknown): VendorSkuRef {
+  const item = isRecord(skuPayload) && isRecord(skuPayload.data) ? skuPayload.data : null
+  if (!item) throw new InvalidVendorContextError()
+  const price = isRecord(pricePayload) && isRecord(pricePayload.data) ? pricePayload.data : {}
+  const name = lenientString(item.name) ?? ''
+  const { quantity, unit, size } = mapSkuMeasurement(item)
+  return {
+    vendorProductId: requiredId(item.product_id),
+    skuId: requiredId(item.sku_id),
+    priceId: lenientInteger(price.price_id),
+    name,
+    size,
+    displayName: stripSizeSuffix(name, size),
+    description: lenientString(item.description) ?? '',
+    isActive: item.is_active !== false,
+    listPrice: lenientNumber(price.list_price),
+    salePrice: lenientNumber(price.sale_price),
+    quantity,
+    unit,
+  }
+}
+
 export function mapVendorSkuPage(payload: unknown): {
   skus: VendorSkuRef[]
   pageNumber: number | null
@@ -937,6 +964,15 @@ export type SkuUpdateInput = { quantity: number; unit: string; active: boolean }
 
 export function mapSkuUpdateRequest(input: SkuUpdateInput): components['schemas']['SkuInfoUpdateRequest'] {
   return { quantity_value: input.quantity, unit: input.unit, is_active: input.active }
+}
+
+/**
+ * Switching a size on or off. The deployed PATCH fails when `features` is omitted, so an empty
+ * object is sent with the status alone; the app never reads or writes SKU features. Temporary,
+ * see docs/API_GAPS.md ("Updated SKU contract").
+ */
+export function mapSkuStatusUpdateRequest(active: boolean): components['schemas']['SkuInfoUpdateRequest'] {
+  return { features: {}, is_active: active }
 }
 
 export type CheckoutDeliveryInput = {

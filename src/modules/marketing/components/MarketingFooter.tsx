@@ -8,7 +8,8 @@ const footerGroups = [
     title: 'Products',
     links: [
       ['Vendor Onboarding', '/onboarding'],
-      ['Demo Storefront', '/stores'],
+      // Hidden for the first production phase. Rename the label (e.g. 'Browse Stores') before restoring.
+      // ['Demo Storefront', '/stores'],
       ['Features', '#features'],
       ['Pricing', '#pricing'],
     ],

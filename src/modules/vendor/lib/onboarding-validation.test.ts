@@ -589,6 +589,43 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
     expect(additiveCatalogIssues(6, draft).length).toBeGreaterThan(0)
   })
 
+  it('validates edits to saved sizes, duplicates among them included', () => {
+    const draft = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'sku-4001', productId: 41, salePrice: 999 }), sku({ id: 'sku-4002', productId: 41 })],
+    )
+    expect(additiveCatalogIssues(6, draft)).toEqual(expect.arrayContaining([
+      { step: 6, field: 'sku-sku-4001-sale-price', message: 'Discounted price cannot exceed MRP.' },
+      { step: 6, field: 'sku-sku-4002-quantity', message: 'Each size needs a unique quantity and unit.' },
+    ]))
+  })
+
+  it('requires each product with sizes to keep one switched on, saved sizes included', () => {
+    const allOff = draftWith(
+      [product(41, 'Juice'), product(42, 'Unpriced product')],
+      [sku({ id: 'sku-4001', productId: 41, active: false }), sku({ id: 'sku-4002', productId: 41, quantity: 2, active: false })],
+    )
+    expect(additiveCatalogIssues(6, allOff)).toEqual([
+      { step: 6, field: 'product-41', message: 'Turn on at least one size for Juice.' },
+    ])
+
+    const oneOn = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'sku-4001', productId: 41, active: false }), sku({ id: 'draft-sku-41-1', productId: 41, quantity: 2 })],
+    )
+    expect(additiveCatalogIssues(6, oneOn)).toEqual([])
+  })
+
+  it('blocks removing the only switched-on size while the remaining one is off', () => {
+    const removedActive = draftWith(
+      [product(41, 'Juice')],
+      [sku({ id: 'sku-4002', productId: 41, quantity: 2, active: false })],
+    )
+    expect(additiveCatalogIssues(6, removedActive)).toEqual([
+      { step: 6, field: 'product-41', message: 'Turn on at least one size for Juice.' },
+    ])
+  })
+
   it('rejects additions past the limit when inactive account sizes are not listed', () => {
     const draft = draftWith([product(41, 'Juice')], [sku({ id: 'draft-sku-41-1', productId: 41 })])
     const account = { categoryIds: [], productIds: [], skuIds: [4001], unlistedSkuCount: 1 }

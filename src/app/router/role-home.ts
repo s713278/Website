@@ -78,5 +78,7 @@ export function resumePathAfterLogin(
     return customerResumePath(from)
   }
 
-  return '/'
+  // A customer who signs in with no shopping page to return to lands on the store directory.
+  // (Was '/' before; restore that if the directory stays hidden past the first production phase.)
+  return '/stores'
 }

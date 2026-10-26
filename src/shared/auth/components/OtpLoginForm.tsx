@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CircleCheck, MessageCircle } from 'lucide-react'
+import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { loginPathForRole } from '@/app/router/role-home'
 import { resolveLandingPath } from '@/app/router/vendor-landing'
 import logoDarkMd from '@/assets/logo_dark_md.png'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 import { StoreBrandLogo } from '@/modules/storefront/components/StoreBrandLogo'
 import {
   authService,
@@ -126,8 +128,6 @@ export function OtpLoginForm({
       : 'Shops use your WhatsApp number to reach you about your orders.'
   const errorId = error ? 'login-error' : undefined
   const phoneComplete = isValidMobile(phone)
-  // Only the cell the next digit lands in is highlighted, so the row reads like a cursor.
-  const activeCell = Math.min(otp.length, OTP_LENGTH - 1)
   const linkClass =
     'rounded font-semibold text-[var(--md-green-700)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-green-600)]'
 
@@ -264,44 +264,33 @@ export function OtpLoginForm({
                   </button>
                 </p>
                 <form className="mt-8" noValidate onSubmit={onVerify}>
-                  <div className="group relative">
-                    <input
-                      id="otp"
-                      name="otp"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      autoFocus
-                      maxLength={OTP_LENGTH}
-                      required
-                      aria-label={`${OTP_LENGTH}-digit OTP`}
-                      aria-invalid={error ? true : undefined}
-                      aria-describedby={['otp-sent-to', errorId].filter(Boolean).join(' ')}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-                      // The real input spans the cells but draws nothing, so typing, paste and
-                      // WhatsApp/SMS autofill all go through one field.
-                      className="absolute inset-0 z-10 w-full cursor-text bg-transparent text-base text-transparent caret-transparent outline-none selection:bg-transparent"
-                    />
-                    <div className="grid grid-cols-4 gap-3" aria-hidden>
+                  <InputOTP
+                    id="otp"
+                    name="otp"
+                    autoFocus
+                    required
+                    maxLength={OTP_LENGTH}
+                    pattern={REGEXP_ONLY_DIGITS}
+                    aria-label={`${OTP_LENGTH}-digit OTP`}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={['otp-sent-to', errorId].filter(Boolean).join(' ')}
+                    value={otp}
+                    onChange={setOtp}
+                    containerClassName="justify-center"
+                    // Password managers never store OTPs; their badge probe would only resize the field.
+                    pushPasswordManagerStrategy="none"
+                  >
+                    <InputOTPGroup>
                       {Array.from({ length: OTP_LENGTH }, (_, i) => (
-                        <span
+                        <InputOTPSlot
                           key={i}
-                          className={
-                            'md-login-otp-cell flex h-16 items-center justify-center rounded-2xl border bg-white font-display text-3xl font-semibold tabular-nums text-[var(--md-ink)] transition-colors motion-reduce:transition-none ' +
-                            (error
-                              ? 'border-[var(--md-danger)]'
-                              : i === activeCell
-                                ? 'border-slate-300 group-focus-within:border-[var(--md-green-600)] group-focus-within:ring-4 group-focus-within:ring-[var(--md-green-600)]/15'
-                                : otp[i]
-                                  ? 'border-slate-400'
-                                  : 'border-slate-300')
-                          }
-                        >
-                          {otp[i] ?? ''}
-                        </span>
+                          index={i}
+                          aria-invalid={error ? true : undefined}
+                          className="md-login-otp-cell size-13 text-xl"
+                        />
                       ))}
-                    </div>
-                  </div>
+                    </InputOTPGroup>
+                  </InputOTP>
                   {error ? (
                     <p id={errorId} role="alert" className="mt-2 text-center text-sm text-[var(--md-danger)]">
                       {error}

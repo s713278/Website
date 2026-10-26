@@ -175,7 +175,7 @@ describe('resolveLandingPath dashboard preload', () => {
   it('does not preload for a customer', async () => {
     const customer: User = { ...vendor, role: 'customer', roles: ['customer'], vendors: [], vendorId: undefined }
 
-    await expect(resolveLandingPath(customer)).resolves.toBe('/')
+    await expect(resolveLandingPath(customer)).resolves.toBe('/stores')
     expect(preloadVendorDashboard).not.toHaveBeenCalled()
   })
 

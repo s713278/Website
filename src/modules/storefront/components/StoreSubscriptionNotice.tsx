@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+// import { Link } from 'react-router-dom' // Restore with the "Browse other shops" link below.
 import { Store } from 'lucide-react'
 import { storeClosedMessage } from '@/modules/storefront/lib/store-subscription'
 import type { Store as StoreModel } from '@/modules/storefront/types'
@@ -21,12 +21,14 @@ export function StoreSubscriptionNotice({ store }: StoreSubscriptionNoticeProps)
           {copy.title}
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{copy.body}</p>
+        {/* Hidden for the first production phase; /stores stays reachable by URL.
         <Link
           to="/stores"
           className="mt-8 inline-flex h-12 items-center justify-center rounded-xl bg-[var(--store-theme,var(--md-green-800))] px-6 text-sm font-semibold text-white hover:opacity-90"
         >
           Browse other shops
         </Link>
+        */}
       </div>
     </main>
   )

@@ -1,4 +1,4 @@
-import { getHttp, vendorsService as apiVendorsService } from '@mithra/api-client'
+import { ApiError, getHttp, pricesService as apiPricesService, vendorsService as apiVendorsService } from '@mithra/api-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { settleMeasurementDetails, vendorOnboardingService } from './vendor-onboarding.service'
 
@@ -84,6 +84,18 @@ describe('SKU edits', () => {
     }, expect.anything())
   })
 
+  it('switches a size on or off with an empty features object and nothing else', async () => {
+    const request = vi.spyOn(getHttp(), 'patch').mockResolvedValue({ data: { success: true } })
+
+    await vendorOnboardingService.updateSkuStatus('91', 4021, false)
+    await vendorOnboardingService.updateSkuStatus('91', 4021, true)
+
+    expect(request.mock.calls.map(([path, body]) => [path, body])).toEqual([
+      ['/v1/vendors/91/skus/4021', { features: {}, is_active: false }],
+      ['/v1/vendors/91/skus/4021', { features: {}, is_active: true }],
+    ])
+  })
+
   it('updates prices using the price record id and includes the SKU id in the body', async () => {
     const request = vi.spyOn(getHttp(), 'put').mockResolvedValue({ data: { success: true } })
 
@@ -144,6 +156,69 @@ describe('SKU account reads', () => {
     await expect(vendorOnboardingService.getVendorSkus('91', { signal: controller.signal }))
       .rejects.toMatchObject({ name: 'AbortError' })
     expect(request).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('one saved size by id', () => {
+  const info = { data: {
+    sku_id: 4021, product_id: 900, name: 'Milk', description: 'Fresh',
+    features: {}, quantity_value: 0.5, unit: 'L', is_active: false,
+  } }
+  const price = { data: { price_id: 8021, sku_id: 4021, list_price: 60, sale_price: 55, shipping_price: 0 } }
+
+  it('reads a switched-off size and its price record', async () => {
+    const read = vi.spyOn(apiVendorsService, 'getSku').mockResolvedValue(info)
+    const priceRead = vi.spyOn(apiPricesService, 'getSkuPrice').mockResolvedValue(price)
+
+    await expect(vendorOnboardingService.getVendorSku('91', 4021, { withPrice: true })).resolves.toMatchObject({
+      skuId: 4021, vendorProductId: 900, priceId: 8021, quantity: 0.5, unit: 'L',
+      listPrice: 60, salePrice: 55, isActive: false,
+    })
+    expect(read).toHaveBeenCalledWith('91', 4021)
+    expect(priceRead).toHaveBeenCalledWith(4021)
+  })
+
+  it('sends both reads with the vendor session, since the price read rejects anonymous calls', async () => {
+    const request = vi.spyOn(getHttp(), 'get').mockImplementation(async (path: string) =>
+      ({ data: path.startsWith('/v1/sku/price/') ? price : info }))
+
+    await expect(vendorOnboardingService.getVendorSku('91', 4021, { withPrice: true }))
+      .resolves.toMatchObject({ skuId: 4021, priceId: 8021 })
+    expect(request.mock.calls.map(([path, config]) => [path, Boolean((config as { skipAuth?: boolean } | undefined)?.skipAuth)])).toEqual([
+      ['/v1/vendors/91/skus/4021', false],
+      ['/v1/sku/price/4021', false],
+    ])
+  })
+
+  it('skips the price record unless asked', async () => {
+    vi.spyOn(apiVendorsService, 'getSku').mockResolvedValue(info)
+    const priceRead = vi.spyOn(apiPricesService, 'getSkuPrice')
+
+    await expect(vendorOnboardingService.getVendorSku('91', 4021)).resolves.toMatchObject({
+      skuId: 4021, priceId: null, listPrice: null, salePrice: null,
+    })
+    expect(priceRead).not.toHaveBeenCalled()
+  })
+
+  it('returns null for a size that no longer exists and rethrows other failures', async () => {
+    const read = vi.spyOn(apiVendorsService, 'getSku')
+      .mockRejectedValueOnce(new ApiError('SKU not found', 404))
+      .mockRejectedValueOnce(new ApiError('Server error', 500))
+    const priceRead = vi.spyOn(apiPricesService, 'getSkuPrice')
+
+    await expect(vendorOnboardingService.getVendorSku('91', 4021, { withPrice: true })).resolves.toBeNull()
+    await expect(vendorOnboardingService.getVendorSku('91', 4021, { withPrice: true })).rejects.toThrow('Server error')
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(priceRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps a size whose price record is missing, without a price id', async () => {
+    vi.spyOn(apiVendorsService, 'getSku').mockResolvedValue(info)
+    vi.spyOn(apiPricesService, 'getSkuPrice').mockRejectedValue(new ApiError('No price found', 400))
+
+    await expect(vendorOnboardingService.getVendorSku('91', 4021, { withPrice: true })).resolves.toMatchObject({
+      skuId: 4021, priceId: null, isActive: false,
+    })
   })
 })
 

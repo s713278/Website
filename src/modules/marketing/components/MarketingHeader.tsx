@@ -7,12 +7,13 @@ import { cn } from '@/shared/lib/utils'
 import { useHeaderActions } from '../hooks/useHeaderActions'
 import { HeaderActionButton } from './HeaderActionButton'
 
-const NAV = [
+const NAV: ({ label: string; href: string } | { label: string; to: string })[] = [
   { label: 'About Us', href: '#about' },
-  { label: 'Search Stores', to: '/stores' },
+  // Hidden for the first production phase; restore with the 'to' branch handling below if re-enabled.
+  // { label: 'Search Stores', to: '/stores' },
   { label: 'Features', href: '#features' },
   { label: 'Pricing', href: '#pricing' },
-] as const
+]
 
 function BrandMark() {
   return (
