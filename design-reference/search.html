@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Find shops near you on MithraDirect Neighbourhood Market — support local owners. WhatsApp ordering, owners keep 100%.">
+    <title>Find shops near you — MithraDirect Neighbourhood Market</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/landing.css">
+    <link rel="stylesheet" href="assets/css/search.css">
+    <script src="assets/js/assets-config.js"></script>
+</head>
+<body class="landing-page search-page">
+    <header class="site-header">
+        <div class="container nav-bar">
+            <a href="index.html" aria-label="MithraDirect home">
+                <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="brand-logo">
+            </a>
+
+            <nav class="nav-links" aria-label="Primary">
+                <a href="index.html#about">About Us</a>
+                <a href="search.html" aria-current="page">Neighbourhood Market</a>
+                <a href="store.html">Store Demo</a>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#pricing">Pricing</a>
+                <div class="nav-dropdown" id="nav-resources">
+                    <button type="button" class="btn-ghost" style="font-weight:500;font-size:0.9rem;padding:0;color:#374151;">
+                        Resources ▾
+                    </button>
+                    <div class="nav-dropdown-menu" role="menu">
+                        <a href="onboarding.html">Setup Guide</a>
+                        <a href="privacy.html">Privacy Policy</a>
+                        <a href="terms-conditions.html">Terms &amp; Conditions</a>
+                        <a href="index.html#how-it-works">How It Works</a>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="nav-actions">
+                <a href="onboarding.html" class="btn btn-ghost">Vendor Login</a>
+                <a href="onboarding.html" class="btn btn-primary btn-sm">Get Started Free</a>
+            </div>
+
+            <button type="button" class="menu-toggle" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="container mobile-nav" id="mobile-menu">
+            <a href="index.html#about">About Us</a>
+            <a href="search.html" aria-current="page">Neighbourhood Market</a>
+            <a href="store.html">Store Demo</a>
+            <a href="index.html#features">Features</a>
+            <a href="index.html#pricing">Pricing</a>
+            <a href="onboarding.html">Setup Guide</a>
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms-conditions.html">Terms &amp; Conditions</a>
+            <div class="mobile-cta">
+                <a href="onboarding.html" class="btn btn-secondary btn-block">Vendor Login</a>
+                <a href="onboarding.html" class="btn btn-primary btn-block">Get Started Free</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- One composition: brand + job + search -->
+        <section class="market-hero" aria-labelledby="market-heading">
+            <div class="container market-hero-inner">
+                <p class="market-kicker">MithraDirect Neighbourhood Market</p>
+                <h1 id="market-heading">Shop your street.<span class="accent"> Keep money local.</span></h1>
+                <p class="market-lead">
+                    A digital bazaar for independent kitchens, farms, and makers near you —
+                    order on WhatsApp, and they keep every rupee.
+                </p>
+
+                <form class="market-search" id="market-search-form" role="search" novalidate>
+                    <div class="market-search-fields">
+                        <label class="market-field market-field--place">
+                            <span>Near</span>
+                            <input type="text" id="market-address" name="address" placeholder="Area, landmark, or pincode" autocomplete="street-address">
+                        </label>
+                        <label class="market-field market-field--query">
+                            <span>Looking for</span>
+                            <input type="search" id="market-query" name="q" placeholder="Pickles, milk, home food…" autocomplete="off">
+                        </label>
+                    </div>
+                    <div class="market-search-actions">
+                        <button type="button" class="btn btn-secondary" id="market-locate">Near me</button>
+                        <button type="submit" class="btn btn-primary">Show shops near me</button>
+                    </div>
+                </form>
+
+                <ul class="market-promises" aria-label="Why this market">
+                    <li><strong>Owners keep 100%</strong> — no marketplace cut</li>
+                    <li><strong>Real neighbourhood shops</strong> — not warehouses</li>
+                    <li><strong>Order on WhatsApp</strong> — talk to the owner</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="market-body">
+            <div class="container">
+                <div class="market-toolbar">
+                    <div class="market-cats" id="market-cats" role="list" aria-label="Shop categories"></div>
+                    <div class="market-filters">
+                        <label class="market-check">
+                            <input type="checkbox" id="filter-open" checked>
+                            <span>Taking orders</span>
+                        </label>
+                        <label class="market-check">
+                            <input type="checkbox" id="filter-delivery" checked>
+                            <span>Delivers here</span>
+                        </label>
+                        <label class="market-sort">
+                            <span class="sr-only">Sort</span>
+                            <select id="market-sort" aria-label="Sort shops">
+                                <option value="near">Nearest first</option>
+                                <option value="rating">Top rated</option>
+                                <option value="name">A–Z</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="market-results-head">
+                    <h2 id="market-results-title">Shops near you</h2>
+                    <p id="market-results-meta" class="market-results-meta">Local owners near you · they keep 100%</p>
+                </div>
+
+                <div class="market-grid" id="market-results" aria-live="polite"></div>
+
+                <div class="market-empty" id="market-empty" hidden>
+                    <h3>No shops match that yet</h3>
+                    <p>Try another area or category — or invite a neighbourhood owner to open their digital shop.</p>
+                    <div class="market-empty-actions">
+                        <button type="button" class="btn btn-secondary" id="market-reset">Clear filters</button>
+                        <a href="onboarding.html" class="btn btn-primary">Invite a neighbourhood shop</a>
+                    </div>
+                </div>
+
+                <aside class="market-owner-banner">
+                    <div>
+                        <h2>Run a neighbourhood shop?</h2>
+                        <p>List your kitchen, farm, or shelf here. Customers find you by area — you keep 100% of sales.</p>
+                    </div>
+                    <a href="onboarding.html" class="btn btn-primary">List your shop free</a>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-bottom" style="border-top:0;padding-top:1.5rem;">
+            <span>© <span id="year"></span> MithraDirect · Neighbourhood Market</span>
+            <a href="index.html" style="color:inherit;">Back to home</a>
+        </div>
+    </footer>
+
+    <div class="toast" id="landing-toast" role="status" aria-live="polite"></div>
+
+    <script>
+        document.getElementById('year').textContent = String(new Date().getFullYear());
+    </script>
+    <script src="assets/js/landing.js"></script>
+    <script src="assets/js/search.js"></script>
+</body>
+</html>

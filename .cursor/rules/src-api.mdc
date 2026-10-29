@@ -1,0 +1,24 @@
+---
+description: Shared API client and service conventions
+globs: src/shared/api/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Shared API
+
+Read root `AGENTS.md` and `docs/API_ARCHITECTURE.md` before changing this folder.
+
+- Keep `@/shared/api` as the application's import facade; app code must not import
+  `@mithra/api-client` directly.
+- The files `client.ts`, `errors.ts`, `tokens.ts`, and `types.ts` are thin package re-exports.
+  Transport logic belongs in `packages/api-client/src/client/`.
+- Current app services call raw package transport primitives. Package domain services are parallel;
+  do not silently migrate or create a third service path during a feature.
+- Preserve explicit demo/live behavior with `isLiveApi()`. Never let an unsupported mode fail as an
+  unexplained blank screen.
+- Map reusable wire-format differences in `mappers/`, not in pages.
+- The backend OpenAPI document is authoritative. Do not invent an endpoint or payload; record a
+  backend gap when the contract is insufficient.
+- Do not edit `openapi.json` or `schema.d.ts` manually.
+- Use `getErrorMessage()` for UI errors. Remember that `assertApiSuccess` can reject an HTTP 200
+  envelope whose `success` field is false.

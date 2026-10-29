@@ -1,0 +1,179 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { deriveStoreState } from '@/modules/vendor/lib/store-state'
+import {
+  contextSnapshotMayReplace,
+  invalidateVendorContext,
+  loadVendorContext,
+  peekVendorContext,
+} from '@/modules/vendor/lib/vendor-context-cache'
+import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import {
+  getErrorMessage,
+  isLiveApi,
+  mapVendorPlan,
+  vendorOnboardingService,
+  type VendorContext,
+} from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { Button, Card, EmptyState, Spinner } from '@/shared/components'
+
+/**
+ * Loads the vendor account once and shares it with every dashboard surface.
+ *
+ * The cache filled at sign-in is checked first, so a vendor arriving from login pays
+ * nothing. Only a direct visit to a dashboard URL costs a request, and it is the narrow
+ * context read rather than the full account hydration the wizard needs.
+ */
+export function VendorAccountProvider({ children }: { children: ReactNode }) {
+  const vendorId = useAuthStore((s) => s.user?.vendorId)
+  const memberships = useAuthStore((s) => s.user?.vendors)
+
+  /**
+   * The context is held **with the id it was loaded for**, not on its own.
+   *
+   * `selectVendor()` can change `vendorId` without remounting this provider. Keeping the
+   * context alone made the freshness check "have I loaded anything?", so a second store
+   * would have been rendered with the first store's figures until something remounted.
+   * Pairing them makes the check "have I loaded *this* store?", and the key compared is
+   * the one used to fetch rather than a field the backend fills in.
+   */
+  const [loaded, setLoaded] = useState<{ vendorId: string; context: VendorContext } | null>(() => {
+    if (!vendorId) return null
+    const cached = peekVendorContext(vendorId)
+    return cached ? { vendorId, context: cached } : null
+  })
+  const loadedRef = useRef(loaded)
+  const [error, setError] = useState('')
+  const [contextStale, setContextStale] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+  const refreshClaim = useRef(0)
+
+  const reload = useCallback(() => {
+    refreshClaim.current += 1
+    if (vendorId) invalidateVendorContext(vendorId)
+    loadedRef.current = null
+    setLoaded(null)
+    setError('')
+    setContextStale(false)
+    setReloadToken((token) => token + 1)
+  }, [vendorId])
+
+  const refreshContext = useCallback(async (): Promise<VendorContext> => {
+    if (!vendorId) throw new Error('Choose a vendor before refreshing billing.')
+    const claim = ++refreshClaim.current
+    invalidateVendorContext(vendorId)
+    try {
+      const context = await loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
+      if (claim !== refreshClaim.current || useAuthStore.getState().user?.vendorId !== vendorId) {
+        throw new Error('The selected vendor changed during refresh.')
+      }
+      const previous = loadedRef.current
+      if (previous?.vendorId === vendorId && !contextSnapshotMayReplace(previous.context, context)) {
+        invalidateVendorContext(vendorId)
+        throw new Error('Vendor context is older than the last confirmed billing status. Please refresh.')
+      }
+      loadedRef.current = { vendorId, context }
+      setLoaded(loadedRef.current)
+      setContextStale(false)
+      return context
+    } catch (cause) {
+      if (claim === refreshClaim.current && useAuthStore.getState().user?.vendorId === vendorId) setContextStale(true)
+      throw cause
+    }
+  }, [vendorId])
+
+  useEffect(() => {
+    if (!vendorId || loaded?.vendorId === vendorId) return
+    let cancelled = false
+    const claim = ++refreshClaim.current
+
+    // A failure recorded against the previous store must not survive into this one.
+    setError('')
+
+    void loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id))
+      .then((context) => {
+        if (!cancelled && claim === refreshClaim.current && useAuthStore.getState().user?.vendorId === vendorId) {
+          loadedRef.current = { vendorId, context }
+          setLoaded(loadedRef.current)
+          setContextStale(false)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled && claim === refreshClaim.current) setError(getErrorMessage(err, 'Could not load your store'))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, loaded, reloadToken])
+
+  const account = useMemo<VendorAccount | null>(() => {
+    if (!vendorId || !loaded || loaded.vendorId !== vendorId) return null
+    const { context } = loaded
+
+    // Demo reads its seeded context, an approved, active, completed store, without the
+    // live-backend approval compensation.
+    return {
+      vendorId,
+      context,
+      storeState: deriveStoreState(context, { coercePendingApproval: isLiveApi() }),
+      plan: mapVendorPlan(context),
+      contextStale,
+      refreshContext,
+      reload,
+    }
+  }, [vendorId, loaded, reload, refreshContext, contextStale])
+
+  /**
+   * A session that holds several stores resolves no `vendorId`, deliberately — picking
+   * the first would silently choose one. The dashboard says so rather than requesting a
+   * store id it does not have; the previous pages fell back to the demo id `'r1'` and
+   * asked the live API about somebody else's store.
+   */
+  if (!vendorId) {
+    const several = (memberships?.length ?? 0) > 1
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <EmptyState
+          title={several ? 'Choose a store' : 'No store on this account'}
+          description={
+            several
+              ? 'This account manages more than one store, and picking between them is not built yet. Sign in again from the store you want to manage.'
+              : 'This account has no store yet. Set one up to get a dashboard.'
+          }
+        />
+        {!several ? (
+          <div className="mt-4 flex justify-center">
+            <Link to="/onboarding">
+              <Button>Set up your store</Button>
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <Card>
+          <EmptyState title="Could not load your store" description={error} />
+          <div className="mt-4 flex justify-center">
+            <Button onClick={reload}>Try again</Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!account) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <Spinner label="Loading your store…" />
+      </div>
+    )
+  }
+
+  return <VendorAccountContext.Provider value={account}>{children}</VendorAccountContext.Provider>
+}

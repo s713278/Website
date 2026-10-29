@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const out = join(__dirname, '..', 'openapi.json');
-const url = process.env.OPENAPI_URL || 'https://subscriptionapp-wgf8.onrender.com/api/v3/api-docs';
+const url = process.env.OPENAPI_URL || 'https://qa.mithradirect.com/api/v3/api-docs';
 
 const res = await fetch(url);
 if (!res.ok) {

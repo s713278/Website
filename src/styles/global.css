@@ -1,0 +1,1254 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --md-green-50: #ecfdf5;
+  --md-green-100: #d1fae5;
+  --md-green-500: #10b981;
+  --md-green-600: #059669;
+  --md-green-700: #047857;
+  --md-green-800: #065f46;
+  --md-ink: #0f172a;
+  --md-muted: #64748b;
+  --md-border: #e2e8f0;
+  --md-surface: #ffffff;
+  --md-bg: #f8fafc;
+  --md-danger: #dc2626;
+  --md-warning: #d97706;
+  --md-radius: 12px;
+  --md-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --font-display: 'Poppins', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Per-vendor storefront theme — set at runtime via applyTheme()/applyAccent() on a scoped wrapper.
+     Falls back to Mithra brand green/orange when unthemed. */
+  --store-theme: var(--md-green-500);
+  --store-theme-soft: rgba(16, 185, 129, 0.14);
+  --store-theme-muted: rgba(16, 185, 129, 0.22);
+  --store-theme-overlay: rgba(6, 78, 59, 0.78);
+  --store-theme-overlay-mid: rgba(6, 78, 59, 0.32);
+  --store-theme-overlay-light: rgba(6, 78, 59, 0.1);
+
+  --store-accent: #f97316;
+  --store-accent-soft: rgba(249, 115, 22, 0.16);
+  --store-accent-muted: rgba(249, 115, 22, 0.28);
+
+  /* Storefront canvas + surface tokens. Real values are set per-mode below; these are
+     the unthemed fallbacks used everywhere outside a themed storefront. */
+  --store-bg: var(--md-bg);
+  --store-ink: var(--md-ink);
+  --store-muted: var(--md-muted);
+  --store-border: var(--md-border);
+  --store-panel: var(--md-surface);
+
+  /* Badge tones. Defaults are byte-identical to the emerald-100/800 and amber-100/800
+     they replaced, so every non-storefront badge renders exactly as before. */
+  --badge-success-bg: #d1fae5;
+  --badge-success-fg: #065f46;
+  --badge-warning-bg: #fef3c7;
+  --badge-warning-fg: #92400e;
+
+  /* shadcn tokens — emerald brand */
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.21 0.034 265.8);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.034 265.8);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.034 265.8);
+  --primary: oklch(0.596 0.145 163.2);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0.005 247);
+  --secondary-foreground: oklch(0.28 0.03 265);
+  --muted: oklch(0.97 0.005 247);
+  --muted-foreground: oklch(0.52 0.03 260);
+  --accent: oklch(0.96 0.03 163);
+  --accent-foreground: oklch(0.35 0.08 163);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.01 250);
+  --input: oklch(0.91 0.01 250);
+  --ring: oklch(0.596 0.145 163.2);
+  --chart-1: oklch(0.65 0.15 163);
+  --chart-2: oklch(0.55 0.12 200);
+  --chart-3: oklch(0.45 0.08 160);
+  --chart-4: oklch(0.7 0.12 140);
+  --chart-5: oklch(0.4 0.08 180);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0.01 163);
+  --sidebar-foreground: oklch(0.21 0.034 265.8);
+  --sidebar-primary: oklch(0.596 0.145 163.2);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.96 0.03 163);
+  --sidebar-accent-foreground: oklch(0.35 0.08 163);
+  --sidebar-border: oklch(0.91 0.01 250);
+  --sidebar-ring: oklch(0.596 0.145 163.2);
+}
+
+/* Marketing layout. The header, landing sections and footer share one gutter and one measure,
+   so the logo and the last action sit on the same edges as the content below. The content is
+   capped at 1248px: wider screens grow the margins, not the line length.
+   The marketing and customer headers share one bar height: the logo (h-10, sm:h-11) plus 0.75rem
+   above and below. The 1px bottom border sits outside it. */
+:root {
+  --marketing-gutter: 1.25rem;
+  --marketing-measure: 78rem;
+  --header-height: 4rem;
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --marketing-gutter: 2rem;
+    --header-height: 4.25rem;
+  }
+}
+
+@media (min-width: 80rem) {
+  :root {
+    --marketing-gutter: 3rem;
+  }
+}
+
+@utility marketing-gutter {
+  padding-inline: var(--marketing-gutter);
+}
+
+@utility marketing-measure {
+  margin-inline: auto;
+  max-width: var(--marketing-measure);
+}
+
+/* Pricing deck. usePricingStage sets data-pricing-stage on the section while stage mode applies and
+   measures the heading block (--pricing-head-h), the tallest card (--pricing-card-h) and, on
+   desktop, the plan card (--pricing-plan-h); without the attribute the cards stay an ordinary
+   stack. In the deck the heading block and every card are sticky: the heading pins first and each
+   card lands one peek below the card before it, so the cards pile up under their heading rather
+   than swap. The cards share one height and every margin box (the heading's included) ends on the
+   same line, so the whole deck, and on desktop the plan card beside it, releases on the scroll that
+   lands the last card. The 3s are the four cards' three landings. On tablet the deck hangs under
+   the header, leaving the rest of the viewport for the cards still arriving; on desktop it centres
+   beside the plan card. Screen only, so print stays static. */
+@media screen {
+  [data-pricing-stage] {
+    --pricing-peek: 14px;
+    --pricing-head: var(--pricing-head-h, 0px);
+    --pricing-card-min: max(
+      var(--pricing-card-h, 0px),
+      var(--pricing-plan-h, 0px) - var(--pricing-head) - 3 * var(--pricing-peek)
+    );
+    --pricing-stack-h: calc(var(--pricing-card-min) + 3 * var(--pricing-peek));
+    --pricing-pinned-h: calc(var(--pricing-head) + var(--pricing-stack-h));
+    --pricing-pin-top: calc(var(--header-height) + 1.5rem);
+    --pricing-deck-top: calc(var(--pricing-pin-top) + var(--pricing-head));
+  }
+
+  [data-pricing-stage='desktop'] {
+    --pricing-pin-top: max(calc(var(--header-height) + 1rem), calc((100svh - var(--pricing-pinned-h)) / 2));
+  }
+
+  [data-pricing-stage='desktop'] [data-pricing-plan] {
+    top: var(--pricing-pin-top);
+    min-height: var(--pricing-pinned-h);
+  }
+
+  /* The heading's margin box reaches the deck's landed bottom, so it releases with the last card;
+     the deck's matching negative margin keeps the flow spacing unchanged. */
+  [data-pricing-stage] [data-pricing-head] {
+    position: sticky;
+    top: var(--pricing-pin-top);
+    margin-bottom: var(--pricing-stack-h);
+  }
+
+  /* Flex, not grid: a sticky grid item could only travel inside its own row. */
+  [data-pricing-stage] [data-pricing-cards] {
+    display: flex;
+    flex-direction: column;
+    margin-top: calc(-1 * var(--pricing-stack-h));
+  }
+
+  [data-pricing-stage] [data-pricing-card] {
+    --pricing-card-i: 0;
+    position: sticky;
+    top: calc(var(--pricing-deck-top) + var(--pricing-card-i) * var(--pricing-peek));
+    min-height: var(--pricing-card-min);
+    margin-bottom: calc((3 - var(--pricing-card-i)) * var(--pricing-peek));
+    transform-origin: 50% 0;
+    /* The upward shadow falls on the card beneath, so each landing reads as one sheet over another. */
+    box-shadow:
+      0 -1px 2px rgba(15, 23, 42, 0.04),
+      0 -16px 36px -22px rgba(15, 23, 42, 0.2),
+      0 2px 6px rgba(15, 23, 42, 0.04),
+      0 20px 48px -12px rgba(15, 23, 42, 0.06);
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(2) {
+    --pricing-card-i: 1;
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(3) {
+    --pricing-card-i: 2;
+  }
+
+  [data-pricing-stage] [data-pricing-card]:nth-child(4) {
+    --pricing-card-i: 3;
+  }
+
+  /* Where scroll-driven animations exist, each card eases into its slot and its landing presses
+     every card beneath back one step under a veil. A landing runs from the arriving card's top
+     meeting the bottom of the card before it to its sticky top, measured from the moment its top
+     enters the viewport (cover 0%). Over that stretch the card's offset is
+     D * (t - ease(t)): an eased lift composited with a linear return, where D is the stretch and
+     ease(t) = t + t² - t³ (the bezier below). The card enters at page speed, gathers slightly, and
+     decelerates to rest on its slot; the cards beneath recede on the same curve. */
+  @supports (animation-timeline: view()) {
+    [data-pricing-stage] [data-pricing-cards] {
+      --pricing-land-ease: cubic-bezier(0.3333, 0.3333, 0.6667, 1);
+      --pricing-land-d: calc(var(--pricing-card-min) - var(--pricing-peek));
+      --pricing-arrive-from: calc(100svh - var(--pricing-deck-top) - var(--pricing-card-min));
+      --pricing-arrive-2: cover var(--pricing-arrive-from) cover calc(100svh - var(--pricing-deck-top) - var(--pricing-peek));
+      --pricing-arrive-3: cover calc(var(--pricing-arrive-from) - var(--pricing-peek)) cover
+        calc(100svh - var(--pricing-deck-top) - 2 * var(--pricing-peek));
+      --pricing-arrive-4: cover calc(var(--pricing-arrive-from) - 2 * var(--pricing-peek)) cover
+        calc(100svh - var(--pricing-deck-top) - 3 * var(--pricing-peek));
+      timeline-scope: --pricing-card-2, --pricing-card-3, --pricing-card-4;
+    }
+
+    [data-pricing-stage] [data-pricing-card] {
+      animation-duration: auto;
+      animation-fill-mode: both;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(1) {
+      animation-name: pricing-card-recede, pricing-card-recede, pricing-card-recede;
+      animation-timeline: --pricing-card-2, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-2), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease);
+      animation-composition: replace, add, add;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(2) {
+      view-timeline: --pricing-card-2 block;
+      animation-name: pricing-card-lift, pricing-card-return, pricing-card-recede, pricing-card-recede;
+      animation-timeline: --pricing-card-2, --pricing-card-2, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-2), var(--pricing-arrive-2), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear, var(--pricing-land-ease);
+      animation-composition: replace, add, replace, add;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(3) {
+      view-timeline: --pricing-card-3 block;
+      animation-name: pricing-card-lift, pricing-card-return, pricing-card-recede;
+      animation-timeline: --pricing-card-3, --pricing-card-3, --pricing-card-4;
+      animation-range: var(--pricing-arrive-3), var(--pricing-arrive-3), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear, var(--pricing-land-ease);
+      animation-composition: replace, add, replace;
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(4) {
+      view-timeline: --pricing-card-4 block;
+      animation-name: pricing-card-lift, pricing-card-return;
+      animation-timeline: --pricing-card-4, --pricing-card-4;
+      animation-range: var(--pricing-arrive-4), var(--pricing-arrive-4);
+      animation-timing-function: var(--pricing-land-ease), linear;
+      animation-composition: replace, add;
+    }
+
+    /* A veil of the section ground settles over each card as the next lands, so the half-covered
+       copy recedes instead of competing with the card arriving over it. */
+    [data-pricing-stage] [data-pricing-card]:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--md-bg);
+      pointer-events: none;
+      animation: pricing-card-veil var(--pricing-land-ease) both;
+      animation-timeline: --pricing-card-2;
+      animation-range: var(--pricing-arrive-2);
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(2)::after {
+      animation-timeline: --pricing-card-3;
+      animation-range: var(--pricing-arrive-3);
+    }
+
+    [data-pricing-stage] [data-pricing-card]:nth-child(3)::after {
+      animation-timeline: --pricing-card-4;
+      animation-range: var(--pricing-arrive-4);
+    }
+  }
+
+  @keyframes pricing-card-lift {
+    from {
+      translate: 0 0;
+    }
+    to {
+      translate: 0 calc(-1 * var(--pricing-land-d));
+    }
+  }
+
+  @keyframes pricing-card-return {
+    from {
+      translate: 0 0;
+    }
+    to {
+      translate: 0 var(--pricing-land-d);
+    }
+  }
+
+  @keyframes pricing-card-recede {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes pricing-card-veil {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 0.75;
+    }
+  }
+}
+
+@layer components {
+  /* The bay the shop takes shape in: phone above, a short count below. */
+  .onboarding-preview-stage {
+    container-type: size;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.875rem;
+    padding: 1.25rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Device frame, following design-reference/onboarding.html: 280x560, 2rem corners
+     and a deep soft shadow, with a slimmer bezel than the reference's 10px. The
+     reference can hard-code its size because its whole page scrolls; this bay does
+     not, so the phone takes whatever height is going and holds the 1:2 ratio. */
+  /* On every direct child, so the label row can match the phone's width. Container units
+     resolve against the stage, the nearest size container of each child. */
+  .onboarding-preview-stage > * {
+    --phone-w: min(17.5rem, 100cqw, calc((100cqh - 7rem) / 2));
+  }
+
+  .onboarding-phone {
+    flex: none;
+    width: var(--phone-w);
+    height: calc(var(--phone-w) * 2);
+    border: 7px solid #1f2937;
+    border-radius: 2rem;
+    background: #fff;
+    overflow: hidden;
+    /* Reaches ~8px past the sides, inside the stage's 1rem padding, so the scroll
+       container never cuts it. */
+    box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.28);
+  }
+
+}
+
+/* ── Vendor onboarding ──────────────────────────────────────────────────────
+   Scoped to `.onboarding-shell` on purpose — these are not app-wide tokens, and
+   the storefront preview inside the shell still owns its own vendor theming via
+   [data-store-mode]. */
+.onboarding-shell {
+  /* One plane. The stepper and the form are transparent and sit on this single tinted
+     ground, as in design-reference/onboarding.html; only the phone carries a shadow.
+     Departure from the reference: on desktop a hairline sets off the preview bay
+     (`.ob-bay`) so the phone centres in a space it visibly owns. Anything raised
+     (inputs, choice cards) reads white against it. */
+  --ob-canvas-base: #f8fafc;
+  --ob-canvas: #eef3f1;
+  --ob-sheet: #ffffff;
+  --ob-ink: #10241d;
+  --ob-ink-soft: #59706a;
+  --ob-line: #dde7e2;
+  --ob-line-soft: #e9f0ec;
+  --ob-brand: var(--md-green-600);
+  --ob-brand-soft: rgba(5, 150, 105, 0.09);
+  --ob-pending: #b6c6bf;
+
+  /* Lets the preview bay measure how far it is from the shell's edge (`cqw`). */
+  container-type: inline-size;
+
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
+    var(--ob-canvas-base);
+}
+
+.dark .onboarding-shell {
+  --ob-canvas-base: oklch(0.15 0.02 163);
+  --ob-canvas: oklch(0.19 0.02 163);
+  --ob-sheet: oklch(0.21 0.02 163);
+  --ob-ink: oklch(0.96 0.01 163);
+  --ob-ink-soft: oklch(0.7 0.02 163);
+  --ob-line: rgba(255, 255, 255, 0.12);
+  --ob-line-soft: rgba(255, 255, 255, 0.07);
+  --ob-brand-soft: rgba(16, 185, 129, 0.14);
+  --ob-pending: oklch(0.45 0.02 163);
+
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.1), transparent 42%),
+    var(--ob-canvas-base);
+}
+
+@layer components {
+  /* The utility type role. Poppins carries the display voice and Inter the body
+     voice; this is the third — step labels, field eyebrows, the preview counts.
+     Tabular figures keep those counts from shifting as they reach double digits. */
+  .ob-eyebrow {
+    font-size: 0.6875rem;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ob-numeric {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Each step arriving. Small on purpose: the vendor is filling a form, not
+     watching a transition. */
+  .ob-step-enter {
+    animation: ob-step-in 200ms ease-out both;
+  }
+
+  @keyframes ob-step-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ob-step-enter {
+      animation: none;
+    }
+  }
+
+  .md-pop-in {
+    animation: md-pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes md-pop-in {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .md-pop-in {
+      animation: none;
+    }
+  }
+
+  /* Side by side, the hero has to fit under the header. The phone (about 560px) is the tallest
+     thing in it, so it scales with the window's height. `zoom` rather than a transform: it
+     changes the layout box, so the section follows it. Below 1280px the steps are coarse.
+     From 1280px each step is the largest size that still fits at its height (header and
+     padding included), so the phone stays as large as the screen allows; the 1344px floor keeps
+     it from crowding the headline. */
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 765px) {
+    .md-hero-scale {
+      zoom: 0.9;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 710px) {
+    .md-hero-scale {
+      zoom: 0.8;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 655px) {
+    .md-hero-scale {
+      zoom: 0.7;
+    }
+  }
+
+  @media (min-width: 48rem) and (max-width: 79.99rem) and (max-height: 600px) {
+    .md-hero-scale {
+      zoom: 0.62;
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .md-hero-scale {
+      zoom: 0.62;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 560px) {
+    .md-hero-scale {
+      zoom: 0.7;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 600px) {
+    .md-hero-scale {
+      zoom: 0.78;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 640px) {
+    .md-hero-scale {
+      zoom: 0.85;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 680px) {
+    .md-hero-scale {
+      zoom: 0.91;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 720px) {
+    .md-hero-scale {
+      zoom: 0.97;
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 740px) {
+    .md-hero-scale {
+      zoom: 1;
+    }
+  }
+
+  @media (min-width: 84rem) and (min-height: 780px) {
+    .md-hero-scale {
+      zoom: 1.07;
+    }
+  }
+
+  @media (min-width: 84rem) and (min-height: 800px) {
+    .md-hero-scale {
+      zoom: 1.1;
+    }
+  }
+
+  /* The hero's one moment: the phone settles, then an order lands on it. */
+  .md-hero-rise {
+    animation: md-hero-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* The order feed: toasts stack downward, newest on top, each older one smaller and paler until
+     the fourth is invisible and gets dropped. The slot (data-slot) is the only thing that changes
+     as orders arrive, so the move is a transform/opacity transition. The entry animation fills
+     backwards only, otherwise it would pin the toast and block those transitions. */
+  .md-order-toast {
+    --md-order-pitch: 60px;
+    transform-origin: 50% 0;
+    transform: translateY(calc(var(--slot, 0) * var(--md-order-pitch)))
+      scale(calc(1 - var(--slot, 0) * 0.05));
+    transition:
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.6s ease;
+    animation: md-order-in 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+    will-change: transform, opacity;
+  }
+
+  .md-order-toast[data-slot='0'] { --slot: 0; opacity: 1; }
+  .md-order-toast[data-slot='1'] { --slot: 1; opacity: 0.65; }
+  .md-order-toast[data-slot='2'] { --slot: 2; opacity: 0.35; }
+  .md-order-toast[data-slot='3'] { --slot: 3; opacity: 0; }
+
+  /* On a phone there is no room beside the preview, so the stack collapses to one pill: older
+     toasts crossfade out in place instead of cascading down over the storefront. */
+  @media (max-width: 39.999rem) {
+    .md-order-toast {
+      --md-order-pitch: 0px;
+    }
+
+    .md-order-toast:not([data-slot='0']) {
+      opacity: 0;
+    }
+  }
+
+  @keyframes md-order-in {
+    from {
+      opacity: 0;
+      transform: translateY(-14px) scale(0.95);
+    }
+  }
+
+  /* The cart badge on the phone pulses as each order lands. */
+  .md-order-badge {
+    animation: md-order-bump 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s backwards;
+  }
+
+  @keyframes md-order-bump {
+    from {
+      transform: scale(1.6);
+    }
+  }
+
+  @keyframes md-hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* The hero's colour field: a mint wash pooled bottom-left and a warm cream one bottom-right,
+     blending through the middle. Each is oversized and drifts a few percent on a long loop, so
+     the field breathes without any visible shape moving. Transform only, no blur filter. */
+  .md-hero-glow {
+    position: absolute;
+    inset: -12%;
+    will-change: transform;
+  }
+
+  .md-hero-glow-a {
+    animation: md-hero-drift-a 30s ease-in-out infinite alternate;
+  }
+
+  .md-hero-glow-b {
+    animation: md-hero-drift-b 38s ease-in-out infinite alternate;
+  }
+
+  @keyframes md-hero-drift-a {
+    to {
+      transform: translate3d(7%, -5%, 0) scale(1.08);
+    }
+  }
+
+  @keyframes md-hero-drift-b {
+    to {
+      transform: translate3d(-7%, -4%, 0) scale(1.1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .md-hero-rise,
+    .md-order-toast,
+    .md-order-badge,
+    .md-hero-glow {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  /* Sign-in awning: the striped shade over a shopfront, hung above both sign-in forms. A rod,
+     then stripes whose scalloped hem drops onto the form. One scallop spans one stripe, and both
+     patterns are centred so the hem stays symmetric at any width. The shadow is on the wrapper
+     because a filter on the masked element would itself be masked away. Decorative only. */
+  .md-awning {
+    --md-awning-stripe: 2rem;
+    --md-awning-drop: calc(var(--md-awning-stripe) / 2);
+    position: relative;
+    z-index: 1;
+    margin-bottom: calc(var(--md-awning-drop) * -1);
+    filter: drop-shadow(0 3px 0 rgb(6 78 59 / 0.14));
+  }
+
+  .md-awning::before {
+    content: '';
+    display: block;
+    height: 0.375rem;
+    border-radius: 999px;
+    background: var(--md-green-800);
+  }
+
+  .md-awning::after {
+    content: '';
+    display: block;
+    height: calc(2.25rem + var(--md-awning-drop));
+    background: linear-gradient(
+        90deg,
+        var(--md-green-600) 50%,
+        #fff 50%
+      )
+      center / calc(var(--md-awning-stripe) * 2) 100% repeat-x;
+    -webkit-mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+    mask:
+      linear-gradient(#000 0 0) top center / 100% calc(100% - var(--md-awning-drop)) no-repeat,
+      radial-gradient(circle var(--md-awning-drop) at 50% 0, #000 96%, transparent 100%) bottom
+        center / var(--md-awning-stripe) var(--md-awning-drop) repeat-x;
+  }
+
+}
+
+/* Height breakpoints preserve login controls when landscape screens leave less
+   vertical room. The illustration takes the space left by its heading. */
+@layer utilities {
+  @media (max-height: 700px) {
+    .md-login .md-login-awning {
+      display: none;
+    }
+    .md-login .md-login-header {
+      padding-block: 0.5rem;
+    }
+    .md-login .md-login-main {
+      justify-content: center;
+      padding-block: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 1.25rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 1.5rem;
+    }
+    .md-login .md-login-art-copy > p:first-child {
+      font-size: 1.5rem;
+      line-height: 1.3;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .md-login h1 {
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+    .md-login .md-login-lead,
+    .md-login #phone-help,
+    .md-login .md-login-sent-label {
+      display: none;
+    }
+    .md-login form {
+      margin-top: 1rem;
+    }
+    .md-login .md-login-phone-field {
+      height: 3.5rem;
+    }
+    .md-login .md-login-otp-cell {
+      width: 3rem;
+      height: 3rem;
+    }
+    .md-login form > button[type="submit"] {
+      height: 2.75rem;
+      margin-top: 1rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.75rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0.5rem;
+    }
+    .md-login [role="alert"] {
+      font-size: 0.8125rem;
+      line-height: 1.125rem;
+    }
+  }
+
+  @media (max-height: 380px) {
+    .md-login .md-login-header {
+      padding-block: 0;
+    }
+    .md-login .md-login-main {
+      padding-block: 0.25rem;
+    }
+    .md-login h1 {
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+    .md-login #otp-sent-to {
+      margin-top: 0;
+    }
+    .md-login form {
+      margin-top: 0.25rem;
+    }
+    .md-login .md-login-phone-field,
+    .md-login .md-login-otp-cell {
+      height: 2.75rem;
+    }
+    .md-login .md-login-otp-cell {
+      width: 2.75rem;
+    }
+    .md-login form > button[type="submit"] {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-switch {
+      margin-top: 0.5rem;
+    }
+    .md-login .md-login-resend {
+      margin-top: 0;
+    }
+    .md-login [role="alert"] {
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .md-login .md-login-art-copy {
+      padding-block: 0.75rem;
+    }
+  }
+}
+
+@theme inline {
+  --font-heading: var(--font-display);
+  --font-sans: var(--font-body);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 163);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.02 163);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.02 163);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.72 0.14 163);
+  --primary-foreground: oklch(0.2 0.04 163);
+  --secondary: oklch(0.28 0.02 163);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.28 0.02 163);
+  --muted-foreground: oklch(0.72 0.02 163);
+  --accent: oklch(0.3 0.04 163);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.72 0.14 163);
+}
+
+/* ── Per-vendor storefront scope ────────────────────────────────────────────
+   Applied by applyStoreTheme() to the storefront wrapper only. Remapping the
+   shadcn tokens here is what lets shared components (Card, Button, Input,
+   EmptyState…) adapt with no prop or API changes, while every surface outside
+   this subtree keeps Mithra branding.
+
+   Deliberately independent of `.dark` above: that is app-wide dark mode, an
+   orthogonal concern. A vendor choosing a dark canvas must not opt the whole
+   app into dark mode, and vice versa. */
+[data-store-mode] {
+  --primary: var(--store-theme);
+  --ring: var(--store-theme);
+  /* --primary-foreground is computed in applyTheme() — vendors may pick any
+     primary hex, so it can't be a fixed value here. */
+}
+
+[data-store-mode='light'] {
+  --store-ink: #111827;
+  --store-muted: #6b7280;
+  --store-border: #e5e7eb;
+  --store-panel: #ffffff;
+
+  --background: var(--store-bg);
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --accent: #f3f4f6;
+  --accent-foreground: #111827;
+}
+
+[data-store-mode='dark'] {
+  --store-ink: #f9fafb;
+  --store-muted: #9ca3af;
+  --store-border: rgba(255, 255, 255, 0.12);
+  --store-panel: #1f2937;
+
+  --background: var(--store-bg);
+  --foreground: #f9fafb;
+  --card: #1f2937;
+  --card-foreground: #f9fafb;
+  --popover: #1f2937;
+  --popover-foreground: #f9fafb;
+  --muted: #263244;
+  --muted-foreground: #9ca3af;
+  --secondary: #263244;
+  --secondary-foreground: #f9fafb;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.18);
+  --accent: #263244;
+  --accent-foreground: #f9fafb;
+
+  /* Pastel chips read as blown-out on a dark canvas. Retint to the same
+     translucent-fill + bright-text pattern the destructive badge already uses. */
+  --badge-success-bg: rgba(16, 185, 129, 0.18);
+  --badge-success-fg: #6ee7b7;
+  --badge-warning-bg: rgba(245, 158, 11, 0.18);
+  --badge-warning-fg: #fcd34d;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    min-height: 100%;
+    /* Short pages keep the scrollbar's width too, so the centred headers don't shift sideways
+       between pages that scroll and pages that don't. */
+    scrollbar-gutter: stable;
+  }
+
+  /* Radix menus, selects and dialogs lock scrolling and add the scrollbar's width as body margin.
+     The gutter above already holds that space, so the margin would shift the page sideways. */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+
+  body {
+    @apply text-foreground antialiased;
+    margin: 0;
+    min-height: 100%;
+    font-family: var(--font-body);
+    background:
+      radial-gradient(1200px 600px at 10% -10%, var(--md-green-50), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, #ecfeff, transparent 50%),
+      var(--md-bg);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+/* ── Vendor console ─────────────────────────────────────────────────────
+   Scoped to `.vendor-console`, not app-wide. Ported from
+   `design-reference/dashboard.html` + `assets/css/dashboard.css`, which is the source of
+   the vendor-dashboard screenshots the team shared.
+
+   The reference puts the console on the same emerald-washed canvas as marketing and the
+   storefront, and lets the panels carry a hairline shadow. An earlier pass here used a flat
+   grey ground with no shadow; the shared design supersedes it, so the wash and the shadow
+   come back and the panels take the reference's 1.25rem corner.
+
+   Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own outer
+   boundary, `--vc-rule` a division between rows inside one. A row rule as dark as a panel
+   edge reads as "next panel" rather than "next row". */
+.vendor-console,
+.store-share-scope {
+  --vc-panel: #ffffff;
+  --vc-edge: color-mix(in srgb, var(--md-green-500) 12%, var(--md-border));
+  --vc-rule: #f3f4f6;
+
+  /* The emerald the console tints with, and the ink that stays readable on it.
+
+     The reference writes that ink as `color-mix(--md-green 90%, #000)`, which lands near
+     #0ea674 — about 3:1 on the tint, under AA for the 0.7–0.9rem type it is used on. The
+     700 is the same colour family a shade down and clears 4.5:1, so nav labels, plan chips
+     and prices keep the reference's look and stay legible. */
+  --vc-tint: rgba(16, 185, 129, 0.14);
+  --vc-tint-line: color-mix(in srgb, var(--md-green-500) 45%, #fff);
+  --vc-tint-ink: var(--md-green-700);
+
+  /* Uppercase micro-type: table heads, metric labels, settings terms. The reference's
+     #9ca3af is 2.5:1 on white; slate-500 reads the same at a glance and passes. */
+  --vc-label: #6b7280;
+
+  /* The three tinted surfaces the reference builds out of that emerald: the rail, the
+     translucent top bar, and the plan banner under it. Declared as tokens rather than
+     inline utilities because each is a `color-mix` or a gradient — the shapes Tailwind's
+     arbitrary-value syntax reads worst. */
+  /* Mixed from the opaque emerald-50, not from `--vc-tint`: `color-mix` carries the
+     tint's alpha through, and below `lg` this is a drawer laid over the page, where a
+     93%-opaque rail lets the content read straight through the nav. */
+  --vc-rail-bg: color-mix(in srgb, var(--md-green-50) 45%, #fff);
+  --vc-bar-bg: rgba(255, 255, 255, 0.92);
+  --vc-banner: linear-gradient(135deg, var(--vc-tint), #fffaf5);
+  /* One panel is allowed to lift off the others — the QR on Store & Share. */
+  --vc-spotlight: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--md-green-50) 75%, #fff) 0%,
+    #fff 58%
+  );
+
+  /* The rail, the gutter the main column keeps, and the panel shape. */
+  --vc-rail: 15.5rem;
+  --vc-gutter: 0.9rem;
+  --vc-radius: 1.25rem;
+  --vc-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
+  --vc-shadow-lift: 0 8px 24px rgba(17, 24, 39, 0.08);
+
+}
+
+.vendor-console {
+  background:
+    radial-gradient(120% 80% at 0% -10%, rgba(16, 185, 129, 0.16), transparent 42%),
+    radial-gradient(90% 60% at 100% 0%, rgba(16, 185, 129, 0.06), transparent 40%),
+    #f8fafc;
+  color: var(--md-ink);
+}
+
+@media (min-width: 640px) {
+  .vendor-console {
+    --vc-gutter: 1.25rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .vendor-console {
+    --vc-rail: 17rem;
+    --vc-gutter: 1.75rem;
+  }
+}
+
+@layer components {
+  /* Money, counts and order numbers. This list is read by scanning a column of amounts,
+     and proportional figures put every rupee total at a different width. */
+  .vc-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* One panel, ruled rows inside it. Declared here rather than as a `divide-y` utility
+     so the rule token stays with the two it is defined against. */
+  .vc-rows > * + * {
+    border-top: 1px solid var(--vc-rule);
+  }
+
+  /* The console's third type role, after Poppins display and Inter body: the tracked-out
+     micro-label over a table column, a metric, or a settings term. One declaration so the
+     six surfaces cannot drift into six sizes of it.
+
+     The second selector reaches the `<label>` the shared `Input` renders for itself, so a
+     field can wear this voice without the page hand-rolling the field markup to get it. */
+  .vc-label,
+  .vc-labelled-fields label {
+    font-size: 0.7rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--vc-label);
+  }
+}
+
+/* Every panel in the console. The reference's shape: a 1.25rem corner, a green-tinted
+   hairline edge, and the faintest lift off the washed canvas.
+
+   Padding is deliberately not set here: `EmptyState` earns its generous px-6 py-16 through
+   a utility, and a padding declaration at this specificity would silently outrank it. */
+.vendor-console [data-slot='card'],
+.store-share-scope [data-slot='card'] {
+  border: 1px solid var(--vc-edge);
+  border-radius: var(--vc-radius);
+  box-shadow: var(--vc-shadow);
+}
+
+/*Storefront shell */
+.store-shell {
+  color: var(--store-ink, var(--md-ink));
+  background: var(--store-bg, #f8fafc);
+}
+
+/* The marketing gutter and measure, so the storefront keeps the same page edges as the rest of
+   the app. */
+.store-shell-inner {
+  width: 100%;
+  max-width: calc(var(--marketing-measure) + 2 * var(--marketing-gutter));
+  margin-inline: auto;
+  padding-inline: var(--marketing-gutter);
+}
+
+.store-category-scroller {
+  scroll-snap-type: x mandatory;
+}
+
+.store-category-scroller > button {
+  scroll-snap-align: start;
+}
+
+.store-product-grid {
+  align-items: stretch;
+}
+
+.store-offer-banner {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(42vw, 28rem);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 8px 24px -6px rgba(15, 23, 42, 0.18),
+    0 20px 48px -12px rgba(15, 23, 42, 0.14);
+}
+
+.store-offer-banner__image {
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Top + bottom scrim keeps text and CTA readable; middle stays open for the photo. */
+.store-offer-banner__scrim {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.78) 0%,
+      rgba(15, 23, 42, 0.28) 34%,
+      rgba(15, 23, 42, 0.06) 52%,
+      rgba(15, 23, 42, 0.42) 100%
+    ),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.5) 0%, transparent 58%);
+}
+
+.store-offer-banner--dark {
+  color-scheme: dark;
+}
+@layer components {
+  /* The step row scrolls when it outgrows the window. Without a container edge to
+     clip against, a half-cut node just looks broken, so an end fades instead — which
+     also reads as "there is more this way". Each end fades only while steps are hidden
+     past it (set by the stepper), so a fully visible first or last dot stays crisp. */
+  .ob-stepper-scroll {
+    --ob-fade-before: 0px;
+    --ob-fade-after: 0px;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--ob-fade-before),
+      #000 calc(100% - var(--ob-fade-after)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--ob-fade-before),
+      #000 calc(100% - var(--ob-fade-after)),
+      transparent 100%
+    );
+  }
+
+  .ob-stepper-scroll[data-fade-before] {
+    --ob-fade-before: 1.5rem;
+  }
+
+  .ob-stepper-scroll[data-fade-after] {
+    --ob-fade-after: 1.5rem;
+  }
+
+  /* Form column · preview bay. Declared here rather than as Tailwind breakpoint
+     variants so the preview track collapses out of the grid entirely below 900px,
+     where it becomes a tab instead. */
+  .ob-grid {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 900px) {
+    .ob-grid {
+      /* The track is the phone's width (17.5rem); `.ob-bay` widens the panel around it.
+         The 16.5rem floor keeps the three preview counts inside the bay's padding. */
+      --ob-column-gap: clamp(2rem, 4vw, 4rem);
+      grid-template-columns: minmax(0, 1fr) clamp(16.5rem, 22vw, 17.5rem);
+      column-gap: var(--ob-column-gap);
+    }
+
+    /* The preview bay is its own panel on the same ground: it starts halfway across the
+       column gap behind a hairline and runs out to the shell's right edge through the
+       gutter and the measure's side margin, so its contents centre in the space it owns.
+       100cqw is the shell's content width (the shell is the nearest inline container). */
+    .ob-bay {
+      --ob-bay-bleed: calc(var(--marketing-gutter) + (100cqw - min(100cqw, var(--marketing-measure))) / 2);
+      margin-inline: calc(var(--ob-column-gap) / -2) calc(-1 * var(--ob-bay-bleed));
+      justify-content: safe center;
+      border-left: 1px solid var(--ob-line);
+    }
+  }
+
+  @keyframes md-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.md-indeterminate-bar {
+  position: relative;
+  overflow: hidden;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--store-theme-muted, rgba(16, 185, 129, 0.22));
+}
+.md-indeterminate-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  border-radius: inherit;
+  background: var(--store-theme, var(--md-green-600, #059669));
+  animation: md-indeterminate 1.2s ease-in-out infinite;
+}
+.md-indeterminate-bar--flush { border-radius: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .md-indeterminate-bar::after { animation: none; width: 100%; opacity: 0.6; }
+}
+}

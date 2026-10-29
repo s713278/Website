@@ -1,0 +1,281 @@
+# Session handling (JWT)
+
+Shared lifecycle for **Customer** (storefront) and **Vendor / Owner** (store-setup) roles.
+This describes what is implemented today. The agreed target model and the backend answers it
+still needs are recorded under "Outstanding: the approved target session model" below.
+
+## Components
+
+| Piece | Location | Role |
+|--------|----------|------|
+| Token store | `@mithra/api-client` `tokens.ts` | `mithra_access_token` + `mithra_refresh_token` in `localStorage` |
+| Request interceptor | `http.ts` | Unless `skipAuth`: refreshes first when the access token is present but already expired, then attaches `Authorization: Bearer <access>` |
+| Response interceptor | `http.ts` | `401` → single-flight refresh → retry once; else `onUnauthorized`. `403` → `onForbidden`, session kept |
+| Session mapping | `src/shared/api/services/auth.service.ts` | Builds the session from the backend's verified identity |
+| Auth UI state | `src/shared/auth/store/auth-store.ts` | Persists the user only; session actions write API credentials |
+| Startup restoration | `AppProviders` → `restoreSession()` | One shot; owns `isHydrated` |
+| Route gates | `ProtectedRoute` | `customer` → `/checkout` and `/orders`; shop-scoped cart, checkout, and orders stay on the store header so **Sign in** can replace account after logout; `vendor` → `/vendor/*` |
+
+## What the session contains
+
+`verify-otp` is the only source of identity. A session is created **only** when:
+
+- `mobile_verified` is `true`; and
+- the role being signed in as appears in the response `roles`.
+
+The role chosen on the login screen is a request, not a grant. Unknown authorities
+(`ADMIN`, `CUSTOMER_CARE`) are dropped rather than mapped.
+
+**A refused verification clears the tokens.** The package-level `verifyOtp` writes whatever
+credentials come back *before* the app service can check `mobile_verified` or `roles`, so both
+refusal paths call `clearTokens()` on the way out. Without that the browser keeps a live bearer
+token for a login the app rejected — and when a signed-in vendor changes their number from inside
+the wizard, the refused number's token would be left sitting under the first vendor's still-persisted
+`md-auth` user, so every later request would carry the wrong identity. Tokens are only ever adopted
+into a session by `applySession()`.
+
+| Field | Meaning |
+|-------|---------|
+| `role` | Active session. The login screen that was used: customer or vendor. Shop cart, orders, and checkout follow this. `/vendor` and onboarding follow this. The other role on the same phone is not entered until that screen is used. |
+| `roles` | Every role the backend verified for the phone. This is not a second login. |
+| `vendors` | Vendor memberships from the response `vendors[]`: ID and name only. Each entry's `status` and `onboarding` are a sign-in snapshot used once for landing (see [Where a session lands](#where-a-session-lands)) and are never stored. |
+| `vendorId` | Set **only** when there is exactly one membership, whichever login form was used — memberships come from the backend, not from the requested role. Several memberships require an explicit `selectVendor()` choice; the first entry is never taken silently. |
+
+## Lifecycle
+
+1. **Login (OTP or demo)** → `applySession` / `completeOtpLogin` → writes access (+ refresh when present) and user
+2. **Reload** → Zustand rehydrates the user, then `restoreSession()` completes hydration:
+   - credentials come only from `mithra_access_token` / `mithra_refresh_token`; a legacy
+     `md-auth.token` is ignored, so reload cannot overwrite a refreshed token or revive cleared
+     credentials. The store's in-memory token mirror is populated from the API token store;
+   - an expired-but-present access token is left alone **here**; the request interceptor
+     refreshes it before the first protected call leaves the browser;
+   - if only the refresh token remains, refresh once before deciding;
+   - a transient refresh failure keeps the session rather than signing the user out;
+   - the session is cleared only when **both** credentials are gone.
+3. **Expired access** → detected in two places, in this order:
+   - **Request interceptor, before sending.** `isAccessTokenExpired()` reads the token's own
+     `exp` (30-second skew allowance) and refreshes up front when it has passed. This removes
+     the doomed request that the 401 path would otherwise spend to learn what the token
+     already said. It is an optimization, never an authority: an opaque token, a malformed
+     payload or a missing `exp` is reported *usable*, and a transient refresh failure sends
+     the stale token rather than failing before reaching the server.
+   - **Response interceptor, on a 401.** Refreshes with the refresh token and retries once.
+     This stays the backstop for revocation and for every token the check above cannot read.
+
+   Both share the same single-flight refresh, so parallel requests still cost one refresh.
+   Refresh writes the API token store, and the next reload preserves that updated credential.
+   Access tokens live **600 seconds**, so this path runs constantly during a long form;
+   it is a main path, not an edge case.
+4. **Refresh fails (400/401/403)** → `clearSession()`; protected routes redirect to the role's login
+5. **Refresh fails transiently (network/5xx)** → session kept; the error is normalized to `ApiError`
+6. **Refresh returns 200 but no recognizable token** → session kept and the attempt fails. The server
+   accepted the credentials, so they are alive; clearing would destroy a working refresh token over a
+   response-shape surprise
+7. **`403` on a protected call** → `sessionProblem: 'forbidden'`; the session and unsaved work survive
+8. **Sign-out** → optional `POST /v1/auth/signout` (`skipRefresh`), then `clearSession`, then every
+   handler registered through `onExplicitSignOut()`. Customer cleanup clears `md-cart` memory and
+   persist storage, pending add, and in-flight cart writes. The public storefront cache stays so
+   `/login` can still show that shop's name and logo. The next customer OTP loads that identity's
+   cart from the server. Vendor payment records stay. Storefront logout stays on the page and
+   shows **Sign in** in the header; tapping it opens `/login` with `from` plus `shopName` /
+   `shopLogoUrl`. Protected customer routes still redirect to that login.
+9. **Public storefront** → catalog calls use `{ skipAuth: true }` (no Bearer)
+
+### Refresh response shape
+
+`POST /v1/auth/refresh` answers with the new access token as a **bare string in `data`**:
+
+```json
+{ "timestamp": "…", "success": true, "status": 200, "data": "<jwt>" }
+```
+
+There is no object to read a field from, and **no new refresh token** — the existing one is reused.
+`parseTokenResponse` therefore accepts a JWT-shaped `data` string, gated on three base64url segments
+so that endpoints returning a plain sentence in `data` (go-live, for one) can never be mistaken for
+credentials. The contract types this operation as a bare `APIResponseObject` with no example, so the
+shape is only knowable by calling it — see [API_GAPS.md](./API_GAPS.md).
+
+Route guards wait for `isHydrated`, so they never act on a half-restored session.
+
+## Where a session lands
+
+`resolveLandingPath(user, from)` decides, and sign-in **awaits it before navigating**.
+
+It follows the login screen. A customer OTP stays on the shop (`from`, otherwise `/`). A vendor OTP
+goes to `/vendor` when setup is already submitted, and to `/onboarding` when it is not. The same
+phone can hold both roles on the server, but one OTP does not open both sides.
+
+At sign-in the chosen vendor's `verify-otp` `vendors[]` entry decides first, when it carries a
+`status` and onboarding evidence (a usable `next_step`, or a known `onboarding.status`). The same
+`isStoreSubmitted` rule below applies, through `storeSubmittedAtSignIn`; no context is awaited.
+Sign-in then starts, without awaiting, the reads the destination needs through the shared caches:
+`/vendor` starts the context and the shell's billing read, `/onboarding` the context, the profile and
+the landing step's reads (from this entry's `next_step`, else the context's), so the provider, shell
+and wizard join those requests. Any missing or unknown value, a multi-vendor identity with no store
+chosen, or a context already resolved in the context cache falls back to the context path below.
+The entry is a snapshot that go-live and saved setup steps make stale: it is used only for this
+sign-in decision and never persisted, so `VendorLandingRedirect` and every later landing read the
+context.
+
+Otherwise, for a vendor it reads the vendor context alone — one cached request, or none when a context is
+already resolved — and routes on completed setup and submission. Only a vendor headed into setup also
+starts the profile and the landing step's reads from that context, without awaiting them. An active
+store with `onboarding.next_step: 11` goes to `/vendor`; steps 1–10 go to `/onboarding` even if the store
+is active and approved. If the pointer is absent or invalid, `onboarding.status: COMPLETED`
+establishes completion; activation alone is a legacy fallback only when onboarding status is
+also absent or unknown. Approval does not establish completion. The wizard resumes at the backend step
+(at least Step 3 for an already verified session). Direct dashboard visits also show unfinished
+setup instead of an open store, while suspension and rejection retain precedence.
+The staged read policy and cache lifecycle are documented
+in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration). Routing every vendor
+into the wizard and letting it redirect back out is what produced a visible flash through setup for
+vendors who had already finished it.
+
+Any failure falls back to the role-only answer, which is `/onboarding`. That direction is deliberate:
+being sent to setup wrongly costs a click, while being sent to a dashboard wrongly leaves a
+half-finished store with no route back. `resumePathAfterLogin` remains the pure role-only function
+underneath, and is what the fallback calls.
+
+## Swapping identity in place
+
+Verifying a second number while already signed in is an identity **swap**, not a sign-out:
+`applySession()` replaces the user and tokens, and deliberately does not fire the
+`onExplicitSignOut` handlers — the vendor is not leaving, they are moving to another account.
+Feature state keyed on the previous identity still has to go, and does: changing `user.vendorId`
+is what drives the onboarding draft's ownership check into discarding the old vendor's draft.
+
+Use `logout()` when the user is leaving, `applySession()` when they are changing who they are.
+
+## Browser-local state owned by a session
+
+Features that keep their own browser-local state must not let it outlive the identity that created
+it. Two mechanisms cover the two ways a session can end:
+
+| Mechanism | Fires on | Use for |
+|-----------|----------|---------|
+| `onExplicitSignOut(handler)` | `logout()` only | Dropping local state the moment the user chooses to leave |
+| Feature-side ownership check | Any read of that state | Every other path — expiry, failed refresh, a second account in the same browser |
+
+`onExplicitSignOut` is deliberately **not** wired to `clearSession()`: an expired token or a failed
+refresh is not a decision to discard work. The ownership check is what makes that safe, so it is the
+required half — a feature that only clears on sign-out still leaks across identities after a session
+expires.
+
+The vendor onboarding draft implements both, and is the worked example: `useOnboardingDraftSession`
+binds the stored draft to the signed-in vendor on every read and remount, an explicit sign-out clears
+it, and an involuntary session loss *parks* it — kept in storage, taken off screen, and refused all
+writes until the same vendor verifies again. A draft read under the wrong identity is both a
+disclosure and a write hazard, because Continue would submit the previous vendor's details to the
+account signed in now.
+
+The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: an explicit sign-out
+clears it, and the ownership check covers every other path — the header ignores a record whose
+`vendorId` is not the signed-in vendor's.
+
+### Temporary: vendor header hint — TEMP(vendor-header-hint)
+
+**Purpose.** The marketing header and the general header (`RootLayout`) pick a vendor's buttons from
+the live vendor context read. Until that read lands they show no action; the account menu offers
+Dashboard meanwhile. A persisted Zustand store (`md-vendor-header-hint`) remembers the last accepted
+read — `{ vendorId, vendorStatus, approvalStatus, storeIdentifier, onboarding: { status,
+description, nextStep } }` — so the first frame already shows the right buttons. The live read
+still runs and corrects it.
+
+- **Written** by the cache layer whenever a context read is accepted: `loadVendorContext`, which
+  every context read goes through, sign-in's included.
+- **Read** only through `useHeaderActions`, by the marketing header (including on `/onboarding`) and
+  the general header. Precedence: resolved memory cache, then this session's ready read, then the
+  record (while the read is loading or after it failed), then the fallback (loading → no action;
+  failed → Continue setup, or no action on `/onboarding`, where the vendor already is). It only selects links; it never navigates. The wizard and route gates
+  never read it. Demo mode makes no account read, so it is unaffected.
+- **Cleared** by `onExplicitSignOut` in `AppProviders.tsx`. Involuntary session loss keeps it; the
+  `vendorId` ownership check stops it applying to another vendor.
+- **Accepted risk:** an out-of-date record (for example, a store suspended elsewhere) can show a
+  wrong button for about 1–4 s until the read lands.
+
+Files:
+
+- `src/modules/vendor/store/vendor-header-hint-store.ts` and `vendor-header-hint-store.test.ts`
+- `src/modules/vendor/lib/vendor-context-cache.ts` and its test
+- `src/modules/vendor/lib/onboarding-server-state.ts` and its test
+- `src/modules/marketing/hooks/useHeaderActions.ts`
+- `src/app/providers/AppProviders.tsx`
+- `src/modules/marketing/components/MarketingHeader.test.tsx`
+- `src/app/layouts/index.tsx` (general header, a second consumer of `useHeaderActions`)
+
+**Removal** — required before any caching layer (Zustand + TanStack Query) starts:
+
+1. Delete `vendor-header-hint-store.ts` and its test.
+2. Remove the two write calls in `vendor-context-cache.ts` and `onboarding-server-state.ts`.
+3. Remove the record fallback from `useHeaderActions.ts` and the `onExplicitSignOut` registration
+   from `AppProviders.tsx`.
+4. Update `MarketingHeader.test.tsx` to the remaining behavior.
+5. Delete this subsection, the session-owned note above it, and the `AGENTS.md` bullet.
+6. `grep -rn "TEMP(vendor-header-hint)" src docs AGENTS.md` must return nothing.
+
+## Known limitation: persisted identity is not server-confirmed
+
+`md-auth` persists the user (including `roles`, `vendors` and `vendorId`) in `localStorage`,
+which is user-editable. On reload that data is normalized but **not verified against the
+backend**, so it is a cache of what the browser was told at login, not proof of authority.
+Backend authorization remains the real boundary; route guards are UX only.
+
+The vendor onboarding wizard does confirm itself against
+`GET /v1/vendors/{vendor_id}/context` for plan limits (its top-level `limits`). A general
+server-backed session restoration needs a typed profile/session payload — `/v1/auth/profile` currently
+returns plain text and cannot serve it.
+
+## Interim XSS posture (important)
+
+**Current:** access + refresh tokens are JS-accessible (`localStorage`). This is an **interim** approach so the SPA and Axios interceptors can attach Bearer headers and refresh on 401.
+
+**Risk:** any XSS can read tokens.
+
+**Future direction:** move to **httpOnly, Secure, SameSite cookies** (or BFF) so refresh/access are not readable from JavaScript; pair with CSRF protections as needed. Feature code must never read a token directly — only `useAuthStore` and `@/shared/api` — so that migration stays invisible to features.
+
+Until that migration, keep CSP tight, avoid `dangerouslySetInnerHTML` with untrusted content, and treat XSS as a session-compromise bug.
+
+## Outstanding: the approved target session model
+
+Tokens are in `localStorage` today. The direction below was accepted by the senior backend developer
+as the MVP target and has **not** shipped; it is recorded here because it is the only place it is
+written down.
+
+1. `/verify-otp` returns the short-lived access token; the frontend holds it in memory only.
+2. The refresh credential lives in a `Secure`, `HttpOnly` cookie that JavaScript never reads.
+3. `/refresh` authenticates through that cookie, rotates it, and returns a new access token.
+4. Assume the refresh credential is single-use and its predecessor dies on rotation — no grace period.
+5. Coordinate refresh across concurrent requests and, if required, across tabs.
+6. `/signout` revokes the session and expires the cookie; local state clears even if the call fails.
+7. Credentialed CORS, `SameSite`, CSRF, cookie scope and the frontend/API domain topology are one
+   design, not separate decisions.
+8. The existing mobile token contract must keep working alongside it.
+
+HttpOnly mitigates theft of the long-lived credential by injected JavaScript. It does not eliminate
+XSS or CSRF.
+
+Five backend answers are still required before this can be built: the executable contract for all
+five `/v1/auth` operations; the exact production frontend/API origins (which decide `SameSite`,
+credentialed CORS and the CSRF defence); an authoritative session-restoration payload, since
+`/v1/auth/profile` currently returns plain text and cannot serve one; the multi-role and
+vendor-context switching rules; and explicit confirmation of the pre-verification invariants — that
+an unverified identity is inert, that no credential is issued before verification, and that public
+registration cannot request `ADMIN` or `CUSTOMER_CARE`.
+
+## Manual test checklist
+
+- [ ] OTP (or demo) login → reload → still authenticated on protected route
+- [ ] With valid refresh, expired access → API call succeeds after silent refresh, tokens still in
+      storage afterwards, and in-progress form work intact
+- [ ] Invalid/missing refresh on 401 → session cleared → role login
+- [ ] Transient network failure during refresh → session survives, error shown
+- [ ] `403` on a protected call → still signed in, unsaved work intact
+- [ ] `mobile_verified: false` or missing vendor role → no session created **and no tokens left in
+      `localStorage`** (check `mithra_access_token` / `mithra_refresh_token` are gone)
+- [ ] Signed-in vendor verifies a second number that is refused → not left holding the other
+      number's token
+- [ ] Identity with several vendors → wizard asks which store, none chosen silently
+- [ ] Sign out → tokens gone, protected routes redirect, session-owned local state cleared
+- [ ] Second vendor signs in on the same browser → no first-vendor state survives anywhere
+- [ ] `/stores` public load works without login (`skipAuth`)

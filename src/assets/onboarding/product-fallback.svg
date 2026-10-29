@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+  <defs>
+    <linearGradient id="product-bg" x1="15" y1="15" x2="145" y2="147" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0FDF4"/>
+      <stop offset="1" stop-color="#FFFBEB"/>
+    </linearGradient>
+    <linearGradient id="product-box" x1="52" y1="55" x2="111" y2="119" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="product-shadow" x="29" y="35" width="106" height="108" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#065F46" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+  <rect width="160" height="160" rx="28" fill="url(#product-bg)"/>
+  <circle cx="27" cy="31" r="18" fill="#D1FAE5" fill-opacity="0.8"/>
+  <circle cx="135" cy="128" r="25" fill="#FDE68A" fill-opacity="0.42"/>
+  <g filter="url(#product-shadow)" transform="translate(80 80) scale(1.1) translate(-80 -80)">
+    <path d="m48 63 32-18 32 18-32 18-32-18Z" fill="#6EE7B7"/>
+    <path d="m48 63 32 18v38L48 101V63Z" fill="url(#product-box)"/>
+    <path d="m112 63-32 18v38l32-18V63Z" fill="#047857"/>
+    <path d="m66 53 32 18 14-8-32-18-14 8Z" fill="#A7F3D0"/>
+    <path d="M64 84.5 80 93v15.5l-16-8.5V84.5Z" fill="#ECFDF5" fill-opacity="0.92"/>
+    <path d="m80 81 32-18M80 81v38" stroke="#065F46" stroke-opacity="0.36" stroke-width="2"/>
+  </g>
+  <path d="M118 35v13M111.5 41.5h13" stroke="#D97706" stroke-width="3" stroke-linecap="round"/>
+  <path d="M128 52v8M124 56h8" stroke="#F59E0B" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
