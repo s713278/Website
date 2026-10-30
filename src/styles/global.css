@@ -418,6 +418,28 @@
     letter-spacing: -0.01em;
   }
 
+  /* pathLength=100: dash + gap must stay at 100 as the head extends and the tail catches up. */
+  @keyframes ob-loading-dash {
+    0% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: 0;
+    }
+    50% {
+      stroke-dasharray: 74 26;
+      stroke-dashoffset: -12;
+    }
+    100% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: -100;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ob-loading-arc {
+      animation: ob-loading-dash 2s ease-in-out infinite;
+    }
+  }
+
   /* Each step arriving. Small on purpose: the vendor is filling a form, not
      watching a transition. */
   .ob-step-enter {

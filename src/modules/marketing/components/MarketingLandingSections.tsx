@@ -12,6 +12,7 @@ import {
   MapPin,
   MessageCircle,
   Milk,
+  Minus,
   Palette,
   Play,
   Puzzle,
@@ -20,6 +21,7 @@ import {
   Star,
   Store,
   Wheat,
+  X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, ShadcnInput } from '@/shared/components'
@@ -144,15 +146,51 @@ const audiences = [
   ['👩‍🍳', 'Women Entrepreneurs'],
 ]
 
+const comparisonOthers = ['Shopify', 'Dukaan', 'Marketplaces']
+
 const comparisons = [
   ['Setup Time', '~5 minutes', 'Hours–days', '~30 minutes', 'Days–weeks'],
   ['Coding Required', 'No', 'Often yes', 'No', 'No'],
   ['WhatsApp Orders', 'Built-in', 'Limited', 'Limited', 'No'],
   ['Hyperlocal Focus', 'Yes', 'No', 'Partial', 'City-wide'],
   ['Commission', '0%', 'App fees', 'Plan fees', '15–30%'],
-  ['Subscription Selling', 'Yes', 'Apps needed', 'Limited', 'Rare'],
+  ['Subscription Selling', 'Yes', 'Apps needed', 'Limited', 'Limited'],
   ['Own Your Customers', 'Yes', 'Yes', 'Yes', 'No'],
 ]
+
+type ComparisonMark = 'yes' | 'limited' | 'no'
+/** A short value shown as text, or a mark whose label is what a screen reader hears. */
+type GlanceCell = string | { mark: ComparisonMark; label: string }
+
+const yes = (label = 'Yes'): GlanceCell => ({ mark: 'yes', label })
+const limited = (label = 'Limited'): GlanceCell => ({ mark: 'limited', label })
+const no = (label = 'No'): GlanceCell => ({ mark: 'no', label })
+
+/** The phone form of `comparisons`: marks where the answer is yes, limited or no; short text where the number is the point. */
+const comparisonGlance: { feature: string; cells: GlanceCell[] }[] = [
+  { feature: 'Setup time', cells: ['5 min', 'Hours', '30 min', 'Days'] },
+  { feature: 'No coding needed', cells: [yes(), no(), yes(), yes()] },
+  { feature: 'WhatsApp orders', cells: [yes('Built-in'), limited(), limited(), no()] },
+  { feature: 'Hyperlocal focus', cells: [yes(), no(), limited('Partial'), limited('City-wide')] },
+  { feature: 'Commission', cells: ['0%', 'App fees', 'Plan fees', '15–30%'] },
+  { feature: 'Subscription selling', cells: [yes(), limited('Apps needed'), limited(), limited()] },
+  { feature: 'Own your customers', cells: [yes(), yes(), yes(), no()] },
+]
+
+const comparisonMarkStyle = {
+  yes: { Icon: Check, className: 'bg-emerald-100 text-emerald-700' },
+  limited: { Icon: Minus, className: 'bg-slate-100 text-slate-500' },
+  no: { Icon: X, className: 'text-rose-600' },
+} satisfies Record<ComparisonMark, { Icon: ComponentType<{ className?: string; strokeWidth?: number }>; className: string }>
+
+function ComparisonMarkIcon({ mark }: { mark: ComparisonMark }) {
+  const { Icon, className } = comparisonMarkStyle[mark]
+  return (
+    <span className={`mx-auto flex size-6 items-center justify-center rounded-full ${className}`} aria-hidden>
+      <Icon className="size-3.5" strokeWidth={3} />
+    </span>
+  )
+}
 
 const testimonials = [
   {
@@ -886,15 +924,78 @@ export function ComparisonSection() {
           </>
         }
       />
-      <div className="mt-10 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] border-collapse text-left">
+      {/* Phones see every platform at once: marks for yes, limited and no; short text where the number is the point. */}
+      <div className="mt-8 md:hidden">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full table-fixed border-collapse text-center">
+            <caption className="sr-only">MithraDirect compared with Shopify, Dukaan and Marketplaces</caption>
+            <colgroup>
+              <col className="w-[30%] min-[360px]:w-[32%]" />
+              <col className="w-[17.5%]" />
+              <col />
+              <col />
+              <col />
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-50 align-middle text-[0.6875rem] leading-tight text-slate-950 min-[360px]:text-xs">
+                <th scope="col" className="px-3 py-3 text-left font-semibold">
+                  Feature
+                </th>
+                <th scope="col" className="bg-emerald-100 px-1 py-3 font-bold text-emerald-800">
+                  Mithra<wbr />Direct
+                </th>
+                <th scope="col" className="px-1 py-3 font-semibold">Shopify</th>
+                <th scope="col" className="px-1 py-3 font-semibold">Dukaan</th>
+                <th scope="col" className="px-1 py-3 font-semibold hyphens-manual">Market&shy;places</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonGlance.map(({ feature, cells }) => (
+                <tr key={feature} className="border-t border-slate-100">
+                  <th scope="row" className="py-3 pr-1.5 pl-2 text-left text-[0.6875rem] font-medium leading-snug text-slate-900 min-[360px]:px-3 min-[360px]:text-[0.8125rem]">
+                    {feature}
+                  </th>
+                  {cells.map((cell, index) => (
+                    <td
+                      key={index}
+                      className={`px-1 py-3 text-[0.6875rem] leading-tight min-[360px]:text-xs ${
+                        index === 0 ? 'bg-emerald-100/50 font-bold text-emerald-800' : 'text-slate-600'
+                      }`}
+                    >
+                      {typeof cell === 'string' ? (
+                        cell
+                      ) : (
+                        <>
+                          <ComparisonMarkIcon mark={cell.mark} />
+                          <span className="sr-only">{cell.label}</span>
+                        </>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ul className="mt-4 flex items-center justify-center gap-5 text-xs font-medium text-slate-600" aria-hidden>
+          {(['yes', 'limited', 'no'] as const).map((mark) => (
+            <li key={mark} className="flex items-center gap-1.5">
+              <ComparisonMarkIcon mark={mark} />
+              {mark === 'yes' ? 'Yes' : mark === 'limited' ? 'Limited' : 'No'}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-10 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
+        <table className="w-full border-collapse text-left">
           <thead>
             <tr className="bg-slate-50 text-sm text-slate-950">
-              {['Feature', 'MithraDirect', 'Shopify', 'Dukaan', 'Marketplaces'].map((heading, index) => (
+              {['Feature', 'MithraDirect', ...comparisonOthers].map((heading, index) => (
                 <th
                   key={heading}
                   scope="col"
-                  className={`px-5 py-5 font-bold ${index === 1 ? 'bg-emerald-50 text-emerald-800' : ''}`}
+                  className={`px-4 py-5 font-bold lg:px-5 ${index === 1 ? 'bg-emerald-100 text-emerald-800' : ''}`}
                 >
                   {heading}
                 </th>
@@ -904,20 +1005,22 @@ export function ComparisonSection() {
           <tbody>
             {comparisons.map((row) => (
               <tr key={row[0]} className="border-t border-slate-100">
-                {row.map((cell, index) => (
-                  <td
-                    key={cell}
-                    className={`px-5 py-4 text-sm sm:text-base ${
-                      index === 1
-                        ? 'bg-emerald-50/70 font-bold text-emerald-700'
-                        : index === 0
-                          ? 'font-medium text-slate-900'
-                          : 'text-slate-700'
-                    }`}
-                  >
-                    {cell}
-                  </td>
-                ))}
+                {row.map((cell, index) =>
+                  index === 0 ? (
+                    <th key={index} scope="row" className="px-4 py-4 text-sm font-medium text-slate-900 lg:px-5 lg:text-base">
+                      {cell}
+                    </th>
+                  ) : (
+                    <td
+                      key={index}
+                      className={`px-4 py-4 text-sm lg:px-5 lg:text-base ${
+                        index === 1 ? 'bg-emerald-100/50 font-bold text-emerald-800' : 'text-slate-700'
+                      }`}
+                    >
+                      {cell}
+                    </td>
+                  ),
+                )}
               </tr>
             ))}
           </tbody>

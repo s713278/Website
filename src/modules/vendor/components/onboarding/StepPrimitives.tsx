@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type Ref, 
 import { CheckIcon, ChevronRightIcon, DatabaseIcon, RotateCcwIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
+import logoDarkMd from '@/assets/logo_dark_md.png'
 import { Button } from '@/shared/components/ui'
 import type { ValidationIssue } from '../../types/onboarding'
 import { StepNotice } from './AccessNotice'
@@ -315,7 +316,32 @@ export function QuietSpinner({ className }: { className?: string }) {
 export function StepLoading({ label = 'Loading this step' }: { label?: string }) {
   return (
     <div role="status" aria-label={label} aria-busy="true" className="grid min-h-72 place-items-center">
-      <QuietSpinner className="size-8" />
+      <div className="px-4 py-8">
+        <span aria-hidden="true" className="relative grid size-14 place-items-center">
+          <svg
+            viewBox="0 0 64 64"
+            fill="none"
+            className="absolute inset-0 size-full motion-safe:animate-[spin_2s_linear_infinite]"
+          >
+            <circle
+              className="ob-loading-arc"
+              cx="32"
+              cy="32"
+              r="30"
+              pathLength="100"
+              stroke="#4caf50"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="25 75"
+              transform="rotate(-90 32 32)"
+            />
+          </svg>
+          {/* Crop the original logo lockup to its round mark without redrawing the brand. */}
+          <svg viewBox="0 0 68 68" className="size-11 overflow-hidden">
+            <image href={logoDarkMd} width="317" height="68" />
+          </svg>
+        </span>
+      </div>
     </div>
   )
 }
