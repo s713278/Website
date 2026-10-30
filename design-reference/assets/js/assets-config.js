@@ -18,6 +18,7 @@
     },
     fallbacks: {
       banner: BASE + '/banner_md.png',
+      storeBg: BASE + '/background.png',
       fresh: BASE + '/fresh.png',
       cup: BASE + '/cup.png',
       flower: BASE + '/flower.png',

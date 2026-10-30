@@ -1,10 +1,16 @@
-type EnvLike = { VITE_API_BASE_URL?: string; env?: Record<string, string> };
+function configuredApiBaseUrl(): string | undefined {
+  // Vite inlines only the direct expression `import.meta.env.VITE_API_BASE_URL`.
+  // Copying `import.meta` and reading `.env` later is undefined in a production
+  // bundle, so every deployment falls back to the QA host.
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (typeof configured !== 'string') return undefined;
+  const trimmed = configured.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 export function getApiBaseUrl(override?: string): string {
   if (override) return override.replace(/\/$/, '');
-  const meta = (typeof import.meta !== 'undefined' ? import.meta : undefined) as EnvLike | undefined;
-  const fromVite = meta?.env?.VITE_API_BASE_URL;
-  return (fromVite || 'https://qa.mithradirect.com/api').replace(/\/$/, '');
+  return (configuredApiBaseUrl() || 'https://qa-api.mithradirect.com/api').replace(/\/$/, '');
 }
 
 export type ClientConfig = {
