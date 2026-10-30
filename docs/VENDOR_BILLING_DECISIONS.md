@@ -8,7 +8,8 @@ because MithraDirect's account offers UPI · 30 September 2026
 ([UPI and collection retries](#upi-and-collection-retries--24-september-2026)). Live API billing on
 the published backend API agreed · 29 September 2026 ([Live API billing](#live-api-billing--29-september-2026)).
 The early first fee replaces AutoPay-only setup during the trial · 29 September 2026
-([Early first fee](#early-first-fee--29-september-2026)).
+([Early first fee](#early-first-fee--29-september-2026)). The platform fee moved from ₹299 to ₹399
+a month · 7 October 2026 ([Platform fee ₹399](#platform-fee-399--7-october-2026)).
 This amends the 18 September decisions. Open edge-case policies are listed below; the development
 preview and production backend do not yet implement this model.
 
@@ -60,7 +61,7 @@ reads; see [Live API billing](#live-api-billing--29-september-2026).)*
   authorisation). The label does not change the underlying payment timing.
   The development [six-state Plan prototype](#six-state-demo-plan-prototype--24-september-2026)
   replaces this label with state-specific ones; the diagnostic preview and demo-mode production
-  builds keep it. The Live API also uses state-specific labels ("Pay ₹299 with Razorpay", "Keep shop
+  builds keep it. The Live API also uses state-specific labels ("Pay ₹399 with Razorpay", "Keep shop
   open", "Stop the plan"); see [Live API billing](#live-api-billing--29-september-2026).
 - After unpaid trial expiry, explicit signup uses an immediate-start subscription and collects
   the first monthly platform fee upfront. Paid access requires backend confirmation of that fee;
@@ -115,7 +116,7 @@ reads; see [Live API billing](#live-api-billing--29-september-2026).)*
 ## Current Test Mode method scope
 
 The 19 September review is for **Test Mode development**, using the supplied Test credentials and
-₹299 monthly plan. That account, which the local test server uses, offers cards only; Live API
+₹399 monthly plan. That account, which the local test server uses, offers cards only; Live API
 Checkout uses MithraDirect's own account, which offers UPI too. Production bank acceptance for other
 methods remains deferred.
 The launch-method rule above is a later release gate, not a requirement to test every method before
@@ -212,11 +213,11 @@ Recommendations in this table are **not approved defaults**. Unanswered choices 
 | Decision | Unresolved question / recommendation |
 |---|---|
 | Other refunds | Discretionary refunds, errors outside the cancellation-race case and access following those refunds remain open. A full Test refund of a confirmed first ₹299 currently leaves the prototype Paid and "verified" ([evidence](./VENDOR_BILLING_PREVIEW.md#prototype-evaluation-and-fixes--24-september-2026)). Ordinary cancellation has no automatic proration; timely cancellation racing a debit requires a full refund with only original coverage retained. Whether a vendor who stops after an early first fee, before the trial end, gets that fee back in full is undecided (today: no automatic refund); Razorpay refunds come from the merchant balance and its fee is not reversed ([backend brief](./VENDOR_BILLING_BACKEND_BRIEF.md#other-razorpay-facts)). |
-| Payment-method evidence | Cards and UPI are offered in Live API Checkout; the local test server's account offers cards only; eMandate is excluded, though MithraDirect's Checkout account still offered it on 30 September 2026 and must switch it off. UPI's launch evidence is in [UPI: accounts and launch evidence](#upi-accounts-and-launch-evidence) and is unobserved. Card future authorisation, immediate signup, renewal success, a failed renewal debit and cancellation were observed in Test Mode on 23 September 2026 ([Plan evidence](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)); renewal recovery is unobserved, so that evidence remains open, but it no longer gates UPI. The early first fee (an upfront ₹299 with a future start) was verified by Test card on 30 September 2026; UPI with it is unobserved and a [release blocker](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers). Do not silently shift `T` or shorten the trial. |
-| Lifecycle completion | Pause/resume and the end of the finite production schedule still need decisions. A pause made at Razorpay is not shown: the demo Plan keeps naming the next ₹299 ([evidence](./VENDOR_BILLING_PREVIEW.md#prototype-evaluation-and-fixes--24-september-2026)). Successful retries keep the original billing anchor. The finite Test Mode count is not a production duration decision. |
+| Payment-method evidence | Cards and UPI are offered in Live API Checkout; the local test server's account offers cards only; eMandate is excluded, though MithraDirect's Checkout account still offered it on 30 September 2026 and must switch it off. UPI's launch evidence is in [UPI: accounts and launch evidence](#upi-accounts-and-launch-evidence) and is unobserved. Card future authorisation, immediate signup, renewal success, a failed renewal debit and cancellation were observed in Test Mode on 23 September 2026 ([Plan evidence](./VENDOR_BILLING_PREVIEW.md#plan-test-mode-evidence--23-september-2026)); renewal recovery is unobserved, so that evidence remains open, but it no longer gates UPI. The early first fee (an upfront ₹399 with a future start) was verified by Test card on 30 September 2026; UPI with it is unobserved and a [release blocker](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers). Do not silently shift `T` or shorten the trial. |
+| Lifecycle completion | Pause/resume and the end of the finite production schedule still need decisions. A pause made at Razorpay is not shown: the demo Plan keeps naming the next ₹399 ([evidence](./VENDOR_BILLING_PREVIEW.md#prototype-evaluation-and-fixes--24-september-2026)). Successful retries keep the original billing anchor. The finite Test Mode count is not a production duration decision. |
 | Reminders | Decide channels, delivery times/timezone and offsets. Distinguish an action-needed setup reminder from notice of an already-scheduled debit, and from a cancellation/no-renewal notice. |
-| Production commercial terms | Production taxes/invoicing, subscription duration and refund handling need decisions separate from the ₹299 monthly fee. |
-| Prototype copy | Awaiting product-owner review: the 3 days left body and banner ("Set up AutoPay now…" instead of the mockup's "Pay ₹299 with Razorpay now…"); the calmer neutral copy once trial AutoPay is on; relative history labels that differ from the mockups; the "Pay ₹299" banner and header label beside Plan's "Set up AutoPay" button; the banner's position under the top bar; the "AutoPay ended" Stopped copy and its "AutoPay ended · Cancelled outside MithraDirect" history row, added on 24 September; the free-days copy once the first ₹299 is collected early ("AutoPay on — first ₹299 paid, shop open until ‹date›. Next ₹299 on ‹date›."), added on 25 September. The prototype is frozen since 29 September 2026. |
+| Production commercial terms | Production taxes/invoicing, subscription duration and refund handling need decisions separate from the ₹399 monthly fee. |
+| Prototype copy | Awaiting product-owner review: the 3 days left body and banner ("Set up AutoPay now…" instead of the mockup's "Pay ₹399 with Razorpay now…"); the calmer neutral copy once trial AutoPay is on; relative history labels that differ from the mockups; the "Pay ₹399" banner and header label beside Plan's "Set up AutoPay" button; the banner's position under the top bar; the "AutoPay ended" Stopped copy and its "AutoPay ended · Cancelled outside MithraDirect" history row, added on 24 September; the free-days copy once the first ₹399 is collected early ("AutoPay on — first ₹399 paid, shop open until ‹date›. Next ₹399 on ‹date›."), added on 25 September. The prototype is frozen since 29 September 2026. |
 
 [Provider research](./research/razorpay-vendor-subscriptions.md) records provider facts and limits;
 the [backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns required contract capabilities
@@ -321,15 +322,15 @@ holds the hosted Test evidence.
 
 | State | Seed (relative to selection) | Primary action | On a verified success | Other action |
 |---|---|---|---|---|
-| Free days | Trial ends in 12 days; no AutoPay | **Set up AutoPay · ₹299 on ‹trial end›**: a future-start subscription at the trial end, with a ₹5 card authorisation | Stays Free days, "AutoPay on — first ₹299 on ‹date›" | **Turn off AutoPay** cancels, back to plain Free days with the trial kept |
+| Free days | Trial ends in 12 days; no AutoPay | **Set up AutoPay · ₹399 on ‹trial end›**: a future-start subscription at the trial end, with a ₹5 card authorisation | Stays Free days, "AutoPay on — first ₹399 on ‹date›" | **Turn off AutoPay** cancels, back to plain Free days with the trial kept |
 | 3 days left | Trial ends in 3 days; no AutoPay | Same as Free days | Same | Same |
 | Paid | A labelled sample: paid through +1 month, AutoPay on; no provider object | — | — | **Stop the plan** → Stopped |
-| Payment failed | Trial ended 3 days ago; AutoPay's first ₹299 was retried until Razorpay halted collection (amended 25 September) | **Pay ₹299 with Razorpay**: an immediate charge | Paid, a new period from now | — |
-| Stopped | Paid through 8 days from now; AutoPay cancelled | **Keep shop open · ₹299**: a future start at paid-through, with a ₹5 authorisation | Paid, same paid-through, next ₹299 then | — |
-| Shop closed | Paid through ended 2 days ago; AutoPay cancelled | **Pay ₹299 with Razorpay**: an immediate charge | Paid, a new period from now | — |
+| Payment failed | Trial ended 3 days ago; AutoPay's first ₹399 was retried until Razorpay halted collection (amended 25 September) | **Pay ₹399 with Razorpay**: an immediate charge | Paid, a new period from now | — |
+| Stopped | Paid through 8 days from now; AutoPay cancelled | **Keep shop open · ₹399**: a future start at paid-through, with a ₹5 authorisation | Paid, same paid-through, next ₹399 then | — |
+| Shop closed | Paid through ended 2 days ago; AutoPay cancelled | **Pay ₹399 with Razorpay**: an immediate charge | Paid, a new period from now | — |
 
 Demo only. In the Live API, paying in the free days is the
-[early first fee](#early-first-fee--29-september-2026) (₹299 now), and Keep shop open charges ₹299
+[early first fee](#early-first-fee--29-september-2026) (₹399 now), and Keep shop open charges ₹399
 now for the month after paid-through.
 
 - **Labels.** These button labels replace the "Pay Now in every phase" rule on the prototype.
@@ -360,9 +361,9 @@ now for the month after paid-through.
   offers AutoPay again at that boundary. Before this fix, Paid kept saying "Shop is open" and gave no
   way to set AutoPay up again. This keeps the six states; it adds no seventh.
 - **Dates.** "Open until" names the last paid day in India time. Razorpay ends a first immediate
-  cycle at IST midnight, so the next ₹299 falls on the following day.
+  cycle at IST midnight, so the next ₹399 falls on the following day.
 - **Beyond Plan.** The chips ("Prototype: try each shop-plan state") appear at the bottom of Plan
-  only. The state's banner and a header button ("Pay ₹299", "Keep open · ₹299" or, in Paid and with
+  only. The state's banner and a header button ("Pay ₹399", "Keep open · ₹399" or, in Paid and with
   trial AutoPay on, "Shop plan") show on every demo vendor page, Overview included, and link to Plan.
   Checkout opens only on Plan. They are messages only: the storefront and orders are not gated. An
   Overview plan card was built and then withdrawn on 24 September, because it duplicated the banner
@@ -392,11 +393,11 @@ These rules apply to cards and UPI.
   hidden and new orders stop; billing, account and existing-order fulfillment remain) and cancels
   the halted subscription itself, so nothing can charge the vendor later. "Stop the plan" remains
   the vendor's own cancellation.
-- **Recovery** is the existing immediate-start "Pay ₹299". It begins a new paid period from its
+- **Recovery** is the existing immediate-start "Pay ₹399". It begins a new paid period from its
   confirmation; the unpaid retry days are forgiven, not billed.
 - **A cancellation during the retry period** ends the retries. Coverage has already ended, so
   service stops immediately.
-- **A fee paid immediately has no retry period.** A pending payment from "Pay ₹299" after the
+- **A fee paid immediately has no retry period.** A pending payment from "Pay ₹399" after the
   trial or a halt leaves the shop closed until it is confirmed.
 - **Nothing is shown during retries.** Plan and the banner show no failed-attempt or next-retry
   message. The card drops the past paid-through or trial-end date and its countdown, and reads
@@ -410,7 +411,7 @@ These rules apply to cards and UPI.
 ### UPI: accounts and launch evidence
 
 **Product decision:** every Live API platform-fee Checkout offers UPI alongside cards: the early
-first fee, "Pay ₹299" and "Keep shop open". (Trial AutoPay setup, listed here originally, was
+first fee, "Pay ₹399" and "Keep shop open". (Trial AutoPay setup, listed here originally, was
 replaced by the [early first fee](#early-first-fee--29-september-2026) on 29 September 2026. The local
 test server's account offers cards only.) Hosted Checkout offers the same methods everywhere;
 there is no per-action method selector. eMandate stays excluded.
@@ -431,7 +432,7 @@ replaced by the release blocker below. UPI's launch evidence with the early firs
 history:
 
 1. **Account.** In the new account's Test mode, confirm UPI and cards are enabled and eMandate is
-   disabled under Subscriptions → Settings, and create or confirm the monthly ₹299 plan.
+   disabled under Subscriptions → Settings, and create or confirm the monthly ₹399 plan.
 2. **Local credentials.** Replace `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET` and
    `RAZORPAY_TEST_PLAN_ID` in the local, git-ignored helper environment
    ([README](../README.md#environment-variables)); never in `VITE_*` variables or tracked files.
@@ -443,7 +444,7 @@ history:
    charge" until Test evidence shows the UPI amount; Razorpay documents both ₹5 and ₹1. Update the
    six-state section's "card payment only" note and the
    [architecture owner](./API_ARCHITECTURE.md#local-razorpay-test-backend-development-demo) with the implementation.
-4. **Test evidence.** By UPI, observe trial AutoPay setup, an immediate ₹299, and one scheduled
+4. **Test evidence.** By UPI, observe trial AutoPay setup, an immediate ₹399, and one scheduled
    debit that succeeds and one that fails; record it in the
    [preview record](./VENDOR_BILLING_PREVIEW.md). Razorpay does not document UPI subscriptions in
    Test Mode; if Test cannot run them, one small real-money Live check (set up, charge, cancel,
@@ -516,20 +517,20 @@ the backend equivalents are gaps K, A, E and B in the
 **Status:** decided by the backend team on 29 September 2026; its consequences for the app were
 agreed with the product owner the same day. Implemented in the app on 30 September 2026, building
 to the read requested from the backend; not yet built in the backend (gap K in
-[API gaps](./API_GAPS.md#billing-gaps-ak)). It amends
+[API gaps](./API_GAPS.md#billing-gaps-al)). It amends
 the [agreed product rules](#agreed-product-rules), the [approved lifecycle](#approved-lifecycle) and
 [Live API billing](#live-api-billing--29-september-2026). The contract change goes to
 [API gaps](./API_GAPS.md#vendor-platform-billing) and the implementation to the
 [architecture owner](./API_ARCHITECTURE.md), with the work.
 
-- **Paying during free days.** A vendor who pays during the trial pays the first ₹299 at once. Its
+- **Paying during free days.** A vendor who pays during the trial pays the first ₹399 at once. Its
   paid period starts at the trial end `T` and runs one billing month, to the paid-through date the
-  backend records. The same Checkout approves AutoPay, which collects the next ₹299 when that
+  backend records. The same Checkout approves AutoPay, which collects the next ₹399 when that
   period ends. All remaining trial time is kept.
 - **Withdrawn:** setting up AutoPay alone during the trial (a future-start subscription with a
-  small refundable authorisation now and the first ₹299 at `T`), and turning it off before `T`.
-- **Keep shop open** follows the same rule. A vendor who stopped the plan pays ₹299 at once for
-  the period after their paid-through date, and AutoPay collects the next ₹299 when it ends.
+  small refundable authorisation now and the first ₹399 at `T`), and turning it off before `T`.
+- **Keep shop open** follows the same rule. A vendor who stopped the plan pays ₹399 at once for
+  the period after their paid-through date, and AutoPay collects the next ₹399 when it ends.
 - **After an early first fee** Plan shows Paid and says the free days are kept. Stop the plan is
   offered; stopping keeps the remaining trial and the paid period, with no automatic refund.
 - **An unconfirmed early first fee** leaves the shop open, with "Confirming payment…", until `T`.
@@ -549,8 +550,8 @@ the [agreed product rules](#agreed-product-rules), the [approved lifecycle](#app
   has been checked there.
 - **Demo mode** keeps the earlier trial AutoPay flow; it stays frozen.
 - **Release to production** waits for:
-  - the early first fee in the backend: one ₹299 at setup, a paid period from `T` to one billing
-    month later, the next ₹299 exactly then, and card and UPI tested with it;
+  - the early first fee in the backend: one ₹399 at setup, a paid period from `T` to one billing
+    month later, the next ₹399 exactly then, and card and UPI tested with it;
   - stopping after an early first fee, which fails today because cancel is refused before
     Razorpay's first cycle;
   - paying immediately after the trial ends, which currently fails;
@@ -561,3 +562,25 @@ the [agreed product rules](#agreed-product-rules), the [approved lifecycle](#app
     unconfirmed after `T`.
 
   This replaces the Live API billing release list. The app tolerates the other known deviations.
+
+## Platform fee ₹399 — 7 October 2026
+
+**Status:** a team product decision. The app's demo mode, local test server and billing wording
+moved to ₹399 on 7 October 2026; the Live API dashboard has shown ₹399 since 30 October 2026.
+
+- **The price.** `MITHRA_SOCIAL_STARTER_MONTHLY`, the only plan, costs **₹399 a month**, INR,
+  instead of ₹299. Every fee in the rules above is that one monthly fee: the early first fee, a
+  payment after the free days, Keep shop open and each AutoPay renewal. Production tax and
+  invoicing treatment is still pending.
+- **Earlier sections.** Dated sections in this document now say ₹399 where they state a rule or a
+  label. Recorded evidence keeps the ₹299 actually charged at the time.
+- **Backend not yet moved.** On 30 October 2026 the backend's plan still read `sale_price: 299`
+  and was linked to a ₹299 Razorpay plan, so Live API Checkout charges ₹299
+  ([backend brief, gap L](./VENDOR_BILLING_BACKEND_BRIEF.md#l-the-plan-is-still-299--blocker)).
+  Because the change is urgent, the Live API shows ₹399 in every billing state, the banner and the
+  header button whatever the plans list says. This is temporary: once the backend charges ₹399,
+  the app goes back to showing the backend's price
+  ([API gaps](./API_GAPS.md#billing-gaps-al)).
+- **Payments already made** show the amount Razorpay actually charged, so a ₹299 payment still
+  reads ₹299 in Payments you made.
+- **Open.** Whether vendors already subscribed at ₹299 move to ₹399, and when, is not decided.

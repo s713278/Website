@@ -50,7 +50,7 @@ describe('VendorBillingPanel', () => {
 
     view.rerender(<VendorBillingPanel service={createVendorBillingMockService('trial_ineligible')} vendorId={vendorId} />)
     await screen.findByText(/not eligible for a new trial/)
-    expect(screen.getByText(/first ₹299 platform fee is collected now/)).toBeTruthy()
+    expect(screen.getByText(/first ₹399 platform fee is collected now/)).toBeTruthy()
     expect(screen.queryByText(/Trial access until/)).toBeNull()
   })
 
@@ -162,7 +162,7 @@ describe('VendorBillingPanel', () => {
     expect(screen.getByText(/Last confirmed paid coverage ended/).textContent).toContain('15 Nov 2026')
     expect(screen.getByText('PAYMENT_REQUIRED')).toBeTruthy()
     if (finalLabel === 'Refund failed') {
-      expect(screen.getByText(/₹299 is still owed/)).toBeTruthy()
+      expect(screen.getByText(/₹399 is still owed/)).toBeTruthy()
       expect(screen.getByText('The refund is still owed. Support must retry the refund.')).toBeTruthy()
     }
     expect(screen.queryByText(/instant refund|refunded instantly/i)).toBeNull()
@@ -174,12 +174,12 @@ describe('VendorBillingPanel', () => {
     // Authorised derivation: two unresolved race refunds reported as one combined, failed summary.
     const base = createVendorBillingMockService('refund_pending')
     const pending = await base.getStatus(vendorId)
-    const service: VendorBillingService = { ...base, getStatus: async () => ({ ...pending, refund: { status: 'failed', amountMinor: 59800 } }) }
+    const service: VendorBillingService = { ...base, getStatus: async () => ({ ...pending, refund: { status: 'failed', amountMinor: 79800 } }) }
     render(<VendorBillingPanel service={service} vendorId={vendorId} />)
     await screen.findByText('Refund failed')
-    expect(screen.getByText(/₹598 is still owed/)).toBeTruthy()
+    expect(screen.getByText(/₹798 is still owed/)).toBeTruthy()
     expect(screen.getByText(/total across every unintended fee/)).toBeTruthy()
-    expect(screen.queryByText(/₹897|₹299 is still owed/)).toBeNull()
+    expect(screen.queryByText(/₹1,197|₹399 is still owed/)).toBeNull()
     expect(screen.getByText('PAYMENT_REQUIRED')).toBeTruthy()
   })
 
@@ -293,7 +293,7 @@ describe('VendorBillingPanel', () => {
     render(<VendorBillingPanel service={service} vendorId={vendorId} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Pay Now' }))
     await screen.findByText(/separate payment-method authorisation amount of ₹700/)
-    expect(screen.getAllByText(/₹299/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/₹399/).length).toBeGreaterThan(0)
   })
 
   it('keeps a real Test callback pending and never offers simulated verification', async () => {
@@ -421,7 +421,7 @@ describe('VendorBillingPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Simulate failure' }))
     await screen.findByText(/Simulated attempt failed/)
     expect(screen.getByText('TRIAL_ENDED')).toBeTruthy()
-    expect(screen.getByText(/retries the failed first ₹299 platform fee/)).toBeTruthy()
+    expect(screen.getByText(/retries the failed first ₹399 platform fee/)).toBeTruthy()
     expect(screen.queryByText(/starts an immediate subscription/)).toBeNull()
     expect(screen.queryByText(/Confirmed paid/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Pay Now' }))
@@ -436,14 +436,14 @@ describe('VendorBillingPanel', () => {
     const base = createVendorBillingMockService('trial_active')
     const service: VendorBillingService = { ...base, prepareCheckout: async (...args) => {
       const prepared = await base.prepareCheckout(...args)
-      return { ...prepared, expected: { ...prepared.expected, amountMinor: 39900, chargeAt: null } }
+      return { ...prepared, expected: { ...prepared.expected, amountMinor: 49900, chargeAt: null } }
     } }
     const submit = vi.spyOn(service, 'submitCheckout')
     render(<VendorBillingPanel service={service} vendorId={vendorId} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Pay Now' }))
     await screen.findByRole('button', { name: 'Confirm updated schedule' })
-    expect(screen.getByText(/Displayed platform fee/).textContent).toContain('₹299')
     expect(screen.getByText(/Displayed platform fee/).textContent).toContain('₹399')
+    expect(screen.getByText(/Displayed platform fee/).textContent).toContain('₹499')
     expect(screen.getByText(/Prepared first fee/).textContent).toContain('collected now')
     fireEvent.click(screen.getByRole('button', { name: 'Keep current status' }))
     expect(submit).not.toHaveBeenCalled()

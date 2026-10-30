@@ -19,7 +19,7 @@ describe('vendor billing fixture service', () => {
     const attempt = await service.prepareCheckout(vendorId, 'setup_autopay', 'one-logical-action')
     expect(attempt.mode).toBe('simulated')
     expect(attempt.config).toBeNull()
-    expect(attempt.expected).toEqual({ amountMinor: 29900, currency: 'INR', chargeAt: before.trial.endsAt, authorisationAmountMinor: 500 })
+    expect(attempt.expected).toEqual({ amountMinor: 39900, currency: 'INR', chargeAt: before.trial.endsAt, authorisationAmountMinor: 500 })
     expect(await service.prepareCheckout(vendorId, 'setup_autopay', 'one-logical-action')).toEqual(attempt)
 
     const pending = await service.submitCheckout(attempt, null)
@@ -190,9 +190,9 @@ describe('vendor billing fixture service', () => {
     const pending = await service.simulateCancellationProgress!(vendorId, 'refund_started')
     const done = await service.simulateCancellationProgress!(vendorId, last)
     expect([owed, pending, done].map((status) => status.refund)).toEqual([
-      { status: 'owed', amountMinor: 29900 },
-      { status: 'pending', amountMinor: 29900 },
-      { status: last === 'refund_completed' ? 'completed' : 'failed', amountMinor: 29900 },
+      { status: 'owed', amountMinor: 39900 },
+      { status: 'pending', amountMinor: 39900 },
+      { status: last === 'refund_completed' ? 'completed' : 'failed', amountMinor: 39900 },
     ])
     for (const status of [owed, pending, done]) {
       expect(status.membership.paidThrough).toBe(paid.membership.paidThrough)
@@ -220,7 +220,7 @@ describe('vendor billing fixture service', () => {
     expect(ready.accessStatus).toBe('PAID')
 
     const attempt = await service.prepareCheckout(vendorId, 'setup_autopay', 'rejoin-paid')
-    expect(attempt.expected).toEqual({ amountMinor: 29900, currency: 'INR', chargeAt: paid.membership.paidThrough, authorisationAmountMinor: 500 })
+    expect(attempt.expected).toEqual({ amountMinor: 39900, currency: 'INR', chargeAt: paid.membership.paidThrough, authorisationAmountMinor: 500 })
     const prepared = await service.getStatus(vendorId)
     expect(prepared.cancellation).toBeNull()
     expect(prepared.revision).toBeGreaterThan(ready.revision)
@@ -284,7 +284,7 @@ describe('vendor billing fixture service', () => {
     expect(pending.membership.paymentStatus).toBe('pending')
     // The obligation still advances only through its own explicit simulated steps.
     const refunded = await service.simulateCancellationProgress!(vendorId, 'refund_completed')
-    expect(refunded.refund).toEqual({ status: 'completed', amountMinor: 29900 })
+    expect(refunded.refund).toEqual({ status: 'completed', amountMinor: 39900 })
     expect(refunded.accessStatus).toBe('PAYMENT_REQUIRED')
     expect(refunded.membership.paymentStatus).toBe('pending')
     expect(refunded.revision).toBeGreaterThan(pending.revision)
@@ -295,7 +295,7 @@ describe('vendor billing fixture service', () => {
     const outstandingRefund = (await createVendorBillingMockService('refund_pending').getStatus(vendorId)).refund
     const service = createVendorBillingMockService('rejoin_paid_ready', 'mock', undefined, { outstandingRefund })
     const ready = await service.getStatus(vendorId)
-    expect(ready.refund).toEqual({ status: 'pending', amountMinor: 29900 })
+    expect(ready.refund).toEqual({ status: 'pending', amountMinor: 39900 })
     const pending = await service.submitCheckout(await service.prepareCheckout(vendorId, 'setup_autopay', 'rejoin-with-refund'), null)
     const confirmed = await service.reconcileSimulatedCheckout!(vendorId)
     for (const status of [pending, confirmed]) {

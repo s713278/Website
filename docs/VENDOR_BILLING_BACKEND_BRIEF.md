@@ -1,6 +1,6 @@
 # Vendor billing: backend brief (Razorpay platform fee)
 
-**As of 1 October 2026.** This brief is the single place where the frontend records, for the
+**As of 1 October 2026; the ₹399 price and gap L added 30 October 2026.** This brief is the single place where the frontend records, for the
 backend team, how vendor platform billing must behave, what the frontend observed on the dev
 backend, and exactly what each fix must return. It is self-contained so it can be copied into the
 backend repository or an agent's knowledge base. The product rules it restates are owned by the
@@ -26,14 +26,14 @@ frontend repository's `docs/VENDOR_BILLING_DECISIONS.md`.
 - **Reporting a fix.** When a fix reaches dev, tell the frontend team which gap it closes. The
   frontend reruns that gap's check (section 12) with fresh test vendors. The app already reads both
   today's responses and the corrected ones, so a fix needs no frontend release.
-- **Fix order.** K first (it changes the flow the others build on), then A and D (same
-  subscription setup), I, MFPS-66 with H's rule, the configuration items, then C, B, E, J, F, G.
+- **Fix order.** L can go at any time (it is plan configuration). K first among the flow fixes (it
+  changes the flow the others build on), then A and D (same subscription setup), I, MFPS-66 with H's rule, the configuration items, then C, B, E, J, F, G.
 - Test vendor IDs and scrubbed request/response captures are available from the frontend team on
   request; none are reproduced here.
 
 ## 2. The model in one screen
 
-MithraDirect charges each vendor a **platform fee** of **₹299 a month** (INR) for their store, via
+MithraDirect charges each vendor a **platform fee** of **₹399 a month** (INR) for their store, via
 Razorpay Subscriptions. This is unrelated to money customers pay vendors for orders, and to
 customer delivery subscriptions (`/v1/api/subscription-plans` is that unrelated catalogue).
 
@@ -46,12 +46,12 @@ customer delivery subscriptions (`/v1/api/subscription-plans` is that unrelated 
 | Term | Meaning |
 |---|---|
 | Trial (free days) | 14 days without paying, in production. Shorter on dev and test environments on purpose; see *Trial length* below. |
-| Early first fee | Paying during the free days. ₹299 is charged **now**; it pays for the month from T to P = T + one billing month. No free days are lost. The same Checkout approves AutoPay for later months. Decided by the backend team on 29 September 2026. |
-| AutoPay | Razorpay charging ₹299 each month from the saved card or UPI mandate. Approving AutoPay is not a payment. |
-| Captured | Razorpay has actually taken the money. Only a captured ₹299 is a paid platform fee. |
+| Early first fee | Paying during the free days. ₹399 is charged **now**; it pays for the month from T to P = T + one billing month. No free days are lost. The same Checkout approves AutoPay for later months. Decided by the backend team on 29 September 2026. |
+| AutoPay | Razorpay charging ₹399 each month from the saved card or UPI mandate. Approving AutoPay is not a payment. |
+| Captured | Razorpay has actually taken the money. Only a captured ₹399 is a paid platform fee. |
 | Stop the plan | The vendor's own cancellation. Stops future charges; keeps the remaining free days and the paid month, with no automatic refund. |
-| Keep shop open | A vendor who stopped pays again before P. ₹299 is charged now for the month after the old P. |
-| Pay after the free days | A vendor whose trial ended unpaid pays ₹299 at once; the paid month starts at that payment. |
+| Keep shop open | A vendor who stopped pays again before P. ₹399 is charged now for the month after the old P. |
+| Pay after the free days | A vendor whose trial ended unpaid pays ₹399 at once; the paid month starts at that payment. |
 | Collection retry period | Razorpay retrying a scheduled renewal (day 1, 2 and 3 after the debit date). The shop stays open. |
 | Halted / failed platform fee | Every retry used. The shop is hidden, new orders stop, existing orders can still be fulfilled; the backend cancels the halted subscription. |
 
@@ -60,8 +60,8 @@ customer delivery subscriptions (`/v1/api/subscription-plans` is that unrelated 
 ```
  go-live      vendor pays early          T (free days end)          P = T + 1 month
     |------------------|-------------------------|-----------------------------|---------->
-       free days            free days kept           paid month (the ₹299)        AutoPay ₹299
-                        ₹299 charged NOW                                          charged here
+       free days            free days kept           paid month (the ₹399)        AutoPay ₹399
+                        ₹399 charged NOW                                          charged here
                         AutoPay approved                                          (Razorpay start_at)
 ```
 
@@ -76,8 +76,8 @@ customer delivery subscriptions (`/v1/api/subscription-plans` is that unrelated 
 
 **Money and time.**
 
-- Every amount on the MithraDirect API is in **rupees** (`sale_price: 299`). Paise exist only
-  between the backend and Razorpay (`29900`). The frontend never converts.
+- Every amount on the MithraDirect API is in **rupees** (`sale_price: 399`). Paise exist only
+  between the backend and Razorpay (`39900`). The frontend never converts.
 - Every timestamp needs a timezone (`Z` or an offset). The frontend refuses a billing date it
   cannot place in time.
 
@@ -131,8 +131,8 @@ read. Once published, it also reads the requested `latest_payment_id` and `lates
 `authenticated`, `active`, `pending`, `halted`, `cancelled`, `completed`. The app treats AutoPay
 as approved only when `razorpay_status` is `authenticated` or `active`.
 
-**Plans list fields the app reads:** the `billing_cycle: "MONTHLY"` entry's `plan_code`,
-`plan_name` and `sale_price` (rupees).
+**Plans list fields the app reads:** the `billing_cycle: "MONTHLY"` entry's `plan_code` and
+`plan_name`. Its `sale_price` (rupees) is not read until gap L is fixed; the app shows ₹399.
 
 **History event types the app reads:** `SUBSCRIPTION_CHARGED` ("Payment received"),
 `CANCELLATION_REQUESTED`,
@@ -149,19 +149,19 @@ Each flow states what the backend does at Razorpay and what the subscription rea
 Recipes are in section 7; how the app turns each read into a screen is in section 8.
 
 1. **Pay during the free days (early first fee, gap K).** Subscribe creates a Razorpay
-   subscription with the first ₹299 as an upfront `addons` item and `start_at` = P = T + one
-   billing month (recipe 1). Subscribing alone changes nothing in the read (gap C). Once the ₹299 is
+   subscription with the first ₹399 as an upfront `addons` item and `start_at` = P = T + one
+   billing month (recipe 1). Subscribing alone changes nothing in the read (gap C). Once the ₹399 is
    captured: `ACTIVE`, `current_period_start` = T, `current_period_end` = `next_billing_at` = P.
 2. **Stop the plan (gap A).** Cancel at Razorpay immediately (`cancel_at_cycle_end: 0`, recipe 2):
-   that stops future charges and leaves the paid ₹299 paid. Keep P. Report `ACTIVE`,
+   that stops future charges and leaves the paid ₹399 paid. Keep P. Report `ACTIVE`,
    `cancel_at_period_end: true`, the same P and `next_billing_at: null` (gap F) until P. When
    Razorpay refuses, return a 4xx with its reason.
 3. **Keep shop open (gap E).** When `cancel_at_period_end` is true, subscribe cancels the old
    Razorpay subscription immediately (its paid invoice stays) and creates a new one as in recipe 1
-   with `start_at` = old P + one month. Keep the stopped read until the ₹299 is captured, then
+   with `start_at` = old P + one month. Keep the stopped read until the ₹399 is captured, then
    `ACTIVE`, `cancel_at_period_end: false`, P = old P + one month.
 4. **Pay after the free days (gap I).** After T, subscribe creates an immediate-start
-   subscription: no `start_at`, no `addons` (recipe 3). Checkout charges ₹299 at once; P = one
+   subscription: no `start_at`, no `addons` (recipe 3). Checkout charges ₹399 at once; P = one
    month from that charge. Never reuse a subscription created during the free days; cancel it and
    create a new one. The read is `PAYMENT_PENDING` until captured, then `ACTIVE` with P.
 5. **Renewal at P.** Razorpay charges at `start_at` = P exactly (gap D). While it retries, report
@@ -173,7 +173,7 @@ Recipes are in section 7; how the app turns each read into a screen is in sectio
    enforcement must not hide the shop on that status alone.
 7. **Trial ends unpaid (gap J).** At T, on server time, the status becomes `TRIAL_EXPIRED` and the
    shop is hidden. Cancel any subscription still `created` (gap C).
-8. **Early ₹299 still unconfirmed at T.** The shop is hidden until the payment is captured: a fee
+8. **Early ₹399 still unconfirmed at T.** The shop is hidden until the payment is captured: a fee
    paid now has no retry period. The read keeps its trial status with AutoPay approved and no P.
 
 **Moment → required read** (`GET …/subscription`):
@@ -182,9 +182,9 @@ Recipes are in section 7; how the app turns each read into a screen is in sectio
 |---|---|---|---|---|
 | Free days, not subscribed | `TRIAL_ACTIVE` | null | T ahead, no P | `false` |
 | Subscribed in free days, Checkout closed unpaid | `TRIAL_ACTIVE`, trial plan | `created` | T ahead, no P | `false` |
-| Early ₹299 paid, not yet recorded | `TRIAL_ACTIVE` | `authenticated` | T ahead, no P | `false` |
-| Early ₹299 captured | `ACTIVE` | `authenticated` (until P) | `current_period_start` = T; `current_period_end` = `next_billing_at` = T + 1 month; `trial_ends_at` unchanged | `false` |
-| Early ₹299 still unrecorded when T passes | `TRIAL_ACTIVE` or `TRIAL_EXPIRED` | `authenticated` | T passed, no P | `false` |
+| Early ₹399 paid, not yet recorded | `TRIAL_ACTIVE` | `authenticated` | T ahead, no P | `false` |
+| Early ₹399 captured | `ACTIVE` | `authenticated` (until P) | `current_period_start` = T; `current_period_end` = `next_billing_at` = T + 1 month; `trial_ends_at` unchanged | `false` |
+| Early ₹399 still unrecorded when T passes | `TRIAL_ACTIVE` or `TRIAL_EXPIRED` | `authenticated` | T passed, no P | `false` |
 | Stopped (the plan or AutoPay) | `ACTIVE` | `cancelled` (immediate cancel), or `active` (cycle-end cancel in a paid cycle) | same P; `next_billing_at` null | `true` |
 | Keep shop open paid, not yet captured | unchanged stopped read | — | old P | `true` |
 | Keep shop open captured | `ACTIVE` | `authenticated` | P = old P + 1 month; `next_billing_at` = new P | `false` |
@@ -194,7 +194,7 @@ Recipes are in section 7; how the app turns each read into a screen is in sectio
 | Renewal being retried | `PAST_DUE` (or `ACTIVE`) | `pending` | P passed | `false` |
 | Collection halted | `HALTED` | `halted` | — | — |
 
-Example: the early ₹299 captured (T = 14 October).
+Example: the early ₹399 captured (T = 14 October).
 
 ```json
 {
@@ -212,7 +212,7 @@ Example: the early ₹299 captured (T = 14 October).
 
 Razorpay keeps an early-fee subscription `authenticated` until its first cycle starts at P, so
 `razorpay_status` is `authenticated` here, not `active`. **History:** a `SUBSCRIPTION_CHARGED`
-event with the payment ID and `amount: 299` (rupees).
+event with the payment ID and `amount: 399` (rupees).
 
 ## 5. Release blockers
 
@@ -220,25 +220,43 @@ A gap blocks a production release if, left unfixed, a real vendor is charged wro
 cannot stop paying, or loses a shop they paid for. No production release of billing until all of
 these are cleared:
 
-- **K**: one ₹299 at setup during the free days, a paid month from T to P, and `start_at` = P;
-  card and UPI tested with the upfront ₹299.
+- **L**: the monthly plan charges ₹399 (`sale_price: 399` and a ₹399 Razorpay plan).
+- **K**: one ₹399 at setup during the free days, a paid month from T to P, and `start_at` = P;
+  card and UPI tested with the upfront ₹399.
 - **A**: stopping after an early first fee works.
-- **D**: the next ₹299 falls exactly at P, confirmed by a Razorpay read of `start_at`.
+- **D**: the next ₹399 falls exactly at P, confirmed by a Razorpay read of `start_at`.
 - **I**: a vendor whose free days ended can pay.
 - **MFPS-66**: shop enforcement on server time. Keep the shop open while a renewal is collected and
   until P when AutoPay ends, even when the status is `CANCELLED` (H). Hide it after T when unpaid,
-  and while an early ₹299 is still unconfirmed after T.
+  and while an early ₹399 is still unconfirmed after T.
 - **Configuration**: a 14-day trial in production (shorter trials elsewhere stay as they are);
   eMandate switched off on the Checkout account.
 
 B, C, E, F, G and J are not blockers: the app reads around them.
 
-## 6. Gaps A–K, MFPS-66 and configuration
+## 6. Gaps A–L, MFPS-66 and configuration
 
 Observed on the dev backend, 28–30 September 2026, with fresh test vendors, real Razorpay Test
 Checkout and a dashboard "Charge this now". Rechecked the night of 30 September (about 23:50 IST):
 everything below still reproduced, except J (recheck pending) and E (not rechecked: it needs a
 paid vendor who stopped the plan).
+
+### L. The plan is still ₹299 — *blocker*
+
+- **Product decision.** The team moved the platform fee of `MITHRA_SOCIAL_STARTER_MONTHLY`, the
+  only plan, from ₹299 to **₹399 a month**.
+- **Observed on dev (30 October 2026).** `GET /v1/subscription-plans` lists that plan with
+  `sale_price: 299`, `list_price: 599` and a linked Razorpay plan (`external_plan_id`), so every
+  Checkout charges ₹299.
+- **Required change.** Link a monthly Razorpay plan of 39900 paise (INR) to
+  `MITHRA_SOCIAL_STARTER_MONTHLY` and return `sale_price: 399`. Upfront amounts (K, E) and the
+  immediate charge (I) are the same ₹399. Whether vendors already subscribed at ₹299 move to ₹399
+  is not decided (section 11); leave their subscriptions as they are until it is.
+- **Acceptance check.** The plans list returns `sale_price: 399` for the monthly plan, and a fresh
+  vendor's Checkout says ₹399.
+- **Frontend today.** Since 30 October 2026 the app shows ₹399 in every billing state and ignores
+  `sale_price`, so it disagrees with Checkout until this is fixed. The fix needs no frontend
+  release; the app then goes back to reading `sale_price`.
 
 ### K. The early first fee is not built — *blocker*
 
@@ -249,16 +267,16 @@ paid vendor who stopped the plan).
   offered UPI, cards and eMandate. Closing Checkout unpaid left the read unchanged.
 - **Cause (inferred).** The Razorpay subscription is still created with a future `start_at` (T)
   and no upfront amount, the withdrawn AutoPay-only setup: a refundable ₹5 now, the first ₹299 at T.
-- **Required change.** Recipe 1: the first ₹299 as an upfront `addons` item and `start_at` = P
-  (T + one month). `start_at` = T would charge a second ₹299 at T for the same month; an immediate
+- **Required change.** Recipe 1: the first ₹399 as an upfront `addons` item and `start_at` = P
+  (T + one month). `start_at` = T would charge a second ₹399 at T for the same month; an immediate
   start would make the vendor lose the remaining free days. Store P yourself: Razorpay records no
-  period for the upfront payment. `ACTIVE` only once the ₹299 is captured (B's rule, with the
+  period for the upfront payment. `ACTIVE` only once the ₹399 is captured (B's rule, with the
   upfront caveat in section 7). Test with card and UPI.
-- **Acceptance check.** A fresh vendor in free days subscribes; Checkout says "a payment of ₹299
+- **Acceptance check.** A fresh vendor in free days subscribes; Checkout says "a payment of ₹399
   will be charged now"; after paying, the reads follow the table in section 4 (rows 3–5), Razorpay
-  shows one paid ₹299 invoice and `start_at` = P, and history has `SUBSCRIPTION_CHARGED` with
-  `amount: 299`.
-- **Frontend today.** Plan offers "Pay ₹299 with Razorpay" and says the free days are kept. On dev
+  shows one paid ₹399 invoice and `start_at` = P, and history has `SUBSCRIPTION_CHARGED` with
+  `amount: 399`.
+- **Frontend today.** Plan offers "Pay ₹399 with Razorpay" and says the free days are kept. On dev
   that creates an AutoPay-only subscription: the app shows "Confirming payment…" in the free days,
   then hides the shop with "Confirming payment…" from T until Razorpay charges, then Collecting,
   then Paid.
@@ -273,7 +291,7 @@ paid vendor who stopped the plan).
   cycle gets Razorpay's `400` "Subscription cannot be cancelled since no billing cycle is going on".
   The backend turns that into a `500`.
 - **Impact (inferred).** After an early first fee, Razorpay's first cycle starts only at P. A
-  vendor who paid early could not stop the plan for the whole paid month, and the next ₹299 would
+  vendor who paid early could not stop the plan for the whole paid month, and the next ₹399 would
   be charged against their wishes, which the product's refund rule would then make MithraDirect
   refund in full.
 - **Required change.** Recipe 2: cancel at Razorpay with `cancel_at_cycle_end: 0` (stops future
@@ -282,12 +300,12 @@ paid vendor who stopped the plan).
   a 4xx with its reason, not a `500`.
 - **Acceptance check.** After an early first fee, cancel returns `200` with `ACTIVE`,
   `cancel_at_period_end: true`, unchanged P and `next_billing_at: null`; Razorpay shows the
-  subscription `cancelled` with its ₹299 invoice still `paid`; no charge arrives at P.
+  subscription `cancelled` with its ₹399 invoice still `paid`; no charge arrives at P.
 - **Frontend today.** Stop the plan still calls cancel; a `500` shows "Couldn't stop the plan right
   now. Try again later or contact support." A backend that reports `CANCELLED` instead reads
   "AutoPay off", open until P.
 
-### D. The next ₹299 must fall exactly at P — *blocker*
+### D. The next ₹399 must fall exactly at P — *blocker*
 
 - **Observed on dev (28 September).** Subscribe created the Razorpay subscription with `start_at`
   exactly 24 hours after T; a paid vendor's `current_period_start` still shows T + 24 h. On
@@ -318,10 +336,10 @@ paid vendor who stopped the plan).
 - **Impact.** Every vendor whose trial ends unpaid has no way to pay, so their shop cannot reopen.
   This is the most common path.
 - **Required change.** After T, subscribe creates an immediate-start subscription (recipe 3), so
-  Checkout collects ₹299 at once. Never reuse a subscription created during the free days: cancel it
+  Checkout collects ₹399 at once. Never reuse a subscription created during the free days: cancel it
   (`cancel_at_cycle_end: 0`) and create a new one. Decide on server time at subscribe.
 - **Acceptance check.** A vendor past T (with and without an earlier unpaid free-days Checkout)
-  subscribes; Checkout opens showing ₹299 now; after paying, the read is `ACTIVE` with P one month
+  subscribes; Checkout opens showing ₹399 now; after paying, the read is `ACTIVE` with P one month
   from the charge.
 - **Frontend today.** A `500` shows the backend's message. The `200` with a reused subscription
   opens a blank Checkout, which the app cannot detect.
@@ -336,7 +354,7 @@ paid vendor who stopped the plan).
   - keep it **open** while a renewal is being collected (the collection retry period);
   - keep it **open** until P after AutoPay ends or the plan is stopped, even when the status is
     `CANCELLED` (H);
-  - **hide** it after T when unpaid, after a halted collection, and while an early ₹299 is still
+  - **hide** it after T when unpaid, after a halted collection, and while an early ₹399 is still
     unconfirmed after T.
   Existing orders stay fulfillable; billing and account stay reachable. Exposing the result on the
   public storefront payload (a visibility flag or the shop-plan status) lets the customer app follow
@@ -366,9 +384,9 @@ paid vendor who stopped the plan).
   eMandate off in the Razorpay dashboard (Subscriptions → Settings), then check the methods hosted
   Checkout offers. eMandate is excluded by product decision: it cannot register and charge on the
   same day, bank holidays can move a debit earlier, and confirmation can take 1–2 days, which breaks
-  "₹299 now" and "charge exactly at P".
+  "₹399 now" and "charge exactly at P".
 
-### B. `ACTIVE` before the ₹299 is captured — not a blocker
+### B. `ACTIVE` before the ₹399 is captured — not a blocker
 
 - **Observed on dev (twice, 28 September; history rechecked 30 September).** The status became
   `ACTIVE` on Razorpay's `subscription.activated` webhook, about six minutes before the ₹299 was
@@ -376,7 +394,7 @@ paid vendor who stopped the plan).
 - **Impact.** If that charge fails and its `pending`/`halted` webhook is late or lost, an unpaid
   vendor stays `ACTIVE`. With UPI the window can be hours.
 - **Required change.** `ACTIVE` only once money is captured: `subscription.charged` for AutoPay and
-  immediate-start charges. For an upfront ₹299 (K, E) Razorpay stays `authenticated` until P, so
+  immediate-start charges. For an upfront ₹399 (K, E) Razorpay stays `authenticated` until P, so
   use that payment's capture instead (section 7). Until then keep the current status: the trial, or
   `PAST_DUE` while Razorpay retries.
 - **Frontend today.** `ACTIVE` without P reads Collecting ("Shop is open · AutoPay on"), never Paid.
@@ -391,7 +409,7 @@ paid vendor who stopped the plan).
 - **Cause (inferred).** The status is written on subscribe, not on payment. A `created` Razorpay
   subscription has no payment method, so Razorpay never charges it and no webhook ever moves it on.
 - **Required change.** Subscribing alone changes nothing: keep `TRIAL_ACTIVE` and the trial plan
-  until the ₹299 is captured, whatever `razorpay_status` is. At T, cancel any subscription still
+  until the ₹399 is captured, whatever `razorpay_status` is. At T, cancel any subscription still
   `created` (`cancel_at_cycle_end: 0`, recipe 4). Use `PAYMENT_PENDING` only for paying after the
   trial.
 - **Frontend today.** AutoPay counts as approved only when `razorpay_status` is `authenticated` or
@@ -404,8 +422,8 @@ paid vendor who stopped the plan).
   subscribe returned `409` "An active subscription already exists."
 - **Impact.** A vendor who changes their mind cannot restart before P, so the shop closes first.
 - **Required change.** Flow 3 in section 4: cancel the old subscription immediately, create a new
-  one with the upfront ₹299 and `start_at` = old P + one month, and keep the stopped read until the
-  ₹299 is captured. A `PAYMENT_PENDING` read with a future P is a shape the app deliberately refuses
+  one with the upfront ₹399 and `start_at` = old P + one month, and keep the stopped read until the
+  ₹399 is captured. A `PAYMENT_PENDING` read with a future P is a shape the app deliberately refuses
   to guess about; it shows a read error.
 - **Frontend today.** A `409` shows "Couldn't start the payment right now. Your shop stays open
   until ‹P›."
@@ -416,7 +434,7 @@ paid vendor who stopped the plan).
   showed the old next charge date, likely copied from Razorpay's `charge_at`. It also stayed after an
   immediate Razorpay-side cancel (H).
 - **Required change.** `next_billing_at: null` while `cancel_at_period_end` is true, set from
-  MithraDirect's own flag. After Keep shop open, the next ₹299's date.
+  MithraDirect's own flag. After Keep shop open, the next ₹399's date.
 - **Frontend today.** Ignores `next_billing_at` whenever `cancel_at_period_end` is true.
 
 ### J. The status does not flip at T — not a blocker
@@ -449,17 +467,18 @@ paid vendor who stopped the plan).
 
 Verified on Razorpay Test (24 and 30 September 2026): the calls below were made directly against
 a separate Razorpay Test account with a monthly ₹299 plan and paid by Test card through hosted
-Checkout. The dev backend was not involved. Amounts to Razorpay are in paise.
+Checkout. The dev backend was not involved. Amounts to Razorpay are in paise. The recipes now use
+the ₹399 price (gap L); the observations keep the ₹299 actually charged then.
 
 ### Recipe 1: early first fee (K) and Keep shop open (E)
 
 ```http
 POST /v1/subscriptions
 {
-  "plan_id": "<monthly ₹299 plan>",
+  "plan_id": "<monthly ₹399 plan>",
   "total_count": <as today>,
   "start_at": <P as Unix seconds>,
-  "addons": [{ "item": { "name": "First month", "amount": 29900, "currency": "INR" } }]
+  "addons": [{ "item": { "name": "First month", "amount": 39900, "currency": "INR" } }]
 }
 ```
 
@@ -470,12 +489,12 @@ P is T + one month for K, and old P + one month for E. Observed:
 - After a Test card payment: one invoice `paid`, ₹299, with a single line item of type `addon`; its
   payment `captured` within 5 s; the card saved for AutoPay.
 - The subscription was `authenticated`, with `charge_at` = `start_at`. It stays `authenticated`
-  until P. Razorpay records **no period** for the upfront ₹299: `paid_count` 0, no `current_start`
+  until P. Razorpay records **no period** for the upfront ₹399: `paid_count` 0, no `current_start`
   or `current_end`, and no billing dates on the invoice. The backend stores the period itself:
   `current_period_start` = T (or old P), P = `start_at`.
-- **Paid signal.** `subscription.charged` does not fire for the upfront ₹299; Razorpay's docs send
+- **Paid signal.** `subscription.charged` does not fire for the upfront ₹399; Razorpay's docs send
   `subscription.authenticated` for an upfront payment (webhooks not observed: the Test account had
-  no receiver). On that event, fetch the subscription's invoice and treat the ₹299 as paid once its
+  no receiver). On that event, fetch the subscription's invoice and treat the ₹399 as paid once its
   payment is `captured`.
 - Razorpay's FAQ says "the Add-Ons feature is deprecated". That refers to the old separate add-on
   endpoints; the `addons` field on create works.
@@ -516,14 +535,14 @@ the authorisation payment"; setting it to T on create may make this automatic (*
   reversed; normal refunds take 5–7 working days and must be made within 6 months. Whether a vendor
   who stops before T after an early first fee gets a refund is **not decided**; the current rule is
   no automatic refund.
-- **UPI** shows for a subscription only if the upfront plus plan amount is under ₹15,000 (₹299 is
+- **UPI** shows for a subscription only if the upfront plus plan amount is under ₹15,000 (₹399 is
   fine), per Razorpay's docs. Cards have no such limit.
 - **Retries.** Razorpay retries a failed card or UPI renewal on the three days after the debit
   date, then halts.
 
 ### Not yet verified
 
-- UPI with the upfront ₹299 (only cards were paid). Test before release.
+- UPI with the upfront ₹399 (only cards were paid). Test before release.
 - Which webhooks Razorpay sends for the upfront payment.
 - The AutoPay charge actually landing at P (seen scheduled, not charged).
 - Switching eMandate off in Subscriptions → Settings.
@@ -560,7 +579,7 @@ without a `MONTHLY` entry or a non-positive `sale_price`. A `404` reads as "not 
 
 **Writes.**
 
-- **Pay ₹299 / Keep shop open:** subscribe → hosted Checkout with `razorpay_key_id` and
+- **Pay ₹399 / Keep shop open:** subscribe → hosted Checkout with `razorpay_key_id` and
   `razorpay_subscription_id` → `confirm` with Checkout's three values → poll the read every 5 s for
   up to 90 s. Subscribe is never retried automatically. `confirm` is retried on 502, 503 or a
   network failure at 5, 15 and 30 s. While a payment is confirming, the app offers no second payment.
@@ -593,7 +612,7 @@ These apply whatever the endpoints are called.
    amount, and actual capture. Paid evidence is the captured upfront add-on payment for the early
    first fee and Keep shop open, and a captured charge (`subscription.charged`) for immediate-start
    payments and renewals. An approved mandate or a refundable authorisation is never a paid fee.
-   Check that exactly one upfront ₹299 is charged and that `start_at` = P.
+   Check that exactly one upfront ₹399 is charged and that `start_at` = P.
 4. Verify webhook HMAC over the exact raw bytes; deduplicate event IDs and status transitions.
    Duplicates, out-of-order events and callback/webhook races must never extend a paid period twice
    or revive an obsolete subscription. Persist events before acknowledging them, and reconcile late
@@ -645,10 +664,10 @@ These apply whatever the endpoints are called.
   free-days subscription after T (gap I). Show a changed schedule and get the vendor's explicit
   agreement before a replacement Checkout.
 - Payment methods: cards and UPI; eMandate excluded. Configure them in Subscriptions → Settings and
-  check the hosted method set for both the early first fee (future start with an upfront ₹299) and
+  check the hosted method set for both the early first fee (future start with an upfront ₹399) and
   immediate start. Validate each method's timing before production.
 - Reminders (proposed: three days left and last day) are scheduled from the stored T, delivered
-  idempotently. Suppress payment-needed wording once an early ₹299 is paid, including while it is
+  idempotently. Suppress payment-needed wording once an early ₹399 is paid, including while it is
   confirming. Times, timezone and channels still need product approval.
 
 ### Acceptance evidence before production
@@ -658,14 +677,14 @@ These apply whatever the endpoints are called.
 - Cross-store reads and writes fail without exposing billing records. Tampered signatures, a
   callback for another store, the wrong plan, mode or currency, and an authorisation-only amount
   never grant paid access.
-- Early first fee: exactly one ₹299 now, `start_at` = P, the trial kept through T, and the same
+- Early first fee: exactly one ₹399 now, `start_at` = P, the trial kept through T, and the same
   final read whether the webhook arrives before, after or without the browser's `confirm`.
 - Stop after an early first fee: immediate Razorpay cancel, `ACTIVE` with
   `cancel_at_period_end: true` and P unchanged, no charge at P.
-- Keep shop open: the old subscription cancelled, one ₹299 now, P = old P + one month.
+- Keep shop open: the old subscription cancelled, one ₹399 now, P = old P + one month.
 - After an unpaid T: the shop hidden and new orders blocked while existing orders stay fulfillable;
-  pending carts cannot bypass this; paying collects a full ₹299 and restores access only after
-  confirmation. An early ₹299 still unconfirmed at T also hides the shop.
+  pending carts cannot bypass this; paying collects a full ₹399 and restores access only after
+  confirmation. An early ₹399 still unconfirmed at T also hides the shop.
 - A `CANCELLED` shop with a future P, and a shop whose renewal is being retried, stay visible.
 - A renewal pending or retrying past P keeps service; a halt stops service and cancels the
   subscription; a cancellation during retries stops service at once; a retry succeeding two days
@@ -690,9 +709,11 @@ replaced by this brief.
 - A test vendor who approved AutoPay on 28 September (₹5 authorisation) was still `PAYMENT_PENDING`
   and uncharged 35 hours after T, about 11 hours after its T + 24 h start. Was the ₹299 attempted in
   Razorpay, and did a webhook arrive? The frontend can share the vendor ID.
-- Which webhooks Razorpay sends for the upfront ₹299 (section 7).
-- UPI with the upfront ₹299, before release.
+- Which webhooks Razorpay sends for the upfront ₹399 (section 7).
+- UPI with the upfront ₹399, before release.
 - Gap J's recheck after a fresh vendor's trial ends (due 1 October).
+- **Product, not backend:** whether vendors already subscribed at ₹299 move to ₹399 (gap L), and
+  when, is not decided.
 - **Product, not backend:** a full refund for a vendor who stops before T after an early first fee
   is undecided. Today's rule is no automatic refund.
 
@@ -702,13 +723,14 @@ Use fresh test vendors taken through go-live, and never a captured Razorpay ID.
 
 | Gap | Check |
 |---|---|
-| K | In free days, subscribe and open Checkout: it must say ₹299 now, not ₹5. Pay by Test card and UPI; read. |
+| L | Read `GET /v1/subscription-plans`: the monthly plan's `sale_price` is `399`. A fresh vendor's Checkout says ₹399. |
+| K | In free days, subscribe and open Checkout: it must say ₹399 now, not ₹5. Pay by Test card and UPI; read. |
 | C | Subscribe, close Checkout unpaid, read: still `TRIAL_ACTIVE`, trial plan. After T: not `PAYMENT_PENDING`. |
 | A | After an early first fee (or on a `created`/`authenticated` subscription), cancel: `200`, `ACTIVE`, flag `true`, same P. |
 | D | Read the new subscription's `start_at` in Razorpay (backend keys or dashboard): equals P. |
-| I | Let a trial pass (dev's configured length, 1 day as of 1 October), with and without an earlier unpaid Checkout; subscribe: Checkout charges ₹299 now. |
+| I | Let a trial pass (dev's configured length, 1 day as of 1 October), with and without an earlier unpaid Checkout; subscribe: Checkout charges ₹399 now. |
 | J | Read just after T: `TRIAL_EXPIRED`. |
-| E, F | On a paid vendor: stop, read (`next_billing_at` null), then Keep shop open: ₹299 now, P + one month. |
+| E, F | On a paid vendor: stop, read (`next_billing_at` null), then Keep shop open: ₹399 now, P + one month. |
 | B | Trigger a charge ("Charge this now" in the dashboard): `ACTIVE` appears only with `subscription.charged`. |
 | H | Cancel a paid subscription in the Razorpay dashboard: shop stays visible until P. |
 | MFPS-66 | After T unpaid, the public storefront hides the shop and new orders are refused. |

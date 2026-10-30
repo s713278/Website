@@ -475,9 +475,11 @@ describe('mapLiveBilling', () => {
       expect(() => mapLiveBilling(subscription(), null, daysBeforeEnd(10))).toThrow(LiveBillingUnreadableError)
     })
 
-    it('reads sale_price in rupees', () => {
-      const plans = [{ ...liveMonthlyPlan, sale_price: 349 }]
-      expect(mapLiveBilling({ kind: 'not-live' }, plans, daysBeforeEnd(10))).toMatchObject({ plan: { price: 349 } })
+    it('shows ₹399 whatever sale_price the backend sends', () => {
+      for (const sale_price of [299, 349, 0, null]) {
+        const plans = [{ ...liveMonthlyPlan, sale_price }]
+        expect(mapLiveBilling({ kind: 'not-live' }, plans, daysBeforeEnd(10))).toMatchObject({ plan: { price: 399 } })
+      }
     })
   })
 
