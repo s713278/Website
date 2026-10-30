@@ -78,15 +78,19 @@ function instant(value: unknown): string | null {
   return new Date(at).toISOString()
 }
 
-/** The `billing_cycle: MONTHLY` entry of `GET /v1/subscription-plans`. `sale_price` is rupees, not the documented paise (G). */
+/**
+ * The monthly price every billing state shows, in rupees. The backend's plan still says ₹299 (its
+ * `sale_price` and Razorpay plan), so it is not read until the backend moves to ₹399 (L).
+ */
+export const LIVE_MONTHLY_PRICE = 399
+
+/** The `billing_cycle: MONTHLY` entry of `GET /v1/subscription-plans`, priced at `LIVE_MONTHLY_PRICE`. */
 function monthlyPlan(payload: unknown): LiveBillingPlan {
   if (!Array.isArray(payload)) throw new LiveBillingUnreadableError()
   const entry = payload.find((item) => record(item).billing_cycle === 'MONTHLY')
   if (!entry) throw new LiveBillingUnreadableError()
   const plan = record(entry)
-  const price = plan.sale_price
-  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) throw new LiveBillingUnreadableError()
-  return { code: text(plan.plan_code), name: text(plan.plan_name), price }
+  return { code: text(plan.plan_code), name: text(plan.plan_name), price: LIVE_MONTHLY_PRICE }
 }
 
 /**
