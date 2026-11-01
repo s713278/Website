@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const PAGES = [
+  'VendorOverviewPage', 'VendorOrdersPage', 'VendorOrderDetailPage', 'VendorSubscriptionsPage',
+  'VendorProductsPage', 'VendorPlanPage', 'VendorStorefrontPage', 'VendorSettingsPage',
+] as const
+
 afterEach(() => {
   vi.doUnmock('@/modules/vendor/components/VendorShell')
-  vi.doUnmock('@/modules/vendor/pages/VendorOverviewPage')
+  for (const page of PAGES) vi.doUnmock(`@/modules/vendor/pages/${page}`)
   vi.resetModules()
 })
 
@@ -48,5 +53,51 @@ describe('preloadVendorDashboard', () => {
 
     expect(shell).toHaveBeenCalledTimes(1)
     expect(overview).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('preloadVendorPage', () => {
+  it.each([
+    ['/vendor', ['VendorOverviewPage']],
+    ['/vendor/', ['VendorOverviewPage']],
+    ['/vendor/orders', ['VendorOrdersPage']],
+    ['/vendor/orders/subscriptions', ['VendorSubscriptionsPage']],
+    ['/vendor/orders/ord-42', ['VendorOrderDetailPage']],
+    ['/vendor/products', ['VendorProductsPage']],
+    ['/vendor/plan', ['VendorPlanPage']],
+    ['/vendor/storefront', ['VendorStorefrontPage']],
+    ['/vendor/settings', ['VendorSettingsPage']],
+    ['/vendor/unknown', []],
+    ['/vendor/products/extra', []],
+    ['/vendor/orders/ord-42/extra', []],
+    ['/orders', []],
+  ])('requests only the chunk %s renders', async (pathname, expected) => {
+    const requested: string[] = []
+    const shell = vi.fn(() => ({ VendorShell: () => null }))
+    vi.doMock('@/modules/vendor/components/VendorShell', shell)
+    for (const page of PAGES) {
+      vi.doMock(`@/modules/vendor/pages/${page}`, () => {
+        requested.push(page)
+        return { [page]: () => null }
+      })
+    }
+    const { preloadVendorPage } = await import('./vendor-dashboard-chunks')
+
+    preloadVendorPage(pathname)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(requested).toEqual(expected)
+    expect(shell).not.toHaveBeenCalled()
+  })
+})
+
+describe('page chunk loaders', () => {
+  it('remember the module once it has arrived', async () => {
+    vi.doMock('@/modules/vendor/pages/VendorProductsPage', () => ({ VendorProductsPage: () => null }))
+    const { loadVendorProductsPage } = await import('./vendor-dashboard-chunks')
+
+    expect(loadVendorProductsPage.loaded()).toBeUndefined()
+    const module = await loadVendorProductsPage()
+    expect(loadVendorProductsPage.loaded()).toBe(module)
   })
 })

@@ -16,7 +16,7 @@ import {
   type VendorContext,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Card, EmptyState, Spinner } from '@/shared/components'
+import { Button, EmptyState, LoadError, PageLoaderScreen } from '@/shared/components'
 
 /**
  * Loads the vendor account once and shares it with every dashboard surface.
@@ -156,24 +156,13 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <Card>
-          <EmptyState title="Could not load your store" description={error} />
-          <div className="mt-4 flex justify-center">
-            <Button onClick={reload}>Try again</Button>
-          </div>
-        </Card>
+      <div className="grid min-h-dvh place-items-center bg-background p-4">
+        <LoadError onRetry={reload} />
       </div>
     )
   }
 
-  if (!account) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <Spinner label="Loading your store…" />
-      </div>
-    )
-  }
+  if (!account) return <PageLoaderScreen />
 
   return <VendorAccountContext.Provider value={account}>{children}</VendorAccountContext.Provider>
 }

@@ -148,7 +148,8 @@ describe('VendorLoginPage', () => {
     act(() => useAuthStore.getState().applySession({ token: 'test-access-token', refreshToken: null, user: vendor }))
 
     renderAt('/vendor/login')
-    expect(screen.getByText('Signing you in…')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeTruthy()
+    expect(screen.queryByLabelText(/WhatsApp number/)).toBeNull()
     expect(screen.queryByText('Dashboard')).toBeNull()
 
     await act(async () => context.resolve(SUBMITTED))

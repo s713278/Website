@@ -5,6 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* The brand loader's ring: the onboarding wizard's green, which PageLoader matches exactly. */
+  --loader-ring: #4caf50;
   --md-green-50: #ecfdf5;
   --md-green-100: #d1fae5;
   --md-green-500: #10b981;
@@ -1290,6 +1292,10 @@
       stroke-dasharray: 3 97;
       stroke-dashoffset: -100;
     }
+  }
+
+  .md-loader-arc {
+    stroke: var(--loader-ring);
   }
 
   @media (prefers-reduced-motion: no-preference) {

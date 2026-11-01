@@ -6,7 +6,7 @@ import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
 import { storeIdFromPath } from '@/modules/storefront/lib/store-paths'
 import { getAccessToken, getRefreshToken } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Spinner } from '@/shared/components'
+import { PageLoader, PageLoaderScreen } from '@/shared/components'
 import type { UserRole } from '@/shared/types'
 
 type ProtectedRouteProps = {
@@ -29,7 +29,8 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
     }
   }, [isHydrated, user, clearSession])
 
-  if (!isHydrated) return <Spinner label="Restoring session…" />
+  // The customer guard sits inside RootLayout, under its header; the vendor guard has no layout.
+  if (!isHydrated) return roles?.includes('customer') ? <PageLoader /> : <PageLoaderScreen />
 
   if (!user || !hasCredentials) {
     const intended = roles?.length === 1 ? roles[0] : undefined

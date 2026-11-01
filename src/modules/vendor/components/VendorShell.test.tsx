@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { lazy, type ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
 import { holdLiveBilling, resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
@@ -891,5 +891,25 @@ describe('VendorShell under the live API', () => {
       await wait(3 * 24 * 60 * 60 * 1000)
       expect(reads).toHaveBeenCalledOnce()
     })
+  })
+})
+
+describe('VendorShell page loading', () => {
+  it('keeps the chrome and loads inside main while a page chunk downloads', async () => {
+    vi.stubEnv('DEV', false)
+    vi.stubEnv('VITE_USE_API', 'false'); configureApiClient({ useApi: false })
+    const PendingPage = lazy(() => new Promise<never>(() => {}))
+    render(
+      <MemoryRouter initialEntries={['/vendor/products']}>
+        <Routes>
+          <Route path="/vendor" element={<VendorShell />}>
+            <Route path="products" element={<PendingPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('complementary', { name: 'Vendor navigation' })).toBeTruthy()
+    expect(within(screen.getByRole('main')).getByRole('status', { name: 'Loading' })).toBeTruthy()
   })
 })
