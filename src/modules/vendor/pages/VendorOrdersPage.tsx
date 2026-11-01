@@ -4,6 +4,7 @@ import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { OrderFilterBar } from '@/modules/vendor/components/OrderFilterBar'
 import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
 import { OrdersSectionTabs } from '@/modules/vendor/components/OrdersSectionTabs'
+import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import {
   canRecordPayment,
@@ -27,8 +28,8 @@ import {
 import { isoDay } from '@/modules/vendor/lib/work-queue'
 import type { DeliveryStatus, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
-import { Button, Spinner } from '@/shared/components'
-import { formatCurrency } from '@/shared/lib/utils'
+import { Button, LoadError, Skeleton, Spinner } from '@/shared/components'
+import { cn, formatCurrency } from '@/shared/lib/utils'
 
 /**
  * The screen a vendor works from: filter by delivery date, page through, open an order,
@@ -64,7 +65,10 @@ function DeliveryWindowSubtotal({ heading, state }: { heading: string; state: Su
     <div className="mb-4 rounded-[var(--vc-radius)] border border-[var(--vc-tint-line)] bg-[var(--vc-tint)] px-4 py-3">
       <p className="text-xs font-semibold text-[var(--vc-tint-ink)]">{heading}</p>
       {state.kind === 'loading' ? (
-        <p className="mt-1 text-sm text-[var(--md-muted)]">Adding it up…</p>
+        <>
+          <span role="status" aria-label="Adding it up" className="sr-only">Adding it up</span>
+          <Skeleton className="mt-1 h-8 w-40" />
+        </>
       ) : null}
       {state.kind === 'total' ? (
         <p className="font-display vc-num mt-0.5 text-2xl font-bold">
@@ -234,12 +238,17 @@ export function VendorOrdersPage() {
   }
 
   const orders = result?.orders ?? []
+  const firstLoad = loading && result === null
+  const refetching = loading && result !== null
 
   return (
     <div className="grid gap-4">
       <OrdersSectionTabs />
 
-      <DashboardPanel title="All orders">
+      <DashboardPanel
+        title="All orders"
+        action={refetching ? <Spinner label="Updating orders" /> : null}
+      >
         <OrderFilterBar
           status={status}
           range={query.range}
@@ -258,27 +267,11 @@ export function VendorOrdersPage() {
         {actionError ? (
           <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
         ) : null}
-        {loading ? <Spinner label="Loading orders…" /> : null}
+        {firstLoad ? <RowSkeleton label="Loading orders" /> : null}
 
-        {/*
-          A failed request and an empty list are different facts, and "No orders here" is the
-          wrong one to guess at: a vendor who reads it stops looking.
-        */}
+        {/* A failed request is not an empty list: "No orders here" would stop a vendor looking. */}
         {!loading && loadError ? (
-          <div className="rounded-lg border border-[var(--md-danger)] p-4">
-            <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
-            <p className="mt-1 text-sm text-[var(--md-muted)]">
-              This is a failed request, not an empty list.
-            </p>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="mt-3"
-              onClick={() => setReloadToken((token) => token + 1)}
-            >
-              Try again
-            </Button>
-          </div>
+          <LoadError onRetry={() => setReloadToken((token) => token + 1)} />
         ) : null}
 
         {!loading && !loadError && !rangeIssue && !orders.length ? (
@@ -290,53 +283,60 @@ export function VendorOrdersPage() {
           </p>
         ) : null}
 
-        {!loading && !loadError && orders.length ? (
-          <OrderLedger
-            orders={orders}
-            todayIso={todayIso}
-            caption="Orders matching the current filters"
-            showAmount
-            /*
-              The filters ride along in history state so that the detail screen's own "Back to
-              orders" returns to this exact view. Browser back already would; a vendor who uses
-              the button on screen should not be punished for it by losing the range they typed.
-            */
-            linkState={{ from: `/vendor/orders${search}` }}
-            renderPaymentAction={(order) => {
-              // Reversal is deliberately detail-only: on a list a vendor is scrolling, and a
-              // paid flag flipped by accident is a flag nothing else can correct.
-              if (!canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID') {
-                return null
-              }
+        {!firstLoad && !loadError && orders.length ? (
+          <div
+            aria-busy={refetching || undefined}
+            className={cn('transition-opacity motion-reduce:transition-none', refetching && 'opacity-60')}
+          >
+            <OrderLedger
+              orders={orders}
+              todayIso={todayIso}
+              caption="Orders matching the current filters"
+              showAmount
+              /*
+                The filters ride along in history state so that the detail screen's own "Back to
+                orders" returns to this exact view. Browser back already would; a vendor who uses
+                the button on screen should not be punished for it by losing the range they typed.
+              */
+              linkState={{ from: `/vendor/orders${search}` }}
+              renderPaymentAction={(order) => {
+                // Reversal is deliberately detail-only: on a list a vendor is scrolling, and a
+                // paid flag flipped by accident is a flag nothing else can correct.
+                if (!canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID') {
+                  return null
+                }
 
-              return (
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="h-auto p-0 text-xs"
-                  disabled={payingId !== null}
-                  onClick={() => void recordPayment(order.id)}
-                >
-                  {payingId === order.id ? 'Saving…' : 'Mark paid'}
-                </Button>
-              )
-            }}
-            renderNextStep={(order) => {
-              const next = nextVendorDeliveryStatus(order.deliveryStatus)
-              if (!next) return null
+                return (
+                  <Button
+                    size="sm"
+                    variant="link"
+                    className="h-auto p-0 text-xs"
+                    disabled={payingId !== null}
+                    pending={payingId === order.id}
+                    onClick={() => void recordPayment(order.id)}
+                  >
+                    {payingId === order.id ? 'Saving…' : 'Mark paid'}
+                  </Button>
+                )
+              }}
+              renderNextStep={(order) => {
+                const next = nextVendorDeliveryStatus(order.deliveryStatus)
+                if (!next) return null
 
-              return (
-                <Button
-                  size="sm"
-                  className="rounded-full"
-                  disabled={busyId !== null}
-                  onClick={() => void advance(order.id, order.deliveryStatus, next)}
-                >
-                  {busyId === order.id ? 'Working…' : forwardActionLabel(next)}
-                </Button>
-              )
-            }}
-          />
+                return (
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    disabled={busyId !== null}
+                    pending={busyId === order.id}
+                    onClick={() => void advance(order.id, order.deliveryStatus, next)}
+                  >
+                    {busyId === order.id ? 'Working…' : forwardActionLabel(next)}
+                  </Button>
+                )
+              }}
+            />
+          </div>
         ) : null}
 
         {result && result.totalPages > 1 ? (
