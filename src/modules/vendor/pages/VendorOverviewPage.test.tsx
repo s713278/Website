@@ -306,7 +306,7 @@ describe('VendorOverviewPage status counts', () => {
 describe('VendorOverviewPage loading layout', () => {
   const productsLink = () => screen.getByRole('link', { name: /^Products/ })
   const gridOf = () => productsLink().parentElement as HTMLElement
-  const placeholders = () => Array.from(gridOf().querySelectorAll('[aria-hidden="true"]'))
+  const placeholders = () => Array.from(gridOf().querySelectorAll(':scope > [aria-hidden="true"]'))
 
   it('reads the catalog while the counts are still pending', async () => {
     stubQueue([])

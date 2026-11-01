@@ -1297,4 +1297,24 @@
       animation: md-loader-dash 2s ease-in-out infinite;
     }
   }
+
+  /* Skeleton sweep; reduced motion keeps the static fill only. */
+  @keyframes md-shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .md-skeleton::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--background) 55%, transparent), transparent);
+      animation: md-shimmer 1.5s ease-in-out infinite;
+    }
+  }
 }
