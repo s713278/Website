@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { relativeDay } from '@/modules/vendor/lib/billing-prototype-card'
 import { keptLiveHistory, readLiveHistory } from '@/modules/vendor/store/live-billing'
 import { getErrorMessage, mapLiveBillingHistory, type LiveBillingView } from '@/shared/api'
@@ -80,7 +81,7 @@ export function LivePaymentsYouMade({ vendorId, view, reading, trialStartedAt, w
       <p role="alert" className="text-destructive">{getErrorMessage(failure)}</p>
       <Button className="w-fit" variant="outline" size="sm" disabled={loading} onClick={() => setAttempt((count) => count + 1)}>Try again</Button>
     </div> : null}
-    {mapped.rows === null ? failure ? null : <p role="status" className="text-sm text-muted-foreground">Reading payments…</p>
+    {mapped.rows === null ? failure ? null : <RowSkeleton label="Reading payments…" rows={2} rowClassName="h-14.5 rounded-xl" />
       : mapped.rows.length === 0 ? <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
         : <ul className="grid gap-2">
           {mapped.rows.map((row, index) => <li key={index} className="rounded-xl border bg-muted/30 px-3 py-2.5">

@@ -669,6 +669,40 @@ describe('VendorBillingPanel', () => {
     expect(screen.getByText('TRIAL')).toBeTruthy()
   })
 
+  it('shows the plan skeleton under one status while the first read runs, not the logo loader', () => {
+    const service = createVendorBillingMockService('trial_active')
+    vi.spyOn(service, 'getStatus').mockReturnValue(new Promise(() => {}))
+    const view = render(<VendorBillingPanel service={service} vendorId={vendorId} />)
+    expect(screen.getByRole('status', { name: 'Loading billing status…' }).textContent).toBe('Loading billing status…')
+    expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-slot="page-loader"]')).toBeNull()
+  })
+
+  it('marks only a pressed Refresh billing status busy, and no button during an automatic refresh', async () => {
+    const service = createVendorBillingMockService('trial_active')
+    const initial = await service.getStatus(vendorId)
+    let resolveRead!: (status: typeof initial) => void
+    const read = vi.spyOn(service, 'getStatus').mockResolvedValueOnce(initial)
+    render(<VendorBillingPanel service={service} vendorId={vendorId} />)
+    const pay = await screen.findByRole('button', { name: 'Pay Now' })
+    const refreshButton = screen.getByRole('button', { name: 'Refresh billing status' })
+
+    read.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve }))
+    fireEvent.click(refreshButton)
+    expect(refreshButton.getAttribute('aria-busy')).toBe('true')
+    expect(pay.hasAttribute('aria-busy')).toBe(false)
+    resolveRead(initial)
+    await waitFor(() => expect(refreshButton.hasAttribute('aria-busy')).toBe(false))
+
+    read.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve }))
+    fireEvent.focus(window)
+    expect(await screen.findByText('Checkout or confirmation in progress…')).toBeTruthy()
+    expect(refreshButton.hasAttribute('aria-busy')).toBe(false)
+    expect(pay.hasAttribute('aria-busy')).toBe(false)
+    resolveRead(initial)
+    await waitFor(() => expect(screen.queryByText('Checkout or confirmation in progress…')).toBeNull())
+  })
+
   describe('rejoining and renewal recovery', () => {
     const text = () => document.body.textContent ?? ''
 
