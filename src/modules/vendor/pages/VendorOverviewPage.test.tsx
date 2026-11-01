@@ -2,7 +2,7 @@
 
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type {
@@ -153,6 +153,9 @@ function stubInsights(ordersByStatus: VendorInsights['ordersByStatus']) {
   return vi.spyOn(vendorService, 'getInsights').mockResolvedValue(insights(ordersByStatus))
 }
 
+const queuePanel = () =>
+  screen.getByRole('heading', { name: 'What needs doing' }).closest('[data-slot="card"]') as HTMLElement
+
 describe('VendorOverviewPage work queue', () => {
   it('does not declare the queue empty when later pages remain', async () => {
     stubQueue([
@@ -259,8 +262,60 @@ describe('VendorOverviewPage work queue', () => {
     renderFor()
     await settle()
 
-    expect(screen.getByText('This is a failed request, not an empty queue.')).toBeTruthy()
+    expect(within(queuePanel()).getByRole('alert').textContent).toContain('Something went wrong')
     expect(screen.queryByText('Nothing waiting')).toBeNull()
+  })
+
+  it('reads the queue again on Try again', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list')
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValue(pageOf([]))
+    stubInsights({})
+
+    renderFor()
+    await settle()
+    fireEvent.click(within(queuePanel()).getByRole('button', { name: 'Try again' }))
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(within(queuePanel()).queryByRole('alert')).toBeNull()
+    expect(screen.getByText('Nothing waiting')).toBeTruthy()
+  })
+
+  it('holds row placeholders under one status while the queue first loads', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockReturnValue(new Promise(() => {}))
+    stubInsights({})
+
+    renderFor()
+    await settle()
+
+    expect(within(queuePanel()).getByRole('status', { name: 'Loading what needs doing' })).toBeTruthy()
+    expect(within(queuePanel()).queryByRole('table')).toBeNull()
+    expect(screen.queryByText('Nothing waiting')).toBeNull()
+  })
+
+  it('keeps the current page on screen, dimmed, while the next page loads', async () => {
+    let respond!: (page: VendorOrderPage) => void
+    vi.spyOn(vendorOrdersService, 'list')
+      .mockResolvedValueOnce(pageOf([order('4021', 'PENDING', '2026-09-06')], false))
+      .mockReturnValueOnce(new Promise((resolve) => { respond = resolve }))
+    stubInsights({})
+
+    renderFor()
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await settle()
+
+    const busy = screen.getByRole('link', { name: 'Order #4021' }).closest('[aria-busy="true"]')
+    expect(busy?.className).toContain('opacity-60')
+    expect(within(queuePanel()).getByRole('status', { name: 'Updating what needs doing' })).toBeTruthy()
+    expect(within(queuePanel()).queryByRole('status', { name: 'Loading what needs doing' })).toBeNull()
+
+    await act(async () => { respond(pageOf([order('4030', 'PENDING', '2026-09-07')])) })
+    await settle()
+
+    expect(screen.getByRole('link', { name: 'Order #4030' }).closest('[aria-busy]')).toBeNull()
+    expect(within(queuePanel()).queryByRole('status')).toBeNull()
   })
 })
 
@@ -345,7 +400,7 @@ describe('VendorOverviewPage loading layout', () => {
     renderFor()
     await settle()
 
-    expect(screen.getByText('Insights are down')).toBeTruthy()
+    expect(within(gridOf().parentElement as HTMLElement).getByRole('alert').textContent).toContain('Something went wrong')
     expect(screen.queryByRole('status')).toBeNull()
     expect(placeholders()).toHaveLength(0)
     expect(gridOf().children).toHaveLength(1)
@@ -379,6 +434,22 @@ describe('VendorOverviewPage loading layout', () => {
     const names = Array.from(gridOf().querySelectorAll('a')).map((a) => a.textContent)
     expect(names).toEqual(['New 2', 'Confirmed 3', 'Out for delivery 4', 'Products 0'])
   })
+
+  it('reads the counts again on Try again', async () => {
+    stubQueue([])
+    const getInsights = vi.spyOn(vendorService, 'getInsights')
+      .mockRejectedValueOnce(new Error('Insights are down'))
+      .mockResolvedValue(insights({ PENDING: 1 }))
+
+    renderFor()
+    await settle()
+    fireEvent.click(within(gridOf().parentElement as HTMLElement).getByRole('button', { name: 'Try again' }))
+    await settle()
+
+    expect(getInsights).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('link', { name: 'New 1' })).toBeTruthy()
+  })
 })
 
 function size(skuId: string, productId: string | null): VendorSize {
@@ -409,6 +480,21 @@ describe('VendorOverviewPage product count', () => {
     await settle()
 
     expect(screen.getByRole('link', { name: 'Products —' })).toBeTruthy()
+  })
+
+  it('holds the Products cell with a placeholder while the catalog loads', async () => {
+    stubQueue([])
+    stubInsights({})
+    vi.spyOn(vendorProductsService, 'listSizes').mockReturnValue(new Promise(() => {}))
+
+    renderFor()
+    await settle()
+
+    const grid = screen.getByRole('link', { name: 'New 0' }).parentElement as HTMLElement
+    expect(screen.queryByRole('link', { name: /^Products/ })).toBeNull()
+    expect(grid.children).toHaveLength(WORK_QUEUE_STATUSES.length + 1)
+    expect(within(grid.lastElementChild as HTMLElement).getByRole('status', { name: 'Loading your product count' })).toBeTruthy()
+    expect(grid.textContent).not.toContain('…')
   })
 })
 

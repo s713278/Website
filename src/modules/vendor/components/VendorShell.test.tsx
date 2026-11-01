@@ -557,7 +557,9 @@ describe('VendorShell under the live API', () => {
     let resolve!: (read: LiveSubscriptionRead) => void
     stubReads(() => new Promise((res) => { resolve = res }))
     renderShell('/vendor/settings', <LiveVendorPlan />)
-    await waitFor(() => expect(settingsPlan()).toBe('Loading…'))
+    const planCell = await waitFor(() => screen.getByText('Plan', { selector: 'dt' }).nextElementSibling as HTMLElement)
+    expect(within(planCell).getByRole('status', { name: 'Loading plan name' })).toBeTruthy()
+    expect(within(planCell).queryByText('Loading…')).toBeNull()
     expect(railBadge()).toBeNull()
     await act(async () => { resolve({ kind: 'not-live' }) })
     expect(settingsPlan()).toBe('Not set')
