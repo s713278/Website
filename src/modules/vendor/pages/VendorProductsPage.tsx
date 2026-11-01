@@ -2,12 +2,13 @@ import { ChevronDownIcon } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorProductsService } from '@/shared/api'
-import { Badge, Button, Input, Spinner } from '@/shared/components'
-import { formatCurrency } from '@/shared/lib/utils'
+import { Badge, Button, Input, LoadError, Spinner } from '@/shared/components'
+import { cn, formatCurrency } from '@/shared/lib/utils'
 
 /**
  * The cheapest way in to a product, as the shared design writes it: "From ₹189".
@@ -94,7 +95,7 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>
           Cancel
         </Button>
-        <Button size="sm" className="rounded-full" disabled={busy || invalid} onClick={() => void save()}>
+        <Button size="sm" className="rounded-full" pending={busy} disabled={busy || invalid} onClick={() => void save()}>
           Save price
         </Button>
       </div>
@@ -190,7 +191,7 @@ const PRODUCTS_PER_PAGE = 5
 
 export function VendorProductsPage() {
   const { vendorId } = useVendorAccount()
-  const [sizes, setSizes] = useState<VendorSize[]>([])
+  const [sizes, setSizes] = useState<VendorSize[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
@@ -223,9 +224,7 @@ export function VendorProductsPage() {
     }
   }, [vendorId, reloadToken])
 
-  if (loading) return <Spinner label="Loading products…" />
-
-  const groups = groupByProduct(sizes)
+  const groups = groupByProduct(sizes ?? [])
   const totalPages = Math.max(1, Math.ceil(groups.length / PRODUCTS_PER_PAGE))
   const currentPage = Math.min(page, totalPages - 1)
   const visible = groups.slice(currentPage * PRODUCTS_PER_PAGE, (currentPage + 1) * PRODUCTS_PER_PAGE)
@@ -234,55 +233,71 @@ export function VendorProductsPage() {
     <DashboardPanel
       title="Your catalog"
       action={
-        <Link to="/onboarding">
-          <Button size="sm" variant="outline" className="rounded-full">
-            Edit in setup
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          {loading && sizes !== null ? <Spinner label="Updating products" /> : null}
+          <Link to="/onboarding">
+            <Button size="sm" variant="outline" className="rounded-full">
+              Edit in setup
+            </Button>
+          </Link>
+        </div>
       }
     >
-      {error ? (
-        <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p>
-      ) : null}
-
-      {!groups.length ? (
-        <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
-          <span className="mb-1 block font-semibold text-[var(--md-ink)]">Nothing listed yet</span>
-          Products and their sizes are added during store setup.
-        </p>
+      {sizes === null ? (
+        error ? (
+          <LoadError onRetry={reload} />
+        ) : (
+          <RowSkeleton label="Loading products" rowClassName="h-[4.25rem] rounded-lg" className="gap-2.5" />
+        )
       ) : (
-        <ul className="grid gap-2.5">
-          {visible.map((group) => (
-            <ProductGroup
-              key={group.id}
-              name={group.name}
-              sizes={group.sizes}
-              open={openProductId === group.id}
-              onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
-              onSaved={reload}
-            />
-          ))}
-        </ul>
-      )}
+        <>
+          {error ? <LoadError onRetry={reload} className="mb-4" /> : null}
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
-          <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-            Previous
-          </Button>
-          <span className="vc-num text-sm text-[var(--md-muted)]">
-            Page {currentPage + 1} of {totalPages}
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={currentPage >= totalPages - 1}
-            onClick={() => setPage(currentPage + 1)}
+          <div
+            aria-busy={loading || undefined}
+            className={cn('transition-opacity motion-reduce:transition-none', loading && 'opacity-60')}
           >
-            Next
-          </Button>
-        </div>
-      ) : null}
+            {!groups.length ? (
+              <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+                <span className="mb-1 block font-semibold text-[var(--md-ink)]">Nothing listed yet</span>
+                Products and their sizes are added during store setup.
+              </p>
+            ) : (
+              <ul className="grid gap-2.5">
+                {visible.map((group) => (
+                  <ProductGroup
+                    key={group.id}
+                    name={group.name}
+                    sizes={group.sizes}
+                    open={openProductId === group.id}
+                    onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
+                    onSaved={reload}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+              <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+                Previous
+              </Button>
+              <span className="vc-num text-sm text-[var(--md-muted)]">
+                Page {currentPage + 1} of {totalPages}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage >= totalPages - 1}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
+        </>
+      )}
     </DashboardPanel>
   )
 }

@@ -21,8 +21,80 @@ import type {
   VendorOrderDetail,
 } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, isOrderAdvancePartial, isOrderTransitionRefused, vendorOrdersService } from '@/shared/api'
-import { Badge, Button, Card, EmptyState, Input, Spinner } from '@/shared/components'
-import { formatCurrency } from '@/shared/lib/utils'
+import { Badge, Button, Card, EmptyState, Input, LoadError, Skeleton, Spinner } from '@/shared/components'
+import { cn, formatCurrency } from '@/shared/lib/utils'
+
+/**
+ * The first read's placeholder: the order panel and the bill at their real sizes, so the
+ * page does not jump when the order lands. Payment and cancel blocks depend on the status
+ * and are left out.
+ */
+function OrderDetailSkeleton() {
+  return (
+    <div aria-busy="true">
+      <span role="status" aria-label="Loading order" className="sr-only">
+        Loading order
+      </span>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <DashboardPanel>
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+          </div>
+          <div className="mt-4">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-1 h-5 w-44" />
+          </div>
+          <div className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 sm:grid-cols-2">
+            <div>
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="mt-0.5 h-5 w-24" />
+            </div>
+            <div className="sm:col-span-2">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="mt-0.5 h-5 w-64 max-w-full" />
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
+            <Skeleton className="h-8 w-32 rounded-full" />
+            <Skeleton className="h-8 w-28 rounded-full" />
+          </div>
+        </DashboardPanel>
+
+        <Card className="p-0">
+          <div className="border-b border-[var(--vc-edge)] px-5 py-3.5">
+            <Skeleton className="h-6 w-20" />
+          </div>
+          <ul className="vc-rows">
+            {Array.from({ length: 3 }, (_, i) => (
+              <li key={i} className="flex items-start justify-between gap-4 px-5 py-3">
+                <div className="min-w-0">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="mt-0.5 h-4 w-24" />
+                </div>
+                <Skeleton className="h-5 w-14" />
+              </li>
+            ))}
+          </ul>
+          <div className="space-y-1.5 border-t border-[var(--vc-rule)] px-5 py-4">
+            <div className="flex justify-between gap-4">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-5 w-14" />
+            </div>
+            <div className="flex justify-between gap-4">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-12" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t border-[var(--vc-edge)] px-5 py-4">
+            <Skeleton className="h-5 w-12" />
+            <Skeleton className="h-7 w-20" />
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
 
 /**
  * One order, with its lines.
@@ -49,7 +121,12 @@ export function VendorOrderDetailPage() {
   const [reason, setReason] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
 
-  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+  // Loading is set here as well as in the effect, so an action's `setBusy(false)` lands in the
+  // same commit and its buttons are never briefly enabled before the re-read starts.
+  const reload = useCallback(() => {
+    setLoading(true)
+    setReloadToken((token) => token + 1)
+  }, [])
 
   // The Orders list hands its filters over in history state, so this screen's own back
   // button returns to the view the vendor left rather than to an unfiltered list.
@@ -134,7 +211,7 @@ export function VendorOrderDetailPage() {
   const backLink = (
     <Link
       to={backTo}
-      className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--md-muted)] transition hover:text-[var(--md-ink)]"
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--md-muted)] transition hover:text-[var(--md-ink)]"
     >
       <ChevronLeft className="size-4" aria-hidden />
       Back to orders
@@ -150,21 +227,26 @@ export function VendorOrderDetailPage() {
     </Link>
   )
 
-  if (loading) return <Spinner label="Loading order…" />
+  /*
+   * Only the first read of this order hides it. A re-read after an action keeps the order on
+   * screen, dimmed; a different order (same route element, new param) is a first read again.
+   */
+  const firstLoad = loading && (order === null || order.id !== orderId)
+
+  if (firstLoad) {
+    return (
+      <div>
+        <div className="mb-4 flex">{backLink}</div>
+        <OrderDetailSkeleton />
+      </div>
+    )
+  }
 
   if (loadError) {
     return (
       <div>
-        {backLink}
-        <Card className="max-w-[68ch] border-[var(--md-danger)] p-5">
-          <p className="text-sm text-[var(--md-danger)]">{loadError}</p>
-          <p className="mt-1 text-sm text-[var(--md-muted)]">
-            This order could not be loaded. That is not the same as it not existing.
-          </p>
-          <Button size="sm" variant="secondary" className="mt-4" onClick={reload}>
-            Try again
-          </Button>
-        </Card>
+        <div className="mb-4 flex">{backLink}</div>
+        <LoadError onRetry={reload} />
       </div>
     )
   }
@@ -192,241 +274,251 @@ export function VendorOrderDetailPage() {
 
   return (
     <div>
-      {backLink}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        {backLink}
+        {loading ? <Spinner label="Updating order" /> : null}
+      </div>
 
-      {actionError ? (
-        <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
-      ) : null}
-
-      {/*
-        The order on the left, the bill on the right. They are two different questions — what
-        do I do with this, and what does it come to — and stacking them put the second one
-        below the fold on every order with more than a couple of lines.
-      */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <DashboardPanel>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={deliveryStatusPillClass(order.deliveryStatus)}>{delivery.label}</span>
-            {order.paymentStatus ? (
-              <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
-                {presentPaymentStatus(order.paymentStatus).label}
-              </Badge>
-            ) : null}
-          </div>
-
-          {/*
-            This read carries a real `customer_name`, unlike a list row — so the detail screen
-            shows a person, with the number as an action beside it rather than in its place.
-          */}
-          <CustomerContact
-            name={order.customerName}
-            mobile={order.customerMobile}
-            className="mt-4"
-          />
-
-          <dl className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 text-sm sm:grid-cols-2">
-            {order.deliveryDate ? (
-              <div>
-                <dt className="text-[var(--md-muted)]">Delivery date</dt>
-                <dd className="vc-num mt-0.5 font-medium">{order.deliveryDate}</dd>
-              </div>
-            ) : null}
-            {order.deliveryAddress ? (
-              <div className="sm:col-span-2">
-                <dt className="text-[var(--md-muted)]">Delivering to</dt>
-                <dd className="mt-0.5 font-medium">{order.deliveryAddress}</dd>
-              </div>
-            ) : null}
-          </dl>
-
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
-            {next ? (
-              <Button
-                size="sm"
-                className="rounded-full"
-                disabled={busy}
-                onClick={() => void advance(next)}
-              >
-                {busy ? 'Working…' : forwardActionLabel(next)}
-              </Button>
-            ) : null}
-            {canCancel(order.deliveryStatus) && !cancelling ? (
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setCancelling(true)}>
-                Cancel order
-              </Button>
-            ) : null}
-          </div>
-
-          {/*
-            The vendor's own record that they were paid, kept on this device.
-
-            The platform never handles the money — a customer pays their vendor in cash at
-            the door or by UPI — so payment status is not a fact the system can observe, and
-            no backend route stores one. See
-            `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
-
-            The control is withheld on a cancelled order, because marking one paid raises a
-            refund question v1 has no answer for. **The sentence is not**: an order marked
-            paid and then cancelled still shows a Paid badge, and a badge with no word about
-            where it came from is exactly what that sentence exists to prevent.
-          */}
-          {canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID' ? (
-            <div className="mt-5 border-t border-[var(--vc-rule)] pt-5">
-              {canRecordPayment(order.deliveryStatus) ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(
-                      () => vendorOrdersService.setPaymentStatus(vendorId, order.id, paymentTarget),
-                      'Could not save the payment record',
-                    )
-                  }
-                >
-                  {paymentTarget === 'PAID' ? 'Mark paid' : 'Mark unpaid'}
-                </Button>
-              ) : null}
-              {/*
-                One quiet sentence, not a banner and not a per-row footnote. It is the only
-                thing standing between a vendor and believing their accounts synced.
-              */}
-              <p
-                className={`max-w-[68ch] text-sm text-[var(--md-muted)] ${
-                  canRecordPayment(order.deliveryStatus) ? 'mt-3' : ''
-                }`}
-              >
-                This payment record is saved on this device only — it will not appear on
-                another phone or computer.
-              </p>
-            </div>
-          ) : null}
-
-          {cancelling ? (
-            <div className="mt-5 rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">
-              <p className="text-sm font-medium">Cancel this order?</p>
-              <p className="mt-1 text-sm text-[var(--md-muted)]">
-                The customer is told the order was cancelled. This cannot be undone.
-              </p>
-              <div className="mt-3">
-                <Input
-                  label="Reason"
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  placeholder="Out of stock"
-                />
-              </div>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setCancelling(false)
-                    setReason('')
-                  }}
-                >
-                  Keep order
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={busy || !reason.trim()}
-                  onClick={() =>
-                    void run(async () => {
-                      // Its own endpoint, never the bulk one: `CANCELLED` is in that enum but
-                      // 417s through it.
-                      await vendorOrdersService.cancel(vendorId, order.id, reason.trim())
-                      setCancelling(false)
-                      setReason('')
-                    }, 'Could not cancel the order')
-                  }
-                >
-                  {busy ? 'Cancelling…' : 'Cancel order'}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </DashboardPanel>
+      <div
+        aria-busy={loading || undefined}
+        className={cn('transition-opacity motion-reduce:transition-none', loading && 'opacity-60')}
+      >
+        {actionError ? (
+          <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
+        ) : null}
 
         {/*
-          The bill. Every figure on it — line amounts, charges and the total — is right-aligned
-          on one edge in tabular figures, so the column reads down as a column and a vendor can
-          check the arithmetic the way they would on paper.
+          The order on the left, the bill on the right. They are two different questions — what
+          do I do with this, and what does it come to — and stacking them put the second one
+          below the fold on every order with more than a couple of lines.
         */}
-        <Card className="p-0">
-          <h2 className="font-display border-b border-[var(--vc-edge)] px-5 py-3.5 text-base font-semibold">
-            Items
-          </h2>
-          {!order.lines.length ? (
-            <p className="px-5 py-4 text-sm text-[var(--md-muted)]">No items on this order.</p>
-          ) : (
-            <ul className="vc-rows">
-              {order.lines.map((line) => (
-                <li key={line.id} className="flex items-baseline justify-between gap-4 px-5 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{line.name}</p>
-                    {/*
-                      Quantity and unit price are both read from the response; neither is
-                      derived from the line total, so a line whose numbers disagree shows the
-                      disagreement rather than a tidied version of it.
-                    */}
-                    <p className="vc-num mt-0.5 text-xs text-[var(--md-muted)]">
-                      {line.size ? `${line.size} · ` : ''}
-                      {line.quantity} ×
-                      {line.unitPrice != null ? ` ${formatCurrency(line.unitPrice)}` : ''}
-                    </p>
-                  </div>
-                  {line.amount != null ? (
-                    <p className="vc-num shrink-0 text-sm font-semibold">
-                      {formatCurrency(line.amount)}
-                    </p>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/*
-            Only the charges the response carried. Nothing here is derived from the total to
-            make the column add up — a charge invented to close a gap is a charge the vendor
-            would be asked to explain, and no system anywhere holds it.
-          */}
-          {lines.length ? (
-            <dl className="space-y-1.5 border-t border-[var(--vc-rule)] px-5 py-4 text-sm">
-              {lines.map((line) => (
-                <div key={line.key} className="flex items-baseline justify-between gap-4">
-                  <dt className="text-[var(--md-muted)]">{line.label}</dt>
-                  <dd className="vc-num">{formatCurrency(line.amount)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-
-          {/*
-            The total sits on the panel's own edge weight rather than a row rule: it closes the
-            bill, and closing it with the same line that separates two items would let the eye
-            run straight past.
-          */}
-          {order.total != null ? (
-            <div className="flex items-baseline justify-between gap-4 border-t border-[var(--vc-edge)] px-5 py-4">
-              <span className="text-sm font-medium">Total</span>
-              <span className="font-display vc-num text-lg font-bold">
-                {formatCurrency(order.total)}
-              </span>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <DashboardPanel>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={deliveryStatusPillClass(order.deliveryStatus)}>{delivery.label}</span>
+              {order.paymentStatus ? (
+                <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
+                  {presentPaymentStatus(order.paymentStatus).label}
+                </Badge>
+              ) : null}
             </div>
-          ) : (
-            <p className="border-t border-[var(--vc-edge)] px-5 py-4 text-sm text-slate-500">
-              Amount not available
-            </p>
-          )}
 
-          {reconciles === false ? (
-            <p className="border-t border-[var(--vc-rule)] px-5 py-3 text-sm text-[var(--md-muted)]">
-              These charges do not add up to the total. They are shown exactly as the store recorded
-              them; nothing has been added to close the difference.
-            </p>
-          ) : null}
-        </Card>
+            {/*
+              This read carries a real `customer_name`, unlike a list row — so the detail screen
+              shows a person, with the number as an action beside it rather than in its place.
+            */}
+            <CustomerContact
+              name={order.customerName}
+              mobile={order.customerMobile}
+              className="mt-4"
+            />
+
+            <dl className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 text-sm sm:grid-cols-2">
+              {order.deliveryDate ? (
+                <div>
+                  <dt className="text-[var(--md-muted)]">Delivery date</dt>
+                  <dd className="vc-num mt-0.5 font-medium">{order.deliveryDate}</dd>
+                </div>
+              ) : null}
+              {order.deliveryAddress ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-[var(--md-muted)]">Delivering to</dt>
+                  <dd className="mt-0.5 font-medium">{order.deliveryAddress}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
+              {next ? (
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  pending={busy}
+                  disabled={busy || loading}
+                  onClick={() => void advance(next)}
+                >
+                  {busy ? 'Working…' : forwardActionLabel(next)}
+                </Button>
+              ) : null}
+              {canCancel(order.deliveryStatus) && !cancelling ? (
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setCancelling(true)}>
+                  Cancel order
+                </Button>
+              ) : null}
+            </div>
+
+            {/*
+              The vendor's own record that they were paid, kept on this device.
+
+              The platform never handles the money — a customer pays their vendor in cash at
+              the door or by UPI — so payment status is not a fact the system can observe, and
+              no backend route stores one. See
+              `docs/adr/0003-payment-status-is-a-device-local-vendor-record.md`.
+
+              The control is withheld on a cancelled order, because marking one paid raises a
+              refund question v1 has no answer for. **The sentence is not**: an order marked
+              paid and then cancelled still shows a Paid badge, and a badge with no word about
+              where it came from is exactly what that sentence exists to prevent.
+            */}
+            {canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID' ? (
+              <div className="mt-5 border-t border-[var(--vc-rule)] pt-5">
+                {canRecordPayment(order.deliveryStatus) ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy || loading}
+                    onClick={() =>
+                      void run(
+                        () => vendorOrdersService.setPaymentStatus(vendorId, order.id, paymentTarget),
+                        'Could not save the payment record',
+                      )
+                    }
+                  >
+                    {paymentTarget === 'PAID' ? 'Mark paid' : 'Mark unpaid'}
+                  </Button>
+                ) : null}
+                {/*
+                  One quiet sentence, not a banner and not a per-row footnote. It is the only
+                  thing standing between a vendor and believing their accounts synced.
+                */}
+                <p
+                  className={`max-w-[68ch] text-sm text-[var(--md-muted)] ${
+                    canRecordPayment(order.deliveryStatus) ? 'mt-3' : ''
+                  }`}
+                >
+                  This payment record is saved on this device only — it will not appear on
+                  another phone or computer.
+                </p>
+              </div>
+            ) : null}
+
+            {cancelling ? (
+              <div className="mt-5 rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">
+                <p className="text-sm font-medium">Cancel this order?</p>
+                <p className="mt-1 text-sm text-[var(--md-muted)]">
+                  The customer is told the order was cancelled. This cannot be undone.
+                </p>
+                <div className="mt-3">
+                  <Input
+                    label="Reason"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="Out of stock"
+                  />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setCancelling(false)
+                      setReason('')
+                    }}
+                  >
+                    Keep order
+                  </Button>
+                  <Button
+                    size="sm"
+                    pending={busy}
+                    disabled={busy || loading || !reason.trim()}
+                    onClick={() =>
+                      void run(async () => {
+                        // Its own endpoint, never the bulk one: `CANCELLED` is in that enum but
+                        // 417s through it.
+                        await vendorOrdersService.cancel(vendorId, order.id, reason.trim())
+                        setCancelling(false)
+                        setReason('')
+                      }, 'Could not cancel the order')
+                    }
+                  >
+                    {busy ? 'Cancelling…' : 'Cancel order'}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </DashboardPanel>
+
+          {/*
+            The bill. Every figure on it — line amounts, charges and the total — is right-aligned
+            on one edge in tabular figures, so the column reads down as a column and a vendor can
+            check the arithmetic the way they would on paper.
+          */}
+          <Card className="p-0">
+            <h2 className="font-display border-b border-[var(--vc-edge)] px-5 py-3.5 text-base font-semibold">
+              Items
+            </h2>
+            {!order.lines.length ? (
+              <p className="px-5 py-4 text-sm text-[var(--md-muted)]">No items on this order.</p>
+            ) : (
+              <ul className="vc-rows">
+                {order.lines.map((line) => (
+                  <li key={line.id} className="flex items-baseline justify-between gap-4 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{line.name}</p>
+                      {/*
+                        Quantity and unit price are both read from the response; neither is
+                        derived from the line total, so a line whose numbers disagree shows the
+                        disagreement rather than a tidied version of it.
+                      */}
+                      <p className="vc-num mt-0.5 text-xs text-[var(--md-muted)]">
+                        {line.size ? `${line.size} · ` : ''}
+                        {line.quantity} ×
+                        {line.unitPrice != null ? ` ${formatCurrency(line.unitPrice)}` : ''}
+                      </p>
+                    </div>
+                    {line.amount != null ? (
+                      <p className="vc-num shrink-0 text-sm font-semibold">
+                        {formatCurrency(line.amount)}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/*
+              Only the charges the response carried. Nothing here is derived from the total to
+              make the column add up — a charge invented to close a gap is a charge the vendor
+              would be asked to explain, and no system anywhere holds it.
+            */}
+            {lines.length ? (
+              <dl className="space-y-1.5 border-t border-[var(--vc-rule)] px-5 py-4 text-sm">
+                {lines.map((line) => (
+                  <div key={line.key} className="flex items-baseline justify-between gap-4">
+                    <dt className="text-[var(--md-muted)]">{line.label}</dt>
+                    <dd className="vc-num">{formatCurrency(line.amount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+
+            {/*
+              The total sits on the panel's own edge weight rather than a row rule: it closes the
+              bill, and closing it with the same line that separates two items would let the eye
+              run straight past.
+            */}
+            {order.total != null ? (
+              <div className="flex items-baseline justify-between gap-4 border-t border-[var(--vc-edge)] px-5 py-4">
+                <span className="text-sm font-medium">Total</span>
+                <span className="font-display vc-num text-lg font-bold">
+                  {formatCurrency(order.total)}
+                </span>
+              </div>
+            ) : (
+              <p className="border-t border-[var(--vc-edge)] px-5 py-4 text-sm text-slate-500">
+                Amount not available
+              </p>
+            )}
+
+            {reconciles === false ? (
+              <p className="border-t border-[var(--vc-rule)] px-5 py-3 text-sm text-[var(--md-muted)]">
+                These charges do not add up to the total. They are shown exactly as the store recorded
+                them; nothing has been added to close the difference.
+              </p>
+            ) : null}
+          </Card>
+        </div>
       </div>
     </div>
   )
