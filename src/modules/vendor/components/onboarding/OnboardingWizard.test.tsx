@@ -1413,11 +1413,13 @@ describe('Continue prefetches the next step’s account reads', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(categories).toHaveBeenCalledTimes(1))
     expect(vendorOnboardingService.saveBusinessType).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Continue' }).getAttribute('aria-busy')).toBe('true')
 
     await act(async () => save.resolve(undefined))
     await screen.findByRole('button', { name: /Step 4,.*You are here/ })
     await waitFor(() => expect(stepSpinner()).toBeNull())
     expect(categories).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('aria-busy')).toBe(false)
   })
 
   it('reads Step 5’s products but not the units on Continue; Step 5 reads the units when it opens', async () => {

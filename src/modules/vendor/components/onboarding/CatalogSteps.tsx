@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref, type RefObject, type ToggleEvent } from 'react'
 import {
   CheckIcon,
+  DatabaseIcon,
   RefreshCwIcon,
   SearchIcon,
   SparklesIcon,
@@ -9,6 +10,8 @@ import {
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
+import { LoadError } from '@/shared/components/LoadError'
+import { PageLoader } from '@/shared/components/PageLoader'
 import { Button, EmptyState } from '@/shared/components/ui'
 import { isLiveApi, type ProductReference } from '@/shared/api'
 import {
@@ -30,7 +33,7 @@ import {
 } from '../../store/onboarding-store'
 import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
 import { AuthorCategoryForm, AuthorProductForm } from './CatalogAuthoring'
-import { CatalogError, CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, LoadingMore, LoadMoreButton, StepLoading, type RequestConfirmation } from './StepPrimitives'
+import { CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, MoreTilesLoading, LoadMoreButton, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -113,6 +116,19 @@ function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPag
     /** The first card a pending press reveals; it takes focus as it mounts. */
     focusIndex,
   }
+}
+
+/** A catalog list's first read failed; the sample catalog stays on offer where it applies. */
+function CatalogLoadError({ onRetry, onUseSample }: { onRetry: () => void; onUseSample?: () => void }) {
+  return (
+    <LoadError onRetry={onRetry}>
+      {onUseSample ? (
+        <Button size="sm" onClick={onUseSample}>
+          <DatabaseIcon /> Use sample catalog
+        </Button>
+      ) : null}
+    </LoadError>
+  )
 }
 
 function ReferenceThumb({
@@ -252,8 +268,8 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
 
   if (firstLoad) {
     return references.error && draft.catalogSource === 'account'
-      ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
-      : <StepLoading />
+      ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} />
+      : <PageLoader label="Loading this step" />
   }
 
   return (
@@ -285,7 +301,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
           </div>
         </form>
         {initialError && draft.catalogSource === 'account' ? (
-          <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
+          <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} />
         ) : null}
         {!references.loading && !references.error && !references.searchPending && !items.length ? (
           <EmptyState
@@ -305,7 +321,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
             className="outline-none"
             aria-busy={references.loading || references.loadingMore}
           >
-            {listLoading ? <StepLoading label="Loading business types" /> : null}
+            {listLoading ? <PageLoader label="Loading business types" /> : null}
             {items.length ? (
               <fieldset disabled={readOnly} className={cn(choiceGrid, 'min-w-0 border-0 p-0', listLoading && 'mt-3')}>
                 {items.map((item, index) => (
@@ -322,7 +338,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
             ) : null}
             {references.loadingMore && !references.searchPending ? (
               <div className="mt-3">
-                <LoadingMore />
+                <MoreTilesLoading size="choice" />
               </div>
             ) : null}
             {incrementalError ? (
@@ -487,8 +503,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   }
   if (firstLoad) {
     return references.error && draft.catalogSource === 'account'
-      ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
-      : <StepLoading />
+      ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} />
+      : <PageLoader label="Loading this step" />
   }
 
   return (
@@ -511,8 +527,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           />
         </div>
       </div>
-      {references.loading ? <StepLoading label="Loading categories" /> : null}
-      {references.error && draft.catalogSource === 'account' ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} /> : null}
+      {references.loading ? <PageLoader label="Loading categories" /> : null}
+      {references.error && draft.catalogSource === 'account' ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} /> : null}
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
@@ -549,7 +565,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           })}
         </div>
       ) : null}
-      {references.loadingMore ? <LoadingMore /> : null}
+      {references.loadingMore ? <MoreTilesLoading size="choice" /> : null}
       <FieldError issues={issues} field="categories" />
       {sets.hasMore ? (
         <LoadMoreButton
@@ -686,8 +702,8 @@ function ProductCategoryPicker({
     >
       {firstLoad ? (
         references.error && draft.catalogSource === 'account'
-          ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} />
-          : <StepLoading label="Loading products" />
+          ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} />
+          : <PageLoader label="Loading products" />
       ) : (
         /* Search lives in the panel, not the summary: a click inside the summary row
             would collapse the group the vendor is trying to search. */
@@ -709,8 +725,8 @@ function ProductCategoryPicker({
             </div>
           </div>
           {blocked ? <StepNotice tone="info" message={blocked} /> : null}
-          {references.loading ? <StepLoading label="Loading products" /> : null}
-          {references.error && draft.catalogSource === 'account' ? <CatalogError onRetry={references.retry} onUseSample={onUseSample} /> : null}
+          {references.loading ? <PageLoader label="Loading products" /> : null}
+          {references.error && draft.catalogSource === 'account' ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} /> : null}
           {!references.loading && !references.error && !items.length ? (
             <EmptyState title="No products found" description={search ? 'Try another search.' : 'No products are currently listed for this category.'} />
           ) : null}
@@ -751,7 +767,7 @@ function ProductCategoryPicker({
               })}
             </div>
           ) : null}
-          {references.loadingMore ? <LoadingMore /> : null}
+          {references.loadingMore ? <MoreTilesLoading size="product" /> : null}
           {sets.hasMore ? (
             <LoadMoreButton
               key={sets.key}
