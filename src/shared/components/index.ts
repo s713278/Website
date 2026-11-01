@@ -9,6 +9,8 @@ export {
   Spinner,
 } from './ui'
 
+export { PageLoader, PageLoaderScreen } from './PageLoader'
+
 export { SearchField } from './SearchField'
 export { SectionHeader } from './SectionHeader'
 export { QuantityStepper } from './QuantityStepper'

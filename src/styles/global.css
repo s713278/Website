@@ -1274,3 +1274,27 @@
   .md-indeterminate-bar::after { animation: none; width: 100%; opacity: 0.6; }
 }
 }
+
+@layer components {
+  /* The PageLoader ring's arc. pathLength=100: dash + gap must stay at 100 as the head extends and the tail catches up. */
+  @keyframes md-loader-dash {
+    0% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: 0;
+    }
+    50% {
+      stroke-dasharray: 74 26;
+      stroke-dashoffset: -12;
+    }
+    100% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: -100;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .md-loader-arc {
+      animation: md-loader-dash 2s ease-in-out infinite;
+    }
+  }
+}
