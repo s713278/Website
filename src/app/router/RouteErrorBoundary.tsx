@@ -29,7 +29,7 @@ class RouteErrorBoundaryInner extends Component<BoundaryProps, BoundaryState> {
     return (
       <div className="grid min-h-dvh place-items-center bg-background p-4">
         {/* Reload, not a state reset: React.lazy caches a rejected import, so only a reload retries the chunk. */}
-        <LoadError onRetry={() => window.location.reload()} />
+        <LoadError className="justify-items-center" onRetry={() => window.location.reload()} />
       </div>
     )
   }

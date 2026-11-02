@@ -157,7 +157,7 @@ export function VendorAccountProvider({ children }: { children: ReactNode }) {
   if (error) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background p-4">
-        <LoadError onRetry={reload} />
+        <LoadError className="justify-items-center" onRetry={reload} />
       </div>
     )
   }

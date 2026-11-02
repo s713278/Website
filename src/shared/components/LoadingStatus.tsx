@@ -69,14 +69,14 @@ export function LoadingStatus({ loading, label, onRetry, className }: LoadingSta
       role="status"
       aria-live="polite"
       className={cn(
-        'pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4',
+        'pointer-events-none fixed inset-x-0 z-50 my-0 flex justify-center px-4',
         'bottom-[max(1rem,env(safe-area-inset-bottom))]',
         className,
       )}
     >
       <div
         className={cn(
-          'pointer-events-auto flex w-full max-w-sm items-center gap-2.5',
+          'pointer-events-auto flex min-w-0 max-w-sm items-center gap-2.5',
           'rounded-full bg-white/95 px-3.5 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.14)]',
           'ring-1 ring-slate-200/80 backdrop-blur-md',
         )}
@@ -90,7 +90,7 @@ export function LoadingStatus({ loading, label, onRetry, className }: LoadingSta
           <Loader2 className={cn('size-3.5', !offline && 'animate-spin')} aria-hidden />
         </span>
 
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-slate-900">
+        <p className="min-w-0 truncate text-sm font-semibold tracking-tight text-slate-900">
           {title}
         </p>
 
