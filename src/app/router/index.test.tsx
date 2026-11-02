@@ -11,6 +11,9 @@ import {
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { AppRouter } from './index'
 
+// A page chunk that never arrives, as on a network too slow for the preload to win.
+vi.mock('@/modules/vendor/pages/VendorPlanPage', () => new Promise(() => {}))
+
 beforeEach(async () => {
   window.history.pushState({}, '', '/vendor/orders/subscriptions')
   invalidateVendorContext()
@@ -92,5 +95,40 @@ describe('vendor order routes', () => {
       startDate: null,
       endDate: null,
     })
+  })
+})
+
+describe('in-shell page chunks', () => {
+  it('loads inside main, with the chrome shown, while the page chunk has not arrived', async () => {
+    window.history.pushState({}, '', '/vendor/plan')
+
+    render(<AppRouter />)
+
+    expect(await screen.findByRole('complementary', { name: 'Vendor navigation' })).toBeTruthy()
+    expect(within(screen.getByRole('main')).getByRole('status', { name: 'Loading' })).toBeTruthy()
+  })
+})
+
+describe('session restore', () => {
+  it('fills the screen with one loader on a vendor route', () => {
+    window.history.pushState({}, '', '/vendor')
+    useAuthStore.getState().setHydrated(false)
+
+    render(<AppRouter />)
+
+    expect(screen.getAllByRole('status', { name: 'Loading' })).toHaveLength(1)
+    expect(screen.queryByText('Restoring session…')).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Vendor navigation' })).toBeNull()
+  })
+
+  it('keeps the customer header and loads inside the page on a customer route', () => {
+    window.history.pushState({}, '', '/orders')
+    useAuthStore.getState().setHydrated(false)
+
+    render(<AppRouter />)
+
+    expect(screen.getByRole('banner')).toBeTruthy()
+    expect(within(screen.getByRole('main')).getAllByRole('status', { name: 'Loading' })).toHaveLength(1)
+    expect(screen.queryByText('Restoring session…')).toBeNull()
   })
 })

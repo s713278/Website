@@ -119,7 +119,7 @@ describe('VendorOrderDetailPage states', () => {
     renderDetail()
     await settle()
 
-    expect(screen.getByText('This order could not be loaded. That is not the same as it not existing.')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('Something went wrong')
     expect(screen.queryByText('Order not found')).toBeNull()
 
     get.mockResolvedValue(detail())
@@ -130,7 +130,17 @@ describe('VendorOrderDetailPage states', () => {
     // The order number is the console top bar's page title, which this render does not
     // mount; the bill appearing is what says the retried read landed.
     expect(screen.getByRole('heading', { name: 'Items' })).toBeTruthy()
-    expect(screen.queryByText(/could not be loaded/)).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('holds the order layout under the back link while the first read is in flight', () => {
+    vi.spyOn(vendorOrdersService, 'get').mockReturnValue(new Promise<VendorOrderDetail | null>(() => {}))
+
+    const view = renderDetail()
+
+    expect(screen.getByRole('status', { name: 'Loading order' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Back to orders' })).toBeTruthy()
+    expect(view.container.querySelector('[data-slot="page-loader"]')).toBeNull()
   })
 })
 
@@ -237,6 +247,62 @@ describe('VendorOrderDetailPage actions', () => {
     await settle()
     expect(screen.getByText('Confirmed')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Mark out for delivery' })).toBeTruthy()
+  })
+
+  it('keeps the order on screen, dimmed, while it re-reads after an action', async () => {
+    const get = vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    vi.spyOn(vendorOrdersService, 'advance').mockResolvedValue(undefined)
+    let reread!: (value: VendorOrderDetail) => void
+    renderDetail()
+    await settle()
+
+    get.mockReturnValue(new Promise<VendorOrderDetail>((resolve) => { reread = resolve }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }))
+    await settle()
+
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('New').closest('[aria-busy="true"]')).not.toBeNull()
+    expect(screen.getByRole('status', { name: 'Updating order' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Loading order' })).toBeNull()
+    // Nothing acts on a status that is about to change.
+    expect(screen.getByRole('button', { name: 'Confirm order' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Mark paid' }).hasAttribute('disabled')).toBe(true)
+
+    await act(async () => { reread(detail({ deliveryStatus: 'IN_PROCESS' })) })
+    await settle()
+
+    expect(screen.getByText('Confirmed').closest('[aria-busy]')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Updating order' })).toBeNull()
+  })
+
+  it('never re-enables the forward action between the action and its re-read', async () => {
+    const get = vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+    vi.spyOn(vendorOrdersService, 'advance').mockResolvedValue(undefined)
+    let reread!: (value: VendorOrderDetail) => void
+    renderDetail()
+    await settle()
+
+    // Every change to the button's `disabled` attribute is recorded, including one that a
+    // later commit in the same act would undo.
+    const forward = screen.getByRole('button', { name: 'Confirm order' })
+    const records: MutationRecord[] = []
+    const observer = new MutationObserver((batch) => { records.push(...batch) })
+    observer.observe(forward, { attributes: true, attributeFilter: ['disabled'], attributeOldValue: true })
+
+    get.mockReturnValue(new Promise<VendorOrderDetail>((resolve) => { reread = resolve }))
+    fireEvent.click(forward)
+    await settle()
+
+    records.push(...observer.takeRecords())
+    observer.disconnect()
+    expect(records.length).toBeGreaterThan(0)
+    expect(forward.hasAttribute('disabled')).toBe(true)
+    // A record with a non-null old value is the attribute being removed.
+    expect(records.filter((record) => record.oldValue !== null)).toHaveLength(0)
+
+    await act(async () => { reread(detail({ deliveryStatus: 'IN_PROCESS' })) })
+    await settle()
+    expect(screen.getByText('Confirmed')).toBeTruthy()
   })
 
   it('reports partial progress and reloads the intermediate state', async () => {

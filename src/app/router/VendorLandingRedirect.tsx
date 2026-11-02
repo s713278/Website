@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Spinner } from '@/shared/components/ui'
+import { PageLoaderScreen } from '@/shared/components'
 import type { User } from '@/shared/types'
 import { landingPathIfKnown, resolveLandingPath } from './vendor-landing'
 
@@ -9,7 +9,7 @@ import { landingPathIfKnown, resolveLandingPath } from './vendor-landing'
  * says they belong. A vendor with a finished store never sees the setup wizard on the way
  * to their dashboard.
  *
- * The spinner is only for the case that genuinely needs a network read. A customer, demo
+ * The loader is only for the case that genuinely needs a network read. A customer, demo
  * mode, or an account already cached resolves on the first render.
  */
 export function VendorLandingRedirect({ user, from }: { user: User; from?: string | null }) {
@@ -26,6 +26,6 @@ export function VendorLandingRedirect({ user, from }: { user: User; from?: strin
     }
   }, [path, user, from])
 
-  if (!path) return <Spinner label="Signing you in…" />
+  if (!path) return <PageLoaderScreen />
   return <Navigate to={path} replace />
 }

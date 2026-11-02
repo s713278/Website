@@ -5,7 +5,6 @@ import {
   DatabaseIcon,
   EyeIcon,
   InfoIcon,
-  Loader2Icon,
   RotateCcwIcon,
   StoreIcon,
 } from 'lucide-react'
@@ -19,6 +18,8 @@ import {
   type VendorContext,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { LoadError } from '@/shared/components/LoadError'
+import { PageLoader } from '@/shared/components/PageLoader'
 import { Button } from '@/shared/components/ui'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage } from '../../hooks/use-onboarding-catalog'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
@@ -94,7 +95,7 @@ import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
 import { PreviewStats } from './PreviewStats'
-import { QuietSpinner, StepLoading, type RequestConfirmation } from './StepPrimitives'
+import type { RequestConfirmation } from './StepPrimitives'
 
 const EMPTY_CONFIRM: ConfirmDialogState = {
   open: false,
@@ -152,16 +153,6 @@ function waitsForFirstList(
 ): 'loading' | 'failed' | 'loaded' {
   const list = step === 4 ? view.categoryList : step === 5 ? view.productPanel : 'loaded'
   return state === 'loaded' && (list === 'idle' || list === 'loading') ? 'loading' : state
-}
-
-/** In place of a step's form when a read it needs failed. */
-function StepLoadError({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="space-y-3">
-      <StepNotice message="Something went wrong" />
-      <Button variant="outline" onClick={onRetry}><RotateCcwIcon /> Try again</Button>
-    </div>
-  )
 }
 
 type OnboardingState = ReturnType<typeof useOnboardingStore.getState>
@@ -1363,11 +1354,8 @@ export function OnboardingWizard() {
     // One gate for both reads. Painting between them shows Step 3 to a vendor whose
     // account puts them on Step 9, and then moves the form under them.
     return (
-      <div className="onboarding-shell grid h-full min-h-0 place-items-center text-sm text-[var(--ob-ink-soft)]">
-        <span className="flex items-center gap-2">
-          <QuietSpinner className="size-5" />
-          {persistenceInitialized ? 'Restoring your setup…' : 'Restoring browser draft…'}
-        </span>
+      <div className="onboarding-shell grid h-full min-h-0 place-items-center">
+        <PageLoader label={persistenceInitialized ? 'Restoring your setup' : 'Restoring browser draft'} />
       </div>
     )
   }
@@ -1488,8 +1476,8 @@ export function OnboardingWizard() {
                           disabled={currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
                           className="min-w-0 border-0 p-0"
                         >
-                        {stepState === 'loading' ? <StepLoading /> : null}
-                        {stepState === 'failed' ? <StepLoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
+                        {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
+                        {stepState === 'failed' ? <LoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
                         {stepState === 'loaded' ? <>
                           {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
                           {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
@@ -1529,7 +1517,7 @@ export function OnboardingWizard() {
                     ) : null}
                     <div className="flex items-center gap-2">
                       {currentStep > firstNavigableStep ? <Button variant="ghost" disabled={busy} onClick={goBack}><ArrowLeftIcon /> Back</Button> : null}
-                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={busy || stepState !== 'loaded'} onClick={() => void handleContinue()}>{busy ? <Loader2Icon className="animate-spin motion-reduce:animate-none" /> : null}{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
+                      {!(currentStep === 10 && setupNeedsNoFurtherAction) && !(currentStep >= 3 && !catalogUnlocked) && !(currentStep <= 2 && identitySettled) ? <Button className="h-11 px-6 sm:min-w-48" disabled={stepState !== 'loaded'} pending={busy} onClick={() => void handleContinue()}>{continueLabel}{!busy ? <ArrowRightIcon /> : null}</Button> : null}
                     </div>
                   </div>
                 </div> : null}

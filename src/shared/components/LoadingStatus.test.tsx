@@ -40,6 +40,16 @@ describe('LoadingStatus', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   })
 
+  it("sizes the pill to its label and cancels a parent's stacked spacing", () => {
+    render(<LoadingStatus loading label="Loading store…" />)
+    const status = screen.getByRole('status')
+    const pill = screen.getByText('Loading store…').parentElement as HTMLElement
+    expect(status.classList.contains('my-0')).toBe(true)
+    expect(pill.classList.contains('w-full')).toBe(false)
+    expect(pill.classList.contains('max-w-sm')).toBe(true)
+    expect(pill.classList.contains('min-w-0')).toBe(true)
+  })
+
   it('shows offline copy when the device is offline', () => {
     vi.stubGlobal('navigator', { ...navigator, onLine: false })
     render(

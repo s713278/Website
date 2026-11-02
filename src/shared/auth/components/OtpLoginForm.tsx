@@ -224,7 +224,7 @@ export function OtpLoginForm({
                   <p id="phone-help" className="mt-2 text-sm text-[var(--md-muted)]">
                     We’ll send a {OTP_LENGTH}-digit OTP to this number on WhatsApp.
                   </p>
-                  <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={sending}>
+                  <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={sending} pending={sending}>
                     {sending ? 'Sending OTP…' : 'Send OTP'}
                   </Button>
                 </form>
@@ -296,7 +296,7 @@ export function OtpLoginForm({
                       {error}
                     </p>
                   ) : null}
-                  <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={verifying}>
+                  <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={verifying} pending={verifying}>
                     {verifying ? 'Verifying…' : 'Verify & continue'}
                   </Button>
                   <p className="md-login-resend mt-5 text-center text-sm text-[var(--md-muted)]">
@@ -305,6 +305,7 @@ export function OtpLoginForm({
                       type="button"
                       className={`${linkClass} inline-flex min-h-11 items-center disabled:font-medium disabled:text-[var(--md-muted)] disabled:no-underline`}
                       disabled={cooldown > 0 || sending || verifying}
+                      aria-busy={sending || undefined}
                       onClick={() => void sendOtp()}
                     >
                       {cooldown > 0 ? `Resend OTP in ${cooldown}s` : sending ? 'Sending OTP…' : 'Resend OTP'}

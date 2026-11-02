@@ -244,7 +244,7 @@ reads the vendor context and the vendor profile; every other account resource is
 vendor first opens a step that needs it (`stepResources` in `onboarding-resume.ts`;
 `loadStepResources` in `onboarding-server-state.ts` starts or joins those reads). A context the
 session already holds or is reading costs no second request. While the context is read the wizard
-shows "Restoring your setup…".
+shows the page loader (screen-reader label "Restoring your setup").
 
 | Step | Account reads | Units |
 |---|---|---|
@@ -272,8 +272,8 @@ first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
 step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
 applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
-change; a save does not reset it. A step shows a spinner until its reads have loaded (Steps 3-4
-keep the same spinner until their first reference list arrives, so the two reads show as one load),
+change; a save does not reset it. A step shows the page loader until its reads have loaded (Steps 3-4
+keep the same page loader until their first reference list arrives, so the two reads show as one load),
 and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
 failed resources. Continue is disabled in both states, while Back and the stepper stay usable, so a
 failed earlier step never traps the vendor. A failed read is never turned into empty data, because
@@ -284,13 +284,13 @@ fail.
 
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
 (first) category panel's first product page, alongside the step's account reads, into the reference
-cache the list paints from; the step's spinner waits for both, and the list then makes no request of
+cache the list paints from; the step's page loader waits for both, and the list then makes no request of
 its own. Each starts as soon as its input is applied (the business type for Step 4, the categories for
 Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not
 cached: the list reads it again itself, and shows "Something went wrong" with **Try again** if that
 fails too. A first-page read in flight is shared by key, so a second prefetch or a list that mounts
 meanwhile joins it instead of sending another request. Every product panel, including one opened later (read once, on first
-open), shows only its spinner or its error, with no saved products, until its first page arrives.
+open), shows only its page loader or its error, with no saved products, until its first page arrives.
 
 The phone preview (storefront mockup and its Categories / Products / Sizes counts) is shown on every
 step. Its categories, products and sizes each come from the context's `catalog_preview` while their
@@ -311,7 +311,7 @@ Measurements mean one authenticated `GET /v1/measurements/` followed by one auth
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
-Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their spinner waits for it.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their page loader waits for it.
 Continue starts only the next step's missing account reads alongside its save, never the units
 (an approved store's Step 6 save stays on the step and starts none). A
 failed read does not block: sizes fall back to the sample units and products carry no measurement

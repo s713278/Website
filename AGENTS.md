@@ -81,6 +81,7 @@ Read the relevant owner before changing its area; load additional documents as t
 | Authentication, roles, route gates, or session-owned state | [docs/SESSION.md](./docs/SESSION.md) — current lifecycle and separately marked target model |
 | Adding or changing tests | [docs/TESTING.md](./docs/TESTING.md) — tiers, writing rules, and runner limits |
 | API package commands or exports | [packages/api-client/README.md](./packages/api-client/README.md) |
+| UI styling, brand, loading and error states | [docs/DESIGN_STANDARDS.md](./docs/DESIGN_STANDARDS.md) |
 | Editing the static design reference | [design-reference/README.md](./design-reference/README.md) |
 
 Keep each detailed fact in one owner; summarize and link elsewhere. Keep always-loaded guidance
@@ -175,8 +176,9 @@ There is no `apps/web` package or `src/features/*` layout.
 - Prefer `@/` aliases to deep relative imports.
 - Use function components. Keep ephemeral UI state local; use Zustand for established shared auth and
   cart state.
-- Data-fetch effects must include their real dependencies, cancel/ignore stale work during cleanup,
-  and present errors through `getErrorMessage`.
+- Data-fetch effects must include their real dependencies and cancel/ignore stale work during
+  cleanup. Load failures use `LoadError`; action failures present their message through
+  `getErrorMessage`.
 - Normalize reusable wire-format differences in mappers, not inline in pages.
 - Use existing shared wrappers and shadcn primitives rather than creating a parallel component system.
 - Keep vendor theming scoped to a component element and clear it during effect cleanup.
@@ -217,9 +219,8 @@ Update the session document with the implementation, not in advance of it.
 
 ## UI and design reference
 
-The product uses emerald brand colors, Poppins for display text, Inter for body text, Tailwind v4,
-and shadcn variables defined in `src/styles/global.css`. Prefer established variables and shared UI.
-For small-vendor workflows, keep one primary job per screen and make the next action obvious.
+Prefer established variables and shared UI. Brand basics and the loading and error rules live in
+[docs/DESIGN_STANDARDS.md](./docs/DESIGN_STANDARDS.md).
 
 Use `design-reference/` only to study layout and behavior, then implement the result in React and
 `src/styles`. Do not move product work back into static HTML. Read

@@ -1,6 +1,7 @@
 import { ArrowLeftIcon, LockKeyholeIcon, StoreIcon } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { Button, Spinner } from '@/shared/components/ui'
+import { PageLoaderScreen } from '@/shared/components'
+import { Button } from '@/shared/components/ui'
 import { StorefrontPreview } from '../components/onboarding/StorefrontPreview'
 import { useOnboardingDraftSession } from '../hooks/use-onboarding-draft-session'
 import { hydratePersistedDraft } from '../lib/onboarding-persistence'
@@ -18,7 +19,7 @@ export function VendorOnboardingPreviewPage() {
   const { ready } = useOnboardingDraftSession()
 
   if (!ready) {
-    return <main className="grid min-h-[100dvh] place-items-center bg-background"><Spinner label="Opening private preview…" /></main>
+    return <PageLoaderScreen label="Opening private preview" />
   }
 
   if (!previewSnapshot || previewSnapshot.slug !== draftSlug) {

@@ -15,7 +15,9 @@ import type {
 } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorSubscriptionsService } from '@/shared/api'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
-import { Badge, Button, Spinner } from '@/shared/components'
+import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
+import { Badge, Button, LoadError, Spinner } from '@/shared/components'
+import { cn } from '@/shared/lib/utils'
 
 function titleCaseToken(value: string | null): string {
   if (!value) return 'Not available'
@@ -89,6 +91,8 @@ export function VendorSubscriptionsPage() {
   }, [vendorId, page, status, reloadToken])
 
   const subscriptions = result?.subscriptions ?? []
+  const firstLoad = loading && result === null
+  const refetching = loading && result !== null
 
   return (
     <div className="grid gap-4">
@@ -123,25 +127,15 @@ export function VendorSubscriptionsPage() {
               {titleCaseToken(value)}
             </button>
           ))}
+          {refetching ? <Spinner label="Updating subscriptions" className="ml-1" /> : null}
         </div>
 
-      {loading ? <Spinner label="Loading subscriptions…" /> : null}
+      {/* Each row stacks four lines beside a details list, so it is taller than an order row. */}
+      {firstLoad ? <RowSkeleton label="Loading subscriptions" rowClassName="h-84 sm:h-32" /> : null}
 
+      {/* A failed request is not an empty list. */}
       {!loading && loadError ? (
-        <div className="rounded-lg border border-[var(--md-danger)] p-4">
-          <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{loadError}</p>
-          <p className="mt-1 text-sm text-[var(--md-muted)]">
-            This is a failed request, not an empty list.
-          </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="mt-3"
-            onClick={() => setReloadToken((token) => token + 1)}
-          >
-            Try again
-          </Button>
-        </div>
+        <LoadError onRetry={() => setReloadToken((token) => token + 1)} />
       ) : null}
 
       {!loading && !loadError && !subscriptions.length ? (
@@ -155,8 +149,11 @@ export function VendorSubscriptionsPage() {
         </p>
       ) : null}
 
-      {!loading && !loadError && subscriptions.length ? (
-        <div className="vc-rows">
+      {!firstLoad && !loadError && subscriptions.length ? (
+        <div
+          aria-busy={refetching || undefined}
+          className={cn('vc-rows transition-opacity motion-reduce:transition-none', refetching && 'opacity-60')}
+        >
           {subscriptions.map((subscription) => {
             const presentation = statusPresentation(subscription.status)
             return (

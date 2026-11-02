@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
+import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { StoreStatusScreen } from '@/modules/vendor/components/StoreStatusScreen'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { groupByProduct } from '@/modules/vendor/lib/product-groups'
@@ -15,7 +16,8 @@ import {
 import type { VendorInsights, VendorOrderPage } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, LoadingSkeleton, Spinner } from '@/shared/components'
+import { Button, LoadError, LoadingSkeleton, Spinner } from '@/shared/components'
+import { cn } from '@/shared/lib/utils'
 
 /**
  * One figure and what it counts, as the shared design draws it: the label small and
@@ -36,13 +38,22 @@ function MetricTile({ to, label, value }: { to: string; label: string; value: Re
   )
 }
 
-/** A `MetricTile`'s frame with its two lines drawn as skeletons, so it holds the same space. */
-function MetricTilePlaceholder() {
+/**
+ * A `MetricTile`'s frame with its two lines drawn as skeletons, so it holds the same space.
+ * With a `label` it announces its own load; without one it is hidden, for tiles whose load
+ * another status already announces.
+ */
+function MetricTilePlaceholder({ label }: { label?: string }) {
   return (
     <div
-      aria-hidden="true"
+      aria-hidden={label ? undefined : 'true'}
       className="rounded-[var(--vc-radius)] border border-[var(--vc-edge)] bg-[var(--vc-panel)] px-4 py-3.5 shadow-[var(--vc-shadow)]"
     >
+      {label ? (
+        <span role="status" aria-label={label} className="sr-only">
+          {label}
+        </span>
+      ) : null}
       <LoadingSkeleton className="h-[0.84rem] w-16" />
       <LoadingSkeleton className="mt-1.5 h-8 w-10" />
     </div>
@@ -95,13 +106,15 @@ function ProductCountTile({ vendorId }: { vendorId: string }) {
     }
   }, [vendorId])
 
-  return <MetricTile to="/vendor/products" label="Products" value={failed ? '—' : count ?? '…'} />
+  if (count === null && !failed) return <MetricTilePlaceholder label="Loading your product count" />
+  return <MetricTile to="/vendor/products" label="Products" value={failed ? '—' : count} />
 }
 
 function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
   const [insights, setInsights] = useState<VendorInsights | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -129,11 +142,11 @@ function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
       cancelled = true
       window.clearTimeout(start)
     }
-  }, [userId])
+  }, [userId, reloadToken])
 
   // The product tile renders in every state, so its read starts alongside this one rather
   // than after it. While loading, placeholders hold the count tiles' cells so nothing moves
-  // when they arrive; an error line sits above the grid, where nothing arrives later.
+  // when they arrive; an error notice sits above the grid, where nothing arrives later.
   return (
     <div className="grid gap-3">
       {loading ? (
@@ -141,7 +154,7 @@ function Metrics({ userId, vendorId }: { userId: string; vendorId: string }) {
           Loading your order counts…
         </span>
       ) : null}
-      {!loading && error ? <p className="text-sm text-[var(--md-danger)]">{error}</p> : null}
+      {!loading && error ? <LoadError onRetry={() => setReloadToken((token) => token + 1)} /> : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {loading
           ? WORK_QUEUE_STATUSES.map((status) => <MetricTilePlaceholder key={status} />)
@@ -186,6 +199,7 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [page, setPage] = useState(0)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -215,63 +229,68 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
       cancelled = true
       window.clearTimeout(start)
     }
-  }, [vendorId, queueWindow, page])
+  }, [vendorId, queueWindow, page, reloadToken])
 
   const queue = result ? selectWorkQueue(result.orders) : []
+  // Only the first read has nothing to show. A page change keeps the rows on screen, dimmed.
+  const firstLoad = loading && result === null
+  const refetching = loading && result !== null
 
   return (
     <DashboardPanel
       title="What needs doing"
       action={
-        <Link
-          to="/vendor/orders"
-          className="text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)]"
-        >
-          See all
-        </Link>
+        <div className="flex items-center gap-3">
+          {refetching ? <Spinner label="Updating what needs doing" /> : null}
+          <Link
+            to="/vendor/orders"
+            className="text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)]"
+          >
+            See all
+          </Link>
+        </div>
       }
     >
       <p className="vc-num -mt-2 mb-3 max-w-[68ch] text-xs text-[var(--md-muted)]">
         Deliveries due between {queueWindow.startDate} and {queueWindow.endDate}, still open.
       </p>
 
-      {loading ? <Spinner label="Loading what needs doing…" /> : null}
+      {/* The narrow ledger turns from cards into rows at `lg`, so the placeholders do too. */}
+      {firstLoad ? <RowSkeleton label="Loading what needs doing" rowClassName="h-39 lg:h-[4.5rem]" /> : null}
 
       {/*
         A failed request and an empty queue are different facts. Telling a vendor there is
         nothing to do because a request failed is the worse of the two mistakes.
       */}
-      {!loading && error ? (
-        <div className="rounded-lg border border-[var(--md-danger)] p-4">
-          <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p>
-          <p className="mt-1 text-sm text-[var(--md-muted)]">
-            This is a failed request, not an empty queue.
-          </p>
-        </div>
-      ) : null}
+      {!loading && error ? <LoadError onRetry={() => setReloadToken((token) => token + 1)} /> : null}
 
       {/*
         The reference's own empty state: one centred line inside the panel, not a dashed
         `EmptyState` box. A panel that already has a title and a frame does not need a
         second frame drawn inside it to say it is empty.
       */}
-      {!loading && !error && !queue.length ? (
-        <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
-          <span className="mb-1 block font-semibold text-[var(--md-ink)]">
-            {result?.lastPage ? 'Nothing waiting' : 'More orders to check'}
-          </span>
-          {result?.lastPage
-            ? 'No open orders are due in this window. New orders appear here as they arrive.'
-            : 'No open orders appear on this page. Check the remaining orders before finishing for the day.'}
-        </p>
-      ) : null}
-
-      {!loading && !error && queue.length ? (
-        <OrderLedger
-          orders={queue}
-          todayIso={todayIso}
-          caption="Open orders due in this window, soonest first"
-        />
+      {!firstLoad && !error && result ? (
+        <div
+          aria-busy={refetching || undefined}
+          className={cn('transition-opacity motion-reduce:transition-none', refetching && 'opacity-60')}
+        >
+          {!queue.length ? (
+            <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+              <span className="mb-1 block font-semibold text-[var(--md-ink)]">
+                {result.lastPage ? 'Nothing waiting' : 'More orders to check'}
+              </span>
+              {result.lastPage
+                ? 'No open orders are due in this window. New orders appear here as they arrive.'
+                : 'No open orders appear on this page. Check the remaining orders before finishing for the day.'}
+            </p>
+          ) : (
+            <OrderLedger
+              orders={queue}
+              todayIso={todayIso}
+              caption="Open orders due in this window, soonest first"
+            />
+          )}
+        </div>
       ) : null}
 
       {result && result.totalPages > 1 ? (

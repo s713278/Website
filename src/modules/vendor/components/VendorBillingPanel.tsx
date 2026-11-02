@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { billingFailure, getErrorMessage, type BillingCheckoutAttempt, type SimulatedCancellationStep, type SimulatedRenewalStep, type VendorBillingService, type VendorBillingStatus } from '@/shared/api'
-import { Badge, Button, Card, Spinner } from '@/shared/components/ui'
+import { PlanSkeleton } from '@/modules/vendor/components/PlanSkeleton'
+import { Badge, Button, Card } from '@/shared/components/ui'
 import { CheckoutBeforeOpenError, openSubscriptionCheckout } from '@/shared/payments/razorpay-checkout'
 
 function displayDate(value: string): string {
@@ -56,6 +57,8 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** `busy` is shared by every action and by automatic refreshes; `pressed` names the button that started it. */
+  const [pressed, setPressed] = useState<string | null>(null)
   const [pendingAttempt, setPendingAttempt] = useState<BillingCheckoutAttempt | null>(null)
   const [lastAttempt, setLastAttempt] = useState<BillingCheckoutAttempt | null>(null)
   const [simulatedPending, setSimulatedPending] = useState(false)
@@ -116,6 +119,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
     setAwaitingStatus(false)
     setRetryUntil(0)
     setConfirmingCancel(false)
+    setPressed(null)
     logicalPreparation.current = null
     logicalCancellation.current = null
     const claim = readClaim.current
@@ -146,6 +150,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
       if (!signal.aborted) {
         inFlight.current = false
         setBusy(false)
+        setPressed(null)
         if (queuedBoundaryRefresh.current) {
           queuedBoundaryRefresh.current = false
           queueMicrotask(() => { void refresh() })
@@ -158,6 +163,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
     if (signal.aborted) return
     inFlight.current = false
     setBusy(false)
+    setPressed(null)
     if (queuedBoundaryRefresh.current) {
       queuedBoundaryRefresh.current = false
       queueMicrotask(() => { void refresh() })
@@ -325,12 +331,14 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
     if (!signal || signal.aborted || inFlight.current || !attempt || stale || !status?.availableActions.includes(attempt.action)) return
     if (scheduleChanged(attempt, status)) {
       setRetryAttempt(null)
+      setPressed(null)
       setPendingAttempt(attempt)
       setMessage('The displayed schedule changed. Review this prepared attempt again before Checkout.')
       return
     }
     if (Date.parse(attempt.expiresAt) <= Date.now()) {
       setRetryAttempt(null)
+      setPressed(null)
       logicalPreparation.current = null
       setStale(true)
       setAwaitingStatus(true)
@@ -423,8 +431,8 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
   }
 
   if (!status) {
-    return error ? <Card className="p-6"><p role="alert">Billing unavailable: {error}</p><Button className="mt-3" onClick={refresh} disabled={busy || retryUntil > Date.now()}>Refresh billing status</Button></Card>
-      : <Spinner label="Loading billing status…" />
+    return error ? <Card className="p-6"><p role="alert">Billing unavailable: {error}</p><Button className="mt-3" onClick={() => { setPressed('refresh'); void refresh() }} disabled={busy || retryUntil > Date.now()} pending={busy && pressed === 'refresh'}>Refresh billing status</Button></Card>
+      : <PlanSkeleton label="Loading billing status…" />
   }
 
   const trialActive = status.trial.status === 'active'
@@ -510,7 +518,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
             : <>{status.authorisation.status === 'failed' ? 'Pay Now retries the failed AutoPay setup during your existing trial.'
               : status.authorisation.status === 'revoked' ? 'Pay Now sets up AutoPay again during your existing trial; it does not start a new trial.'
                 : 'Pay Now sets up AutoPay during your existing trial.'} The first monthly platform fee is scheduled for {status.trial.endsAt ? displayDate(status.trial.endsAt) : 'the end of your confirmed coverage'}; all remaining trial days stay yours.</>}</p>
-          <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} onClick={() => prepare('setup_autopay')}>Pay Now</Button>
+          <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} pending={busy && pressed === 'setup_autopay'} onClick={() => { setPressed('setup_autopay'); void prepare('setup_autopay') }}>Pay Now</Button>
         </div> : null}
         {canPayFirstFee ? <div className="grid gap-3 border-t pt-5">
           <p className="text-sm">{status.membership.paidThrough
@@ -518,7 +526,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
             : status.membership.paymentStatus === 'failed'
               ? `Pay Now retries the failed first ${displayMoney(status.plan.amountMinor)} platform fee. It is collected now; paid access begins only after that fee is confirmed.`
               : `Pay Now starts an immediate subscription. The first ${displayMoney(status.plan.amountMinor)} platform fee is collected now; paid access begins only after that fee is confirmed.`}</p>
-          <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} onClick={() => prepare('pay_first_fee')}>Pay Now</Button>
+          <Button className="w-fit" disabled={busy || stale || !!pendingAttempt || !!retryAttempt || awaitingStatus || retryUntil > Date.now()} pending={busy && pressed === 'pay_first_fee'} onClick={() => { setPressed('pay_first_fee'); void prepare('pay_first_fee') }}>Pay Now</Button>
         </div> : null}
         {canCancel ? <div className="grid gap-3 border-t pt-5">
           {confirmingCancel ? <div role="group" aria-label="Confirm cancellation" className="grid gap-2 rounded-lg border p-4 text-sm">
@@ -530,7 +538,7 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
               ? `To rejoin, set up billing again with Pay Now before ${displayDate(retained.at)}; the next fee is scheduled for that same date, with no new trial and no duplicate fee.`
               : 'To rejoin, set up billing again with Pay Now.'}</p>
             <div className="flex flex-wrap gap-2">
-              <Button className="w-fit" variant="danger" disabled={mutationsBlocked} onClick={confirmCancellation}>Confirm cancellation</Button>
+              <Button className="w-fit" variant="danger" disabled={mutationsBlocked} pending={busy && pressed === 'cancel'} onClick={() => { setPressed('cancel'); void confirmCancellation() }}>Confirm cancellation</Button>
               <Button className="w-fit" variant="ghost" disabled={busy} onClick={() => setConfirmingCancel(false)}>Keep AutoPay</Button>
             </div>
           </div> : <Button className="w-fit" variant="outline" disabled={mutationsBlocked} onClick={() => setConfirmingCancel(true)}>Cancel AutoPay</Button>}
@@ -540,20 +548,20 @@ export function VendorBillingPanel({ service, vendorId }: { service: VendorBilli
           <p>Displayed platform fee: {displayMoney(status.plan.amountMinor)} {status.plan.currency}; prepared platform fee: {displayMoney(pendingAttempt.expected.amountMinor)} {pendingAttempt.expected.currency}.</p>
           <p>Displayed first fee: {pendingAttempt.action === 'pay_first_fee' ? 'collected now' : status.trial.status === 'active' && status.trial.endsAt ? displayDate(status.trial.endsAt) : status.membership.paidThrough ? displayDate(status.membership.paidThrough) : 'collected now'}.</p>
           <p>Prepared first fee: {pendingAttempt.expected.chargeAt ? displayDate(pendingAttempt.expected.chargeAt) : 'collected now'}.</p>
-          <Button className="w-fit" disabled={busy || stale} onClick={confirmSchedule}>Confirm updated schedule</Button>
+          <Button className="w-fit" disabled={busy || stale} pending={busy && pressed === 'schedule'} onClick={() => { setPressed('schedule'); void confirmSchedule() }}>Confirm updated schedule</Button>
           <Button className="w-fit" variant="ghost" disabled={busy} onClick={() => { setPendingAttempt(null); setAwaitingStatus(true); setMessage('Checkout was not opened. Refresh billing status before choosing another action.') }}>Keep current status</Button>
         </div> : null}
-        {retryAttempt ? <Button className="w-fit" variant="outline" disabled={busy || stale || retryUntil > Date.now()} onClick={retryCheckout}>Retry prepared Checkout</Button> : null}
+        {retryAttempt ? <Button className="w-fit" variant="outline" disabled={busy || stale || retryUntil > Date.now()} pending={busy && pressed === 'retry'} onClick={() => { setPressed('retry'); void retryCheckout() }}>Retry prepared Checkout</Button> : null}
         {paymentPending ? <p className="text-sm font-medium">{retained ? 'Confirmation is pending. Your current trial or confirmed paid boundary still applies.' : 'Confirmation is pending. Access stays limited until the fee is confirmed; there is no grace period.'}</p> : null}
         {simulatedSteps.length ? <div className="flex flex-wrap gap-2">{simulatedSteps.map((step) => (
-          <Button key={step} className="w-fit" variant="outline" disabled={busy || stale} onClick={() => simulateCancellation(step)}>{SIMULATED_STEP_LABELS[step]}</Button>
+          <Button key={step} className="w-fit" variant="outline" disabled={busy || stale} pending={busy && pressed === step} onClick={() => { setPressed(step); void simulateCancellation(step) }}>{SIMULATED_STEP_LABELS[step]}</Button>
         ))}</div> : null}
         {renewalSteps.length ? <div className="flex flex-wrap gap-2">{renewalSteps.map((step) => (
-          <Button key={step} className="w-fit" variant="outline" disabled={busy || stale} onClick={() => simulateRenewal(step)}>{SIMULATED_RENEWAL_LABELS[step]}</Button>
+          <Button key={step} className="w-fit" variant="outline" disabled={busy || stale} pending={busy && pressed === step} onClick={() => { setPressed(step); void simulateRenewal(step) }}>{SIMULATED_RENEWAL_LABELS[step]}</Button>
         ))}</div> : null}
-        {simulatedPending && service.reconcileSimulatedCheckout ? <div className="flex gap-2"><Button className="w-fit" variant="outline" disabled={busy || stale} onClick={() => reconcileSimulated()}>Simulate confirmation</Button><Button className="w-fit" variant="outline" disabled={busy || stale} onClick={() => reconcileSimulated('failed')}>Simulate failure</Button></div> : null}
+        {simulatedPending && service.reconcileSimulatedCheckout ? <div className="flex gap-2"><Button className="w-fit" variant="outline" disabled={busy || stale} pending={busy && pressed === 'reconcile_confirmed'} onClick={() => { setPressed('reconcile_confirmed'); void reconcileSimulated() }}>Simulate confirmation</Button><Button className="w-fit" variant="outline" disabled={busy || stale} pending={busy && pressed === 'reconcile_failed'} onClick={() => { setPressed('reconcile_failed'); void reconcileSimulated('failed') }}>Simulate failure</Button></div> : null}
         <div className="flex items-center gap-3 border-t pt-4">
-          <Button variant="ghost" onClick={refresh} disabled={busy || retryUntil > Date.now()}>Refresh billing status</Button>
+          <Button variant="ghost" onClick={() => { setPressed('refresh'); void refresh() }} disabled={busy || retryUntil > Date.now()} pending={busy && pressed === 'refresh'}>Refresh billing status</Button>
           {busy ? <span role="status" className="text-sm text-muted-foreground">Checkout or confirmation in progress…</span> : null}
         </div>
       </Card>

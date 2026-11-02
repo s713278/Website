@@ -4,6 +4,7 @@ import { isBriefOutage, pause, retryDelays } from '@/modules/vendor/lib/live-bil
 import { liveBillingWording, livePaymentFailed, type LiveCheckoutPurpose } from '@/modules/vendor/lib/live-billing-wording'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { LivePaymentsYouMade } from '@/modules/vendor/components/LivePaymentsYouMade'
+import { PlanSkeleton } from '@/modules/vendor/components/PlanSkeleton'
 import { cancelLiveBilling, clearLiveBillingPaymentFailed, holdLiveBilling, readLiveBilling, useLiveBilling } from '@/modules/vendor/store/live-billing'
 import { getErrorMessage, isApiError, liveBillingService, mapLiveCheckout, type LiveBillingView } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -69,6 +70,8 @@ export function LiveVendorPlan() {
   const polling = pollWindowOpen && hold !== null
   /** Successful `confirm` calls: each one rereads the history. A cancel's response is a new view, which does too. */
   const [confirmed, setConfirmed] = useState(0)
+  /** Which reread button the vendor pressed; the poll's own reads leave it unset. */
+  const [rereading, setRereading] = useState<'try' | 'check' | null>(null)
 
   // The shared read drops a response for a previous vendor or session, so there is nothing to cancel here.
   useEffect(() => {
@@ -78,6 +81,7 @@ export function LiveVendorPlan() {
     setActionError(null)
     setConfirmStop(false)
     setPollWindowOpen(false)
+    setRereading(null)
     void readLiveBilling(vendorId)
     return () => { current.controller.abort() }
   }, [vendorId, sessionUser])
@@ -169,12 +173,17 @@ export function LiveVendorPlan() {
     }
   }
 
+  function reread(button: 'try' | 'check') {
+    setRereading(button)
+    void readLiveBilling(vendorId).finally(() => setRereading(null))
+  }
+
   // A failed reread keeps the last view on screen, under this line.
   const readAlert = errorMessage ? <div className="grid gap-2 text-sm">
     <p role="alert" className="text-destructive">{errorMessage}</p>
-    <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Try again</Button>
+    <Button className="w-fit" variant="outline" size="sm" disabled={reading} pending={rereading === 'try'} onClick={() => reread('try')}>Try again</Button>
   </div> : null
-  if (!view) return readAlert ?? <p role="status">Reading shop plan…</p>
+  if (!view) return readAlert ?? <PlanSkeleton label="Reading shop plan…" />
 
   const { card, note, confirming, stopConfirmation, stopNote, checkout: purpose } = liveBillingWording(view)
   const alertLine = (message: string | null) => message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null
@@ -186,7 +195,7 @@ export function LiveVendorPlan() {
       <StateCard card={card}>
         {card.action && purpose ? <div className="grid gap-1">
           {/* TEMP(vendor-billing-reads): see docs/VENDOR_BILLING_READS_TARGET.md. Plan rereads on open, and no server guarantee against a second subscribe is known, so Checkout waits for the read. */}
-          <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null || reading} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
+          <Button size="lg" fullWidth className="rounded-full" disabled={acting || hold !== null || reading} pending={acting && !confirmStop} onClick={() => void checkout(purpose, view)}>{card.action.label}</Button>
           {/* A payment the read reports failed outranks what Plan saw while it waited, such as a confirm failure. */}
           {alertLine(paymentFailed ? livePaymentFailed : actionError)}
         </div> : null}
@@ -194,7 +203,7 @@ export function LiveVendorPlan() {
       {/* While a payment confirms, the shared read shows a Confirming view: no payment action, and Check again only rereads the shared read. A confirm failure shows here. */}
       {confirming ? <div className="grid gap-2 text-sm">
         <p role="status">{confirming}</p>
-        <Button className="w-fit" variant="outline" size="sm" disabled={reading} onClick={() => void readLiveBilling(vendorId)}>Check again</Button>
+        <Button className="w-fit" variant="outline" size="sm" disabled={reading} pending={rereading === 'check'} onClick={() => reread('check')}>Check again</Button>
         {actionAlert}
       </div> : null}
       <Section title="What you get">
@@ -211,7 +220,7 @@ export function LiveVendorPlan() {
         {confirmStop ? <>
           <p className="text-sm">{stopConfirmation}</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="danger" className="w-fit rounded-full" disabled={acting} onClick={() => void stopPlan()}>Yes, stop the plan</Button>
+            <Button variant="danger" className="w-fit rounded-full" disabled={acting} pending={acting} onClick={() => void stopPlan()}>Yes, stop the plan</Button>
             <Button variant="outline" className="w-fit rounded-full" disabled={acting} onClick={() => setConfirmStop(false)}>Keep the plan</Button>
           </div>
         </> : <>
