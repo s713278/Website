@@ -93,6 +93,23 @@ afterEach(() => {
 })
 
 describe('VendorLoginPage', () => {
+  it('marks Send OTP and Verify busy while their requests run, keeping their labels', async () => {
+    const sent = deferred<never>()
+    vi.spyOn(authService, 'requestOtp').mockReturnValue(sent.promise)
+    vi.spyOn(authService, 'verifyOtp').mockReturnValue(neverSettles())
+
+    renderAt('/vendor/login')
+    fireEvent.change(screen.getByLabelText(/WhatsApp number/), { target: { value: '9000000000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send OTP' }))
+    expect(screen.getByRole('button', { name: 'Sending OTP…' }).getAttribute('aria-busy')).toBe('true')
+
+    await act(async () => sent.resolve({ success: true, status: 200, data: {} } as never))
+    fireEvent.change(await screen.findByLabelText('4-digit OTP'), { target: { value: '1234' } })
+    expect(screen.getByRole('button', { name: /Resend OTP/ }).hasAttribute('aria-busy')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Verify & continue' }))
+    expect(screen.getByRole('button', { name: 'Verifying…' }).getAttribute('aria-busy')).toBe('true')
+  })
+
   it('starts only the landing step’s reads for a sign-in headed into setup, without awaiting them', async () => {
     const context = deferred<VendorContext>()
     const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(context.promise)

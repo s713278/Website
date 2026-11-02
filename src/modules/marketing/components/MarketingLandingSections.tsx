@@ -24,7 +24,9 @@ import {
   X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button, ShadcnInput } from '@/shared/components'
+import { LoadError } from '@/shared/components/LoadError'
 import {
   catalogService,
   getErrorMessage,
@@ -391,6 +393,23 @@ function LandingStoreCard({ store }: { store: LandingStore }) {
         </div>
       </article>
     </Link>
+  )
+}
+
+/** Same outline and height as a loaded `LandingStoreCard`, so the row does not move when stores arrive. */
+function LandingStoreCardSkeleton() {
+  return (
+    <div className="flex w-[84%] min-w-0 shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:w-auto sm:shrink">
+      <Skeleton className="h-40 w-full rounded-none" />
+      <div className="flex flex-1 flex-col p-5">
+        <Skeleton className="h-6 w-3/5" />
+        <Skeleton className="mt-2 h-5 w-2/5" />
+        <Skeleton className="mt-3 h-5 w-1/2" />
+        <div className="mt-auto pt-5">
+          <Skeleton className="h-5 w-24" />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -838,22 +857,15 @@ export function ExploreStoresSection() {
         </div>
 
         {storesLoading ? (
-          <div role="status" className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-medium text-slate-600">
-            Loading stores for this delivery location…
+          <div aria-busy="true" className="-mx-(--marketing-gutter) mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-(--marketing-gutter) pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+            <span role="status" className="sr-only">Loading stores</span>
+            {Array.from({ length: 3 }, (_, index) => (
+              <LandingStoreCardSkeleton key={index} />
+            ))}
           </div>
         ) : null}
         {!storesLoading && storesError ? (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-8 text-center">
-            <h4 className="font-display text-lg font-bold text-slate-950">Stores could not be loaded</h4>
-            <p role="alert" className="mt-2 text-sm text-rose-700">{storesError}</p>
-            <Button
-              type="button"
-              onClick={() => setRetryKey((key) => key + 1)}
-              className="mt-4 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
-            >
-              Retry store search
-            </Button>
-          </div>
+          <LoadError className="mt-4" onRetry={() => setRetryKey((key) => key + 1)} />
         ) : null}
         {!storesLoading && !storesError && location && stores.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center">
