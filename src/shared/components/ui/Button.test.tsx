@@ -22,12 +22,9 @@ describe('Button pending', () => {
     expect(button.querySelector('[role="status"]')).toBeNull()
   })
 
-  it('shows a decorative spinner only after the delay', () => {
+  it('shows a decorative spinner at once', () => {
     render(<Button pending>Save</Button>)
     const button = screen.getByRole('button', { name: 'Save' })
-    expect(button.querySelector('svg')).toBeNull()
-
-    act(() => vi.advanceTimersByTime(300))
 
     const icon = button.querySelector('svg')
     expect(icon).not.toBeNull()
@@ -35,6 +32,7 @@ describe('Button pending', () => {
     expect(icon!.getAttribute('role')).toBeNull()
     expect(icon!.getAttribute('class')).toContain('motion-reduce:animate-none')
     expect(screen.getByRole('button', { name: 'Save' })).toBe(button)
+    expect(button.textContent).toBe('Save')
     expect(button.querySelector('[role="status"]')).toBeNull()
   })
 

@@ -31,7 +31,7 @@ type ButtonProps = Omit<ComponentProps<typeof ShadButton>, 'variant' | 'size'> &
   variant?: AppButtonVariant
   size?: AppButtonSize
   fullWidth?: boolean
-  /** Disables the button, marks it busy and adds a delayed spinner before the label. Not for `asChild`. */
+  /** Disables the button, marks it busy and adds a spinner before the label at once. Not for `asChild`. */
   pending?: boolean
 }
 
@@ -64,8 +64,6 @@ export function Button({
 
 /** Decorative only: a status role inside a button would join the button's accessible name. */
 function PendingIcon() {
-  const visible = useShowAfterDelay()
-  if (!visible) return null
   return (
     <ShadSpinner
       role={undefined}

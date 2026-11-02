@@ -39,8 +39,8 @@ design reference.
 
 - No visible loader text. Each loading region has one `role="status"` with a screen-reader label;
   skeleton blocks are `aria-hidden`.
-- `PageLoader` and `Spinner` appear after about 300 ms; skeletons appear at once. No minimum display
-  time.
+- `PageLoader` and `Spinner` appear after about 300 ms; skeletons and a button's pending spinner
+  appear at once. No minimum display time.
 - Under reduced motion, loaders and skeletons are static.
 - A skeleton replaces only the region that is loading; `PageLoader` fills the whole content area.
 - A refetch (filter or page change, reload after an action) keeps the current results on screen,
