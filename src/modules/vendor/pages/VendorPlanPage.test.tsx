@@ -71,15 +71,18 @@ describe('VendorPlanPage', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       requests.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null })
       if (url.endsWith('/scenario')) subscription = liveStoppedSubscription()
-      const data = url.endsWith('/subscription-plans') ? livePlans : url.endsWith('/history') ? [] : url.endsWith('/scenario') ? {} : subscription
+      const data = url.endsWith('/subscription-plans') ? livePlans : url.endsWith('/history') ? [] : url.endsWith('/scenario') ? {}
+        : url.endsWith('/simulation') ? { outcome: 'real', delay_ms: 5000 } : subscription
       return { ok: true, status: 200, json: async () => ({ success: true, status: 200, data }) }
     }))
     show(accountFor(context('trial_active')))
     expect(await screen.findByText('13')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' })).toBeTruthy()
     const chips = within((await screen.findByText('Local Razorpay Test: choose a billing scenario')).parentElement!)
+    await chips.findByRole('button', { name: 'Real Test Checkout' })
     expect(chips.getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Free days', '3 days left', 'Free days end in 5 min', 'Free days over', 'Paid', 'Stopped', 'AutoPay off', 'Paid days over', 'Renewal retrying', 'Payment failed',
+      'Real Test Checkout', 'Stay pending', 'Succeed in 5 s', 'Fail in 5 s', 'Deliver now: success', 'Deliver now: failure',
     ])
     for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
     expect(screen.queryByText('Simulated billing')).toBeNull()
