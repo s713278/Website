@@ -71,15 +71,18 @@ describe('VendorPlanPage', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       requests.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null })
       if (url.endsWith('/scenario')) subscription = liveStoppedSubscription()
-      const data = url.endsWith('/subscription-plans') ? livePlans : url.endsWith('/history') ? [] : url.endsWith('/scenario') ? {} : subscription
+      const data = url.endsWith('/subscription-plans') ? livePlans : url.endsWith('/history') ? [] : url.endsWith('/scenario') ? {}
+        : url.endsWith('/simulation') ? { outcome: 'real', delay_ms: 5000 } : subscription
       return { ok: true, status: 200, json: async () => ({ success: true, status: 200, data }) }
     }))
     show(accountFor(context('trial_active')))
     expect(await screen.findByText('13')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Pay ₹399 with Razorpay' })).toBeTruthy()
     const chips = within((await screen.findByText('Local Razorpay Test: choose a billing scenario')).parentElement!)
+    await chips.findByRole('button', { name: 'Real Test Checkout' })
     expect(chips.getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Free days', '3 days left', 'Free days end in 5 min', 'Free days over', 'Paid', 'Stopped', 'AutoPay off', 'Paid days over', 'Renewal retrying', 'Payment failed',
+      'Real Test Checkout', 'Stay pending', 'Succeed in 5 s', 'Fail in 5 s', 'Deliver now: success', 'Deliver now: failure',
     ])
     for (const name of removedControls) expect(screen.queryByRole('button', { name })).toBeNull()
     expect(screen.queryByText('Simulated billing')).toBeNull()
@@ -473,6 +476,23 @@ describe('VendorPlanPage', () => {
         expect(cancel).toHaveBeenCalledOnce()
       })
 
+      it('marks only Yes, stop the plan busy while the cancel call runs', async () => {
+        vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
+        stubReads(async () => paid())
+        let fail!: (error: unknown) => void
+        vi.spyOn(liveBillingService, 'cancel').mockReturnValue(new Promise((_, reject) => { fail = reject }))
+        show(accountFor(context('trial_active', 'vendor-1')))
+        fireEvent.click(await screen.findByRole('button', { name: 'Stop the plan' }))
+        expect(screen.getByRole('button', { name: 'Yes, stop the plan' }).hasAttribute('aria-busy')).toBe(false)
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the plan' }))
+        expect(screen.getByRole('button', { name: 'Yes, stop the plan' }).getAttribute('aria-busy')).toBe('true')
+        expect(screen.getByRole('button', { name: 'Keep the plan' }).hasAttribute('aria-busy')).toBe(false)
+        await act(async () => { fail(new ApiError('Subscription is not active.', 409, null, '/v1/vendors/vendor-1/subscription/cancel', 'client')) })
+        expect((await screen.findByRole('alert')).textContent).toBe('Subscription is not active.')
+        expect(screen.getByRole('button', { name: 'Yes, stop the plan' }).hasAttribute('aria-busy')).toBe(false)
+        expect(screen.getByRole('button', { name: 'Keep the plan' }).hasAttribute('aria-busy')).toBe(false)
+      })
+
       it('makes one call for a double click on Yes, stop the plan', async () => {
         vi.setSystemTime(new Date('2026-10-22T18:30:00Z'))
         stubReads(async () => paid())
@@ -703,6 +723,61 @@ describe('VendorPlanPage', () => {
         await wait(90_000)
         expect(reads.readSubscription).toHaveBeenCalledTimes(5)
         expect(screen.queryByRole('alert')).toBeNull()
+      })
+
+      it('marks only the pressed button busy: Pay while it subscribes, Try again and Check again while their own reread runs, and neither during a poll', async () => {
+        const reads = stubReads(async () => trial())
+        const response = deferred<unknown>()
+        vi.spyOn(liveBillingService, 'subscribe').mockReturnValue(response.promise)
+        open().mockResolvedValue(submitted())
+        confirm().mockResolvedValue(null)
+        show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(button().hasAttribute('aria-busy')).toBe(false)
+        fireEvent.click(button())
+        await wait()
+        expect(button().getAttribute('aria-busy')).toBe('true')
+        await act(async () => { response.resolve(liveSubscribeResponse()) })
+        await wait()
+        const checkAgain = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Check again' })
+        const tryAgain = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Try again' })
+        expect(checkAgain().hasAttribute('aria-busy')).toBe(false)
+
+        // A poll that fails shows Try again; the next poll in flight marks neither button busy.
+        const refused = () => new ApiError('Bad request', 400, null, '/v1/vendors/vendor-1/subscription', 'client')
+        reads.readSubscription.mockRejectedValueOnce(refused())
+        await wait(5_000)
+        expect(screen.getByRole('alert').textContent).toBe('Bad request')
+        let failPoll!: (error: unknown) => void
+        reads.readSubscription.mockReturnValueOnce(new Promise((_, reject) => { failPoll = reject }))
+        await wait(5_000)
+        expect(reads.readSubscription).toHaveBeenCalledTimes(3)
+        expect(checkAgain().disabled).toBe(true)
+        expect(tryAgain().disabled).toBe(true)
+        expect(checkAgain().hasAttribute('aria-busy')).toBe(false)
+        expect(tryAgain().hasAttribute('aria-busy')).toBe(false)
+        await act(async () => { failPoll(refused()) })
+        await wait()
+        expect(screen.getByRole('alert').textContent).toBe('Bad request')
+
+        let poll = deferred<LiveSubscriptionRead>()
+        reads.readSubscription.mockReturnValueOnce(poll.promise)
+        fireEvent.click(tryAgain())
+        await wait()
+        expect(tryAgain().getAttribute('aria-busy')).toBe('true')
+        expect(checkAgain().hasAttribute('aria-busy')).toBe(false)
+        await act(async () => { poll.resolve(trial()) })
+        await wait()
+        expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+
+        poll = deferred<LiveSubscriptionRead>()
+        reads.readSubscription.mockReturnValueOnce(poll.promise)
+        fireEvent.click(checkAgain())
+        await wait()
+        expect(checkAgain().getAttribute('aria-busy')).toBe('true')
+        await act(async () => { poll.resolve(trial()) })
+        await wait()
+        expect(checkAgain().hasAttribute('aria-busy')).toBe(false)
       })
 
       /** Shows Plan, presses Pay ₹399 with Razorpay and lets Checkout submit, leaving Plan polling. */
@@ -1549,6 +1624,15 @@ describe('VendorPlanPage', () => {
       const unavailable = () => readFailure(503, 'server')
       const offline = () => readFailure(0, 'network', 'You appear to be offline. Check your connection and try again.')
       const notResponding = 'MithraDirect isn’t responding. Try again in a minute.'
+
+      it('shows the plan skeleton under one status while the first read runs, not the logo loader', async () => {
+        stubReads(() => new Promise(() => {}))
+        const view = show(accountFor(context('trial_active', 'vendor-1')))
+        await wait()
+        expect(screen.getByRole('status', { name: 'Reading shop plan…' }).textContent).toBe('Reading shop plan…')
+        expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull()
+        expect(view.container.querySelector('[data-slot="page-loader"]')).toBeNull()
+      })
 
       it('retries a read quietly 5, 15 and 30 s apart on 502, 503 and network failures, then says MithraDirect isn’t responding; Try again rereads', async () => {
         const reads = stubReads(async () => trial())

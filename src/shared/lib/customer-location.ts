@@ -56,9 +56,19 @@ export function homeQuery(location: CustomerLocation) {
   }
 }
 
-export function requestBrowserCoords(): Promise<{ latitude: number; longitude: number }> {
+const LOCATION_UNAVAILABLE = 'Could not access location. Allow location or enter a PIN / city.'
+const LOCATION_BLOCKED = 'Location is blocked for this site. Allow location, or enter a PIN / city.'
+const PERMISSION_DENIED = 1
+
+function geolocationCode(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null
+  const code = (error as { code: unknown }).code
+  return typeof code === 'number' ? code : null
+}
+
+function readGpsCoords(): Promise<{ latitude: number; longitude: number }> {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       reject(new Error('Location is not supported in this browser.'))
       return
     }
@@ -68,10 +78,36 @@ export function requestBrowserCoords(): Promise<{ latitude: number; longitude: n
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
         }),
-      () => reject(new Error('Could not access location. Allow location or enter a PIN / city.')),
+      (error) => reject(error),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
     )
   })
+}
+
+async function readIpCoords(): Promise<{ latitude: number; longitude: number }> {
+  const res = await fetch(
+    'https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en',
+  )
+  if (!res.ok) throw new Error(LOCATION_UNAVAILABLE)
+  const data = (await res.json()) as { latitude?: unknown; longitude?: unknown }
+  if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') {
+    throw new Error(LOCATION_UNAVAILABLE)
+  }
+  return { latitude: data.latitude, longitude: data.longitude }
+}
+
+export async function requestBrowserCoords(): Promise<{ latitude: number; longitude: number }> {
+  try {
+    return await readGpsCoords()
+  } catch (error) {
+    if (geolocationCode(error) === PERMISSION_DENIED) throw new Error(LOCATION_BLOCKED)
+    try {
+      return await readIpCoords()
+    } catch (ipError) {
+      if (ipError instanceof Error && ipError.message === LOCATION_UNAVAILABLE) throw ipError
+      throw error instanceof Error ? error : new Error(LOCATION_UNAVAILABLE)
+    }
+  }
 }
 
 type ReversePayload = {

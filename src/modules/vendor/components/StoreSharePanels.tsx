@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { Link } from 'react-router-dom'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
-import { Button } from '@/shared/components'
+import { Button, Skeleton } from '@/shared/components'
 import { readableUrl, storefrontUrl } from '@/shared/lib/store-link'
 
 /**
@@ -140,8 +140,15 @@ function ShopQrPanel({ identifier, storeName }: { identifier: string; storeName:
               alt={`QR code linking to ${storeName}`}
               className="size-full object-contain p-2"
             />
+          ) : error ? (
+            <span className="vc-label">No code</span>
           ) : (
-            <span className="vc-label">{error ? 'No code' : 'Drawing…'}</span>
+            <>
+              <span role="status" aria-label="Drawing QR code" className="sr-only">
+                Drawing QR code
+              </span>
+              <Skeleton className="size-full rounded-none" />
+            </>
           )}
         </div>
 

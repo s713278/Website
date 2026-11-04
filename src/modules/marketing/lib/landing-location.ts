@@ -1,5 +1,6 @@
 import {
   getSavedLocation,
+  requestBrowserCoords,
   saveLocation,
   type CustomerLocation,
 } from '@/shared/lib/customer-location'
@@ -370,32 +371,8 @@ export async function createLandingLocationSearch(): Promise<LandingLocationSear
   }
 }
 
-function browserCoordinates(): Promise<Coordinates> {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(
-        new Error(
-          'Location is not supported in this browser. Search for your delivery location instead.',
-        ),
-      )
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude }),
-      () =>
-        reject(
-          new Error(
-            'Location permission was not available. Allow location access or search for your delivery location.',
-          ),
-        ),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
-    )
-  })
-}
-
 export async function detectLandingLocation(): Promise<CustomerLocation> {
-  const coordinates = await browserCoordinates()
+  const coordinates = await requestBrowserCoords()
   const feature = await reversePhoton(coordinates, 'reverse-geocode')
   return toCustomerLocation(featureBoundary(feature, 'reverse-geocode', coordinates))
 }

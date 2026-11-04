@@ -3,8 +3,12 @@
 > **Frozen, demo only.** Since 29 September 2026 demo mode, this preview, the six-state prototype
 > and the local test server are frozen with the trial AutoPay flow described below (Set up AutoPay,
 > Turn off AutoPay, a ₹5 authorisation, a future-start Keep shop open). The Live API follows the
-> [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) instead: paying during the trial charges ₹299 at once. Nothing here describes Live API
+> [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) instead: paying during the trial charges ₹399 at once. Nothing here describes Live API
 > behavior.
+>
+> **Price.** The plan is ₹399 a month since the
+> [7 October 2026 decision](./VENDOR_BILLING_DECISIONS.md#platform-fee-399--7-october-2026), and the
+> mock dataset uses ₹399. The dated evidence below keeps the ₹299 charged at the time.
 
 The development route demonstrates the [hybrid trial](./VENDOR_BILLING_DECISIONS.md) as approved
 on 19–24 September 2026, with the [mock dataset](./VENDOR_BILLING_MOCK_DATASET.md)'s
@@ -31,20 +35,20 @@ Since 24 September, demo Plan in development no longer offers **Show a sample bi
 Paid, Payment failed, Stopped, Shop closed). Its chips are seeded through the local helper under
 its own vendor key, and choosing a chip runs the guarded reset before selecting. In Free days and
 3 days left, **Set up AutoPay** opens hosted Test Checkout for a future-start subscription at the
-trial end (demo only; the Live API charges ₹299 now instead). Only after helper verification and a provider read does Plan show AutoPay on; the
+trial end (demo only; the Live API charges ₹399 now instead). Only after helper verification and a provider read does Plan show AutoPay on; the
 state and free days stay unchanged. **Turn off AutoPay** cancels through the helper. In Payment
-failed and Shop closed, **Pay ₹299 with Razorpay** opens hosted Test Checkout for an immediate-start
+failed and Shop closed, **Pay ₹399 with Razorpay** opens hosted Test Checkout for an immediate-start
 subscription. Plan shows "Confirming payment…" until a provider read shows the fee captured. Then
 the helper moves the scenario to Paid, paid through the end of the provider's first invoice
-period, and adds a "Paid ₹299" history row. In Paid, **Stop the plan** asks once, then moves to
+period, and adds a "Paid ₹399" history row. In Paid, **Stop the plan** asks once, then moves to
 Stopped with the same paid-through date. The seeded sample stops locally. A real Test subscription
 is cancelled at cycle end, and Stopped then rests on the helper's record of Razorpay accepting
 that request, because provider reads cannot show a scheduled stop. In Stopped, **Keep shop open**
 first closes any stopped subscription and reads it back closed. It then opens hosted Test
 Checkout for a future-start subscription at the paid-through date. Once the provider read shows
-it authorised, the state returns to Paid with the same paid-through and the next ₹299 due then.
+it authorised, the state returns to Paid with the same paid-through and the next ₹399 due then.
 Every demo vendor page in development shows the current state's banner and a header button ("Pay
-₹299", "Keep open · ₹299" or "Shop plan"), Overview included. Both read the state Plan shows and
+₹399", "Keep open · ₹399" or "Shop plan"), Overview included. Both read the state Plan shows and
 only link to Plan, so Checkout opens nowhere else. They are messages only: the storefront and orders
 are not gated. The demo "store state" switcher and its fixture states are removed; the demo store
 is always approved and active. As of 24 September, Live API and production demo builds were
@@ -64,7 +68,7 @@ progress; the displayed cancellation and refund progress comes from fixtures. It
 demonstrate presentation only. The Live API's integration is separate and does not use the
 preview ([Live API billing](./API_ARCHITECTURE.md#vendor-platform-billing-live-api)).
 
-The biggest difference since 29 September 2026: the approved model is the [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) (₹299 at once during
+The biggest difference since 29 September 2026: the approved model is the [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026) (₹399 at once during
 the trial, for the month that starts at the trial end), while the preview and prototype keep the
 withdrawn AutoPay-only trial setup.
 

@@ -80,7 +80,7 @@ export function PhoneStep({ issues, busy, statusMessage, onContinue }: StepProps
             ? `We’ll send a ${OTP_LENGTH}-digit OTP to this number on WhatsApp.`
             : <>Demo mode: enter <strong className="font-semibold text-[var(--ob-ink)]">{DEMO_OTP}</strong> as the OTP.</>}
         </p>
-        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={busy}>
+        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" pending={busy}>
           {busy ? 'Sending OTP…' : 'Send OTP'}
         </Button>
       </form>
@@ -139,7 +139,7 @@ export function OtpStep({
             Demo mode: enter <strong className="font-semibold text-[var(--ob-ink)]">{DEMO_OTP}</strong> as the OTP.
           </p>
         )}
-        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={busy}>
+        <Button type="submit" size="lg" fullWidth className="mt-6 h-12 rounded-xl" disabled={busy} pending={busy && !resending}>
           {busy && !resending ? 'Verifying…' : 'Verify & continue'}
         </Button>
         <p className="mt-5 text-center text-sm text-[var(--ob-ink-soft)]">
@@ -148,6 +148,7 @@ export function OtpStep({
             type="button"
             className={`${linkClass} inline-flex min-h-11 items-center disabled:font-medium disabled:text-[var(--ob-ink-soft)] disabled:no-underline`}
             disabled={busy || seconds > 0}
+            aria-busy={resending || undefined}
             onClick={() => void resend()}
           >
             {seconds > 0 ? `Resend OTP in ${seconds}s` : resending ? 'Sending OTP…' : 'Resend OTP'}

@@ -6,7 +6,7 @@ import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import type { VendorStoreProfile } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, usesLiveBilling, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
-import { Button, Spinner } from '@/shared/components'
+import { Button, LoadError, Skeleton, Spinner } from '@/shared/components'
 
 /**
  * One detail, as term and value.
@@ -27,6 +27,17 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
+/** The store panel's one control. It needs no data, so it is there while the details load. */
+function EditSetupLink() {
+  return (
+    <Link to="/onboarding">
+      <Button size="sm" variant="outline" className="rounded-full">
+        Edit setup
+      </Button>
+    </Link>
+  )
+}
+
 /**
  * Store details, read-only.
  *
@@ -43,16 +54,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
  */
 function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; planName: ReactNode }) {
   return (
-    <DashboardPanel
-      title="Store settings"
-      action={
-        <Link to="/onboarding">
-          <Button size="sm" variant="outline" className="rounded-full">
-            Edit setup
-          </Button>
-        </Link>
-      }
-    >
+    <DashboardPanel title="Store settings" action={<EditSetupLink />}>
       <dl className="grid gap-2.5">
         <Row label="Store name" value={profile.businessName} />
         <Row label="What you sell" value={profile.businessType} />
@@ -75,6 +77,29 @@ function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; pla
   )
 }
 
+/** `StoreSettings` while its details load: the same frame, one placeholder pair per `Row`. */
+function StoreSettingsSkeleton() {
+  return (
+    <DashboardPanel title="Store settings" action={<EditSetupLink />}>
+      <span role="status" aria-label="Loading your details" className="sr-only">
+        Loading your details
+      </span>
+      <div className="grid gap-2.5">
+        {Array.from({ length: 9 }, (_, i) => (
+          <div
+            key={i}
+            className="grid gap-0.5 border-b border-[var(--vc-rule)] pb-2.5 last:border-0 last:pb-0 sm:grid-cols-[8rem_1fr] sm:gap-2"
+          >
+            <Skeleton className="h-[0.84rem] w-20 sm:mt-0.5" />
+            <Skeleton className="h-5 w-40 max-w-full" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="mt-4 h-4 w-72 max-w-full" />
+    </DashboardPanel>
+  )
+}
+
 /**
  * The live API's plan name, from the subscription read the console chrome shares: the vendor
  * context no longer carries the plan. "Not set" only once the read has landed without one.
@@ -83,7 +108,7 @@ function LivePlanName() {
   const { vendorId } = useVendorAccount()
   const { view, planName, error } = useStartedLiveBilling(vendorId)
   if (planName) return planName
-  return view || error ? 'Not set' : 'Loading…'
+  return view || error ? 'Not set' : <Spinner label="Loading plan name" className="align-middle" />
 }
 
 /**
@@ -135,10 +160,12 @@ export function VendorSettingsPage() {
   const [profile, setProfile] = useState<VendorStoreProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setError('')
 
     void vendorService
       .getStoreProfile(vendorId)
@@ -155,12 +182,12 @@ export function VendorSettingsPage() {
     return () => {
       cancelled = true
     }
-  }, [vendorId])
+  }, [vendorId, reloadToken])
 
   return (
     <div className="grid gap-4">
-      {error ? <p className="max-w-[68ch] text-sm text-[var(--md-danger)]">{error}</p> : null}
-      {loading ? <Spinner label="Loading your details…" /> : null}
+      {error ? <LoadError onRetry={() => setReloadToken((token) => token + 1)} /> : null}
+      {loading ? <StoreSettingsSkeleton /> : null}
 
       {!loading && profile ? (
         <StoreSettings profile={profile} planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />

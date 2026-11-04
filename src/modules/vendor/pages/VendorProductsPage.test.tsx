@@ -170,4 +170,60 @@ describe('VendorProductsPage', () => {
     expect(screen.getByText('No price record')).toBeTruthy()
     expect(screen.queryByText('Edit price')).toBeNull()
   })
+
+  it('keeps the panel header while the first read is in flight', () => {
+    vi.spyOn(vendorProductsService, 'listSizes').mockReturnValue(deferred<VendorSize[]>().promise)
+
+    renderFor('vendor-1')
+
+    expect(screen.getByText('Your catalog')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edit in setup' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Loading products' })).toBeTruthy()
+  })
+
+  it('says a failed first read failed, not that the catalog is empty', async () => {
+    vi.spyOn(vendorProductsService, 'listSizes').mockRejectedValue(new Error('Network down'))
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.queryByText('Nothing listed yet')).toBeNull()
+  })
+
+  it('keeps the list on screen, dimmed, while a price save re-reads it', async () => {
+    const reread = deferred<VendorSize[]>()
+    vi.spyOn(vendorProductsService, 'listSizes')
+      .mockResolvedValueOnce([size('Rice')])
+      .mockReturnValueOnce(reread.promise)
+    vi.spyOn(vendorProductsService, 'updatePrice').mockResolvedValue(undefined)
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Rice/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit price' }))
+    fireEvent.change(screen.getByLabelText('Selling price'), { target: { value: '80' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save price' }))
+      await Promise.resolve()
+    })
+
+    const kept = screen.getByRole('button', { name: /Rice/ })
+    expect(kept.closest('[aria-busy="true"]')).not.toBeNull()
+    expect(screen.getByRole('status', { name: 'Updating products' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Loading products' })).toBeNull()
+
+    await act(async () => {
+      reread.resolve([{ ...size('Rice'), salePrice: 80 }])
+      await Promise.resolve()
+    })
+
+    expect(screen.getAllByText('₹80').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Rice/ }).closest('[aria-busy]')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Updating products' })).toBeNull()
+  })
 })

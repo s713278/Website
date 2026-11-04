@@ -5,6 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* The brand loader's ring: the onboarding wizard's green, which PageLoader matches exactly. */
+  --loader-ring: #4caf50;
   --md-green-50: #ecfdf5;
   --md-green-100: #d1fae5;
   --md-green-500: #10b981;
@@ -1224,31 +1226,52 @@
       border-left: 1px solid var(--ob-line);
     }
   }
-
-  @keyframes md-indeterminate {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
 }
 
-.md-indeterminate-bar {
-  position: relative;
-  overflow: hidden;
-  height: 3px;
-  border-radius: 9999px;
-  background: var(--store-theme-muted, rgba(16, 185, 129, 0.22));
-}
-.md-indeterminate-bar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 30%;
-  border-radius: inherit;
-  background: var(--store-theme, var(--md-green-600, #059669));
-  animation: md-indeterminate 1.2s ease-in-out infinite;
-}
-.md-indeterminate-bar--flush { border-radius: 0; }
+@layer components {
+  /* The PageLoader ring's arc. pathLength=100: dash + gap must stay at 100 as the head extends and the tail catches up. */
+  @keyframes md-loader-dash {
+    0% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: 0;
+    }
+    50% {
+      stroke-dasharray: 74 26;
+      stroke-dashoffset: -12;
+    }
+    100% {
+      stroke-dasharray: 3 97;
+      stroke-dashoffset: -100;
+    }
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .md-indeterminate-bar::after { animation: none; width: 100%; opacity: 0.6; }
-}
+  .md-loader-arc {
+    stroke: var(--loader-ring);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .md-loader-arc {
+      animation: md-loader-dash 2s ease-in-out infinite;
+    }
+  }
+
+  /* Skeleton sweep; reduced motion keeps the static fill only. */
+  @keyframes md-shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .md-skeleton::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--background) 55%, transparent), transparent);
+      animation: md-shimmer 1.5s ease-in-out infinite;
+    }
+  }
 }

@@ -244,7 +244,7 @@ reads the vendor context and the vendor profile; every other account resource is
 vendor first opens a step that needs it (`stepResources` in `onboarding-resume.ts`;
 `loadStepResources` in `onboarding-server-state.ts` starts or joins those reads). A context the
 session already holds or is reading costs no second request. While the context is read the wizard
-shows "Restoring your setup…".
+shows the page loader (screen-reader label "Restoring your setup").
 
 | Step | Account reads | Units |
 |---|---|---|
@@ -272,8 +272,8 @@ first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
 step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
 applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
-change; a save does not reset it. A step shows a spinner until its reads have loaded (Steps 3-4
-keep the same spinner until their first reference list arrives, so the two reads show as one load),
+change; a save does not reset it. A step shows the page loader until its reads have loaded (Steps 3-4
+keep the same page loader until their first reference list arrives, so the two reads show as one load),
 and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
 failed resources. Continue is disabled in both states, while Back and the stepper stay usable, so a
 failed earlier step never traps the vendor. A failed read is never turned into empty data, because
@@ -284,13 +284,13 @@ fail.
 
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
 (first) category panel's first product page, alongside the step's account reads, into the reference
-cache the list paints from; the step's spinner waits for both, and the list then makes no request of
+cache the list paints from; the step's page loader waits for both, and the list then makes no request of
 its own. Each starts as soon as its input is applied (the business type for Step 4, the categories for
 Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not
 cached: the list reads it again itself, and shows "Something went wrong" with **Try again** if that
 fails too. A first-page read in flight is shared by key, so a second prefetch or a list that mounts
 meanwhile joins it instead of sending another request. Every product panel, including one opened later (read once, on first
-open), shows only its spinner or its error, with no saved products, until its first page arrives.
+open), shows only its page loader or its error, with no saved products, until its first page arrives.
 
 The phone preview (storefront mockup and its Categories / Products / Sizes counts) is shown on every
 step. Its categories, products and sizes each come from the context's `catalog_preview` while their
@@ -311,7 +311,7 @@ Measurements mean one authenticated `GET /v1/measurements/` followed by one auth
 the deployed list omits `unit_options`; an individual failed detail retains its usable list row.
 The measurement catalog is platform reference data, so `measurement-catalog-cache` keeps one
 successful read per session: a later visit reuses it without a request, and only sign-out drops it.
-Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their spinner waits for it.
+Steps 5, 6 and an unsubmitted Step 10 read it when they open, and their page loader waits for it.
 Continue starts only the next step's missing account reads alongside its save, never the units
 (an approved store's Step 6 save stays on the step and starts none). A
 failed read does not block: sizes fall back to the sample units and products carry no measurement
@@ -581,7 +581,7 @@ rail's plan chip and Settings' Plan row read the published backend billing API. 
 product rules and the billing states, as amended by the
 [early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026).
 [API gaps](./API_GAPS.md#vendor-platform-billing) owns where the backend falls short
-([gaps A–K](./API_GAPS.md#billing-gaps-ak), including gap K, the early first fee) and the
+([gaps A–L](./API_GAPS.md#billing-gaps-al), including gap K, the early first fee) and the
 [production release blockers](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers), which the
 [backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns with each gap's detail. Code comments tag each
 gap the app copes with.
@@ -610,10 +610,12 @@ a production demo build gets the billing panel. Pages and components import bill
   `GET /v1/subscription-plans` (requested once per page load, see below); if either fails, the whole
   read fails. It feeds Plan, the banner, the header button, the rail chip and Settings, so they
   cannot disagree. It holds the billing view, the subscription's `plan_name`, its `trial_started_at` and its `trial_ends_at`.
-- **The plan** is the list's `billing_cycle: MONTHLY` entry: its name, `plan_code` for subscribe and
-  `sale_price`, which the app reads as rupees. There is no conversion; the OpenAPI examples'
-  paise are a backend documentation bug ([gap G](./API_GAPS.md#billing-gaps-ak)). No monthly entry takes the
-  read error path.
+- **The plan** is the list's `billing_cycle: MONTHLY` entry: its name and `plan_code` for subscribe.
+  Its price is `LIVE_MONTHLY_PRICE` (₹399), not the entry's `sale_price`, until the backend's plan
+  moves from ₹299 to the team's ₹399 ([gap L](./API_GAPS.md#billing-gaps-al), a temporary
+  exception). Rupee amounts need no conversion; the OpenAPI examples' paise are a backend
+  documentation bug ([gap G](./API_GAPS.md#billing-gaps-al)). No monthly entry takes the read error
+  path.
 - **History** (`GET …/subscription/history`) is read only by Plan, apart from the shared read.
 - **The vendor context** supplies features and limits only. In the Live API, Settings' Plan row
   takes the plan name from the shared read (`mapLivePlanName` through `useStartedLiveBilling`) and
@@ -633,24 +635,24 @@ Confirming say whether free days or paid days ended. Free days and 3 days left c
 the free days' length in whole days from `trial_started_at` to `trial_ends_at` (`null` without a
 readable start, when the Free days card shows the exact end instead). Paid carries `trialEndsAt`
 while its free days last after an early first fee (otherwise `null`); with it, or with
-`next_billing_at`, the wording adds that next month is another ₹299. The Confirming views are Free days Confirming,
+`next_billing_at`, the wording adds that next month is another ₹399. The Confirming views are Free days Confirming,
 Confirming, and Stopped or AutoPay off marked `confirming`; they offer no payment action, and Plan
 shows their status line with **Check again**.
 
 **Actions.** Only Plan opens Checkout, and only one action runs at a time.
 
-- **Pay ₹299 with Razorpay** in Free days and 3 days left is the early first fee: one Checkout for
-  ₹299 now, with the free days kept. The backend decides what Checkout charges
-  ([gap K](./API_GAPS.md#billing-gaps-ak)). Set up AutoPay and Turn off AutoPay are not Live API behavior.
-- **Pay ₹299 with Razorpay** in Payment failed and Shop closed pays for a new period now.
-- **Keep shop open** in Stopped and AutoPay off pays ₹299 now for the month after the paid-through
+- **Pay ₹399 with Razorpay** in Free days and 3 days left is the early first fee: one Checkout for
+  ₹399 now, with the free days kept. The backend decides what Checkout charges
+  ([gap K](./API_GAPS.md#billing-gaps-al)). Set up AutoPay and Turn off AutoPay are not Live API behavior.
+- **Pay ₹399 with Razorpay** in Payment failed and Shop closed pays for a new period now.
+- **Keep shop open** in Stopped and AutoPay off pays ₹399 now for the month after the paid-through
   date.
 - **Stop the plan** in Paid, including while free days are kept, asks once and then calls cancel.
-- The header and banner label these "Pay ₹299", "Keep open · ₹299" or "Shop plan".
+- The header and banner label these "Pay ₹399", "Keep open · ₹399" or "Shop plan".
 
 A Checkout action runs subscribe, Checkout, then `confirm` with Checkout's values, then a poll.
 Subscribe is never retried; a repeat while pending returns the same subscription (after the trial
-end, that reuse is [gap I](./API_GAPS.md#billing-gaps-ak)). A dismissed
+end, that reuse is [gap I](./API_GAPS.md#billing-gaps-al)). A dismissed
 Checkout changes nothing; one closed after a failed attempt shows the purpose's failure line with
 Razorpay's reason.
 
@@ -694,9 +696,9 @@ Razorpay's reason.
   drops any read in flight. It is published even after Plan unmounts, so the chrome stays true; a
   late answer changes none of Plan's own state.
 - Gap-specific messages appear only after the real failure. Cancel's 500
-  ([gap A](./API_GAPS.md#billing-gaps-ak)) and subscribe's 409 from Stopped or AutoPay off
-  ([gap E](./API_GAPS.md#billing-gaps-ak)) have their own lines. Subscribe's 500 after the trial
-  ([gap I](./API_GAPS.md#billing-gaps-ak)) shows the backend's copy through `getErrorMessage`. Since
+  ([gap A](./API_GAPS.md#billing-gaps-al)) and subscribe's 409 from Stopped or AutoPay off
+  ([gap E](./API_GAPS.md#billing-gaps-al)) have their own lines. Subscribe's 500 after the trial
+  ([gap I](./API_GAPS.md#billing-gaps-al)) shows the backend's copy through `getErrorMessage`. Since
   30 September dev can instead return 200 with the free-days subscription, and Checkout then opens
   blank, which the app cannot detect.
 
@@ -709,7 +711,7 @@ Razorpay's reason.
   (`confirmingLiveBilling`), so Plan, the banner and the header offer no payment and no "If you do
   not pay". Free days and 3 days left show as Free days Confirming (row 7); Shop closed as Confirming
   with the same ended days (rows 8 and 8b), and Payment failed as Confirming after paid days;
-  Stopped and AutoPay off keep their eyebrow and days without the Pay sentence, with "your ₹299
+  Stopped and AutoPay off keep their eyebrow and days without the Pay sentence, with "your ₹399
   payment is being confirmed." in the banner and "Shop plan" in the header. Settled views never
   change. Ending the hold, below, is decided on the view as read. `authorized` needs no hold, so it
   survives a reload; without the fields only the hold shows the variant.
@@ -739,7 +741,7 @@ rows at once, so reopening Plan on an unchanged subscription sends no history re
 event, stays in its section with Try again, beside any last rows. `mapLiveBillingHistory` lists
 events newest first and shows each once per type and payment ID, or per type and subscription ID
 without a payment, because the development backend records some twice
-([gap G](./API_GAPS.md#billing-gaps-ak)). The titles are "Payment received",
+([gap G](./API_GAPS.md#billing-gaps-al)). The titles are "Payment received",
 "Plan stopped" (a cancellation requested while `ACTIVE`) or "AutoPay turned off" (one requested while
 not `ACTIVE`, such as a legacy AutoPay-only subscription on dev), "AutoPay ended" (skipped after a Plan stop on that subscription), and
 "Free days started" from the shared read's `trialStartedAt`. Other events, such as `SUBSCRIPTION_AUTHENTICATED`, are ignored. An amount

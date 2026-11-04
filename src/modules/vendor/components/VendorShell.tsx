@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import {
   ClipboardList,
   Gauge,
@@ -18,7 +18,7 @@ import type { PrototypeTone } from '@/modules/vendor/lib/billing-prototype-card'
 import { liveBillingWording } from '@/modules/vendor/lib/live-billing-wording'
 import { useStartedLiveBilling } from '@/modules/vendor/store/live-billing'
 import { usesLiveBilling } from '@/shared/api'
-import { Button, HeaderButton } from '@/shared/components'
+import { Button, HeaderButton, PageLoader } from '@/shared/components'
 import { cn } from '@/shared/lib/utils'
 
 /**
@@ -373,7 +373,10 @@ function VendorChrome() {
         )}
 
         <main className="flex-1 px-[var(--vc-gutter)] pt-4 pb-6">
-          <Outlet />
+          {/* A page chunk still downloading loads here, with the chrome around it. */}
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

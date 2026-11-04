@@ -307,3 +307,34 @@ describe('VendorAccountProvider first render', () => {
     expect(readContext).not.toHaveBeenCalled()
   })
 })
+
+describe('VendorAccountProvider while loading and after a failure', () => {
+  it('shows the page loader while the context is read', () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockReturnValue(new Promise<never>(() => {}))
+    render(<MemoryRouter><VendorAccountProvider><AccountReading /></VendorAccountProvider></MemoryRouter>)
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeTruthy()
+    expect(screen.queryByText('Loading your store…')).toBeNull()
+    expect(screen.queryByLabelText('Account approval')).toBeNull()
+  })
+
+  it('shows the load error for a failed read, and Try again reads the context again', async () => {
+    const readContext = vi.spyOn(vendorOnboardingService, 'getVendorContext')
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValue(mapVendorContext({
+        data: { vendor_id: 'test-vendor', vendor_status: 'ACTIVE', approval_status: 'APPROVED',
+          onboarding: { status: 'COMPLETED', next_step: 11 } },
+      }))
+    render(<MemoryRouter><VendorAccountProvider><AccountReading /></VendorAccountProvider></MemoryRouter>)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Something went wrong')
+    expect(screen.queryByText('Could not load your store')).toBeNull()
+    expect(screen.queryByText('Network down')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect((await screen.findByLabelText('Account approval')).textContent).toBe('APPROVED')
+    expect(readContext).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})

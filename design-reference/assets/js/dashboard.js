@@ -19,7 +19,7 @@
 
   var PLAN_STORAGE_KEY = 'md-demo-shop-plan';
   var WELCOME_STORAGE_KEY = 'md-demo-welcome-dismissed';
-  var PLAN_PRICE = 299;
+  var PLAN_PRICE = 399;
 
   var orderFilter = 'all';
   var orderPage = 0;
@@ -92,7 +92,7 @@
         periodEnd: isoFromDays(22),
         history: [
           historyItem('trial', 'Free days started', '14 free days', 'Last month'),
-          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(isoFromDays(22)), 'Today')
+          historyItem('paid', 'Paid ₹399', 'Shop open until ' + formatDayLabel(isoFromDays(22)), 'Today')
         ]
       };
     }
@@ -115,7 +115,7 @@
         daysLeft: 8,
         periodEnd: isoFromDays(8),
         history: [
-          historyItem('paid', 'Paid ₹299', 'Shop open until ' + formatDayLabel(isoFromDays(8)), 'Last week'),
+          historyItem('paid', 'Paid ₹399', 'Shop open until ' + formatDayLabel(isoFromDays(8)), 'Last week'),
           historyItem('stopped', 'Plan stopped', 'Shop stays open until paid days end', 'Today')
         ]
       };
@@ -127,7 +127,7 @@
         daysLeft: 0,
         periodEnd: isoFromDays(-2),
         history: [
-          historyItem('paid', 'Paid ₹299', 'One month', 'Last month'),
+          historyItem('paid', 'Paid ₹399', 'One month', 'Last month'),
           historyItem('stopped', 'Plan stopped', 'Paid days ended', '2 days ago')
         ]
       };
@@ -1301,11 +1301,11 @@
     var chipLabel = 'Social Starter';
     var bannerTitle = '';
     var bannerText = '';
-    var bannerCta = 'Pay ₹299';
+    var bannerCta = 'Pay ₹399';
     var kicker = 'Shop plan';
     var daysHtml = 'Shop is open';
-    var copy = 'Mithra Social Starter is ₹299 each month. Pay with UPI, card or netbanking.';
-    var payLabel = 'Pay ₹299';
+    var copy = 'Mithra Social Starter is ₹399 each month. Pay with UPI, card or netbanking.';
+    var payLabel = 'Pay ₹399';
     var showPay = true;
     var showIfUnpaid = needsPay;
     var showStop = billing.status === 'paid';
@@ -1316,56 +1316,56 @@
       bannerTitle = days + ' free ' + (days === 1 ? 'day' : 'days') + ' left';
       bannerText =
         days <= 3
-          ? ' — pay ₹299 with Razorpay now so customers can still open your shop.'
-          : ' — after that, subscribe with Razorpay (₹299 / month) to keep the shop open.';
-      bannerCta = 'Pay ₹299';
+          ? ' — pay ₹399 with Razorpay now so customers can still open your shop.'
+          : ' — after that, subscribe with Razorpay (₹399 / month) to keep the shop open.';
+      bannerCta = 'Pay ₹399';
       kicker = 'Free days';
       daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
       copy =
         days <= 3
-          ? 'Pay ₹299 with Razorpay now so customers can still open your shop when free days end.'
-          : 'Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹299 each month — to keep it open.';
-      payLabel = 'Pay ₹299 with Razorpay';
+          ? 'Pay ₹399 with Razorpay now so customers can still open your shop when free days end.'
+          : 'Your shop is live for 14 free days. After that, subscribe with Razorpay — ₹399 each month — to keep it open.';
+      payLabel = 'Pay ₹399 with Razorpay';
     } else if (billing.status === 'paid') {
       chipLabel = 'Social Starter';
       bannerTitle = '';
       kicker = 'Paid';
       daysHtml = 'Shop is open';
-      copy = 'You paid ₹299 via Razorpay. Shop stays open until ' + dateLabel + '. Next month is another ₹299.';
+      copy = 'You paid ₹399 via Razorpay. Shop stays open until ' + dateLabel + '. Next month is another ₹399.';
       showPay = false;
     } else if (billing.status === 'due') {
       chipLabel = 'Shop closed';
       bannerTitle = 'Shop is hidden from customers';
-      bannerText = ' — last Razorpay payment did not go through. Pay ₹299 to open the shop again.';
-      bannerCta = 'Pay ₹299';
+      bannerText = ' — last Razorpay payment did not go through. Pay ₹399 to open the shop again.';
+      bannerCta = 'Pay ₹399';
       kicker = 'Payment failed';
       daysHtml = 'Shop is hidden';
-      copy = 'Customers cannot see your shop. Pay ₹299 with Razorpay to open it again. Old orders are still here.';
-      payLabel = 'Pay ₹299 with Razorpay';
+      copy = 'Customers cannot see your shop. Pay ₹399 with Razorpay to open it again. Old orders are still here.';
+      payLabel = 'Pay ₹399 with Razorpay';
     } else if (billing.status === 'stopping') {
       chipLabel = dateLabel ? 'Open until ' + dateLabel : 'Plan stopped';
       bannerTitle = dateLabel ? 'Shop stays open until ' + dateLabel : 'Plan stopped';
       bannerText = ' — then customers cannot see it. You can pay again any time with Razorpay.';
-      bannerCta = 'Keep open · ₹299';
+      bannerCta = 'Keep open · ₹399';
       kicker = 'Plan stopped';
       daysHtml = days + ' <span>' + (days === 1 ? 'day left' : 'days left') + '</span>';
       copy =
         'You stopped the plan. Shop stays open until ' +
         dateLabel +
-        '. Pay ₹299 with Razorpay if you want to keep it after that.';
-      payLabel = 'Keep shop open · ₹299';
+        '. Pay ₹399 with Razorpay if you want to keep it after that.';
+      payLabel = 'Keep shop open · ₹399';
       showIfUnpaid = true;
       showStop = false;
       stopCopy = 'Plan already stopped. Shop stays open until paid days end.';
     } else if (billing.status === 'closed') {
       chipLabel = 'Shop closed';
       bannerTitle = 'Shop is hidden from customers';
-      bannerText = ' — pay ₹299 with Razorpay to open it again.';
-      bannerCta = 'Pay ₹299';
+      bannerText = ' — pay ₹399 with Razorpay to open it again.';
+      bannerCta = 'Pay ₹399';
       kicker = 'Shop closed';
       daysHtml = 'Shop is hidden';
-      copy = 'Paid days are over. Customers cannot see your shop. Pay ₹299 with Razorpay to open it again.';
-      payLabel = 'Pay ₹299 with Razorpay';
+      copy = 'Paid days are over. Customers cannot see your shop. Pay ₹399 with Razorpay to open it again.';
+      payLabel = 'Pay ₹399 with Razorpay';
     }
 
     var chip = qs('dash-plan-chip');
@@ -1387,7 +1387,7 @@
 
     var payCta = qs('dash-pay-cta');
     if (payCta) {
-      payCta.textContent = needsPay ? 'Pay ₹299' : 'Shop plan';
+      payCta.textContent = needsPay ? 'Pay ₹399' : 'Shop plan';
       payCta.classList.toggle('btn-primary', needsPay);
       payCta.classList.toggle('btn-secondary', !needsPay);
     }
@@ -1452,7 +1452,7 @@
 
     if (qs('set-plan')) {
       qs('set-plan').textContent = closed
-        ? 'Shop closed — pay ₹299 with Razorpay'
+        ? 'Shop closed — pay ₹399 with Razorpay'
         : billing.status === 'trial'
           ? days + ' free days left'
           : billing.status === 'stopping'
@@ -1491,8 +1491,8 @@
           ? 'Only ' +
             days +
             (days === 1 ? ' free day' : ' free days') +
-            ' left. Share your shop link, then pay ₹299 with Razorpay so customers can still open it.'
-          : 'Customers can order now. Share your shop link. Before free days end, pay ₹299 with Razorpay to keep the shop open.';
+            ' left. Share your shop link, then pay ₹399 with Razorpay so customers can still open it.'
+          : 'Customers can order now. Share your shop link. Before free days end, pay ₹399 with Razorpay to keep the shop open.';
     }
   }
 
@@ -1540,7 +1540,7 @@
         billing.daysLeft = 30;
         billing.periodEnd = isoFromDays(30);
         billing.history = (billing.history || []).concat([
-          historyItem('paid', 'Paid ₹299 via Razorpay', 'Shop open until ' + formatDayLabel(billing.periodEnd), 'Just now')
+          historyItem('paid', 'Paid ₹399 via Razorpay', 'Shop open until ' + formatDayLabel(billing.periodEnd), 'Just now')
         ]);
         saveBilling();
         try {

@@ -10,13 +10,13 @@ the backend.
 **Frozen on the earlier model, on purpose.** The dataset encodes the shape proposed on
 19 September 2026: a `subscription.billing` block on the vendor context, plus three proposed writes.
 It models the trial AutoPay flow as it stood before 29 September: during the trial, Checkout sets up
-AutoPay with a small refundable authorisation now and the first ₹299 at the trial end, and AutoPay
+AutoPay with a small refundable authorisation now and the first ₹399 at the trial end, and AutoPay
 can be turned off before then. Demo mode is frozen with that flow by decision
 ([Live API billing](./VENDOR_BILLING_DECISIONS.md#live-api-billing--29-september-2026),
 [Early first fee](./VENDOR_BILLING_DECISIONS.md#early-first-fee--29-september-2026)).
 
 **Current model.** The Live API reads the backend's own subscription API, and paying during the
-trial is the early first fee: ₹299 at once for the month that starts at the trial end. The
+trial is the early first fee: ₹399 at once for the month that starts at the trial end. The
 [decision record](./VENDOR_BILLING_DECISIONS.md) owns the product rules, and the
 [backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns the backend contract and its gaps.
 The backend never adopted the context extension below; the vendor context has been flat since
@@ -41,7 +41,7 @@ cancellation are writes; reading the context never starts a payment, cancellatio
 |---|---|
 | `data.vendor_id`, `business_name`, `role` | Selected vendor, display name and membership role; no duplicate billing identity object |
 | `onboarding`, `approval_status`, `vendor_status` | Unfinished setup, awaiting/rejected approval or suspension; no second setup/approval status |
-| `subscription.plan_name`, `monthly_price`, `currency` | The plan and full monthly fee, including during the trial: ₹299, INR |
+| `subscription.plan_name`, `monthly_price`, `currency` | The plan and full monthly fee, including during the trial: ₹399, INR |
 | `subscription.trial_days` | Configured trial length (14); **not days remaining** |
 | `subscription.trial_ends_at` | Original granted trial expiry, or null |
 | `subscription.limits`, `subscription.usage` | Quota data; the Plan page no longer shows usage against limits |
@@ -51,7 +51,7 @@ cancellation are writes; reading the context never starts a payment, cancellatio
 `tier`, the legacy subscription `status` and `yearly_price` keep their meaning. `FREE`/`ACTIVE`
 are not paid-membership evidence, and a free trial does not make the future monthly fee zero.
 
-**Units.** Rupees: `monthly_price: 299.00` means ₹299, not 299 paise. Preparation and refund
+**Units.** Rupees: `monthly_price: 399.00` means ₹399, not 399 paise. Preparation and refund
 amounts use the same units; paise exist only at a payment boundary.
 
 **Time.** Contexts with the extension use explicit UTC on the envelope `timestamp` and every

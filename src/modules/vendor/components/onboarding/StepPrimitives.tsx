@@ -1,10 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type Ref, type ToggleEvent } from 'react'
-import { CheckIcon, ChevronRightIcon, DatabaseIcon, RotateCcwIcon } from 'lucide-react'
+import { CheckIcon, ChevronRightIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Spinner } from '@/components/ui/spinner'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/shared/components/ui'
 import type { ValidationIssue } from '../../types/onboarding'
-import { StepNotice } from './AccessNotice'
 import type { ConfirmDialogState } from './ConfirmDialog'
 
 export type RequestConfirmation = (
@@ -296,58 +295,19 @@ export function LoadMoreButton({ label, disabled, pressOnly = false, onClick }: 
   )
 }
 
-/** The shadcn spinner without its own status role, for a place that names the wait itself. */
-export function QuietSpinner({ className }: { className?: string }) {
-  return (
-    <Spinner
-      role={undefined}
-      aria-label={undefined}
-      aria-hidden="true"
-      className={cn('text-[var(--ob-ink-soft)] motion-reduce:animate-none', className)}
-    />
-  )
+/** Placeholder tile heights, matched to the cards each catalog grid renders. */
+const loadingTileHeight = {
+  choice: 'h-32 @min-[30rem]:h-26',
+  product: 'h-36 @min-[30rem]:h-32',
 }
 
-/**
- * A step's body while its first reads load. The wizard's step read and a catalog step's
- * first list read both draw this, in the same place, so the two loads read as one.
- */
-export function StepLoading({ label = 'Loading this step' }: { label?: string }) {
+/** Below a catalog grid while its next set loads; the list's own sr-only status names the wait. */
+export function MoreTilesLoading({ size }: { size: keyof typeof loadingTileHeight }) {
   return (
-    <div role="status" aria-label={label} aria-busy="true" className="grid min-h-72 place-items-center">
-      <QuietSpinner className="size-8" />
-    </div>
-  )
-}
-
-/** Below a list while its next page loads; the list's own sr-only status names the wait. */
-export function LoadingMore() {
-  return (
-    <div className="flex justify-center py-2">
-      <QuietSpinner className="size-6" />
-    </div>
-  )
-}
-
-/** A catalog list's first read failed: the same words and action as a step's own failed read. */
-export function CatalogError({
-  onRetry,
-  onUseSample,
-}: {
-  onRetry: () => void
-  onUseSample?: () => void
-}) {
-  return (
-    <div role="alert" className="space-y-3">
-      <StepNotice message="Something went wrong" />
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={onRetry}><RotateCcwIcon /> Try again</Button>
-        {onUseSample ? (
-          <Button size="sm" onClick={onUseSample}>
-            <DatabaseIcon /> Use sample catalog
-          </Button>
-        ) : null}
-      </div>
+    <div aria-hidden="true" className={choiceGrid}>
+      {Array.from({ length: 3 }, (_, index) => (
+        <Skeleton key={index} className={cn('rounded-xl', loadingTileHeight[size])} />
+      ))}
     </div>
   )
 }

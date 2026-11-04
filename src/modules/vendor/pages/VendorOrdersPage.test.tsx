@@ -228,14 +228,79 @@ describe('VendorOrdersPage filter round-trip', () => {
 })
 
 describe('VendorOrdersPage loading failures', () => {
-  it('says a request failed rather than reporting an empty list', async () => {
-    vi.spyOn(vendorOrdersService, 'list').mockRejectedValue(new Error('Network down'))
+  it('says a request failed rather than reporting an empty list, and retries it', async () => {
+    const list = vi
+      .spyOn(vendorOrdersService, 'list')
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValueOnce(pageOf([order('4021')]))
 
     renderAt()
     await settle()
 
-    expect(screen.getByText('This is a failed request, not an empty list.')).toBeTruthy()
+    expect(within(screen.getByRole('alert')).getByText('Something went wrong')).toBeTruthy()
     expect(screen.queryByText('No orders here')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Order #4021' })).toBeTruthy()
+  })
+})
+
+describe('VendorOrdersPage loading', () => {
+  it('shows row skeletons on first load, and no ledger', () => {
+    vi.spyOn(vendorOrdersService, 'list').mockReturnValue(deferred<VendorOrderPage>().promise)
+
+    renderAt()
+
+    expect(screen.getByRole('status', { name: 'Loading orders' })).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.queryByText('No orders here')).toBeNull()
+  })
+
+  it('keeps the previous rows, dimmed and busy, while a filter change refetches', async () => {
+    const next = deferred<VendorOrderPage>()
+    vi.spyOn(vendorOrdersService, 'list')
+      .mockResolvedValueOnce(pageOf([order('4021')]))
+      .mockReturnValueOnce(next.promise)
+
+    renderAt()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }))
+    await settle()
+
+    const old = screen.getByRole('link', { name: 'Order #4021' })
+    expect(old.closest('[aria-busy="true"]')).not.toBeNull()
+    expect(screen.getByRole('status', { name: 'Updating orders' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Loading orders' })).toBeNull()
+    expect(screen.queryByText('No orders here')).toBeNull()
+
+    await act(async () => {
+      next.resolve(pageOf([order('4030')]))
+      await Promise.resolve()
+    })
+
+    const fresh = screen.getByRole('link', { name: 'Order #4030' })
+    expect(screen.queryByRole('link', { name: 'Order #4021' })).toBeNull()
+    expect(fresh.closest('[aria-busy]')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Updating orders' })).toBeNull()
+  })
+
+  it('shows a skeleton line while the delivery-window subtotal adds up', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockImplementation(
+      (_vendorId: string | number, query: VendorOrderQuery = {}) =>
+        query.size === 100
+          ? deferred<VendorOrderPage>().promise
+          : Promise.resolve(pageOf([order('1', 100)])),
+    )
+
+    renderAt('/vendor/orders?start=2026-09-08&end=2026-09-14')
+    await settle()
+
+    expect(screen.getByRole('status', { name: 'Adding it up' })).toBeTruthy()
   })
 })
 
@@ -383,6 +448,24 @@ describe('VendorOrdersPage payment record', () => {
 
     expect(setPaymentStatus).toHaveBeenCalledWith('vendor-1', '4021', 'PAID')
     expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('marks the pressed row action busy and keeps its label', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+    const completion = deferred<void>()
+    vi.spyOn(vendorOrdersService, 'setPaymentStatus').mockReturnValue(completion.promise)
+
+    renderAt()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
+    await settle()
+
+    const saving = screen.getByRole('button', { name: 'Saving…' })
+    expect(saving.getAttribute('aria-busy')).toBe('true')
+    expect(saving.hasAttribute('disabled')).toBe(true)
+    await act(async () => { completion.resolve() })
+    await settle()
   })
 
   it('offers the control on a row whose payment status the store omitted', async () => {

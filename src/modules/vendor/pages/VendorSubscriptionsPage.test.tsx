@@ -186,7 +186,7 @@ describe('VendorSubscriptionsPage', () => {
     renderAt()
     await settle()
 
-    expect(screen.getByText('This is a failed request, not an empty list.')).toBeTruthy()
+    expect(within(screen.getByRole('alert')).getByText('Something went wrong')).toBeTruthy()
     expect(screen.queryByText('No subscriptions yet')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
@@ -194,7 +194,44 @@ describe('VendorSubscriptionsPage', () => {
 
     expect(list).toHaveBeenCalledTimes(2)
     expect(screen.getByText('No subscriptions yet')).toBeTruthy()
-    expect(screen.queryByText('This is a failed request, not an empty list.')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('shows row skeletons on first load', () => {
+    vi.spyOn(vendorSubscriptionsService, 'list').mockReturnValue(
+      deferred<VendorSubscriptionPage>().promise,
+    )
+
+    renderAt()
+
+    expect(screen.getByRole('status', { name: 'Loading subscriptions' })).toBeTruthy()
+    expect(screen.queryByText('No subscriptions yet')).toBeNull()
+  })
+
+  it('keeps the previous rows, dimmed and busy, while a status change refetches', async () => {
+    const next = deferred<VendorSubscriptionPage>()
+    vi.spyOn(vendorSubscriptionsService, 'list')
+      .mockResolvedValueOnce(pageOf([subscription('Old')]))
+      .mockReturnValueOnce(next.promise)
+
+    renderAt()
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active' }))
+    await settle()
+
+    expect(screen.getByText('Subscription Old').closest('[aria-busy="true"]')).not.toBeNull()
+    expect(screen.getByRole('status', { name: 'Updating subscriptions' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Loading subscriptions' })).toBeNull()
+
+    await act(async () => {
+      next.resolve(pageOf([subscription('New')]))
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('Subscription Old')).toBeNull()
+    expect(screen.getByText('Subscription New').closest('[aria-busy]')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Updating subscriptions' })).toBeNull()
   })
 
   it('renders the complete row without making it a detail link', async () => {

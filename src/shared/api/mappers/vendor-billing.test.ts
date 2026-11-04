@@ -16,7 +16,7 @@ describe('proposed vendor billing mapper', () => {
       const status = mapVendorBillingStatus(context, 'mock', context.vendorId)
       expect(status.vendorId).toBe(context.vendorId)
       expect(status.source).toBe('mock')
-      expect(status.plan.amountMinor).toBe(29900)
+      expect(status.plan.amountMinor).toBe(39900)
       expect(status.capabilities).toEqual(context.eligibleFeatures)
     }
     expect(Object.keys(fixtures.contexts)).toHaveLength(33)

@@ -303,7 +303,7 @@ demo-only tooling and are not the login UI. Their demo credentials are:
 | [docs/API_ARCHITECTURE.md](./docs/API_ARCHITECTURE.md) | Implemented API architecture and endpoint workflow |
 | [docs/API_GAPS.md](./docs/API_GAPS.md) | Confirmed frontend/backend contract gaps |
 | [docs/VENDOR_BILLING_DECISIONS.md](./docs/VENDOR_BILLING_DECISIONS.md) | Vendor platform billing product rules and dated decisions |
-| [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md) | Self-contained backend brief: billing contract, gaps A–K, release blockers and Razorpay recipes |
+| [docs/VENDOR_BILLING_BACKEND_BRIEF.md](./docs/VENDOR_BILLING_BACKEND_BRIEF.md) | Self-contained backend brief: billing contract, gaps A–L, release blockers and Razorpay recipes |
 | [docs/VENDOR_BILLING_MOCK_DATASET.md](./docs/VENDOR_BILLING_MOCK_DATASET.md) | Demo-mode billing mock dataset (frozen); not the Live API contract |
 | [docs/SESSION.md](./docs/SESSION.md) | Current auth/session lifecycle |
 | [docs/TESTING.md](./docs/TESTING.md) | Test tiers and component-test rules |

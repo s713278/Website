@@ -12,6 +12,7 @@ import {
   MapPin,
   MessageCircle,
   Milk,
+  Minus,
   Palette,
   Play,
   Puzzle,
@@ -20,9 +21,12 @@ import {
   Star,
   Store,
   Wheat,
+  X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button, ShadcnInput } from '@/shared/components'
+import { LoadError } from '@/shared/components/LoadError'
 import {
   catalogService,
   getErrorMessage,
@@ -144,15 +148,51 @@ const audiences = [
   ['👩‍🍳', 'Women Entrepreneurs'],
 ]
 
+const comparisonOthers = ['Shopify', 'Dukaan', 'Marketplaces']
+
 const comparisons = [
   ['Setup Time', '~5 minutes', 'Hours–days', '~30 minutes', 'Days–weeks'],
   ['Coding Required', 'No', 'Often yes', 'No', 'No'],
   ['WhatsApp Orders', 'Built-in', 'Limited', 'Limited', 'No'],
   ['Hyperlocal Focus', 'Yes', 'No', 'Partial', 'City-wide'],
   ['Commission', '0%', 'App fees', 'Plan fees', '15–30%'],
-  ['Subscription Selling', 'Yes', 'Apps needed', 'Limited', 'Rare'],
+  ['Subscription Selling', 'Yes', 'Apps needed', 'Limited', 'Limited'],
   ['Own Your Customers', 'Yes', 'Yes', 'Yes', 'No'],
 ]
+
+type ComparisonMark = 'yes' | 'limited' | 'no'
+/** A short value shown as text, or a mark whose label is what a screen reader hears. */
+type GlanceCell = string | { mark: ComparisonMark; label: string }
+
+const yes = (label = 'Yes'): GlanceCell => ({ mark: 'yes', label })
+const limited = (label = 'Limited'): GlanceCell => ({ mark: 'limited', label })
+const no = (label = 'No'): GlanceCell => ({ mark: 'no', label })
+
+/** The phone form of `comparisons`: marks where the answer is yes, limited or no; short text where the number is the point. */
+const comparisonGlance: { feature: string; cells: GlanceCell[] }[] = [
+  { feature: 'Setup time', cells: ['5 min', 'Hours', '30 min', 'Days'] },
+  { feature: 'No coding needed', cells: [yes(), no(), yes(), yes()] },
+  { feature: 'WhatsApp orders', cells: [yes('Built-in'), limited(), limited(), no()] },
+  { feature: 'Hyperlocal focus', cells: [yes(), no(), limited('Partial'), limited('City-wide')] },
+  { feature: 'Commission', cells: ['0%', 'App fees', 'Plan fees', '15–30%'] },
+  { feature: 'Subscription selling', cells: [yes(), limited('Apps needed'), limited(), limited()] },
+  { feature: 'Own your customers', cells: [yes(), yes(), yes(), no()] },
+]
+
+const comparisonMarkStyle = {
+  yes: { Icon: Check, className: 'bg-emerald-100 text-emerald-700' },
+  limited: { Icon: Minus, className: 'bg-slate-100 text-slate-500' },
+  no: { Icon: X, className: 'text-rose-600' },
+} satisfies Record<ComparisonMark, { Icon: ComponentType<{ className?: string; strokeWidth?: number }>; className: string }>
+
+function ComparisonMarkIcon({ mark }: { mark: ComparisonMark }) {
+  const { Icon, className } = comparisonMarkStyle[mark]
+  return (
+    <span className={`mx-auto flex size-6 items-center justify-center rounded-full ${className}`} aria-hidden>
+      <Icon className="size-3.5" strokeWidth={3} />
+    </span>
+  )
+}
 
 const testimonials = [
   {
@@ -353,6 +393,23 @@ function LandingStoreCard({ store }: { store: LandingStore }) {
         </div>
       </article>
     </Link>
+  )
+}
+
+/** Same outline and height as a loaded `LandingStoreCard`, so the row does not move when stores arrive. */
+function LandingStoreCardSkeleton() {
+  return (
+    <div className="flex w-[84%] min-w-0 shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:w-auto sm:shrink">
+      <Skeleton className="h-40 w-full rounded-none" />
+      <div className="flex flex-1 flex-col p-5">
+        <Skeleton className="h-6 w-3/5" />
+        <Skeleton className="mt-2 h-5 w-2/5" />
+        <Skeleton className="mt-3 h-5 w-1/2" />
+        <div className="mt-auto pt-5">
+          <Skeleton className="h-5 w-24" />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -800,22 +857,15 @@ export function ExploreStoresSection() {
         </div>
 
         {storesLoading ? (
-          <div role="status" className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-medium text-slate-600">
-            Loading stores for this delivery location…
+          <div aria-busy="true" className="-mx-(--marketing-gutter) mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-(--marketing-gutter) pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+            <span role="status" className="sr-only">Loading stores</span>
+            {Array.from({ length: 3 }, (_, index) => (
+              <LandingStoreCardSkeleton key={index} />
+            ))}
           </div>
         ) : null}
         {!storesLoading && storesError ? (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-8 text-center">
-            <h4 className="font-display text-lg font-bold text-slate-950">Stores could not be loaded</h4>
-            <p role="alert" className="mt-2 text-sm text-rose-700">{storesError}</p>
-            <Button
-              type="button"
-              onClick={() => setRetryKey((key) => key + 1)}
-              className="mt-4 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
-            >
-              Retry store search
-            </Button>
-          </div>
+          <LoadError className="mt-4" onRetry={() => setRetryKey((key) => key + 1)} />
         ) : null}
         {!storesLoading && !storesError && location && stores.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center">
@@ -886,15 +936,78 @@ export function ComparisonSection() {
           </>
         }
       />
-      <div className="mt-10 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] border-collapse text-left">
+      {/* Phones see every platform at once: marks for yes, limited and no; short text where the number is the point. */}
+      <div className="mt-8 md:hidden">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full table-fixed border-collapse text-center">
+            <caption className="sr-only">MithraDirect compared with Shopify, Dukaan and Marketplaces</caption>
+            <colgroup>
+              <col className="w-[30%] min-[360px]:w-[32%]" />
+              <col className="w-[17.5%]" />
+              <col />
+              <col />
+              <col />
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-50 align-middle text-[0.6875rem] leading-tight text-slate-950 min-[360px]:text-xs">
+                <th scope="col" className="px-3 py-3 text-left font-semibold">
+                  Feature
+                </th>
+                <th scope="col" className="bg-emerald-100 px-1 py-3 font-bold text-emerald-800">
+                  Mithra<wbr />Direct
+                </th>
+                <th scope="col" className="px-1 py-3 font-semibold">Shopify</th>
+                <th scope="col" className="px-1 py-3 font-semibold">Dukaan</th>
+                <th scope="col" className="px-1 py-3 font-semibold hyphens-manual">Market&shy;places</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonGlance.map(({ feature, cells }) => (
+                <tr key={feature} className="border-t border-slate-100">
+                  <th scope="row" className="py-3 pr-1.5 pl-2 text-left text-[0.6875rem] font-medium leading-snug text-slate-900 min-[360px]:px-3 min-[360px]:text-[0.8125rem]">
+                    {feature}
+                  </th>
+                  {cells.map((cell, index) => (
+                    <td
+                      key={index}
+                      className={`px-1 py-3 text-[0.6875rem] leading-tight min-[360px]:text-xs ${
+                        index === 0 ? 'bg-emerald-100/50 font-bold text-emerald-800' : 'text-slate-600'
+                      }`}
+                    >
+                      {typeof cell === 'string' ? (
+                        cell
+                      ) : (
+                        <>
+                          <ComparisonMarkIcon mark={cell.mark} />
+                          <span className="sr-only">{cell.label}</span>
+                        </>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ul className="mt-4 flex items-center justify-center gap-5 text-xs font-medium text-slate-600" aria-hidden>
+          {(['yes', 'limited', 'no'] as const).map((mark) => (
+            <li key={mark} className="flex items-center gap-1.5">
+              <ComparisonMarkIcon mark={mark} />
+              {mark === 'yes' ? 'Yes' : mark === 'limited' ? 'Limited' : 'No'}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-10 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
+        <table className="w-full border-collapse text-left">
           <thead>
             <tr className="bg-slate-50 text-sm text-slate-950">
-              {['Feature', 'MithraDirect', 'Shopify', 'Dukaan', 'Marketplaces'].map((heading, index) => (
+              {['Feature', 'MithraDirect', ...comparisonOthers].map((heading, index) => (
                 <th
                   key={heading}
                   scope="col"
-                  className={`px-5 py-5 font-bold ${index === 1 ? 'bg-emerald-50 text-emerald-800' : ''}`}
+                  className={`px-4 py-5 font-bold lg:px-5 ${index === 1 ? 'bg-emerald-100 text-emerald-800' : ''}`}
                 >
                   {heading}
                 </th>
@@ -904,20 +1017,22 @@ export function ComparisonSection() {
           <tbody>
             {comparisons.map((row) => (
               <tr key={row[0]} className="border-t border-slate-100">
-                {row.map((cell, index) => (
-                  <td
-                    key={cell}
-                    className={`px-5 py-4 text-sm sm:text-base ${
-                      index === 1
-                        ? 'bg-emerald-50/70 font-bold text-emerald-700'
-                        : index === 0
-                          ? 'font-medium text-slate-900'
-                          : 'text-slate-700'
-                    }`}
-                  >
-                    {cell}
-                  </td>
-                ))}
+                {row.map((cell, index) =>
+                  index === 0 ? (
+                    <th key={index} scope="row" className="px-4 py-4 text-sm font-medium text-slate-900 lg:px-5 lg:text-base">
+                      {cell}
+                    </th>
+                  ) : (
+                    <td
+                      key={index}
+                      className={`px-4 py-4 text-sm lg:px-5 lg:text-base ${
+                        index === 1 ? 'bg-emerald-100/50 font-bold text-emerald-800' : 'text-slate-700'
+                      }`}
+                    >
+                      {cell}
+                    </td>
+                  ),
+                )}
               </tr>
             ))}
           </tbody>

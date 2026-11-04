@@ -197,7 +197,7 @@ describe('category step messages', () => {
     expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeNull()
   })
 
-  it('shows a spinner below the list, not skeleton tiles, while more categories load', async () => {
+  it('shows three skeleton tiles below the list, not a spinner, while more categories load', async () => {
     const category = (id: number) => ({ id, businessTypeId: 45, name: `Category ${id}`, description: null, icon: null, imageUrl: null, displayOrder: id })
     let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getCategories>>) => void = () => undefined
     vi.spyOn(vendorOnboardingService, 'getCategories')
@@ -205,19 +205,19 @@ describe('category step messages', () => {
       .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve }))
     setCatalogDraft(45, [])
     render(<CategoryStep issues={[]} confirm={() => undefined} />)
-    const spinner = () => document.querySelector('#categories ~ div > svg.animate-spin')
+    const tiles = () => document.querySelectorAll('#categories ~ div[aria-hidden="true"] > [data-slot="skeleton"]')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Show more categories' }))
 
     expect((await screen.findByRole('status')).textContent).toBe('Loading more categories.')
     expect(screen.getByRole('button', { name: 'Show more categories' }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByRole('button', { name: /Category 4501/ })).toBeTruthy()
-    expect(spinner()?.getAttribute('aria-hidden')).toBe('true')
-    expect(document.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(0)
+    expect(tiles()).toHaveLength(3)
+    expect(document.querySelector('svg.animate-spin')).toBeNull()
 
     await act(async () => resolveMore({ items: [category(4502)], pageNumber: 1, pageSize: 9, totalElements: 2, totalPages: 2, lastPage: true }))
     expect(screen.getByRole('status').textContent).toBe('All categories are loaded.')
-    expect(spinner()).toBeNull()
+    expect(document.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(0)
   })
 })
 
