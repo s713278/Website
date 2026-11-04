@@ -126,6 +126,7 @@ export function CategoryPanel({
   name,
   meta,
   count,
+  error,
   children,
 }: {
   id: string
@@ -134,6 +135,11 @@ export function CategoryPanel({
   name: string
   meta: string
   count: number
+  /**
+   * A validation message for the whole group, shown first in the body, right under the summary.
+   * Not below the panel: a list that loads after the panel opens would push it out of view.
+   */
+  error?: string
   children: ReactNode
 }) {
   return (
@@ -158,7 +164,10 @@ export function CategoryPanel({
           {count}
         </span>
       </summary>
-      <div className="border-t border-[var(--ob-line-soft)] px-3 pt-3 pb-3.5 max-[30rem]:px-2">{children}</div>
+      <div className="border-t border-[var(--ob-line-soft)] px-3 pt-3 pb-3.5 max-[30rem]:px-2">
+        {error ? <p id={`${id}-error`} className="mb-3 text-xs font-medium text-destructive">{error}</p> : null}
+        {children}
+      </div>
     </details>
   )
 }

@@ -454,6 +454,62 @@ describe('validateStep rejects an over-limit projected account total', () => {
   })
 })
 
+describe('validateStep — step 5 needs a product in every chosen category', () => {
+  function category(id: number): VendorOnboardingDraftV1['categories'][number] {
+    return { id, name: `Category ${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null }
+  }
+
+  function productIn(id: number, categoryId: number): SelectedProduct {
+    return { ...product(id, `Product ${id}`), categoryId }
+  }
+
+  it('blocks Continue when a chosen category has no product', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [productIn(1, 10), productIn(2, 10)],
+    }
+    expect(validateStep(5, draft, runtime)).toEqual([
+      { step: 5, field: 'category-products-20', message: 'Choose at least one product in Category 20.' },
+    ])
+  })
+
+  it('names every empty category, not just the first', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20), category(30)],
+      products: [productIn(1, 10)],
+    }
+    expect(validateStep(5, draft, runtime).map((item) => item.field)).toEqual([
+      'category-products-20',
+      'category-products-30',
+    ])
+  })
+
+  it('keeps the single prompt when no product is chosen at all', () => {
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(10), category(20)] }
+    expect(validateStep(5, draft, runtime).map((item) => item.field)).toEqual(['products'])
+  })
+
+  it('does not require a product per category for a submitted store', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [productIn(1, 10)],
+    }
+    expect(additiveCatalogIssues(5, draft)).toEqual([])
+  })
+
+  it('allows Continue when every chosen category has a product', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [productIn(1, 10), productIn(2, 20)],
+    }
+    expect(validateStep(5, draft, runtime)).toEqual([])
+  })
+})
+
 describe('validateStep — step 6 measurement guard', () => {
   // A size's measurement is its product's measurement. Step 6 no longer lets a vendor
   // change it, but a stale draft, a restored draft, or a direct store write could still

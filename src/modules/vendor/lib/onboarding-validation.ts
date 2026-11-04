@@ -325,7 +325,12 @@ export function validateStep(
   }
   if (step === 5) {
     if (!draft.products.length) return [issue(5, 'products', 'Choose at least one product to continue.')]
-    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
+    // Every chosen category needs a product; the field is that category's Step 5 panel.
+    const coveredCategoryIds = new Set(draft.products.map((product) => product.categoryId))
+    const emptyCategoryIssues = draft.categories
+      .filter((category) => !coveredCategoryIds.has(category.id))
+      .map((category) => issue(5, `category-products-${category.id}`, `Choose at least one product in ${category.name}.`))
+    return [...emptyCategoryIssues, ...productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)]
   }
   if (step === 6) {
     // Projected post-save size count: account sizes plus new local ones, an edit net-zero.

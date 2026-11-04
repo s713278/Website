@@ -468,6 +468,20 @@ describe('product step reads a category only once its panel has been opened', ()
     expect(fruit.queryByRole('alert')).toBeNull()
     expect(readIds(read)).toEqual([510, 510])
   })
+
+  it('shows an empty category issue first in that panel, right under its summary', async () => {
+    setup()
+    render(<ProductStep issues={[{ step: 5, field: 'category-products-511', message: 'Choose at least one product in Dairy.' }]} confirm={() => undefined} />)
+    await screen.findByRole('button', { name: /Item of 510/ })
+
+    // The wizard scrolls to this id. It sits above the list, which loads only once the panel
+    // opens: below it, the arriving list would push the message out of view after the scroll.
+    const message = screen.getByText('Choose at least one product in Dairy.')
+    expect(message.id).toBe('category-products-511-error')
+    const body = panel(511).querySelector(':scope > summary')!.nextElementSibling!
+    expect(body.firstElementChild).toBe(message)
+    expect(panel(510).querySelector('.text-destructive')).toBeNull()
+  })
 })
 
 describe('first-page reads in flight are shared', () => {
