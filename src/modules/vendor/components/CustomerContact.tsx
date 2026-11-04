@@ -1,4 +1,5 @@
 import { MessageCircle, Phone } from 'lucide-react'
+import { cn } from '@/shared/lib/utils'
 import {
   callLink,
   formatMobile,
@@ -15,15 +16,20 @@ import {
  *
  * Both links are ordinary anchors. Tapping opens the phone's dialler or WhatsApp; nothing
  * is sent, and no message is prefilled.
+ *
+ * `stacked` is the order-row form: whoever the order is — the name, or the number when there
+ * is none — leads in ink, and a number under a name takes a line of its own above the links.
  */
 export function CustomerContact({
   name,
   mobile,
   className,
+  stacked = false,
 }: {
   name: string | null
   mobile: string | null
   className?: string
+  stacked?: boolean
 }) {
   const call = callLink(mobile)
   const whatsApp = whatsAppLink(mobile)
@@ -32,14 +38,27 @@ export function CustomerContact({
   return (
     <div className={className}>
       {/* A phone number broken across two lines is a phone number nobody can read back. */}
-      <p className="text-sm whitespace-nowrap text-[var(--md-muted)]">
+      <p
+        className={cn(
+          'text-sm whitespace-nowrap',
+          stacked && (name || readable)
+            ? 'font-medium text-[var(--md-ink)]'
+            : 'text-[var(--md-muted)]',
+        )}
+      >
         {name ?? (readable ? readable : 'No contact details')}
       </p>
+
+      {stacked && name && readable ? (
+        <p className="vc-num mt-0.5 text-sm whitespace-nowrap text-[var(--md-muted)]">
+          {readable}
+        </p>
+      ) : null}
 
       {call || whatsApp ? (
         <div className="mt-1 flex flex-wrap items-center gap-3">
           {/* Shown under the name when both exist, so the number is still reachable. */}
-          {name && readable ? (
+          {name && readable && !stacked ? (
             <span className="text-sm whitespace-nowrap text-[var(--md-muted)]">{readable}</span>
           ) : null}
           {call ? (

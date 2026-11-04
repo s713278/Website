@@ -103,10 +103,13 @@ export function mapVendorInsights(payload: unknown): VendorInsights {
 /**
  * One row of the orders list, and the header of the items read.
  *
- * The list row was measured on the deployed API and carries exactly these 15 keys:
+ * The list row was measured on the deployed API and carries exactly these 17 keys:
  * `order_id, vendor_id, user_id, delivery_date, items_count, amount, order_status,
  * payment_status, delivery_method, mobile, gross_amount, discount, delivery_charges,
- * payment_method, order_timing_type`.
+ * payment_method, order_timing_type, delivery_window_start, delivery_window_end`.
+ *
+ * `items_count` is the total units (the sum of quantities), not the number of lines; it is
+ * mapped as `itemCount`.
  *
  * Three consequences, each of which was a live bug before it was measured:
  *
@@ -129,6 +132,7 @@ function mapOrderSummary(row: UnknownRecord): VendorOrderSummary {
     deliveryStatus: toDeliveryStatus(row.order_status ?? row.delivery_status ?? row.status),
     paymentStatus: toPaymentStatus(row.payment_status),
     deliveryDate: str(row.delivery_date),
+    itemCount: num(row.items_count),
   }
 }
 

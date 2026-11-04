@@ -1,12 +1,41 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorOrderDetail } from '@/modules/vendor/types/dashboard'
 import { OrderAdvancePartialError, vendorOrdersService } from '@/shared/api'
+import { formatCurrency } from '@/shared/lib/utils'
 import { VendorOrderDetailPage } from './VendorOrderDetailPage'
+
+/**
+ * TEMP(vendor-orders-read-only): the order-writes switch is off, which hides the action row,
+ * the payment record and the payment badge. The tests that cover those stay, forced on here,
+ * so turning the switch back on finds them still guarding the hidden code. `undefined` reads
+ * the switch's real value, which is what the read-only tests use.
+ */
+const orderWrites = vi.hoisted(() => ({ forced: true as boolean | undefined }))
+
+/**
+ * TEMP(vendor-orders-minimal-rows): the order-details switch is off, which hides the status
+ * and delivery date. The tests written against them stay, forced on here; `undefined` reads
+ * the switch's real value, which is what the minimal-mode tests use.
+ */
+const orderDetails = vi.hoisted(() => ({ forced: true as boolean | undefined }))
+
+vi.mock('@/modules/vendor/lib/order-actions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/modules/vendor/lib/order-actions')>()
+  return {
+    ...actual,
+    get VENDOR_ORDER_WRITES_ENABLED() {
+      return orderWrites.forced ?? actual.VENDOR_ORDER_WRITES_ENABLED
+    },
+    get VENDOR_ORDER_DETAILS_SHOWN() {
+      return orderDetails.forced ?? actual.VENDOR_ORDER_DETAILS_SHOWN
+    },
+  }
+})
 
 /**
  * The three ways this screen can fail to show an order, which must not read alike.
@@ -92,6 +121,7 @@ function detail(overrides: Partial<VendorOrderDetail> = {}): VendorOrderDetail {
     deliveryStatus: 'PENDING',
     paymentStatus: 'DUE',
     deliveryDate: '2026-09-09',
+    itemCount: null,
     deliveryAddress: '12 Market Road, Mirdoddi',
     charges: { gross: 320, discount: 30, deliveryCharges: 30, serviceCharge: null, tax: null },
     lines: [
@@ -453,5 +483,109 @@ describe('VendorOrderDetailPage payment record', () => {
 
     expect(screen.queryByText(/dues/i)).toBeNull()
     expect(screen.queryByText(/cash on delivery/i)).toBeNull()
+  })
+})
+
+describe('VendorOrderDetailPage read-only', () => {
+  beforeEach(() => {
+    orderWrites.forced = undefined
+  })
+
+  afterEach(() => {
+    orderWrites.forced = true
+  })
+
+  /** What a read-only order still shows: its status, who it is for, and what it comes to. */
+  function expectOrderFacts(status: string) {
+    expect(screen.getByText(status)).toBeTruthy()
+    expect(screen.getByText('Asha')).toBeTruthy()
+    expect(screen.getByText('Total').parentElement?.textContent).toContain(formatCurrency(320))
+  }
+
+  it('offers no step, cancel or payment record on a new order', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Confirm order' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel order' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+    expect(screen.queryByLabelText('Reason')).toBeNull()
+    expect(screen.queryByText('Payment due')).toBeNull()
+    expect(screen.queryByText(/saved on this device/i)).toBeNull()
+    expectOrderFacts('New')
+  })
+
+  it('offers no step or cancel on an order out for delivery', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ deliveryStatus: 'SHIPPED' }))
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Mark delivered' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel order' })).toBeNull()
+    expectOrderFacts('Out for delivery')
+  })
+
+  it('shows no paid badge, no way back and no device sentence on a paid order', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ paymentStatus: 'PAID' }))
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Mark unpaid' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+    expect(screen.queryByText('Paid')).toBeNull()
+    expect(screen.queryByText(/saved on this device/i)).toBeNull()
+    expectOrderFacts('New')
+  })
+
+  it('holds no place for the badge or the action row while the first read is in flight', () => {
+    vi.spyOn(vendorOrdersService, 'get').mockReturnValue(new Promise<VendorOrderDetail | null>(() => {}))
+
+    const view = renderDetail()
+
+    // Only the status pill is pill-shaped; the badge and both action buttons are not drawn.
+    const pills = view.container.querySelectorAll('[data-slot="skeleton"].rounded-full')
+    expect(pills).toHaveLength(1)
+  })
+})
+
+describe('VendorOrderDetailPage minimal rows', () => {
+  beforeEach(() => {
+    orderWrites.forced = undefined
+    orderDetails.forced = undefined
+  })
+
+  afterEach(() => {
+    orderWrites.forced = true
+    orderDetails.forced = true
+  })
+
+  it('shows no delivery date, and still shows the status, address, contact and bill', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail())
+
+    renderDetail()
+    await settle()
+
+    expect(screen.queryByText('Delivery date')).toBeNull()
+    expect(screen.queryByText('2026-09-09')).toBeNull()
+    expect(screen.getByText('New')).toBeTruthy()
+    expect(screen.getByText('12 Market Road, Mirdoddi')).toBeTruthy()
+    expect(screen.getByText('Asha')).toBeTruthy()
+    expect(screen.getByText('Total').parentElement?.textContent).toContain(formatCurrency(320))
+  })
+
+  it('draws no empty details block for an order with no address', async () => {
+    vi.spyOn(vendorOrdersService, 'get').mockResolvedValue(detail({ deliveryAddress: null }))
+
+    const view = renderDetail()
+    await settle()
+
+    expect(screen.getByText('New')).toBeTruthy()
+    expect(screen.queryByText('Delivering to')).toBeNull()
+    // The bill's own list is the only one left.
+    expect(view.container.querySelectorAll('dl')).toHaveLength(1)
   })
 })

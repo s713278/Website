@@ -51,3 +51,19 @@ export function formatMobile(mobile: string | null): string | null {
   if (digits.length === 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`
   return mobile
 }
+
+/**
+ * A customer's name as an order row shows it: the first word with its first letter
+ * capitalised, then the last word's initial — "hemesh thakur" reads "Hemesh T.". The rest of
+ * the first word stays as sent, so a name typed in capitals is not quietly rewritten.
+ * Blank or missing → `null`, and the caller shows the number in its place.
+ */
+export function shortCustomerName(name: string | null): string | null {
+  const words = name?.trim().split(/\s+/).filter(Boolean) ?? []
+  if (words.length === 0) return null
+
+  const [first] = words
+  const short = first.charAt(0).toUpperCase() + first.slice(1)
+  if (words.length === 1) return short
+  return `${short} ${words[words.length - 1].charAt(0).toUpperCase()}.`
+}
