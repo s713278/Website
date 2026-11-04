@@ -870,16 +870,28 @@ export function OnboardingWizard() {
 
   const focusField = (field: string) => {
     window.setTimeout(() => {
-      const element = document.getElementById(field)
+      const target = document.getElementById(field)
+      // A disclosure is focused by its summary. The field's message is what gets centred: a
+      // group such as an open panel or a list of panels is taller than the screen, so centring
+      // the field itself pushes its message out of view.
+      const element = target instanceof HTMLDetailsElement ? target.querySelector(':scope > summary') : target
       if (element instanceof HTMLElement) {
+        const scrollTarget = document.getElementById(`${field}-error`) ?? element
+        const reveal = () => {
+          const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          scrollTarget.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
+        }
         const disclosure = element.closest('details')
-        if (disclosure instanceof HTMLDetailsElement) disclosure.open = true
-        if (!element.hasAttribute('tabindex') && !element.matches('input,button,select,textarea,a')) {
+        if (disclosure instanceof HTMLDetailsElement && !disclosure.open) {
+          // Opening a group closes the one that was open, often above it, once its toggle
+          // re-renders. Scrolling before that collapse lands past the target on short screens.
+          disclosure.addEventListener('toggle', () => window.setTimeout(reveal, 0), { once: true })
+          disclosure.open = true
+        } else window.setTimeout(reveal, 0)
+        if (!element.hasAttribute('tabindex') && !element.matches('input,button,select,textarea,a,summary')) {
           element.setAttribute('tabindex', '-1')
         }
-        element.focus()
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
+        element.focus({ preventScroll: true })
       } else headingRef.current?.focus()
     }, 0)
   }

@@ -219,7 +219,7 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
     <div>
       <StepSection id="store-basics" title="Store basics">
         <div className="grid gap-4 @min-[32rem]:grid-cols-2">
-          <Input id="store-name" label="Store name" value={store.storeName} minLength={3} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
+          <Input id="store-name" label="Store name" value={store.storeName} minLength={5} maxLength={100} error={issues.find((item) => item.field === 'store-name')?.message} onChange={(event) => updateStoreName(event.target.value)} placeholder="Example: Lakshmi Home Foods" />
           <Input id="owner-name" label="Owner name" value={draft.business.ownerName} minLength={3} error={issues.find((item) => item.field === 'owner-name')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, ownerName: event.target.value } }), 9)} placeholder="Full name" />
           <Input id="contact-person" label="Contact person" value={draft.business.contactPerson} minLength={3} error={issues.find((item) => item.field === 'contact-person')?.message} onChange={(event) => updateDraft((current) => ({ ...current, business: { ...current.business, contactPerson: event.target.value } }), 9)} placeholder="Who should customers speak with?" />
           {/* Built like the shared Input's label (gap, not margin; one-line leading) so this
