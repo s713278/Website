@@ -1,12 +1,41 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { VendorAccountContext, type VendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import type { VendorOrderPage, VendorOrderSummary } from '@/modules/vendor/types/dashboard'
 import { OrderAdvancePartialError, OrderTransitionRefusedError, vendorOrdersService, type VendorOrderQuery } from '@/shared/api'
+import { formatCurrency } from '@/shared/lib/utils'
 import { VendorOrdersPage } from './VendorOrdersPage'
+
+/**
+ * TEMP(vendor-orders-read-only): the order-writes switch is off, which hides the row controls
+ * and the payment badge. The tests that cover those stay, forced on here, so turning the
+ * switch back on finds them still guarding the hidden code. `undefined` reads the switch's
+ * real value, which is what the read-only tests use.
+ */
+const orderWrites = vi.hoisted(() => ({ forced: true as boolean | undefined }))
+
+/**
+ * TEMP(vendor-orders-minimal-rows): the order-details switch is off, which hides the status
+ * and delivery date. The tests written against them stay, forced on here; `undefined` reads
+ * the switch's real value, which is what the minimal-mode tests use.
+ */
+const orderDetails = vi.hoisted(() => ({ forced: true as boolean | undefined }))
+
+vi.mock('@/modules/vendor/lib/order-actions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/modules/vendor/lib/order-actions')>()
+  return {
+    ...actual,
+    get VENDOR_ORDER_WRITES_ENABLED() {
+      return orderWrites.forced ?? actual.VENDOR_ORDER_WRITES_ENABLED
+    },
+    get VENDOR_ORDER_DETAILS_SHOWN() {
+      return orderDetails.forced ?? actual.VENDOR_ORDER_DETAILS_SHOWN
+    },
+  }
+})
 
 /**
  * What this page fetches, when it refetches, and what it does with a response that arrives
@@ -99,6 +128,7 @@ function order(id: string, total: number | null = 320): VendorOrderSummary {
     deliveryStatus: 'PENDING',
     paymentStatus: 'DUE',
     deliveryDate: '2026-09-09',
+    itemCount: null,
   }
 }
 
@@ -538,5 +568,121 @@ describe('VendorOrdersPage payment record', () => {
     ])
     expect(screen.queryByRole('group', { name: /payment/i })).toBeNull()
     expect(screen.queryByText(/unpaid/i)).toBeNull()
+  })
+})
+
+describe('VendorOrdersPage read-only', () => {
+  beforeEach(() => {
+    orderWrites.forced = undefined
+  })
+
+  afterEach(() => {
+    orderWrites.forced = true
+  })
+
+  it('offers no order or payment control and drops the next-step column', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([order('4021'), { ...order('4022'), deliveryStatus: 'SHIPPED' }]),
+    )
+
+    renderAt()
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Confirm order' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark delivered' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Next step' })).toBeNull()
+    expect(screen.getByRole('columnheader', { name: 'Amount' })).toBeTruthy()
+  })
+
+  it('shows no payment badge, and still shows the status and amount', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(
+      pageOf([order('4021'), { ...order('4022'), paymentStatus: 'PAID' }]),
+    )
+
+    renderAt()
+    await settle()
+
+    expect(screen.queryByText('Payment due')).toBeNull()
+    expect(screen.queryByText('Paid')).toBeNull()
+    const row = screen.getByRole('link', { name: 'Order #4021' }).closest('tr') as HTMLElement
+    expect(within(row).getByText('New')).toBeTruthy()
+    expect(within(row).getByText(formatCurrency(320))).toBeTruthy()
+  })
+})
+
+describe('VendorOrdersPage minimal rows', () => {
+  beforeEach(() => {
+    orderWrites.forced = undefined
+    orderDetails.forced = undefined
+  })
+
+  afterEach(() => {
+    orderWrites.forced = true
+    orderDetails.forced = true
+  })
+
+  it('offers no status chips, no delivery-date filter and no subtotal', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+
+    renderAt('/vendor/orders?start=2026-09-01&end=2026-09-30')
+    await settle()
+
+    expect(screen.queryByRole('group', { name: 'Order status' })).toBeNull()
+    expect(screen.queryByLabelText('Delivery date from')).toBeNull()
+    expect(screen.queryByLabelText('Delivery date to')).toBeNull()
+    expect(screen.queryByText(/delivering/i)).toBeNull()
+    // The subtotal walks bigger pages; with it hidden that walk is never sent.
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(list.mock.calls[0][1]?.size).toBeUndefined()
+  })
+
+  it('asks for every order even when the URL carries a status and dates', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+
+    renderAt('/vendor/orders?status=SCHEDULED&start=2026-09-01&end=2026-09-30')
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledWith('vendor-1', {
+      page: 0,
+      status: null,
+      startDate: null,
+      endDate: null,
+    })
+  })
+
+  it('keeps paging through every order', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')], 0, 3))
+
+    renderAt('/vendor/orders?status=SCHEDULED')
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await settle()
+
+    expect(list.mock.calls.at(-1)?.[1]).toEqual({ page: 1, status: null, startDate: null, endDate: null })
+  })
+
+  it('renders the order, customer and amount, with no status or delivery date', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([order('4021')]))
+
+    renderAt()
+    await settle()
+
+    const row = screen.getByRole('link', { name: 'Order #4021' }).closest('tr') as HTMLElement
+    expect(within(row).getByText(formatCurrency(320))).toBeTruthy()
+    expect(within(row).queryByText('New')).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).toBeNull()
+  })
+
+  it('says there are no orders yet when the list is empty', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockResolvedValue(pageOf([]))
+
+    renderAt('/vendor/orders?status=SCHEDULED')
+    await settle()
+
+    expect(screen.getByText('No orders yet.')).toBeTruthy()
+    expect(screen.queryByText('No orders here')).toBeNull()
+    expect(screen.queryByText(/Nothing matches these filters/)).toBeNull()
   })
 })

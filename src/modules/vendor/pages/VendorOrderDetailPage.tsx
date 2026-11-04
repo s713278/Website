@@ -12,6 +12,8 @@ import {
   nextVendorDeliveryStatus,
   presentDeliveryStatus,
   presentPaymentStatus,
+  VENDOR_ORDER_DETAILS_SHOWN,
+  VENDOR_ORDER_WRITES_ENABLED,
 } from '@/modules/vendor/lib/order-actions'
 import { chargeLines, chargesReconcile } from '@/modules/vendor/lib/order-charges'
 import { deliveryStatusPillClass } from '@/modules/vendor/lib/status-pill'
@@ -28,6 +30,12 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  * The first read's placeholder: the order panel and the bill at their real sizes, so the
  * page does not jump when the order lands. Payment and cancel blocks depend on the status
  * and are left out.
+ *
+ * TEMP(vendor-orders-read-only): the payment-badge pill and the action row follow the
+ * order-writes switch, so a read-only page does not jump either.
+ *
+ * TEMP(vendor-orders-minimal-rows): so does the delivery date's placeholder, on the
+ * order-details switch.
  */
 function OrderDetailSkeleton() {
   return (
@@ -39,26 +47,30 @@ function OrderDetailSkeleton() {
         <DashboardPanel>
           <div className="flex flex-wrap items-center gap-2">
             <Skeleton className="h-5 w-20 rounded-full" />
-            <Skeleton className="h-5 w-20 rounded-full" />
+            {VENDOR_ORDER_WRITES_ENABLED ? <Skeleton className="h-5 w-20 rounded-full" /> : null}
           </div>
           <div className="mt-4">
             <Skeleton className="h-5 w-32" />
             <Skeleton className="mt-1 h-5 w-44" />
           </div>
           <div className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 sm:grid-cols-2">
-            <div>
-              <Skeleton className="h-5 w-20" />
-              <Skeleton className="mt-0.5 h-5 w-24" />
-            </div>
+            {VENDOR_ORDER_DETAILS_SHOWN ? (
+              <div>
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="mt-0.5 h-5 w-24" />
+              </div>
+            ) : null}
             <div className="sm:col-span-2">
               <Skeleton className="h-5 w-20" />
               <Skeleton className="mt-0.5 h-5 w-64 max-w-full" />
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
-            <Skeleton className="h-8 w-32 rounded-full" />
-            <Skeleton className="h-8 w-28 rounded-full" />
-          </div>
+          {VENDOR_ORDER_WRITES_ENABLED ? (
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
+              <Skeleton className="h-8 w-32 rounded-full" />
+              <Skeleton className="h-8 w-28 rounded-full" />
+            </div>
+          ) : null}
         </DashboardPanel>
 
         <Card className="p-0">
@@ -296,7 +308,8 @@ export function VendorOrderDetailPage() {
           <DashboardPanel>
             <div className="flex flex-wrap items-center gap-2">
               <span className={deliveryStatusPillClass(order.deliveryStatus)}>{delivery.label}</span>
-              {order.paymentStatus ? (
+              {/* TEMP(vendor-orders-read-only): no payment claim while orders are read-only. */}
+              {VENDOR_ORDER_WRITES_ENABLED && order.paymentStatus ? (
                 <Badge tone={presentPaymentStatus(order.paymentStatus).tone}>
                   {presentPaymentStatus(order.paymentStatus).label}
                 </Badge>
@@ -313,39 +326,48 @@ export function VendorOrderDetailPage() {
               className="mt-4"
             />
 
-            <dl className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 text-sm sm:grid-cols-2">
-              {order.deliveryDate ? (
-                <div>
-                  <dt className="text-[var(--md-muted)]">Delivery date</dt>
-                  <dd className="vc-num mt-0.5 font-medium">{order.deliveryDate}</dd>
-                </div>
-              ) : null}
-              {order.deliveryAddress ? (
-                <div className="sm:col-span-2">
-                  <dt className="text-[var(--md-muted)]">Delivering to</dt>
-                  <dd className="mt-0.5 font-medium">{order.deliveryAddress}</dd>
-                </div>
-              ) : null}
-            </dl>
+            {/*
+              TEMP(vendor-orders-minimal-rows): the delivery date waits on the order-details
+              switch, and with it hidden an order with no address draws no empty ruled block.
+            */}
+            {VENDOR_ORDER_DETAILS_SHOWN || order.deliveryAddress ? (
+              <dl className="mt-5 grid gap-4 border-t border-[var(--vc-rule)] pt-4 text-sm sm:grid-cols-2">
+                {VENDOR_ORDER_DETAILS_SHOWN && order.deliveryDate ? (
+                  <div>
+                    <dt className="text-[var(--md-muted)]">Delivery date</dt>
+                    <dd className="vc-num mt-0.5 font-medium">{order.deliveryDate}</dd>
+                  </div>
+                ) : null}
+                {order.deliveryAddress ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-[var(--md-muted)]">Delivering to</dt>
+                    <dd className="mt-0.5 font-medium">{order.deliveryAddress}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : null}
 
-            <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
-              {next ? (
-                <Button
-                  size="sm"
-                  className="rounded-full"
-                  pending={busy}
-                  disabled={busy || loading}
-                  onClick={() => void advance(next)}
-                >
-                  {busy ? 'Working…' : forwardActionLabel(next)}
-                </Button>
-              ) : null}
-              {canCancel(order.deliveryStatus) && !cancelling ? (
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setCancelling(true)}>
-                  Cancel order
-                </Button>
-              ) : null}
-            </div>
+            {/* TEMP(vendor-orders-read-only): the action row waits on the order-writes switch. */}
+            {VENDOR_ORDER_WRITES_ENABLED ? (
+              <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--vc-rule)] pt-5">
+                {next ? (
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    pending={busy}
+                    disabled={busy || loading}
+                    onClick={() => void advance(next)}
+                  >
+                    {busy ? 'Working…' : forwardActionLabel(next)}
+                  </Button>
+                ) : null}
+                {canCancel(order.deliveryStatus) && !cancelling ? (
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => setCancelling(true)}>
+                    Cancel order
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
 
             {/*
               The vendor's own record that they were paid, kept on this device.
@@ -359,8 +381,11 @@ export function VendorOrderDetailPage() {
               refund question v1 has no answer for. **The sentence is not**: an order marked
               paid and then cancelled still shows a Paid badge, and a badge with no word about
               where it came from is exactly what that sentence exists to prevent.
+
+              TEMP(vendor-orders-read-only): hidden, with its sentence, while orders are read-only.
             */}
-            {canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID' ? (
+            {VENDOR_ORDER_WRITES_ENABLED &&
+            (canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID') ? (
               <div className="mt-5 border-t border-[var(--vc-rule)] pt-5">
                 {canRecordPayment(order.deliveryStatus) ? (
                   <Button
@@ -392,7 +417,8 @@ export function VendorOrderDetailPage() {
               </div>
             ) : null}
 
-            {cancelling ? (
+            {/* TEMP(vendor-orders-read-only): unreachable without its button; gated to match. */}
+            {VENDOR_ORDER_WRITES_ENABLED && cancelling ? (
               <div className="mt-5 rounded-lg border border-[var(--vc-edge)] bg-slate-50/60 p-4">
                 <p className="text-sm font-medium">Cancel this order?</p>
                 <p className="mt-1 text-sm text-[var(--md-muted)]">

@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CustomerContact } from '@/modules/vendor/components/CustomerContact'
-import { presentDeliveryStatus, presentPaymentStatus } from '@/modules/vendor/lib/order-actions'
+import { shortCustomerName } from '@/modules/vendor/lib/customer-contact'
+import {
+  presentDeliveryStatus,
+  presentPaymentStatus,
+  VENDOR_ORDER_DETAILS_SHOWN,
+  VENDOR_ORDER_WRITES_ENABLED,
+} from '@/modules/vendor/lib/order-actions'
 import { deliveryStatusPillClass } from '@/modules/vendor/lib/status-pill'
 import { DELIVERY_DATE_LABEL, deliveryDayLabel } from '@/modules/vendor/lib/work-queue'
 import type { VendorOrderSummary } from '@/modules/vendor/types/dashboard'
@@ -40,30 +46,74 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  * columns and waits for `xl`; Overview carries four and can afford `lg`. Both sets are written
  * out in full because a class name assembled from a prefix is a class name Tailwind never sees.
  *
- * `stacked` is the one alignment switch. Below the breakpoint a cell is a label-and-value
- * line, so the value hangs off the right edge; as a table column it starts at the left like
- * everything else. Nothing in the table is right-aligned any more: the amount used to be,
- * which pushed the figures across their column and left them touching the status pill in the
- * next one while a hand's width of nothing sat between the delivery date and them. Every
- * column now begins on its own vertical, one `px-3` gutter apart, and the row reads as an
- * even rhythm rather than two crowded pairs.
+ * Below the breakpoint each row is a small grid rather than a column of label-and-value
+ * lines, which on a phone repeated the same three labels on every row and on a tablet left a
+ * hand's width of nothing between each label and its value. Who the order is sits on the
+ * left — the number, then the contact — and where it stands sits on the right: the status
+ * pill, then the facts. On a phone the contact takes the full width and the facts drop under
+ * it, delivery date left and amount right. Only the date keeps a visible label, because
+ * "Tomorrow" alone does not say what is tomorrow; the amount and the status say what they
+ * are by themselves, and keep their names for a screen reader. The next step, when there is
+ * one, takes the last line at the right; on a phone the payment action shares that line at the
+ * left, and from `sm` it sits under the payment line it changes.
+ *
+ * Every cell keeps its table-column place in the markup, so the table and a screen reader
+ * read the same order; only grid placement moves them. Grid placement and margins do nothing
+ * to a table cell, so the classes that build the stack fall away at the breakpoint.
+ *
+ * In the table nothing is right-aligned: the amount used to be, which pushed the figures
+ * across their column and left them touching the status pill in the next one while a hand's
+ * width of nothing sat between the delivery date and them. Every column begins on its own
+ * vertical, one `px-3` gutter apart, and the row reads as an even rhythm rather than two
+ * crowded pairs.
+ *
+ * The amount, payment and next-step keys exist only on `WIDE`: those cells render only when
+ * `showAmount` or `renderNextStep` is set, and either one selects `WIDE`.
  */
 const WIDE = {
   head: 'hidden xl:table-header-group',
-  row: 'block border-l-[3px] py-2.5 xl:table-row xl:py-0',
-  cell: 'flex items-baseline justify-between gap-4 px-3 py-1 xl:table-cell xl:py-3.5 xl:align-middle',
-  block: 'block px-3 py-1 xl:table-cell xl:py-3.5 xl:align-middle',
-  label: 'text-xs text-[var(--md-muted)] xl:hidden',
-  stacked: 'text-right xl:text-left',
+  // Three tracks at every stack size, so no two lines have to share one split: on a phone
+  // the pill spans the two right tracks of the first line and the date the two left tracks of
+  // the facts line, and a long status cannot squeeze the date, nor a long date the status.
+  row: 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-4 border-l-[3px] px-3 py-3 xl:table-row xl:px-0 xl:py-0',
+  order: 'col-1 row-1 block xl:table-cell xl:px-3 xl:py-3.5 xl:align-middle',
+  contact:
+    'col-span-full row-2 mt-1 block sm:col-1 sm:row-[2/span_2] xl:table-cell xl:px-3 xl:py-3.5 xl:align-middle',
+  date: 'col-[1/3] row-3 mt-2 flex items-baseline gap-1.5 max-xl:whitespace-nowrap sm:col-2 sm:row-2 sm:mt-1 sm:justify-self-end sm:text-right xl:table-cell xl:px-3 xl:py-3.5 xl:text-start xl:align-middle',
+  dateLabel: 'text-xs text-[var(--md-muted)] xl:hidden',
+  // The money cell's own box steps aside below the breakpoint so its three lines can each
+  // take a place in the row: the figure and whether it is paid on the right, and the action
+  // at the foot on a phone, within thumb reach. From `sm` the action sits directly under the
+  // payment line instead, beside the money it changes rather than a panel's width from it.
+  // At the breakpoint it is an ordinary cell again.
+  amount: 'contents xl:table-cell xl:px-3 xl:py-3.5 xl:align-middle',
+  amountValue:
+    'col-3 row-3 mt-2 justify-self-end text-right sm:col-3 sm:row-2 sm:mt-1 xl:mt-0 xl:justify-self-auto xl:text-start',
+  // "Amount not available" is the one long amount; on a phone it wraps in a narrow measure
+  // so the date beside it keeps its single line. A figure never wraps.
+  amountMissing: 'max-sm:max-w-[5.5rem]',
+  payment: 'col-3 row-4 justify-self-end sm:col-3 sm:row-3 xl:justify-self-auto',
+  paymentAction:
+    'col-1 row-5 mt-2 block self-center empty:max-xl:hidden sm:col-3 sm:row-4 sm:mt-1 sm:justify-self-end xl:justify-self-auto',
+  status:
+    'col-[2/-1] row-1 block self-center justify-self-end xl:table-cell xl:px-3 xl:py-3.5 xl:align-middle',
+  pill: 'max-xl:whitespace-nowrap',
+  srLabel: 'sr-only xl:hidden',
+  nextStep:
+    'col-span-full row-5 block self-center justify-self-end xl:table-cell xl:px-3 xl:py-3.5 xl:align-middle',
+  nextStepInner: 'mt-2 flex justify-end empty:hidden xl:mt-0 xl:justify-start',
 }
 
 const NARROW = {
   head: 'hidden lg:table-header-group',
-  row: 'block border-l-[3px] py-2.5 lg:table-row lg:py-0',
-  cell: 'flex items-baseline justify-between gap-4 px-3 py-1 lg:table-cell lg:py-3.5 lg:align-middle',
-  block: 'block px-3 py-1 lg:table-cell lg:py-3.5 lg:align-middle',
-  label: 'text-xs text-[var(--md-muted)] lg:hidden',
-  stacked: 'text-right lg:text-left',
+  row: 'grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 border-l-[3px] px-3 py-3 lg:table-row lg:px-0 lg:py-0',
+  order: 'col-1 row-1 block lg:table-cell lg:px-3 lg:py-3.5 lg:align-middle',
+  contact: 'col-span-full row-2 mt-1 block sm:col-1 lg:table-cell lg:px-3 lg:py-3.5 lg:align-middle',
+  date: 'col-1 row-3 mt-2 flex items-baseline gap-1.5 max-lg:whitespace-nowrap sm:col-2 sm:row-2 sm:mt-1 sm:justify-self-end sm:text-right lg:table-cell lg:px-3 lg:py-3.5 lg:text-start lg:align-middle',
+  dateLabel: 'text-xs text-[var(--md-muted)] lg:hidden',
+  status: 'col-2 row-1 block self-center justify-self-end lg:table-cell lg:px-3 lg:py-3.5 lg:align-middle',
+  pill: 'max-lg:whitespace-nowrap',
+  srLabel: 'sr-only lg:hidden',
 }
 
 const HEAD_CELL = 'vc-label px-3 py-2 text-left'
@@ -99,6 +149,19 @@ export function OrderLedger({
   renderNextStep,
   renderPaymentAction,
 }: OrderLedgerProps) {
+  // TEMP(vendor-orders-minimal-rows): no status or delivery date, so one row for both pages.
+  if (!VENDOR_ORDER_DETAILS_SHOWN) {
+    return (
+      <MinimalOrderLedger
+        orders={orders}
+        caption={caption}
+        linkState={linkState}
+        renderNextStep={renderNextStep}
+        renderPaymentAction={renderPaymentAction}
+      />
+    )
+  }
+
   const style = showAmount || renderNextStep ? WIDE : NARROW
 
   return (
@@ -165,7 +228,7 @@ export function OrderLedger({
                   day.overdue ? 'border-l-[var(--md-danger)]' : 'border-l-transparent',
                 )}
               >
-                <td className={style.block}>
+                <td className={style.order}>
                   {/*
                     Under the "Order" head the word is redundant, but a row read out of the
                     table — by a screen reader, or from the rotor's list of links — is just
@@ -181,13 +244,13 @@ export function OrderLedger({
                   </Link>
                 </td>
 
-                <td className={style.block}>
+                <td className={style.contact}>
                   <CustomerContact name={order.customerName} mobile={order.customerMobile} />
                 </td>
 
-                <td className={style.cell}>
-                  <span className={style.label}>{DELIVERY_DATE_LABEL}</span>
-                  <span className={style.stacked}>
+                <td className={style.date}>
+                  <span className={style.dateLabel}>{DELIVERY_DATE_LABEL}</span>
+                  <span>
                     <span
                       className={cn(
                         'vc-num block',
@@ -214,51 +277,197 @@ export function OrderLedger({
                   "Payment due" is the state nearly every order is in, so it stays quiet and
                   "Paid" is the one that carries colour. An amber on every row would be a second
                   alarm competing with the only one that means drop everything.
+
+                  TEMP(vendor-orders-read-only): the payment badge waits on the order-writes
+                  switch; with orders read-only the console makes no claim about money.
                 */}
                 {showAmount ? (
-                  <td className={style.cell}>
-                    <span className={style.label}>Amount</span>
-                    <span className={style.stacked}>
-                      {order.total != null ? (
-                        <span className="vc-num block font-semibold whitespace-nowrap">
-                          {formatCurrency(order.total)}
-                        </span>
-                      ) : (
-                        <span className="block text-slate-500">Amount not available</span>
-                      )}
-                      {payment ? (
-                        <span
-                          className={cn(
-                            'block text-xs whitespace-nowrap',
-                            payment.tone === 'success'
-                              ? 'font-medium text-[var(--vc-tint-ink)]'
-                              : 'text-[var(--md-muted)]',
-                          )}
-                        >
-                          {payment.label}
-                        </span>
-                      ) : null}
-                      {renderPaymentAction ? (
-                        <span className="mt-1 block">{renderPaymentAction(order)}</span>
-                      ) : null}
-                    </span>
+                  <td className={WIDE.amount}>
+                    <span className={WIDE.srLabel}>Amount</span>
+                    {order.total != null ? (
+                      <span
+                        className={cn(
+                          WIDE.amountValue,
+                          'vc-num block font-semibold whitespace-nowrap',
+                        )}
+                      >
+                        {formatCurrency(order.total)}
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(WIDE.amountValue, WIDE.amountMissing, 'block text-slate-500')}
+                      >
+                        Amount not available
+                      </span>
+                    )}
+                    {VENDOR_ORDER_WRITES_ENABLED && payment ? (
+                      <span
+                        className={cn(
+                          WIDE.payment,
+                          'block text-xs whitespace-nowrap',
+                          payment.tone === 'success'
+                            ? 'font-medium text-[var(--vc-tint-ink)]'
+                            : 'text-[var(--md-muted)]',
+                        )}
+                      >
+                        {payment.label}
+                      </span>
+                    ) : null}
+                    {renderPaymentAction ? (
+                      <span className={WIDE.paymentAction}>{renderPaymentAction(order)}</span>
+                    ) : null}
                   </td>
                 ) : null}
 
-                <td className={style.cell}>
-                  <span className={style.label}>Status</span>
-                  <span className={deliveryStatusPillClass(order.deliveryStatus)}>
+                <td className={style.status}>
+                  <span className={style.srLabel}>Status</span>
+                  <span className={cn(deliveryStatusPillClass(order.deliveryStatus), style.pill)}>
                     {delivery.label}
                   </span>
                 </td>
 
                 {renderNextStep ? (
-                  <td className={cn(style.block, 'pt-2 xl:py-3.5')}>
-                    <span className="flex justify-end xl:justify-start">
+                  <td className={WIDE.nextStep}>
+                    <span className={WIDE.nextStepInner}>
                       {renderNextStep(order)}
                     </span>
                   </td>
                 ) : null}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * TEMP(vendor-orders-minimal-rows): the row while status and delivery date are hidden —
+ * the order, the customer and the amount, the same three on Overview and Orders.
+ *
+ * Three columns fit a phone held sideways, so the table starts at `sm` on both pages. Below
+ * it the order and its amount share the first line, number left and money right, and the
+ * customer takes the full width under them. The amount is right-aligned here, unlike the
+ * full row: with no status pill beside it there is nothing for the figures to crowd, and a
+ * column of rupee totals is read down its right edge.
+ *
+ * The left rule the full row keeps for lateness is gone with the delivery date it measures.
+ * When order writes are on, the payment line, its action and the next step stack under the
+ * amount, so the row stays three columns.
+ */
+const MINIMAL = {
+  head: 'hidden sm:table-header-group',
+  row: 'grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 px-3 py-3 sm:table-row sm:px-0 sm:py-0',
+  order: 'col-1 row-1 block sm:table-cell sm:px-3 sm:py-3.5 sm:align-top',
+  contact: 'col-span-full row-2 mt-2 block sm:table-cell sm:mt-0 sm:px-3 sm:py-3.5 sm:align-top',
+  amount:
+    'col-2 row-1 block text-right sm:table-cell sm:px-3 sm:py-3.5 sm:text-right sm:align-top',
+}
+
+type MinimalOrderLedgerProps = Pick<
+  OrderLedgerProps,
+  'orders' | 'caption' | 'linkState' | 'renderNextStep' | 'renderPaymentAction'
+>
+
+function itemCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'item' : 'items'}`
+}
+
+function MinimalOrderLedger({
+  orders,
+  caption,
+  linkState,
+  renderNextStep,
+  renderPaymentAction,
+}: MinimalOrderLedgerProps) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <caption className="sr-only">{caption}</caption>
+
+        <thead className={MINIMAL.head}>
+          <tr className="border-b border-[var(--vc-edge)]">
+            <th scope="col" className={cn(HEAD_CELL, 'w-[7rem]')}>
+              Order
+            </th>
+            <th scope="col" className={HEAD_CELL}>
+              Customer
+            </th>
+            <th scope="col" className={cn(HEAD_CELL, 'w-[10rem] text-right')}>
+              Amount
+            </th>
+          </tr>
+        </thead>
+
+        <tbody className="vc-rows">
+          {orders.map((order) => {
+            const payment = order.paymentStatus ? presentPaymentStatus(order.paymentStatus) : null
+
+            return (
+              <tr
+                key={order.id}
+                className={cn(MINIMAL.row, 'transition-colors hover:bg-slate-50/70')}
+              >
+                <td className={MINIMAL.order}>
+                  <Link
+                    to={`/vendor/orders/${order.id}`}
+                    state={linkState}
+                    aria-label={`Order #${order.id}`}
+                    className="vc-num font-semibold hover:underline"
+                  >
+                    #{order.id}
+                  </Link>
+                  {order.itemCount != null ? (
+                    <span className="vc-num mt-0.5 block text-xs text-[var(--md-muted)] sm:mt-1 sm:leading-5">
+                      {itemCountLabel(order.itemCount)}
+                    </span>
+                  ) : null}
+                </td>
+
+                <td className={MINIMAL.contact}>
+                  <CustomerContact
+                    name={shortCustomerName(order.customerName)}
+                    mobile={order.customerMobile}
+                    stacked
+                  />
+                </td>
+
+                <td className={MINIMAL.amount}>
+                  <span className="sr-only sm:hidden">Amount</span>
+                  {order.total != null ? (
+                    <span className="vc-num block font-semibold whitespace-nowrap text-[var(--md-ink)]">
+                      {formatCurrency(order.total)}
+                    </span>
+                  ) : (
+                    <span className="block text-[var(--md-muted)] max-sm:max-w-[6rem] sm:whitespace-nowrap">
+                      Amount not available
+                    </span>
+                  )}
+                  {/* TEMP(vendor-orders-read-only): no payment claim while orders are read-only. */}
+                  {VENDOR_ORDER_WRITES_ENABLED && payment ? (
+                    <span
+                      className={cn(
+                        'mt-0.5 block text-xs whitespace-nowrap',
+                        payment.tone === 'success'
+                          ? 'font-medium text-[var(--vc-tint-ink)]'
+                          : 'text-[var(--md-muted)]',
+                      )}
+                    >
+                      {payment.label}
+                    </span>
+                  ) : null}
+                  {renderPaymentAction ? (
+                    <span className="mt-1 flex justify-end empty:hidden">
+                      {renderPaymentAction(order)}
+                    </span>
+                  ) : null}
+                  {renderNextStep ? (
+                    <span className="mt-2 flex justify-end empty:hidden">
+                      {renderNextStep(order)}
+                    </span>
+                  ) : null}
+                </td>
               </tr>
             )
           })}

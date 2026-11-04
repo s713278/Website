@@ -15,7 +15,26 @@ import type {
 import { WORK_QUEUE_STATUSES } from '@/modules/vendor/lib/work-queue'
 import { vendorOrdersService, vendorProductsService, vendorService } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { formatCurrency } from '@/shared/lib/utils'
 import { VendorOverviewPage } from './VendorOverviewPage'
+
+/**
+ * TEMP(vendor-orders-minimal-rows): the order-details switch is off, which hides the status
+ * tiles, the queue and the rows' status and delivery date. The tests written against them
+ * stay, forced on here; `undefined` reads the switch's real value, which is what the
+ * minimal-mode tests use.
+ */
+const orderDetails = vi.hoisted(() => ({ forced: true as boolean | undefined }))
+
+vi.mock('@/modules/vendor/lib/order-actions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/modules/vendor/lib/order-actions')>()
+  return {
+    ...actual,
+    get VENDOR_ORDER_DETAILS_SHOWN() {
+      return orderDetails.forced ?? actual.VENDOR_ORDER_DETAILS_SHOWN
+    },
+  }
+})
 
 /**
  * The clock is fixed so the queue window can be asserted against literal dates rather than
@@ -134,6 +153,7 @@ function order(
     deliveryStatus,
     paymentStatus: 'DUE',
     deliveryDate,
+    itemCount: null,
   }
 }
 
@@ -540,5 +560,112 @@ describe('VendorOverviewPage under StrictMode', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(listSizes).toHaveBeenCalledTimes(1)
     expect(listSizes.mock.calls[0][1]?.aborted).toBe(false)
+  })
+})
+
+describe('VendorOverviewPage minimal rows', () => {
+  beforeEach(() => {
+    orderDetails.forced = undefined
+  })
+
+  afterEach(() => {
+    orderDetails.forced = true
+  })
+
+  const latestPanel = () =>
+    screen.getByRole('heading', { name: 'Latest orders' }).closest('[data-slot="card"]') as HTMLElement
+
+  it('lists the latest orders with no window, status or queue filtering', async () => {
+    const list = stubQueue([
+      order('4021', 'PENDING', '2026-09-06'),
+      order('4010', 'DELIVERED', '2026-09-02'),
+    ])
+    const getInsights = stubInsights({ PENDING: 4 })
+
+    renderFor()
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledWith('vendor-1', { page: 0 })
+    // A finished order is not dropped: with no status shown, nothing tells it apart.
+    expect(within(latestPanel()).getByRole('link', { name: 'Order #4021' })).toBeTruthy()
+    expect(within(latestPanel()).getByRole('link', { name: 'Order #4010' })).toBeTruthy()
+    expect(within(latestPanel()).getAllByText(formatCurrency(320))).toHaveLength(2)
+    expect(within(latestPanel()).queryByText('New')).toBeNull()
+    expect(within(latestPanel()).getByRole('link', { name: 'See all' }).getAttribute('href')).toBe('/vendor/orders')
+    expect(screen.queryByRole('heading', { name: 'What needs doing' })).toBeNull()
+    expect(screen.queryByText(/Deliveries due/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+    expect(getInsights).not.toHaveBeenCalled()
+  })
+
+  it('shows the order total from the same read, beside Products and no status tile', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list').mockResolvedValue({
+      ...pageOf([order('4021', 'PENDING', '2026-09-06')], false),
+      totalElements: 37,
+    })
+
+    renderFor()
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(1)
+    const tile = screen.getByRole('link', { name: 'Orders 37' })
+    expect(tile.getAttribute('href')).toBe('/vendor/orders')
+    const names = Array.from((tile.parentElement as HTMLElement).querySelectorAll('a')).map((a) => a.textContent)
+    expect(names).toEqual(['Orders 37', 'Products 0'])
+    expect(screen.queryByRole('link', { name: /^New/ })).toBeNull()
+  })
+
+  it('holds the Orders tile with a placeholder while the read is pending', async () => {
+    vi.spyOn(vendorOrdersService, 'list').mockReturnValue(new Promise(() => {}))
+
+    renderFor()
+    await settle()
+
+    const grid = screen.getByRole('link', { name: /^Products/ }).parentElement as HTMLElement
+    expect(grid.children).toHaveLength(2)
+    expect(grid.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByRole('status', { name: 'Loading latest orders' })).toBeTruthy()
+  })
+
+  it('shows a dash on the tile and an error in the panel when the read fails, and retries once', async () => {
+    const list = vi.spyOn(vendorOrdersService, 'list')
+      .mockRejectedValueOnce(new Error('Orders are down'))
+      .mockResolvedValue(pageOf([order('4021', 'PENDING', '2026-09-06')]))
+
+    renderFor()
+    await settle()
+
+    expect(screen.getByRole('link', { name: 'Orders —' })).toBeTruthy()
+    fireEvent.click(within(latestPanel()).getByRole('button', { name: 'Try again' }))
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('link', { name: 'Orders 1' })).toBeTruthy()
+    expect(within(latestPanel()).getByRole('link', { name: 'Order #4021' })).toBeTruthy()
+  })
+
+  it('says there are no orders yet, and keeps the way to Orders', async () => {
+    stubQueue([])
+
+    renderFor()
+    await settle()
+
+    expect(within(latestPanel()).getByText('No orders yet.')).toBeTruthy()
+    expect(within(latestPanel()).getByRole('link', { name: 'See all' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Orders 0' })).toBeTruthy()
+  })
+
+  it('reads the orders and the catalog once each under StrictMode', async () => {
+    const list = stubQueue([])
+    const getInsights = stubInsights({})
+    const listSizes = vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([])
+
+    renderFor('OPEN', true)
+    await settle()
+
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(listSizes).toHaveBeenCalledTimes(1)
+    expect(getInsights).not.toHaveBeenCalled()
   })
 })
