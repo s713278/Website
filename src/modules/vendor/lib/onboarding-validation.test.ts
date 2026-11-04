@@ -739,3 +739,269 @@ describe('validateStep — step 9 WhatsApp numbers', () => {
     expect(supportIssue('12345')).toBe(true)
   })
 })
+
+describe('validateStep — step 4 leaves room for a product in every category', () => {
+  function category(id: number): VendorOnboardingDraftV1['categories'][number] {
+    return { id, name: `Category ${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null }
+  }
+
+  // Step 5 needs a product in every chosen category and an assigned category cannot be
+  // removed, so a category added with no product slot left would trap the vendor.
+  it('rejects a new category when the product allowance is already used up', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }],
+    }
+    const issues = validateStep(4, draft, runtime, 5, [], { maxProducts: 1 })
+    expect(issues).toEqual([expect.objectContaining({ step: 4, field: 'categories' })])
+    expect(issues[0].message).toMatch(/product/i)
+  })
+
+  it('counts products already on the account against the remaining room', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20), category(30)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }],
+    }
+    const account = { categoryIds: [10], productIds: [1, 2], skuIds: [] }
+    expect(validateStep(4, draft, runtime, 5, [], { maxProducts: 3, account })).toHaveLength(1)
+    expect(validateStep(4, draft, runtime, 5, [], { maxProducts: 4, account })).toEqual([])
+  })
+
+  it('accepts categories that already hold a product even at the product limit', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }, { ...product(2, 'Rice'), categoryId: 20 }],
+    }
+    expect(validateStep(4, draft, runtime, 5, [], { maxProducts: 2 })).toEqual([])
+  })
+
+  it('does not apply to a submitted store, which need not fill every category', () => {
+    const draft = { ...createEmptyOnboardingDraft(), categories: [category(10), category(20)] }
+    expect(additiveCatalogIssues(4, draft, 5, { maxProducts: 0 })).toEqual([])
+  })
+})
+
+describe('validateStep — step 5 coverage edge cases', () => {
+  function category(id: number): VendorOnboardingDraftV1['categories'][number] {
+    return { id, name: `Category ${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null }
+  }
+
+  it('does not let a product outside the chosen categories cover an empty one', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }, { ...product(2, 'Stray'), categoryId: 99 }],
+    }
+    expect(validateStep(5, draft, runtime).map((item) => item.field)).toEqual(['category-products-20'])
+  })
+
+  it('reports an empty category before the product limit', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }, { ...product(2, 'Curd'), categoryId: 10 }],
+    }
+    expect(validateStep(5, draft, runtime, 5, [], { maxProducts: 1 }).map((item) => item.field)).toEqual([
+      'category-products-20',
+      'products',
+    ])
+  })
+
+  it('surfaces an empty category again in the Step 10 readiness pass', () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      categories: [category(10), category(20)],
+      products: [{ ...product(1, 'Milk'), categoryId: 10 }],
+    }
+    expect(readinessIssues(draft, runtime).some((item) => item.field === 'category-products-20')).toBe(true)
+  })
+})
+
+describe('validateStep — step 7 counts are whole numbers and charges are money', () => {
+  type Delivery = VendorOnboardingDraftV1['delivery']
+
+  function deliveryIssues(patch: (delivery: Delivery) => Delivery): string[] {
+    const draft = createEmptyOnboardingDraft()
+    return validateStep(7, { ...draft, delivery: patch(draft.delivery) }, runtime).map((item) => item.field)
+  }
+
+  it('accepts the default delivery settings', () => {
+    expect(deliveryIssues((delivery) => delivery)).toEqual([])
+  })
+
+  it('rejects a fractional delivery-day range', () => {
+    expect(deliveryIssues((delivery) => ({ ...delivery, fixedWindow: { minDeliveryDays: 1.5, maxDeliveryDays: 3 } }))).toEqual(['fixed-window'])
+    expect(deliveryIssues((delivery) => ({ ...delivery, fixedWindow: { minDeliveryDays: 1, maxDeliveryDays: 2.5 } }))).toEqual(['fixed-window'])
+  })
+
+  it('rejects fractional advance-booking days', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      schedulingStrategy: 'CUSTOMER_SELECT_DATE',
+      customerSelectDate: { ...delivery.customerSelectDate, minAdvanceBookingDays: 0.5 },
+    }))).toEqual(['customer-date-range'])
+  })
+
+  it('rejects a fractional maximum orders per day', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      schedulingStrategy: 'PREDEFINED_DAYS',
+      predefinedDays: { days: ['MONDAY'], maxOrdersPerDay: 2.5 },
+    }))).toEqual(['max-orders'])
+  })
+
+  it('rejects fractional preparation minutes', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      schedulingStrategy: 'INSTANT',
+      instant: { ...delivery.instant, minPrepTimeMinutes: 10.5 },
+    }))).toEqual(['prep-range'])
+  })
+
+  it('rejects a delivery charge or free-delivery threshold with more than two decimals', () => {
+    expect(deliveryIssues((delivery) => ({ ...delivery, shipping: { ...delivery.shipping, charge: 30.555 } }))).toEqual(['shipping-charge'])
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      shippingStrategy: 'ORDER_AMOUNT_THRESHOLD',
+      shipping: { ...delivery.shipping, freeDeliveryThreshold: 299.999 },
+    }))).toEqual(['free-threshold'])
+  })
+
+  it('accepts a zero delivery charge and two-decimal amounts', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      shippingStrategy: 'ORDER_AMOUNT_THRESHOLD',
+      shipping: { charge: 0, freeDeliveryThreshold: 299.5 },
+    }))).toEqual([])
+    expect(deliveryIssues((delivery) => ({ ...delivery, shipping: { ...delivery.shipping, charge: 29.99 } }))).toEqual([])
+  })
+
+  it('rejects a cleared maximum (read as 0) and a maximum below the minimum', () => {
+    expect(deliveryIssues((delivery) => ({ ...delivery, fixedWindow: { minDeliveryDays: 1, maxDeliveryDays: 0 } }))).toEqual(['fixed-window'])
+    expect(deliveryIssues((delivery) => ({ ...delivery, fixedWindow: { minDeliveryDays: 4, maxDeliveryDays: 3 } }))).toEqual(['fixed-window'])
+  })
+
+  it('skips every home-delivery rule for store pickup', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      fulfillmentType: 'STORE_PICKUP',
+      fixedWindow: { minDeliveryDays: 1.5, maxDeliveryDays: 0 },
+      shipping: { charge: -1, freeDeliveryThreshold: 0 },
+      slots: [{ id: 'draft-slot-1', startTime: '12:00', endTime: '09:00' }],
+    }))).toEqual([])
+  })
+
+  it('rejects a slot ending before it starts and an exact duplicate slot', () => {
+    expect(deliveryIssues((delivery) => ({
+      ...delivery,
+      slots: [
+        { id: 'draft-slot-1', startTime: '09:00', endTime: '12:00' },
+        { id: 'draft-slot-2', startTime: '09:00', endTime: '12:00' },
+        { id: 'draft-slot-3', startTime: '18:00', endTime: '17:00' },
+      ],
+    }))).toEqual(['slot-draft-slot-2', 'slot-draft-slot-3'])
+  })
+})
+
+describe('validateStep — step 8 UPI details', () => {
+  function upiIssues(upiId: string): string[] {
+    const draft = createEmptyOnboardingDraft()
+    const payments = draft.payments.map((payment) => ({
+      ...payment,
+      enabled: payment.type === 'PRE_PAID',
+      isDefault: payment.type === 'PRE_PAID',
+    }))
+    const state = {
+      ...createEmptyRuntimeState(),
+      paymentDetails: { ...createEmptyRuntimeState().paymentDetails, upiId, upiAccountHolderName: 'Asha Rao' },
+    }
+    return validateStep(8, { ...draft, payments }, state).map((item) => item.field)
+  }
+
+  it('accepts a UPI ID in the name@bank form', () => {
+    expect(upiIssues('asha.rao-1@okaxis')).toEqual([])
+    expect(upiIssues('  9876543210@ybl ')).toEqual([])
+  })
+
+  it('rejects a UPI ID that is not in the name@bank form', () => {
+    for (const value of ['asharao', 'asha@', '@okaxis', 'asha rao@okaxis', 'asha@ok axis', 'a@b@c']) {
+      expect(upiIssues(value), value).toEqual(['upi-id'])
+    }
+  })
+
+  it('still asks for a missing UPI ID', () => {
+    expect(upiIssues('   ')).toEqual(['upi-id'])
+  })
+})
+
+describe('validateStep — step 9 matches what the account accepts', () => {
+  function validStoreDraft(): VendorOnboardingDraftV1 {
+    const draft = createEmptyOnboardingDraft()
+    return {
+      ...draft,
+      business: { ...draft.business, ownerName: 'Asha Rao', contactPerson: 'Asha Rao' },
+      storefront: { ...draft.storefront, storeName: 'Asha Dairy', businessLocation: 'Indiranagar' },
+    }
+  }
+  const storeRuntime = { ...createEmptyRuntimeState(), orderWhatsapp: '9876543210' }
+
+  function storeIssues(patch: Partial<VendorOnboardingDraftV1['storefront']>): string[] {
+    const draft = validStoreDraft()
+    return validateStep(9, { ...draft, storefront: { ...draft.storefront, ...patch } }, storeRuntime).map((item) => item.field)
+  }
+
+  it('accepts a complete storefront', () => {
+    expect(storeIssues({})).toEqual([])
+  })
+
+  // The store name is also saved as the business name, which the account requires to be
+  // at least five characters; a shorter name would save the storefront and then fail.
+  it('rejects a store name shorter than five characters', () => {
+    expect(storeIssues({ storeName: 'Abc' })).toEqual(['store-name'])
+    expect(storeIssues({ storeName: ' Abcd ' })).toEqual(['store-name'])
+    expect(storeIssues({ storeName: 'Abcde' })).toEqual([])
+  })
+
+  it('accepts a store name of exactly 100 characters and rejects 101', () => {
+    expect(storeIssues({ storeName: 'a'.repeat(100) })).toEqual([])
+    expect(storeIssues({ storeName: 'a'.repeat(101) })).toEqual(['store-name'])
+  })
+
+  it('accepts Instagram handles and profile URLs the account accepts', () => {
+    for (const instagram of ['asha.dairy', '@asha_dairy', 'https://instagram.com/asha.dairy', 'https://www.instagram.com/asha_dairy/']) {
+      expect(storeIssues({ instagram }), instagram).toEqual([])
+    }
+  })
+
+  it('rejects Instagram URLs the account refuses', () => {
+    for (const instagram of [
+      'https://instagram.com',
+      'https://www.instagram.com/',
+      'https://www.instagram.com/p/abc123/',
+      'https://m.instagram.com/asha',
+      'https://instagram.com/asha?igsh=x',
+      'http://instagram.com/asha',
+      'https://evil.com/instagram.com/asha',
+    ]) {
+      expect(storeIssues({ instagram }), instagram).toEqual(['instagram'])
+    }
+  })
+
+  it('rejects whitespace-only names and location', () => {
+    const draft = validStoreDraft()
+    const blank = {
+      ...draft,
+      business: { ...draft.business, ownerName: '   ', contactPerson: '  ' },
+      storefront: { ...draft.storefront, storeName: '     ', businessLocation: '   ' },
+    }
+    expect(validateStep(9, blank, storeRuntime).map((item) => item.field)).toEqual([
+      'store-name',
+      'owner-name',
+      'contact-person',
+      'business-location',
+    ])
+  })
+})
