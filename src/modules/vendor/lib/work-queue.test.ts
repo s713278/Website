@@ -23,6 +23,7 @@ function order(
     deliveryStatus,
     paymentStatus: 'DUE',
     deliveryDate,
+    itemCount: null,
   }
 }
 

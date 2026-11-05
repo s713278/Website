@@ -11,6 +11,7 @@ function order(total: number | null): VendorOrderSummary {
     deliveryStatus: 'SCHEDULED',
     paymentStatus: 'DUE',
     deliveryDate: '2026-09-09',
+    itemCount: null,
   }
 }
 

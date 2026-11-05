@@ -11,9 +11,12 @@ import {
   forwardActionLabel,
   forwardRefusalMessage,
   nextVendorDeliveryStatus,
+  VENDOR_ORDER_DETAILS_SHOWN,
+  VENDOR_ORDER_WRITES_ENABLED,
 } from '@/modules/vendor/lib/order-actions'
 import {
   hasDeliveryRange,
+  NO_RANGE,
   rangeError,
   readOrdersQuery,
   subtotalHeading,
@@ -42,6 +45,9 @@ import { cn, formatCurrency } from '@/shared/lib/utils'
  * makes it survive opening an order and coming back: history restores the URL, where
  * component state would have unmounted on the way out. It is also how Overview's status
  * counts link straight into a filtered view.
+ *
+ * TEMP(vendor-orders-minimal-rows): with status and delivery date hidden, so are the filters
+ * and the subtotal, and the list is every order, paged.
  */
 
 type SubtotalState = { kind: 'loading' } | SubtotalOutcome
@@ -99,7 +105,13 @@ export function VendorOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { search } = useLocation()
 
-  const query = useMemo(() => readOrdersQuery(searchParams), [searchParams])
+  // TEMP(vendor-orders-minimal-rows): a status or range already in the URL — from an older
+  // Overview link, or history — is dropped rather than narrowing a list with no filter on
+  // screen to clear it. With no range, the subtotal has nothing to total and sends nothing.
+  const query = useMemo(() => {
+    const read = readOrdersQuery(searchParams)
+    return VENDOR_ORDER_DETAILS_SHOWN ? read : { ...read, status: null, range: NO_RANGE }
+  }, [searchParams])
   const { status, page } = query
   const { startDate, endDate } = query.range
   // Fixed for the life of the screen: the preset chips must not shift under the vendor if
@@ -249,12 +261,15 @@ export function VendorOrdersPage() {
         title="All orders"
         action={refetching ? <Spinner label="Updating orders" /> : null}
       >
-        <OrderFilterBar
-          status={status}
-          range={query.range}
-          today={today}
-          onApply={applyFilters}
-        />
+        {/* TEMP(vendor-orders-minimal-rows): no status chips or delivery dates to filter by. */}
+        {VENDOR_ORDER_DETAILS_SHOWN ? (
+          <OrderFilterBar
+            status={status}
+            range={query.range}
+            today={today}
+            onApply={applyFilters}
+          />
+        ) : null}
 
         {rangeIssue ? (
           <p className="mb-4 text-sm text-[var(--md-danger)]">{rangeIssue}</p>
@@ -267,7 +282,13 @@ export function VendorOrdersPage() {
         {actionError ? (
           <p className="mb-4 max-w-[68ch] text-sm text-[var(--md-danger)]">{actionError}</p>
         ) : null}
-        {firstLoad ? <RowSkeleton label="Loading orders" /> : null}
+        {/* TEMP(vendor-orders-minimal-rows): the minimal row's own heights, phone and from `sm`. */}
+        {firstLoad ? (
+          <RowSkeleton
+            label="Loading orders"
+            rowClassName={VENDOR_ORDER_DETAILS_SHOWN ? undefined : 'h-[7rem] sm:h-[4.5rem]'}
+          />
+        ) : null}
 
         {/* A failed request is not an empty list: "No orders here" would stop a vendor looking. */}
         {!loading && loadError ? (
@@ -276,7 +297,10 @@ export function VendorOrdersPage() {
 
         {!loading && !loadError && !rangeIssue && !orders.length ? (
           <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
-            <span className="mb-1 block font-semibold text-[var(--md-ink)]">No orders here</span>
+            {/* TEMP(vendor-orders-minimal-rows): with no filters, empty means none at all. */}
+            <span className="mb-1 block font-semibold text-[var(--md-ink)]">
+              {VENDOR_ORDER_DETAILS_SHOWN ? 'No orders here' : 'No orders yet.'}
+            </span>
             {status || hasDeliveryRange(query.range)
               ? 'Nothing matches these filters. Widen the delivery dates or clear the status.'
               : 'When a customer orders from your store, it will show up here.'}
@@ -291,7 +315,9 @@ export function VendorOrdersPage() {
             <OrderLedger
               orders={orders}
               todayIso={todayIso}
-              caption="Orders matching the current filters"
+              caption={
+                VENDOR_ORDER_DETAILS_SHOWN ? 'Orders matching the current filters' : 'All your orders'
+              }
               showAmount
               /*
                 The filters ride along in history state so that the detail screen's own "Back to
@@ -299,7 +325,11 @@ export function VendorOrdersPage() {
                 the button on screen should not be punished for it by losing the range they typed.
               */
               linkState={{ from: `/vendor/orders${search}` }}
-              renderPaymentAction={(order) => {
+              /*
+                TEMP(vendor-orders-read-only): both row controls wait on the order-writes switch.
+                Without them the ledger drops its "Next step" column; the handlers stay.
+              */
+              renderPaymentAction={VENDOR_ORDER_WRITES_ENABLED ? (order) => {
                 // Reversal is deliberately detail-only: on a list a vendor is scrolling, and a
                 // paid flag flipped by accident is a flag nothing else can correct.
                 if (!canRecordPayment(order.deliveryStatus) || order.paymentStatus === 'PAID') {
@@ -318,8 +348,8 @@ export function VendorOrdersPage() {
                     {payingId === order.id ? 'Saving…' : 'Mark paid'}
                   </Button>
                 )
-              }}
-              renderNextStep={(order) => {
+              } : undefined}
+              renderNextStep={VENDOR_ORDER_WRITES_ENABLED ? (order) => {
                 const next = nextVendorDeliveryStatus(order.deliveryStatus)
                 if (!next) return null
 
@@ -334,7 +364,7 @@ export function VendorOrdersPage() {
                     {busyId === order.id ? 'Working…' : forwardActionLabel(next)}
                   </Button>
                 )
-              }}
+              } : undefined}
             />
           </div>
         ) : null}

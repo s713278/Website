@@ -9,6 +9,7 @@ import { invalidateVendorContext, loadVendorContext } from '@/modules/vendor/lib
 import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
 import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
 import { resetLiveBilling, resetLiveBillingPlansForTests } from '@/modules/vendor/store/live-billing'
+import { VENDOR_ORDER_DETAILS_SHOWN } from '@/modules/vendor/lib/order-actions'
 import { VendorOverviewPage } from '@/modules/vendor/pages/VendorOverviewPage'
 import {
   configureApiClient,
@@ -24,6 +25,9 @@ import { LiveHeaderButton } from './LiveBillingChrome'
 import { VendorAccountProvider } from './VendorAccountProvider'
 import fixtures from '../../../../docs/examples/vendor-billing/mock-responses.json'
 import type { VendorContext } from '@/shared/api'
+
+// TEMP(vendor-orders-minimal-rows): the open dashboard's orders panel is named by the switch.
+const ORDERS_PANEL_HEADING = VENDOR_ORDER_DETAILS_SHOWN ? 'What needs doing' : 'Latest orders'
 
 vi.mock('@/app/router/vendor-dashboard-chunks', () => ({ preloadVendorDashboard: vi.fn() }))
 
@@ -112,14 +116,14 @@ describe('VendorAccountProvider store state', () => {
     invalidateVendorContext('test-vendor')
     renderContext('ACTIVE', 'PENDING', 11)
 
-    expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: ORDERS_PANEL_HEADING })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Setup incomplete' })).toBeNull()
   })
 
   it('opens the work queue for a submitted live PENDING store with completed onboarding', async () => {
     renderContext('ACTIVE', 'PENDING', 11)
 
-    expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: ORDERS_PANEL_HEADING })).toBeTruthy()
     expect(screen.getByLabelText('Account approval').textContent).toBe('PENDING')
     expect(screen.queryByRole('link', { name: 'Continue setup' })).toBeNull()
   })
@@ -138,7 +142,7 @@ describe('VendorAccountProvider store state', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'What needs doing' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: ORDERS_PANEL_HEADING })).toBeTruthy()
     expect(screen.getByLabelText('Account approval').textContent).toBe('APPROVED')
   })
 

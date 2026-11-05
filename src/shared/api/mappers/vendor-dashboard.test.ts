@@ -154,6 +154,21 @@ describe('mapVendorOrderPage', () => {
     expect(page.orders[0].customerName).toBeNull()
   })
 
+  it('reads the unit count a list row carries, and leaves an absent one unknown', () => {
+    // `items_count` sums quantities: 7 units across 5 lines reads 7, not 5.
+    const page = mapVendorOrderPage({
+      data: {
+        result: [
+          { order_id: 1, items_count: 7, order_status: 'PENDING' },
+          { order_id: 2, order_status: 'PENDING' },
+        ],
+      },
+    })
+
+    expect(page.orders[0].itemCount).toBe(7)
+    expect(page.orders[1].itemCount).toBeNull()
+  })
+
   it('exposes no placed-at field, because no order read carries one', () => {
     const page = mapVendorOrderPage({
       data: { result: [{ order_id: 3, order_status: 'PENDING', created_date: '2026-09-04' }] },

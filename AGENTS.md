@@ -216,6 +216,15 @@ Update the session document with the implementation, not in advance of it.
   Live API billing reads in memory. A caching-layer migration (e.g. TanStack Query) must first remove
   both, per [docs/SESSION.md](./docs/SESSION.md#temporary-vendor-header-hint--tempvendor-header-hint)
   and [docs/VENDOR_BILLING_READS_TARGET.md](./docs/VENDOR_BILLING_READS_TARGET.md#removal).
+- `TEMP(vendor-orders-read-only)`: vendor orders are read-only while status handling is decided.
+  `VENDOR_ORDER_WRITES_ENABLED` in `src/modules/vendor/lib/order-actions.ts` hides the status,
+  cancel and payment-record controls; their handlers, helpers and service writes stay for a likely
+  revert, so do not delete them as dead code.
+- `TEMP(vendor-orders-minimal-rows)`: vendor order rows show only order, customer and amount while
+  the team decides. `VENDOR_ORDER_DETAILS_SHOWN` in `src/modules/vendor/lib/order-actions.ts` hides
+  status and delivery date in rows, the Orders status/date filters and subtotal, and Overview's
+  status tiles and work queue, and the order page's delivery date; the hidden code stays for a
+  likely revert, so do not delete it as dead code.
 
 ## UI and design reference
 

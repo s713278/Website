@@ -1,6 +1,50 @@
 import type { DeliveryStatus, PaymentStatus } from '@/modules/vendor/types/dashboard'
 
 /**
+ * TEMP(vendor-orders-read-only): whether a vendor may change an order from the console.
+ *
+ * Product decision, 2026-11-03: once an order is placed over WhatsApp, what happens next is
+ * between the customer and the vendor, and the platform plays no part in it. So the vendor's
+ * orders are read-only while the team decides how status handling should work — most likely
+ * for a while, not for good.
+ *
+ * `false` hides the forward step ("Confirm order", "Mark out for delivery", "Mark delivered"),
+ * "Cancel order", "Mark paid" / "Mark unpaid" with the sentence saying that record stays on
+ * this device, and the "Payment due" / "Paid" badge — on the Orders list and the order detail.
+ *
+ * Only the controls are hidden. The service writes, the page handlers and their busy state,
+ * and the helpers below are kept on purpose; do not delete them as dead code.
+ *
+ * Every gated site carries this marker: `grep -rn "TEMP(vendor-orders-read-only)" src`.
+ * To revert: set this to `true`; in the page tests, drop the read-only tests and the mocked
+ * switch that forces the older tests on.
+ */
+export const VENDOR_ORDER_WRITES_ENABLED = false
+
+/**
+ * TEMP(vendor-orders-minimal-rows): whether the console shows an order's status and delivery
+ * date.
+ *
+ * Product decision, 2026-11-04: on top of the read-only switch above, the vendor's order rows
+ * show only the order (number and item count), the customer (name, number, Call and WhatsApp)
+ * and the amount — likely for a while, not for good.
+ *
+ * `false` hides the status pill and the delivery date in the order rows; on Orders, the status
+ * chips, the delivery-date filter and the subtotal; on Overview, the status tiles and the
+ * "What needs doing" queue, which give way to "Latest orders" and an Orders total tile; and on
+ * the order detail, the delivery date (its status pill stays).
+ *
+ * Only the display is hidden. The filters, reads, helpers and the full row are kept on
+ * purpose; do not delete them as dead code. Independent of `VENDOR_ORDER_WRITES_ENABLED`:
+ * either may be turned back on without the other.
+ *
+ * Every gated site carries this marker: `grep -rn "TEMP(vendor-orders-minimal-rows)" src`.
+ * To revert: set this to `true`; drop the minimal-mode tests, and in the page tests the mocked
+ * switch that forces the older tests on.
+ */
+export const VENDOR_ORDER_DETAILS_SHOWN = false
+
+/**
  * The one forward step the backend accepts from each state.
  *
  * This is not a UI preference — it is the measured transition graph. `bulk-status-update`

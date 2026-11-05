@@ -995,12 +995,14 @@
 
    Two line weights, and the difference carries meaning: `--vc-edge` is a panel's own outer
    boundary, `--vc-rule` a division between rows inside one. A row rule as dark as a panel
-   edge reads as "next panel" rather than "next row". */
+   edge reads as "next panel" rather than "next row". The rule is still a visible grey, though:
+   the earlier #f3f4f6 sat at about 1.1:1 on white and vanished on most screens, so rows ran
+   together; the edge stays the heavier, green-tinted line. */
 .vendor-console,
 .store-share-scope {
   --vc-panel: #ffffff;
   --vc-edge: color-mix(in srgb, var(--md-green-500) 12%, var(--md-border));
-  --vc-rule: #f3f4f6;
+  --vc-rule: #e5e7eb;
 
   /* The emerald the console tints with, and the ink that stays readable on it.
 

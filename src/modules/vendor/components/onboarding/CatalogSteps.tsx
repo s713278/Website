@@ -598,6 +598,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 function ProductCategoryPicker({
   categoryId,
   categoryName,
+  error,
   confirm,
   onUseSample,
   open,
@@ -606,6 +607,7 @@ function ProductCategoryPicker({
 }: {
   categoryId: number
   categoryName: string
+  error?: string
   confirm: RequestConfirmation
   onUseSample?: () => void
   open: boolean
@@ -699,6 +701,7 @@ function ProductCategoryPicker({
       name={categoryName}
       meta={selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
       count={selectedCount}
+      error={error}
     >
       {firstLoad ? (
         references.error && draft.catalogSource === 'account'
@@ -911,6 +914,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             key={category.id}
             categoryId={category.id}
             categoryName={category.name}
+            error={issues.find((item) => item.field === `category-products-${category.id}`)?.message}
             confirm={confirm}
             onUseSample={onUseSample}
             open={openId === category.id}

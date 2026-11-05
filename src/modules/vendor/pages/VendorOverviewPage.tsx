@@ -5,6 +5,7 @@ import { OrderLedger } from '@/modules/vendor/components/OrderLedger'
 import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { StoreStatusScreen } from '@/modules/vendor/components/StoreStatusScreen'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
+import { VENDOR_ORDER_DETAILS_SHOWN } from '@/modules/vendor/lib/order-actions'
 import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import {
   isoDay,
@@ -311,6 +312,143 @@ function WorkQueue({ vendorId }: { vendorId: string }) {
 }
 
 /**
+ * TEMP(vendor-orders-minimal-rows): the one orders read Overview makes while status and
+ * delivery date are hidden — the first page of every order, in the order the API returns them.
+ * Both the Orders tile and the Latest orders panel render from it, so the total costs no
+ * request of its own.
+ */
+type LatestOrdersRead = {
+  result: VendorOrderPage | null
+  loading: boolean
+  error: string
+  reload: () => void
+}
+
+function useLatestOrders(vendorId: string): LatestOrdersRead {
+  const [result, setResult] = useState<VendorOrderPage | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [reloadToken, setReloadToken] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+
+    // Started a tick late for the same reason as the read in `Metrics`.
+    const start = window.setTimeout(() => {
+      void vendorOrdersService
+        .list(vendorId, { page: 0 })
+        .then((data) => {
+          if (!cancelled) setResult(data)
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(getErrorMessage(err, 'Could not load your latest orders'))
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 0)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(start)
+    }
+  }, [vendorId, reloadToken])
+
+  return { result, loading, error, reload: () => setReloadToken((token) => token + 1) }
+}
+
+/**
+ * TEMP(vendor-orders-minimal-rows): how many orders there are, and how much of the catalog is
+ * built. The total is the latest-orders read's own count; that panel announces its load and
+ * its failure, so the tile only holds its place and then shows a dash.
+ *
+ * Two tiles share the row at every width. The four-column grid the full Overview uses would
+ * leave half of a desktop row empty, and nothing else is known without another request.
+ */
+function MinimalMetrics({ vendorId, latest }: { vendorId: string; latest: LatestOrdersRead }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {latest.loading ? (
+        <MetricTilePlaceholder />
+      ) : (
+        <MetricTile
+          to="/vendor/orders"
+          label="Orders"
+          value={latest.error || !latest.result ? '—' : latest.result.totalElements}
+        />
+      )}
+      <ProductCountTile vendorId={vendorId} />
+    </div>
+  )
+}
+
+/**
+ * TEMP(vendor-orders-minimal-rows): the first page of orders in place of the queue. With no
+ * status there is no telling an open order from a finished one, so nothing is filtered out;
+ * paging is left to Orders, one "See all" away.
+ */
+function LatestOrders({ latest }: { latest: LatestOrdersRead }) {
+  const todayIso = useMemo(() => isoDay(new Date()), [])
+  const { result, loading, error } = latest
+
+  return (
+    <DashboardPanel
+      title="Latest orders"
+      action={
+        <Link
+          to="/vendor/orders"
+          className="text-sm font-semibold text-[var(--md-muted)] transition hover:text-[var(--vc-tint-ink)]"
+        >
+          See all
+        </Link>
+      }
+    >
+      {/* The minimal row's own heights, phone and from `sm`. */}
+      {loading ? (
+        <RowSkeleton label="Loading latest orders" rowClassName="h-[7rem] sm:h-[4.5rem]" />
+      ) : null}
+
+      {!loading && error ? <LoadError onRetry={latest.reload} /> : null}
+
+      {!loading && !error && result ? (
+        result.orders.length ? (
+          <OrderLedger orders={result.orders} todayIso={todayIso} caption="Latest orders" />
+        ) : (
+          <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+            <span className="mb-1 block font-semibold text-[var(--md-ink)]">No orders yet.</span>
+            When a customer orders from your store, it will show up here.
+          </p>
+        )
+      ) : null}
+    </DashboardPanel>
+  )
+}
+
+/**
+ * TEMP(vendor-orders-minimal-rows): Overview while status and delivery date are hidden. No
+ * insights read: its counts are per status, and the status tiles are what is hidden.
+ */
+function MinimalOpenStoreOverview({
+  vendorId,
+  storeIdentifier,
+}: {
+  vendorId: string
+  storeIdentifier: string | null
+}) {
+  const latest = useLatestOrders(vendorId)
+
+  return (
+    <div className="grid gap-4">
+      <MinimalMetrics vendorId={vendorId} latest={latest} />
+      <LatestOrders latest={latest} />
+      <QuickActions storeIdentifier={storeIdentifier} />
+    </div>
+  )
+}
+
+/**
  * The three jobs a vendor comes back to the console for, one tap from the first screen.
  *
  * Each says what it opens rather than selling it, and the storefront card is withheld until
@@ -356,6 +494,11 @@ function QuickActions({ storeIdentifier }: { storeIdentifier: string | null }) {
 function OpenStoreOverview({ vendorId }: { vendorId: string }) {
   const userId = useAuthStore((s) => s.user?.id)
   const { context } = useVendorAccount()
+
+  // TEMP(vendor-orders-minimal-rows): no status tiles or queue while order details are hidden.
+  if (!VENDOR_ORDER_DETAILS_SHOWN) {
+    return <MinimalOpenStoreOverview vendorId={vendorId} storeIdentifier={context.storeIdentifier} />
+  }
 
   return (
     <div className="grid gap-4">

@@ -37,6 +37,14 @@ const EMPTY_ACCOUNT: NonNullable<CatalogEnforcement['account']> = { categoryIds:
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 const INDIA_PHONE_PATTERN = /^[6-9]\d{9}$/
+// name@bank: a handle, then the payment provider's alphabetic code. No spaces, one `@`.
+const UPI_ID_PATTERN = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/
+// The account's storefront rule: a bare handle, or an instagram.com profile URL.
+const INSTAGRAM_HANDLE_PATTERN = /^@?[a-zA-Z0-9._]{1,30}$/
+const INSTAGRAM_PROFILE_URL_PATTERN = /^https:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9._]{1,30}\/?$/
+// The store name is also saved as the business name, which the account requires to be
+// at least five characters (the storefront itself accepts three).
+const MIN_STORE_NAME_LENGTH = 5
 
 export function isValidIndianMobile(value: string): boolean {
   return INDIA_PHONE_PATTERN.test(value.trim())
@@ -84,6 +92,15 @@ function positive(value: number | null): value is number {
 
 function nonNegative(value: number): boolean {
   return Number.isFinite(value) && value >= 0
+}
+
+/** Days, orders and minutes are counted in whole units. */
+function wholeNonNegative(value: number): boolean {
+  return nonNegative(value) && Number.isInteger(value)
+}
+
+function wholePositive(value: number): boolean {
+  return positive(value) && Number.isInteger(value)
 }
 
 /**
@@ -175,13 +192,13 @@ export function validateDelivery(delivery: DeliveryDraft): ValidationIssue[] {
   if (hasHomeDelivery) {
     if (delivery.schedulingStrategy === 'FIXED_WINDOW') {
       const { minDeliveryDays, maxDeliveryDays } = delivery.fixedWindow
-      if (!nonNegative(minDeliveryDays) || !positive(maxDeliveryDays) || maxDeliveryDays < minDeliveryDays) {
+      if (!wholeNonNegative(minDeliveryDays) || !wholePositive(maxDeliveryDays) || maxDeliveryDays < minDeliveryDays) {
         issues.push(issue(7, 'fixed-window', 'Use a valid delivery-day range with the maximum at least the minimum.'))
       }
     }
     if (delivery.schedulingStrategy === 'CUSTOMER_SELECT_DATE') {
       const { minAdvanceBookingDays, maxAdvanceBookingDays, cutoffTime } = delivery.customerSelectDate
-      if (!nonNegative(minAdvanceBookingDays) || !positive(maxAdvanceBookingDays) || maxAdvanceBookingDays < minAdvanceBookingDays) {
+      if (!wholeNonNegative(minAdvanceBookingDays) || !wholePositive(maxAdvanceBookingDays) || maxAdvanceBookingDays < minAdvanceBookingDays) {
         issues.push(issue(7, 'customer-date-range', 'Use a valid advance-booking range.'))
       }
       if (!TIME_PATTERN.test(cutoffTime)) issues.push(issue(7, 'customer-cutoff', 'Enter a valid cutoff time.'))
@@ -192,11 +209,13 @@ export function validateDelivery(delivery: DeliveryDraft): ValidationIssue[] {
       }
       if (!positive(delivery.predefinedDays.maxOrdersPerDay)) {
         issues.push(issue(7, 'max-orders', 'Maximum orders per day must be greater than zero.'))
+      } else if (!Number.isInteger(delivery.predefinedDays.maxOrdersPerDay)) {
+        issues.push(issue(7, 'max-orders', 'Maximum orders per day must be a whole number.'))
       }
     }
     if (delivery.schedulingStrategy === 'INSTANT') {
       const config = delivery.instant
-      if (!positive(config.minPrepTimeMinutes) || !positive(config.maxPrepTimeMinutes) || config.maxPrepTimeMinutes < config.minPrepTimeMinutes) {
+      if (!wholePositive(config.minPrepTimeMinutes) || !wholePositive(config.maxPrepTimeMinutes) || config.maxPrepTimeMinutes < config.minPrepTimeMinutes) {
         issues.push(issue(7, 'prep-range', 'Use a valid preparation range.'))
       }
       if (!TIME_PATTERN.test(config.operatingUntil)) issues.push(issue(7, 'operating-until', 'Enter a valid operating-until time.'))
@@ -208,9 +227,15 @@ export function validateDelivery(delivery: DeliveryDraft): ValidationIssue[] {
 
     if (!nonNegative(delivery.shipping.charge)) {
       issues.push(issue(7, 'shipping-charge', 'Delivery charge cannot be negative.'))
+    } else if (!withinTwoDecimals(delivery.shipping.charge)) {
+      issues.push(issue(7, 'shipping-charge', 'Delivery charge can have at most two decimal places.'))
     }
-    if (delivery.shippingStrategy === 'ORDER_AMOUNT_THRESHOLD' && !positive(delivery.shipping.freeDeliveryThreshold)) {
-      issues.push(issue(7, 'free-threshold', 'Free-delivery threshold must be greater than zero.'))
+    if (delivery.shippingStrategy === 'ORDER_AMOUNT_THRESHOLD') {
+      if (!positive(delivery.shipping.freeDeliveryThreshold)) {
+        issues.push(issue(7, 'free-threshold', 'Free-delivery threshold must be greater than zero.'))
+      } else if (!withinTwoDecimals(delivery.shipping.freeDeliveryThreshold)) {
+        issues.push(issue(7, 'free-threshold', 'Free-delivery threshold can have at most two decimal places.'))
+      }
     }
   }
 
@@ -251,6 +276,8 @@ export function validatePayments(
   if (payments.some((payment) => payment.type === 'PRE_PAID' && payment.enabled)) {
     if (!paymentDetails.upiId.trim()) {
       issues.push(issue(8, 'upi-id', 'Enter the UPI ID.'))
+    } else if (!UPI_ID_PATTERN.test(paymentDetails.upiId.trim())) {
+      issues.push(issue(8, 'upi-id', 'Enter the UPI ID in the form name@bank.'))
     }
     if (!paymentDetails.upiAccountHolderName.trim()) {
       issues.push(issue(8, 'upi-account-holder-name', 'Enter the UPI account holder name.'))
@@ -262,13 +289,7 @@ export function validatePayments(
 function validateInstagram(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed) return true
-  if (/^@?[a-zA-Z0-9._]{1,30}$/.test(trimmed)) return true
-  try {
-    const url = new URL(trimmed)
-    return url.protocol === 'https:' && /(^|\.)instagram\.com$/i.test(url.hostname)
-  } catch {
-    return false
-  }
+  return INSTAGRAM_HANDLE_PATTERN.test(trimmed) || INSTAGRAM_PROFILE_URL_PATTERN.test(trimmed)
 }
 
 // The plan-limit checks are shared by the full per-step validation and the additive check a
@@ -285,6 +306,23 @@ function productLimitIssue(accountProductIds: number[], draftProductIds: number[
   return projectedProductTotal(accountProductIds, draftProductIds) > maxProducts
     ? [issue(5, 'products', `Your plan allows ${maxProducts} products in total, including those already saved to your store.`)]
     : []
+}
+
+/**
+ * Step 5 needs a product in every chosen category, and an assigned category cannot be
+ * removed (403, Admin only). A category added without a product slot left to fill it would
+ * trap the vendor at Step 5, so Step 4 refuses more empty categories than the plan has room
+ * for products.
+ */
+function productRoomIssue(draft: VendorOnboardingDraftV1, accountProductIds: number[], maxProducts: number): ValidationIssue[] {
+  const coveredCategoryIds = new Set(draft.products.map((product) => product.categoryId))
+  const emptyCategories = draft.categories.filter((category) => !coveredCategoryIds.has(category.id)).length
+  const room = Math.max(0, maxProducts - projectedProductTotal(accountProductIds, draft.products.map((product) => product.id)))
+  if (emptyCategories <= room) return []
+  const message = room === 0
+    ? 'Your plan has no room for more products, and each category needs one. Remove the categories without products.'
+    : `Your plan has room for ${room} more ${room === 1 ? 'product' : 'products'}, and each category needs one. Choose at most ${room} ${room === 1 ? 'category' : 'categories'} without products.`
+  return [issue(4, 'categories', message)]
 }
 
 function skuLimitIssue(accountSkuIds: number[], draftSkus: DraftSku[], maxSkus: number, unlistedSkuCount = 0): ValidationIssue[] {
@@ -321,11 +359,18 @@ export function validateStep(
   }
   if (step === 4) {
     if (!draft.categories.length) return [issue(4, 'categories', 'Choose at least one category.')]
-    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
+    const limitIssues = categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
+    if (limitIssues.length) return limitIssues
+    return productRoomIssue(draft, account.productIds, maxProducts)
   }
   if (step === 5) {
     if (!draft.products.length) return [issue(5, 'products', 'Choose at least one product to continue.')]
-    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
+    // Every chosen category needs a product; the field is that category's Step 5 panel.
+    const coveredCategoryIds = new Set(draft.products.map((product) => product.categoryId))
+    const emptyCategoryIssues = draft.categories
+      .filter((category) => !coveredCategoryIds.has(category.id))
+      .map((category) => issue(5, `category-products-${category.id}`, `Choose at least one product in ${category.name}.`))
+    return [...emptyCategoryIssues, ...productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)]
   }
   if (step === 6) {
     // Projected post-save size count: account sizes plus new local ones, an edit net-zero.
@@ -352,7 +397,7 @@ export function validateStep(
   if (step === 8) return validatePayments(draft.payments, runtime.paymentDetails)
   if (step === 9) {
     const issues: ValidationIssue[] = []
-    if (draft.storefront.storeName.trim().length < 3) issues.push(issue(9, 'store-name', 'Enter at least 3 characters for the store name.'))
+    if (draft.storefront.storeName.trim().length < MIN_STORE_NAME_LENGTH) issues.push(issue(9, 'store-name', `Enter at least ${MIN_STORE_NAME_LENGTH} characters for the store name.`))
     if (draft.storefront.storeName.trim().length > 100) issues.push(issue(9, 'store-name', 'Keep the store name under 100 characters.'))
     if (draft.business.ownerName.trim().length < 3) issues.push(issue(9, 'owner-name', 'Enter at least 3 characters for the owner name.'))
     if (draft.business.contactPerson.trim().length < 3) issues.push(issue(9, 'contact-person', 'Enter at least 3 characters for the contact person.'))

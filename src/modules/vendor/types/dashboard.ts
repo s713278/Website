@@ -43,6 +43,11 @@ export type VendorOrderSummary = {
   deliveryStatus: DeliveryStatus
   paymentStatus: PaymentStatus | null
   deliveryDate: string | null
+  /**
+   * Total units in the order — the list row's `items_count`, which sums quantities rather
+   * than counting product lines. `null` when the row omitted it.
+   */
+  itemCount: number | null
 }
 
 export type VendorOrderLine = {
