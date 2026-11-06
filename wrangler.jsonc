@@ -1,9 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "web",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-10-04",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "API_BASE_URL": "https://qa.mithradirect.com/api"
   }
 }

@@ -7,17 +7,26 @@ import { ProductPrice } from '@/modules/storefront/components/ProductPrice'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
 import { storeProductPath } from '@/modules/storefront/lib/store-paths'
 import type { Product } from '@/modules/storefront/types'
+
 type ProductCardProps = {
   storeId: string
   storeName: string
   product: Product
   className?: string
+  preferredSkuId?: string
 }
 
-export function ProductCard({ storeId, storeName, product, className }: ProductCardProps) {
+export function ProductCard({
+  storeId,
+  storeName,
+  product,
+  className,
+  preferredSkuId,
+}: ProductCardProps) {
   const { variants, selected, selectedId, setSelectedId, multi } = useSelectedVariant(
     product,
     storeId,
+    preferredSkuId,
   )
   const productHref = storeProductPath(storeId, product.id, selected.id)
 
@@ -41,7 +50,6 @@ export function ProductCard({ storeId, storeName, product, className }: ProductC
             imgClassName="transition duration-300 group-hover:scale-[1.03]"
           />
         </Link>
-
         <ProductCartControl
           storeId={storeId}
           storeName={storeName}
