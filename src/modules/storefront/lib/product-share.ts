@@ -1,7 +1,6 @@
 import { storePath, storeProductPath } from '@/modules/storefront/lib/store-paths'
 import { productShareCard, shareCardLines } from '@/shared/lib/share-preview'
 import { formatCurrency } from '@/shared/lib/utils'
-import { publicSiteOrigin } from '@/shared/lib/store-link'
 
 /** A WhatsApp status stays readable, and the shared URL stays short. */
 export const SHARE_ITEM_LIMIT = 10
@@ -64,10 +63,16 @@ export function shareMessageUrl(url: string) {
   return url.includes('#') ? url : `${url}#`
 }
 
+/** Host of the page the customer is sharing from. The store and product are added after it. */
+function pageOrigin(): string {
+  if (typeof window === 'undefined') return ''
+  return window.location.origin.replace(/\/+$/, '')
+}
+
 /** One item opens the product page. Several items open the shop with `?items=`. */
 export function shareListUrl(storeId: string, items: ShareItem[]): string {
   const list = items.slice(0, SHARE_ITEM_LIMIT)
-  const origin = publicSiteOrigin()
+  const origin = pageOrigin()
   if (list.length === 1) {
     const item = list[0]
     return `${origin}${storeProductPath(storeId, item.productId, item.skuId)}`

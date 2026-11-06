@@ -26,20 +26,32 @@ const onion: ShareItem = {
 }
 
 afterEach(() => {
-  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
+
+function onSite(origin: string) {
+  vi.stubGlobal('window', { location: { origin } })
+}
 
 describe('shareListUrl', () => {
   it('opens the product page for one item, including the selected size', () => {
-    vi.stubEnv('VITE_PUBLIC_SITE_URL', 'https://mithradirect.com')
+    onSite('https://mithradirect.com')
 
     expect(shareListUrl('anithas-pickles', [tomato])).toBe(
       'https://mithradirect.com/stores/anithas-pickles/products/423?sku=4404',
     )
   })
 
+  it('uses the shop and product from the page, on whatever host that page is open', () => {
+    onSite('https://preview.example.test')
+
+    expect(shareListUrl('srk-foods', [onion])).toBe(
+      'https://preview.example.test/stores/srk-foods/products/424?sku=4410',
+    )
+  })
+
   it('opens the shop with every selected item when there is more than one', () => {
-    vi.stubEnv('VITE_PUBLIC_SITE_URL', 'https://mithradirect.com')
+    onSite('https://mithradirect.com')
 
     expect(shareListUrl('anithas-pickles', [tomato, onion])).toBe(
       'https://mithradirect.com/stores/anithas-pickles?items=423.4404~424.4410',
