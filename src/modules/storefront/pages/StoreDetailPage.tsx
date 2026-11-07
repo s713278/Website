@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import {
   CategoryBrowseSection,
   CategoryScroller,
@@ -31,6 +31,8 @@ import { isLiveApi } from '@/shared/api'
 import { isSearchActive, isSearchTooShort, searchUiMinChars } from '@/shared/lib/search-query'
 import { syncVendorCart } from '../lib/cart-actions'
 import { StoreSubscriptionNotice } from '@/modules/storefront/components/StoreSubscriptionNotice'
+import { SharedProductList } from '@/modules/storefront/components/SharedProductList'
+import { parseShareItems } from '@/modules/storefront/lib/product-share'
 import { isStoreClosedForSubscription } from '@/modules/storefront/lib/store-subscription'
 import { canShopAsCustomer } from '@/app/router/role-home'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
@@ -73,6 +75,7 @@ type StoreHomeProps = {
 }
 
 function StoreHome({ store, itemCount }: StoreHomeProps) {
+  const [searchParams] = useSearchParams()
   const { query, setQuery, searchRequested } = useSearchQueryParam()
   const [searchDraft, setSearchDraft] = useState(query)
   const [searchOpen, setSearchOpen] = useState(Boolean(query.trim()) || searchRequested)
@@ -80,6 +83,10 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
   const [browseOpen, setBrowseOpen] = useState(Boolean(query.trim()) || searchRequested)
   const cartSubtotal = useCartStore((s) => s.subtotal(store.id))
   const productsRef = useRef<HTMLElement>(null)
+  const sharedTargets = useMemo(
+    () => parseShareItems(searchParams.get('items')),
+    [searchParams],
+  )
 
   const homePageSize = 6
   const browsePageSize = 10
@@ -214,9 +221,16 @@ function StoreHome({ store, itemCount }: StoreHomeProps) {
 
       <main
         className={`store-shell-inner flex flex-1 flex-col gap-5 py-5 sm:gap-6 sm:py-6${
-          itemCount > 0 ? ' pb-24' : ''
+          itemCount > 0 ? ' pb-28' : ''
         }`}
       >
+        {sharedTargets.length > 0 ? (
+          <SharedProductList
+            storeId={store.id}
+            storeName={store.name}
+            targets={sharedTargets}
+          />
+        ) : null}
         {browseOpen ? (
           (searching ? skuSearch.error : products.error) &&
           browseProducts.length === 0 &&

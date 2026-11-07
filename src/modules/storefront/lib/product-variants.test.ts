@@ -49,6 +49,11 @@ describe('selectInitialVariant', () => {
     expect(selectInitialVariant(product, '4152').id).toBe('4152')
     expect(selectInitialVariant(product, 'missing').id).toBe('4153')
   })
+
+  it('reads a sku when the shared link has the product name stuck on it', () => {
+    expect(selectInitialVariant(product, '4152Amla').id).toBe('4152')
+    expect(selectInitialVariant(product, '41520').id).toBe('4153')
+  })
 })
 
 describe('parseCartLineId', () => {
