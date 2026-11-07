@@ -1,0 +1,530 @@
+/* Neighbourhood Market — discovery search page */
+
+/* —— Hero: one composition —— */
+.market-hero {
+  position: relative;
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(2rem, 4vw, 3rem);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 0%, color-mix(in srgb, var(--md-green) 14%, transparent), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 20%, color-mix(in srgb, #d97706 12%, transparent), transparent 50%),
+    linear-gradient(180deg, var(--md-surface-alt) 0%, color-mix(in srgb, var(--md-green) 4%, var(--md-surface-alt)) 100%);
+}
+
+.market-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      -12deg,
+      transparent,
+      transparent 28px,
+      color-mix(in srgb, var(--md-ink) 3%, transparent) 28px,
+      color-mix(in srgb, var(--md-ink) 3%, transparent) 29px
+    );
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.market-hero-inner {
+  position: relative;
+  max-width: 42rem;
+}
+
+.market-kicker {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-green-dark);
+}
+
+.market-hero h1 {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: clamp(1.85rem, 5vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--md-ink);
+}
+
+.market-hero h1 .accent {
+  display: inline;
+  color: var(--md-green-dark);
+}
+
+.market-lead {
+  margin: 0 0 1.5rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--md-muted);
+  max-width: 36rem;
+}
+
+/* Search form */
+.market-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--md-surface, #fff);
+  border: 1px solid color-mix(in srgb, var(--md-ink) 8%, transparent);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--md-ink) 6%, transparent);
+}
+
+.market-search-fields {
+  display: grid;
+  gap: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .market-search-fields {
+    grid-template-columns: 1.1fr 1.2fr;
+  }
+}
+
+.market-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.market-field span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-muted);
+}
+
+.market-field input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--md-border);
+  border-radius: 0.65rem;
+  background: var(--md-surface-alt);
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--md-ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.market-field input:focus {
+  border-color: var(--md-green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-green) 22%, transparent);
+}
+
+.market-search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.market-search-actions .btn {
+  flex: 1 1 auto;
+  min-width: 8rem;
+}
+
+.market-promises {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.market-promises li {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--md-muted);
+  padding-left: 1.15rem;
+  position: relative;
+}
+
+.market-promises li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--md-green);
+}
+
+.market-promises strong {
+  color: var(--md-ink);
+  font-weight: 600;
+}
+
+@media (min-width: 720px) {
+  .market-promises {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .market-promises li {
+    flex: 1 1 12rem;
+  }
+}
+
+/* —— Results body —— */
+.market-body {
+  padding: 0 0 clamp(3rem, 8vw, 5rem);
+  background: var(--md-surface-alt);
+}
+
+.market-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem 0 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--md-surface-alt) 94%, transparent);
+  backdrop-filter: blur(8px);
+  margin-bottom: 0.5rem;
+}
+
+.market-cats {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.market-cat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--md-border);
+  background: var(--md-surface, #fff);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--md-ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.market-cat:hover {
+  border-color: color-mix(in srgb, var(--md-green) 45%, transparent);
+}
+
+.market-cat.is-active {
+  background: var(--md-green);
+  border-color: var(--md-green);
+  color: #fff;
+}
+
+.market-cat-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.market-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
+.market-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--md-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.market-check input {
+  accent-color: var(--md-green);
+  width: 1rem;
+  height: 1rem;
+}
+
+.market-sort select {
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--md-border);
+  background: var(--md-surface, #fff);
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--md-ink);
+}
+
+.market-results-head {
+  margin: 1rem 0 1.25rem;
+}
+
+.market-results-head h2 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--md-ink);
+}
+
+.market-results-meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--md-muted);
+}
+
+/* Store cards — interaction containers */
+.market-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .market-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .market-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.market-card {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: var(--md-surface, #fff);
+  border: 1px solid var(--md-border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s;
+  animation: market-card-in 0.45s ease both;
+}
+
+.market-card:nth-child(2) { animation-delay: 0.05s; }
+.market-card:nth-child(3) { animation-delay: 0.1s; }
+.market-card:nth-child(4) { animation-delay: 0.15s; }
+.market-card:nth-child(5) { animation-delay: 0.2s; }
+.market-card:nth-child(6) { animation-delay: 0.25s; }
+
+@keyframes market-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.market-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--md-green) 35%, transparent);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--md-ink) 8%, transparent);
+}
+
+.market-card-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--md-green-soft);
+  overflow: hidden;
+}
+
+.market-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.market-card-badge {
+  position: absolute;
+  left: 0.65rem;
+  bottom: 0.65rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--md-surface) 92%, transparent);
+  color: var(--md-ink);
+  backdrop-filter: blur(6px);
+}
+
+.market-card-status {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: #fff;
+  color: var(--md-green-dark);
+}
+
+.market-card-status.is-closed {
+  color: var(--md-muted);
+}
+
+.market-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem 1.1rem;
+  flex: 1;
+}
+
+.market-card-name {
+  margin: 0;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.market-card-owner {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--md-muted);
+}
+
+.market-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--md-muted);
+}
+
+.market-card-meta strong {
+  color: var(--md-ink);
+  font-weight: 600;
+}
+
+.market-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.market-card-tag {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.3rem;
+  background: var(--md-green-soft);
+  color: var(--md-green-deep);
+}
+
+.market-card-cta {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-green-dark);
+}
+
+.market-card:hover .market-card-cta {
+  text-decoration: underline;
+}
+
+/* Empty */
+.market-empty {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  border-radius: 1rem;
+  border: 1px dashed color-mix(in srgb, var(--md-ink) 15%, transparent);
+  background: color-mix(in srgb, var(--md-green) 3%, var(--md-surface-alt));
+}
+
+.market-empty h3 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: 1.2rem;
+}
+
+.market-empty p {
+  margin: 0 auto 1.25rem;
+  max-width: 26rem;
+  color: var(--md-muted);
+  font-size: 0.95rem;
+}
+
+.market-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Owner banner */
+.market-owner-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 2.5rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--md-green) 12%, var(--md-surface-alt)), var(--md-surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--md-green) 20%, transparent);
+}
+
+.market-owner-banner h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display, "Poppins", sans-serif);
+  font-size: 1.2rem;
+}
+
+.market-owner-banner p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--md-muted);
+  max-width: 36rem;
+  line-height: 1.5;
+}
+
+@media (min-width: 720px) {
+  .market-owner-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

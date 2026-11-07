@@ -1,12 +1,13 @@
 import axios, {
+  AxiosHeaders,
   type AxiosInstance,
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { getClientConfig } from './config';
-import { ApiError, toApiError } from './errors';
+import { ApiError, assertApiSuccess, toApiError } from './errors';
 import { refreshAccessToken } from './refresh';
-import { getAccessToken } from './tokens';
+import { getAccessToken, getRefreshToken, isAccessTokenExpired } from './tokens';
 import type { ApiEnvelope, RequestConfig } from './types';
 
 type RetryConfig = InternalAxiosRequestConfig & {
@@ -28,12 +29,34 @@ function createHttp(): AxiosInstance {
     },
   });
 
-  instance.interceptors.request.use((config: RetryConfig) => {
+  instance.interceptors.request.use(async (config: RetryConfig) => {
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      const headers = AxiosHeaders.from(config.headers ?? {});
+      headers.delete('Content-Type');
+      config.headers = headers;
+    }
+
     if (!config.skipAuth) {
-      const token = getAccessToken();
+      let token = getAccessToken();
+
+      // Access tokens live 600s, so a returning vendor usually holds an expired one.
+      // Letting the 401 handler discover that costs a doomed request first — three
+      // serial round trips to first paint instead of two. Refresh up front instead.
+      // Single-flight means parallel requests still share one refresh, and the 401
+      // handler below stays the backstop for revocation and for tokens this cannot read.
+      if (!config.skipRefresh && isAccessTokenExpired(token) && getRefreshToken()) {
+        try {
+          token = await refreshAccessToken();
+        } catch {
+          // Transient refresh failure must not block the request. Send what we have and
+          // let the 401 path try again rather than failing before reaching the server.
+          token = getAccessToken();
+        }
+      }
+
       if (token) {
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers = AxiosHeaders.from(config.headers ?? {});
+        config.headers.set('Authorization', `Bearer ${token}`);
       }
     }
     return config;
@@ -47,13 +70,25 @@ function createHttp(): AxiosInstance {
 
       if (status === 401 && !original.skipAuth && !original.skipRefresh && !original._retry) {
         original._retry = true;
-        const token = await refreshAccessToken();
+        let token: string | null = null;
+        try {
+          token = await refreshAccessToken();
+        } catch (refreshError) {
+          // Refresh now throws on transient failures so the session survives. Normalize it
+          // here so callers never receive a raw axios error from the retry path.
+          return Promise.reject(toApiError(refreshError, original.url));
+        }
         if (token) {
           original.headers = original.headers || {};
           original.headers.Authorization = `Bearer ${token}`;
           return instance.request(original);
         }
         getClientConfig().onUnauthorized?.();
+      }
+
+      // Authenticated but not permitted. The session stays; the caller decides what to show.
+      if (status === 403 && !original.skipAuth) {
+        getClientConfig().onForbidden?.(original.url);
       }
 
       return Promise.reject(toApiError(error, original.url));
@@ -89,7 +124,7 @@ function withFlags(config?: RequestConfig): AxiosRequestConfig {
 export async function apiGet<T>(url: string, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().get<T>(url, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -98,7 +133,7 @@ export async function apiGet<T>(url: string, config?: RequestConfig): Promise<T>
 export async function apiPost<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().post<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -107,7 +142,7 @@ export async function apiPost<T>(url: string, body?: unknown, config?: RequestCo
 export async function apiPut<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().put<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -116,7 +151,7 @@ export async function apiPut<T>(url: string, body?: unknown, config?: RequestCon
 export async function apiPatch<T>(url: string, body?: unknown, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().patch<T>(url, body, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }
@@ -125,7 +160,7 @@ export async function apiPatch<T>(url: string, body?: unknown, config?: RequestC
 export async function apiDelete<T>(url: string, config?: RequestConfig): Promise<T> {
   try {
     const res = await getHttp().delete<T>(url, withFlags(config));
-    return res.data;
+    return assertApiSuccess(res.data, url);
   } catch (error) {
     throw toApiError(error, url);
   }

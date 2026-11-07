@@ -11,3 +11,9 @@ coverage
 .vite
 *.tsbuildinfo
 website.zip
+
+# Vercel
+.vercel
+
+# Cloudflare
+.wrangler

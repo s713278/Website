@@ -28,6 +28,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save vendor storefront configuration
+         * @description Saves the storefront settings, theme, messaging and badges for a vendor in a single API
+         */
+        put: operations["saveStorefrontConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/checkout_options": {
         parameters: {
             query?: never;
@@ -38,51 +58,51 @@ export interface paths {
         /**
          * Get checkout options for a vendor
          * @description Returns the available fulfillment methods and their configuration for the checkout UI.
-         *      The vendor's fulfillment_type determines which options are returned:
-         *      • HOME_DELIVERY — delivery charges, free threshold, same-day availability, delivery slots
-         *      • STORE_PICKUP — list of active pickup stores with per-store ready time and pickup slots
-         *      • BOTH — both options returned, user selects at checkout
-         *      Delivery Scheduling Strategies:
-         *      • FIXED_WINDOW — Eco products: 3-5 days delivery window
-         *      • CUSTOMER_SELECT_DATE — Milk delivery: customer picks exact date within 1-30 days
-         *      • PREDEFINED_DAYS — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday)
-         *      • INSTANT — Hotel/Restaurant: 30-60 minutes delivery
-         *      Response Structure:
-         *      • delivery_methods — list of available methods: ["HOME_DELIVERY"], ["STORE_PICKUP"], or both
-         *      • delivery_options — home delivery config (charges, scheduling, slots) — null if not available
-         *      • delivery_options.scheduling_strategy — one of: FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
-         *      • delivery_options.shipping_strategy_type — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
-         *      • delivery_options.shipping_config — strategy-specific configuration (snake_case keys)
-         *      • delivery_options.scheduling_config — strategy-specific configuration
-         *      • delivery_options.available_delivery_dates — list of available dates based on strategy
-         *      • pickup_options.stores[] — pickup store list with address, ready time, slots — null if not available
-         *      Shipping Strategy Configurations:
-         *      • ORDER_AMOUNT_THRESHOLD: delivery_charge=30, free_delivery_threshold=300
-         *      • ZIPCODE_THRESHOLD: free_zipcodes=["560001"], free_delivery_threshold=500, default_charge=50
-         *      • ZIPCODE_TIERED: tiers=[{label, zipcodes[], charge}], rest_of_india_charge=80
-         *      • FLAT: charge=40
-         *      • WEIGHT_BASED: free_up_to_kg=2, charge_per_kg=20
-         *      Scheduling Strategy Configurations:
-         *      • FIXED_WINDOW: min_delivery_days=3, max_delivery_days=5, deliveryFrequency=false
-         *      • CUSTOMER_SELECT_DATE: min_advance_booking_days=1, max_advance_booking_days=30, cutoff_time=18:00
-         *      • PREDEFINED_DAYS: available_delivery_days=["SUNDAY", "WEDNESDAY"], max_orders_per_day=50
-         *      • INSTANT: minPrepTimeMinutes=30, maxPrepTimeMinutes=60, operatingUntil=23:59, orderCutoffTime=22:00
+         *     <br><br>The vendor's <code>fulfillment_type</code> determines which options are returned:
+         *     <br>• <b>HOME_DELIVERY</b> — delivery charges, free threshold, same-day availability, delivery slots
+         *     <br>• <b>STORE_PICKUP</b> — list of active pickup stores with per-store ready time and pickup slots
+         *     <br>• <b>BOTH</b> — both options returned, user selects at checkout
+         *     <br><br><b>Delivery Scheduling Strategies:</b>
+         *     <br>• <b>FIXED_WINDOW</b> — Eco products: 3-5 days delivery window
+         *     <br>• <b>CUSTOMER_SELECT_DATE</b> — Milk delivery: customer picks exact date within 1-30 days
+         *     <br>• <b>PREDEFINED_DAYS</b> — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday)
+         *     <br>• <b>INSTANT</b> — Hotel/Restaurant: 30-60 minutes delivery
+         *     <br><br><b>Response Structure:</b>
+         *     <br>• <code>delivery_methods</code> — list of available methods: <code>["HOME_DELIVERY"]</code>, <code>["STORE_PICKUP"]</code>, or both
+         *     <br>• <code>delivery_options</code> — home delivery config (charges, scheduling, slots) — null if not available
+         *     <br>• <code>delivery_options.scheduling_strategy</code> — one of: FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
+         *     <br>• <code>delivery_options.shipping_strategy_type</code> — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
+         *     <br>• <code>delivery_options.shipping_config</code> — strategy-specific configuration (snake_case keys)
+         *     <br>• <code>delivery_options.scheduling_config</code> — strategy-specific configuration
+         *     <br>• <code>delivery_options.available_delivery_dates</code> — list of available dates based on strategy
+         *     <br>• <code>pickup_options.stores[]</code> — pickup store list with address, ready time, slots — null if not available
+         *     <br><br><b>Shipping Strategy Configurations:</b>
+         *     <br>• <b>ORDER_AMOUNT_THRESHOLD</b>: delivery_charge=30, free_delivery_threshold=300
+         *     <br>• <b>ZIPCODE_THRESHOLD</b>: free_zipcodes=["560001"], free_delivery_threshold=500, default_charge=50
+         *     <br>• <b>ZIPCODE_TIERED</b>: tiers=[{label, zipcodes[], charge}], rest_of_india_charge=80
+         *     <br>• <b>FLAT</b>: charge=40
+         *     <br>• <b>WEIGHT_BASED</b>: free_up_to_kg=2, charge_per_kg=20
+         *     <br><br><b>Scheduling Strategy Configurations:</b>
+         *     <br>• <b>FIXED_WINDOW</b>: min_delivery_days=3, max_delivery_days=5, deliveryFrequency=false
+         *     <br>• <b>CUSTOMER_SELECT_DATE</b>: min_advance_booking_days=1, max_advance_booking_days=30, cutoff_time=18:00
+         *     <br>• <b>PREDEFINED_DAYS</b>: available_delivery_days=["SUNDAY", "WEDNESDAY"], max_orders_per_day=50
+         *     <br>• <b>INSTANT</b>: minPrepTimeMinutes=30, maxPrepTimeMinutes=60, operatingUntil=23:59, orderCutoffTime=22:00
          */
         get: operations["getCheckoutOptions"];
         /**
          * Save vendor checkout configuration
          * @description Creates or updates the full checkout configuration for a vendor in a single call.
-         *      Manageable fields:
-         *      • fulfillment_type — HOME_DELIVERY, STORE_PICKUP, or BOTH
-         *      • customer_consent_title / customer_consent_text — consent dialog
-         *      • scheduling_strategy — FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
-         *      • scheduling_config — strategy-specific JSON
-         *      • shipping_strategy_type — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
-         *      • shipping_config — strategy-specific JSON for the selected shipping strategy
-         *      • order_acceptance_policy — AUTO_ACCEPT or MANUAL_APPROVAL
-         *      • payment_options[] — list of payment methods (replaces existing active options)
-         *      Rule: shipping_strategy_type and shipping_config must be provided together.
-         *      Returns CheckoutOptionsResponse, the same shape as GET /v1/vendors/{vendor_id}/checkout_options.
+         *     <br><br><b>Manageable fields:</b>
+         *     <br>• <code>fulfillment_type</code> — HOME_DELIVERY, STORE_PICKUP, or BOTH
+         *     <br>• <code>customer_consent_title</code> / <code>customer_consent_text</code> — consent dialog
+         *     <br>• <code>scheduling_strategy</code> — FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT
+         *     <br>• <code>scheduling_config</code> — strategy-specific JSON
+         *     <br>• <code>shipping_strategy_type</code> — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED
+         *     <br>• <code>shipping_config</code> — strategy-specific JSON for the selected shipping strategy
+         *     <br>• <code>order_acceptance_policy</code> — AUTO_ACCEPT or MANUAL_APPROVAL
+         *     <br>• <code>payment_options[]</code> — list of payment methods (replaces existing active options)
+         *     <br><br><b>Rule:</b> <code>shipping_strategy_type</code> and <code>shipping_config</code> must be provided together.
+         *     <br>Returns <code>CheckoutOptionsResponse</code>, the same shape as GET /v1/vendors/{vendor_id}/checkout_options.
          */
         put: operations["saveDeliveryConfig"];
         post?: never;
@@ -103,29 +123,29 @@ export interface paths {
         /**
          * Add/update item in cart
          * @description Add a new item or update quantity of existing item in cart.
-         *      Behavior:
-         *      • If item exists: quantity is added to existing quantity (additive, same as POST)
-         *      • If item doesn't exist: adds new item with specified quantity
-         *      • Enforces vendor validation (same as POST)
-         *      • Recalculates cart totals automatically
-         *      Use Cases:
-         *      • Add quantity on top of current (e.g., add 2 more to existing 3 → becomes 5)
-         *      • Add new item to existing cart
-         *      • Use PUT /items/{cart_item_id} for exact quantity replacement by item ID
+         *     <br><br><b>Behavior:</b>
+         *     <br>• If item exists: quantity is <b>added</b> to existing quantity (additive, same as POST)
+         *     <br>• If item doesn't exist: adds new item with specified quantity
+         *     <br>• Enforces vendor validation (same as POST)
+         *     <br>• Recalculates cart totals automatically
+         *     <br><br><b>Use Cases:</b>
+         *     <br>• Add quantity on top of current (e.g., add 2 more to existing 3 → becomes 5)
+         *     <br>• Add new item to existing cart
+         *     <br>• Use PUT /items/{cart_item_id} for exact quantity replacement by item ID
          */
         put: operations["addOrUpdateItem"];
         /**
          * Add item to cart
          * @description Add a new item to the user's cart. Automatically handles vendor validation.
-         *      Business Rules:
-         *      • Only items from the same vendor can be in one cart
-         *      • Maximum 25 quantity per item
-         *      • Maximum 50 items per cart
-         *      • Cart expires after 24 hours
-         *      • If cart contains items from different vendor, returns 409 Conflict
-         *      Test Data:
-         *      • SKU ID: 101, Quantity: 2 (Vendor: 123)
-         *      • SKU ID: 102, Quantity: 1 (Vendor: 123)
+         *     <br><br><b>Business Rules:</b>
+         *     <br>• Only items from the same vendor can be in one cart
+         *     <br>• Maximum 25 quantity per item
+         *     <br>• Maximum 50 items per cart
+         *     <br>• Cart expires after 24 hours
+         *     <br>• If cart contains items from different vendor, returns 409 Conflict
+         *     <br><br><b>Test Data:</b>
+         *     <br>• SKU ID: 101, Quantity: 2 (Vendor: 123)
+         *     <br>• SKU ID: 102, Quantity: 1 (Vendor: 123)
          */
         post: operations["addItemToCart"];
         delete?: never;
@@ -145,26 +165,26 @@ export interface paths {
         /**
          * Update item quantity
          * @description Update the quantity of an existing item in the cart.
-         *      Behavior:
-         *      • Updates quantity to exact value provided
-         *      • Recalculates cart totals automatically
-         *      • Validates quantity limits
-         *      Use Cases:
-         *      • Update quantity from 2 to 5 units
-         *      • Reduce quantity from 10 to 3 units
+         *     <br><br><b>Behavior:</b>
+         *     <br>• Updates quantity to exact value provided
+         *     <br>• Recalculates cart totals automatically
+         *     <br>• Validates quantity limits
+         *     <br><br><b>Use Cases:</b>
+         *     <br>• Update quantity from 2 to 5 units
+         *     <br>• Reduce quantity from 10 to 3 units
          */
         put: operations["updateItemQuantity"];
         post?: never;
         /**
          * Remove item from cart
          * @description Remove a specific item from the user's cart.
-         *      Behavior:
-         *      • Removes item completely (not quantity reduction)
-         *      • Recalculates cart totals automatically
-         *      • If cart becomes empty, vendor_id becomes null
-         *      • Cart remains active for adding new items
-         *      Test Data:
-         *      • Cart Item ID: 987654321 (from previous examples)
+         *     <br><br><b>Behavior:</b>
+         *     <br>• Removes item completely (not quantity reduction)
+         *     <br>• Recalculates cart totals automatically
+         *     <br>• If cart becomes empty, vendor_id becomes null
+         *     <br>• Cart remains active for adding new items
+         *     <br><br><b>Test Data:</b>
+         *     <br>• Cart Item ID: 987654321 (from previous examples)
          */
         delete: operations["removeItemFromCart"];
         options?: never;
@@ -340,6 +360,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current subscription
+         * @description Returns the vendor's single current subscription row (trial or paid), including:
+         *
+         *     - `status`: TRIAL_ACTIVE | TRIAL_EXPIRED | PAYMENT_PENDING | ACTIVE | PAST_DUE |
+         *       HALTED | CANCELLED | EXPIRED
+         *     - Trial fields (populated when the vendor started on the free trial)
+         *     - Razorpay identifiers (`razorpay_subscription_id`, `razorpay_status`)
+         *     - `checkout_url` while PAYMENT_PENDING, so the UI can resume checkout
+         *     - Billing period (`current_period_*`, `next_billing_at`) once ACTIVE
+         *     - Cancellation state (`cancel_at_period_end`, `cancelled_at`)
+         *
+         *     Prices are in **rupees**. `404` if the vendor has never started a trial.
+         */
+        get: operations["getCurrentSubscription"];
+        put?: never;
+        /**
+         * Subscribe to a paid plan
+         * @description Starts a paid subscription for the vendor:
+         *
+         *     1. Looks up the plan (`plan_code`; the mapped Razorpay plan id is also accepted).
+         *     2. Creates a Razorpay subscription via `external_plan_id` with the full plan
+         *        price as the **upfront amount** — checkout charges it immediately and it is
+         *        **non-refundable**. Razorpay's first recurring charge is scheduled at
+         *        `start_at`, which is the next renewal date: paid period start
+         *        (trial end, or now if the trial already ended) + one billing interval
+         *        (30 days for MONTHLY, 365 days for YEARLY). `next_billing_at` returns it.
+         *     3. Moves the vendor's single subscription row to `PAYMENT_PENDING` — the existing
+         *        trial fields (`trial_started_at`/`trial_ends_at`) are retained as history.
+         *     4. Returns `razorpay_key_id`, `razorpay_subscription_id`, `checkout_url`, and a
+         *        `message` with the billing terms (non-refundable, cancellation applies from
+         *        the next billing cycle).
+         *        The key ID is public and may be used by the UI to initialise Razorpay Checkout;
+         *        no key secret or webhook secret is ever returned.
+         *
+         *     Idempotent: calling again while `PAYMENT_PENDING` returns the existing checkout
+         *     URL — no duplicate Razorpay subscription is created.
+         *
+         *     The subscription becomes `ACTIVE` when the upfront payment is confirmed via
+         *     `/subscription/confirm` or the `subscription.authenticated` webhook.
+         *     Conflicts: `409` if the vendor already has an ACTIVE subscription on
+         *     the same plan — when cancellation is already scheduled, the error message
+         *     includes the access end date (`current_period_end`) after which the vendor
+         *     can renew; `400` if the plan is not purchasable online; `404` if the vendor
+         *     has no subscription row (go live first).
+         */
+        post: operations["subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/subscription/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Razorpay checkout
+         * @description Verifies the three values Razorpay Checkout returns to the browser after payment:
+         *
+         *     - `razorpay_subscription_id` — must equal the id returned by the subscribe call
+         *     - `razorpay_payment_id` — the payment attempt id from the Checkout handler
+         *     - `razorpay_signature` — HMAC-SHA256 of `payment_id|subscription_id`
+         *
+         *     On success the signature proves the upfront payment was collected, so the
+         *     subscription moves to `ACTIVE` immediately, the paid period is recorded
+         *     (until `next_billing_at`), and the vendor is notified by WhatsApp/email.
+         *     Returns `401` on signature mismatch and `400` on subscription mismatch.
+         */
+        post: operations["confirmPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/subscription/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel paid subscription
+         * @description Cancels the vendor's paid subscription at Razorpay so it does not renew.
+         *     **The upfront payment is never refunded** — cancellation always applies from the
+         *     next billing cycle and access continues until `current_period_end`.
+         *
+         *     Outcomes by current state:
+         *
+         *     - `ACTIVE` / `PAST_DUE` → `cancel_at_period_end = true`; status unchanged.
+         *       Razorpay is cancelled at cycle end (`active` subs) or immediately
+         *       (`authenticated` subs — the scheduled first charge never runs).
+         *     - `PAYMENT_PENDING`, checkout never paid → cancelled immediately;
+         *       status becomes `CANCELLED` with `cancelled_at` set.
+         *     - `PAYMENT_PENDING` but payment already completed (confirm/webhook still in
+         *       flight) → treated as paid: `cancel_at_period_end = true`, access continues
+         *       until `current_period_end`; activation still flips status to `ACTIVE`.
+         *     - **Idempotent**: calling again while `cancel_at_period_end = true` returns the
+         *       current state with the same billing `message` — no second Razorpay call.
+         *
+         *     `400` if the vendor has no paid subscription or is already CANCELLED/EXPIRED.
+         */
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/subs": {
         parameters: {
             query?: never;
@@ -356,16 +502,43 @@ export interface paths {
         /**
          * Create Subscriptions on Behalf of Customers
          * @description Allows a VENDOR or ADMIN to create single or bulk subscriptions on behalf of customers.
-         *      Business Rules:
-         *      • Vendor can only create subscriptions for their own SKUs.
-         *      • Start date must be today or a future date.
-         *      • Quantity must be greater than 0.
-         *      • Duplicate active subscriptions for the same customer+SKU are rejected.
-         *      • Customer receives an async notification after creation.
-         *      • Failed items in a bulk request do NOT roll back successful ones.
-         *      Future Support: CSV/Excel bulk import via multipart upload.
+         *     <br><br><b>Business Rules:</b>
+         *     <br>• Vendor can only create subscriptions for their own SKUs.
+         *     <br>• Start date must be today or a future date.
+         *     <br>• Quantity must be greater than 0.
+         *     <br>• Duplicate active subscriptions for the same customer+SKU are rejected.
+         *     <br>• Customer receives an async notification after creation.
+         *     <br>• Failed items in a bulk request do NOT roll back successful ones.
+         *     <br><br><b>Future Support:</b> CSV/Excel bulk import via multipart upload.
          */
         post: operations["createSubscriptionsOnBehalfOfCustomers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/social-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor social links
+         * @description Returns the vendor's active social links (with <code>id</code>) ordered by
+         *     <code>display_order</code>.
+         *     <br><b>Public endpoint</b> — API key optional, no bearer token required.
+         */
+        get: operations["getSocialLinks"];
+        put?: never;
+        /**
+         * Create vendor social link
+         * @description Adds a social link for a platform. Only one link per platform per vendor.
+         *     <br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.
+         */
+        post: operations["createSocialLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -382,9 +555,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Vendor Sku API
-         * @description This API is used to create Sku with eligible subscription plans and delivery days.
-         *     ONE_TIME with FIXED delivery mode is always required 'eligible_delivery_days'.
+         * Create Vendor SKU API
+         * @description Creates SKUs for a vendor product. The SKU's display name, description and image are no
+         *     longer supplied here - they are derived from the owning product / vendor product.
+         *     <br/><code>eligible_sub_plans</code> is optional; pass an empty list (or omit it) for SKUs
+         *     without subscriptions.
+         *     <br/>ONE_TIME with FIXED delivery mode always requires <code>eligible_delivery_days</code>.
          */
         post: operations["createVendorSku"];
         delete?: never;
@@ -492,27 +668,27 @@ export interface paths {
          * Fetch vendor image URL from the database
          * @description Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.
          *
-         *      Image Types & Parameter Combinations:
+         *     <b>Image Types &amp; Parameter Combinations:</b>
+         *     <ul>
+         *       <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).
+         *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
+         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).
+         *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
+         *       <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).
+         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>
+         *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown
+         *           for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>
+         *     </ul>
          *
-         *      HOMEBANNER - Vendor home banner (reads tb_vendor.banner_image).
-         *      Only vendor_id + image_type required.
-         *      THUMBNAIL - Vendor thumbnail (reads tb_vendor.thumbnail_image).
-         *      Only vendor_id + image_type required.
-         *      PRODUCT - Product image (reads tb_product.image_path).
-         *      Requires vendor_id + image_type + reference_id (productId).
-         *      SKU - SKU image (reads tb_sku.image_path, must belong to vendor).
-         *      Requires vendor_id + image_type + reference_id (skuId).
+         *     <b>Request Format:</b><br/>
+         *     GET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>
+         *     GET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>
          *
+         *     <b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,
+         *     <code>reference_id</code> (when applicable), and a <code>message</code>.
+         *     The <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.
          *
-         *      Request Format:
-         *     GET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER
-         *     GET /v1/vendors/{vendor_id}/images?image_type=SKU&reference_id=114
-         *
-         *      Response: Returns image_url, image_type,
-         *      reference_id (when applicable), and a message.
-         *     The image_url will be null if no image has been uploaded yet.
-         *
-         *      Access: ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.
+         *     <b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.
          */
         get: operations["getVendorImageUrl"];
         put?: never;
@@ -521,22 +697,47 @@ export interface paths {
          * @description Uploads images for a specific vendor. Simple API for back office use.
          *     Supports vendor banner, thumbnail, product, and SKU images using multipart/form-data.
          *
-         *      Image Types:
+         *     <b>Image Types:</b>
+         *     <ul>
+         *       <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>
+         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>
+         *       <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>
+         *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>
+         *     </ul>
          *
-         *      HOMEBANNER - Vendor home banner (updates tb_vendor.banner_image)
-         *      THUMBNAIL - Vendor thumbnail (updates tb_vendor.thumbnail_image)
-         *      PRODUCT - Product image (reference_id = productId)
-         *      SKU - SKU image (reference_id = skuId, must belong to vendor)
-         *
-         *
-         *      Request Format:
-         *     POST /v1/vendors/{vendor_id}/images
-         *     Content-Type: multipart/form-data
+         *     <b>Request Format:</b><br/>
+         *     POST /v1/vendors/{vendor_id}/images<br/>
+         *     Content-Type: multipart/form-data<br/>
          *     Parameters: image_type, reference_id (optional), fileName (optional), file (required)
          *
-         *      Access: ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.
+         *     <b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.
          */
         post: operations["uploadVendorImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/go-live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Go live and start trial
+         * @description Self-onboarding step 10: finalize the vendor profile, validate mandatory setup,
+         *     and set the vendor status to ACTIVE. Admin approval may still be required.
+         *
+         *     On success, the vendor is enrolled in the configured default platform trial plan
+         *     (e.g. Social Starter Trial, 14 days). No Razorpay subscription is created at this
+         *     step. Repeated calls are idempotent and will not reset or extend the trial.
+         */
+        post: operations["goLive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -555,15 +756,15 @@ export interface paths {
         /**
          * Check vendor delivery eligibility for an address
          * @description This API checks whether the given vendor can deliver to the supplied address.
-         *      The address is passed as a flexible key-value map, similar to a Google Places address
-         *      selection, and may include `latitude`, `longitude`, `pincode`/`zipcode`/`postal_code`
-         *      and any other address fields (e.g. `city`, `state`, `country`, `formatted_address`, `place_id`).
-         *      At least one of a pincode/zipcode or a latitude+longitude pair must be supplied.
-         *      A vendor is deliverable when, in order of precedence: the pincode is in its
-         *      serviceable zipcode list; the supplied latitude/longitude falls within its mapped geo
-         *      service area polygon; or the vendor has a mapped geo service area with no explicit
-         *      zipcode restriction.
-         *      Test data: pincode: 500049
+         *         <br>The address is passed as a flexible key-value map, similar to a Google Places address
+         *         selection, and may include `latitude`, `longitude`, `pincode`/`zipcode`/`postal_code`
+         *         and any other address fields (e.g. `city`, `state`, `country`, `formatted_address`, `place_id`).
+         *         <br>At least one of a pincode/zipcode or a latitude+longitude pair must be supplied.
+         *         <br>A vendor is deliverable when, in order of precedence: the pincode is in its
+         *         serviceable zipcode list; the supplied latitude/longitude falls within its mapped geo
+         *         service area polygon; or the vendor has a mapped geo service area with no explicit
+         *         zipcode restriction.
+         *         <br>Test data: pincode: 500049
          */
         post: operations["checkDeliveryEligibility"];
         delete?: never;
@@ -582,14 +783,14 @@ export interface paths {
         /**
          * Fetch Vendor Customers
          * @description Fetch all customers associated with a vendor with optional mobile number filtering.
-         *      Features:
-         *      • Pagination support for large datasets
-         *      • Optional mobile number filter (pass null to get all customers)
-         *      • Only active vendor-customer relationships are returned
-         *      • Results ordered by relationship creation date (newest first)
-         *      Access: Vendors can only view their own customers
-         *      Admin : 9948023105
-         *      Vendor : 9948023190
+         *     <br><b>Features:</b></br>
+         *     <br>• Pagination support for large datasets</br>
+         *     <br>• Optional mobile number filter (pass null to get all customers)</br>
+         *     <br>• Only active vendor-customer relationships are returned</br>
+         *     <br>• Results ordered by relationship creation date (newest first)</br>
+         *     <br><b>Access:</b> Vendors can only view their own customers</br>
+         *     <br>Admin : 9948023105 </br>
+         *     <br>Vendor : 9948023190 </br>
          */
         get: operations["getVendorCustomers"];
         put?: never;
@@ -616,10 +817,10 @@ export interface paths {
         /**
          * Bulk Create Customer Profiles via Excel
          * @description Upload an .xlsx file to bulk-create customer profiles and send WhatsApp invitations.
-         *      Expected columns (row 1 is header):
-         *      A: country_code   B: mobile_number   C: first_name   D: last_name
-         *      Admin : 9948023105
-         *      Vendor : 9948023190
+         *       <br><b>Expected columns (row 1 is header):</b></br>
+         *       <br>A: country_code &nbsp; B: mobile_number &nbsp; C: first_name &nbsp; D: last_name</br>
+         *       <br>Admin : 9948023105 </br>
+         *       <br>Vendor : 9948023190 </br>
          */
         post: operations["createCustomerProfilesFromExcel"];
         delete?: never;
@@ -640,16 +841,16 @@ export interface paths {
         /**
          * Invite Customer via WhatsApp
          * @description Send a WhatsApp invitation to a customer on behalf of a vendor.
-         *      Access: VENDOR or ADMIN only.
-         *      The vendor must supply the customer's country code and mobile number.
-         *      Notifications are dispatched asynchronously; the API returns immediately on acceptance.
-         *      Rate Limits (Redis-backed):
-         *
-         *      Vendor weekly cap: default 100 invitations per calendar week (configurable per vendor via application.invite-rate-limit.vendor-overrides).
-         *      Mobile window cap: default 2 invitations per mobile number per 10 minutes (configurable).
-         *      Exceeding either limit returns HTTP 429 Too Many Requests.
-         *
-         *      See docs/vendor-invite-api.md for full configuration reference.
+         *     <br><b>Access:</b> VENDOR or ADMIN only.</br>
+         *     <br>The vendor must supply the customer's country code and mobile number.</br>
+         *     <br>Notifications are dispatched asynchronously; the API returns immediately on acceptance.</br>
+         *     <br><b>Rate Limits (Redis-backed):</b></br>
+         *     <ul>
+         *       <li><b>Vendor weekly cap:</b> default 100 invitations per calendar week (configurable per vendor via <code>application.invite-rate-limit.vendor-overrides</code>).</li>
+         *       <li><b>Mobile window cap:</b> default 2 invitations per mobile number per 10 minutes (configurable).</li>
+         *       <li>Exceeding either limit returns <code>HTTP 429 Too Many Requests</code>.</li>
+         *     </ul>
+         *     <br>See <a href="https://github.com/search?q=vendor-invite-api.md">docs/vendor-invite-api.md</a> for full configuration reference.</br>
          */
         post: operations["inviteCustomer"];
         delete?: never;
@@ -667,21 +868,21 @@ export interface paths {
         };
         /**
          * Fetch all vendors
-         * @description Fetch all vendors OR Search vendors by business_name/phone number/id.
-         *      search_key Used to search vendors by business name/phone number/id.
-         *      name_only Used to fetch only names and vendor_ids of vendors for rendering dropdowns.
+         * @description Fetch all vendors OR Search vendors by business_name/phone number/id.<br>
+         *     <b>search_key</b> Used to search vendors by business name/phone number/id.<br>
+         *     <b>name_only</b> Used to fetch only names and vendor_ids of vendors for rendering dropdowns.
          */
         get: operations["getAllVendors"];
         put?: never;
         /**
          * Create Vendor Profile
          * @description Profile can be created by Vendor/Admin/Customer_Care after login.
-         *
-         *      Test data
-         *
-         *      Admin : 9948023105
-         *      Vendor : 9948023190
-         *      OTP is default one to verify the APIs.
+         *       <br>
+         *         <b>Test data</b>
+         *       </br>
+         *       <br>Admin : 9948023105 </br>
+         *       <br>Vendor : 9948023190 </br>
+         *       OTP is default one to verify the APIs.
          */
         post: operations["createVendorProfile"];
         delete?: never;
@@ -700,7 +901,7 @@ export interface paths {
         /**
          * Fetch Subscriptions
          * @description Returns all active subscriptions for a user, or a single subscription when `sub_id` is supplied.
-         *
+         *     <br><br>
          *     The response includes all fields needed to populate the **Edit Subscription** screen:
          *     vendor name, item name, image, status, quantity, frequency, unit price, estimated monthly
          *     cost, payment method, start date, next delivery date, delivery slot, and delivery mode.
@@ -710,7 +911,7 @@ export interface paths {
         /**
          * Create new subscription
          * @description Creates a subscription with the specified details.
-         *      Test Data: SKUID : 664 to 680
+         *     <br> Test Data: SKUID : 664 to 680
          */
         post: operations["createSubscription"];
         delete?: never;
@@ -792,19 +993,19 @@ export interface paths {
         /**
          * Create order
          * @description Create a new order with multiple items from a single vendor.
-         *      Business Rules:
-         *      • All items must be from the same vendor
-         *      • Valid SKU IDs and price IDs required
-         *      • Real-time pricing applied from SKU price table
-         *      • Automatic total calculation including taxes and delivery
-         *      • Order status set to PENDING by default
-         *      Vendor Context:
-         *      • vendor_id specifies which vendor's items to order
-         *      • System validates all SKUs belong to specified vendor
-         *      • Vendor-specific delivery charges applied
-         *      Test Data:
-         *      • User ID: 12552, Vendor ID: 123
-         *      • SKU IDs: 101, 102 (both from Vendor 123)
+         *     <br><br><b>Business Rules:</b>
+         *     <br>• All items must be from the same vendor
+         *     <br>• Valid SKU IDs and price IDs required
+         *     <br>• Real-time pricing applied from SKU price table
+         *     <br>• Automatic total calculation including taxes and delivery
+         *     <br>• Order status set to PENDING by default
+         *     <br><br><b>Vendor Context:</b>
+         *     <br>• vendor_id specifies which vendor's items to order
+         *     <br>• System validates all SKUs belong to specified vendor
+         *     <br>• Vendor-specific delivery charges applied
+         *     <br><br><b>Test Data:</b>
+         *     <br>• User ID: 12552, Vendor ID: 123
+         *     <br>• SKU IDs: 101, 102 (both from Vendor 123)
          */
         post: operations["createOrder"];
         delete?: never;
@@ -825,43 +1026,43 @@ export interface paths {
         /**
          * Create order from cart
          * @description Convert user's shopping cart into a formal order.
-         *     Supports both HOME_DELIVERY and STORE_PICKUP fulfillment modes.
-         *     Can be invoked by USER, VENDOR, ADMIN, or CUSTOMER_CARE roles.
-         *      Fulfillment Modes:
-         *      • HOME_DELIVERY — requires address_id, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, or PREDEFINED_DAYS).
-         *      FIXED_WINDOW / CUSTOMER_SELECT_DATE / PREDEFINED_DAYS require delivery_date. INSTANT auto-sets delivery date to today.
-         *      Delivery charges calculated from vendor's delivery config (charge + free threshold).
-         *      • STORE_PICKUP — requires pickup_address_id (vendor store ID) and pickup_slot (Morning/Evening).
-         *      Pickup is always free. ready_in_minutes is captured from the store's config.
-         *      Pickup slots are validated against the selected store's configured slots.
-         *      Delivery Scheduling Strategies:
-         *      • FIXED_WINDOW — Eco products: 3-5 days delivery window. System validates delivery date is within this range.
-         *      • CUSTOMER_SELECT_DATE — Milk delivery: customer picks exact date within 1-30 days advance booking via delivery_date.
-         *      • PREDEFINED_DAYS — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday).
-         *      System validates delivery date matches configured days.
-         *      • INSTANT — Hotel/Restaurant: 30-60 minutes delivery. Use order_timing_type = "INSTANT".
-         *      Validates against cutoff time and operating hours.
-         *      Backoffice Ordering:
-         *      • When called by VENDOR/ADMIN/CUSTOMER_CARE, customer_id is required to identify the customer.
-         *      • order_source is auto-derived from the caller role but can be overridden.
-         *      • placed_by_user_id is recorded automatically from the authenticated principal.
-         *      Business Rules:
-         *      • Cart must exist and contain items for the specified vendor
-         *      • Current pricing applied from SKU price table
-         *      • Per-item fulfillment eligibility validated (SKU home_delivery / store_pickup flags)
-         *      • Cart can be optionally cleared after order creation
-         *      • Delivery scheduling validation based on vendor's configured strategy
-         *      • payment_type_id must be a valid VendorPaymentConfig.id from the checkout-options API.
-         *      If omitted, the vendor's default payment option is used. Each vendor can support different payment methods (COD, PRE_PAID, ONLINE, IN_STORE_PAYMENT).
-         *      Process Flow:
-         *      1. Validate request fields based on delivery method
-         *      2. Validate against vendor's fulfillment_type (HOME_DELIVERY / STORE_PICKUP / BOTH)
-         *      3. For HOME_DELIVERY: load delivery config, validate timing based on scheduling strategy
-         *      4. For STORE_PICKUP: validate pickup store exists and belongs to vendor
-         *      5. Retrieve and validate cart from Redis
-         *      6. Per-item fulfillment eligibility + price validation
-         *      7. Create order, calculate totals, persist, send notifications
-         *      8. Optionally clear cart
+         *     Supports both <b>HOME_DELIVERY</b> and <b>STORE_PICKUP</b> fulfillment modes.
+         *     Can be invoked by <b>USER</b>, <b>VENDOR</b>, <b>ADMIN</b>, or <b>CUSTOMER_CARE</b> roles.
+         *     <br><br><b>Fulfillment Modes:</b>
+         *     <br>• <b>HOME_DELIVERY</b> — requires <code>address_id</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, or PREDEFINED_DAYS).
+         *       FIXED_WINDOW / CUSTOMER_SELECT_DATE / PREDEFINED_DAYS require <code>delivery_date</code>. INSTANT auto-sets delivery date to today.
+         *       Delivery charges calculated from vendor's delivery config (charge + free threshold).
+         *     <br>• <b>STORE_PICKUP</b> — requires <code>pickup_address_id</code> (vendor store ID) and <code>pickup_slot</code> (Morning/Evening).
+         *       Pickup is always free. <code>ready_in_minutes</code> is captured from the store's config.
+         *       Pickup slots are validated against the selected store's configured slots.
+         *     <br><br><b>Delivery Scheduling Strategies:</b>
+         *     <br>• <b>FIXED_WINDOW</b> — Eco products: 3-5 days delivery window. System validates delivery date is within this range.
+         *     <br>• <b>CUSTOMER_SELECT_DATE</b> — Milk delivery: customer picks exact date within 1-30 days advance booking via <code>delivery_date</code>.
+         *     <br>• <b>PREDEFINED_DAYS</b> — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday).
+         *       System validates delivery date matches configured days.
+         *     <br>• <b>INSTANT</b> — Hotel/Restaurant: 30-60 minutes delivery. Use <code>order_timing_type</code> = "INSTANT".
+         *       Validates against cutoff time and operating hours.
+         *     <br><br><b>Backoffice Ordering:</b>
+         *     <br>• When called by VENDOR/ADMIN/CUSTOMER_CARE, <code>customer_id</code> is <b>required</b> to identify the customer.
+         *     <br>• <code>order_source</code> is auto-derived from the caller role but can be overridden.
+         *     <br>• <code>placed_by_user_id</code> is recorded automatically from the authenticated principal.
+         *     <br><br><b>Business Rules:</b>
+         *     <br>• Cart must exist and contain items for the specified vendor
+         *     <br>• Current pricing applied from SKU price table
+         *     <br>• Per-item fulfillment eligibility validated (SKU <code>home_delivery</code> / <code>store_pickup</code> flags)
+         *     <br>• Cart can be optionally cleared after order creation
+         *     <br>• Delivery scheduling validation based on vendor's configured strategy
+         *     <br>• <code>payment_type_id</code> must be a valid <code>VendorPaymentConfig.id</code> from the checkout-options API.
+         *       If omitted, the vendor's default payment option is used. Each vendor can support different payment methods (COD, PRE_PAID, ONLINE, IN_STORE_PAYMENT).
+         *     <br><br><b>Process Flow:</b>
+         *     <br>1. Validate request fields based on delivery method
+         *     <br>2. Validate against vendor's <code>fulfillment_type</code> (HOME_DELIVERY / STORE_PICKUP / BOTH)
+         *     <br>3. For HOME_DELIVERY: load delivery config, validate timing based on scheduling strategy
+         *     <br>4. For STORE_PICKUP: validate pickup store exists and belongs to vendor
+         *     <br>5. Retrieve and validate cart from Redis
+         *     <br>6. Per-item fulfillment eligibility + price validation
+         *     <br>7. Create order, calculate totals, persist, send notifications
+         *     <br>8. Optionally clear cart
          */
         post: operations["createOrderFromCart"];
         delete?: never;
@@ -904,8 +1105,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create product
-         * @description Create platform level product. measurement_unit_id get from the '/v1/measurements/'
+         * Create a product
+         * @description Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description.
          */
         post: operations["addProduct"];
         delete?: never;
@@ -923,13 +1124,13 @@ export interface paths {
         };
         /**
          * Fetch All Categories
-         * @description API accessed by Admin/Customer_Care roles
+         * @description API accessed by  Admin/Customer_Care roles. Each returned category now includes the `icon` field.
          */
         get: operations["getCategories"];
         put?: never;
         /**
-         * Create a new category
-         * @description API accessed by only Admin roles
+         * Create a category
+         * @description Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles.
          */
         post: operations["createCategory"];
         delete?: never;
@@ -949,10 +1150,10 @@ export interface paths {
         put?: never;
         /**
          * Verify OTP
-         * @description This API returns access_token with short TTL and refresh_token with long TTL on successful user authentication.
-         *
-         *      data.address and name values are null for new users.
-         *      data.roles never be null.
+         * @description This API returns <b>access_token</b> with short TTL and <b>refresh_token</b> with long TTL on successful user authentication.
+         *     <ul>
+         *     <li>data.address and name values are null for new users.
+         *     <li>data.roles never be null.
          */
         post: operations["verifyMobileOtp"];
         delete?: never;
@@ -989,7 +1190,7 @@ export interface paths {
         put?: never;
         /**
          * Request OTP
-         * @description Test users with USER role Test User#1 : 9912149045 with address Test User#2 : 9912149046 without address Test users with VENDOR role Test User#1 : 9912149047
+         * @description <b>Test users with USER role</b><br> Test User#1 : 9912149045 with address <br> Test User#2 : 9912149046 without address<br><b>Test users with VENDOR role </b><br> Test User#1 : 9912149047
          */
         post: operations["requestOTP"];
         delete?: never;
@@ -1052,9 +1253,9 @@ export interface paths {
          * Import Catalog for Existing Vendor from CSV
          * @description Import catalog data (categories, products, SKUs with prices) for an existing vendor using CSV file.
          *     Vendor must already exist in the system. Skips vendor profile and delivery config creation.
-         *
-         *      CSV Format:
-         *      category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
+         *     <br><br>
+         *     <b>CSV Format:</b>
+         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type
          */
         post: operations["importCatalogFromCsv"];
         delete?: never;
@@ -1074,7 +1275,8 @@ export interface paths {
         put?: never;
         /**
          * Import Catalog for Existing Vendor from JSON
-         * @description Import catalog data (categories, products, SKUs with prices) for an existing vendor using JSON payload.
+         * @description Import catalog data (categories, products, SKUs with prices and required quantity_value/unit measurements)
+         *     for an existing vendor using JSON payload.
          *     Vendor must already exist in the system. Skips vendor profile and delivery config creation.
          */
         post: operations["importCatalogFromJson"];
@@ -1096,13 +1298,14 @@ export interface paths {
         /**
          * Bulk Import Vendor Catalog from CSV
          * @description Bulk import vendor catalog from CSV file. Creates vendor profile, categories (if not exists),
-         *     products (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.
-         *
-         *      CSV Format:
-         *      category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,sku_weight,unit,list_price,sale_price,measurement_unit_type
-         *
-         *      Example:
-         *      Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT
+         *     products (if not exists), SKUs with prices and required quantity_value/unit measurements,
+         *     and delivery config with HOME_DELIVERY and FIXED_WINDOW.
+         *     <br><br>
+         *     <b>CSV Format:</b>
+         *     <br>category_name,product_name,product_description,sku_name,sku_code,sku_variant,sku_description,image_path,quantity_value,unit,list_price,sale_price,measurement_unit_type
+         *     <br><br>
+         *     <b>Example:</b>
+         *     <br>Breakfast,Breakfast Items,Traditional South Indian breakfast items,Idli 2 Pcs,IDL-2PC,Regular,Soft steamed rice cakes,,2,pcs,30,30,COUNT
          */
         post: operations["bulkImportVendorFromCsv"];
         delete?: never;
@@ -1123,7 +1326,8 @@ export interface paths {
         /**
          * Bulk Import Vendor Catalog from JSON
          * @description Bulk import vendor catalog from JSON payload. Creates vendor profile, categories (if not exists),
-         *     products (if not exists), SKUs with prices, and delivery config with HOME_DELIVERY and FIXED_WINDOW.
+         *     products (if not exists), SKUs with prices and required quantity_value/unit measurements,
+         *     and delivery config with HOME_DELIVERY and FIXED_WINDOW.
          */
         post: operations["bulkImportVendorFromJson"];
         delete?: never;
@@ -1185,8 +1389,11 @@ export interface paths {
         };
         /**
          * Fetch SKU info
-         * @description Fetch core SKU information (sku_id, product_id, name, description, features, is_active)
-         *     for a given vendor and SKU. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.
+         * @description Fetch core SKU information (sku_id, product_id, name, description, features,
+         *     quantity_value, unit, is_active) for a given vendor and SKU. Accessible by ADMIN,
+         *     VENDOR, or CUSTOMER_CARE.
+         *     <br/><b>Note:</b> <code>name</code>, <code>description</code> and <code>image_path</code>
+         *     are derived from the product / vendor product, not stored on the SKU.
          */
         get: operations["getSkuInfo"];
         put?: never;
@@ -1200,9 +1407,12 @@ export interface paths {
         head?: never;
         /**
          * Update SKU info
-         * @description Partially update core SKU fields: name, description, features,
-         *     and is_active. Only supplied (non-null) fields are written to the database;
-         *     omitted fields are left unchanged. Accessible by ADMIN, VENDOR, or CUSTOMER_CARE.
+         * @description Partially update core SKU fields: <b>features</b>, <b>quantity_value</b>, <b>unit</b>,
+         *     and <b>is_active</b>. quantity_value and unit must be supplied together. Other omitted
+         *     fields are left unchanged.
+         *     <br/><b>Note:</b> <code>name</code> and <code>description</code> are not editable on a
+         *     SKU - they are derived from the owning vendor product. Accessible by ADMIN, VENDOR, or
+         *     CUSTOMER_CARE.
          */
         patch: operations["updateSkuInfo"];
         trace?: never;
@@ -1350,7 +1560,7 @@ export interface paths {
         /**
          * Vendor assigned categories
          * @description This API fetches assigned categories and This API accessed by Vendor/Admin/Customer_Care role.
-         *      This response.data.id has to be used for assigning products to vendor.
+         *     <br> This response.data.id has to be used for assigning products to vendor.
          */
         get: operations["fetchAssignCategories"];
         put?: never;
@@ -1363,6 +1573,33 @@ export interface paths {
          * @description Assign one or more categories to a vendor by Admin/Customer_Care role
          */
         patch: operations["assignCategories"];
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/business-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update vendor business type
+         * @description Self-onboarding step 3: choose business type and initial details for an empty vendor
+         *     created during OTP verification.
+         *
+         *     Only the vendor owner can call this endpoint. The `business_type` must match an existing
+         *     value in the master table. Partial updates are supported: only non-blank fields are
+         *     persisted. The fields collected here are mandatory preconditions for the go-live endpoint.
+         *
+         *     On success, the vendor's `onboarding_step` is set to `STEP_3_COMPLETED`.
+         */
+        patch: operations["updateVendorBusinessType"];
         trace?: never;
     };
     "/v1/vendors/{vendor_id}/assign/products": {
@@ -1380,7 +1617,7 @@ export interface paths {
         head?: never;
         /**
          * Assign products to a vendor
-         * @description Assigns one or more products to a vendor with their features by Admin/Customer_Care role.
+         * @description Assigns one or more products to a vendor with their features by Admin/Customer_Care role. <br>
          *     In the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it.
          */
         patch: operations["assignProducts"];
@@ -1401,7 +1638,7 @@ export interface paths {
         head?: never;
         /**
          * Approve Vendor
-         * @description This API is used to APPROVED/REJECTED vendor's registration by Admin.
+         * @description This API is used to  APPROVED/REJECTED vendor's registration by Admin.
          */
         patch: operations["updateApprovalStatus"];
         trace?: never;
@@ -1451,11 +1688,11 @@ export interface paths {
          * Get order details by ID
          * @description Returns full order details with all items, fulfillment info, and financials.
          *     Only the order owner can access this endpoint.
-         *      Response structure:
-         *      • Order header: order_id, vendor_id, user_id, store_name, delivery_date, order_status, payment_status
-         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
-         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
-         *      • order_items[] — per-item with SKU enrichment: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
+         *     <br><br><b>Response structure:</b>
+         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>store_name</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
+         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
+         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
+         *     <br>• <code>order_items[]</code> — per-item with SKU enrichment: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
          */
         get: operations["getOrderDetail"];
         put?: never;
@@ -1466,19 +1703,19 @@ export interface paths {
         /**
          * Update order quantity and status
          * @description Update the quantity and/or status of an existing order.
-         *      Customer Capabilities:
-         *      • Update one or more item quantities for PENDING orders (auto-recalculates totals)
-         *      • Cancel PENDING orders with a required reason
-         *      • Only PENDING orders can be modified by customers
-         *      Quantity Update — Two Modes:
-         *      • Multi-item (preferred): supply items array with sku_id + quantity per item
-         *      • Single-item (legacy): supply top-level quantity — applies to the first item only
-         *      • If both are provided, items takes precedence
-         *      Status Transition Rules (Customer View):
-         *      • PENDING → QUANTITY UPDATE or CANCELLED
-         *      • SCHEDULED / DELIVERED / CANCELLED → locked, no changes allowed
-         *      Test Data:
-         *      • Order ID: 6353, User ID: 12552
+         *     <br><br><b>Customer Capabilities:</b>
+         *     <br>• Update one or more item quantities for PENDING orders (auto-recalculates totals)
+         *     <br>• Cancel PENDING orders with a required reason
+         *     <br>• Only PENDING orders can be modified by customers
+         *     <br><br><b>Quantity Update — Two Modes:</b>
+         *     <br>• <b>Multi-item (preferred):</b> supply <code>items</code> array with <code>sku_id</code> + <code>quantity</code> per item
+         *     <br>• <b>Single-item (legacy):</b> supply top-level <code>quantity</code> — applies to the first item only
+         *     <br>• If both are provided, <code>items</code> takes precedence
+         *     <br><br><b>Status Transition Rules (Customer View):</b>
+         *     <br>• PENDING → QUANTITY UPDATE or CANCELLED
+         *     <br>• SCHEDULED / DELIVERED / CANCELLED → locked, no changes allowed
+         *     <br><br><b>Test Data:</b>
+         *     <br>• Order ID: 6353, User ID: 12552
          */
         patch: operations["updateOrder_1"];
         trace?: never;
@@ -1549,12 +1786,12 @@ export interface paths {
         /**
          * Get order by ID
          * @description Returns full order details including fulfillment info and financials.
-         *      Response structure:
-         *      • Order header: order_id, vendor_id, user_id, delivery_date, order_status, payment_status
-         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
-         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
-         *      • order_source — APP, ADMIN, VENDOR, or CUSTOMER_CARE
-         *      • order_items[] — per-item: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
+         *     <br><br><b>Response structure:</b>
+         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
+         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
+         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
+         *     <br>• <code>order_source</code> — APP, ADMIN, VENDOR, or CUSTOMER_CARE
+         *     <br>• <code>order_items[]</code> — per-item: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
          */
         get: operations["getOrder"];
         put?: never;
@@ -1565,10 +1802,10 @@ export interface paths {
         /**
          * Update order status or payment
          * @description Update order status and/or payment status. Restricted to ADMIN and VENDOR roles.
-         *      Updatable fields:
-         *      • order_status — e.g. CONFIRMED, SHIPPED, DELIVERED, CANCELLED
-         *      • payment_status — e.g. PAID, REFUNDED
-         *      • cancel_reason — required when cancelling
+         *     <br><br><b>Updatable fields:</b>
+         *     <br>• <code>order_status</code> — e.g. CONFIRMED, SHIPPED, DELIVERED, CANCELLED
+         *     <br>• <code>payment_status</code> — e.g. PAID, REFUNDED
+         *     <br>• <code>cancel_reason</code> — required when cancelling
          */
         patch: operations["updateOrder_2"];
         trace?: never;
@@ -1662,6 +1899,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/{vendor_id}/subscription/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get subscription history
+         * @description Returns the append-only lifecycle timeline for the vendor's subscription —
+         *     trial start, checkout creation, payment authorization, activation, renewals,
+         *     payment failures and cancellation — newest first, capped at 100 entries.
+         *
+         *     Each entry carries `event_type`, `previous_status`/`new_status`, and the
+         *     Razorpay subscription/payment ids involved. Empty list if no events yet.
+         */
+        get: operations["getHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/{vendor_id}/subs/{sub_id}": {
         parameters: {
             query?: never;
@@ -1682,26 +1944,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/vendors/{vendor_id}/storefront": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get vendor storefront
-         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories, products, trust strip and share link.
-         */
-        get: operations["getStorefront"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/vendors/{vendor_id}/skus/search": {
         parameters: {
             query?: never;
@@ -1711,7 +1953,7 @@ export interface paths {
         };
         /**
          * SKU Search by category name,product name and sku name in vendor context.
-         * @description This API used for search and list matched skus for given search criteria.
+         * @description This API searches SKUs and returns separate quantity_value and unit fields.
          */
         get: operations["searchSkusByKeyword"];
         put?: never;
@@ -1732,11 +1974,11 @@ export interface paths {
         /**
          * Fetch vendor assigned products
          * @description This API endpoint retrieves a list of products assigned to a specific vendor.
-         *      The response includes an array of products, each with its id, name, category_id,
-         *      and measurement_id. Optionally, descriptions can be included in the response.
-         *      * vendorId The ID of the vendor whose assigned products are to be fetched. (Example: 91,94,99)
-         *      * categoryId (Optional) The category ID to filter products by category.
-         *      * descNeeded (Optional) A boolean flag indicating whether descriptions are needed in the response.
+         *        The response includes an array of products, each with its id, name, category_id,
+         *        and measurement_id. Optionally, descriptions can be included in the response.
+         *         * vendorId The ID of the vendor whose assigned products are to be fetched. (Example: 91,94,99)
+         *         * categoryId (Optional) The category ID to filter products by category.
+         *         * descNeeded (Optional) A boolean flag indicating whether descriptions are needed in the response.
          */
         get: operations["fetchAssignProducts"];
         put?: never;
@@ -1757,9 +1999,10 @@ export interface paths {
         /**
          * Fetch SKUs with vendor_id and/or without product_id
          * @description This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.
-         *      If product_id is NULL: SKUs will be filtered by vendor_id only.
-         *      If product_id is not NULL: SKUs will be filtered by vendor_id & product_id.
-         *      Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2
+         *     <br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.
+         *     <br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.
+         *     <br>Each SKU returns measurement as separate <b>quantity_value</b> and <b>unit</b> fields.
+         *     <br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2
          */
         get: operations["fetchSkusByVendorProduct"];
         put?: never;
@@ -1783,16 +2026,51 @@ export interface paths {
          *     customer details (customer_name, customer_mobile, email), resolved delivery address,
          *     shipment tracking, and all order items enriched with SKU display data.
          *     Use this endpoint to render the order detail view after selecting an order from the list.
-         *      Response structure:
-         *      • Order header: order_id, vendor_id, user_id, store_name, delivery_date, order_status, payment_status
-         *      • Customer: customer_name, customer_mobile, email
-         *      • Address: delivery_address — nested object with type, address map, default_one
-         *      • order_amount — nested financial summary: items_count, gross_amount, discount, delivery_charges, service_charge, tax_amount, amount
-         *      • Fulfillment: delivery_method, order_timing_type (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), pickup_store_id, ready_in_minutes
-         *      • shipment — tracking info for shipped orders: courier_partner, tracking_number, tracking_url, status, shipped_at
-         *      • order_items[] — per-item: order_item_id, sku_id, sku_name, size, image_path, quantity, list_price, sale_price, unit_price, discount, line_total
+         *     <br><br><b>Response structure:</b>
+         *     <br>• Order header: <code>order_id</code>, <code>vendor_id</code>, <code>user_id</code>, <code>store_name</code>, <code>delivery_date</code>, <code>order_status</code>, <code>payment_status</code>
+         *     <br>• Customer: <code>customer_name</code>, <code>customer_mobile</code>, <code>email</code>
+         *     <br>• Address: <code>delivery_address</code> — nested object with <code>type</code>, <code>address</code> map, <code>default_one</code>
+         *     <br>• <code>order_amount</code> — nested financial summary: <code>items_count</code>, <code>gross_amount</code>, <code>discount</code>, <code>delivery_charges</code>, <code>service_charge</code>, <code>tax_amount</code>, <code>amount</code>
+         *     <br>• Fulfillment: <code>delivery_method</code>, <code>order_timing_type</code> (INSTANT, FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS), <code>pickup_store_id</code>, <code>ready_in_minutes</code>
+         *     <br>• <code>shipment</code> — tracking info for shipped orders: <code>courier_partner</code>, <code>tracking_number</code>, <code>tracking_url</code>, <code>status</code>, <code>shipped_at</code>
+         *     <br>• <code>order_items[]</code> — per-item: <code>order_item_id</code>, <code>sku_id</code>, <code>sku_name</code>, <code>size</code>, <code>image_path</code>, <code>quantity</code>, <code>list_price</code>, <code>sale_price</code>, <code>unit_price</code>, <code>discount</code>, <code>line_total</code>
          */
         get: operations["getOrderItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor dashboard context
+         * @description Returns the vendor's onboarding state and current entitlements.
+         *
+         *     Use `onboarding.status` to decide between the dashboard (`COMPLETED`) and the
+         *     onboarding flow (`IN_PROGRESS`, resume at `onboarding.next_step`).
+         *
+         *     `features` and `limits` reflect what the vendor can use right now:
+         *     - Onboarding (before go-live): `features` is empty and `limits` holds the configured
+         *       onboarding limits (`max_categories`, `max_products`, `max_skus`).
+         *     - Trial / paid: the current plan's features and limits.
+         *     - Trial expired, halted, cancelled or expired: both empty.
+         *
+         *     Subscription details (plan, trial dates,
+         *     billing) are served by `GET /vendors/{vendor_id}/subscription`, and purchasable
+         *     plans by `GET /subscription-plans`.
+         *
+         *     Trial expiry is evaluated at request time; no background job is required.
+         */
+        get: operations["getVendorContext"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1811,15 +2089,15 @@ export interface paths {
         /**
          * Get user cart
          * @description Retrieve the user's current cart with all items and calculated totals.
-         *      Returns:
-         *      • Cart items with details and pricing
-         *      • Cart summary with totals breakdown
-         *      • Vendor information (if cart has items)
-         *      • Cart expiration time
-         *      Behavior:
-         *      • Returns empty cart if no cart exists
-         *      • Returns cart with vendor_id null if cart is empty
-         *      • Includes real-time calculated totals
+         *     <br><br><b>Returns:</b>
+         *     <br>• Cart items with details and pricing
+         *     <br>• Cart summary with totals breakdown
+         *     <br>• Vendor information (if cart has items)
+         *     <br>• Cart expiration time
+         *     <br><br><b>Behavior:</b>
+         *     <br>• Returns empty cart if no cart exists
+         *     <br>• Returns cart with vendor_id null if cart is empty
+         *     <br>• Includes real-time calculated totals
          */
         get: operations["getCart"];
         put?: never;
@@ -1827,18 +2105,130 @@ export interface paths {
         /**
          * Clear cart
          * @description Clear all items from the user's cart.
-         *      Behavior:
-         *      • Removes ALL items from cart
-         *      • Resets cart to empty state
-         *      • vendor_id becomes null (ready for new vendor)
-         *      • Cart remains active for new items
-         *      • Useful for switching vendors
-         *      Use Cases:
-         *      • Switch to different vendor's items
-         *      • Start fresh shopping session
-         *      • Remove all items before logout
+         *     <br><br><b>Behavior:</b>
+         *     <br>• Removes ALL items from cart
+         *     <br>• Resets cart to empty state
+         *     <br>• vendor_id becomes null (ready for new vendor)
+         *     <br>• Cart remains active for new items
+         *     <br>• Useful for switching vendors
+         *     <br><br><b>Use Cases:</b>
+         *     <br>• Switch to different vendor's items
+         *     <br>• Start fresh shopping session
+         *     <br>• Remove all items before logout
          */
         delete: operations["clearCart"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor storefront
+         * @description Returns the complete storefront payload for a single vendor including profile, theme, badges, fulfillment, categories (with icon), products, trust strip and share link.
+         *     <br><br>The <code>identifier</code> path variable accepts either a numeric vendor ID (e.g. <code>91</code>) or the vendor's store slug/store_identifier (e.g. <code>mirdoddi-farm-fresh-91</code>).
+         */
+        get: operations["getStorefront"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get storefront product listing with variants
+         * @description Returns a paginated list of active products for the storefront, each grouped by
+         *     <code>vendor_product_id</code> and containing price variants with separate
+         *     <code>quantity_value</code> and <code>unit</code> measurement fields.
+         *     <br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.
+         *     <br>Optionally filter by an assigned <code>category_id</code>.
+         *     <br><b>Public endpoint</b> — no bearer token or vendor login required.
+         */
+        get: operations["getStorefrontProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single storefront product with all variants
+         * @description Returns one storefront product grouped by <code>vendor_product_id</code> with all of its active SKU variants — identical in shape to a single entry in <code>GET /{identifier}/storefront/products</code>. All variants are returned in one response (no pagination).
+         *     <br>The <code>identifier</code> accepts a numeric vendor ID or the store slug.
+         *     <br><b>Public endpoint</b> — no bearer token or vendor login required. The <code>X-API-Key</code> header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
+         *     <br>Test data: identifier <code>91</code>, product_id <code>161</code>
+         */
+        get: operations["getStorefrontProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{identifier}/storefront/contact-us": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get vendor contact-us details
+         * @description Returns everything needed to render a vendor's <b>Contact Us</b> page in one call:
+         *     <ul>
+         *       <li><b>Vendor contact</b> — <code>business_name</code>, <code>owner_name</code>,
+         *           <code>contact_number</code>, <code>communication_email</code>.</li>
+         *       <li><b>main_address</b> — the vendor's registered business address.</li>
+         *       <li><b>addresses</b> — active vendor store locations, each with its store
+         *           <code>type</code> and <code>address</code>. <code>MAIN_BRANCH</code> entries come
+         *           first, then by store name. Inactive stores are excluded.</li>
+         *       <li><b>social_links</b> — active social media links ordered by
+         *           <code>display_order</code>.</li>
+         *     </ul>
+         *     <b>Store types:</b> <code>MAIN_BRANCH</code>, <code>BRANCH</code>,
+         *     <code>HEAD_OFFICE</code>, <code>PICKUP_POINT</code>, <code>WAREHOUSE</code>,
+         *     <code>DARK_STORE</code>, <code>DISTRIBUTION_CENTER</code>, <code>KITCHEN</code>,
+         *     <code>FARM</code>, <code>OUTLET</code>, <code>FRANCHISE</code>, <code>KIOSK</code>,
+         *     <code>OTHER</code>.
+         *     <br><br>The <code>identifier</code> accepts a numeric vendor ID (e.g. <code>91</code>)
+         *     or the store slug (e.g. <code>mirdoddi-farm-fresh-91</code>). Only <b>ACTIVE</b> and
+         *     <b>APPROVED</b> vendors are returned.
+         *     <br><br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>
+         *     header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
+         *     <br>Responses are cached and refreshed when the vendor profile, status or social links
+         *     change.
+         *     <br>Test data: identifier <code>91</code>
+         */
+        get: operations["getContactUs"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1874,9 +2264,9 @@ export interface paths {
         /**
          * Fetch Vendors by zipcode with/without category_id
          * @description This API used for searching vendors and specific vendors based on zipcode and/or category_id.
-         *      If category_id is NULL: Vendors will be filtered by zipcode only.
-         *      If category_id is not NULL: Vendors will be filtered by zipcode & product_id.
-         *      Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103
+         *     <br>If <b>category_id</b> is NULL: Vendors will be filtered by zipcode only.
+         *     <br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & product_id.
+         *     <br>Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103
          */
         get: operations["fetchActiveVendorsByServiceArea"];
         put?: never;
@@ -1897,7 +2287,7 @@ export interface paths {
         /**
          * Search vendors by zipcode and product keyword[ regex: vendor name , category name,product name and sku name ]
          * @description This API used for search and list of matched vendors for given search pattern.
-         *      Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish
+         *     <br>Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish
          */
         get: operations["searchVendorsByKeyword"];
         put?: never;
@@ -1917,7 +2307,7 @@ export interface paths {
         };
         /**
          * Fetch Product SKU Details to display on PDP page.
-         * @description This API used for fetching SKU information.
+         * @description This API returns SKU information with separate quantity_value and unit fields.
          */
         get: operations["fetchSkuDetails"];
         put?: never;
@@ -1954,7 +2344,7 @@ export interface paths {
         /**
          * Fetch Categories by service_area
          * @description This API used for fetching all categories served by the vendors based on service_area/zipcode.
-         *      Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.
+         *         <br>Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.
          */
         get: operations["fetchCategoriesByZipCode"];
         put?: never;
@@ -1974,7 +2364,7 @@ export interface paths {
         };
         /**
          * Order History API
-         * @description Accessed by logged in user only.
+         * @description Accessed by logged in user only. Optionally filter by <code>vendor_id</code> to return orders for a single vendor; omit it to return all orders.
          */
         get: operations["getUserOrderHistory"];
         put?: never;
@@ -1995,19 +2385,20 @@ export interface paths {
         /**
          * Paginated Order History API
          * @description Returns paginated order history for a user. Use this endpoint for large order lists to improve performance.
-         *      Query parameters:
-         *      • page — page number (0-indexed, default: 0)
-         *      • size — page size (default: 20)
-         *      Response structure:
-         *      • result[] — array of order history items
-         *      • page_number — current page number
-         *      • page_size — items per page
-         *      • total_elements — total number of orders
-         *      • total_pages — total number of pages
-         *      • last_page — boolean indicating if this is the last page
-         *      Each order history item includes: order_id, vendor_name, delivery_date,
-         *      order_status, payment_status, amount, delivery_charge, discount,
-         *      items[] (enriched with SKU data), shipment (tracking info), and order_amount (nested financial summary).
+         *     <br><br><b>Query parameters:</b>
+         *     <br>• <code>page</code> — page number (0-indexed, default: 0)
+         *     <br>• <code>size</code> — page size (default: 20)
+         *     <br>• <code>vendor_id</code> — optional; filter orders to a single vendor
+         *     <br><br><b>Response structure:</b>
+         *     <br>• <code>result[]</code> — array of order history items
+         *     <br>• <code>page_number</code> — current page number
+         *     <br>• <code>page_size</code> — items per page
+         *     <br>• <code>total_elements</code> — total number of orders
+         *     <br>• <code>total_pages</code> — total number of pages
+         *     <br>• <code>last_page</code> — boolean indicating if this is the last page
+         *     <br><br>Each order history item includes: <code>order_id</code>, <code>vendor_id</code>, <code>vendor_name</code>, <code>delivery_date</code>,
+         *     <code>order_status</code>, <code>payment_status</code>, <code>amount</code>, <code>delivery_charge</code>, <code>discount</code>,
+         *     <code>items[]</code> (enriched with SKU data), <code>shipment</code> (tracking info), and <code>order_amount</code> (nested financial summary).
          */
         get: operations["getUserOrderHistoryPaged"];
         put?: never;
@@ -2059,6 +2450,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Order History by Date Range API
+         * @description Returns order history for a user within a delivery-date range. Optionally filter by <code>vendor_id</code> to return orders for a single vendor.
+         */
         get: operations["getOrderHistoryByDateRange"];
         put?: never;
         post?: never;
@@ -2100,6 +2495,33 @@ export interface paths {
          * @description This API is for fetching the list of users and accessed with authentication token only.
          */
         get: operations["getUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/subscription-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available paid plans
+         * @description Returns every active, purchasable platform plan from the internal catalogue
+         *     (`tb_platform_subscription_plan`) — database-backed, not a Razorpay call.
+         *     Results are cached; the internal trial plan is never included.
+         *
+         *     Each plan includes `plan_id`, `plan_code`, price fields in **rupees**
+         *     (`sale_price`, `list_price`), `billing_cycle` (MONTHLY/YEARLY), `currency`,
+         *     `features`, `limits`, and the mapped `external_plan_id` (Razorpay plan id).
+         *     The UI submits `plan_code` to the subscribe endpoint.
+         */
+        get: operations["listPaidPlans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2343,9 +2765,9 @@ export interface paths {
         /**
          * GeoBased Home Page API
          * @description This API is used for fetching new_vendors , offers based on user's location.
-         *      On click on the new vendor image/name ,User has to navigate to vendor's product listing page.
-         *      On click on offer image/name ,User has to navigate to vendor's specific sku's listing page.
-         *      On click on top product ,User has to navigate to vendor's specific sku's listing page.
+         *     <br> On click on the <b>new vendor image/name</b> ,User has to navigate to vendor's product listing page.
+         *     <br> On click on <b>offer image/name</b> ,User has to navigate to vendor's specific sku's listing page.
+         *     <br> On click on <b>top product</b> ,User has to navigate to vendor's specific sku's listing page.
          */
         get: operations["getHomePageData"];
         put?: never;
@@ -2445,7 +2867,7 @@ export interface paths {
         };
         /**
          * Fetch products by category_id
-         * @description API accessed by Admin/Customer_Care role only
+         * @description API accessed by Admin/Customer_Care role only. Each returned product now includes the `icon` field.
          */
         get: operations["getProductsByCategory"];
         put?: never;
@@ -2501,7 +2923,7 @@ export interface paths {
         };
         /**
          * Fetch categories by type
-         * @description API accessed by Admin/Customer_Care roles with bearer token.This API return all the categories grouped by type
+         * @description API accessed by  Admin/Customer_Care roles with bearer token.This API return all the categories grouped by <b>type</b>
          */
         get: operations["getCategoriesByType"];
         put?: never;
@@ -2582,6 +3004,27 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/vendors/{vendor_id}/social-links/{social_link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete vendor social link
+         * @description Permanently removes a social link.
+         *     <br>Allowed for ADMIN, CUSTOMER_CARE, or store members with STORE_CONFIG permission.
+         */
+        delete: operations["deleteSocialLink"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2714,6 +3157,131 @@ export interface components {
             status?: number;
             /** @description Data */
             data?: Record<string, never>;
+        };
+        SaveStorefrontConfigRequest: {
+            /**
+             * @description Store name shown on the storefront
+             * @example NSR Stores
+             */
+            business_name?: string;
+            /**
+             * @description Short tagline shown on the storefront
+             * @example Made with love | Delivered warm
+             */
+            tagline?: string;
+            /**
+             * @description Display business location
+             * @example Hyderabad, Telangana
+             */
+            business_location?: string;
+            /**
+             * @description WhatsApp number used for customer orders
+             * @example +919912149049
+             */
+            order_whatsapp_number?: string;
+            /**
+             * @description Instagram page URL or handle
+             * @example yourshop
+             */
+            instagram_url?: string;
+            theme?: components["schemas"]["ThemeRequest"];
+            /**
+             * @description List of hero badge labels
+             * @example [
+             *       "100% Natural",
+             *       "No Preservatives"
+             *     ]
+             */
+            hero_badges?: string[];
+            /** @description Trust strip badges */
+            trust_strip?: components["schemas"]["StorefrontBadgeResponse"][];
+            /**
+             * @description WhatsApp support number with country code
+             * @example +919900000000
+             */
+            support_whatsapp_number?: string;
+            /**
+             * @description Welcome message shown to customers
+             * @example Hi! Welcome to Swathi's Bakes
+             */
+            welcome_message?: string;
+            /**
+             * @description Top announcement or promo bar text
+             * @example Free delivery on orders above ₹299
+             */
+            announcement_bar?: string;
+        };
+        StorefrontBadgeResponse: {
+            /**
+             * @description Lucide/material icon identifier
+             * @example shield
+             */
+            icon?: string;
+            /**
+             * @description Badge title
+             * @example Hygienic & Safe
+             */
+            title?: string;
+            /**
+             * @description Badge subtitle
+             * @example Prepared with care
+             */
+            subtitle?: string;
+        };
+        ThemeRequest: {
+            /**
+             * @description Primary brand color hex code
+             * @example #F97316
+             */
+            primary_color?: string;
+            /**
+             * @description Accent brand color hex code
+             * @example #15803D
+             */
+            accent_color?: string;
+            /**
+             * @description Storefront background color hex code
+             * @example #FFF7ED
+             */
+            background_color?: string;
+            /**
+             * @description Storefront text color hex code
+             * @example #3E2723
+             */
+            text_color?: string;
+            /**
+             * @description Font family used across the storefront
+             * @example Poppins
+             */
+            font_family?: string;
+            /**
+             * @description URL of the storefront logo image
+             * @example https://example.com/logo.png
+             */
+            logo_image?: string;
+            /**
+             * @description URL of the storefront hero banner image
+             * @example https://example.com/banner.png
+             */
+            banner_image?: string;
+            /**
+             * @description Button shape style
+             * @example ROUNDED
+             * @enum {string}
+             */
+            button_shape?: "PILL" | "ROUNDED" | "SQUARE";
+            /**
+             * @description Product card visual style
+             * @example SHADOW
+             * @enum {string}
+             */
+            card_style?: "FLAT" | "SHADOW" | "BORDER";
+            /**
+             * @description Pre-built theme preset for non-designers
+             * @example WARM
+             * @enum {string}
+             */
+            theme_preset?: "WARM" | "FRESH" | "MINIMAL" | "BOLD";
         };
         JsonNode: Record<string, never>;
         PaymentOptionRequest: {
@@ -3076,8 +3644,8 @@ export interface components {
             field?: string;
         };
         Contact: {
-            profile?: components["schemas"]["Profile"];
-            wa_id?: string;
+            name?: string;
+            phone?: string;
         };
         Context: {
             from?: string;
@@ -3100,9 +3668,6 @@ export interface components {
             display_phone_number?: string;
             phone_number_id?: string;
         };
-        Profile: {
-            name?: string;
-        };
         Text: {
             body?: string;
         };
@@ -3115,6 +3680,29 @@ export interface components {
         WhatsAppWebhookRequest: {
             object?: string;
             entry?: components["schemas"]["Entry"][];
+        };
+        /** @description Request to subscribe the vendor to a paid platform plan. */
+        VendorSubscriptionSubscribeRequest: {
+            /**
+             * @description Platform plan code from GET /v1/subscription-plans
+             * @example MITHRA_SOCIAL_STARTER_MONTHLY
+             */
+            plan_code: string;
+        };
+        /** @description Razorpay Checkout confirmation payload returned to the vendor's browser. */
+        VendorSubscriptionConfirmRequest: {
+            /**
+             * @description Razorpay payment id
+             * @example pay_Qk0example123
+             */
+            razorpay_payment_id: string;
+            /**
+             * @description Razorpay subscription id
+             * @example sub_Qk0example123
+             */
+            razorpay_subscription_id: string;
+            /** @description Checkout signature generated by Razorpay */
+            razorpay_signature: string;
         };
         VendorCreateSubscriptionRequest: {
             /**
@@ -3169,24 +3757,105 @@ export interface components {
              */
             delivery_slot?: string;
         };
+        CreateVendorSocialLinkRequest: {
+            /**
+             * @description Social media platform
+             * @example INSTAGRAM
+             * @enum {string}
+             */
+            platform: "INSTAGRAM" | "FACEBOOK" | "YOUTUBE" | "TWITTER" | "LINKEDIN";
+            /**
+             * @description Public profile/page URL
+             * @example https://www.instagram.com/srkfoods
+             */
+            url?: string;
+            /**
+             * Format: int32
+             * @description Display order on the storefront (ascending)
+             * @example 1
+             */
+            display_order?: number;
+        };
+        APIResponseVendorSocialLinkResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["VendorSocialLinkResponse"];
+        };
+        VendorSocialLinkResponse: {
+            /**
+             * Format: int64
+             * @description Social link ID (used for delete)
+             * @example 12
+             */
+            id?: number;
+            /**
+             * @description Social media platform
+             * @example INSTAGRAM
+             * @enum {string}
+             */
+            platform?: "INSTAGRAM" | "FACEBOOK" | "YOUTUBE" | "TWITTER" | "LINKEDIN";
+            /**
+             * @description Public profile/page URL
+             * @example https://www.instagram.com/srkfoods
+             */
+            url?: string;
+            /**
+             * Format: int32
+             * @description Display order on the storefront (ascending)
+             * @example 1
+             */
+            display_order?: number;
+        };
         ItemSkuCreateRequest: {
-            /** @example Organic and Own farm grown vegetables */
+            /**
+             * @description Deprecated. This field is ignored - the SKU description is derived from the vendor product (or product).
+             * @example Organic and Own farm grown vegetables
+             */
             description?: string;
+            /**
+             * @description Measurement unit represented by this SKU.
+             * @example ml
+             */
+            unit?: string;
             /**
              * Format: int64
              * @description Its vendor's assigned product id not platform level product id.
              * @example 10002
              */
             product_id: number;
-            /** @example NON GMO Tomato */
+            /**
+             * @description Deprecated. This field is ignored - the SKU display name is derived from the product.
+             * @example Organic Tomato 1 kg
+             */
             name?: string;
             /**
              * @example ITEM or SERVICE
              * @enum {string}
              */
             sku_type?: "ITEM" | "SERVICE" | "DIGITAL";
-            /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
+            /**
+             * @description Deprecated. This field is ignored - the SKU image is derived from the vendor product (or product).
+             * @example data:image/jpeg;base64,/9j/4AAQSkJRgABAQAAAQABAAD/2wCEAAk
+             */
             image_path?: string;
+            /**
+             * @description Numeric quantity represented by this SKU.
+             * @example 250
+             */
+            quantity_value?: number;
             is_active?: boolean;
             subscription_eligible?: boolean;
             /** @example false */
@@ -3198,18 +3867,22 @@ export interface components {
             /** @example false */
             return_eligible?: boolean;
             price_list?: components["schemas"]["SkuPriceDTO"][];
+            /** @description Optional list of eligible subscription plans. Empty or omitted means the SKU has no subscription plans. */
             eligible_sub_plans?: components["schemas"]["SubscriptionPlanDTO"][];
         };
         SkuPriceDTO: {
             /** @example kg or L */
             unit?: string;
-            /** @example 0.5 */
-            value?: string;
             /**
              * @example WEIGHT
              * @enum {string}
              */
             measurement_type?: "WEIGHT" | "VOLUME" | "COUNT" | "AREA" | "SERVICE_UNIT" | "DURATION" | "PER_PERSON" | "SLOT";
+            /**
+             * @description Numeric quantity represented by this SKU
+             * @example 0.5
+             */
+            quantity_value?: number;
             /** Format: date */
             effective_date?: string;
             /** @example 100 */
@@ -3316,6 +3989,7 @@ export interface components {
             /** Format: int32 */
             items_count?: number;
             gross_amount?: number;
+            order_sub_total?: number;
             discount?: number;
             delivery_charges?: number;
             service_charge?: number;
@@ -3804,6 +4478,10 @@ export interface components {
             /** Format: int64 */
             id?: number;
             name?: string;
+            /**
+             * @description Product description. Defaults to the product name when omitted or blank.
+             * @example Fresh whole milk
+             */
             description?: string;
             /** Format: int64 */
             measurement_unit_id?: number;
@@ -3817,10 +4495,20 @@ export interface components {
             name?: string;
             /** @example Retail */
             business_type?: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            business_type_id: number;
             /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
             image_path?: string;
             /** @example A category dedicated to Milk products, offering a wide range of high-quality items for everyday use. */
             description?: string;
+            /**
+             * @description Category icon
+             * @example dairy-icon
+             */
+            icon?: string;
         };
         OTPVerificationRequest: {
             /**
@@ -3961,7 +4649,7 @@ export interface components {
             sku_variant?: string;
             sku_description?: string;
             image_path?: string;
-            weight?: string;
+            quantity_value?: number;
             unit?: string;
             list_price?: number;
             sale_price?: number;
@@ -3992,20 +4680,25 @@ export interface components {
             /** @enum {string} */
             vendor_status?: "ACTIVE" | "INACTIVE" | "SUSPENDED";
         };
-        /** @description Request payload for updating core SKU info fields */
+        /**
+         * @description Request payload for updating core SKU info fields.
+         *     <br/><b>Note:</b> <code>name</code> and <code>description</code> are no longer editable on a
+         *     SKU - they are derived from the owning vendor product. Update them via the vendor product
+         *     endpoint instead.
+         */
         SkuInfoUpdateRequest: {
-            /**
-             * @description SKU display name
-             * @example Organic Tomato 1kg
-             */
-            name?: string;
-            /**
-             * @description SKU description
-             * @example Fresh organic tomatoes grown without pesticides
-             */
-            description?: string;
             /** @description SKU features as a JSON value */
             features?: components["schemas"]["JsonNode"];
+            /**
+             * @description Numeric quantity represented by this SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description Measurement unit represented by this SKU
+             * @example ml
+             */
+            unit?: string;
             /**
              * @description Whether the SKU is active
              * @example true
@@ -4046,6 +4739,17 @@ export interface components {
         ServiceAreasDTO: {
             service_areas: Record<string, never>;
             zip_codes: string[];
+        };
+        /** @description Request to choose/update business type and initial details */
+        VendorBusinessTypeRequest: {
+            /** @example Organic Produce */
+            business_type?: string;
+            /** @example My Organic Store */
+            business_name?: string;
+            /** @example Ravi */
+            owner_name?: string;
+            /** @example Ravi */
+            contact_person?: string;
         };
         AssignProduct: {
             /** Format: int64 */
@@ -4179,22 +4883,110 @@ export interface components {
              */
             preference_type?: "VENDOR" | "PRODUCT" | "CATEGORY";
         };
-        StorefrontBadgeResponse: {
+        APIResponseListVendorSocialLinkResponse: {
             /**
-             * @description Lucide/material icon identifier
-             * @example shield
+             * @description Response message
+             * @example Customer registered successfully
              */
-            icon?: string;
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
             /**
-             * @description Badge title
-             * @example Hygienic & Safe
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
              */
-            title?: string;
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["VendorSocialLinkResponse"][];
+        };
+        APIResponseSkuInfoDTO: {
             /**
-             * @description Badge subtitle
-             * @example Prepared with care
+             * @description Response message
+             * @example Customer registered successfully
              */
-            subtitle?: string;
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["SkuInfoDTO"];
+        };
+        /** @description SKU information response containing core display fields */
+        SkuInfoDTO: {
+            /**
+             * Format: int64
+             * @description SKU identifier
+             * @example 1001
+             */
+            sku_id?: number;
+            /**
+             * Format: int64
+             * @description Vendor product identifier
+             * @example 10002
+             */
+            product_id?: number;
+            /**
+             * @description SKU name
+             * @example Organic Tomato 1kg
+             */
+            name?: string;
+            /**
+             * @description SKU description
+             * @example Fresh organic tomatoes
+             */
+            description?: string;
+            /** @description SKU features as a JSON value */
+            features?: components["schemas"]["JsonNode"];
+            /**
+             * @description Numeric quantity represented by this SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description SKU measurement unit
+             * @example ml
+             */
+            unit?: string;
+            /**
+             * @description Whether SKU is active
+             * @example true
+             */
+            is_active?: boolean;
+        };
+        APIResponseListSkuSubscriptionPlanResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["SkuSubscriptionPlanResponse"][];
+        };
+        SkuSubscriptionPlanResponse: {
+            /** Format: int64 */
+            id?: number;
+            /** @enum {string} */
+            frequency?: "ONE_TIME" | "DAILY" | "ALTERNATE_DAY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
+            /** @enum {string} */
+            delivery_mode?: "FIXED" | "FLEXIBLE";
+            eligible_delivery_days?: string[];
         };
         StorefrontFulfillmentResponse: {
             /**
@@ -4237,10 +5029,48 @@ export interface components {
              */
             accent_color?: string;
             /**
+             * @description Storefront background color hex code
+             * @example #FFF7ED
+             */
+            background_color?: string;
+            /**
+             * @description Storefront text color hex code
+             * @example #3E2723
+             */
+            text_color?: string;
+            /**
+             * @description Font family used across the storefront
+             * @example Poppins
+             */
+            font_family?: string;
+            /**
              * @description URL of the storefront logo image
              * @example https://example.com/logo.png
              */
             logo_image?: string;
+            /**
+             * @description URL of the storefront hero banner image
+             * @example https://example.com/banner.png
+             */
+            banner_image?: string;
+            /**
+             * @description Button shape style
+             * @example ROUNDED
+             * @enum {string}
+             */
+            button_shape?: "PILL" | "ROUNDED" | "SQUARE";
+            /**
+             * @description Product card visual style
+             * @example SHADOW
+             * @enum {string}
+             */
+            card_style?: "FLAT" | "SHADOW" | "BORDER";
+            /**
+             * @description Pre-built theme preset for non-designers
+             * @example WARM
+             * @enum {string}
+             */
+            theme_preset?: "WARM" | "FRESH" | "MINIMAL" | "BOLD";
         };
         VendorStorefrontResponse: {
             /**
@@ -4289,6 +5119,48 @@ export interface components {
              *     ]
              */
             hero_badges?: string[];
+            /**
+             * @description Short tagline shown on the storefront
+             * @example Eggless, home-baked cakes & brownies
+             */
+            tagline?: string;
+            /**
+             * @description Welcome message shown to customers
+             * @example Hi! Welcome to Swathi's Bakes
+             */
+            welcome_message?: string;
+            /**
+             * @description Top announcement or promo bar text
+             * @example Free delivery on orders above ₹299
+             */
+            announcement_bar?: string;
+            /**
+             * @description Business location displayed on storefront
+             * @example Hyderabad, Telangana
+             */
+            business_location?: string;
+            /**
+             * @description Instagram page URL
+             * @example https://instagram.com/yourshop
+             */
+            instagram_url?: string;
+            /** @description Active vendor social media links ordered by display order; empty if none */
+            social_links?: components["schemas"]["VendorSocialLinkResponse"][];
+            /**
+             * @description WhatsApp CTA button label
+             * @example Order on WhatsApp
+             */
+            whatsapp_cta_text?: string;
+            /**
+             * @description Payment instructions or accepted modes
+             * @example Pay via UPI / Cash on delivery
+             */
+            payment_note?: string;
+            /**
+             * @description WhatsApp number used for customer orders
+             * @example +919912149049
+             */
+            order_whatsapp_number?: string;
             /** @description Available delivery/pickup fulfillment options */
             fulfillment?: components["schemas"]["StorefrontFulfillmentResponse"];
             /** @description Categories assigned to this vendor */
@@ -4308,131 +5180,8 @@ export interface components {
              */
             support_whatsapp_number?: string;
         };
-        APIResponseSkuInfoDTO: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["SkuInfoDTO"];
-        };
-        /** @description SKU information response containing core display fields */
-        SkuInfoDTO: {
-            /**
-             * Format: int64
-             * @description SKU identifier
-             * @example 1001
-             */
-            sku_id?: number;
-            /**
-             * Format: int64
-             * @description Vendor product identifier
-             * @example 10002
-             */
-            product_id?: number;
-            /**
-             * @description SKU name
-             * @example Organic Tomato 1kg
-             */
-            name?: string;
-            /**
-             * @description SKU description
-             * @example Fresh organic tomatoes
-             */
-            description?: string;
-            /** @description SKU features as a JSON value */
-            features?: components["schemas"]["JsonNode"];
-            /**
-             * @description Whether SKU is active
-             * @example true
-             */
-            is_active?: boolean;
-        };
-        APIResponseListSkuSubscriptionPlanResponse: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["SkuSubscriptionPlanResponse"][];
-        };
-        SkuSubscriptionPlanResponse: {
-            /** Format: int64 */
-            id?: number;
-            /** @enum {string} */
-            frequency?: "ONE_TIME" | "DAILY" | "ALTERNATE_DAY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
-            /** @enum {string} */
-            delivery_mode?: "FIXED" | "FLEXIBLE";
-            eligible_delivery_days?: string[];
-        };
-        APIResponsePaginationResponseOrderDetailsDTO: {
-            /**
-             * @description Response message
-             * @example Customer registered successfully
-             */
-            message?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            success?: boolean;
-            /**
-             * Format: int32
-             * @description HTTP Status Code
-             * @example 201
-             */
-            status?: number;
-            /** @description Data */
-            data?: components["schemas"]["PaginationResponseOrderDetailsDTO"];
-        };
-        OrderDetailsDTO: {
-            /** Format: int64 */
-            order_id?: number;
-            /** Format: int64 */
-            subscription_id?: number;
-            /** Format: date */
-            delivery_date?: string;
-            vendor_name?: string;
-            sku_name?: string;
-            size?: string;
-            /** Format: int32 */
-            quantity?: number;
-            /** Format: double */
-            unit_price?: number;
-            items?: components["schemas"]["OrderItemDTO"][];
-            amount?: number;
-            delivery_charge?: number;
-            items_total?: number;
-            total_discount?: number;
-            order_amount?: components["schemas"]["OrderAmountDTO"];
-            /** @enum {string} */
-            order_status?: "PENDING" | "SCHEDULED" | "IN_PROCESS" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-            /** @enum {string} */
-            payment_type?: "CASH_ON_DELIVERY" | "PRE_PAID" | "ONLINE" | "IN_STORE_PAYMENT";
-            /** @enum {string} */
-            payment_status?: "DUE" | "PAID";
-            shipment?: components["schemas"]["ShipmentDTO"];
-        };
-        PaginationResponseOrderDetailsDTO: {
-            result?: components["schemas"]["OrderDetailsDTO"][];
+        PaginationResponse: {
+            result?: Record<string, never>[];
             /** Format: int32 */
             page_number?: number;
             /** Format: int32 */
@@ -4445,6 +5194,299 @@ export interface components {
             meta_data?: {
                 [key: string]: string;
             };
+        };
+        APIResponsePaginationResponseStorefrontProductResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["PaginationResponseStorefrontProductResponse"];
+        };
+        PaginationResponseStorefrontProductResponse: {
+            result?: components["schemas"]["StorefrontProductResponse"][];
+            /** Format: int32 */
+            page_number?: number;
+            /** Format: int32 */
+            page_size?: number;
+            /** Format: int64 */
+            total_elements?: number;
+            /** Format: int32 */
+            total_pages?: number;
+            last_page?: boolean;
+            meta_data?: {
+                [key: string]: string;
+            };
+        };
+        StorefrontProductResponse: {
+            /**
+             * Format: int64
+             * @description Vendor product identifier
+             * @example 161
+             */
+            vendor_product_id?: number;
+            /**
+             * @description Display product name
+             * @example Jute Loofah
+             */
+            product_name?: string;
+            /**
+             * Format: int64
+             * @description Category identifier
+             * @example 5
+             */
+            category_id?: number;
+            /**
+             * @description Category name
+             * @example Bath & Body
+             */
+            category_name?: string;
+            /**
+             * @description Product image URL
+             * @example https://example.com/vendors/1/products/jute_loofah.jpeg
+             */
+            product_image_path?: string;
+            /**
+             * @description Product description
+             * @example Eco friendly bamboo and natural products
+             */
+            product_description?: string;
+            /**
+             * @description Whether the product has at least one active SKU
+             * @example true
+             */
+            active?: boolean;
+            /**
+             * Format: double
+             * @description Lowest sale price across all variants
+             * @example 30
+             */
+            min_sale_price?: number;
+            /**
+             * Format: double
+             * @description Highest sale price across all variants
+             * @example 60
+             */
+            max_sale_price?: number;
+            /**
+             * Format: double
+             * @description Price shown on the product card, usually the lowest sale price
+             * @example 30
+             */
+            starting_at?: number;
+            /**
+             * Format: int64
+             * @description SKU id to select by default (cheapest active variant)
+             * @example 1785
+             */
+            default_sku_id?: number;
+            /**
+             * Format: int32
+             * @description Number of variants for this product
+             * @example 6
+             */
+            variants_count?: number;
+            /** @description Size/price variants of the product */
+            variants?: components["schemas"]["StorefrontProductVariantResponse"][];
+        };
+        StorefrontProductVariantResponse: {
+            /**
+             * Format: int64
+             * @description Unique SKU identifier
+             * @example 1785
+             */
+            sku_id?: number;
+            /**
+             * @description Numeric quantity represented by the SKU
+             * @example 250
+             */
+            quantity_value?: number;
+            /**
+             * @description Measurement unit represented by the SKU
+             * @example ml
+             */
+            unit?: string;
+            /**
+             * @description Type of SKU
+             * @example ITEM
+             * @enum {string}
+             */
+            sku_type?: "ITEM" | "SERVICE" | "DIGITAL";
+            /**
+             * @description Whether the SKU is active
+             * @example true
+             */
+            active?: boolean;
+            /**
+             * Format: int64
+             * @description Current price record identifier
+             * @example 248
+             */
+            price_id?: number;
+            /**
+             * Format: double
+             * @description Maximum retail price
+             * @example 30
+             */
+            list_price?: number;
+            /**
+             * Format: double
+             * @description Customer-facing sale price
+             * @example 30
+             */
+            sale_price?: number;
+            /**
+             * Format: double
+             * @description Discount amount (list_price - sale_price)
+             * @example 0
+             */
+            discount?: number;
+            /**
+             * @description Whether sale_price is lower than list_price
+             * @example false
+             */
+            on_sale?: boolean;
+        };
+        APIResponseStorefrontProductResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["StorefrontProductResponse"];
+        };
+        /** @description Vendor store location */
+        PickupStoreDTO: {
+            /**
+             * Format: int64
+             * @description Vendor store ID
+             * @example 10
+             */
+            id?: number;
+            /**
+             * @description Store location type
+             * @example MAIN_BRANCH
+             * @enum {string}
+             */
+            type?: "MAIN_BRANCH" | "BRANCH" | "HEAD_OFFICE" | "PICKUP_POINT" | "WAREHOUSE" | "DARK_STORE" | "DISTRIBUTION_CENTER" | "KITCHEN" | "FARM" | "OUTLET" | "FRANCHISE" | "KIOSK" | "OTHER";
+            /**
+             * @description Store display name
+             * @example H2A2 Farms Main Store
+             */
+            name?: string;
+            /**
+             * @description Unique store code
+             * @example H2A2-MAIN
+             */
+            code?: string;
+            /**
+             * @description Store address as key-value pairs
+             * @example {
+             *       "address1": "Road No-27F",
+             *       "city": "Hyderabad",
+             *       "state": "Telangana",
+             *       "zipCode": "500049"
+             *     }
+             */
+            address?: {
+                [key: string]: Record<string, never>;
+            };
+            latitude?: number;
+            longitude?: number;
+            pickup_timings?: components["schemas"]["JsonNode"];
+            /** Format: int32 */
+            ready_in_minutes?: number;
+            pickup_slots?: string[];
+            contact?: components["schemas"]["Contact"];
+        };
+        /** @description Vendor contact-us details: contact info, main address, store addresses and social links */
+        StorefrontContactUsResponse: {
+            /**
+             * Format: int64
+             * @description Unique identifier of the vendor
+             * @example 91
+             */
+            vendor_id?: number;
+            /**
+             * @description Public store identifier/slug
+             * @example mirdoddi-farm-fresh-91
+             */
+            store_identifier?: string;
+            /**
+             * @description Display name of the vendor's business
+             * @example Mirdoddi Farm Fresh
+             */
+            business_name?: string;
+            /**
+             * @description Business owner name
+             * @example Swamy
+             */
+            owner_name?: string;
+            /**
+             * @description Vendor contact number
+             * @example 919900000000
+             */
+            contact_number?: string;
+            /**
+             * @description Vendor communication email
+             * @example owner@example.com
+             */
+            communication_email?: string;
+            /**
+             * @description Main (registered business) address of the vendor as key-value pairs
+             * @example {
+             *       "address1": "Road No-27F",
+             *       "city": "Hyderabad",
+             *       "state": "Telangana",
+             *       "country": "India",
+             *       "zipCode": "500049"
+             *     }
+             */
+            main_address?: {
+                [key: string]: string;
+            };
+            /** @description Active vendor store addresses; each item contains only `type` and `address`. MAIN_BRANCH entries first, then by store name. Empty array if none. */
+            addresses?: components["schemas"]["PickupStoreDTO"][];
+            /** @description Active vendor social media links ordered by display order. Empty if none. */
+            social_links?: components["schemas"]["VendorSocialLinkResponse"][];
+        };
+        APIResponseStorefrontContactUsResponse: {
+            /**
+             * @description Response message
+             * @example Customer registered successfully
+             */
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            success?: boolean;
+            /**
+             * Format: int32
+             * @description HTTP Status Code
+             * @example 201
+             */
+            status?: number;
+            /** @description Data */
+            data?: components["schemas"]["StorefrontContactUsResponse"];
         };
         SocialAccountResponse: {
             /** Format: int64 */
@@ -4753,6 +5795,51 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VendorProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    saveStorefrontConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Storefront configuration */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "business_name": "NSR Stores",
+                 *       "tagline": "Made with love | Delivered warm",
+                 *       "business_location": "Hyderabad, Telangana",
+                 *       "order_whatsapp_number": "+919912149049",
+                 *       "instagram_url": "yourshop",
+                 *       "theme": {
+                 *         "primary_color": "#d97706",
+                 *         "accent_color": "#0ea5e9",
+                 *         "background_color": "#F9FAFB",
+                 *         "font_family": "Poppins"
+                 *       },
+                 *       "welcome_message": "Hi! Welcome to NSR Stores",
+                 *       "announcement_bar": "Free delivery on orders above ₹299"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SaveStorefrontConfigRequest"];
             };
         };
         responses: {
@@ -5397,6 +6484,180 @@ export interface operations {
             };
         };
     };
+    getCurrentSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current subscription */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Selected platform plan code */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorSubscriptionSubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Checkout created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Invalid or non-purchasable plan */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description An active subscription already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    confirmPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Checkout values returned by Razorpay to the vendor's browser */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorSubscriptionConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Payment signature verified; subscription pending webhook activation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Payment signature verification failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation scheduled or applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description No cancellable paid subscription */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     fetchSubsByVendorId: {
         parameters: {
             query?: {
@@ -5457,6 +6718,99 @@ export interface operations {
             };
         };
     };
+    getSocialLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Social links loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseListVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseListVendorSocialLinkResponse"];
+                };
+            };
+        };
+    };
+    createSocialLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "platform": "INSTAGRAM",
+                 *       "url": "https://www.instagram.com/srkfoods",
+                 *       "display_order": 1
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateVendorSocialLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Social link created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Invalid platform or URL */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+            /** @description Platform already configured for vendor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseVendorSocialLinkResponse"];
+                };
+            };
+        };
+    };
     createVendorSku: {
         parameters: {
             query?: never;
@@ -5467,7 +6821,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description SKU Creation details */
+        /** @description SKU creation details (name, description and image_path are ignored) */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ItemSkuCreateRequest"];
@@ -5828,6 +7182,28 @@ export interface operations {
             };
         };
     };
+    goLive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
     checkDeliveryEligibility: {
         parameters: {
             query?: never;
@@ -6128,6 +7504,7 @@ export interface operations {
                 end_date: string;
                 user_id: number;
                 email: string;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -6409,19 +7786,38 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Product details */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProductDTO"];
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Product created successfully */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Product with the same name already exists in this category */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Category not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -6441,13 +7837,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Categories returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };
@@ -6459,19 +7855,38 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Category details */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CategoryDTO"];
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Category created successfully */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Category with the same name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -6531,19 +7946,29 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Mobile OTP request for a USER or a VENDOR */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MobileSignUpRequest"];
             };
         };
         responses: {
-            /** @description OK */
+            /** @description OTP sent successfully to an already registered user/vendor */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description OTP sent successfully to a new user */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -7298,6 +8723,60 @@ export interface operations {
             };
         };
     };
+    updateVendorBusinessType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Business type and initial vendor details */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorBusinessTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Vendor business type updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Validation failed or invalid business type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not the vendor owner or lacks STORE_CONFIG permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     assignProducts: {
         parameters: {
             query?: never;
@@ -7921,6 +9400,29 @@ export interface operations {
             };
         };
     };
+    getHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     fetchSubsById: {
         parameters: {
             query?: never;
@@ -7937,50 +9439,6 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-        };
-    };
-    getStorefront: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description Vendor ID
-                 * @example 91
-                 */
-                vendor_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Storefront loaded successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VendorStorefrontResponse"];
-                };
-            };
-            /** @description Vendor not found or not active/approved */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8112,6 +9570,47 @@ export interface operations {
             };
         };
     };
+    getVendorContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 91 */
+                vendor_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vendor context retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Access denied to the vendor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
     getCart: {
         parameters: {
             query?: never;
@@ -8154,6 +9653,215 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    getStorefront: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Storefront loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorStorefrontResponse"];
+                };
+            };
+            /** @description Vendor not found or not active/approved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    getStorefrontProducts: {
+        parameters: {
+            query?: {
+                category_id?: number;
+                page_number?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Products loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginationResponse"];
+                };
+            };
+            /** @description Vendor not found or not active/approved */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponsePaginationResponseStorefrontProductResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponsePaginationResponseStorefrontProductResponse"];
+                };
+            };
+        };
+    };
+    getStorefrontProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+                /**
+                 * @description Vendor product identifier
+                 * @example 161
+                 */
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontProductResponse"];
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontProductResponse"];
+                };
+            };
+            /** @description Vendor not found/not ACTIVE+APPROVED, or product not found/has no active variants */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontProductResponse"];
+                };
+            };
+        };
+    };
+    getContactUs: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
+            path: {
+                /**
+                 * @description Vendor identifier — either a numeric vendor ID or the store_identifier slug
+                 * @example 91
+                 */
+                identifier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contact details loaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontContactUsResponse"];
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Vendor not found, or not ACTIVE/APPROVED */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseStorefrontContactUsResponse"];
                 };
             };
         };
@@ -8317,7 +10025,9 @@ export interface operations {
     };
     getUserOrderHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                vendor_id?: number;
+            };
             header?: never;
             path: {
                 user_id: number;
@@ -8326,13 +10036,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -8342,6 +10061,7 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
+                vendor_id?: number;
             };
             header?: never;
             path: {
@@ -8351,13 +10071,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Paginated order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponsePaginationResponseOrderDetailsDTO"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -8368,6 +10097,7 @@ export interface operations {
                 start_date: string;
                 end_date: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -8394,6 +10124,7 @@ export interface operations {
                 /** @example 2025-01-30 */
                 end_date: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -8420,6 +10151,7 @@ export interface operations {
                 /** @example 2025-04-10 */
                 endDate: string;
                 user_id: number;
+                vendor_id?: number;
             };
             header?: never;
             path?: never;
@@ -8427,13 +10159,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Order history fetched successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["OrderDetailsDTO"][];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authorization failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -8484,6 +10225,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+        };
+    };
+    listPaidPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active paid plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -9128,13 +10889,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Products returned successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["PaginationResponse"];
                 };
             };
         };
@@ -9296,6 +11057,40 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    deleteSocialLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example 273 */
+                vendor_id: number;
+                /** @example 12 */
+                social_link_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Social link deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseString"];
+                };
+            };
+            /** @description Social link not found for vendor */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["APIResponseString"];
                 };
             };
         };

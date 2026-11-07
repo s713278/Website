@@ -1,11 +1,15 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
-import type { ApiEnvelope } from '../client/types';
+import type { ApiEnvelope, RequestConfig } from '../client/types';
+import type { components, operations } from '../schema';
+
+type HomeQuery = operations['getHomePageData']['parameters']['query'];
 
 /** Vendor profile + catalog assignment (tag 07) + public listing (tag 02) */
 export const vendorsService = {
   list: () => apiGet<ApiEnvelope>('/v1/vendors/'),
   create: (body: Record<string, unknown>) => apiPost<ApiEnvelope>('/v1/vendors/', body),
-  getById: (vendorId: number | string) => apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}`),
+  getById: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}`, config),
   update: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}`, body),
   getByMobile: (params?: Record<string, unknown>) =>
@@ -17,42 +21,78 @@ export const vendorsService = {
   addLegalDetails: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/legal_details`, body),
 
-  getCheckoutOptions: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, { skipAuth: true }),
-  saveCheckoutOptions: (vendorId: number | string, body: Record<string, unknown>) =>
-    apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, body),
+  updateBusinessType: (
+    vendorId: number | string,
+    body: components['schemas']['VendorBusinessTypeRequest'],
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/business-type`, body),
+  getContext: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/context`, config),
+  saveStorefront: (
+    vendorId: number | string,
+    body: components['schemas']['SaveStorefrontConfigRequest'],
+  ) => apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}/storefront`, body),
+  goLive: (vendorId: number | string) =>
+    apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/go-live`),
 
-  getProducts: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products`, { skipAuth: true }),
-  getProductSkus: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/skus`, { skipAuth: true }),
-  searchSkus: (vendorId: number | string, q?: string) =>
+  getCheckoutOptions: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, config),
+  saveCheckoutOptions: (
+    vendorId: number | string,
+    body: components['schemas']['SaveVendorDeliveryConfigRequest'],
+  ) => apiPut<ApiEnvelope>(`/v1/vendors/${vendorId}/checkout_options`, body),
+
+  getProducts: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products`, { ...config, skipAuth: true }),
+  getProductSkus: (vendorId: number | string, config?: Pick<RequestConfig, 'signal' | 'params'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/skus`, { ...config, skipAuth: true }),
+  searchSkus: (
+    vendorId: number | string,
+    queryOrParams?: string | { keyword?: string; page_number?: number; page_size?: number },
+  ) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/search`, {
       skipAuth: true,
-      params: q ? { q } : undefined,
+      params:
+        typeof queryOrParams === 'string'
+          ? queryOrParams
+            ? { keyword: queryOrParams }
+            : undefined
+          : queryOrParams,
     }),
   getProduct: (vendorId: number | string, productId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`),
+  /** PDP — GET /v1/vendors/products/{product_id}/skus/{sku_id} (`fetchSkuDetails`). */
+  getSkuDetails: (productId: number | string, skuId: number | string) =>
+ apiGet<ApiEnvelope>(`/v1/vendors/products/${productId}/skus/${skuId}`, { skipAuth: true }),
   updateProduct: (vendorId: number | string, productId: number | string, body: Record<string, unknown>) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`, body),
-  assignProducts: (vendorId: number | string, body: Record<string, unknown>) =>
-    apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/assign/products`, body),
+  assignProducts: (
+    vendorId: number | string,
+    body: components['schemas']['AssignProductsRequest'],
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/assign/products`, body),
   unassignProducts: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/delete/products`, body),
 
-  createSku: (vendorId: number | string, body: Record<string, unknown>) =>
-    apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/skus`, body),
+  createSku: (
+    vendorId: number | string,
+    body: components['schemas']['ItemSkuCreateRequest'],
+  ) => apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/skus`, body),
   getSku: (vendorId: number | string, skuId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`),
-  updateSku: (vendorId: number | string, skuId: number | string, body: Record<string, unknown>) =>
+  updateSku: (
+    vendorId: number | string,
+    skuId: number | string,
+    body: components['schemas']['SkuInfoUpdateRequest'],
+  ) =>
     apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`, body),
   deleteSku: (vendorId: number | string, skuId: number | string) =>
     apiDelete<ApiEnvelope>(`/v1/vendors/${vendorId}/skus/${skuId}`),
 
-  getCategories: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`),
-  assignCategories: (vendorId: number | string, body: Record<string, unknown>) =>
-    apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`, body),
+  getCategories: (vendorId: number | string, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`, config),
+  assignCategories: (
+    vendorId: number | string,
+    body: components['schemas']['AssignCategoriesRequest'],
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/categories`, body),
 
   getServiceArea: (vendorId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/geo/service_area`),
@@ -72,6 +112,6 @@ export const vendorsService = {
     apiGet<ApiEnvelope>('/v1/vendors/search/keyword', { skipAuth: true, params }),
   categoriesByZip: (params?: Record<string, unknown>) =>
     apiGet<ApiEnvelope>('/v1/vendors/categories', { skipAuth: true, params }),
-  home: (params?: Record<string, unknown>) =>
-    apiGet<ApiEnvelope>('/v1/home', { skipAuth: true, params }),
+  home: (params: HomeQuery, config?: Pick<RequestConfig, 'signal'>) =>
+    apiGet<ApiEnvelope>('/v1/home', { ...config, skipAuth: true, params }),
 };

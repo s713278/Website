@@ -1,0 +1,267 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useParams } from 'react-router-dom'
+import { ShieldCheck, ShoppingBag } from 'lucide-react'
+import { OrderCard } from '@/modules/storefront/components/OrderCard'
+import { StorePageFooter } from '@/modules/storefront/components/StorePageFooter'
+import { StorefrontHeader } from '@/modules/storefront/components/StorefrontHeader'
+import { peekLastCachedStoreId, useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import {
+  collectStoreOrdersFromPages,
+  mergeOrderPages,
+} from '@/modules/storefront/lib/orders-history'
+import { customerLoginLink } from '@/modules/storefront/lib/cart-nav'
+import { canShopAsCustomer } from '@/modules/storefront/lib/request-add-to-cart'
+import { storeOrdersPath, storePath } from '@/modules/storefront/lib/store-paths'
+import { useCartStore } from '@/modules/storefront/store/cart-store'
+import { ordersService, getErrorMessage, type CustomerOrder } from '@/shared/api'
+import { useAuthStore } from '@/shared/auth/store/auth-store'
+import { Button, EmptyState, Spinner } from '@/shared/components'
+import { LoadingStatus } from '@/shared/components/LoadingStatus'
+import { StoreBone } from '@/modules/storefront/components/store-skeleton-bone'
+
+function OrderCardSkeleton() {
+  return (
+    <div
+      className="rounded-xl bg-white p-3.5 ring-1 ring-slate-100 sm:p-4"
+      aria-hidden
+    >
+      <div className="flex items-center justify-between gap-3">
+        <StoreBone className="h-3 w-24" />
+        <StoreBone className="h-5 w-20 rounded-full" />
+      </div>
+      <div className="mt-2.5 flex gap-3">
+        <StoreBone className="size-12 shrink-0 rounded-lg sm:size-14" />
+        <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+          <StoreBone className="h-4 w-40" />
+          <StoreBone className="h-3 w-28" />
+          <StoreBone className="h-3 w-16" />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <StoreBone className="h-4 w-20" />
+        <StoreBone className="h-10 w-36 rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+export function OrdersPage() {
+  const { storeId: paramStoreId } = useParams()
+  const cartStoreId = useCartStore((s) => s.lines[0]?.storeId)
+  const storeId = paramStoreId || cartStoreId || peekLastCachedStoreId()
+
+  if (!storeId) return <Navigate to="/stores" replace />
+  if (!paramStoreId) return <Navigate to={storeOrdersPath(storeId)} replace />
+
+  return <StoreOrders storeId={storeId} />
+}
+
+function StoreOrders({ storeId }: { storeId: string }) {
+  const user = useAuthStore((s) => s.user)
+  const { store, loading: storeLoading, wrapperRef } = useStorePage(storeId, { network: 'cache-first' })
+  const [orders, setOrders] = useState<CustomerOrder[]>([])
+  const [apiPage, setApiPage] = useState(0)
+  const [lastPage, setLastPage] = useState(true)
+  const [ordersLoading, setOrdersLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [ordersError, setOrdersError] = useState('')
+  const [moreError, setMoreError] = useState('')
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const loadMoreLock = useRef(false)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setOrders([])
+    setApiPage(0)
+    setLastPage(true)
+    setOrdersError('')
+    setMoreError('')
+    loadMoreLock.current = false
+    if (!canShopAsCustomer(user)) {
+      setOrdersLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+    setOrdersLoading(true)
+    void collectStoreOrdersFromPages({
+      storeId,
+      startPage: 0,
+      fetchPage: (page) => ordersService.listMyOrdersPage(user?.id, page),
+      isCancelled: () => cancelled,
+    })
+      .then((snap) => {
+        if (cancelled) return
+        setOrders(snap.orders)
+        setApiPage(snap.pageNumber)
+        setLastPage(snap.lastPage)
+      })
+      .catch((err) => {
+        if (!cancelled) setOrdersError(getErrorMessage(err, 'Could not load orders'))
+      })
+      .finally(() => {
+        if (!cancelled) setOrdersLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [storeId, user, reloadKey])
+
+  const loadMore = useCallback(async () => {
+    if (loadMoreLock.current || loadingMore || lastPage || ordersLoading) return
+    loadMoreLock.current = true
+    setLoadingMore(true)
+    setMoreError('')
+    try {
+      const snap = await collectStoreOrdersFromPages({
+        storeId,
+        startPage: apiPage + 1,
+        fetchPage: (page) => ordersService.listMyOrdersPage(user?.id, page),
+      })
+      setOrders((current) => mergeOrderPages(current, snap.orders))
+      setApiPage(snap.pageNumber)
+      setLastPage(snap.lastPage)
+    } catch (err) {
+      setMoreError(getErrorMessage(err, 'Could not load more orders'))
+    } finally {
+      loadMoreLock.current = false
+      setLoadingMore(false)
+    }
+  }, [apiPage, lastPage, loadingMore, ordersLoading, storeId, user?.id])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (
+      !sentinel ||
+      lastPage ||
+      ordersLoading ||
+      orders.length === 0 ||
+      moreError ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void loadMore()
+      },
+      { root: null, rootMargin: '200px 0px', threshold: 0 },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [lastPage, loadMore, moreError, orders.length, ordersLoading])
+
+  const visible = orders
+
+  const shopName = store?.name ?? visible[0]?.storeName ?? 'this shop'
+  const itemCount = useCartStore((s) => s.itemCount(storeId))
+  const signedIn = canShopAsCustomer(user)
+  const login = customerLoginLink(storeOrdersPath(storeId), {
+    name: store?.name ?? shopName,
+    logoUrl: store?.theme?.logoImage,
+  })
+
+  return (
+    <div ref={wrapperRef} className="flex min-h-screen flex-col bg-[var(--store-bg,#f8fafc)]">
+      <StorefrontHeader store={store} storeId={storeId} storeName={shopName} storeLoading={storeLoading} cartCount={itemCount} />
+
+      <main className="store-shell-inner flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-5">
+        <div className="mx-auto w-full max-w-3xl">
+          <header className="mb-3.5">
+            <div className="flex items-start gap-2.5">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] text-[var(--store-theme,var(--md-green-700))]">
+                <ShoppingBag className="size-5" strokeWidth={2} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+                  My orders
+                </h1>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Past orders from this shop. For open orders, chat with the owner on WhatsApp.
+                </p>
+              </div>
+            </div>
+          </header>
+
+          {!signedIn ? (
+            <EmptyState
+              title="Sign in to see your orders"
+              description="Use the Sign in button in the header to view orders from this shop."
+              action={
+                <Link to={login.to} state={login.state}>
+                  <Button>Sign in</Button>
+                </Link>
+              }
+            />
+          ) : ordersLoading ? (
+            <div className="space-y-2.5" aria-busy="true">
+              <span className="sr-only">Loading orders…</span>
+              <LoadingStatus
+                loading={ordersLoading}
+                label="Loading orders…"
+                onRetry={() => setReloadKey((k) => k + 1)}
+              />
+              {Array.from({ length: 3 }, (_, i) => (
+                <OrderCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : ordersError ? (
+            <EmptyState
+              title="Could not load orders"
+              description={ordersError}
+              action={<Button onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>}
+            />
+          ) : visible.length === 0 ? (
+            <EmptyState
+              title="No orders yet"
+              description="Your orders will show up here after checkout."
+              action={
+                <Link to={storePath(storeId)}>
+                  <Button>Browse store</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {visible.map((order) => (
+                <OrderCard key={order.id} order={order} storeId={storeId} store={store} />
+              ))}
+              {moreError ? (
+                <div className="flex flex-col items-center gap-2 pt-1">
+                  <p className="text-center text-sm text-red-600">{moreError}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadMore()}>
+                    Try again
+                  </Button>
+                </div>
+              ) : !lastPage ? (
+                <div
+                  ref={sentinelRef}
+                  className="flex justify-center py-3"
+                  aria-hidden={loadingMore ? undefined : true}
+                >
+                  {loadingMore ? <Spinner label="Loading more orders…" /> : <span className="h-8" />}
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {visible.length > 0 ? (
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-[var(--store-theme-soft,rgba(16,185,129,0.14))] px-3.5 py-3 ring-1 ring-[var(--store-theme-muted,rgba(16,185,129,0.22))] sm:items-center sm:px-4">
+              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[var(--store-theme,var(--md-green-700))] shadow-sm">
+                <ShieldCheck className="size-4" strokeWidth={2} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">Safe. Secure. Reliable.</p>
+                <p className="text-sm text-slate-600">Your orders are protected and delivered with care.</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </main>
+
+      {store ? <StorePageFooter store={store} /> : null}
+    </div>
+  )
+}

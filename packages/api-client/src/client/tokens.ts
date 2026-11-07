@@ -36,6 +36,63 @@ export function clearTokens() {
   safeSet(REFRESH_KEY, null);
 }
 
+/**
+ * Seconds of remaining life below which a token counts as already expired. A token with
+ * only a moment left would expire in flight, and client clocks drift.
+ */
+const EXPIRY_SKEW_SECONDS = 30;
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+  try {
+    const base64 = segments[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const parsed: unknown = JSON.parse(atob(padded));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the access token is expired (or close enough to count).
+ *
+ * The backend issues access tokens with a 600-second TTL, so a vendor returning to the
+ * app after ten minutes idle holds an expired-but-present token. Without this check the
+ * only expiry detector is the 401 interceptor, which spends a doomed request to learn
+ * what the token already says — an extra serial round trip before anything can paint.
+ *
+ * Anything this cannot judge — an opaque token, a malformed payload, no `exp` claim —
+ * is reported usable so the 401 path stays in charge. This is an optimization, never an
+ * authority on whether a token is still accepted: only the server knows about
+ * revocation.
+ */
+export function isAccessTokenExpired(
+  token: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== 'number') return false;
+  return exp * 1000 - EXPIRY_SKEW_SECONDS * 1000 <= nowMs;
+}
+
+/** Three base64url segments. Used to tell a bearer token from any other string. */
+const JWT_PATTERN = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+
+/**
+ * A bare token string, or `null` for anything else.
+ *
+ * Several endpoints put a plain string in `data` — go-live returns a sentence, refresh
+ * returns the token itself. Only a JWT-shaped value is accepted so a success message
+ * can never be stored as credentials.
+ */
+function asBearerToken(value: unknown): string | null {
+  return typeof value === 'string' && JWT_PATTERN.test(value) ? value : null;
+}
+
 export function parseTokenResponse(payload: unknown): {
   accessToken: string | null;
   refreshToken: string | null;
@@ -44,17 +101,24 @@ export function parseTokenResponse(payload: unknown): {
   const data =
     root.data && typeof root.data === 'object'
       ? (root.data as Record<string, unknown>)
-      : root;
+      : {};
 
-  const access =
-    (data.access_token as string | undefined) ||
-    (data.accessToken as string | undefined) ||
-    (data.token as string | undefined) ||
+  const pickAccess = (obj: Record<string, unknown>) =>
+    (obj.access_token as string | undefined) ||
+    (obj.accessToken as string | undefined) ||
+    (obj.token as string | undefined) ||
     null;
-  const refresh =
-    (data.refresh_token as string | undefined) ||
-    (data.refreshToken as string | undefined) ||
+  const pickRefresh = (obj: Record<string, unknown>) =>
+    (obj.refresh_token as string | undefined) ||
+    (obj.refreshToken as string | undefined) ||
     null;
 
-  return { accessToken: access, refreshToken: refresh };
+  return {
+    // `POST /v1/auth/refresh` answers `{ success, status, data: "<jwt>" }` — the new
+    // access token is the whole of `data`, not a field inside it, and no refresh token
+    // comes back. Verified against the deployed API; the contract types it as a generic
+    // APIResponseObject with no example, so the shape is not discoverable from OpenAPI.
+    accessToken: pickAccess(data) || pickAccess(root) || asBearerToken(root.data),
+    refreshToken: pickRefresh(data) || pickRefresh(root),
+  };
 }

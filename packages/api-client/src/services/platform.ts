@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
+import type { components } from '../schema';
 
 /** FAQs, measurements, SKU price (tag 12, 14) */
 export const platformService = {
@@ -11,21 +12,28 @@ export const platformService = {
   faqsByAudience: (targetAudience: string) =>
     apiGet<ApiEnvelope>(`/v1/faqs/${encodeURIComponent(targetAudience)}`, { skipAuth: true }),
 
-  listMeasurements: () => apiGet<ApiEnvelope>('/v1/measurements/', { skipAuth: true }),
-  getMeasurement: (id: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/measurements/${id}`, { skipAuth: true }),
+  listMeasurements: (config: { signal?: AbortSignal } = {}) =>
+    apiGet<ApiEnvelope>('/v1/measurements/', config),
+  getMeasurement: (id: number | string, config: { signal?: AbortSignal } = {}) =>
+    apiGet<ApiEnvelope>(`/v1/measurements/${id}`, config),
 
+  /** Authenticated: the deployed read answers 401 without the vendor's token. */
   getSkuPrice: (skuId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`, { skipAuth: true }),
-  updateSkuPrice: (priceId: number | string, body: Record<string, unknown>) =>
+    apiGet<ApiEnvelope>(`/v1/sku/price/${skuId}`),
+  updateSkuPrice: (priceId: number | string, body: components['schemas']['SkuPriceUpdateRequest']) =>
     apiPut<ApiEnvelope>(`/v1/sku/price/${priceId}`, body),
 };
 
 export const imagesService = {
   list: (vendorId: number | string, params?: Record<string, unknown>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, { params }),
-  upload: (vendorId: number | string, body: unknown) =>
+  upload: (vendorId: number | string, body: FormData) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, body),
+};
+
+export const pricesService = {
+  getSkuPrice: platformService.getSkuPrice,
+  updateSkuPrice: platformService.updateSkuPrice,
 };
 
 export const courierService = {

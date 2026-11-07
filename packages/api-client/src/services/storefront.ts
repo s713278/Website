@@ -29,8 +29,35 @@ export type StorefrontCategory = {
 
 /** Vendor storefront public API (tag 20) */
 export const storefrontService = {
-  get: (vendorId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/storefront`, { skipAuth: true }),
+  get: (identifier: number | string) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${encodeURIComponent(identifier)}/storefront`, {
+      skipAuth: true,
+    }),
   checkDeliveryEligibility: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/delivery-eligibility`, body, { skipAuth: true }),
+
+  listProducts: (
+    vendorId: number | string,
+    params?: {
+      page_number?: number
+      page_size?: number
+      category_id?: number
+    },
+  ) =>
+    apiGet<ApiEnvelope>(
+      `/v1/vendors/${encodeURIComponent(vendorId)}/storefront/products`,
+      { params, skipAuth: true },
+    ),
+
+   getProduct: (identifier: number | string, productId: number | string) =>
+    apiGet<ApiEnvelope>(
+      `/v1/vendors/${encodeURIComponent(identifier)}/storefront/products/${encodeURIComponent(productId)}`,
+      { skipAuth: true },
+    ),
+
+   getContact: (identifier: number | string) =>
+    apiGet<ApiEnvelope>(
+      `/v1/vendors/${encodeURIComponent(identifier)}/storefront/contact-us`,
+      { skipAuth: true },
+    ),
 };

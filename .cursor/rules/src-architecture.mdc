@@ -1,0 +1,18 @@
+---
+description: React module architecture under src/
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# src architecture
+
+Read root `AGENTS.md` for repository-wide placement, safety, and verification rules.
+
+- Feature code in `src/modules/{marketing,storefront,vendor}`; shared cross-cutting in `src/shared/**`; wiring in `src/app/**`.
+- Pages import services from `@/shared/api` only; never call Axios or `fetch` in pages/components.
+- Shared wrappers: `@/shared/components`. Raw shadcn: `src/components/ui`. Class helper: `cn` from `@/lib/utils`.
+- Prefer `@/` path alias. Function components only; Zustand for auth/cart.
+- Fetch effects: include real dependencies, cancel or ignore stale work during cleanup, and surface
+  failures with `getErrorMessage`.
+- Run `npm run lint`; hook dependency and rules-of-hooks violations are errors.
+- Non-hooks must not use the `use*` prefix (`isLiveApi`, not `useLiveApi`).

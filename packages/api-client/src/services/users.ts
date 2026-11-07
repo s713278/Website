@@ -17,6 +17,11 @@ export const usersService = {
     apiDelete<ApiEnvelope>(`/v1/users/${userId}/address/${addressId}`),
   dashboard: (userId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/users/${userId}/dashboard`),
+  /** Account / order history for a customer */
+  accountHistory: (userId: number | string, params?: Record<string, unknown>) =>
+    apiGet<ApiEnvelope>(`/v1/users/${userId}/orders/history`, { params }),
+  accountHistoryPaged: (userId: number | string, params?: Record<string, unknown>) =>
+    apiGet<ApiEnvelope>(`/v1/users/${userId}/orders/history/paged`, { params }),
   getPreferences: (userId: number | string) =>
     apiGet<ApiEnvelope>(`/v1/users/preferences/${userId}`),
   updatePreferences: (userId: number | string, body: Record<string, unknown>) =>

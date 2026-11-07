@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<!-- saved from url=(0066)http://localhost:8080/api/v1/docs/vendor-onboarding-ui-api-handoff -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vendor-onboarding-ui-api-handoff</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #059669;
+      --accent-light: #d1fae5;
+      --code-bg: #f1f5f9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+    }
+    header h1 {
+      font-size: 1.25rem;
+      margin: 0;
+      color: var(--accent);
+    }
+    header a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    header a:hover { color: var(--accent); }
+    h1, h2, h3, h4 { margin-top: 2rem; margin-bottom: 1rem; }
+    h2 { border-bottom: 2px solid var(--accent-light); padding-bottom: 0.5rem; }
+    h3 { color: var(--accent); }
+    p { margin: 0.75rem 0; }
+    a { color: var(--accent); }
+    code {
+      background: var(--code-bg);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.9em;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    pre code { background: transparent; padding: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--accent-light);
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: none; }
+    ul, ol { margin: 0.75rem 0; padding-left: 1.5rem; }
+    li { margin: 0.35rem 0; }
+    blockquote {
+      border-left: 4px solid var(--accent);
+      background: var(--surface);
+      margin: 1rem 0;
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+    @media (max-width: 640px) {
+      .container { padding: 1rem; }
+      table { font-size: 0.875rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>vendor-onboarding-ui-api-handoff</h1>
+      <a href="http://localhost:8080/api/v1/docs">All docs</a>
+    </div>
+  </header>
+  <main class="container">
+<h1>Vendor Onboarding UI/UX — API Handoff Guide</h1>
+<h2>Context</h2>
+<p>This document maps every backend API needed to build the <strong>10-step vendor onboarding flow</strong> shown in the UI:</p>
+<ol>
+<li>Verify Mobile</li>
+<li>Enter OTP</li>
+<li>Choose Business</li>
+<li>Pick Categories</li>
+<li>Add Products</li>
+<li>Set Prices</li>
+<li>Delivery</li>
+<li>Payments</li>
+<li>Store Settings</li>
+<li>You're Live</li>
+</ol>
+<p>Use this as a single source of truth for frontend engineers, UI designers, and QA.</p>
+<hr>
+<h2>Base URL &amp; Authentication</h2>
+<table>
+<thead>
+<tr><th>Env</th><th>Base URL</th></tr>
+</thead>
+<tbody>
+<tr><td>Local</td><td><code>http://localhost:8080/api</code></td></tr>
+<tr><td>Production</td><td><code>https://&lt;domain&gt;/api</code></td></tr>
+</tbody>
+</table>
+<p>All endpoints (except business-types list and storefront) require:</p>
+<pre><code class="language-http">Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+</code></pre>
+<p>The <code>access_token</code> and <code>refresh_token</code> are returned by <strong>Step 2</strong> (<code>POST /v1/auth/verify-otp</code>).</p>
+<hr>
+<h2>Step 1 — Verify Mobile Number</h2>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>User enters mobile → clicks <strong>Send OTP</strong></td><td><code>POST</code></td><td><code>/v1/auth/request-otp</code></td><td><code>AuthController.java:150-159</code></td></tr>
+</tbody>
+</table>
+<h3>Request</h3>
+<pre><code class="language-json">{
+  "country_code": "+91",
+  "mobile_number": "9912149049",
+  "user_role": "VENDOR"
+}
+</code></pre>
+<h3>Validation</h3>
+<ul>
+<li><code>mobile_number</code> must be exactly 10 digits and start with <code>6-9</code>.</li>
+<li><code>country_code</code> is required.</li>
+</ul>
+<h3>Response Notes</h3>
+<ul>
+<li>Creates a new user if the mobile is not registered.</li>
+<li>For <code>user_role: VENDOR</code>, the user is created/updated with the <code>VENDOR</code> authority.</li>
+<li>Returns <code>mobile_verified: false</code> until OTP is verified.</li>
+</ul>
+<hr>
+<h2>Step 2 — Enter OTP</h2>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>User enters OTP → clicks <strong>Verify</strong></td><td><code>POST</code></td><td><code>/v1/auth/verify-otp</code></td><td><code>AuthController.java:170-180</code></td></tr>
+</tbody>
+</table>
+<h3>Request</h3>
+<pre><code class="language-json">{
+  "country_code": "+91",
+  "mobile_number": "9912149049",
+  "otp": "9090"
+}
+</code></pre>
+<h3>Response</h3>
+<pre><code class="language-json">{
+  "status": "success",
+  "data": {
+    "user_id": 123,
+    "access_token": "&lt;short-lived-jwt&gt;",
+    "refresh_token": "&lt;long-lived-jwt&gt;",
+    "mobile_verified": true,
+    "name": null,
+    "roles": ["VENDOR"],
+    "vendors": [
+      {
+        "vendor_id": 91,
+        "name": "My Store",
+        "status": "INACTIVE",
+        "subscription_type": "Free",
+        "features": []
+      }
+    ],
+    "addresses": null
+  }
+}
+</code></pre>
+<h3>UI State</h3>
+<ul>
+<li>Store <code>access_token</code> and <code>refresh_token</code> securely.</li>
+<li>Store the first <code>vendor_id</code> from <code>data.vendors[0].vendor_id</code>.</li>
+<li>On this flow <code>verify-otp</code> creates an empty draft vendor for <code>VENDOR</code> users if one does not exist.</li>
+<li>Use <code>access_token</code> for every subsequent call.</li>
+<li>If token expires, call <code>POST /v1/auth/refresh</code> with <code>refresh_token</code>.</li>
+</ul>
+<hr>
+<h2>Step 3 — Choose Business</h2>
+<h3>3.1 Load business types</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Render business-type cards/tiles</td><td><code>GET</code></td><td><code>/v1/business-types</code></td><td><code>BusinessTypeController.java:25-48</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-http">GET /v1/business-types?pageNumber=0&amp;pageSize=20&amp;sortBy=name&amp;sortOrder=asc
+</code></pre>
+<h3>3.2 Update business type and basic details</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Save business selection + details</td><td><code>PATCH</code></td><td><code>/v1/vendors/{vendor_id}/business-type</code></td><td><code>VendorController.java:93-109</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "business_type": "Agriculture",
+  "business_name": "SK Fruits and Veggies",
+  "owner_name": "SK Owner",
+  "contact_person": "SK Contact"
+}
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>The vendor already exists after Step 2; update it with the chosen business type and basic details.</li>
+<li>Persist <code>vendor_id</code> in onboarding state if not already captured from <code>verify-otp</code>.</li>
+<li>Categories, products, prices, etc. are filled in later steps.</li>
+</ul>
+<hr>
+<h2>Step 4 — Pick Categories</h2>
+<h3>4.1 Fetch categories for selected business type</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Show categories filtered by business type</td><td><code>GET</code></td><td><code>/v1/categories?business_type_id={id}</code></td><td><code>CategoryController.java:49-65</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-http">GET /v1/categories?business_type_id=1&amp;pageNumber=0&amp;pageSize=50
+</code></pre>
+<h3>4.2 Assign categories to vendor</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Save selected categories</td><td><code>PATCH</code></td><td><code>/v1/vendors/{vendor_id}/categories</code></td><td><code>VendorController.java:263-270</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "category_ids": [10, 11, 12]
+}
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>Allow multi-select.</li>
+<li>Save incrementally or at the end of the step.</li>
+</ul>
+<hr>
+<h2>Step 5 — Add Products</h2>
+<h3>5.1 Fetch products for a category</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Product picker inside a category</td><td><code>GET</code></td><td><code>/v1/categories/{category_id}/products</code></td><td><code>CategoryController.java:131-146</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-http">GET /v1/categories/10/products?pageNumber=0&amp;pageSize=50
+</code></pre>
+<h3>5.2 Assign products to vendor</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Save selected products with features</td><td><code>PATCH</code></td><td><code>/v1/vendors/{vendor_id}/assign/products</code></td><td><code>VendorController.java:307-314</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "category_id": 10,
+  "selected_products": [
+    {
+      "product_id": 111,
+      "features_map": {
+        "Description": "Fresh organic tomato",
+        "Features": [
+          {
+            "Brand": "SK Farms",
+            "Health Benefits": "Rich in vitamins"
+          }
+        ]
+      }
+    }
+  ]
+}
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>Group product selection by category.</li>
+<li>Call this endpoint once per category or batch multiple categories in separate calls.</li>
+</ul>
+<hr>
+<h2>Step 6 — Set Prices</h2>
+<h3>6.1 Create vendor SKU with pricing</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Add a SKU/variant with price and subscription plans</td><td><code>POST</code></td><td><code>/v1/vendors/{vendor_id}/skus</code></td><td><code>VendorController.java:330-534</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "product_id": 111,
+  "name": "Organic Tomato",
+  "description": "Farm-fresh organic tomato",
+  "sku_type": "ITEM",
+  "image_path": "data:image/jpeg;base64,...",
+  "is_active": true,
+  "store_pickup": true,
+  "home_delivery": true,
+  "subscription_eligible": true,
+  "price_list": [
+    {
+      "measurement_type": "WEIGHT",
+      "unit": "kg",
+      "value": "1",
+      "effective_date": "2026-08-07",
+      "list_price": 100,
+      "sale_price": 90,
+      "shipping_price": 0
+    }
+  ],
+  "eligible_sub_plans": [
+    {
+      "sub_plan_id": 1,
+      "sub_frequency": "ONE_TIME",
+      "delivery_mode": "FIXED",
+      "eligible_delivery_days": {
+        "delivery_days": ["SUNDAY", "WEDNESDAY"]
+      }
+    }
+  ]
+}
+</code></pre>
+<h3>6.2 Update SKU price later</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Edit an existing SKU price</td><td><code>PUT</code></td><td><code>/v1/sku/price/{price_id}</code></td><td><code>SkuPriceController.java:77-97</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "sku_id": 1001,
+  "list_price": 110,
+  "sale_price": 99
+}
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>A product can have multiple SKUs (e.g., 500g, 1kg).</li>
+<li><code>product_id</code> here is the <strong>vendor-assigned product id</strong>, not the platform product id.</li>
+<li><code>sale_price</code> is what the customer pays; <code>list_price</code> is the MRP.</li>
+</ul>
+<hr>
+<h2>Step 7 — Delivery</h2>
+<h3>7.1 Save delivery configuration</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Set fulfillment, scheduling, shipping charges, delivery slots</td><td><code>PUT</code></td><td><code>/v1/vendors/{vendor_id}/checkout_options</code></td><td><code>VendorController.java:950-961</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "fulfillment_type": "HOME_DELIVERY",
+  "customer_consent_title": "Delivery Consent",
+  "customer_consent_text": "I confirm that I have reviewed order details, delivery charges, and delivery timeline.",
+  "scheduling_strategy": "CUSTOMER_SELECT_DATE",
+  "scheduling_config": {
+    "min_advance_booking_days": 1,
+    "max_advance_booking_days": 30,
+    "cutoff_time": "18:00"
+  },
+  "shipping_strategy_type": "ORDER_AMOUNT_THRESHOLD",
+  "shipping_config": {
+    "delivery_charge": 30,
+    "free_delivery_threshold": 300
+  },
+  "order_acceptance_policy": "MANUAL_APPROVAL",
+  "delivery_slots": ["6:00 AM - 8:00 AM", "5:00 PM - 7:00 PM"]
+}
+</code></pre>
+<h3>Supported Shipping Strategies</h3>
+<table>
+<thead>
+<tr><th>Strategy</th><th><code>shipping_config</code> Shape</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ORDER_AMOUNT_THRESHOLD</code></td><td><code>{ "delivery_charge": 30, "free_delivery_threshold": 300 }</code></td></tr>
+<tr><td><code>ZIPCODE_THRESHOLD</code></td><td><code>{ "free_zipcodes": ["560001"], "free_delivery_threshold": 500, "default_charge": 50 }</code></td></tr>
+<tr><td><code>ZIPCODE_TIERED</code></td><td><code>{ "tiers": [{ "label": "City", "zipcodes": ["560001"], "charge": 40 }], "rest_of_india_charge": 80 }</code></td></tr>
+<tr><td><code>FLAT</code></td><td><code>{ "charge": 40 }</code></td></tr>
+<tr><td><code>WEIGHT_BASED</code></td><td><code>{ "free_up_to_kg": 2, "charge_per_kg": 20 }</code></td></tr>
+</tbody>
+</table>
+<h3>Supported Scheduling Strategies</h3>
+<table>
+<thead>
+<tr><th>Strategy</th><th><code>scheduling_config</code> Shape</th></tr>
+</thead>
+<tbody>
+<tr><td><code>FIXED_WINDOW</code></td><td><code>{ "min_delivery_days": 3, "max_delivery_days": 5 }</code></td></tr>
+<tr><td><code>CUSTOMER_SELECT_DATE</code></td><td><code>{ "min_advance_booking_days": 1, "max_advance_booking_days": 30, "cutoff_time": "18:00" }</code></td></tr>
+<tr><td><code>PREDEFINED_DAYS</code></td><td><code>{ "available_delivery_days": ["SUNDAY"], "max_orders_per_day": 50 }</code></td></tr>
+<tr><td><code>INSTANT</code></td><td><code>{ "min_prep_time_minutes": 30, "max_prep_time_minutes": 60, "operating_until": "23:59", "order_cutoff_time": "22:00" }</code></td></tr>
+</tbody>
+</table>
+<hr>
+<h2>Step 8 — Payments</h2>
+<blockquote>
+<p><strong>Payments are part of the same <code>checkout_options</code> call as Step 7.</strong> There is no separate payments endpoint for onboarding.</p>
+</blockquote>
+<p>Add the <code>payment_options</code> array to the Step 7 payload:</p>
+<pre><code class="language-json">{
+  "fulfillment_type": "HOME_DELIVERY",
+  "scheduling_strategy": "CUSTOMER_SELECT_DATE",
+  "shipping_strategy_type": "ORDER_AMOUNT_THRESHOLD",
+  "shipping_config": { "delivery_charge": 30, "free_delivery_threshold": 300 },
+  "payment_options": [
+    {
+      "type": "CASH_ON_DELIVERY",
+      "label": "Cash on Delivery",
+      "is_default": true,
+      "display_order": 1,
+      "details": null
+    },
+    {
+      "type": "PRE_PAID",
+      "label": "UPI Payment",
+      "is_default": false,
+      "display_order": 2,
+      "details": {
+        "upi_account": "vendor@upi",
+        "payment_note": "Send payment to this UPI"
+      }
+    }
+  ]
+}
+</code></pre>
+<h3>Supported Payment Types</h3>
+<table>
+<thead>
+<tr><th>Type</th><th>UI Label Suggestion</th></tr>
+</thead>
+<tbody>
+<tr><td><code>CASH_ON_DELIVERY</code></td><td>Cash on Delivery</td></tr>
+<tr><td><code>PRE_PAID</code></td><td>UPI / Pre Paid</td></tr>
+<tr><td><code>ONLINE</code></td><td>Online Payment</td></tr>
+<tr><td><code>IN_STORE_PAYMENT</code></td><td>Pay at Store</td></tr>
+</tbody>
+</table>
+<hr>
+<h2>Step 9 — Store Settings</h2>
+<h3>9.1 Update vendor profile</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Edit store name, description, banner, contact, address</td><td><code>PUT</code></td><td><code>/v1/vendors/{vendor_id}</code></td><td><code>VendorController.java:119-166</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "business_name": "SK Fruits and Veggies",
+  "description": "Updated tagline",
+  "business_type": "Agriculture",
+  "owner_name": "SK Owner",
+  "contact_person": "SK Contact",
+  "contact_number": "9912149049",
+  "communication_email": "store@example.com",
+  "business_address": {
+    "country": "India",
+    "address1": "Farm Road",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "zipCode": "500049",
+    "district": "Hyderabad"
+  },
+  "banner_image": "data:image/jpeg;base64,...",
+  "fulfillment_type": "BOTH"
+}
+</code></pre>
+<h3>9.2 Connect Instagram</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Click <strong>Connect Instagram</strong></td><td><code>GET</code></td><td><code>/v1/social/INSTAGRAM/auth_url</code></td><td><code>SocialIntegrationController.java:62-75</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-http">GET /v1/social/INSTAGRAM/auth_url?vendor_id=91
+</code></pre>
+<ul>
+<li>Open the returned <code>auth_url</code> in a popup or redirect the user to Meta OAuth.</li>
+<li>Meta redirects back to: <code>GET /v1/social/INSTAGRAM/auth/callback?code=...&amp;state=...</code></li>
+<li>Backend handles the callback automatically.</li>
+</ul>
+<h3>9.3 Update service area (optional)</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Draw/select delivery area on map</td><td><code>PATCH</code></td><td><code>/v1/vendors/{vendor_id}/geo/service_area</code></td><td><code>VendorController.java:577-590</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{
+  "service_areas": {
+    "type": "MultiPolygon",
+    "coordinates": [
+      [
+        [
+          [17.4965, 78.372],
+          [17.4965, 78.382],
+          [17.4865, 78.382],
+          [17.4865, 78.372],
+          [17.4965, 78.372]
+        ]
+      ]
+    ]
+  },
+  "zip_codes": ["500049", "500048"]
+}
+</code></pre>
+<hr>
+<h2>Step 10 — You're Live</h2>
+<h3>10.1 Go live</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Click <strong>Go Live</strong> toggle/button</td><td><code>POST</code></td><td><code>/v1/vendors/{vendor_id}/go-live</code></td><td><code>VendorController.java:118-135</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-json">{}
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>Only store owners can call this endpoint.</li>
+<li>Backend validates that the vendor has business details, categories, products, and delivery config.</li>
+<li>On success the vendor <code>status</code> becomes <code>ACTIVE</code> and <code>approval_status</code> becomes <code>PENDING</code> (admin approval may still be required).</li>
+</ul>
+<h3>10.2 Preview public storefront</h3>
+<table>
+<thead>
+<tr><th>UI Action</th><th>Method</th><th>Endpoint</th><th>Source</th></tr>
+</thead>
+<tbody>
+<tr><td>Show live store preview</td><td><code>GET</code></td><td><code>/v1/vendors/{vendor_id}/storefront</code></td><td><code>VendorStorefrontController.java:54-61</code></td></tr>
+</tbody>
+</table>
+<pre><code class="language-http">GET /v1/vendors/91/storefront
+</code></pre>
+<h3>UI Notes</h3>
+<ul>
+<li>After going live, the store is publicly accessible.</li>
+<li>The storefront preview can be rendered with the response from this endpoint.</li>
+</ul>
+<hr>
+<h2>Store Membership &amp; Roles (Multi-Account Stores)</h2>
+<p>A single store can be accessed by multiple user accounts. The existing <code>VENDOR</code> authority still grants store access; the backend additionally checks the <code>tb_vendor_user</code> membership row.</p>
+<table>
+<thead>
+<tr><th>Role</th><th>Permissions in the onboarding flow</th></tr>
+</thead>
+<tbody>
+<tr><td><code>OWNER</code></td><td>Full access, including <code>go-live</code>, store settings, delivery/payment config.</td></tr>
+<tr><td><code>STAFF</code></td><td>Can manage catalog (categories, products, SKUs) and view orders; cannot change store settings, delivery/payment, or go live.</td></tr>
+<tr><td><code>ADMIN</code> / <code>CUSTOMER_CARE</code></td><td>Full access to all vendor-scoped endpoints.</td></tr>
+</tbody>
+</table>
+<p>All vendor-scoped endpoints now use <code>@vendorPermissionEvaluator</code> for ownership checks; the UI does not need to send a new role or change existing role handling.</p>
+<hr>
+<h2>End-to-End API Sequence</h2>
+<pre><code class="language-text">Step 1  POST /v1/auth/request-otp
+        {
+          "country_code": "+91",
+          "mobile_number": "9912149049",
+          "user_role": "VENDOR"
+        }
+
+Step 2  POST /v1/auth/verify-otp
+        └── store access_token, refresh_token, vendor_id
+            (empty draft vendor is created automatically if needed)
+
+Step 3  GET  /v1/business-types
+        PATCH /v1/vendors/{vendor_id}/business-type
+
+Step 4  GET  /v1/categories?business_type_id={id}
+        PATCH /v1/vendors/{vendor_id}/categories
+
+Step 5  GET  /v1/categories/{category_id}/products
+        PATCH /v1/vendors/{vendor_id}/assign/products
+
+Step 6  POST /v1/vendors/{vendor_id}/skus
+        (repeat for each SKU)
+
+Step 7  PUT  /v1/vendors/{vendor_id}/checkout_options
+        (includes Step 8 payment_options)
+
+Step 9  PUT  /v1/vendors/{vendor_id}
+        GET  /v1/social/INSTAGRAM/auth_url?vendor_id={vendor_id}  (optional)
+        PATCH /v1/vendors/{vendor_id}/geo/service_area  (optional)
+
+Step 10 POST /v1/vendors/{vendor_id}/go-live
+        GET  /v1/vendors/{vendor_id}/storefront
+</code></pre>
+<hr>
+<h2>Common Field Name Mapping</h2>
+<table>
+<thead>
+<tr><th>UI Label</th><th>API Field</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Store Name</td><td><code>business_name</code></td><td>Required</td></tr>
+<tr><td>About / Tagline</td><td><code>description</code></td><td>Optional</td></tr>
+<tr><td>Business Type</td><td><code>business_type</code></td><td>From <code>/v1/business-types</code></td></tr>
+<tr><td>Owner Name</td><td><code>owner_name</code></td><td>Required</td></tr>
+<tr><td>Contact Person</td><td><code>contact_person</code></td><td>Required</td></tr>
+<tr><td>Mobile</td><td><code>contact_number</code></td><td>10 digits</td></tr>
+<tr><td>Email</td><td><code>communication_email</code></td><td>Optional</td></tr>
+<tr><td>Store Banner</td><td><code>banner_image</code></td><td>Base64 image string</td></tr>
+<tr><td>Categories</td><td><code>category_ids</code></td><td>Array of IDs</td></tr>
+<tr><td>Products</td><td><code>selected_products</code></td><td>Under <code>assign/products</code></td></tr>
+<tr><td>SKU Name</td><td><code>name</code></td><td>Variant name</td></tr>
+<tr><td>MRP</td><td><code>list_price</code></td><td>Original price</td></tr>
+<tr><td>Selling Price</td><td><code>sale_price</code></td><td>Customer price</td></tr>
+<tr><td>Delivery Type</td><td><code>fulfillment_type</code></td><td><code>HOME_DELIVERY</code>, <code>STORE_PICKUP</code>, <code>BOTH</code></td></tr>
+<tr><td>Delivery Charge Strategy</td><td><code>shipping_strategy_type</code></td><td>See strategies table</td></tr>
+<tr><td>Payment Method</td><td><code>payment_options[].type</code></td><td>See payment types table</td></tr>
+</tbody>
+</table>
+<hr>
+<h2>Key Gotchas for UI/UX</h2>
+<ol>
+<li><strong>Auth first:</strong> Every vendor API needs a valid <code>access_token</code>. Complete Step 1 and Step 2 before anything else.</li>
+<li><strong><code>user_role: VENDOR</code>:</strong> The <code>request-otp</code> call must include <code>"user_role": "VENDOR"</code> to start the store onboarding flow.</li>
+<li><strong><code>vendor_id</code> from Step 2:</strong> <code>verify-otp</code> creates an empty draft vendor and returns the <code>vendor_id</code> in <code>data.vendors[0]</code>. Capture it before Step 3.</li>
+<li><strong>Step 3 updates, not creates:</strong> Use <code>PATCH /v1/vendors/{vendor_id}/business-type</code>; the vendor already exists after OTP verification.</li>
+<li><strong>Snake case everywhere:</strong> Backend expects <code>snake_case</code> JSON keys. Convert to camelCase in React state if needed, but send snake_case.</li>
+<li><strong>Images as Base64:</strong> <code>banner_image</code> and <code>image_path</code> expect Base64 data URIs, not file uploads.</li>
+<li><strong>Checkout options combines delivery + payments:</strong> Steps 7 and 8 are a single <code>PUT</code> call.</li>
+<li><strong>Social OAuth is redirect-based:</strong> Instagram connection happens via browser redirect, not an AJAX call.</li>
+<li><strong>Going live is a validation + activation:</strong> Step 10 is <code>POST /v1/vendors/{vendor_id}/go-live</code>; it validates setup and sets the vendor to <code>ACTIVE</code>/<code>PENDING</code>.</li>
+</ol>
+<hr>
+<h2>Error Handling Checklist</h2>
+<table>
+<thead>
+<tr><th>Scenario</th><th>Expected Backend Response</th><th>UI Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td>Invalid mobile format</td><td><code>400 Bad Request</code></td><td>Show inline validation error</td></tr>
+<tr><td>Wrong OTP</td><td><code>400 Bad Request</code></td><td>Allow retry, show error</td></tr>
+<tr><td>Token expired</td><td><code>401 Unauthorized</code></td><td>Call refresh token endpoint</td></tr>
+<tr><td>Duplicate business name</td><td><code>400 Bad Request</code></td><td>Show duplicate error</td></tr>
+<tr><td>Missing required field</td><td><code>400 Bad Request</code></td><td>Highlight missing field</td></tr>
+<tr><td>Forbidden action</td><td><code>403 Forbidden</code></td><td>Show access denied message</td></tr>
+</tbody>
+</table>
+<hr>
+<h2>Related Backend Docs</h2>
+<ul>
+<li><code>vendor-checkout-delivery-config.md</code> — detailed checkout_options schema</li>
+<li><code>social-media-integration-framework.md</code> — Instagram connect flow</li>
+<li><code>vendor-subscription-api.md</code> — subscription plan details</li>
+</ul>
+  </main>
+
+
+<span id="PING_CONTENT_PUSH_NOTIFICATION" style="display: none;"></span></body></html>

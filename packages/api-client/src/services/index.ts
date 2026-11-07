@@ -12,6 +12,12 @@ export {
 
 export { vendorsService } from './vendors';
 export { catalogService } from './catalog';
+export type {
+  BusinessTypeQuery,
+  CategoryQuery,
+  ProductsByCategoryQuery,
+  PublicCatalogRequestConfig,
+} from './catalog';
 export { cartService } from './cart';
 export { ordersService } from './orders';
 export { usersService } from './users';
@@ -23,7 +29,8 @@ export type {
   StorefrontCategory,
 } from './storefront';
 export { subscriptionsService } from './subscriptions';
-export { courierService, imagesService, platformService } from './platform';
+export { vendorBillingService } from './billing';
+export { courierService, imagesService, platformService, pricesService } from './platform';
 export { socialService } from './social';
 export { adminService } from './admin';
 export type {
