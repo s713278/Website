@@ -110,24 +110,22 @@ export function StepNotice({
   tone = 'warning',
 }: {
   message: string
-  /** Neutral information, amber restrictions/cautions, or red failures. */
-  tone?: 'info' | 'warning' | 'error'
+  /** `info` for a state that holds the step back by design; `warning` for a problem. */
+  tone?: 'info' | 'warning'
 }) {
   const Icon = tone === 'info' ? InfoIcon : CircleAlertIcon
   return (
     <div
-      role={tone === 'error' ? 'alert' : 'status'}
+      role={tone === 'info' ? 'status' : undefined}
       className={tone === 'info'
-        ? 'flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-line)] bg-[var(--ob-canvas)] py-2.5 pr-3 pl-3 text-sm leading-5'
-        : tone === 'error'
-          ? 'flex gap-2.5 rounded-lg border-l-2 border-l-destructive bg-destructive/10 py-2.5 pr-3 pl-3 text-sm leading-5'
-          : 'flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35'}
+        ? 'flex gap-2.5 rounded-lg border-l-2 border-l-[var(--ob-brand)] bg-[var(--ob-brand-soft)] py-2.5 pr-3 pl-3 text-sm leading-5'
+        : 'flex gap-2.5 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 py-2.5 pr-3 pl-3 text-sm leading-5 dark:bg-amber-950/35'}
     >
       <Icon
-        className={tone === 'info' ? 'mt-0.5 size-4 shrink-0 text-[var(--ob-ink-soft)]' : tone === 'error' ? 'mt-0.5 size-4 shrink-0 text-destructive' : 'mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300'}
+        className={tone === 'info' ? 'mt-0.5 size-4 shrink-0 text-[var(--ob-brand)]' : 'mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300'}
         aria-hidden="true"
       />
-      <p className={tone === 'info' ? 'text-[var(--ob-ink)]' : tone === 'error' ? 'text-destructive' : 'text-amber-900 dark:text-amber-100'}>{message}</p>
+      <p className={tone === 'info' ? 'text-[var(--ob-ink)]' : 'text-amber-900 dark:text-amber-100'}>{message}</p>
     </div>
   )
 }
