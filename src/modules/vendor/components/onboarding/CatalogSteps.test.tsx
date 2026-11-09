@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render as renderBare, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { vendorOnboardingService } from '@/shared/api'
@@ -12,10 +11,7 @@ import { ONBOARDING_CONFIG } from '../../types/onboarding'
 import { invalidateOnboardingResources } from '../../lib/onboarding-resource-cache'
 import { loadAccountResource } from '../../lib/onboarding-resume'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage, resetFirstPageReadsForTests } from '../../hooks/use-onboarding-catalog'
-import { OnboardingFeedbackProvider } from './OnboardingFeedbackProvider'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
-
-const render = (ui: ReactNode) => renderBare(ui, { wrapper: OnboardingFeedbackProvider })
 
 afterEach(() => {
   cleanup()
@@ -146,7 +142,7 @@ describe('product step messages', () => {
       pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
     })
     setCatalogDraft(43, [{ id: 430, businessTypeId: 43, name: 'Dairy', description: null, imageUrl: null, displayOrder: 1 }])
-    return render(<ProductStep issues={[]} confirm={() => undefined} />)
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
   }
 
   it('states the plan limit once, even after the vendor tries another product', async () => {
@@ -165,39 +161,27 @@ describe('product step messages', () => {
     act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
     fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
 
-    const notice = screen.getByText('Skim Milk is saved. Set inactive in the next step.')
-    expect(notice.closest('[data-slot="toast"]')?.className).toContain('bg-amber-50')
+    expect(screen.getByText('Skim Milk is saved, so it can’t be removed here. You can set it inactive in the next step.')).toBeTruthy()
   })
 
-  it('shows a dismissible toast outside the product grid without removing the saved product', async () => {
-    const { container } = renderProducts()
+  it('clears the saved-product note after a few seconds, counted from the latest tap', async () => {
+    renderProducts()
     fireEvent.click(await screen.findByRole('button', { name: /Skim Milk/ }))
     act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
+    vi.useFakeTimers()
+    const note = /Skim Milk is saved/
     fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
-    const notice = screen.getByText(/Skim Milk is saved/)
-    expect(container.contains(notice)).toBe(false)
-    expect(screen.getByRole('button', { name: /Skim Milk/ }).getAttribute('aria-pressed')).toBe('true')
-    const viewport = notice.closest('[data-slot="toast-viewport"]')
-    if (!viewport) throw new Error('Toast viewport missing')
-    fireEvent.mouseEnter(viewport)
-    fireEvent.click(await screen.findByRole('button', { name: 'Close toast' }))
-    await waitFor(() => expect(screen.queryByText(/Skim Milk is saved/)).toBeNull())
-  })
-
-  it('removes the product toast when leaving the step', async () => {
-    const { unmount } = renderProducts()
-    fireEvent.click(await screen.findByRole('button', { name: /Skim Milk/ }))
-    act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
+    act(() => vi.advanceTimersByTime(3000))
     fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
-    expect(screen.getByText(/Skim Milk is saved/)).toBeTruthy()
-    unmount()
-    expect(screen.queryByText(/Skim Milk is saved/)).toBeNull()
+    act(() => vi.advanceTimersByTime(3000))
+    expect(screen.queryByText(note)).toBeTruthy()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(screen.queryByText(note)).toBeNull()
   })
-
 })
 
 describe('category step messages', () => {
-  it('shows a saved-category refusal as an amber toast', async () => {
+  it('clears the saved-category note after a few seconds', async () => {
     vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({
       items: [{ id: 4401, businessTypeId: 44, name: 'Pickles', description: null, icon: null, imageUrl: null, displayOrder: 1 }],
       pageNumber: 0, pageSize: 12, totalElements: 1, totalPages: 1, lastPage: true,
@@ -206,8 +190,11 @@ describe('category step messages', () => {
     useOnboardingStore.getState().setAccountCatalog({ categoryIds: [4401], productIds: [] })
     render(<CategoryStep issues={[]} confirm={() => undefined} />)
     const card = await screen.findByRole('button', { name: /Pickles/ })
+    vi.useFakeTimers()
     fireEvent.click(card)
-    expect(screen.getByText('Pickles is saved and can’t be removed here.').closest('[data-slot="toast"]')?.className).toContain('bg-amber-50')
+    expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeTruthy()
+    act(() => vi.advanceTimersByTime(4000))
+    expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeNull()
   })
 
   it('shows three skeleton tiles below the list, not a spinner, while more categories load', async () => {

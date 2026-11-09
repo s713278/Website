@@ -18,7 +18,6 @@
     "sync:api": "npm --prefix packages/api-client run sync"
   },
   "dependencies": {
-    "@base-ui/react": "^1.9.0",
     "@mithra/api-client": "file:packages/api-client",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",

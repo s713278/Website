@@ -118,13 +118,16 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
 const follows = (first: Node, second: Node) =>
   Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
 
-// The toast supplies the action announcement; persistent inline errors remain separate.
+// The wizard's polite live region that announces the first issue after a failed action.
 function liveRegion() {
-  return document.querySelector('[data-slot="toast"]:not([data-ending-style]) [data-slot="toast-title"]') ?? document.createElement('div')
+  const region = document.querySelector('[role="status"][aria-live="polite"]')
+  if (!(region instanceof HTMLElement)) throw new Error('Expected the issue live region')
+  return region
 }
 
+// On-screen copies of a message, leaving out the sr-only live region that also announces it.
 function shownCopies(text: string) {
-  return screen.getAllByText(text).filter((element) => !element.closest('[data-slot="toast"]'))
+  return screen.getAllByText(text).filter((element) => !liveRegion().contains(element))
 }
 
 async function openSizes() {
@@ -134,7 +137,7 @@ async function openSizes() {
 
 // An approved store's Step 6 save confirms in place and keeps the vendor on the step.
 async function expectSavedInPlace() {
-  expect((await screen.findByText('Changes saved.')).closest('[data-slot="toast"]')).toBeTruthy()
+  expect((await screen.findByText('Changes saved.')).closest('[role="status"]')).toBeTruthy()
   expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
 }
 
@@ -290,7 +293,7 @@ describe('onboarding account hydration and size permissions', () => {
 
     fireEvent.change(within(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).getByLabelText('MRP (₹)'), { target: { value: '120' } })
 
-    expect(document.querySelector('[data-slot="toast"]:not([data-ending-style])')?.textContent ?? '').not.toContain('Changes saved.')
+    expect(screen.queryByText('Changes saved.')).toBeNull()
   })
 
   it('keeps the vendor on Step 6 and displays a rejected saved size edit', async () => {
@@ -792,25 +795,6 @@ describe('save failures shown inline on their own step', () => {
     expect(shownCopies('Could not submit the store')).toHaveLength(1)
     expectNoSummary()
     expect(useOnboardingStore.getState().storeSubmission).toBeNull()
-  })
-})
-
-describe('Products action feedback', () => {
-  it('shows a red toast and keeps inline validation and focus when no product is selected', async () => {
-    vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(EMPTY_PAGE)
-    renderAccount('PENDING', 5)
-    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Continue/ }).hasAttribute('disabled')).toBe(false))
-    act(() => useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, products: [], skus: [] }), 5))
-    fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
-    const message = 'Choose at least one product to continue.'
-    expect(document.getElementById('products-error')?.textContent).toBe(message)
-    expect(liveRegion().textContent).toBe(message)
-    expect(liveRegion().closest('[data-slot="toast"]')?.className).toContain('text-destructive')
-    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('products')))
-    expect(useOnboardingStore.getState().draft.currentStep).toBe(5)
-    fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
-    await waitFor(() => expect(liveRegion().textContent).toBe(''))
   })
 })
 
@@ -1505,7 +1489,7 @@ describe('Continue prefetches the next step’s account reads', () => {
 
     await act(async () => save.resolve(undefined))
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
-    expect(document.querySelector('[data-slot="toast"]:not([data-ending-style])')?.textContent ?? '').not.toContain('Changes saved.')
+    expect(screen.queryByText('Changes saved.')).toBeNull()
   })
 
   it('reads nothing on Continue from Step 7, whose checkout settings Step 8 already has', async () => {
