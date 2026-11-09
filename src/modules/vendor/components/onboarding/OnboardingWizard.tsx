@@ -1,3 +1,5 @@
+import { OnboardingFeedbackProvider } from './OnboardingFeedbackProvider'
+import { useOnboardingFeedback } from './onboarding-feedback'
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
@@ -657,6 +659,11 @@ function savesInPlace(step: OnboardingStep, submitted: boolean, approved: boolea
 }
 
 export function OnboardingWizard() {
+  return <OnboardingFeedbackProvider><OnboardingWizardContent /></OnboardingFeedbackProvider>
+}
+
+function OnboardingWizardContent() {
+  const feedback = useOnboardingFeedback()
   const currentStep = useOnboardingStore((state) => state.draft.currentStep)
   const completedSteps = useOnboardingStore((state) => state.draft.completedSteps)
   const furthestVisitedStep = useOnboardingStore((state) => state.furthestVisitedStep)
@@ -725,10 +732,12 @@ export function OnboardingWizard() {
     const kept = new Set(stillShownKey.split(','))
     return shownIssues.issues.filter((_, index) => kept.has(String(index)))
   }, [shownIssues, stillShownKey])
-  // Errors render inline on each step, so this polite region is what tells a screen-reader
-  // user a Continue failed. `count` re-keys the text so a repeat of the same message is
-  // announced again; it reads empty once the shown issues clear (a fix, a step change).
-  const [issueAnnouncement, setIssueAnnouncement] = useState({ text: '', count: 0 })
+  useEffect(() => {
+    if (shownIssues.issues.length && !issues.length) feedback.clear()
+  }, [shownIssues, issues.length, feedback])
+  useEffect(() => {
+    if (currentStepEdited) feedback.clear()
+  }, [currentStepEdited, feedback])
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   // Where this visit's account reads stand. The wizard must not paint an interactive step
@@ -852,10 +861,11 @@ export function OnboardingWizard() {
     setBusy(false)
     setShownIssues(NO_ISSUES)
     setStatusMessage(null)
+    feedback.clear()
     setMobileView('form')
     formScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
     window.setTimeout(() => headingRef.current?.focus(), 0)
-  }, [currentStep])
+  }, [currentStep, feedback])
 
   useEffect(() => {
     if (persistenceStatus !== 'conflict') return
@@ -904,7 +914,7 @@ export function OnboardingWizard() {
   const showIssues = (nextIssues: ValidationIssue[], recheck?: IssueRecheck) => {
     setShownIssues({ issues: nextIssues, recheck })
     const first = nextIssues[0]
-    setIssueAnnouncement((current) => ({ text: first?.message ?? '', count: current.count + 1 }))
+    if (first) feedback.show(first.message, 'error')
     // Every issue renders inline on its own step. Step 10's readiness check raises issues
     // for Steps 3-9, whose fields are not on screen; Step 10 lists those in its readiness list.
     const onScreen = first?.step === useOnboardingStore.getState().draft.currentStep
@@ -1044,7 +1054,8 @@ export function OnboardingWizard() {
     if (identitySettled) return false
     const { runtime } = useOnboardingStore.getState()
     if (!runtime.phone) {
-      setStatusMessage('Return to the first step and enter the phone number again.')
+      setStatusMessage(null)
+      showIssues([{ step: 2, field: 'otp-0', message: 'Return to the first step and enter the phone number again.' }])
       return false
     }
     const controller = beginRequest()
@@ -1052,7 +1063,8 @@ export function OnboardingWizard() {
     try {
       await authService.requestOtp({ phone: runtime.phone, role: 'vendor' })
       if (requestIsCurrent(controller, 2)) {
-        setStatusMessage('We sent a new OTP to your WhatsApp number.')
+        setStatusMessage(null)
+        feedback.show('New OTP sent to WhatsApp.', 'success')
         return true
       }
     } catch (error) {
@@ -1243,7 +1255,7 @@ export function OnboardingWizard() {
     // Demo and sample mode skip the write, and claiming otherwise lets the next account
     // read overwrite work the vendor can still see on screen.
     completeStep(step, inPlace ? step : (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
-    if (inPlace) setStatusMessage('Changes saved.')
+    if (inPlace) feedback.show('Changes saved.', 'success')
   }
 
   const handleContinue = async () => {
@@ -1459,10 +1471,6 @@ export function OnboardingWizard() {
                     <div>
                       {persistenceStatus === 'unavailable' ? <p role="status" className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">Browser recovery unavailable. This session continues in memory.</p> : null}
 
-                      <div role="status" aria-live="polite" className="sr-only">
-                        {issues.length && issueAnnouncement.text ? <span key={issueAnnouncement.count}>{issueAnnouncement.text}</span> : null}
-                      </div>
-
                       {/* Keyed on the step so each one arrives rather than swapping in place. */}
                       <div key={currentStep} className="ob-step-enter mt-6">
                         {currentStep === 1 && !identitySettled ? <PhoneStep issues={issues} busy={busy} statusMessage={statusMessage} onContinue={() => void handleContinue()} /> : null}
@@ -1471,7 +1479,7 @@ export function OnboardingWizard() {
                           <div className="mb-4"><StepNotice tone="info" message="Sizes and prices unlock after approval." /></div>
                         ) : null}
                         {catalogUnlocked && currentStep >= 3 && contextError ? (
-                          <div className="mb-4"><StepNotice message={contextError} /></div>
+                          <div className="mb-4"><StepNotice tone="error" message={contextError} /></div>
                         ) : null}
                         {!catalogUnlocked && (currentStep >= 3 || identitySettled) ? (
                           <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmStartOver} />
@@ -1518,13 +1526,6 @@ export function OnboardingWizard() {
                       <p className="flex min-w-0 basis-full items-center gap-1.5 text-xs leading-5 text-[var(--ob-ink-soft)] sm:mr-auto sm:basis-0 sm:grow">
                         <InfoIcon className="size-3.5 shrink-0 text-[var(--ob-brand)]" aria-hidden="true" />
                         <span>{saveNote}</span>
-                      </p>
-                    ) : null}
-                    {/* Mounted empty while the step saves in place, so a screen reader announces
-                        the confirmation when its text arrives. */}
-                    {stepSavesInPlace ? (
-                      <p role="status" className="min-w-0 grow text-sm font-medium leading-5 text-[var(--ob-brand)]">
-                        {!busy && !currentStepEdited ? statusMessage : null}
                       </p>
                     ) : null}
                     <div className="flex items-center gap-2">

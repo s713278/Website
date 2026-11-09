@@ -1,3 +1,4 @@
+import { useOnboardingFeedback } from './onboarding-feedback'
 import { useState, type FormEvent } from 'react'
 import { PlusIcon } from 'lucide-react'
 import { Button } from '@/shared/components/ui'
@@ -20,7 +21,12 @@ export function AuthorCategoryForm({ onAdded }: { onAdded: (entry: { id: number;
   )
   const addPendingCategory = useOnboardingStore((state) => state.addPendingCategory)
   const [name, setName] = useState('')
-  const [nameError, setNameError] = useState<string | null>(null)
+  const feedback = useOnboardingFeedback()
+  const [nameError, setLocalNameError] = useState<string | null>(null)
+  const setNameError = (message: string | null) => {
+    setLocalNameError(message)
+    if (message) feedback.show(message, 'error')
+  }
   const atLimit = useOnboardingStore(selectCategoryLimitReached)
   // A disabled field cannot be corrected, so its error would only linger.
   const error = atLimit ? null : nameError
@@ -93,7 +99,12 @@ export function AuthorProductForm({
   const [measurementId, setMeasurementId] = useState<number | null>(
     measurementCatalog[0]?.id ?? null,
   )
-  const [nameError, setNameError] = useState<string | null>(null)
+  const feedback = useOnboardingFeedback()
+  const [nameError, setLocalNameError] = useState<string | null>(null)
+  const setNameError = (message: string | null) => {
+    setLocalNameError(message)
+    if (message) feedback.show(message, 'error')
+  }
   const selectedMeasurement =
     measurementCatalog.find((entry) => entry.id === measurementId) ??
     measurementCatalog[0] ??

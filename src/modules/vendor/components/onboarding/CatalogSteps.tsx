@@ -7,6 +7,7 @@ import {
   SparklesIcon,
   StoreIcon,
 } from 'lucide-react'
+import { useOnboardingFeedback } from './onboarding-feedback'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { cn } from '@/lib/utils'
@@ -342,7 +343,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
               </div>
             ) : null}
             {incrementalError ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50/90 p-3 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100" role="alert">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-destructive/10 p-3 text-destructive" role="alert">
                 <p className="min-w-0 flex-1 text-xs leading-5">More business types could not be loaded. {references.error}</p>
                 <Button variant="outline" size="sm" onClick={references.retry}>
                   <RefreshCwIcon /> Retry
@@ -408,28 +409,12 @@ function useRevealAuthored(loadingMore: boolean) {
   }
 }
 
-/** How long a refused tap's note stays up. It answers one tap, so it must not outstay it. */
-const REFUSAL_NOTE_MS = 4000
-
-/** A note that clears itself, counted from the latest time it was shown. */
-function useRefusalNote() {
-  const [note, setNote] = useState<string | null>(null)
-  const timer = useRef<number | undefined>(undefined)
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-  const show = (next: string | null) => {
-    window.clearTimeout(timer.current)
-    setNote(next)
-    if (next) timer.current = window.setTimeout(() => setNote(null), REFUSAL_NOTE_MS)
-  }
-  return [note, show] as const
-}
-
 export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const removePendingEntry = useOnboardingStore((state) => state.removePendingEntry)
   const [search, setSearch] = useState('')
-  const [blocked, setBlocked] = useRefusalNote()
+  const feedback = useOnboardingFeedback()
   // The limit gates the projected account total — draft plus what the account already
   // holds — so a business-type change cannot reopen a fresh allowance on a full account.
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
@@ -462,12 +447,10 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     const choice = catalogChoiceState(draft.categories, category.id)
     if (!choice.chosen && categoryLimitReached) return
     if (choice.chosen && isCategoryAssigned(category.id)) {
-      setBlocked(
-        `${category.name} is saved, so it can’t be removed here.`,
-      )
+      feedback.show(`${category.name} is saved and can’t be removed here.`, 'warning')
       return
     }
-    setBlocked(null)
+    feedback.clear()
     const applyCategoryChoice = () => {
       if (choice.pending) {
         removePendingEntry(category.id)
@@ -509,7 +492,6 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
 
   return (
     <div className="space-y-4">
-      {blocked ? <StepNotice tone="info" message={blocked} /> : null}
       <div>
         <FieldLabel htmlFor="category-search">Search category</FieldLabel>
         <div className="relative">
@@ -604,7 +586,9 @@ function ProductCategoryPicker({
   open,
   onToggle,
   createControlVisible,
+  onRefusal,
 }: {
+  onRefusal: (message: string | null) => void
   categoryId: number
   categoryName: string
   error?: string
@@ -628,7 +612,6 @@ function ProductCategoryPicker({
   // the search box is not unmounted under a vendor typing in it.
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const [search, setSearch] = useState('')
-  const [blocked, setBlocked] = useRefusalNote()
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
@@ -652,14 +635,14 @@ function ProductCategoryPicker({
   const toggle = (product: ProductReference) => {
     const choice = catalogChoiceState(draft.products, product.id)
     if (choice.chosen && isProductAssigned(product.id)) {
-      setBlocked(
-        `${product.name} is saved, so it can’t be removed here. You can set it inactive in the next step.`,
+      onRefusal(
+        `${product.name} is saved. Set inactive in the next step.`,
       )
       return
     }
     // The step states the limit above every category, so a refused pick adds no second copy.
     if (!choice.chosen && productLimitReached) return
-    setBlocked(null)
+    onRefusal(null)
     const applyProductChoice = () => {
       if (choice.pending) {
         removePendingEntry(product.id)
@@ -727,7 +710,6 @@ function ProductCategoryPicker({
               />
             </div>
           </div>
-          {blocked ? <StepNotice tone="info" message={blocked} /> : null}
           {references.loading ? <PageLoader label="Loading products" /> : null}
           {references.error && draft.catalogSource === 'account' ? <CatalogLoadError onRetry={references.retry} onUseSample={onUseSample} /> : null}
           {!references.loading && !references.error && !items.length ? (
@@ -889,6 +871,11 @@ function MeasurementChips({ measurement, units }: { measurement: string | null; 
 }
 
 export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
+  const feedback = useOnboardingFeedback()
+  const setBlocked = (message: string | null) => {
+    if (message) feedback.show(message, 'warning')
+    else feedback.clear()
+  }
   const categories = useOnboardingStore((state) => state.draft.categories)
   const productLimit = useOnboardingStore(selectProductLimit)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
@@ -912,6 +899,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
         {categories.map((category) => (
           <ProductCategoryPicker
             key={category.id}
+            onRefusal={setBlocked}
             categoryId={category.id}
             categoryName={category.name}
             error={issues.find((item) => item.field === `category-products-${category.id}`)?.message}
