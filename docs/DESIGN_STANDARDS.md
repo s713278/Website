@@ -11,6 +11,27 @@ design reference.
 - Prefer established variables and shared UI over per-screen styling.
 - For small-vendor workflows, keep one primary job per screen and make the next action obvious.
 
+## Alert colors
+
+- Amber/yellow-orange: non-blocking cautions, plan limits, and unavailable actions (including
+  removing saved onboarding categories/products). Highlight both message and icon.
+- Red (`destructive`): validation errors, failed actions/loads, system failures, and highly
+  destructive irreversible actions. Keep existing destructive button treatments.
+- Neutral: routine guidance and informational states. Green: success and positive confirmations.
+- Pair color with meaningful text and an icon where appropriate; support light and dark themes.
+
+### Onboarding action feedback
+
+- Use the wizard-scoped shadcn toast for refused saved-category/product removal, validation on
+  Continue or Add, image selection errors, failed actions, in-place saves, and OTP resend success.
+- Keep messages concise and regular weight: amber cautions, red errors, green success.
+- Show only the latest toast. Warnings/successes last 4 seconds; errors last 6 seconds. Hover/focus
+  pauses dismissal; close and swipe remain available. Clear on step changes and wizard exit.
+- Validation toasts supplement persistent inline errors and existing first-error focus/scroll.
+  The toast supplies the action announcement; do not duplicate it in another live region.
+- Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
+  submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
+
 ## Loading and error states
 
 ### Which loader

@@ -1,3 +1,4 @@
+import { useOnboardingFeedback } from './onboarding-feedback'
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -148,6 +149,7 @@ function Disclosure({
 }
 
 export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
+  const feedback = useOnboardingFeedback()
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
@@ -185,7 +187,11 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
     const file = input.files?.[0]
     if (!file) return
     const maxBytes = kind === 'logo' ? 500 * 1024 : 1024 * 1024
-    const setError = kind === 'logo' ? setLogoError : setBannerError
+    const setLocalError = kind === 'logo' ? setLogoError : setBannerError
+    const setError = (message: string | null) => {
+      setLocalError(message)
+      if (message) feedback.show(message.split('. ')[0] + '.', 'error')
+    }
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       setError('Use a PNG, JPEG, or WebP image. The previous valid preview is unchanged.')
       input.value = ''
@@ -380,12 +386,12 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
             return (
               <div key={kind} className="rounded-xl bg-[var(--ob-sheet)] p-4 ring-1 ring-[var(--ob-line)]">
                 <div className="mb-3 flex items-center gap-2"><ImageIcon className="size-4 text-primary" /><strong className="text-sm">{isLogo ? 'Logo' : 'Banner'}</strong></div>
-                <input ref={inputRef} id={`store-${kind}-file`} type="file" aria-label={`Choose ${kind} image`} accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} onClick={(event) => { event.currentTarget.value = '' }} onChange={(event) => handleImage(kind, event)} />
+                <input ref={inputRef} id={`store-${kind}-file`} type="file" aria-label={`Choose ${kind} image`} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `store-${kind}-error` : undefined} accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} onClick={(event) => { event.currentTarget.value = '' }} onChange={(event) => handleImage(kind, event)} />
                 <Button type="button" variant="outline" size="sm" aria-label={`Choose ${kind} image`} onClick={() => inputRef.current?.click()}><UploadIcon /> Choose image</Button>
                 <p className="mt-2 text-xs text-[var(--ob-ink-soft)]">PNG, JPEG, or WebP · {isLogo ? '500 KB' : '1 MB'} max</p>
                 {file ? <p className="mt-2 truncate text-xs font-medium">{file.name}</p> : null}
                 {url ? <Button type="button" className="mt-2" variant="ghost" size="sm" onClick={() => setImage(kind, null, null)}>Remove</Button> : null}
-                {error ? <p role="alert" className="mt-2 text-xs text-destructive">{error}</p> : null}
+                {error ? <p id={`store-${kind}-error`} className="mt-2 text-xs text-destructive">{error}</p> : null}
               </div>
             )
           })}
