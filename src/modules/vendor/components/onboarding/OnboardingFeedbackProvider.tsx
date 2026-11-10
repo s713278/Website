@@ -21,7 +21,7 @@ export function OnboardingFeedbackProvider({ children }: { children: ReactNode }
   return (
     <OnboardingFeedbackContext value={feedback}>
       {children}
-      <Toaster toastManager={manager} limit={1} />
+      <Toaster toastManager={manager} limit={1} viewportClassName="bottom-36" />
     </OnboardingFeedbackContext>
   )
 }

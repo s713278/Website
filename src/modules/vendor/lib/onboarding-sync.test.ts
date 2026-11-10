@@ -1130,11 +1130,11 @@ describe('savedResources', () => {
     expect(savedResources(6)).toEqual(['skus'])
     expect(savedResources(7)).toEqual(['checkout'])
     expect(savedResources(8)).toEqual(['checkout'])
-    expect(savedResources(9)).toEqual(['profile'])
+    expect(savedResources(9)).toEqual(['profile', 'storefront'])
     expect(savedResources(10)).toEqual([])
   })
 
   it('has go-live drop every account resource except the platform business types', () => {
-    expect([...GO_LIVE_RESOURCES].sort()).toEqual(['categories', 'checkout', 'products', 'profile', 'skus'])
+    expect([...GO_LIVE_RESOURCES].sort()).toEqual(['banner', 'categories', 'checkout', 'logo', 'products', 'profile', 'skus', 'storefront'])
   })
 })

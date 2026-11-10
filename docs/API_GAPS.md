@@ -23,10 +23,9 @@ tree. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md) for how the API layer is 
 Wrapped in `@mithra/api-client` as `storefrontService.get` / `checkDeliveryEligibility`, plus the
 flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `services/legacy.ts`.
 
-> **The richer storefront payload is not called from `src/` yet.** The package wrappers are aligned,
-> but the customer storefront still renders from the older catalog service (`/v1/vendors/…`). The
-> onboarding preview renders its private same-browser draft; it does not pretend to be this
-> public backend response.
+> The customer storefront still renders from the older catalog service (`/v1/vendors/…`). Approved
+> onboarding Step 9 now reads the richer storefront to restore its editable settings. The onboarding
+> preview remains a draft preview, not a claim that unsaved edits are public.
 
 ## Still open
 
@@ -47,11 +46,11 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Approval reset during go-live | Keeping an approved vendor able to add sizes after completing setup | A September 2026 test report describes an already `APPROVED` account returning to `approval_status: PENDING` after Step 10 called `POST /v1/vendors/{vendor_id}/go-live`. This transition still needs backend review, including how existing approval should be preserved and the intended status after onboarding. The frontend requires an approved status for submitted size additions (`APPROVED`, plus the current `ACTIVE` compatibility value). The completed-and-approved UI flow passes with simulated responses; a live check of that combined state awaits an approved account. |
 | Approval status vocabulary | Identifying approved vendors consistently | The documented contract and existing fixtures use `approval_status: APPROVED`, while a current supplied vendor context reports `approval_status: ACTIVE`. The frontend treats both as approved at its status boundary; the backend should publish one canonical enum and clarify whether `ACTIVE` belongs to `vendor_status` only. |
 | ~~QR sharing~~ **closed 21 Sep 2026** | The ticket's offline-friendly QR requirement | The dashboard and approved setup Step 10 generate the QR in-browser from the canonical storefront URL. Vendors can save the PNG, and the native file-share action appears only when the device supports sharing that file. |
-| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates name and contacts from the vendor record and leaves branding at defaults. |
+| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates name and contacts from the vendor record and leaves theme/text branding at defaults. Logo/banner URLs restore separately through the authenticated images read. |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
-| Vendor profile is not writable | Editing store name, owner, contact, email or address | **`PUT /v1/vendors/{id}` returns `417` "Could not commit JPA transaction" for every body shape tried** — echoing the record back unchanged, with the vendor's existing category ids, with `category_ids: []`, with `assign_categories` omitted, and with it null. Nothing changed on the record in any attempt. `VendorProfileRequest` also declares `assign_categories` **required**, which would collide with additive-only category assignment even if the write worked. No other endpoint covers these fields, and the wizard never calls this one, which is why the defect went unnoticed. Settings is therefore read-only. |
+| Profile update contract differs from measured behavior | Safely editing an approved store's names | `PUT /v1/vendors/{id}` exists; the earlier universal JPA-failure claim was retracted by the 6 September source correction after successful gone-live and unfinished-vendor tests. The schema still requires `assign_categories` and omits partial-merge semantics. Approved Step 9 uses the [scoped profile exception](#approved-store-profile-updates); dashboard Settings stays read-only. |
 | 14-day trial in production | The agreed 14-day free trial and access enforcement | Go-live now starts a trial (on dev a successful go-live counts as complete and approved; once a vendor verification step exists, the trial must start at approval), and `GET /v1/vendors/{vendor_id}/subscription` carries `trial_started_at` and `trial_ends_at`. Dev deliberately runs a 1-day trial so subscriptions come due quickly; production must give 14 days, a [release blocker](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers). The app counts days from `trial_ends_at` and assumes no length. |
 | Vendor platform billing | Vendor-to-MithraDirect recurring fees, trial eligibility, verification and store access | The backend published its own billing API, and the Live API reads it. Gaps A–L are summarised [below](#vendor-platform-billing); the [backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns their detail and the production release blockers. The explicitly labeled [development preview](./VENDOR_BILLING_PREVIEW.md) stays demo-only; it never grants real access. |
 | `eligible_features` is unexplained | Deciding what a plan actually unlocks | Live returns `["DASHBOARD","VIEW","CATALOG"]` where the doc example returns five entries including `ORDERS` and `PRICES`. Nothing documents what the list governs. Mapped but **not** used for gating: gating on it would hide Orders from every FREE-tier vendor, which is currently all of them. |
@@ -263,6 +262,31 @@ SKUs already written to real accounts under the old vocabulary are not rewritten
 migrated by this work. Reconciling those stored units requires a separate backend migration
 or an explicit update contract; the frontend must not claim that replacing its picker also
 changed existing account data.
+
+### Approved-store profile updates
+
+Checked against current QA OpenAPI on 9 November 2026. Image POST permits a vendor's own ID;
+storefront PUT saves branding; general profile PUT permits Vendor/Admin/Customer_Care after login.
+None documents an active/approved-store prohibition. This contract inspection made no authenticated
+writes and does not establish preservation of completed onboarding or approval on current QA.
+
+The existing Step 9 business-type PATCH is unsuitable for completed-store editing: it explicitly
+sets `onboarding_step` to `STEP_3_COMPLETED`. Approved Step 9 instead uses general profile PUT for
+`business_name`, `owner_name`, and `contact_person`, without status, approval, address, category,
+business-type or onboarding fields. It never invokes go-live to recover from an edit failure.
+
+**Approved temporary exception:** send those three nonblank profile fields without
+`assign_categories`. The source correction of 6 September (commit `a59bf1959fc101ee4a4d855cf395e35b6a68f2cf`)
+reports successful writes on gone-live and unfinished stores, a partial merge, ignored nulls, and
+unenforced `assign_categories`; the older JPA error came from a malformed request. This historical
+measurement is not a new live verification. Do not send empty category lists to satisfy the schema.
+Remove this exception when the backend publishes an accurate partial-update contract with category
+assignment optional/separate, and reverify the mapped request against it.
+
+Before release, verify a dedicated eligible test vendor through read → save → read-back → reload,
+including unchanged vendor/approval/completion status, image replacement and partial failures.
+Storefront blank-field clearing remains unverified: its current mapper omits blank optional text,
+and profile PUT historically ignores null. No clearing capability is promised here.
 
 ### Onboarding continuity a vendor still loses
 
@@ -516,3 +540,51 @@ bare `APIResponseObject` says nothing about what it actually returns, and operat
   and returns it in `vendors[]`.
 - **"`VENDOR` may not be granted at verification"** — it is. A first-time vendor's `verify-otp`
   returns `roles: ["VENDOR", "USER"]`.
+
+
+## Vendor onboarding images (MFPS-166)
+
+Checked 9 November 2026 against the current QA `/api/v3/api-docs`: the image GET/POST contract
+matches the checked-in OpenAPI. The wizard sends `image_type` in the query and `file` in the
+multipart body, and uses the returned `image_url`. This contract check does not verify a live
+upload or authorize treating S3/Cloudflare delivery as production-ready.
+
+- **Fresh-vendor image reads return a vendor-not-found error (reported 9 November 2026):**
+  both THUMBNAIL and HOMEBANNER reads returned `success: false`, `status: "404"`,
+  `failure_reason: "Vendor #<id> not found"`, `user_message: "No data found!!"` on reaching
+  Step 9 for a fresh vendor. This differs from the documented successful `image_url: null`
+  response for an existing vendor without an image. The backend must distinguish a genuinely
+  missing vendor from an existing setup vendor with no image, including any status filters in
+  its vendor lookup. Return success with a null URL for the latter and retain 404 for the former.
+  The same vendor's context and profile reads both succeeded and confirmed `vendor_status:
+  INACTIVE`, `approval_status: PENDING`, and `onboarding.next_step: 9`. The vendor therefore exists;
+  the inconsistent image lookup needs backend investigation. An active-only lookup is a hypothesis,
+  not a confirmed implementation detail. Do not infer that 404 means no image. The frontend now
+  skips restoration for initial setup using the agreed progress rule in
+  [vendor setup images](./API_ARCHITECTURE.md#vendor-setup-images), so these GET failures no longer
+  block a first visit to Step 9. A subsequent banner-only upload was reported successful, but
+  restoring at Step 10 failed when the unconfigured logo returned 404. The frontend now reads
+  each image independently and keeps optional read failures nonblocking, retaining a successful
+  sibling and offering per-image Retry. Failed reads stay unknown, not empty, and untouched
+  unknown URL fields are omitted on save. Recovery after a browser reload following a partial
+  upload with an unchanged Step 9 pointer remains deferred. Full fresh-vendor upload support
+  and preservation of omitted existing image fields still require live verification. Remove
+  this open-gap note after a fresh-vendor
+  live read/upload/reload check verifies the documented behavior, and revisit the initial-setup
+  assumption when partial-save re-entry recovery is implemented.
+- **Nullable image read:** GET prose permits `image_url: null` before upload, but
+  `ImageUploadResponse.image_url` is an optional, non-nullable string in the schema. Backend
+  should publish a nullable response property. The mapper accepts the explicitly documented null;
+  missing/malformed fields remain errors. Remove this discrepancy note after regeneration includes
+  the corrected schema.
+- **Upload and delivery guarantees unverified:** the contract does not specify PNG/JPEG/GIF,
+  5 MB limits, precise validation errors, optimized Cloudflare URLs, immediate replacement/cache
+  invalidation or origin restrictions. Backend should document these ticket requirements and verify
+  them with a dedicated test vendor, including permissions, replacement and a failed transformation.
+  The frontend enforces the agreed selection rules and displays server errors; it does not build
+  CDN URLs or claim to clear server caches.
+- **No saved-image removal:** there is no DELETE/clear operation. The wizard offers replacement
+  only and lets a vendor discard an unsaved selection. Backend must define an authorized clear
+  contract before permanent removal can be offered.
+- **Display scope:** the wizard uses the written 3:1 banner guidance. The public storefront still
+  uses 16:9 and is explicitly outside this change; its different crop remains unresolved.

@@ -534,8 +534,8 @@ describe('stepResources', () => {
     [6, false, ['profile', 'businessTypes', 'categories', 'products', 'skus'], true],
     [7, false, ['checkout'], false],
     [8, false, ['checkout'], false],
-    [9, false, ['profile', 'businessTypes'], false],
-    [10, false, ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'], true],
+    [9, false, ['profile', 'businessTypes', 'logo', 'banner'], false],
+    [10, false, ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner'], true],
     [10, true, ['profile'], false],
   ] as const)('Step %i (submitted: %s) needs %j, units %s', (step, submitted, account, units) => {
     expect(stepResources(step, { submitted })).toEqual({ account, units })
@@ -635,7 +635,7 @@ describe('per-resource appliers', () => {
 describe('stepLoadState', () => {
   const ALL_LOADED = {
     profile: 'loaded', businessTypes: 'loaded', categories: 'loaded',
-    products: 'loaded', skus: 'loaded', checkout: 'loaded',
+    products: 'loaded', skus: 'loaded', checkout: 'loaded', logo: 'loaded', banner: 'loaded', storefront: 'loaded',
   } as const
   const with_ = (changes: Partial<Record<OnboardingResource, ResourceStatus>>) => ({ ...ALL_LOADED, ...changes })
 
@@ -651,6 +651,13 @@ describe('stepLoadState', () => {
     expect(stepLoadState(7, { submitted: false, resources: checkoutOnly, units: 'idle' })).toBe('loaded')
     expect(stepLoadState(7, { submitted: false, resources: with_({ checkout: 'loading' }), units: 'idle' })).toBe('loading')
     expect(stepLoadState(3, { submitted: false, resources: with_({ businessTypes: 'idle' }), units: 'idle' })).toBe('loading')
+  })
+
+  it('keeps Step 9 and review independent of optional image reads without ignoring required failures', () => {
+    expect(stepLoadState(9, { submitted: false, resources: with_({ logo: 'loading', banner: 'loading' }), units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(9, { submitted: false, resources: with_({ logo: 'failed', banner: 'failed' }), units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(9, { submitted: false, resources: with_({ profile: 'failed', logo: 'failed', banner: 'failed' }), units: 'idle' })).toBe('failed')
+    expect(stepLoadState(10, { submitted: false, resources: with_({ logo: 'failed', banner: 'loading' }), units: 'loaded' })).toBe('loaded')
   })
 
   it('fails when a listed resource failed, even while another still loads', () => {

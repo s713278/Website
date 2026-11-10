@@ -55,8 +55,12 @@ export function prefetchOnboardingLanding(
   const fromSignIn = clampResumePointer(options.nextStep)
   const landing = fromSignIn !== null ? Promise.resolve(fromSignIn) : contextRead.then(backendResumeStep)
   landing
-    .then((step) => {
-      if (step !== null) loadStepResources(vendorId, step, { submitted: false, withUnits: false })
+    .then(async (step) => {
+      if (step === null) return
+      // Image restoration depends on verified progress, including when sign-in already
+      // supplied the landing step. Other steps keep their parallel head start.
+      const context = step === 9 || step === 10 ? await contextRead : options.context
+      loadStepResources(vendorId, step, { submitted: false, withUnits: false, context })
     })
     .catch(() => {})
 }
@@ -77,22 +81,34 @@ export type StepResourceReads = { [R in OnboardingResource]?: Promise<Onboarding
  * it lists every type, so it reads them at once alongside the profile, and the read files
  * the step's first page whether or not a type is saved.
  *
+ * IN_PROGRESS through Step 9 starts with empty images, without a restoration request.
+ * Earlier pointers also cover a continuous wizard visit whose context predates Step 9.
+ * This initial-setup assumption is local, never cached over an account read. Recovery on
+ * re-entry after a partial image save with an unchanged pointer is deferred.
+ *
  * Never rejects as a whole. Each promise settles on its own, and an unobserved failure is
  * not reported as unhandled: the cache has already dropped it so the next caller retries.
  */
 export function loadStepResources(
   vendorId: string,
   step: OnboardingStep,
-  options: { submitted: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'> },
+  options: { submitted: boolean; approved?: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'>; context?: VendorContext },
 ): StepResourceReads {
   const skip = new Set(options.skip ?? [])
-  const needs = stepResources(step, { submitted: options.submitted })
+  const needs = stepResources(step, options)
   const reads: StepResourceReads = {}
   const wanted = (resource: OnboardingResource) =>
     !skip.has(resource) && peekOnboardingResource(vendorId, resource) === null
+  const progress = options.context?.onboarding
+  const initialSetup = !options.submitted && progress?.status === 'IN_PROGRESS'
+    && progress.nextStep !== null && progress.nextStep >= 1 && progress.nextStep <= 9
 
   for (const resource of needs.account) {
     if (resource === 'businessTypes' || !wanted(resource)) continue
+    if ((resource === 'logo' || resource === 'banner') && initialSetup) {
+      reads[resource] = Promise.resolve(null)
+      continue
+    }
     Object.assign(reads, { [resource]: loadAccountResource(vendorId, resource) })
   }
   if (needs.account.includes('businessTypes') && wanted('businessTypes')) {

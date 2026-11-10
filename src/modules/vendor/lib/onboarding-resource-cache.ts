@@ -5,6 +5,7 @@ import type {
   VendorProductRef,
   VendorProfile,
   VendorSkuRef,
+  VendorStorefrontSettings,
 } from '@/shared/api'
 import type { OnboardingResource } from './onboarding-resume'
 
@@ -27,6 +28,9 @@ export type OnboardingResourceData = {
   skus: VendorSkuRef[]
   /** `null` is a first-time vendor's 404, which the service maps; it is a real answer. */
   checkout: CheckoutOptionsSnapshot | null
+  logo: string | null
+  banner: string | null
+  storefront: VendorStorefrontSettings
 }
 
 type Entry<R extends OnboardingResource> = {
@@ -36,6 +40,20 @@ type Entry<R extends OnboardingResource> = {
 }
 
 const entries = new Map<string, Map<OnboardingResource, Entry<OnboardingResource>>>()
+
+/** A confirmed write supersedes even a read still in flight. */
+export function setOnboardingResource<R extends OnboardingResource>(
+  vendorId: string,
+  resource: R,
+  value: OnboardingResourceData[R],
+): void {
+  let vendorEntries = entries.get(vendorId)
+  if (!vendorEntries) {
+    vendorEntries = new Map()
+    entries.set(vendorId, vendorEntries)
+  }
+  vendorEntries.set(resource, { promise: Promise.resolve(value), resolved: { value } })
+}
 
 function readEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
   return entries.get(vendorId)?.get(resource) as Entry<R> | undefined

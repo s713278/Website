@@ -1,5 +1,4 @@
-import { useOnboardingFeedback } from './onboarding-feedback'
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckCircle2Icon,
@@ -16,11 +15,13 @@ import {
   PlusIcon,
   Trash2Icon,
   TypeIcon,
-  UploadIcon,
 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { writesReachAccount } from '../../lib/onboarding-sync'
+import { StoreImageInput } from './StoreImageInput'
 import { Button, Input } from '@/shared/components/ui'
+import type { VendorImageKind } from '@/shared/api'
 import { storefrontUrl } from '@/shared/lib/store-link'
 import { ACCENT_PRESETS, FONT_PRESETS, PRIMARY_PRESETS } from '@/shared/lib/theme'
 import {
@@ -30,6 +31,7 @@ import {
 import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
+import type { ResourceStatus } from '../../lib/onboarding-resume'
 import { StoreSharePanels } from '../StoreSharePanels'
 import {
   selectCategoryLimit,
@@ -49,8 +51,6 @@ import type {
 } from '../../types/onboarding'
 import { FieldError, FieldLabel, StepSection } from './StepPrimitives'
 import { TaglineExamplesDialog } from './TaglineExamplesDialog'
-
-const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
 function ColorInput({
   id,
@@ -148,17 +148,16 @@ function Disclosure({
   )
 }
 
-export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
-  const feedback = useOnboardingFeedback()
+export function StorefrontStep({ issues, imageStates, onRetryImage, savesInPlace = false }: {
+  issues: ValidationIssue[]
+  imageStates?: Record<VendorImageKind, ResourceStatus>
+  onRetryImage?: (kind: VendorImageKind) => void
+  savesInPlace?: boolean
+}) {
   const draft = useOnboardingStore((state) => state.draft)
   const runtime = useOnboardingStore((state) => state.runtime)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const updateRuntime = useOnboardingStore((state) => state.updateRuntime)
-  const setImage = useOnboardingStore((state) => state.setImage)
-  const [logoError, setLogoError] = useState<string | null>(null)
-  const [bannerError, setBannerError] = useState<string | null>(null)
-  const logoInputRef = useRef<HTMLInputElement>(null)
-  const bannerInputRef = useRef<HTMLInputElement>(null)
   const store = draft.storefront
 
   const updateStore = (patch: Partial<StorefrontDraft>, customTheme = false) => updateDraft(
@@ -181,39 +180,6 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
     }),
     9,
   )
-
-  const handleImage = (kind: 'logo' | 'banner', event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget
-    const file = input.files?.[0]
-    if (!file) return
-    const maxBytes = kind === 'logo' ? 500 * 1024 : 1024 * 1024
-    const setLocalError = kind === 'logo' ? setLogoError : setBannerError
-    const setError = (message: string | null) => {
-      setLocalError(message)
-      if (message) feedback.show(message.split('. ')[0] + '.', 'error')
-    }
-    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      setError('Use a PNG, JPEG, or WebP image. The previous valid preview is unchanged.')
-      input.value = ''
-      return
-    }
-    if (file.size > maxBytes) {
-      setError(`${kind === 'logo' ? 'Logo' : 'Banner'} must be ${kind === 'logo' ? '500 KB' : '1 MB'} or smaller. The previous valid preview is unchanged.`)
-      input.value = ''
-      return
-    }
-    let objectUrl: string | null = null
-    try {
-      objectUrl = URL.createObjectURL(file)
-      setImage(kind, file, objectUrl)
-      setError(null)
-    } catch {
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-      setError('This image could not be opened for preview. Choose another file.')
-    } finally {
-      input.value = ''
-    }
-  }
 
   const updateHeroBadge = (index: number, value: string) => {
     const heroBadges = [...store.heroBadges]
@@ -375,27 +341,16 @@ export function StorefrontStep({ issues }: { issues: ValidationIssue[] }) {
         </div>
       </Disclosure>
 
-      <Disclosure title="Logo & banner" icon={<ImageIcon className="size-4.5 text-[var(--ob-brand)]" aria-hidden="true" />}>
+      <Disclosure open title="Logo & banner" icon={<ImageIcon className="size-4.5 text-[var(--ob-brand)]" aria-hidden="true" />}>
         <div className="grid gap-4 pt-1 pb-5 @min-[32rem]:grid-cols-2">
-          {(['logo', 'banner'] as const).map((kind) => {
-            const isLogo = kind === 'logo'
-            const inputRef = isLogo ? logoInputRef : bannerInputRef
-            const file = isLogo ? runtime.logoFile : runtime.bannerFile
-            const url = isLogo ? runtime.logoUrl : runtime.bannerUrl
-            const error = isLogo ? logoError : bannerError
-            return (
-              <div key={kind} className="rounded-xl bg-[var(--ob-sheet)] p-4 ring-1 ring-[var(--ob-line)]">
-                <div className="mb-3 flex items-center gap-2"><ImageIcon className="size-4 text-primary" /><strong className="text-sm">{isLogo ? 'Logo' : 'Banner'}</strong></div>
-                <input ref={inputRef} id={`store-${kind}-file`} type="file" aria-label={`Choose ${kind} image`} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `store-${kind}-error` : undefined} accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} onClick={(event) => { event.currentTarget.value = '' }} onChange={(event) => handleImage(kind, event)} />
-                <Button type="button" variant="outline" size="sm" aria-label={`Choose ${kind} image`} onClick={() => inputRef.current?.click()}><UploadIcon /> Choose image</Button>
-                <p className="mt-2 text-xs text-[var(--ob-ink-soft)]">PNG, JPEG, or WebP · {isLogo ? '500 KB' : '1 MB'} max</p>
-                {file ? <p className="mt-2 truncate text-xs font-medium">{file.name}</p> : null}
-                {url ? <Button type="button" className="mt-2" variant="ghost" size="sm" onClick={() => setImage(kind, null, null)}>Remove</Button> : null}
-                {error ? <p id={`store-${kind}-error`} className="mt-2 text-xs text-destructive">{error}</p> : null}
-              </div>
-            )
-          })}
-          <p className="text-xs leading-5 text-[var(--ob-ink-soft)] @min-[32rem]:col-span-2">Images stay in this tab, are never uploaded by the prototype, and must be chosen again after reload.</p>
+          {(['logo', 'banner'] as const).map((kind) => (
+            <StoreImageInput key={kind} kind={kind} issues={issues} live={writesReachAccount(draft.catalogSource)} loadState={imageStates?.[kind]} onRetry={onRetryImage ? () => onRetryImage(kind) : undefined} />
+          ))}
+          <p className="text-xs leading-5 text-[var(--ob-ink-soft)] @min-[32rem]:col-span-2">
+            {writesReachAccount(draft.catalogSource)
+              ? `Images are optional. ${savesInPlace ? 'Save changes' : 'Continue'} saves your selections. Unsaved selections must be chosen again after reload. Saved images can be replaced, but not deleted here.`
+              : 'Images are optional and stay in this tab for preview only. Choose them again after reload.'}
+          </p>
         </div>
       </Disclosure>
     </div>

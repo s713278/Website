@@ -204,13 +204,14 @@ function ToastList() {
 function Toaster({
   children,
   toastManager = toast,
+  viewportClassName,
   ...props
-}: ToastPrimitive.Provider.Props) {
+}: ToastPrimitive.Provider.Props & { viewportClassName?: string }) {
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
       <ToastPortal>
-        <ToastViewport>
+        <ToastViewport className={viewportClassName}>
           <ToastList />
         </ToastViewport>
       </ToastPortal>

@@ -221,7 +221,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
 | `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
 | `orders.service.ts` | `placeOrder`, `listMyOrders`, `listMyOrdersPage`, `getMyOrder` | localStorage `md-customer-orders` | `POST /v1/orders/from-cart` (live checkout; `POST /v1/orders` is unimplemented), `GET /v1/users/{userId}/orders/history/paged` (`page` + `size`, default 20), `GET /v1/users/{userId}/orders/{orderId}` |
-| `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
+| `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings editor is not built; profile PUT caveats live in [API_GAPS.md](./API_GAPS.md#approved-store-profile-updates)) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
@@ -237,6 +237,92 @@ select the reserved-negative-ID sample catalog, then answers from module-local s
 silently converts a live failure into sample data. A persisted sample draft carried into Live API
 mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
+#### Vendor setup images
+
+The onboarding wizard uses `vendorImagesService` → package `imagesService` for authenticated
+`GET`/`POST /v1/vendors/{vendor_id}/images`. Logo uses `THUMBNAIL`; banner uses `HOMEBANNER`.
+`image_type` is a query parameter, and the multipart body contains only the original `file`.
+`mapVendorImageUrl` accepts the documented null for an absent image and requires an HTTP(S) URL
+otherwise; the frontend uses the returned URL without constructing Cloudflare transformations.
+
+With verified context `onboarding.status: IN_PROGRESS` and `next_step` from 1 through 9,
+Step 9 starts with empty image selectors without fetching saved URLs or waiting on an image read.
+Earlier pointers cover a continuous wizard visit whose context was loaded before reaching Step 9.
+Sign-in prefetch waits for context before deciding whether image restoration is needed. An empty
+initial-setup result stays local to the visit; it is not cached as an account response, and an
+already-cached successful image read takes precedence. Selection and Continue are available after
+the other required step reads succeed. Recovery after a browser reload following a partially
+successful image save while the context still points to Step 9 is deferred: without a cached
+confirmed image, that entry also assumes empty images.
+
+Other contexts restore logo and banner independently through `vendorImagesService.getImage`
+and separate per-vendor resource-cache entries. A successful read applies immediately even if
+the sibling is pending or fails. A successful null means empty; a failed read remains unknown,
+retains any known URL, and offers **Retry logo** or **Retry banner** for that resource alone.
+Neither loading nor failure of these optional reads blocks selection, Step 9 saving, Step 10
+review, or submission. Required profile, settings and catalog reads retain their existing gates.
+The picker shows its own loading indicator/failure notice; Step 10 keeps review visible with a
+nonblocking image notice. Pending-review Step 9 stays locked, with image retry outside its disabled
+fieldset. No 404 is converted into a successful empty image. An unsubmitted Step 10 restores
+images unless the initial-setup rule applies or the visit/cache already holds them. Saved URLs
+and pending Files/object URLs are separate runtime state and follow draft/session ownership.
+Selecting a replacement previews it locally; Continue uploads pending images before saving store
+and business details. Each successful upload is recorded immediately in runtime, its resource
+cache and the active visit, superseding any older in-flight read. It survives a sibling upload
+or later settings-write failure; retry sends only remaining pending files. Storefront/profile
+writes invalidate only their own reads, keeping confirmed image results for back-navigation and
+wizard re-entry. Unknown untouched image URLs are omitted from the storefront request rather
+than sent as null/empty strings. Selected-file upload failures still block the save and keep the
+vendor on Step 9. A canceled or foreign-session result cannot update runtime/cache or start the
+next write. Step 9 controls are disabled during saving. Files and URLs are not persisted to the
+browser draft; successful reads/writes in the shared resource cache remain session-owned.
+
+Both images are optional. PNG, JPEG and GIF are accepted up to 5 × 1024 × 1024 bytes each. The UI
+recommends logo 512×512 (1:1, minimum guidance 200×200) and banner 2400×800 (3:1, minimum guidance
+1200×400); it performs no dimension validation, resizing, compression or cropping of the upload.
+Wizard logo previews contain the whole image; banner previews centre-crop visually to 3:1.
+Each image box is the keyboard-accessible file picker, with a strong 2px dashed border and brand
+border/background feedback on hover or keyboard focus, following the static design reference.
+A subtle Upload/Replace button below each preview also opens the same file picker.
+A pending preview has a top-right remove control,
+separate from the picker so removing does not open a file dialog, that restores the saved image
+(or the empty chooser). The control is absent for saved images; no image DELETE exists, so
+saved images support replacement only. Demo/sample images remain local preview selections and
+must be selected again after reload. Pending-review Step 9 stays read-only; approved-store
+editing follows the settings flow below.
+
+MFPS-166 is wizard-only: dashboard/settings and the public storefront are unchanged, including
+the public banner's existing 16:9 layout. Backend upload/Cloudflare/cache guarantees still require
+live verification; see [image gaps](./API_GAPS.md#vendor-onboarding-images-mfps-166).
+
+#### Approved-store settings (Step 9)
+
+A submitted store with verified `ACTIVE` vendor status and granted approval can edit all existing
+Step 9 fields. Completion follows the existing account predicate: a usable unfinished `next_step`
+wins over activation, while legacy active contexts without onboarding evidence retain their
+completion fallback. Other submitted steps keep their existing gates; dashboard Settings is unchanged.
+
+Before editing, Step 9 additionally reads `GET /v1/vendors/{vendor_id}/storefront` through
+`vendorOnboardingService.getStorefrontSettings`. Its onboarding mapper preserves saved theme,
+messages, Instagram, empty badge collections, and both WhatsApp numbers, rather than customer-display
+fallbacks. It checks the returned vendor ID and waits for the profile before applying branding.
+A failed settings read blocks the form/save and offers Retry; image-read failures retain the
+separate visible-details behavior described above.
+
+**Save changes** saves in place without go-live or another review submission. Pending image uploads
+run first, followed by storefront PUT and a general profile PUT containing only business name,
+owner name and contact person. Completed stores never use the business-type PATCH: that endpoint
+documents a reset to `STEP_3_COMPLETED`. The frontend sends no approval, activation or onboarding
+fields. The profile contract exception and live-verification limits are owned by
+[API_GAPS.md](./API_GAPS.md#approved-store-profile-updates).
+
+Successful hydration vouches for unchanged approved Step 9 settings, so Save sends no redundant
+writes. Failed saves retain edits and uploaded-image successes; retries do not upload those images
+again. Both successful and failed Step 9 writes invalidate cached profile and storefront reads,
+since a later failure may follow an already successful write; confirmed image uploads remain
+cached independently. Re-entry restores the account copy. Optional-text clearing retains the
+existing mapper limitations; no deletion semantics are added.
+
 #### Vendor setup account hydration
 
 The setup wizard reads the vendor's account per step. On every entry (Live API, ready session) it
@@ -248,13 +334,14 @@ shows the page loader (screen-reader label "Restoring your setup").
 
 | Step | Account reads | Units |
 |---|---|---|
-| Business type (3), store details (9) | Profile, business types | No |
+| Business type (3) | Profile, business types | No |
+| Store details (9) | Profile, business types, logo/banner URLs; approved submitted stores also read saved storefront settings | No |
 | Categories (4) | Step 3's plus vendor categories | No |
 | Products (5) | Step 4's plus vendor products | Yes |
 | Sizes (6) | Step 5's plus vendor sizes | Yes |
 | Delivery, payments (7, 8) | Checkout options (one read for both) | No |
 | Review (10), store submitted | Profile | No |
-| Review (10), not submitted | All six | Yes |
+| Review (10), not submitted | All required account reads, plus optional logo/banner | Yes |
 
 The business-type catalog (one 100-item page) maps a saved business type name back to the reference
 Step 3 stores. On Step 3, and in a prefetch for it, it is read at once alongside the profile, saved
@@ -318,13 +405,13 @@ failed read does not block: sizes fall back to the sample units and products car
 metadata, and it is not retried within the visit.
 
 The per-resource cache (`onboarding-resource-cache`, one entry per vendor for profile, business
-types, categories, products, sizes and checkout options) is what the wizard and sign-in share. Each
+types, categories, products, sizes, checkout options, logo, banner and approved storefront settings) is what the wizard and sign-in share. Each
 entry is single-flight, a failed read is evicted so the next load retries it, and a late response
 for an invalidated entry reaches its caller but is not stored; the wizard additionally applies a
 result only while the same visit and vendor are current.
 
-A successful step save drops only the resource it wrote (Step 3 or 9 the profile, Step 4
-categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
+A successful step save drops only the resources it wrote (Step 3 the profile, Step 9 the profile
+and storefront settings, Step 4 categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
 every account resource except business types, and sign-out drops every resource for every vendor
 plus the units; business types and units otherwise stay cached until sign-out. Each of these also
 drops the dashboard's context cache, so a later visit re-reads only what changed and returning from
@@ -437,8 +524,8 @@ of vendor leave the step unvouched, so it saves as before.
 Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
 the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the
 storefront plus business-details writes for Step 9. These steps are vouched for only by a save in
-this visit, never by a resume, because the account's stored checkout options and storefront need
-not match the payload a resumed draft would send.
+this visit, except approved Step 9 whose complete editable settings are now hydrated from the
+storefront read. Unfinished setup's defaults and stored checkout options still need an explicit save.
 
 Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Removal
 uses `DELETE /v1/vendors/{vendor_id}/skus/{sku_id}`, a hard delete: re-adding the same size creates

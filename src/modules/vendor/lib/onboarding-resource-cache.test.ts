@@ -4,6 +4,7 @@ import {
   invalidateOnboardingResources,
   loadOnboardingResource,
   peekOnboardingResource,
+  setOnboardingResource,
 } from './onboarding-resource-cache'
 
 afterEach(() => invalidateOnboardingResources())
@@ -24,6 +25,17 @@ function deferred<T>() {
 }
 
 describe('loadOnboardingResource', () => {
+  it('keeps a confirmed image write when an older read finishes later', async () => {
+    const old = deferred<string | null>()
+    const pending = loadOnboardingResource('96', 'banner', () => old.promise)
+    setOnboardingResource('96', 'banner', 'https://images.example.test/new-banner.png')
+    old.resolve(null)
+    await pending
+    expect(peekOnboardingResource('96', 'banner')?.value).toBe('https://images.example.test/new-banner.png')
+    const read = vi.fn(async () => null)
+    await expect(loadOnboardingResource('96', 'banner', read)).resolves.toBe('https://images.example.test/new-banner.png')
+    expect(read).not.toHaveBeenCalled()
+  })
   it('shares one read between callers that ask at the same time', async () => {
     const pending = deferred<VendorProfile | null>()
     const read = vi.fn(() => pending.promise)

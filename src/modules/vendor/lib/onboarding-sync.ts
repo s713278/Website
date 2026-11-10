@@ -23,6 +23,7 @@ import type {
 import type { OnboardingResource } from './onboarding-resume'
 import { peekOnboardingResource } from './onboarding-resource-cache'
 import { serverSkuIdOf } from './onboarding-sku-id'
+import { assertImageSaveCurrent, savePendingImages, type ImageSaveOptions } from './onboarding-images'
 
 /**
  * Steps written to the vendor account on Continue.
@@ -127,7 +128,8 @@ export function stepsSavedTogether(step: OnboardingStep): OnboardingStep[] {
 
 /** The account resource a step's save writes, so only its cached read goes stale. */
 export function savedResources(step: OnboardingStep): readonly OnboardingResource[] {
-  if (step === 3 || step === 9) return ['profile']
+  if (step === 3) return ['profile']
+  if (step === 9) return ['profile', 'storefront']
   if (step === 4) return ['categories']
   if (step === 5) return ['products']
   if (step === 6) return ['skus']
@@ -137,7 +139,7 @@ export function savedResources(step: OnboardingStep): readonly OnboardingResourc
 
 /** Go-live can change every account resource; business types are platform data it never touches. */
 export const GO_LIVE_RESOURCES: readonly OnboardingResource[] = [
-  'profile', 'categories', 'products', 'skus', 'checkout',
+  'profile', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront',
 ]
 
 /** Field to focus when a save for this step fails. */
@@ -202,10 +204,8 @@ function toStorefrontInput(
       cardStyle: draft.storefront.cardStyle,
       themePreset: draft.storefront.themePreset,
     },
-    // Image upload stays out until the wizard uploads through the images endpoint;
-    // a local object URL must never be sent.
-    uploadedLogoUrl: null,
-    uploadedBannerUrl: null,
+    uploadedLogoUrl: runtime.savedLogoUrl,
+    uploadedBannerUrl: runtime.savedBannerUrl,
   }
 }
 
@@ -861,6 +861,7 @@ export async function persistStep(
   onAssigned: OnAssigned,
   onCreated: OnCreated,
   knownSkuIds: readonly number[] = [],
+  imageOptions: ImageSaveOptions & { approvedStore?: boolean } = {},
 ): Promise<void> {
   if (step === 3) {
     const businessType = draft.business.businessType
@@ -892,7 +893,20 @@ export async function persistStep(
   }
 
   if (step === 9) {
-    await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, runtime))
+    const images = await savePendingImages(vendorId, runtime, imageOptions)
+    assertImageSaveCurrent(imageOptions)
+    await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, {
+      ...runtime, savedLogoUrl: images.logo, savedBannerUrl: images.banner,
+    }))
+    assertImageSaveCurrent(imageOptions)
+    if (imageOptions.approvedStore) {
+      await vendorOnboardingService.saveStoreProfile(vendorId, {
+        businessName: draft.storefront.storeName,
+        ownerName: draft.business.ownerName,
+        contactPerson: draft.business.contactPerson,
+      })
+      return
+    }
     const businessDetails = toBusinessDetailsInput(draft)
     if (businessDetails) await vendorOnboardingService.saveBusinessType(vendorId, businessDetails)
   }

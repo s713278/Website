@@ -22,6 +22,8 @@ export function createEmptyRuntimeState(): OnboardingRuntimeState {
     logoUrl: null,
     bannerFile: null,
     bannerUrl: null,
+    savedLogoUrl: null,
+    savedBannerUrl: null,
   }
 }
 

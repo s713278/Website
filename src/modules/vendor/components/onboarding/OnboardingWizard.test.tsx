@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { mapVendorContext, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef } from '@/shared/api'
+import { apiErrorFromResponse, getHttp, mapVendorContext, vendorImagesService, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef, type VendorStorefrontSettings } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
 import { invalidateMeasurementCatalog } from '../../lib/measurement-catalog-cache'
@@ -26,6 +26,18 @@ const savedSize: VendorSkuRef = {
   vendorProductId: 900, skuId: 4001, priceId: 8001,
   name: 'Test Juice-1 L', size: '1 L', displayName: 'Test Juice', description: '',
   isActive: true, quantity: 1, unit: 'L', listPrice: 100, salePrice: 90,
+}
+
+function savedSettings(): VendorStorefrontSettings {
+  const store = createEmptyOnboardingDraft().storefront
+  return {
+    storeName: 'Test Store', tagline: 'Existing tagline', businessLocation: 'Test City',
+    instagram: 'teststore', orderWhatsapp: '+919876543210', supportWhatsapp: '+919000000001',
+    welcomeMessage: 'Welcome back', announcementBar: 'Saved announcement',
+    heroBadges: [], trustStrip: [],
+    theme: { primaryColor: '#123456', accentColor: '#456789', backgroundColor: '#ffffff', textColor: '#222222',
+      fontFamily: store.fontFamily, buttonShape: 'SQUARE', cardStyle: 'BORDER', themePreset: null },
+  }
 }
 
 function invalidateAll() {
@@ -60,6 +72,9 @@ beforeEach(() => {
     },
   })
   useAuthStore.getState().setHydrated(true)
+  vi.spyOn(vendorImagesService, 'getImage').mockResolvedValue(null)
+  vi.spyOn(vendorOnboardingService, 'getStorefrontSettings').mockResolvedValue(savedSettings())
+  vi.spyOn(vendorOnboardingService, 'saveStoreProfile').mockResolvedValue(undefined)
   vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
     businessName: 'Test Store', businessType: 'Beverages', ownerName: 'Test Vendor',
     contactPerson: 'Test Vendor', contactNumber: '',
@@ -100,10 +115,10 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
 })
 
-function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false, catalogPreview?: unknown) {
+function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUsage = 1, strict = false, catalogPreview?: unknown, vendorStatus = 'ACTIVE') {
   vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({
     data: {
-      vendor_id: 91, vendor_status: 'ACTIVE', approval_status: approvalStatus,
+      vendor_id: 91, vendor_status: vendorStatus, approval_status: approvalStatus,
       store_identifier: 'test-store',
       business_name: 'Test Store',
       onboarding: { status: nextStep === 11 ? 'COMPLETED' : 'IN_PROGRESS', next_step: nextStep },
@@ -405,7 +420,7 @@ describe('onboarding account hydration and size permissions', () => {
     renderAccount('APPROVED', 11, 2, 2)
     const add = await openSizes()
     expect(screen.getByText('Approved')).toBeTruthy()
-    expect(screen.getByText('You can add to your catalog and edit sizes; other setup is locked.')).toBeTruthy()
+    expect(screen.getByText('You can add to your catalog, edit sizes and update store details.')).toBeTruthy()
     expect(add.matches(':disabled')).toBe(true)
   })
 
@@ -482,7 +497,7 @@ describe('account copy per step around unsaved edits', () => {
     renderAccount('PENDING', 6)
 
     // Step 5's reads cover Steps 3, 4 and 9 too; Step 6's sizes wait until it opens.
-    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5]))
     const state = useOnboardingStore.getState()
     expect(state.draft.categories.map((category) => category.id)).toEqual([10])
     expect(state.draft.business.businessType?.id).toBe(7)
@@ -522,7 +537,7 @@ describe('account copy per step around unsaved edits', () => {
     stubReferencePages()
     seedEdited([5])
     renderAccount('PENDING', 9)
-    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5]))
 
     act(() => {
       useOnboardingStore.setState({ furthestVisitedStep: 6 })
@@ -530,7 +545,7 @@ describe('account copy per step around unsaved edits', () => {
     })
 
     expect(await screen.findByText('Something went wrong')).toBeTruthy()
-    expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9])
+    expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5])
     expect(useOnboardingStore.getState().draft.skus).toEqual([])
   })
 })
@@ -980,8 +995,8 @@ describe('step messages', () => {
     saveNote('Saved now, but shown here only after approval.')
   })
 
-  it('drops the store details note once the store is submitted and Step 9 is read-only', async () => {
-    renderAccount('APPROVED')
+  it('drops the store details note once the store is under review and Step 9 is read-only', async () => {
+    renderAccount('PENDING')
     fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
     await screen.findByRole('button', { name: /Step 9,.*You are here/ })
     expect(screen.queryByText('Saved now, but shown here only after approval.')).toBeNull()
@@ -1357,7 +1372,7 @@ describe('per-step account reads', () => {
     stubReferencePages()
     renderAccount('APPROVED', 5)
     await screen.findByRole('button', { name: /Step 5,.*You are here/ })
-    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 9]))
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5]))
 
     // Back on Step 4, a category change rewrites the never-loaded sizes section.
     act(() => {
@@ -1535,5 +1550,488 @@ describe('Continue prefetches the next step’s account reads', () => {
     expect(await screen.findByText('Something went wrong')).toBeTruthy()
     expect(categories).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+  })
+})
+
+describe('wizard logo and banner', () => {
+  async function openBranding(nextStep = 9) {
+    renderAccount('PENDING', nextStep)
+    if (nextStep !== 9) fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByRole('button', { name: /Step 9,.*You are here/ })
+    await waitFor(() => expect(stepSpinner()).toBeNull())
+  }
+
+  function prepareStore() {
+    act(() => {
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, storefront: { ...draft.storefront, businessLocation: 'Test Market' },
+      }), 9)
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+  }
+
+  it('retries only the failed image while keeping the other preview and Continue available', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRejectedValueOnce(new Error('Images unavailable'))
+      .mockResolvedValueOnce('https://images.example.test/banner.png')
+      .mockResolvedValueOnce('https://images.example.test/logo.png')
+    await openBranding(10)
+    await screen.findByRole('button', { name: 'Retry logo' })
+    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Choose logo image' }).matches(':disabled')).toBe(false)
+    expect(screen.getByAltText('Banner upload preview').getAttribute('src')).toBe('https://images.example.test/banner.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry logo' }))
+    await screen.findByAltText('Logo upload preview')
+    expect(useOnboardingStore.getState().runtime.savedLogoUrl).toBe('https://images.example.test/logo.png')
+    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(vi.mocked(vendorImagesService.getImage).mock.calls.map(([, kind]) => kind)).toEqual(['logo', 'banner', 'logo'])
+  })
+
+  it.each(['logo', 'banner'] as const)('opens the file picker from the %s box and its upload/replace button, without opening it on remove', async (kind) => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:replacement'); static revokeObjectURL = vi.fn() })
+    await openBranding()
+    const input = document.getElementById(`store-${kind}-file`)!
+    const pick = vi.spyOn(input, 'click')
+    fireEvent.click(screen.getByRole('button', { name: `Choose ${kind} image` }))
+    expect(pick).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: `Upload ${kind}` }))
+    expect(pick).toHaveBeenCalledTimes(2)
+    fireEvent.change(input, { target: { files: [new File(['gif'], `${kind}.gif`, { type: 'image/gif' })] } })
+    fireEvent.click(screen.getByAltText(kind === 'logo' ? 'Logo upload preview' : 'Banner upload preview'))
+    expect(pick).toHaveBeenCalledTimes(3)
+    fireEvent.click(screen.getByRole('button', { name: `Replace ${kind}` }))
+    expect(pick).toHaveBeenCalledTimes(4)
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${kind} selection` }))
+    expect(pick).toHaveBeenCalledTimes(4)
+    expect(useOnboardingStore.getState().runtime[`${kind}File`]).toBeNull()
+    expect(screen.getByRole('button', { name: `Upload ${kind}` })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById(`store-${kind}-file-button`)))
+  })
+
+  it.each(['logo', 'banner'] as const)('retains a valid %s preview on invalid selection and removes its pending replacement back to the saved image', async (kind) => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:replacement'); static revokeObjectURL = vi.fn() })
+    vi.mocked(vendorImagesService.getImage).mockResolvedValue('https://images.example.test/saved.png')
+    const upload = vi.spyOn(vendorImagesService, 'uploadImage').mockRejectedValue(new Error('Do not upload on selection'))
+    await openBranding(10)
+    const input = document.getElementById(`store-${kind}-file`)!
+    const previewLabel = kind === 'logo' ? 'Logo upload preview' : 'Banner upload preview'
+    const valid = new File(['gif'], `${kind}.gif`, { type: 'image/gif' })
+    fireEvent.change(input, { target: { files: [valid] } })
+    expect(useOnboardingStore.getState().runtime[`${kind}File`]).toBe(valid)
+    fireEvent.change(input, { target: { files: [new File(['webp'], 'logo.webp', { type: 'image/webp' })] } })
+    expect(document.getElementById(`store-${kind}-file-error`)?.textContent).toContain('PNG, JPEG, or GIF')
+    expect(useOnboardingStore.getState().runtime[`${kind}File`]).toBe(valid)
+    expect(screen.getByAltText(previewLabel).getAttribute('src')).toBe('blob:replacement')
+    expect(screen.queryByRole('button', { name: `Discard ${kind} selection` })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${kind} selection` }))
+    expect(document.getElementById(`store-${kind}-file-error`)).toBeNull()
+    expect(screen.getByAltText(previewLabel).getAttribute('src')).toBe('https://images.example.test/saved.png')
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById(`store-${kind}-file-button`)))
+    expect(upload).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: `Remove ${kind} selection` })).toBeNull()
+  })
+
+  it('stays on Step 9 after a partial upload failure, then retries only the failed image on Continue', async () => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn((file: File) => `blob:${file.name}`); static revokeObjectURL = vi.fn() })
+    const upload = vi.spyOn(vendorImagesService, 'uploadImage')
+      .mockResolvedValueOnce('https://images.example.test/logo.png')
+      .mockRejectedValueOnce(new Error('Banner upload failed'))
+      .mockResolvedValueOnce('https://images.example.test/banner.gif')
+    const storefrontSave = vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockResolvedValue(undefined)
+    await openBranding()
+    prepareStore()
+    fireEvent.change(document.getElementById('store-logo-file')!, { target: { files: [new File(['png'], 'logo.png', { type: 'image/png' })] } })
+    fireEvent.change(document.getElementById('store-banner-file')!, { target: { files: [new File(['gif'], 'banner.gif', { type: 'image/gif' })] } })
+    expect(upload).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Review readiness' }))
+    await waitFor(() => expect(document.getElementById('store-banner-file-error')?.textContent).toContain('Banner upload failed'))
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(9)
+    expect(useOnboardingStore.getState().runtime.logoFile).toBeNull()
+    expect(storefrontSave).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Review readiness' }))
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).toBe(10))
+    expect(upload.mock.calls.map(([, kind]) => kind)).toEqual(['logo', 'banner', 'banner'])
+    expect(storefrontSave).toHaveBeenCalledWith('91', expect.objectContaining({
+      uploadedLogoUrl: 'https://images.example.test/logo.png', uploadedBannerUrl: 'https://images.example.test/banner.gif',
+    }))
+  })
+
+  it('ignores a saved-image response after sign-out', async () => {
+    const images = deferred<string | null>()
+    vi.mocked(vendorImagesService.getImage).mockReturnValue(images.promise)
+    renderAccount('PENDING', 10)
+    await waitFor(() => expect(vendorImagesService.getImage).toHaveBeenCalled())
+    act(() => useAuthStore.getState().clearSession())
+    await act(async () => images.resolve('https://images.example.test/previous-vendor.png'))
+    expect(useOnboardingStore.getState().runtime.logoUrl).toBeNull()
+    expect(screen.queryByAltText('Logo upload preview')).toBeNull()
+  })
+})
+
+describe('approved Step 9 editing', () => {
+  async function openApprovedBranding() {
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    return screen.findByLabelText('Store name')
+  }
+
+  it('unlocks store details and image replacement for an active completed approved store', async () => {
+    vi.mocked(vendorImagesService.getImage).mockImplementation(async (_vendorId, kind) => `https://images.example.test/saved-${kind}.png`)
+    const name = await openApprovedBranding()
+    expect(name.matches(':disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Replace logo image' }).matches(':disabled')).toBe(false)
+    expect(screen.getByAltText('Logo upload preview').getAttribute('src')).toBe('https://images.example.test/saved-logo.png')
+    expect(screen.getByAltText('Banner upload preview').getAttribute('src')).toBe('https://images.example.test/saved-banner.png')
+    expect(vendorImagesService.getImage).toHaveBeenCalledWith('91', 'logo')
+    expect(vendorImagesService.getImage).toHaveBeenCalledWith('91', 'banner')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
+  })
+
+  it('restores saved branding and both WhatsApp numbers before enabling a full save', async () => {
+    await openApprovedBranding()
+    const state = useOnboardingStore.getState()
+    expect(state.draft.storefront).toMatchObject({
+      storeName: 'Test Store', tagline: 'Existing tagline', businessLocation: 'Test City',
+      instagram: 'teststore', welcomeMessage: 'Welcome back', announcementBar: 'Saved announcement',
+      primaryColor: '#123456', cardStyle: 'BORDER', buttonShape: 'SQUARE', heroBadges: [], trustStrip: [],
+    })
+    expect(state.runtime).toMatchObject({ orderWhatsapp: '9876543210', supportWhatsapp: '9000000001' })
+    expect(screen.getByLabelText('Order WhatsApp').getAttribute('value')).toBe('9876543210')
+  })
+
+  it('saves names and an original image in place without changing approval or resubmitting', async () => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:replacement'); static revokeObjectURL = vi.fn() })
+    const save = vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    const initialDetails = vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockRejectedValue(new Error('Must not reset onboarding'))
+    const submit = vi.spyOn(vendorOnboardingService, 'goLive').mockRejectedValue(new Error('Must not resubmit'))
+    const upload = vi.spyOn(vendorImagesService, 'uploadImage').mockResolvedValue('https://images.example.test/replacement.png')
+    await openApprovedBranding()
+    const submission = useOnboardingStore.getState().storeSubmission
+    fireEvent.change(screen.getByLabelText('Owner name'), { target: { value: 'Updated Owner' } })
+    const file = new File(['original'], 'replacement.png', { type: 'image/png' })
+    fireEvent.change(document.getElementById('store-logo-file')!, { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(9)
+    expect(useOnboardingStore.getState().storeSubmission).toEqual(submission)
+    expect(save).toHaveBeenCalledWith('91', expect.objectContaining({
+      tagline: 'Existing tagline', welcomeMessage: 'Welcome back', heroBadges: [], trustStrip: [],
+      supportWhatsapp: '9000000001', uploadedLogoUrl: 'https://images.example.test/replacement.png',
+      theme: expect.objectContaining({ primaryColor: '#123456', cardStyle: 'BORDER' }),
+    }))
+    expect(vendorOnboardingService.saveStoreProfile).toHaveBeenCalledWith('91', {
+      businessName: 'Test Store', ownerName: 'Updated Owner', contactPerson: 'Test Vendor',
+    })
+    expect(upload).toHaveBeenCalledWith('91', 'logo', file, expect.anything())
+    expect(initialDetails).not.toHaveBeenCalled()
+    expect(submit).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.getVendorContext).toHaveBeenCalledTimes(1)
+    expect(peekOnboardingResource('91', 'storefront')).toBeNull()
+    expect(useOnboardingStore.getState().runtime.logoFile).toBeNull()
+  })
+
+  it('does not write unchanged settings and validates edited Step 9 fields', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    await openApprovedBranding()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    expect(save).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.saveStoreProfile).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Owner name'), { target: { value: 'X' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findAllByText('Enter at least 3 characters for the owner name.')
+    expect(save).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(9)
+  })
+
+  it('keeps defaults out of an active store when the saved settings read fails, then retries', async () => {
+    vi.mocked(vendorOnboardingService.getStorefrontSettings).mockRejectedValueOnce(new Error('unavailable'))
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByText('Could not load your saved store settings. Retry before making changes.')
+    expect(screen.queryByLabelText('Store name')).toBeNull()
+    expect(continueDisabled('Save changes')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect((await screen.findByLabelText('Store name')).getAttribute('value')).toBe('Test Store')
+    expect(vendorOnboardingService.getStorefrontSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('applies saved branding after a slower profile read, so profile defaults cannot overwrite it', async () => {
+    const profile = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProfile>>>()
+    vi.mocked(vendorOnboardingService.getVendorProfile).mockReturnValue(profile.promise)
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await waitFor(() => expect(vendorOnboardingService.getStorefrontSettings).toHaveBeenCalledTimes(1))
+    expect(screen.queryByLabelText('Store name')).toBeNull()
+    await act(async () => profile.resolve({
+      businessName: 'Profile name', businessType: 'Beverages', ownerName: 'Test Owner',
+      contactPerson: 'Test Contact', contactNumber: '9000000002',
+    }))
+    expect((await screen.findByLabelText('Store name')).getAttribute('value')).toBe('Test Store')
+    expect(useOnboardingStore.getState().runtime.orderWhatsapp).toBe('9876543210')
+    expect(useOnboardingStore.getState().draft.storefront.tagline).toBe('Existing tagline')
+  })
+
+  it('restores the saved edit after re-entering the wizard instead of using the pre-save cache', async () => {
+    let settings = savedSettings()
+    vi.mocked(vendorOnboardingService.getStorefrontSettings).mockImplementation(async () => settings)
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockImplementation(async (_id, input) => { settings = input })
+    await openApprovedBranding()
+    fireEvent.change(screen.getByLabelText(/^Tagline/), { target: { value: 'Updated tagline' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    cleanup()
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByLabelText(/^Tagline/)).getAttribute('value')).toBe('Updated tagline')
+    expect(vendorOnboardingService.getStorefrontSettings).toHaveBeenCalledTimes(2)
+    expect(useOnboardingStore.getState().runtime.supportWhatsapp).toBe('9000000001')
+  })
+
+  it('retains uploaded images when a later profile save fails and retries without reuploading', async () => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:replacement'); static revokeObjectURL = vi.fn() })
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    vi.mocked(vendorOnboardingService.saveStoreProfile).mockRejectedValueOnce(new Error('Profile update failed'))
+    const upload = vi.spyOn(vendorImagesService, 'uploadImage').mockResolvedValue('https://images.example.test/replacement.png')
+    await openApprovedBranding()
+    fireEvent.change(document.getElementById('store-logo-file')!, {
+      target: { files: [new File(['original'], 'replacement.png', { type: 'image/png' })] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findAllByText('Profile update failed')
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(9)
+    expect(useOnboardingStore.getState().runtime.logoFile).toBeNull()
+    expect(peekOnboardingResource('91', 'storefront')).toBeNull()
+    expect(screen.queryByText('Changes saved.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    expect(upload).toHaveBeenCalledTimes(1)
+    expect(vendorOnboardingService.saveStoreProfile).toHaveBeenCalledTimes(2)
+  })
+
+  it('supports legacy active approved contexts that omit onboarding, as the current completion rule does', async () => {
+    vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(mapVendorContext({ data: {
+      vendor_id: 91, vendor_status: 'ACTIVE', approval_status: 'APPROVED', business_name: 'Test Store',
+    } }))
+    render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByLabelText('Store name')).matches(':disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
+  })
+
+  it('keeps pending-review branding locked and never reads its unavailable public settings', async () => {
+    renderAccount('PENDING')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByLabelText('Store name')).matches(':disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Choose logo image' }).matches(':disabled')).toBe(true)
+    expect(vendorOnboardingService.getStorefrontSettings).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    expect(vendorOnboardingService.saveStoreProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe('submitted wizard image reads', () => {
+  it('can retry an image read while image editing remains locked', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRejectedValueOnce(new Error('Images unavailable'))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('https://images.example.test/saved.png')
+    renderAccount('PENDING')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByRole('button', { name: 'Retry logo' })
+    const retry = screen.getByRole('button', { name: 'Retry logo' })
+    expect(retry.matches(':disabled')).toBe(false)
+    fireEvent.click(retry)
+    await screen.findByAltText('Logo upload preview')
+    expect(screen.getByRole('button', { name: 'Replace logo image' }).matches(':disabled')).toBe(true)
+    expect(vendorImagesService.getImage).toHaveBeenCalledTimes(3)
+  })
+})
+
+
+describe('first-time Step 9 images', () => {
+  it.each(['none', 'logo', 'banner', 'both'] as const)('saves with %s selected without fetching saved images', async (selection) => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn((file: File) => `blob:${file.name}`); static revokeObjectURL = vi.fn() })
+    vi.mocked(vendorImagesService.getImage).mockRejectedValue(new Error('Vendor not found'))
+    const upload = vi.spyOn(vendorImagesService, 'uploadImage').mockImplementation(async (_vendorId, kind) => `https://images.example.test/${kind}.png`)
+    const save = vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockResolvedValue(undefined)
+    renderAccount('PENDING', 9, 2, 1, false, undefined, 'INACTIVE')
+
+    expect((await screen.findByRole('button', { name: 'Choose logo image' })).matches(':disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Choose banner image' }).matches(':disabled')).toBe(false)
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    expect(continueDisabled('Review readiness')).toBe(false)
+    act(() => {
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, storefront: { ...draft.storefront, businessLocation: 'Test Market' },
+      }), 9)
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+    const selectedKinds = (['logo', 'banner'] as const).filter((kind) => selection === 'both' || selection === kind)
+    for (const kind of selectedKinds) {
+      fireEvent.change(document.getElementById(`store-${kind}-file`)!, {
+        target: { files: [new File(['png'], `${kind}.png`, { type: 'image/png' })] },
+      })
+    }
+    expect(upload).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Review readiness' }))
+    await screen.findByRole('button', { name: /Step 10,.*You are here/ })
+    await waitFor(() => expect(stepSpinner()).toBeNull())
+    expect(save).toHaveBeenCalledWith('91', expect.objectContaining({
+      uploadedLogoUrl: selectedKinds.includes('logo') ? 'https://images.example.test/logo.png' : null,
+      uploadedBannerUrl: selectedKinds.includes('banner') ? 'https://images.example.test/banner.png' : null,
+    }))
+    expect(upload).toHaveBeenCalledTimes(selectedKinds.length)
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    expect(screen.queryByText('Something went wrong')).toBeNull()
+  })
+
+  it('skips image reads when arriving from payments with an earlier context pointer', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRejectedValue(new Error('Vendor not found'))
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 8, 2, 1, false, undefined, 'INACTIVE')
+    await screen.findByRole('button', { name: /Step 8,.*You are here/ })
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft, payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
+    }), 8))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect((await screen.findByRole('button', { name: 'Choose logo image' })).matches(':disabled')).toBe(false)
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    expect(continueDisabled('Review readiness')).toBe(false)
+  })
+})
+
+describe('independent optional image reads', () => {
+  it('allows review submission with an unavailable optional image', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRejectedValue(new Error('Saved image unavailable'))
+    const submit = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
+    renderAccount('PENDING', 10)
+    await screen.findByRole('button', { name: 'Retry logo' })
+    await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
+    act(() => {
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
+        storefront: { ...draft.storefront, businessLocation: 'Test Market' },
+      }))
+      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
+  })
+
+  it.each(['old URL', 'empty', 'error'] as const)('keeps a confirmed upload when an older read returns %s, including re-entry', async (lateResult) => {
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:new-logo'); static revokeObjectURL = vi.fn() })
+    const oldRead = deferred<string | null>()
+    vi.mocked(vendorImagesService.getImage).mockImplementation((_vendorId, kind) => kind === 'logo' ? oldRead.promise : Promise.resolve(null))
+    vi.spyOn(vendorImagesService, 'uploadImage').mockResolvedValue('https://images.example.test/new-logo.png')
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByLabelText('Store name')
+    fireEvent.change(document.getElementById('store-logo-file')!, { target: { files: [new File(['png'], 'new-logo.png', { type: 'image/png' })] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    await act(async () => {
+      if (lateResult === 'error') oldRead.reject(new Error('Stale image error'))
+      else oldRead.resolve(lateResult === 'empty' ? null : 'https://images.example.test/old-logo.png')
+    })
+    expect(screen.getByAltText('Logo upload preview').getAttribute('src')).toBe('https://images.example.test/new-logo.png')
+    expect(screen.queryByRole('button', { name: 'Retry logo' })).toBeNull()
+    expect(peekOnboardingResource('91', 'logo')?.value).toBe('https://images.example.test/new-logo.png')
+    cleanup()
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByAltText('Logo upload preview')
+    expect(useOnboardingStore.getState().runtime.savedLogoUrl).toBe('https://images.example.test/new-logo.png')
+    expect(vi.mocked(vendorImagesService.getImage).mock.calls.filter(([, kind]) => kind === 'logo')).toHaveLength(1)
+  })
+
+  it('shows a loaded logo before a slower banner read settles', async () => {
+    const banner = deferred<string | null>()
+    vi.mocked(vendorImagesService.getImage).mockImplementation((_vendorId, kind) => kind === 'logo'
+      ? Promise.resolve('https://images.example.test/logo.png') : banner.promise)
+    renderAccount('PENDING', 10)
+    await waitFor(() => expect(useOnboardingStore.getState().runtime.savedLogoUrl).toBe('https://images.example.test/logo.png'))
+    await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
+    await screen.findByAltText('Logo upload preview')
+    expect(screen.getByRole('button', { name: 'Choose banner image' }).matches(':disabled')).toBe(false)
+    await act(async () => banner.resolve(null))
+  })
+
+  it('omits an unreadable untouched logo from the storefront write while preserving the saved banner', async () => {
+    vi.mocked(vendorImagesService.getImage).mockImplementation(async (_vendorId, kind) => {
+      if (kind === 'logo') throw new Error('Saved logo unavailable')
+      return 'https://images.example.test/banner.png'
+    })
+    const write = vi.spyOn(getHttp(), 'put').mockResolvedValue({ data: { success: true } })
+    renderAccount('APPROVED')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByRole('button', { name: 'Retry logo' })
+    fireEvent.change(screen.getByLabelText(/^Tagline/), { target: { value: 'Changed tagline' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Changes saved.')
+    const wire = JSON.parse(JSON.stringify(write.mock.calls[0][1]))
+    expect(wire.theme).not.toHaveProperty('logo_image')
+    expect(wire.theme.banner_image).toBe('https://images.example.test/banner.png')
+  })
+
+  it.each(['logo', 'banner'] as const)('keeps review and the other image usable when %s returns 404', async (failedKind) => {
+    vi.mocked(vendorImagesService.getImage).mockRestore()
+    const savedKind = failedKind === 'logo' ? 'banner' : 'logo'
+    vi.spyOn(getHttp(), 'get').mockImplementation(async (_path, config) => {
+      const params = config?.params
+      if (params && typeof params === 'object' && 'image_type' in params && params.image_type === (failedKind === 'logo' ? 'THUMBNAIL' : 'HOMEBANNER')) {
+        throw apiErrorFromResponse(404, { success: false, status: '404', failure_reason: 'Vendor #91 not found' })
+      }
+      return { data: { success: true, data: { image_url: `https://images.example.test/${savedKind}.png` } } }
+    })
+    renderAccount('PENDING', 10, 2, 1, false, undefined, 'INACTIVE')
+    await screen.findByRole('button', { name: `Retry ${failedKind}` })
+    await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
+    await waitFor(() => expect(useOnboardingStore.getState().runtime[`${savedKind}Url`]).toBe(`https://images.example.test/${savedKind}.png`))
+    expect(screen.getByRole('button', { name: `Retry ${failedKind}` })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByRole('button', { name: `Choose ${failedKind} image` })).matches(':disabled')).toBe(false)
+    expect(screen.getByAltText(`${savedKind === 'logo' ? 'Logo' : 'Banner'} upload preview`).getAttribute('src')).toBe(`https://images.example.test/${savedKind}.png`)
+    expect(continueDisabled('Review readiness')).toBe(false)
+  })
+})
+
+describe('resumed vendor image-read failure', () => {
+  it('keeps review and selection available while image reads are still loading', async () => {
+    const image = deferred<string | null>()
+    vi.mocked(vendorImagesService.getImage).mockReturnValue(image.promise)
+    renderAccount('PENDING', 10, 2, 1, false, undefined, 'INACTIVE')
+    await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByRole('button', { name: 'Choose logo image' })).matches(':disabled')).toBe(false)
+    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(screen.getByRole('status', { name: 'Loading saved logo' })).toBeTruthy()
+    await act(async () => image.resolve(null))
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading saved logo' })).toBeNull())
+  })
+
+  it('keeps store details and selection available when both saved-image reads fail', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRestore()
+    const read = vi.spyOn(getHttp(), 'get').mockRejectedValue(apiErrorFromResponse(404, {
+      success: false, status: '404', failure_reason: 'Vendor #91 not found',
+      user_message: 'No data found!!', api_details: [], reason_code: '404',
+    }))
+    renderAccount('PENDING', 10, 2, 1, false, undefined, 'INACTIVE')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    await screen.findByRole('button', { name: 'Retry logo' })
+    expect(read.mock.calls.map(([path, config]) => [path, config?.params])).toEqual([
+      ['/v1/vendors/91/images', { image_type: 'THUMBNAIL' }],
+      ['/v1/vendors/91/images', { image_type: 'HOMEBANNER' }],
+    ])
+    expect(screen.getByLabelText('Store name')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry banner' })).toBeTruthy()
+    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Choose logo image' })).toBeTruthy()
+    expect(screen.queryByText('Something went wrong')).toBeNull()
   })
 })

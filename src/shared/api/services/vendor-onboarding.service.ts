@@ -3,6 +3,7 @@ import {
   isApiError,
   platformService as apiPlatformService,
   pricesService as apiPricesService,
+  storefrontService as apiStorefrontService,
   vendorsService as apiVendorsService,
   type BusinessTypeQuery,
   type CategoryQuery,
@@ -56,6 +57,7 @@ import {
 import { demoVendorContext } from '../fixtures/vendor-dashboard'
 import { isLiveApi } from '../mode'
 import { demoDelay } from './demo-delay'
+import { mapVendorStorefrontSettings } from '../mappers/vendor-storefront-settings'
 
 export type ReferenceRequestConfig = {
   signal?: AbortSignal
@@ -155,6 +157,27 @@ async function saveStorefront(
   input: StorefrontConfigInput,
 ): Promise<void> {
   await apiVendorsService.saveStorefront(vendorId, mapStorefrontConfigRequest(input))
+}
+
+/** Approved-store settings; a failed read must never become a new-store/default config. */
+async function getStorefrontSettings(vendorId: number | string, config: ReferenceRequestConfig = {}) {
+  return mapVendorStorefrontSettings(await apiStorefrontService.get(vendorId, config), vendorId)
+}
+
+/**
+ * Completed stores must not call the Step 3 business-type PATCH. The deployed profile PUT
+ * merges these fields without assign_categories; see the scoped exception in API_GAPS.md.
+ */
+async function saveStoreProfile(vendorId: number | string, input: {
+  businessName: string
+  ownerName: string
+  contactPerson: string
+}): Promise<void> {
+  await apiVendorsService.update(vendorId, {
+    business_name: input.businessName.trim(),
+    owner_name: input.ownerName.trim(),
+    contact_person: input.contactPerson.trim(),
+  })
 }
 
 /* --- Vendor-scoped resource reads ---------------------------------------- */
@@ -351,6 +374,8 @@ export const vendorOnboardingService = {
   saveBusinessType,
   saveCategories,
   saveStorefront,
+  getStorefrontSettings,
+  saveStoreProfile,
   getVendorCategories,
   getVendorProducts,
   getVendorSkus,

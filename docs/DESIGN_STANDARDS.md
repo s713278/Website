@@ -27,6 +27,7 @@ design reference.
 - Keep messages concise and regular weight: amber cautions, red errors, green success.
 - Show only the latest toast. Warnings/successes last 4 seconds; errors last 6 seconds. Hover/focus
   pauses dismissal; close and swipe remain available. Clear on step changes and wizard exit.
+- Wizard toasts sit above its footer so Continue and upload retry stay reachable on phones.
 - Validation toasts supplement persistent inline errors and existing first-error focus/scroll.
   The toast supplies the action announcement; do not duplicate it in another live region.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
@@ -52,7 +53,7 @@ design reference.
 | `Skeleton` | `@/shared/components` | [skeleton.tsx](../src/components/ui/skeleton.tsx). `aria-hidden`; shimmer from `.md-skeleton` in `global.css`. |
 | `RowSkeleton` (vendor) | `@/modules/vendor/components/RowSkeleton` | [RowSkeleton.tsx](../src/modules/vendor/components/RowSkeleton.tsx). Row placeholders under one status label; screen skeletons such as [PlanSkeleton.tsx](../src/modules/vendor/components/PlanSkeleton.tsx) follow the same pattern. |
 | `Spinner`, `Button` `pending` | `@/shared/components` | [ui/index.tsx](../src/shared/components/ui/index.tsx). `pending` disables the button, sets `aria-busy` and adds a decorative spinner before the label. |
-| `LoadError` | `@/shared/components` | [LoadError.tsx](../src/shared/components/LoadError.tsx). `role="alert"`, "Something went wrong" and **Try again** (`onRetry`); extra actions go in `children`. |
+| `LoadError` | `@/shared/components` | [LoadError.tsx](../src/shared/components/LoadError.tsx). `role="alert"`; defaults to "Something went wrong" and **Try again** (`onRetry`). `message` and `retryLabel` allow contextual failures/retries, such as optional onboarding images; extra actions go in `children`. |
 | `RouteErrorBoundary` | `@/app/router/RouteErrorBoundary` | [RouteErrorBoundary.tsx](../src/app/router/RouteErrorBoundary.tsx). Wraps the routes in [router/index.tsx](../src/app/router/index.tsx); a render error or failed route chunk shows `LoadError`, and Try again reloads the page. |
 | `useShowAfterDelay` | `@/shared/hooks/useShowAfterDelay` | [useShowAfterDelay.ts](../src/shared/hooks/useShowAfterDelay.ts). Owns the shared delay, `LOADER_SHOW_DELAY_MS`. |
 

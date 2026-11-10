@@ -223,6 +223,8 @@ export type OnboardingRuntimeState = {
   logoUrl: string | null
   bannerFile: File | null
   bannerUrl: string | null
+  savedLogoUrl: string | null
+  savedBannerUrl: string | null
 }
 
 export type PersistedOnboardingDraftV1 = Omit<VendorOnboardingDraftV1, 'maskedPhone'>
@@ -310,9 +312,9 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product. Add another only for a different pack.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how customers receive orders.' },
   { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay, and pick one default.' },
-  // Step 9 is the only step that cannot be read back: the storefront read 404s until an
+  // Step 9 theme/text branding cannot be read back: the storefront read 404s until an
   // admin approves the store. The note stops a returning vendor concluding their branding
-  // was never saved. See docs/API_GAPS.md.
+  // was never saved. Images restore separately. See docs/API_GAPS.md.
   { step: 9, short: 'Store', title: 'Add your store details', description: 'Add the details customers need.', saveNote: 'Saved now, but shown here only after approval.' },
   { step: 10, short: 'Review', title: 'Review your store', description: 'Check your store before submitting.' },
 ]

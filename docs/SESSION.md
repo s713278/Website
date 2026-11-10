@@ -169,6 +169,19 @@ writes until the same vendor verifies again. A draft read under the wrong identi
 disclosure and a write hazard, because Continue would submit the previous vendor's details to the
 account signed in now.
 
+Onboarding image reads and uploads use the same ownership checks. Saved image URLs are held in
+runtime and the vendor-keyed in-memory resource cache; pending files and preview object URLs stay
+in runtime only. A late upload from an ended wizard/session cannot update that cache or the next
+draft, or start a subsequent image/storefront write. Explicit sign-out clears the resource cache.
+Sign-out, session loss and foreign-draft replacement clear runtime and revoke its object URLs. Image save/retry
+behavior lives in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-images).
+
+Completed active stores with granted approval may edit Step 9 in the wizard; pending-review stores
+remain locked. Eligibility uses the verified account context and the existing completion predicate,
+including its legacy ACTIVE fallback when onboarding evidence is absent. A usable unfinished
+backend pointer still wins over activation. Settings hydration and save behavior are owned by
+[API_ARCHITECTURE.md](./API_ARCHITECTURE.md#approved-store-settings-step-9).
+
 The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: an explicit sign-out
 clears it, and the ownership check covers every other path — the header ignores a record whose
 `vendorId` is not the signed-in vendor's.

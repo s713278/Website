@@ -3,6 +3,7 @@ import {
   schedulingConfigNumber,
   schedulingConfigString,
   vendorOnboardingService,
+  vendorImagesService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
   type MeasurementCatalog,
@@ -11,6 +12,7 @@ import {
   type VendorProductRef,
   type VendorProfile,
   type VendorSkuRef,
+  type VendorStorefrontSettings,
 } from '@/shared/api'
 import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { isValidIndianMobile } from './onboarding-validation'
@@ -39,8 +41,9 @@ import type {
  * selections have to come back from the server.
  *
  * Step 9 is the exception: `GET /{identifier}/storefront` is the only read that carries
- * branding and it returns 404 until an admin approves the store, so a vendor still in the
- * wizard can never read it. Branding therefore falls back to defaults.
+ * theme/text branding and it returns 404 until an admin approves the store. Unfinished
+ * setup therefore keeps branding defaults; approved completed stores hydrate editable
+ * settings from that read. Logo/banner URLs restore through the authenticated images endpoint.
  */
 export type ServerOnboardingState = {
   context: VendorContext
@@ -67,6 +70,9 @@ export type OnboardingResource =
   | 'products'
   | 'skus'
   | 'checkout'
+  | 'logo'
+  | 'banner'
+  | 'storefront'
 
 const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus']
 
@@ -80,15 +86,18 @@ const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes'
  */
 export function stepResources(
   step: OnboardingStep,
-  options: { submitted: boolean },
+  options: { submitted: boolean; approved?: boolean },
 ): { account: readonly OnboardingResource[]; units: boolean } {
   switch (step) {
     case 1:
     case 2:
       return { account: [], units: false }
     case 3:
-    case 9:
       return { account: CATALOG_CHAIN.slice(0, 2), units: false }
+    case 9:
+      return { account: options.submitted && options.approved
+        ? ['profile', 'businessTypes', 'logo', 'banner', 'storefront']
+        : ['profile', 'businessTypes', 'logo', 'banner'], units: false }
     case 4:
       return { account: CATALOG_CHAIN.slice(0, 3), units: false }
     case 5:
@@ -101,8 +110,13 @@ export function stepResources(
     case 10:
       return options.submitted
         ? { account: ['profile'], units: false }
-        : { account: [...CATALOG_CHAIN, 'checkout'], units: true }
+        : { account: [...CATALOG_CHAIN, 'checkout', 'logo', 'banner'], units: true }
   }
+}
+
+/** Optional image reads never gate the form, review or resource-derived resume. */
+export function requiredStepResources(step: OnboardingStep, options: { submitted: boolean; approved?: boolean }): readonly OnboardingResource[] {
+  return stepResources(step, options).account.filter((resource) => resource !== 'logo' && resource !== 'banner')
 }
 
 /** The platform measurement catalog, read at most once per session. */
@@ -150,6 +164,9 @@ function readAccountResource<R extends OnboardingResource>(
     skus: () => vendorOnboardingService.getVendorSkus(vendorId),
     // A first-time vendor legitimately 404s here; the service already maps that to null.
     checkout: () => vendorOnboardingService.getCheckoutOptions(vendorId),
+    logo: () => vendorImagesService.getImage(vendorId, 'logo'),
+    banner: () => vendorImagesService.getImage(vendorId, 'banner'),
+    storefront: () => vendorOnboardingService.getStorefrontSettings(vendorId),
   }
   return reads[resource]()
 }
@@ -484,6 +501,28 @@ export function applyProfile(
   }
 }
 
+/** Approved stores have a readable storefront; use it instead of new-store branding defaults. */
+export function applyStorefront(
+  draft: VendorOnboardingDraftV1,
+  saved: VendorStorefrontSettings,
+): VendorOnboardingDraftV1 {
+  const { theme, orderWhatsapp: _order, supportWhatsapp: _support, ...details } = saved
+  return {
+    ...draft,
+    business: { ...draft.business, businessName: saved.storeName },
+    storefront: {
+      ...createEmptyOnboardingDraft().storefront,
+      ...details,
+      ...theme,
+      trustStrip: saved.trustStrip.map((badge, index) => ({ ...badge, id: `saved-badge-${index}` })),
+    },
+  }
+}
+
+export function resumeStorefrontWhatsapp(saved: VendorStorefrontSettings) {
+  return { orderWhatsapp: toNationalMobile(saved.orderWhatsapp), supportWhatsapp: toNationalMobile(saved.supportWhatsapp) }
+}
+
 /** Step 3: the saved business type, resolved by `resolveBusinessType`. */
 export function applyBusinessType(
   draft: VendorOnboardingDraftV1,
@@ -569,7 +608,8 @@ export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
 /**
  * Whether a step can show its form: every account resource it lists has loaded and, where
  * it uses them, the units have settled. A units failure is not a block: the sample units
- * stand in. A failed resource fails the step even while another still loads, so the vendor
+ * stand in. Step 9 renders its details independently of its image reads; their own region
+ * handles loading/failure, and Continue still waits for them. A failed resource fails other steps even while another still loads, so the vendor
  * can retry at once. A submitted store's Step 10 shows its status and never blocks: it waits
  * only for the profile to settle, and a failed profile just leaves the store name to its
  * fallback.
@@ -578,6 +618,7 @@ export function stepLoadState(
   step: OnboardingStep,
   options: {
     submitted: boolean
+    approved?: boolean
     resources: Readonly<Record<OnboardingResource, ResourceStatus>>
     units: ResourceStatus
   },
@@ -587,7 +628,8 @@ export function stepLoadState(
     return profile === 'loaded' || profile === 'failed' ? 'loaded' : 'loading'
   }
   const needs = stepResources(step, options)
-  const statuses = needs.account.map((resource) => options.resources[resource])
+  const statuses = requiredStepResources(step, options)
+    .map((resource) => options.resources[resource])
   if (statuses.includes('failed')) return 'failed'
   if (statuses.some((status) => status !== 'loaded')) return 'loading'
   if (needs.units && (options.units === 'idle' || options.units === 'loading')) return 'loading'
@@ -600,7 +642,7 @@ export function stepLoadState(
  */
 export function accountResumeState(
   context: VendorContext,
-  values: OnboardingResourceData,
+  values: Omit<OnboardingResourceData, 'storefront' | 'logo' | 'banner'>,
 ): ServerOnboardingState {
   return { context, ...values }
 }

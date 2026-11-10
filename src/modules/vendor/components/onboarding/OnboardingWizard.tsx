@@ -18,9 +18,11 @@ import {
   vendorOnboardingService,
   type MeasurementCatalog,
   type VendorContext,
+  type VendorImageKind,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LoadError } from '@/shared/components/LoadError'
+import { StoreImageLoadNotice } from './StoreImageInput'
 import { PageLoader } from '@/shared/components/PageLoader'
 import { Button } from '@/shared/components/ui'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage } from '../../hooks/use-onboarding-catalog'
@@ -31,6 +33,7 @@ import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache
 import {
   invalidateOnboardingResources,
   peekOnboardingResource,
+  setOnboardingResource,
   type OnboardingResourceData,
 } from '../../lib/onboarding-resource-cache'
 import {
@@ -42,14 +45,17 @@ import {
   applyProfile,
   applyResumeFrame,
   applySkus,
+  applyStorefront,
   backendResumeStep,
   derivedResumeStep,
   isStoreSubmitted,
   loadAccountResource,
   measurementCatalogsForResume,
   resolveBusinessType,
+  requiredStepResources,
   resumeOrderWhatsapp,
   resumePaymentDetails,
+  resumeStorefrontWhatsapp,
   savedBusinessType,
   stepLoadState,
   stepResources,
@@ -70,6 +76,7 @@ import {
   stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
+import { ImageSaveError } from '../../lib/onboarding-images'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import {
@@ -112,7 +119,7 @@ function LivePreviewPane({ accountParts }: { accountParts: PhonePreviewAccountPa
   const logoUrl = useOnboardingStore((state) => state.runtime.logoUrl)
   const bannerUrl = useOnboardingStore((state) => state.runtime.bannerUrl)
   const deferredDraft = useDeferredValue(draft)
-  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
+  return <StorefrontPreview onboardingBranding draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
 }
 
 /** The bay where the shop takes shape: the storefront as a customer will see it. */
@@ -170,10 +177,10 @@ type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
 
 const NO_ISSUES: ShownIssues = { issues: [] }
 
-const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
+const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront']
 /** The steps whose draft each resource's applier fills. */
 const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
-  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8],
+  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8], logo: [9], banner: [9], storefront: [9],
 }
 
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
@@ -203,7 +210,7 @@ type AccountLoadView = {
 const IDLE_LOAD_VIEW: AccountLoadView = {
   context: 'idle',
   resources: {
-    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle',
+    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle', logo: 'idle', banner: 'idle', storefront: 'idle',
   },
   units: 'idle',
   categoryList: 'idle',
@@ -217,6 +224,8 @@ type AccountEntry = {
   prefetchStep: (step: OnboardingStep) => void
   /** Re-read the context if it failed, and the step's failed resources. */
   retry: (step: OnboardingStep) => void
+  retryImage: (kind: VendorImageKind) => void
+  recordImage: (kind: VendorImageKind, url: string) => void
   cancel: () => void
 }
 
@@ -243,6 +252,7 @@ function startAccountEntry(
   // `undefined` while unsettled; `null` after a failed read, which falls back to sample units.
   let units: MeasurementCatalog | null | undefined
   const applied = new Set<OnboardingResource>()
+  const versions: Partial<Record<OnboardingResource | 'units', number>> = {}
   const vouched = new Set<OnboardingStep>()
   let context: VendorContext | null = null
   // The step the account resumes at, which bounds the steps a resume vouches for.
@@ -291,7 +301,7 @@ function startAccountEntry(
     state.applyResumedDraft(
       draft,
       openAt,
-      { paymentDetails: state.runtime.paymentDetails, orderWhatsapp: '' },
+      { paymentDetails: state.runtime.paymentDetails },
       { frameApplied: true },
     )
   }
@@ -301,17 +311,27 @@ function startAccountEntry(
     if (!context) return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
+    const approved = selectStoreIsApproved(state)
     const options = { edited: new Set(state.editedSteps), submitted }
     const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
     let draft = state.draft
     let paymentDetails = state.runtime.paymentDetails
-    let orderWhatsapp = ''
+    let orderWhatsapp: string | undefined
+    let supportWhatsapp: string | undefined
     const ran = (resource: OnboardingResource) => applied.add(resource)
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
       draft = applyProfile(draft, values.profile!, options)
-      if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!)
+      if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
       ran('profile')
+    }
+    // Profile resets new-store branding, so the saved storefront applies only after it.
+    if (!applied.has('storefront') && view.resources.storefront === 'loaded' && applied.has('profile')) {
+      draft = applyStorefront(draft, values.storefront!)
+      const numbers = resumeStorefrontWhatsapp(values.storefront!)
+      orderWhatsapp = numbers.orderWhatsapp
+      supportWhatsapp = numbers.supportWhatsapp
+      ran('storefront')
     }
     const businessType = view.resources.profile === 'loaded' && view.resources.businessTypes === 'loaded'
       ? resolveBusinessType(values.profile!, values.businessTypes!)
@@ -338,11 +358,17 @@ function startAccountEntry(
       if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
       ran('checkout')
     }
-    if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp) {
-      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp }, { frameApplied: false })
+    for (const kind of ['logo', 'banner'] as const) {
+      if (!applied.has(kind) && view.resources[kind] === 'loaded') {
+        state.restoreImage(kind, values[kind]!)
+        ran(kind)
+      }
+    }
+    if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
+      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false })
     }
 
-    if (derivePending && ACCOUNT_RESOURCES.every((resource) => applied.has(resource))) {
+    if (derivePending && requiredStepResources(10, { submitted, approved }).every((resource) => applied.has(resource))) {
       derivePending = false
       resumeAt = derivedResumeStep(accountResumeState(context, values as OnboardingResourceData))
       // Only while the vendor is still where the fallback put them, with nothing edited.
@@ -350,9 +376,19 @@ function startAccountEntry(
       if (!latest.editedSteps.length && latest.draft.currentStep === 10) applyFrame(resumeAt)
     }
 
-    const loadedSteps = ACCOUNT_STEPS.filter((step) =>
-      stepResources(step, { submitted }).account.every((resource) => applied.has(resource)))
+    // Step 3 shares Step 9's required reads. Do not mark store details restored before
+    // their own reads have started; optional images may still be loading or failed.
+    const storeReadsStarted = view.resources.logo !== 'idle' && view.resources.banner !== 'idle'
+    const loadedSteps = ACCOUNT_STEPS.filter((step) => (step !== 9 || storeReadsStarted)
+      && requiredStepResources(step, { submitted, approved }).every((resource) => applied.has(resource)))
     store().setLoadedSteps(loadedSteps)
+    const imageReadsSettled = (['logo', 'banner'] as const).every((kind) => view.resources[kind] === 'loaded' || view.resources[kind] === 'failed')
+    if (submitted && approved && loadedSteps.includes(9) && imageReadsSettled && !vouched.has(9)) {
+      vouched.add(9)
+      if (!store().editedSteps.includes(9)) {
+        hooks.savedSteps.current[9] = stepSaveFingerprint(9, store().draft, store().runtime) ?? undefined
+      }
+    }
 
     // A catalog step before the resume step, taken whole from the account (with every
     // catalog step before it), already matches it: its Continue need not save again.
@@ -451,11 +487,13 @@ function startAccountEntry(
   }
 
   const track = (resource: OnboardingResource | 'units', read: Promise<unknown>) => {
+    const version = (versions[resource] ?? 0) + 1
+    versions[resource] = version
     if (resource === 'units') view.units = 'loading'
     else view.resources[resource] = 'loading'
     read.then(
       (value) => {
-        if (!isCurrent()) return
+        if (!isCurrent() || versions[resource] !== version) return
         if (resource === 'units') settleUnits(value as MeasurementCatalog)
         else landValue(resource, value as OnboardingResourceData[typeof resource])
         applyReady()
@@ -464,7 +502,7 @@ function startAccountEntry(
         publish()
       },
       () => {
-        if (!isCurrent()) return
+        if (!isCurrent() || versions[resource] !== version) return
         if (resource === 'units') settleUnits(null)
         else view.resources[resource] = 'failed'
         applyReady()
@@ -483,7 +521,8 @@ function startAccountEntry(
   const requestStep = (step: OnboardingStep) => {
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const submitted = selectStoreIsSubmitted(store())
-    const needs = stepResources(step, { submitted })
+    const approved = selectStoreIsApproved(store())
+    const needs = stepResources(step, { submitted, approved })
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
@@ -511,7 +550,7 @@ function startAccountEntry(
     if (view.units !== 'idle') skip.push('units')
     // A failed profile stays failed until Try again, so business types do not re-read it.
     if (view.resources.profile === 'failed') skip.push('businessTypes')
-    const reads = loadStepResources(vendorId, step, { submitted, withUnits: true, skip })
+    const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip, context })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
     }
@@ -527,16 +566,17 @@ function startAccountEntry(
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
+    const approved = selectStoreIsApproved(state)
     const edited = new Set(state.editedSteps)
     // Anything this visit holds or is reading is left out, and so is a read that failed: it
     // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
     // edited step's own copy, so a resource only edited steps use is not wanted yet.
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
       view.resources[resource] !== 'idle'
-      || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
+      || (resource !== 'logo' && resource !== 'banner' && !submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
     if (view.resources.profile === 'failed') skip.push('businessTypes')
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
-    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
+    loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip, context })
   }
 
   const applyContext = (loaded: VendorContext) => {
@@ -598,8 +638,22 @@ function startAccountEntry(
   return {
     requestStep,
     prefetchStep,
+    retryImage(kind) {
+      if (!isCurrent() || view.resources[kind] !== 'failed') return
+      applied.delete(kind)
+      track(kind, loadAccountResource(vendorId, kind))
+      publish()
+    },
+    recordImage(kind, url) {
+      if (!isCurrent()) return
+      versions[kind] = (versions[kind] ?? 0) + 1
+      values[kind] = url
+      view.resources[kind] = 'loaded'
+      applied.add(kind)
+      publish()
+    },
     retry(step) {
-      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
+      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()), approved: selectStoreIsApproved(store()) })
       for (const resource of needs.account) {
         if (view.resources[resource] === 'failed') view.resources[resource] = 'idle'
       }
@@ -631,7 +685,7 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
     return readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
   }
   // Validate additions without reopening whole-store readiness for submitted vendors.
-  return selectStoreIsSubmitted(state)
+  return selectStoreIsSubmitted(state) && draft.currentStep !== 9
     ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
     : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
 }
@@ -642,20 +696,19 @@ const OTP_INCOMPLETE: ValidationIssue = { step: 2, field: 'otp-0', message: 'Ent
 const otpIssues: IssueRecheck = (state) => state.runtime.otpDigits.some((digit) => !digit) ? [OTP_INCOMPLETE] : []
 
 /**
- * A submitted store is read-only except for categories/products, an approved store's sizes,
+ * A submitted store is read-only except for categories/products, an approved store's sizes and branding,
  * and the Step 10 status view. The Continue handler and the
  * `fieldset` guard both read this one predicate so they cannot drift out of lockstep.
  */
 function submittedStepIsReadOnly(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
-  return submitted && step < 10 && !isAdditiveCatalogStep(step, approved)
+  return submitted && step < 10 && !(approved && step === 9) && !isAdditiveCatalogStep(step, approved)
 }
 
 /**
- * An approved store's Step 6 saves without moving on: Steps 7-9 are read-only for it, so a
- * sizes update has nowhere useful to continue to. The vendor leaves by the stepper or Step 10.
+ * Approved-store size and branding edits save without reopening the review flow.
  */
 function savesInPlace(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
-  return submitted && approved && step === 6
+  return submitted && approved && (step === 6 || step === 9)
 }
 
 export function OnboardingWizard() {
@@ -884,7 +937,8 @@ function OnboardingWizardContent() {
       // A disclosure is focused by its summary. The field's message is what gets centred: a
       // group such as an open panel or a list of panels is taller than the screen, so centring
       // the field itself pushes its message out of view.
-      const element = target instanceof HTMLDetailsElement ? target.querySelector(':scope > summary') : target
+      const element = target instanceof HTMLDetailsElement ? target.querySelector(':scope > summary')
+        : target instanceof HTMLInputElement && target.type === 'file' ? document.getElementById(`${field}-button`) : target
       if (element instanceof HTMLElement) {
         const scrollTarget = document.getElementById(`${field}-error`) ?? element
         const reveal = () => {
@@ -1202,7 +1256,8 @@ function OnboardingWizardContent() {
       entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
     }
     const fingerprint = stepSaveFingerprint(step, draft, runtime)
-    const unchanged = fingerprint !== null && savedStepRef.current[step] === fingerprint
+    const hasPendingImages = step === 9 && Boolean(runtime.logoFile || runtime.bannerFile)
+    const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
     const shouldPersist =
       writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
@@ -1222,7 +1277,17 @@ function OnboardingWizardContent() {
         // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
         await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
           if (persistenceIsCurrent()) recordAssignment(assignment)
-        }, recordCreatedEntry, state.accountCatalog.skuIds)
+        }, recordCreatedEntry, state.accountCatalog.skuIds, {
+          signal: controller.signal,
+          approvedStore: storeIsSubmitted && storeIsApproved,
+          isCurrent: persistenceIsCurrent,
+          onUploaded: (kind, file, url) => {
+            if (!persistenceIsCurrent()) return
+            useOnboardingStore.getState().recordUploadedImage(kind, file, url)
+            setOnboardingResource(access.vendorId, kind, url)
+            entryRef.current?.recordImage(kind, url)
+          },
+        })
         // This step is now on the account, so a cached read from before it is stale. The
         // open wizard keeps what it holds: the draft is now the account copy.
         dropWrittenAccountData(access.vendorId, savedResources(step))
@@ -1234,10 +1299,18 @@ function OnboardingWizardContent() {
         setStatusMessage(null)
       } catch (error) {
         // Part of the step may have landed, so it no longer matches anything known.
+        if (step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
         for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
         if (!persistenceIsCurrent()) return
         setStatusMessage(null)
         // A failed write is never reported as local success.
+        if (error instanceof ImageSaveError) {
+          showIssues(error.issues, (latest) => error.issues.filter((issue) =>
+            issue.field === 'store-logo-file'
+              ? latest.runtime.logoFile === runtime.logoFile
+              : latest.runtime.bannerFile === runtime.bannerFile))
+          return
+        }
         showIssues([
           {
             step,
@@ -1325,8 +1398,7 @@ function OnboardingWizardContent() {
       }
     : ONBOARDING_STEPS[currentStep - 1]
   const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
-  // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
-  // catalog source, and once the store is submitted it is read-only and saves nothing.
+  // Step 9's approval note applies only to unfinished setup, not published-store editing.
   const saveNote = !stepMeta.saveNote || !catalogUnlocked ? null
     : currentStep === 9 ? (liveApi && !storeIsSubmitted ? stepMeta.saveNote : null)
       : writesReachAccount(catalogSource) ? stepMeta.saveNote : null
@@ -1342,7 +1414,7 @@ function OnboardingWizardContent() {
   // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send OTP'
     : currentStep === 2 ? 'Verify & continue'
-      // An approved store's Step 6 saves without moving on, so the label promises no continue.
+      // Approved size and branding edits save without moving on.
       : stepSavesInPlace ? 'Save changes'
       // A submitted store only writes on the additive catalog steps; everywhere else
       // Continue is pure navigation, so the label must not promise a save.
@@ -1368,7 +1440,7 @@ function OnboardingWizardContent() {
       // A sample draft has no account copy to wait for.
       : catalogSource !== 'account' ? 'loaded'
         : waitsForFirstList(
-          stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units }),
+          stepLoadState(currentStep, { submitted: storeIsSubmitted, approved: storeIsApproved, resources: loadView.resources, units: loadView.units }),
           currentStep,
           loadView,
         )
@@ -1485,19 +1557,29 @@ function OnboardingWizardContent() {
                           <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmStartOver} />
                         ) : null}
                         {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
-                            hold for every control on the locked steps (3, 7, 8, 9), and threading
+                            hold for every control on the locked steps, and threading
                             a flag through those step components is a rule anything new can be added
-                            without. Categories/products and an approved store's sizes stay interactive so the catalog
-                            can still grow within plan limits; Step 10 is the landing step and stays
+                            without. Categories/products and an approved store's sizes/branding stay interactive;
+                            Step 10 is the landing step and stays
                             interactive too. The notices above carry the sign-out action, which
                             stays available because it is the only route backwards. Step 3 locks
                             only its cards, so its list can still be searched and paged. */}
+                        {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
+                        {stepState === 'failed' ? <>
+                          {currentStep === 9 && storeIsSubmitted && storeIsApproved ? <p className="mb-3 text-sm text-destructive">Could not load your saved store settings. Retry before making changes.</p> : null}
+                          <LoadError onRetry={() => entryRef.current?.retry(currentStep)} />
+                        </> : null}
+                        {stepState === 'loaded' && writesReachAccount(catalogSource) && (currentStep === 10 || (currentStep === 9 && submittedStepIsReadOnly(9, storeIsSubmitted, storeIsApproved))) ? (
+                          <div className="space-y-3 empty:hidden [&:not(:empty)]:mb-5">
+                            {(['logo', 'banner'] as const).filter((kind) => loadView.resources[kind] === 'failed').map((kind) => (
+                              <StoreImageLoadNotice key={kind} kind={kind} onRetry={() => entryRef.current?.retryImage(kind)} />
+                            ))}
+                          </div>
+                        ) : null}
                         <fieldset
-                          disabled={currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
+                          disabled={(currentStep === 9 && busy) || (currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved))}
                           className="min-w-0 border-0 p-0"
                         >
-                        {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
-                        {stepState === 'failed' ? <LoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
                         {stepState === 'loaded' ? <>
                           {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
                           {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
@@ -1511,7 +1593,7 @@ function OnboardingWizardContent() {
                           {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} /> : null}
                           {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                           {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
-                          {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
+                          {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} savesInPlace={stepSavesInPlace} imageStates={writesReachAccount(catalogSource) ? { logo: loadView.resources.logo, banner: loadView.resources.banner } : undefined} onRetryImage={submittedStepIsReadOnly(9, storeIsSubmitted, storeIsApproved) ? undefined : (kind) => entryRef.current?.retryImage(kind)} /> : null}
                           {currentStep === 10 && catalogUnlocked ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </> : null}
                         </fieldset>

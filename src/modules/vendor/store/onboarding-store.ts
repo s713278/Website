@@ -245,6 +245,8 @@ type OnboardingStore = {
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
   updatePhone: (phone: string) => void
   setImage: (kind: ImageKind, file: File | null, url: string | null) => void
+  restoreImage: (kind: ImageKind, url: string | null) => void
+  recordUploadedImage: (kind: ImageKind, file: File, url: string) => void
   /**
    * Advance past `step`. `syncedWithAccount` says whether the step actually reached the
    * vendor account — false for demo and sample mode, where the write is deliberately
@@ -267,7 +269,7 @@ type OnboardingStore = {
   applyResumedDraft: (
     draft: VendorOnboardingDraftV1,
     furthestVisitedStep: OnboardingStep,
-    runtime: Pick<OnboardingRuntimeState, 'paymentDetails' | 'orderWhatsapp'>,
+    runtime: Pick<OnboardingRuntimeState, 'paymentDetails'> & Partial<Pick<OnboardingRuntimeState, 'orderWhatsapp' | 'supportWhatsapp'>>,
     options?: { frameApplied?: boolean },
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
@@ -285,8 +287,8 @@ const DEFERRED_MESSAGE =
 
 function revokeRuntimeUrls(runtime: OnboardingRuntimeState) {
   if (typeof URL === 'undefined') return
-  if (runtime.logoUrl) URL.revokeObjectURL(runtime.logoUrl)
-  if (runtime.bannerUrl) URL.revokeObjectURL(runtime.bannerUrl)
+  if (runtime.logoUrl?.startsWith('blob:')) URL.revokeObjectURL(runtime.logoUrl)
+  if (runtime.bannerUrl?.startsWith('blob:')) URL.revokeObjectURL(runtime.bannerUrl)
 }
 
 function constrainVisitedStep(
@@ -1029,10 +1031,10 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   setImage(kind, file, url) {
     set((state) => {
       const oldUrl = kind === 'logo' ? state.runtime.logoUrl : state.runtime.bannerUrl
-      if (oldUrl && oldUrl !== url) URL.revokeObjectURL(oldUrl)
+      if (oldUrl?.startsWith('blob:') && oldUrl !== url) URL.revokeObjectURL(oldUrl)
       const runtime = kind === 'logo'
-        ? { ...state.runtime, logoFile: file, logoUrl: url }
-        : { ...state.runtime, bannerFile: file, bannerUrl: url }
+        ? { ...state.runtime, logoFile: file, logoUrl: url ?? state.runtime.savedLogoUrl }
+        : { ...state.runtime, bannerFile: file, bannerUrl: url ?? state.runtime.savedBannerUrl }
       return {
         runtime,
         furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, 9),
@@ -1040,6 +1042,31 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       }
     })
     queuePersistence()
+  },
+
+  restoreImage(kind, url) {
+    set((state) => ({ runtime: {
+      ...state.runtime,
+      ...(kind === 'logo'
+        ? { savedLogoUrl: url, logoUrl: state.runtime.logoFile ? state.runtime.logoUrl : url }
+        : { savedBannerUrl: url, bannerUrl: state.runtime.bannerFile ? state.runtime.bannerUrl : url }),
+    } }))
+  },
+
+  recordUploadedImage(kind, file, url) {
+    set((state) => {
+      const isLogo = kind === 'logo'
+      const pending = isLogo ? state.runtime.logoFile : state.runtime.bannerFile
+      const previousUrl = isLogo ? state.runtime.logoUrl : state.runtime.bannerUrl
+      const saved = isLogo ? { savedLogoUrl: url } : { savedBannerUrl: url }
+      if (pending !== file) return { runtime: { ...state.runtime, ...saved } }
+      if (previousUrl?.startsWith('blob:')) URL.revokeObjectURL(previousUrl)
+      return { runtime: {
+        ...state.runtime,
+        ...saved,
+        ...(isLogo ? { logoFile: null, logoUrl: url } : { bannerFile: null, bannerUrl: url }),
+      } }
+    })
   },
 
   completeStep(step, nextStep, options = {}) {
@@ -1108,7 +1135,8 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         ...state.runtime,
         paymentDetails: runtime.paymentDetails,
         // Never persisted locally, so a resume is the only thing that can restore it.
-        orderWhatsapp: runtime.orderWhatsapp || state.runtime.orderWhatsapp,
+        ...(runtime.orderWhatsapp === undefined ? {} : { orderWhatsapp: runtime.orderWhatsapp }),
+        ...(runtime.supportWhatsapp === undefined ? {} : { supportWhatsapp: runtime.supportWhatsapp }),
       },
       // A rebuilt draft *is* the account copy. Taking it for some steps only leaves the
       // edited ones as they were, and is not a resume worth announcing.
