@@ -1001,3 +1001,11 @@ describe('validateStep — step 9 matches what the account accepts', () => {
     ])
   })
 })
+
+describe('validateStep — step 1 phone', () => {
+  it('asks for a valid mobile number in plain words', () => {
+    expect(validateStep(1, createEmptyOnboardingDraft(), { ...runtime, phone: '123' })).toEqual([
+      { step: 1, field: 'phone', message: 'Enter a valid mobile number.' },
+    ])
+  })
+})

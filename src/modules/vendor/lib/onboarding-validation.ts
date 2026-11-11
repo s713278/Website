@@ -345,7 +345,7 @@ export function validateStep(
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
       ? []
-      : [issue(1, 'phone', 'Enter a valid 10-digit Indian mobile number beginning with 6-9.')]
+      : [issue(1, 'phone', 'Enter a valid mobile number.')]
   }
   if (step === 2) {
     return draft.mobileVerified

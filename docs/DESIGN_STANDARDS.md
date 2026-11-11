@@ -22,15 +22,19 @@ design reference.
 
 ### Onboarding action feedback
 
-- Use the wizard-scoped shadcn toast for refused saved-category/product removal, validation on
-  Continue or Add, image selection errors, failed actions, in-place saves, and OTP resend success.
+- Use the wizard-scoped shadcn toast for refused saved-category/product removal, missing choices
+  on Steps 3-5, failed saves on Steps 3-5 and 10, in-place saves, and OTP resend success.
 - Keep messages concise and regular weight: amber cautions, red errors, green success.
 - Show only the latest toast. Warnings/successes last 3 seconds; errors last 5 seconds. Hover/focus
   pauses dismissal; close and swipe remain available. Clear on step changes and wizard exit.
 - Wizard toasts sit just above its footer so Continue and upload retry stay reachable; from 1400px
   wide they sit in the corner, clear of the footer's buttons.
-- Validation toasts supplement persistent inline errors and existing first-error focus/scroll.
-  The toast supplies the action announcement; do not duplicate it in another live region.
+- Show each error once. A message tied to one field (Steps 1, 2 and 6-9, including image selection
+  errors) is inline only, with first-error focus/scroll. A missing choice on Steps 3-5 (business
+  type, category, product) is a toast only, with no inline message or scroll; the exception is a
+  category with no product on Step 5, whose panel still opens and scrolls into view. Plan-limit
+  messages stay inline and in the toast. The toast
+  supplies the announcement; do not duplicate it in another live region.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
   submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
 

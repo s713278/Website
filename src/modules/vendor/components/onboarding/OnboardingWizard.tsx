@@ -173,9 +173,22 @@ type OnboardingState = ReturnType<typeof useOnboardingStore.getState>
  */
 type IssueRecheck = (state: OnboardingState) => ValidationIssue[]
 
-type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
+/** `toastOnly` issues are announced by the toast alone: they have no inline message. */
+type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck; toastOnly?: boolean }
 
 const NO_ISSUES: ShownIssues = { issues: [] }
+const NO_INLINE_ISSUES: ValidationIssue[] = []
+
+/**
+ * Steps whose Continue problems sit beside one specific field, so the inline message says
+ * everything and a toast would repeat it. Steps 3-5 are the opposite: a missing choice has no
+ * single field worth marking, so the toast carries it. Step 10 lists its issues itself and keeps
+ * its toast.
+ */
+const INLINE_ONLY_STEPS: readonly OnboardingStep[] = [1, 2, 6, 7, 8, 9]
+// The "Choose …" messages are the missing choices. Plan-limit messages share the `categories` and
+// `products` fields but are guidance the vendor must keep seeing, so they stay inline.
+const isMissingChoice = (item: ValidationIssue) => item.message.startsWith('Choose ')
 
 const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront']
 /** The steps whose draft each resource's applier fills. */
@@ -785,6 +798,8 @@ function OnboardingWizardContent() {
     const kept = new Set(stillShownKey.split(','))
     return shownIssues.issues.filter((_, index) => kept.has(String(index)))
   }, [shownIssues, stillShownKey])
+  // What the step components render inline; a toast-only issue still counts as shown above.
+  const inlineIssues = shownIssues.toastOnly ? NO_INLINE_ISSUES : issues
   useEffect(() => {
     if (shownIssues.issues.length && !issues.length) feedback.clear()
   }, [shownIssues, issues.length, feedback])
@@ -966,13 +981,19 @@ function OnboardingWizardContent() {
    * or go-live, the blocked sample catalog) omit it and stay until the next action.
    */
   const showIssues = (nextIssues: ValidationIssue[], recheck?: IssueRecheck) => {
-    setShownIssues({ issues: nextIssues, recheck })
+    const current = useOnboardingStore.getState().draft.currentStep
+    // Only a validation re-run (`recheck`) marks a missing choice; a failed save on the same
+    // step keeps its inline message, which outlives the toast.
+    const toastOnly = Boolean(recheck) && current >= 3 && current <= 5 && nextIssues.every(isMissingChoice)
+    setShownIssues({ issues: nextIssues, recheck, toastOnly })
     const first = nextIssues[0]
-    if (first) feedback.show(first.message, 'error')
-    // Every issue renders inline on its own step. Step 10's readiness check raises issues
+    if (first && !INLINE_ONLY_STEPS.includes(current)) feedback.show(first.message, 'error')
+    // Every other issue renders inline on its own step. Step 10's readiness check raises issues
     // for Steps 3-9, whose fields are not on screen; Step 10 lists those in its readiness list.
-    const onScreen = first?.step === useOnboardingStore.getState().draft.currentStep
-    if (first) focusField(onScreen ? first.field : 'readiness-issues')
+    // A toast-only issue has nothing to scroll to, except a category's panel, which still opens.
+    if (first && (!toastOnly || first.field.startsWith('category-products-'))) {
+      focusField(first.step === current ? first.field : 'readiness-issues')
+    }
   }
 
   const requestSampleCatalog = () => {
@@ -1581,9 +1602,9 @@ function OnboardingWizardContent() {
                           className="min-w-0 border-0 p-0"
                         >
                         {stepState === 'loaded' ? <>
-                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
-                          {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={inlineIssues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
+                          {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
                           {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
                             <StepNotice message={currentStep === 3
                               ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'

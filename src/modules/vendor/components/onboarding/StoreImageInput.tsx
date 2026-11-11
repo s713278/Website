@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import { imageSelectionError, VENDOR_IMAGE_ACCEPT } from '../../lib/onboarding-images'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { ValidationIssue } from '../../types/onboarding'
-import { useOnboardingFeedback } from './onboarding-feedback'
 import type { ResourceStatus } from '../../lib/onboarding-resume'
 
 export function StoreImageLoadNotice({ kind, onRetry }: { kind: VendorImageKind; onRetry: () => void }) {
@@ -25,7 +24,6 @@ export function StoreImageInput({ kind, issues, live, loadState = 'loaded', onRe
   const chooseButtonRef = useRef<HTMLButtonElement>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
-  const feedback = useOnboardingFeedback()
   const runtime = useOnboardingStore((state) => state.runtime)
   const setImage = useOnboardingStore((state) => state.setImage)
   const isLogo = kind === 'logo'
@@ -42,7 +40,6 @@ export function StoreImageInput({ kind, issues, live, loadState = 'loaded', onRe
     const invalid = imageSelectionError(chosen)
     if (invalid) {
       setSelectionError(invalid)
-      feedback.show(invalid, 'error')
       return
     }
     try {
@@ -51,7 +48,6 @@ export function StoreImageInput({ kind, issues, live, loadState = 'loaded', onRe
     } catch {
       const message = 'This image could not be opened for preview. Choose another file.'
       setSelectionError(message)
-      feedback.show(message, 'error')
     }
   }
 

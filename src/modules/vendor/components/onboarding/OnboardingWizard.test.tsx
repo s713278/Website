@@ -463,7 +463,8 @@ describe('onboarding account hydration and size permissions', () => {
     await waitFor(() => expect(document.getElementById('skus-error')?.textContent).toBe('Could not create size'))
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('skus')))
     expect(document.getElementById('skus')?.getAttribute('tabindex')).toBe('-1')
-    expect(liveRegion().textContent).toBe('Could not create size')
+    // Field-specific, so inline only: no toast repeats it.
+    expect(liveRegion().textContent).toBe('')
     expect(shownCopies('Could not create size')).toHaveLength(1)
     expect(screen.queryByText(/Please fix/)).toBeNull()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
@@ -575,7 +576,8 @@ describe('stale validation errors', () => {
     expect(price.getAttribute('aria-invalid')).toBe('true')
     // The first faulty field takes focus once the step has rendered, and its message is announced.
     await waitFor(() => expect(document.activeElement).toBe(price))
-    expect(liveRegion().textContent).toBe('Discounted price cannot exceed MRP.')
+    // Field-specific, so inline only: no toast repeats it.
+    expect(liveRegion().textContent).toBe('')
     expectNoSummary()
 
     fireEvent.change(price, { target: { value: '160' } })
@@ -755,7 +757,8 @@ describe('save failures shown inline on their own step', () => {
     expect(follows(document.getElementById('fulfillment')!, document.getElementById('fulfillment-error')!)).toBe(true)
     expect(shownCopies('Could not save checkout')).toHaveLength(1)
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('fulfillment')))
-    expect(liveRegion().textContent).toBe('Could not save checkout')
+    // Field-specific, so inline only: no toast repeats it.
+    expect(liveRegion().textContent).toBe('')
     expectNoSummary()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(7)
   })
@@ -777,7 +780,8 @@ describe('save failures shown inline on their own step', () => {
     expect(shownCopies('Could not save payments')).toHaveLength(1)
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('payments')))
     expect(document.getElementById('payments')?.getAttribute('tabindex')).toBe('-1')
-    expect(liveRegion().textContent).toBe('Could not save payments')
+    // Field-specific, so inline only: no toast repeats it.
+    expect(liveRegion().textContent).toBe('')
     expectNoSummary()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(8)
   })
@@ -810,21 +814,92 @@ describe('save failures shown inline on their own step', () => {
 })
 
 describe('Products action feedback', () => {
-  it('shows a red toast and keeps inline validation and focus when no product is selected', async () => {
+  const toProducts = async () => {
     vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(EMPTY_PAGE)
     renderAccount('PENDING', 5)
     await screen.findByRole('button', { name: /Step 5,.*You are here/ })
     await waitFor(() => expect(screen.getByRole('button', { name: /^Continue/ }).hasAttribute('disabled')).toBe(false))
+  }
+
+  it('shows only a red toast, with no inline message or scrolling, when no product is selected', async () => {
+    await toProducts()
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView)
+    scroll.mockClear()
     act(() => useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, products: [], skus: [] }), 5))
     fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
     const message = 'Choose at least one product to continue.'
-    expect(document.getElementById('products-error')?.textContent).toBe(message)
     expect(liveRegion().textContent).toBe(message)
     expect(liveRegion().closest('[data-slot="toast"]')?.className).toContain('text-red-900')
-    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('products')))
+    expect(document.getElementById('products-error')).toBeNull()
+    expect(shownCopies(message)).toHaveLength(0)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(scroll).not.toHaveBeenCalled()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(5)
     fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
     await waitFor(() => expect(liveRegion().textContent).toBe(''))
+  })
+
+  it('toasts a category with no product and still opens and scrolls to its panel, without an inline message', async () => {
+    await toProducts()
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView)
+    scroll.mockClear()
+    const second = { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, second],
+      products: draft.products.filter((product) => product.categoryId !== second.id),
+      skus: [],
+    }), 5))
+    fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
+    const message = `Choose at least one product in ${second.name}.`
+    expect(liveRegion().textContent).toBe(message)
+    expect(document.getElementById(`category-products-${second.id}-error`)).toBeNull()
+    expect(shownCopies(message)).toHaveLength(0)
+    await waitFor(() => expect((document.getElementById(`category-products-${second.id}`) as HTMLDetailsElement).open).toBe(true))
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+  })
+})
+
+describe('Missing choices on Steps 3 and 4', () => {
+  it.each([
+    [3, 'Choose a business type.', 'business-type'],
+    [4, 'Choose at least one category.', 'categories'],
+  ])('Step %i shows only a toast, with no inline message or scrolling', async (step, message, field) => {
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue(EMPTY_PAGE)
+    renderAccount('PENDING', step)
+    await screen.findByRole('button', { name: new RegExp(`Step ${step},.*You are here`) })
+    await waitFor(() => expect(stepSpinner()).toBeNull())
+    act(() => useOnboardingStore.getState().updateDraft((draft) => step === 3
+      ? { ...draft, business: { ...draft.business, businessType: null }, categories: [], products: [], skus: [] }
+      : { ...draft, categories: [], products: [], skus: [] }, step as 3 | 4))
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView)
+    scroll.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
+
+    expect(liveRegion().textContent).toBe(message)
+    expect(document.getElementById(`${field}-error`)).toBeNull()
+    expect(shownCopies(message)).toHaveLength(0)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(scroll).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(step)
+  })
+})
+
+describe('Plan-limit messages on Step 4', () => {
+  it('stay inline as well as in the toast', async () => {
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue(EMPTY_PAGE)
+    renderAccount('PENDING', 4)
+    await screen.findByRole('button', { name: /Step 4,.*You are here/ })
+    await waitFor(() => expect(stepSpinner()).toBeNull())
+    const extra = [11, 12, 13, 14].map((id) => ({ id, name: `Extra ${id}`, businessTypeId: 7, description: null, imageUrl: null, displayOrder: id }))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, categories: [...draft.categories, ...extra] }), 4))
+
+    fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
+
+    const message = 'Your plan allows 3 categories in total, including those already saved to your store.'
+    expect(liveRegion().textContent).toBe(message)
+    expect(document.getElementById('categories-error')?.textContent).toBe(message)
   })
 })
 
