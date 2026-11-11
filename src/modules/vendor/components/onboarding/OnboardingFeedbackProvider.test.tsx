@@ -29,16 +29,16 @@ describe('onboarding action feedback', () => {
     fireEvent.click(screen.getByText('Fail'))
     expect(document.querySelectorAll('[data-slot="toast"]')).toHaveLength(1)
     expect(activeToast()?.textContent).toContain('Select a product.')
-    expect(activeToast()?.className).toContain('text-destructive')
+    expect(activeToast()?.className).toContain('text-red-900')
     fireEvent.click(screen.getByText('Save'))
     expect(activeToast()?.className).toContain('bg-emerald-50')
     expect(activeToast()?.querySelector('[data-slot="toast-title"]')?.className).toContain('font-normal')
   })
 
   it.each([
-    ['Warn', 4000],
-    ['Save', 4000],
-    ['Fail', 6000],
+    ['Warn', 3000],
+    ['Save', 3000],
+    ['Fail', 5000],
   ])('expires %s feedback after %i ms', (action, timeout) => {
     vi.useFakeTimers()
     render(<OnboardingFeedbackProvider><Actions /></OnboardingFeedbackProvider>)

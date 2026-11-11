@@ -25,9 +25,10 @@ design reference.
 - Use the wizard-scoped shadcn toast for refused saved-category/product removal, validation on
   Continue or Add, image selection errors, failed actions, in-place saves, and OTP resend success.
 - Keep messages concise and regular weight: amber cautions, red errors, green success.
-- Show only the latest toast. Warnings/successes last 4 seconds; errors last 6 seconds. Hover/focus
+- Show only the latest toast. Warnings/successes last 3 seconds; errors last 5 seconds. Hover/focus
   pauses dismissal; close and swipe remain available. Clear on step changes and wizard exit.
-- Wizard toasts sit above its footer so Continue and upload retry stay reachable on phones.
+- Wizard toasts sit just above its footer so Continue and upload retry stay reachable; from 1400px
+  wide they sit in the corner, clear of the footer's buttons.
 - Validation toasts supplement persistent inline errors and existing first-error focus/scroll.
   The toast supplies the action announcement; do not duplicate it in another live region.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,

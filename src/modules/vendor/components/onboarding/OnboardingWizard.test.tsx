@@ -820,7 +820,7 @@ describe('Products action feedback', () => {
     const message = 'Choose at least one product to continue.'
     expect(document.getElementById('products-error')?.textContent).toBe(message)
     expect(liveRegion().textContent).toBe(message)
-    expect(liveRegion().closest('[data-slot="toast"]')?.className).toContain('text-destructive')
+    expect(liveRegion().closest('[data-slot="toast"]')?.className).toContain('text-red-900')
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('products')))
     expect(useOnboardingStore.getState().draft.currentStep).toBe(5)
     fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
