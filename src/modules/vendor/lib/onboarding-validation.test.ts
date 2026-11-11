@@ -942,7 +942,6 @@ describe('validateStep — step 9 matches what the account accepts', () => {
     const draft = createEmptyOnboardingDraft()
     return {
       ...draft,
-      business: { ...draft.business, ownerName: 'Asha Rao', contactPerson: 'Asha Rao' },
       storefront: { ...draft.storefront, storeName: 'Asha Dairy', businessLocation: 'Indiranagar' },
     }
   }
@@ -990,17 +989,14 @@ describe('validateStep — step 9 matches what the account accepts', () => {
     }
   })
 
-  it('rejects whitespace-only names and location', () => {
+  it('rejects a whitespace-only store name and location', () => {
     const draft = validStoreDraft()
     const blank = {
       ...draft,
-      business: { ...draft.business, ownerName: '   ', contactPerson: '  ' },
       storefront: { ...draft.storefront, storeName: '     ', businessLocation: '   ' },
     }
     expect(validateStep(9, blank, storeRuntime).map((item) => item.field)).toEqual([
       'store-name',
-      'owner-name',
-      'contact-person',
       'business-location',
     ])
   })

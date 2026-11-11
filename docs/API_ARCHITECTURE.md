@@ -266,8 +266,11 @@ nonblocking image notice. Pending-review Step 9 stays locked, with image retry o
 fieldset. No 404 is converted into a successful empty image. An unsubmitted Step 10 restores
 images unless the initial-setup rule applies or the visit/cache already holds them. Saved URLs
 and pending Files/object URLs are separate runtime state and follow draft/session ownership.
-Selecting a replacement previews it locally; Continue uploads pending images before saving store
-and business details. Each successful upload is recorded immediately in runtime, its resource
+Selecting a replacement previews it locally; Continue uploads pending images before saving store details
+through the storefront PUT, which carries the store name. Setup Step 9 never sends the Step 3
+business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). The storefront PUT
+does not update the vendor record's name, so resume and dashboard Settings prefer the context name
+([gap](./API_GAPS.md#vendor-record-name-after-a-storefront-save)). Each successful upload is recorded immediately in runtime, its resource
 cache and the active visit, superseding any older in-flight read. It survives a sibling upload
 or later settings-write failure; retry sends only remaining pending files. Storefront/profile
 writes invalidate only their own reads, keeping confirmed image results for back-navigation and
@@ -310,8 +313,8 @@ A failed settings read blocks the form/save and offers Retry; image-read failure
 separate visible-details behavior described above.
 
 **Save changes** saves in place without go-live or another review submission. Pending image uploads
-run first, followed by storefront PUT and a general profile PUT containing only business name,
-owner name and contact person. Completed stores never use the business-type PATCH: that endpoint
+run first, followed by storefront PUT and a general profile PUT containing only the business name.
+Completed stores never use the business-type PATCH: that endpoint
 documents a reset to `STEP_3_COMPLETED`. The frontend sends no approval, activation or onboarding
 fields. The profile contract exception and live-verification limits are owned by
 [API_GAPS.md](./API_GAPS.md#approved-store-profile-updates).
@@ -523,7 +526,7 @@ of vendor leave the step unvouched, so it saves as before.
 
 Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
 the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the
-storefront plus business-details writes for Step 9. These steps are vouched for only by a save in
+storefront write for Step 9. These steps are vouched for only by a save in
 this visit, except approved Step 9 whose complete editable settings are now hydrated from the
 storefront read. Unfinished setup's defaults and stored checkout options still need an explicit save.
 

@@ -105,7 +105,7 @@ describe('loadStepResources', () => {
   function stubReads(profileType = 'Beverages') {
     return {
       profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-        businessName: 'Store', businessType: profileType, ownerName: '', contactPerson: '', contactNumber: '',
+        businessName: 'Store', businessType: profileType, contactNumber: '',
       }),
       businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
         items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
@@ -203,7 +203,7 @@ describe('loadStepResources', () => {
     const pending = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: true })
     await Promise.resolve()
     expect(spies.businessTypes).not.toHaveBeenCalled()
-    answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
+    answer({ businessName: 'Store', businessType: null, contactNumber: '' })
     await settled(pending)
     expect(spies.businessTypes).not.toHaveBeenCalled()
   })
@@ -226,7 +226,7 @@ describe('loadStepResources', () => {
     expect(spies.businessTypes).toHaveBeenCalledTimes(1)
     expect(spies.businessTypes.mock.calls[0][0]).toEqual({ pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' })
 
-    answer({ businessName: 'Store', businessType: 'Others', ownerName: '', contactPerson: '', contactNumber: '' })
+    answer({ businessName: 'Store', businessType: 'Others', contactNumber: '' })
     await settled(reads)
     await expect(reads.businessTypes).resolves.toHaveLength(12)
     expect(readReferenceCache(businessTypeCacheKey('account', ''))).toMatchObject({ pageNumber: 0, lastPage: false })
@@ -273,7 +273,7 @@ describe('prefetchOnboardingLanding', () => {
     return {
       context: vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context),
       profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-        businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
+        businessName: 'Store', businessType, contactNumber: '',
       }),
       businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
         items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,

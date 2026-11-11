@@ -76,8 +76,7 @@ beforeEach(() => {
   vi.spyOn(vendorOnboardingService, 'getStorefrontSettings').mockResolvedValue(savedSettings())
   vi.spyOn(vendorOnboardingService, 'saveStoreProfile').mockResolvedValue(undefined)
   vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-    businessName: 'Test Store', businessType: 'Beverages', ownerName: 'Test Vendor',
-    contactPerson: 'Test Vendor', contactNumber: '',
+    businessName: 'Test Store', businessType: 'Beverages', contactNumber: '',
   })
   vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
     items: [{ id: 7, name: 'Beverages', icon: null, displayOrder: 1 }],
@@ -1130,7 +1129,7 @@ describe('per-step account reads', () => {
       expect(stepSpinner()).toBeTruthy()
 
       await act(async () => profile.resolve({
-        businessName: 'Test Store', businessType: 'Others', ownerName: 'Test Vendor', contactPerson: 'Test Vendor', contactNumber: '',
+        businessName: 'Test Store', businessType: 'Others', contactNumber: '',
       }))
       expect(await screen.findByRole('button', { name: /Type 9$/ })).toBeTruthy()
       expect(screen.queryByRole('button', { name: /Type 10$/ })).toBeNull()
@@ -1699,7 +1698,7 @@ describe('approved Step 9 editing', () => {
     expect(screen.getByLabelText('Order WhatsApp').getAttribute('value')).toBe('9876543210')
   })
 
-  it('saves names and an original image in place without changing approval or resubmitting', async () => {
+  it('saves the store name and an original image in place without changing approval or resubmitting', async () => {
     vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:replacement'); static revokeObjectURL = vi.fn() })
     const save = vi.spyOn(vendorOnboardingService, 'saveStorefront').mockResolvedValue(undefined)
     const initialDetails = vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockRejectedValue(new Error('Must not reset onboarding'))
@@ -1707,7 +1706,7 @@ describe('approved Step 9 editing', () => {
     const upload = vi.spyOn(vendorImagesService, 'uploadImage').mockResolvedValue('https://images.example.test/replacement.png')
     await openApprovedBranding()
     const submission = useOnboardingStore.getState().storeSubmission
-    fireEvent.change(screen.getByLabelText('Owner name'), { target: { value: 'Updated Owner' } })
+    fireEvent.change(screen.getByLabelText('Store name'), { target: { value: 'Updated Store' } })
     const file = new File(['original'], 'replacement.png', { type: 'image/png' })
     fireEvent.change(document.getElementById('store-logo-file')!, { target: { files: [file] } })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -1719,9 +1718,7 @@ describe('approved Step 9 editing', () => {
       supportWhatsapp: '9000000001', uploadedLogoUrl: 'https://images.example.test/replacement.png',
       theme: expect.objectContaining({ primaryColor: '#123456', cardStyle: 'BORDER' }),
     }))
-    expect(vendorOnboardingService.saveStoreProfile).toHaveBeenCalledWith('91', {
-      businessName: 'Test Store', ownerName: 'Updated Owner', contactPerson: 'Test Vendor',
-    })
+    expect(vendorOnboardingService.saveStoreProfile).toHaveBeenCalledWith('91', { businessName: 'Updated Store' })
     expect(upload).toHaveBeenCalledWith('91', 'logo', file, expect.anything())
     expect(initialDetails).not.toHaveBeenCalled()
     expect(submit).not.toHaveBeenCalled()
@@ -1737,9 +1734,9 @@ describe('approved Step 9 editing', () => {
     await screen.findByText('Changes saved.')
     expect(save).not.toHaveBeenCalled()
     expect(vendorOnboardingService.saveStoreProfile).not.toHaveBeenCalled()
-    fireEvent.change(screen.getByLabelText('Owner name'), { target: { value: 'X' } })
+    fireEvent.change(screen.getByLabelText('Store name'), { target: { value: 'X' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-    await screen.findAllByText('Enter at least 3 characters for the owner name.')
+    await screen.findAllByText(/characters for the store name\./)
     expect(save).not.toHaveBeenCalled()
     expect(useOnboardingStore.getState().draft.currentStep).toBe(9)
   })
@@ -1764,8 +1761,7 @@ describe('approved Step 9 editing', () => {
     await waitFor(() => expect(vendorOnboardingService.getStorefrontSettings).toHaveBeenCalledTimes(1))
     expect(screen.queryByLabelText('Store name')).toBeNull()
     await act(async () => profile.resolve({
-      businessName: 'Profile name', businessType: 'Beverages', ownerName: 'Test Owner',
-      contactPerson: 'Test Contact', contactNumber: '9000000002',
+      businessName: 'Profile name', businessType: 'Beverages', contactNumber: '9000000002',
     }))
     expect((await screen.findByLabelText('Store name')).getAttribute('value')).toBe('Test Store')
     expect(useOnboardingStore.getState().runtime.orderWhatsapp).toBe('9876543210')

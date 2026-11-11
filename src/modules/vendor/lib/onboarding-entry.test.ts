@@ -40,8 +40,6 @@ function state(
     profile: {
       businessName: 'SK Organic Store',
       businessType: 'Beverages & Juice Center',
-      ownerName: 'Sanjay Kumar',
-      contactPerson: 'Sanjay Kumar',
       contactNumber: '9876543210',
     },
     categories: [{ vendorCategoryId: 501, platformCategoryId: 10, name: 'Juices', imageUrl: null }],

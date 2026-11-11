@@ -54,14 +54,10 @@ describe('approved store settings', () => {
     await expect(vendorOnboardingService.getStorefrontSettings('91')).rejects.toThrow('Storefront unavailable')
   })
 
-  it('updates only profile names without onboarding, category, approval or status fields', async () => {
+  it('updates only the business name without onboarding, category, approval or status fields', async () => {
     const request = vi.spyOn(getHttp(), 'put').mockResolvedValue({ data: { success: true } })
-    await vendorOnboardingService.saveStoreProfile('91', {
-      businessName: ' Test Store ', ownerName: ' Test Owner ', contactPerson: ' Test Contact ',
-    })
-    expect(request).toHaveBeenCalledWith('/v1/vendors/91', {
-      business_name: 'Test Store', owner_name: 'Test Owner', contact_person: 'Test Contact',
-    }, expect.anything())
+    await vendorOnboardingService.saveStoreProfile('91', { businessName: ' Test Store ' })
+    expect(request).toHaveBeenCalledWith('/v1/vendors/91', { business_name: 'Test Store' }, expect.anything())
   })
 })
 

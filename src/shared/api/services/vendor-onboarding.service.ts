@@ -170,13 +170,9 @@ async function getStorefrontSettings(vendorId: number | string, config: Referenc
  */
 async function saveStoreProfile(vendorId: number | string, input: {
   businessName: string
-  ownerName: string
-  contactPerson: string
 }): Promise<void> {
   await apiVendorsService.update(vendorId, {
     business_name: input.businessName.trim(),
-    owner_name: input.ownerName.trim(),
-    contact_person: input.contactPerson.trim(),
   })
 }
 

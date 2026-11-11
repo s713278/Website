@@ -10,7 +10,7 @@ import {
 afterEach(() => invalidateOnboardingResources())
 
 const PROFILE: VendorProfile = {
-  businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
+  businessName: 'Green Bowl Grocers', businessType: null, contactNumber: '',
 }
 
 const CATEGORIES: VendorCategoryRef[] = [

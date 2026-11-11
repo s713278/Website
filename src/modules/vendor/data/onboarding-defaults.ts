@@ -38,8 +38,6 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     business: {
       businessType: null,
       businessName: '',
-      ownerName: '',
-      contactPerson: '',
     },
     categories: [],
     products: [],

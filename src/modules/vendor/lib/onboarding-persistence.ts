@@ -328,9 +328,10 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
   if (!Array.isArray(value.completedSteps) || !value.completedSteps.every(isStep)) return false
   if (value.catalogSource !== 'account' && value.catalogSource !== 'sample') return false
   if (!isBoolean(value.mobileVerified)) return false
+  // ownerName and contactPerson are no longer collected; drafts saved with them stay readable.
   if (!isRecord(value.business) || !hasOnlyKeys(value.business, ['businessType', 'businessName', 'ownerName', 'contactPerson'])) return false
   if (value.business.businessType !== null && !isBusinessTypeReference(value.business.businessType)) return false
-  if (!isString(value.business.businessName) || !isString(value.business.ownerName) || !isString(value.business.contactPerson)) return false
+  if (!isString(value.business.businessName)) return false
   if (!Array.isArray(value.categories) || value.categories.length > ONBOARDING_CONFIG.maxPersistedCategories || !value.categories.every(isCategoryReference)) return false
   if (!Array.isArray(value.products) || !value.products.every(isSelectedProduct)) return false
   if (!Array.isArray(value.skus) || !value.skus.every(isDraftSku)) return false
@@ -436,8 +437,6 @@ export function toPersistedDraft(draft: VendorOnboardingDraftV1): PersistedOnboa
         ? { ...draft.business.businessType, icon: safeAssetUrl(draft.business.businessType.icon) }
         : null,
       businessName: draft.business.businessName,
-      ownerName: draft.business.ownerName,
-      contactPerson: draft.business.contactPerson,
     },
     categories: draft.categories.map((category) => ({
       ...category,

@@ -46,7 +46,8 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Approval reset during go-live | Keeping an approved vendor able to add sizes after completing setup | A September 2026 test report describes an already `APPROVED` account returning to `approval_status: PENDING` after Step 10 called `POST /v1/vendors/{vendor_id}/go-live`. This transition still needs backend review, including how existing approval should be preserved and the intended status after onboarding. The frontend requires an approved status for submitted size additions (`APPROVED`, plus the current `ACTIVE` compatibility value). The completed-and-approved UI flow passes with simulated responses; a live check of that combined state awaits an approved account. |
 | Approval status vocabulary | Identifying approved vendors consistently | The documented contract and existing fixtures use `approval_status: APPROVED`, while a current supplied vendor context reports `approval_status: ACTIVE`. The frontend treats both as approved at its status boundary; the backend should publish one canonical enum and clarify whether `ACTIVE` belongs to `vendor_status` only. |
 | ~~QR sharing~~ **closed 21 Sep 2026** | The ticket's offline-friendly QR requirement | The dashboard and approved setup Step 10 generate the QR in-browser from the canonical storefront URL. Vendors can save the PNG, and the native file-share action appears only when the device supports sharing that file. |
-| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates name and contacts from the vendor record and leaves theme/text branding at defaults. Logo/banner URLs restore separately through the authenticated images read. |
+| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates the store name from the vendor context (falling back to the vendor record) and keeps this owner's local copy of the other Step 9 fields, including the required business location (QA, 10 Nov 2026: saved, but unreadable until approval). On another device or after the local draft is cleared they return to defaults, and Step 10 asks for the location again. Logo/banner URLs restore separately through the authenticated images read. |
+| Vendor record name after a storefront save | One store name across every read | The storefront PUT updates the context and storefront names but not `GET /v1/vendors/{id}`'s `business_name` (QA, 10 Nov 2026). Resume and dashboard Settings prefer the context name; see [below](#vendor-record-name-after-a-storefront-save). |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
@@ -271,11 +272,16 @@ None documents an active/approved-store prohibition. This contract inspection ma
 writes and does not establish preservation of completed onboarding or approval on current QA.
 
 The existing Step 9 business-type PATCH is unsuitable for completed-store editing: it explicitly
-sets `onboarding_step` to `STEP_3_COMPLETED`. Approved Step 9 instead uses general profile PUT for
-`business_name`, `owner_name`, and `contact_person`, without status, approval, address, category,
-business-type or onboarding fields. It never invokes go-live to recover from an edit failure.
+sets `onboarding_step` to `STEP_3_COMPLETED`, and QA (10 November 2026) moved `next_step` back to 4
+from any later step. It also requires `business_type` (`400` without it). Setup Step 9 therefore
+never sends it: the storefront PUT alone saves the store name (see the
+[vendor record name gap](#vendor-record-name-after-a-storefront-save)). The storefront PUT rejects
+unknown fields (`400`, e.g. `owner_name`). Step 9 no longer collects owner name or contact person.
+Approved Step 9 instead uses general
+profile PUT for `business_name` only, without status, approval, address, category, business-type
+or onboarding fields. It never invokes go-live to recover from an edit failure.
 
-**Approved temporary exception:** send those three nonblank profile fields without
+**Approved temporary exception:** send that nonblank profile field without
 `assign_categories`. The source correction of 6 September (commit `a59bf1959fc101ee4a4d855cf395e35b6a68f2cf`)
 reports successful writes on gone-live and unfinished stores, a partial merge, ignored nulls, and
 unenforced `assign_categories`; the older JPA error came from a malformed request. This historical
@@ -287,6 +293,21 @@ Before release, verify a dedicated eligible test vendor through read → save �
 including unchanged vendor/approval/completion status, image replacement and partial failures.
 Storefront blank-field clearing remains unverified: its current mapper omits blank optional text,
 and profile PUT historically ignores null. No clearing capability is promised here.
+
+### Vendor record name after a storefront save
+
+Measured on QA, 10 November 2026, with fresh vendors: `PUT /v1/vendors/{vendor_id}/storefront`
+updates `business_name` in `GET /v1/vendors/{vendor_id}/context`, and after go-live in the owner and
+public storefront reads and `GET /v1/vendors/{identifier}/storefront/contact-us`. It does **not**
+update `business_name` in `GET /v1/vendors/{vendor_id}`, which stays at the signup default
+(`My Store`) through go-live. The storefront PUT also moves `next_step` to 10 from any earlier step.
+
+**Required backend change:** the storefront PUT should update the vendor record's `business_name`,
+or the backend should document which name is canonical.
+
+**Current frontend behavior:** setup Step 9 saves the name through the storefront PUT only. Wizard
+resume and dashboard Settings show the context name and fall back to the vendor record when the
+context has none. Remove the context preference when the vendor record is updated, and reverify.
 
 ### Onboarding continuity a vendor still loses
 

@@ -201,8 +201,6 @@ export type VendorOnboardingDraftV1 = {
   business: {
     businessType: BusinessTypeReference | null
     businessName: string
-    ownerName: string
-    contactPerson: string
   }
   categories: DraftCategory[]
   products: SelectedProduct[]

@@ -69,7 +69,7 @@ function holdSetupReads() {
 /** The same reads, answered with an empty account. */
 function answerSetupReads() {
   vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-    businessName: 'Green Bowl Grocers', businessType: null, ownerName: '', contactPerson: '', contactNumber: '',
+    businessName: 'Green Bowl Grocers', businessType: null, contactNumber: '',
   })
   vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
     items: [], pageNumber: 0, pageSize: 100, totalElements: 0, totalPages: 0, lastPage: true,

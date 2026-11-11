@@ -332,8 +332,6 @@ function stepSection(draft: VendorOnboardingDraftV1, step: OnboardingStep): unkn
     case 8: return [draft.payments]
     case 9: return [
       draft.business.businessName,
-      draft.business.ownerName,
-      draft.business.contactPerson,
       draft.storefront,
     ]
     default: return []

@@ -321,7 +321,7 @@ function startAccountEntry(
     const ran = (resource: OnboardingResource) => applied.add(resource)
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
-      draft = applyProfile(draft, values.profile!, options)
+      draft = applyProfile(draft, values.profile!, options, context.businessName)
       if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
       ran('profile')
     }

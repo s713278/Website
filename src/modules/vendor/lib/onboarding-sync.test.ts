@@ -19,6 +19,7 @@ import {
   planSkuWrites,
   persistProducts,
   persistSkus,
+  persistStep,
   GO_LIVE_RESOURCES,
   resumedCatalogFingerprints,
   savedResources,
@@ -1078,6 +1079,42 @@ describe('resumedCatalogFingerprints', () => {
   })
 })
 
+describe('persistStep Step 9 writes', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const step9Draft = (): VendorOnboardingDraftV1 => {
+    const empty = createEmptyOnboardingDraft()
+    return {
+      ...empty,
+      business: { ...empty.business, businessType: { id: 7, name: 'Beverages', icon: null, displayOrder: null } },
+      storefront: { ...empty.storefront, storeName: 'Test Store' },
+    }
+  }
+
+  function spyWrites() {
+    const calls: string[] = []
+    vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockImplementation(async () => { calls.push('businessType') })
+    vi.spyOn(vendorOnboardingService, 'saveStorefront').mockImplementation(async () => { calls.push('storefront') })
+    vi.spyOn(vendorOnboardingService, 'saveStoreProfile').mockImplementation(async () => { calls.push('profile') })
+    return calls
+  }
+
+  // The business-type PATCH resets onboarding to Step 3, which resumed vendors on Step 4;
+  // the storefront PUT carries the store name.
+  it('saves setup Step 9 through the storefront write alone', async () => {
+    const calls = spyWrites()
+    await persistStep(9, '91', step9Draft(), createEmptyRuntimeState(), vi.fn(), vi.fn())
+    expect(calls).toEqual(['storefront'])
+    expect(vendorOnboardingService.saveStorefront).toHaveBeenCalledWith('91', expect.objectContaining({ storeName: 'Test Store' }))
+  })
+
+  it('never sends the business-type write for an approved store', async () => {
+    const calls = spyWrites()
+    await persistStep(9, '91', step9Draft(), createEmptyRuntimeState(), vi.fn(), vi.fn(), [], { approvedStore: true })
+    expect(calls).toEqual(['storefront', 'profile'])
+  })
+})
+
 describe('stepSaveFingerprint', () => {
   const runtime = createEmptyRuntimeState()
   const settingsDraft = (): VendorOnboardingDraftV1 => {
@@ -1113,10 +1150,6 @@ describe('stepSaveFingerprint', () => {
 
     const whatsapp = { ...runtime, orderWhatsapp: '9000000000' }
     expect(stepSaveFingerprint(9, before, whatsapp)).not.toBe(stepSaveFingerprint(9, before, runtime))
-
-    // Owner and contact ride on the business-type write that Step 9 also sends.
-    const owner = { ...before, business: { ...before.business, ownerName: 'Someone Else' } }
-    expect(stepSaveFingerprint(9, owner, runtime)).not.toBe(stepSaveFingerprint(9, before, runtime))
   })
 })
 

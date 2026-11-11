@@ -399,8 +399,6 @@ export function validateStep(
     const issues: ValidationIssue[] = []
     if (draft.storefront.storeName.trim().length < MIN_STORE_NAME_LENGTH) issues.push(issue(9, 'store-name', `Enter at least ${MIN_STORE_NAME_LENGTH} characters for the store name.`))
     if (draft.storefront.storeName.trim().length > 100) issues.push(issue(9, 'store-name', 'Keep the store name under 100 characters.'))
-    if (draft.business.ownerName.trim().length < 3) issues.push(issue(9, 'owner-name', 'Enter at least 3 characters for the owner name.'))
-    if (draft.business.contactPerson.trim().length < 3) issues.push(issue(9, 'contact-person', 'Enter at least 3 characters for the contact person.'))
     if (draft.storefront.tagline.length > 120) issues.push(issue(9, 'tagline', 'Keep the tagline under 120 characters.'))
     if (!draft.storefront.businessLocation.trim()) issues.push(issue(9, 'business-location', 'Enter a business location.'))
     if (draft.storefront.businessLocation.length > 100) issues.push(issue(9, 'business-location', 'Keep the business location under 100 characters.'))

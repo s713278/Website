@@ -691,7 +691,7 @@ describe('changeBusinessType', () => {
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
-        business: { businessType: typeA, businessName: '', ownerName: '', contactPerson: '' },
+        business: { businessType: typeA, businessName: '' },
         currentStep: 3,
         completedSteps: [1, 2, 3, 4, 5] as OnboardingStep[],
         categories: [

@@ -115,7 +115,6 @@ export function stepSaveFingerprint(
     return JSON.stringify({
       source: draft.catalogSource,
       storefront: toStorefrontInput(draft, runtime),
-      business: toBusinessDetailsInput(draft),
     })
   }
   return catalogFingerprint(step, draft)
@@ -240,22 +239,6 @@ function toPaymentInput(
       isDefault: option.isDefault,
     })),
     details: runtime.paymentDetails,
-  }
-}
-
-/**
- * owner_name and contact_person have no home in the storefront config, so Step 9 sends
- * them on the business-type record where the contract defines them. `null` until a
- * business type is chosen, since that write needs one.
- */
-function toBusinessDetailsInput(draft: VendorOnboardingDraftV1) {
-  const businessType = draft.business.businessType
-  if (!businessType) return null
-  return {
-    businessType: businessType.name,
-    businessName: draft.storefront.storeName,
-    ownerName: draft.business.ownerName,
-    contactPerson: draft.business.contactPerson,
   }
 }
 
@@ -895,6 +878,8 @@ export async function persistStep(
   if (step === 9) {
     const images = await savePendingImages(vendorId, runtime, imageOptions)
     assertImageSaveCurrent(imageOptions)
+    // The storefront PUT carries the store name. Step 9 never sends the Step 3 business-type
+    // PATCH: it resets onboarding to Step 3, which resumed vendors on Step 4 (QA, 10 Nov 2026).
     await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, {
       ...runtime, savedLogoUrl: images.logo, savedBannerUrl: images.banner,
     }))
@@ -902,12 +887,7 @@ export async function persistStep(
     if (imageOptions.approvedStore) {
       await vendorOnboardingService.saveStoreProfile(vendorId, {
         businessName: draft.storefront.storeName,
-        ownerName: draft.business.ownerName,
-        contactPerson: draft.business.contactPerson,
       })
-      return
     }
-    const businessDetails = toBusinessDetailsInput(draft)
-    if (businessDetails) await vendorOnboardingService.saveBusinessType(vendorId, businessDetails)
   }
 }

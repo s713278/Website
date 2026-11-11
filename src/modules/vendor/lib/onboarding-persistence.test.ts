@@ -7,7 +7,7 @@ import {
   type SelectedProduct,
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
-import { parsePersistedEnvelope, restoredEditedSteps, toPersistedDraft } from './onboarding-persistence'
+import { hydratePersistedDraft, parsePersistedEnvelope, restoredEditedSteps, toPersistedDraft } from './onboarding-persistence'
 import { PENDING_ID_BASE } from './onboarding-pending-id'
 
 const businessType = { id: 7, name: 'Grocery', icon: null, displayOrder: 1 }
@@ -74,7 +74,7 @@ function accountDraft(overrides: Partial<VendorOnboardingDraftV1> = {}): VendorO
   return {
     ...createEmptyOnboardingDraft(),
     catalogSource: 'account',
-    business: { businessType, businessName: '', ownerName: '', contactPerson: '' },
+    business: { businessType, businessName: '' },
     categories: [accountCategory, pendingCategory],
     products: [accountProduct, pendingProduct],
     skus: [sku],
@@ -148,7 +148,7 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
 
   it('accepts a saved category that keeps another business type after a type change', () => {
     const changedType = accountDraft({
-      business: { businessType: { ...businessType, id: 8 }, businessName: '', ownerName: '', contactPerson: '' },
+      business: { businessType: { ...businessType, id: 8 }, businessName: '' },
       categories: [accountCategory],
       products: [accountProduct],
       skus: [sku],
@@ -177,6 +177,15 @@ describe('persisted draft — version 4, catalog source and pending entries', ()
 
     expect(parsePersistedEnvelope(legacy)).not.toBeNull()
   })
+
+  it('loads a draft saved while Step 9 still asked for owner and contact names', () => {
+    const legacy = envelope(accountDraft())
+    Object.assign(legacy.draft.business, { ownerName: 'Test Owner', contactPerson: 'Test Contact' })
+
+    const parsed = parsePersistedEnvelope(legacy)
+    expect(parsed).not.toBeNull()
+    expect(hydratePersistedDraft(parsed!.draft).business).not.toHaveProperty('ownerName')
+  })
 })
 
 describe('the sample rule is unchanged', () => {
@@ -203,7 +212,7 @@ describe('the sample rule is unchanged', () => {
     return {
       ...createEmptyOnboardingDraft(),
       catalogSource: 'sample',
-      business: { businessType: sampleBusinessType, businessName: '', ownerName: '', contactPerson: '' },
+      business: { businessType: sampleBusinessType, businessName: '' },
       categories: [sampleCategory],
       products: [sampleProduct],
       skus: [],

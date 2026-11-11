@@ -479,25 +479,27 @@ export function applyResumeFrame(
   }
 }
 
-/** Step 9's part of the profile: the business names and the store name. */
+/**
+ * Step 9's store name. Setup saves it only through the storefront PUT, which updates the
+ * context's name but not the vendor record's (backend gap, QA 10 Nov 2026), so the context
+ * name wins and the vendor record is the fallback.
+ */
 export function applyProfile(
   draft: VendorOnboardingDraftV1,
   profile: VendorProfile | null,
   options: ResumeApplyOptions,
+  contextBusinessName: string | null,
 ): VendorOnboardingDraftV1 {
   if (keepsLocal(9, options)) return draft
-  const base = createEmptyOnboardingDraft()
+  const storeName = contextBusinessName || profile?.businessName || ''
   return {
     ...draft,
-    business: {
-      ...draft.business,
-      businessName: profile?.businessName ?? base.business.businessName,
-      ownerName: profile?.ownerName ?? base.business.ownerName,
-      contactPerson: profile?.contactPerson ?? base.business.contactPerson,
-    },
-    // Branding is unreadable until approval, so Step 9 keeps its defaults and the
-    // store name is the one field the vendor record can supply.
-    storefront: { ...base.storefront, storeName: profile?.businessName ?? '' },
+    business: { ...draft.business, businessName: storeName },
+    // The rest of Step 9 is saved but unreadable until approval (storefront read 404s), so
+    // this owner's local copy is the only source; resetting it to defaults lost the saved
+    // business location and tagline on reload. An approved store's storefront read
+    // replaces it afterwards (`applyStorefront`).
+    storefront: { ...draft.storefront, storeName },
   }
 }
 

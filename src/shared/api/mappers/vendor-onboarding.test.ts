@@ -338,8 +338,6 @@ describe('mapVendorProfile', () => {
     })).toEqual({
       businessName: 'SK Organic Store',
       businessType: 'Beverages & Juice Center',
-      ownerName: 'Sanjay Kumar',
-      contactPerson: 'Sanjay Kumar',
       contactNumber: '9876543210',
     })
   })

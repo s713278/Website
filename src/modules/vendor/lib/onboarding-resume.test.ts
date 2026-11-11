@@ -82,8 +82,6 @@ function context(overrides: Partial<VendorContext> = {}): VendorContext {
 const PROFILE: VendorProfile = {
   businessName: 'SK Organic Store',
   businessType: BUSINESS_TYPE.name,
-  ownerName: 'Sanjay Kumar',
-  contactPerson: 'Sanjay Kumar',
   contactNumber: '9876543210',
 }
 
@@ -156,7 +154,7 @@ function composeByHand(state: ServerOnboardingState) {
   const options = { edited: new Set<OnboardingStep>(), submitted: isStoreSubmitted(state) }
   const businessType = resolveBusinessType(state.profile, state.businessTypes)
   let draft = applyResumeFrame(createEmptyOnboardingDraft(), derivedResumeStep(state), options)
-  draft = applyProfile(draft, state.profile, options)
+  draft = applyProfile(draft, state.profile, options, state.context.businessName)
   draft = applyBusinessType(draft, businessType, options)
   draft = applyCategories(draft, state.categories, businessType, options)
   draft = applyProducts(draft, state.products, options)
@@ -321,7 +319,6 @@ describe('the appliers over a whole account', () => {
     expect(draft.currentStep).toBe(9)
     expect(draft.mobileVerified).toBe(true)
     expect(draft.business.businessType).toEqual(BUSINESS_TYPE)
-    expect(draft.business.ownerName).toBe('Sanjay Kumar')
     expect(draft.categories.map((category) => category.id)).toEqual([10])
     expect(draft.products.map((product) => product.id)).toEqual([31])
     expect(draft.skus).toHaveLength(1)
@@ -485,7 +482,7 @@ describe('the account business-type read files Step 3\'s first page', () => {
 
   function answerReads(businessType: string | null) {
     vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-      businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
+      businessName: 'Store', businessType, contactNumber: '',
     })
     vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
     return vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
@@ -559,7 +556,7 @@ describe('per-resource appliers', () => {
       currentStep: 5 as OnboardingStep,
       completedSteps: [1, 2, 3, 4] as OnboardingStep[],
       catalogSource: 'sample' as const,
-      business: { businessType: { ...BUSINESS_TYPE, id: 99, name: 'Local' }, businessName: 'Local', ownerName: 'L', contactPerson: 'L' },
+      business: { businessType: { ...BUSINESS_TYPE, id: 99, name: 'Local' }, businessName: 'Local' },
       categories: [{ id: 77, name: 'Local', imageUrl: null, businessTypeId: 99, description: null, displayOrder: null }],
       products: [],
       skus: [],
@@ -576,7 +573,7 @@ describe('per-resource appliers', () => {
     [6, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applySkus(draft, SKUS, PRODUCTS, SAMPLE_MEASUREMENT_CATALOG, options), 'skus'],
     [7, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyCheckout(draft, CHECKOUT, options), 'delivery'],
     [8, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyCheckout(draft, CHECKOUT, options), 'payments'],
-    [9, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyProfile(draft, PROFILE, options), 'storefront'],
+    [9, (draft: ReturnType<typeof localDraft>, options: ResumeApplyOptions) => applyProfile(draft, PROFILE, options, null), 'storefront'],
   ] as const)('leave Step %i untouched while it has unsaved edits, unless submitted', (step, apply, path) => {
     const pick = (draft: object) => path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], draft)
     const local = localDraft()
@@ -603,9 +600,29 @@ describe('per-resource appliers', () => {
   it('keep the business names with Step 9 edits', () => {
     const local = localDraft()
 
-    const draft = applyProfile(local, PROFILE, { edited: new Set([9]), submitted: false })
+    const draft = applyProfile(local, PROFILE, { edited: new Set([9]), submitted: false }, null)
 
     expect(draft.business).toEqual(local.business)
+  })
+
+  // A saved Step 9 is no longer edited, but its storefront is unreadable before approval.
+  it('keep the saved Step 9 location and tagline on resume, taking only the store name from the account', () => {
+    const local = localDraft()
+    const saved = { ...local, storefront: { ...local.storefront, businessLocation: 'Indiranagar', tagline: 'Fresh daily' } }
+
+    const draft = applyProfile(saved, PROFILE, NONE, 'Saved Store')
+
+    expect(draft.storefront).toEqual({ ...saved.storefront, storeName: 'Saved Store' })
+  })
+
+  // The storefront PUT updates the context's name but not the vendor record's.
+  it('take the Step 9 store name from the context before the vendor record', () => {
+    const fromContext = applyProfile(localDraft(), { ...PROFILE, businessName: 'My Store' }, NONE, 'Saved Store')
+    expect(fromContext.storefront.storeName).toBe('Saved Store')
+    expect(fromContext.business.businessName).toBe('Saved Store')
+
+    const fallback = applyProfile(localDraft(), PROFILE, NONE, null)
+    expect(fallback.storefront.storeName).toBe(PROFILE.businessName)
   })
 
   it('frame the draft only when nothing is edited or the store is submitted', () => {
@@ -682,7 +699,7 @@ describe('stepLoadState', () => {
 describe('accountResumeState', () => {
   it('feeds the resource-derived resume step from the values read one by one', () => {
     const state = accountResumeState(context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: null } }), {
-      profile: { businessName: 'Store', businessType: BUSINESS_TYPE.name, ownerName: '', contactPerson: '', contactNumber: '' },
+      profile: { businessName: 'Store', businessType: BUSINESS_TYPE.name, contactNumber: '' },
       businessTypes: [BUSINESS_TYPE],
       categories: [],
       products: [],

@@ -40,6 +40,7 @@ afterEach(() => {
 const account = {
   vendorId: 'vendor-1',
   plan: { code: 'FREE', name: 'Free' },
+  context: { businessName: null },
 } as unknown as VendorAccount
 
 const profile: VendorStoreProfile = {
@@ -56,10 +57,10 @@ const profile: VendorStoreProfile = {
   storeIdentifier: null,
 }
 
-function renderPage() {
+function renderPage(value: VendorAccount = account) {
   return render(
     <MemoryRouter>
-      <VendorAccountContext.Provider value={account}>
+      <VendorAccountContext.Provider value={value}>
         <VendorSettingsPage />
       </VendorAccountContext.Provider>
     </MemoryRouter>,
@@ -114,5 +115,16 @@ describe('VendorSettingsPage', () => {
     expect(screen.getByText('Test Store')).toBeTruthy()
     expect(screen.getByRole('status', { name: 'Loading plan name' })).toBeTruthy()
     expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
+  // Setup saves the name through the storefront PUT, which leaves the vendor record's stale.
+  it('shows the store name from the vendor context before the vendor record', async () => {
+    vi.spyOn(vendorService, 'getStoreProfile').mockResolvedValue({ ...profile, businessName: 'My Store' })
+
+    renderPage({ ...account, context: { businessName: 'Saved Store' } } as unknown as VendorAccount)
+    await settle()
+
+    expect(screen.getByText('Saved Store')).toBeTruthy()
+    expect(screen.queryByText('My Store')).toBeNull()
   })
 })
