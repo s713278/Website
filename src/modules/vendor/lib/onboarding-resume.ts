@@ -480,8 +480,8 @@ export function applyResumeFrame(
 }
 
 /**
- * Step 9's store name. Setup saves it only through the storefront PUT, which updates the
- * context's name but not the vendor record's (backend gap, QA 10 Nov 2026), so the context
+ * Step 9's store name. The vendor record read can serve a cached name for about 30 minutes
+ * after a write (backend gap, QA 11 Nov 2026), while the context is current, so the context
  * name wins and the vendor record is the fallback.
  */
 export function applyProfile(

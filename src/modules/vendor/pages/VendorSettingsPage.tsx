@@ -196,8 +196,8 @@ export function VendorSettingsPage() {
       {!loading && profile ? (
         <StoreSettings
           profile={profile}
-          // Setup saves the name through the storefront PUT, which updates the context but not
-          // the vendor record (backend gap, QA 10 Nov 2026), so the context name wins.
+          // The vendor record read can serve a cached name for about 30 minutes after a write
+          // (backend gap, QA 11 Nov 2026); the context is current, so its name wins.
           storeName={context.businessName || profile.businessName}
           planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'}
         />

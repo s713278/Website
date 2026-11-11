@@ -263,14 +263,16 @@ Neither loading nor failure of these optional reads blocks selection, Step 9 sav
 review, or submission. Required profile, settings and catalog reads retain their existing gates.
 The picker shows its own loading indicator/failure notice; Step 10 keeps review visible with a
 nonblocking image notice. Pending-review Step 9 stays locked, with image retry outside its disabled
-fieldset. No 404 is converted into a successful empty image. An unsubmitted Step 10 restores
+fieldset. A 404 from the image read is temporarily treated as a successful empty image, because QA
+returns it for an image never uploaded (`TEMP(vendor-image-404)`,
+[removal](./API_GAPS.md#temporary-image-404-as-no-image)). An unsubmitted Step 10 restores
 images unless the initial-setup rule applies or the visit/cache already holds them. Saved URLs
 and pending Files/object URLs are separate runtime state and follow draft/session ownership.
 Selecting a replacement previews it locally; Continue uploads pending images before saving store details
 through the storefront PUT, which carries the store name. Setup Step 9 never sends the Step 3
-business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). The storefront PUT
-does not update the vendor record's name, so resume and dashboard Settings prefer the context name
-([gap](./API_GAPS.md#vendor-record-name-after-a-storefront-save)). Each successful upload is recorded immediately in runtime, its resource
+business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). The vendor record
+read can serve a cached name for about 30 minutes after a write, so resume and dashboard Settings
+prefer the context name ([gap](./API_GAPS.md#stale-vendor-record-after-a-write)). Each successful upload is recorded immediately in runtime, its resource
 cache and the active visit, superseding any older in-flight read. It survives a sibling upload
 or later settings-write failure; retry sends only remaining pending files. Storefront/profile
 writes invalidate only their own reads, keeping confirmed image results for back-navigation and

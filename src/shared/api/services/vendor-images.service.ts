@@ -1,4 +1,4 @@
-import { imagesService } from '@mithra/api-client'
+import { imagesService, isApiError } from '@mithra/api-client'
 import { mapVendorImageUrl, type VendorImageKind } from '../mappers/vendor-images'
 import { isLiveApi } from '../mode'
 
@@ -6,7 +6,15 @@ const IMAGE_TYPES = { logo: 'THUMBNAIL', banner: 'HOMEBANNER' } as const
 
 async function getImage(vendorId: string, kind: VendorImageKind, config: { signal?: AbortSignal } = {}): Promise<string | null> {
   if (!isLiveApi()) return null
-  return mapVendorImageUrl(await imagesService.list(vendorId, { image_type: IMAGE_TYPES[kind] }, config))
+  try {
+    return mapVendorImageUrl(await imagesService.list(vendorId, { image_type: IMAGE_TYPES[kind] }, config))
+  } catch (error) {
+    // TEMP(vendor-image-404): QA answers 404 "No data found!!" for a logo or banner that was
+    // never uploaded, instead of the contract's 200 with a null `image_url`. Treat it as no image
+    // until the backend fix; removal steps in docs/API_GAPS.md#temporary-image-404-as-no-image.
+    if (isApiError(error) && error.status === 404) return null
+    throw error
+  }
 }
 
 async function uploadImage(

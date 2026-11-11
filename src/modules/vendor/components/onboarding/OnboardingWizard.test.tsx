@@ -1975,13 +1975,13 @@ describe('independent optional image reads', () => {
     expect(wire.theme.banner_image).toBe('https://images.example.test/banner.png')
   })
 
-  it.each(['logo', 'banner'] as const)('keeps review and the other image usable when %s returns 404', async (failedKind) => {
+  it.each(['logo', 'banner'] as const)('keeps review and the other image usable when %s fails to load', async (failedKind) => {
     vi.mocked(vendorImagesService.getImage).mockRestore()
     const savedKind = failedKind === 'logo' ? 'banner' : 'logo'
     vi.spyOn(getHttp(), 'get').mockImplementation(async (_path, config) => {
       const params = config?.params
       if (params && typeof params === 'object' && 'image_type' in params && params.image_type === (failedKind === 'logo' ? 'THUMBNAIL' : 'HOMEBANNER')) {
-        throw apiErrorFromResponse(404, { success: false, status: '404', failure_reason: 'Vendor #91 not found' })
+        throw apiErrorFromResponse(500, { success: false, status: '500', failure_reason: 'Image lookup failed' })
       }
       return { data: { success: true, data: { image_url: `https://images.example.test/${savedKind}.png` } } }
     })
@@ -2013,9 +2013,9 @@ describe('resumed vendor image-read failure', () => {
 
   it('keeps store details and selection available when both saved-image reads fail', async () => {
     vi.mocked(vendorImagesService.getImage).mockRestore()
-    const read = vi.spyOn(getHttp(), 'get').mockRejectedValue(apiErrorFromResponse(404, {
-      success: false, status: '404', failure_reason: 'Vendor #91 not found',
-      user_message: 'No data found!!', api_details: [], reason_code: '404',
+    const read = vi.spyOn(getHttp(), 'get').mockRejectedValue(apiErrorFromResponse(500, {
+      success: false, status: '500', failure_reason: 'Image lookup failed',
+      user_message: 'Something failed', api_details: [], reason_code: '500',
     }))
     renderAccount('PENDING', 10, 2, 1, false, undefined, 'INACTIVE')
     fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
@@ -2029,5 +2029,23 @@ describe('resumed vendor image-read failure', () => {
     expect(continueDisabled('Review readiness')).toBe(false)
     expect(screen.getByRole('button', { name: 'Choose logo image' })).toBeTruthy()
     expect(screen.queryByText('Something went wrong')).toBeNull()
+  })
+
+  // TEMP(vendor-image-404): QA returns 404 for an image never uploaded. Delete this test when the
+  // backend returns 200 with a null `image_url` (docs/API_GAPS.md#temporary-image-404-as-no-image).
+  it('reads a 404 for both images as no saved image, without Retry', async () => {
+    vi.mocked(vendorImagesService.getImage).mockRestore()
+    vi.spyOn(getHttp(), 'get').mockRejectedValue(apiErrorFromResponse(404, {
+      success: false, status: '404', failure_reason: 'Vendor #91 not found',
+      user_message: 'No data found!!', api_details: [], reason_code: '404',
+    }))
+    renderAccount('PENDING', 10, 2, 1, false, undefined, 'INACTIVE')
+    fireEvent.click(await screen.findByRole('button', { name: /^Step 9,/ }))
+    expect((await screen.findByRole('button', { name: 'Choose logo image' })).matches(':disabled')).toBe(false)
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading saved logo' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading saved banner' })).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Retry logo' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry banner' })).toBeNull()
+    expect(continueDisabled('Review readiness')).toBe(false)
   })
 })

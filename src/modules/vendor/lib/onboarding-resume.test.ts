@@ -615,7 +615,7 @@ describe('per-resource appliers', () => {
     expect(draft.storefront).toEqual({ ...saved.storefront, storeName: 'Saved Store' })
   })
 
-  // The storefront PUT updates the context's name but not the vendor record's.
+  // The vendor record read can serve a cached name for about 30 minutes after a write; the context is current.
   it('take the Step 9 store name from the context before the vendor record', () => {
     const fromContext = applyProfile(localDraft(), { ...PROFILE, businessName: 'My Store' }, NONE, 'Saved Store')
     expect(fromContext.storefront.storeName).toBe('Saved Store')
