@@ -24,6 +24,7 @@ import { ONBOARDING_CONFIG, ONBOARDING_DRAFT_VERSION, type OnboardingStep } from
 type OnboardingStoreState = ReturnType<typeof useOnboardingStore.getState>
 import { ONBOARDING_DRAFT_STORAGE_KEY, parsePersistedEnvelope, toPersistedDraft } from '../../lib/onboarding-persistence'
 import { pendingSteps } from '../../lib/onboarding-progress'
+import { ACCOUNT_WRITE_SIGNAL_KEY, AWAY_AFTER_MS } from '../../lib/page-away'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
@@ -135,6 +136,18 @@ function renderAccount(approvalStatus: string, nextStep = 11, maxSkus = 2, skuUs
   }))
   const wizard = <MemoryRouter><OnboardingWizard /></MemoryRouter>
   render(strict ? <StrictMode>{wizard}</StrictMode> : wizard)
+}
+
+/** The tab is hidden for `awayMs`, then shown again; by default long enough to count as away. */
+function hideAndShowTab(awayMs = AWAY_AFTER_MS) {
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+  document.dispatchEvent(new Event('visibilitychange'))
+  clock.mockReturnValue(start + awayMs)
+  visibility.mockReturnValue('visible')
+  document.dispatchEvent(new Event('visibilitychange'))
+  clock.mockRestore()
 }
 
 const follows = (first: Node, second: Node) =>
@@ -1329,6 +1342,9 @@ describe('the business type locks at its first confirmed save', () => {
   }
   const typeListReads = () => vi.mocked(vendorOnboardingService.getCategories).mock.calls
     .filter(([params]) => params?.pageSize === 100).map(([params]) => params?.business_type_id)
+  /** Every read of one type's category list, whatever its page size. */
+  const typeCategoryReads = (typeId: number) => vi.mocked(vendorOnboardingService.getCategories).mock.calls
+    .filter(([params]) => params?.business_type_id === typeId).length
   /** A new account: no catalog saved yet. */
   function emptyAccount() {
     vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([])
@@ -1412,10 +1428,7 @@ describe('the business type locks at its first confirmed save', () => {
     contextAt(4)
     profileNames('Beverages')
 
-    act(() => {
-      window.dispatchEvent(new Event('blur'))
-      window.dispatchEvent(new Event('focus'))
-    })
+    act(() => hideAndShowTab())
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: beverages }))
@@ -1467,7 +1480,11 @@ describe('the business type locks at its first confirmed save', () => {
     expect((await screen.findByRole('button', { name: /Misc/ })).getAttribute('aria-pressed')).toBe('true')
     expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: others })
     expect(useOnboardingStore.getState().draft.business.businessType).toEqual(others)
-    expect(typeListReads().sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([7, 8, 30])
+    // The vendor record says "Others", so its list is checked alone first, and it holds them all.
+    expect(typeListReads()).toEqual([30])
+    // Step 4 shows Others' first page from that read rather than reading the list again.
+    expect(typeCategoryReads(30)).toBe(1)
+    expect(useOnboardingStore.getState().catalogMixed).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: /^Step 3,/ }))
     await currentStepIs(3)
@@ -1488,6 +1505,30 @@ describe('the business type locks at its first confirmed save', () => {
     expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: others })
     expect(typeListReads()).toEqual([])
     expect(vendorOnboardingService.getBusinessTypes).not.toHaveBeenCalled()
+  })
+
+  it('reads every type’s list when a vendor record saying "Others" is stale, without calling the catalog mixed', async () => {
+    profileNames('Others')
+    vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+      { vendorCategoryId: 500, platformCategoryId: 20, name: 'Breads', imageUrl: null },
+    ])
+    vi.mocked(vendorOnboardingService.getVendorProducts).mockResolvedValue([])
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([])
+    listCategories({ 7: [10, 11], 8: [20, 21], 30: [301] })
+    renderAccount('PENDING', 4)
+
+    await currentStepIs(4)
+    expect((await screen.findByRole('button', { name: /Breads/ })).getAttribute('aria-pressed')).toBe('true')
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: bakery })
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: bakery, inFlight: null })
+    // Others first, then the rest; Others' list is not read twice.
+    expect(typeListReads()[0]).toBe(30)
+    expect(typeListReads().sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([7, 8, 30])
+    // Step 4 shows Bakery's first page from the fallback's read.
+    expect(await screen.findByRole('button', { name: /Category 21/ })).toBeTruthy()
+    expect(typeCategoryReads(8)).toBe(1)
+    expect(useOnboardingStore.getState().catalogMixed).toBe(false)
+    expect(screen.queryByText(/more than one business type/)).toBeNull()
   })
 
   it('records no type when the record names one, and none the categories cannot settle', async () => {
@@ -2431,6 +2472,87 @@ describe('Continue prefetches the next step’s account reads', () => {
   })
 })
 
+describe('catalog saves reuse this visit’s account reads', () => {
+  const smoothies = { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }
+  const lemonade = { id: 32, name: 'Lemonade', description: null, imageUrl: null, measurementId: 2, measurementName: null, categoryId: 10 }
+
+  async function openAt(step: OnboardingStep) {
+    stubReferencePages()
+    renderAccount('PENDING', step)
+    await screen.findByRole('button', { name: new RegExp(`Step ${step},.*You are here`) })
+    await waitFor(() => expect(stepSpinner()).toBeNull())
+    await waitFor(() => expect(continueDisabled()).toBe(false))
+  }
+  const addCategory = () => act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+    ...draft, categories: [...draft.categories, smoothies],
+  }), 4))
+  const addProduct = () => act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+    ...draft, products: [...draft.products, lemonade],
+  }), 5))
+
+  it('assigns a new category against the categories Step 4 already read', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockResolvedValue(undefined)
+    await openAt(4)
+    addCategory()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+
+    expect(save).toHaveBeenCalledWith('91', [11])
+    expect(vendorOnboardingService.getVendorCategories).toHaveBeenCalledTimes(1)
+  })
+
+  it('assigns a new product against the products Step 5 already read', async () => {
+    const assign = vi.spyOn(vendorOnboardingService, 'assignProducts').mockResolvedValue(undefined)
+    await openAt(5)
+    addProduct()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 6,.*You are here/ })
+
+    expect(assign).toHaveBeenCalledWith('91', 10, [32])
+    expect(vendorOnboardingService.getVendorProducts).toHaveBeenCalledTimes(1)
+  })
+
+  it('assigns against the re-check’s read after an away, reading nothing more itself', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockResolvedValue(undefined)
+    await openAt(4)
+    addCategory()
+    // Another device assigned category 11 meanwhile: nothing is left to send.
+    vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+      { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+      { vendorCategoryId: 501, platformCategoryId: 11, name: 'Smoothies', imageUrl: null },
+    ])
+
+    act(() => hideAndShowTab())
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+
+    expect(save).not.toHaveBeenCalled()
+    expect(vendorOnboardingService.getVendorCategories).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads the account again when retrying a failed category save, which may have landed', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockRejectedValueOnce(new Error('Network Error'))
+    await openAt(4)
+    addCategory()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findAllByText('Network Error')).not.toHaveLength(0)
+    expect(vendorOnboardingService.getVendorCategories).toHaveBeenCalledTimes(1)
+
+    // It had landed after all.
+    vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+      { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+      { vendorCategoryId: 501, platformCategoryId: 11, name: 'Smoothies', imageUrl: null },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(vendorOnboardingService.getVendorCategories).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('wizard logo and banner', () => {
   async function openBranding(nextStep = 9) {
     renderAccount('PENDING', nextStep)
@@ -3174,15 +3296,21 @@ describe('account freshness after the page was away', () => {
     subscription: { limits: { max_categories: 3, max_products: 10, max_skus: 2 }, usage: { skus: 1 } },
     ...overrides,
   })
-  /** The vendor switches to another window and back. */
-  const leaveWindow = () => act(() => {
+  /** The vendor switches to another tab and back. */
+  const leaveTab = () => act(() => hideAndShowTab())
+  /** The vendor glances at another tab and comes straight back. */
+  const switchTabBriefly = () => act(() => hideAndShowTab(AWAY_AFTER_MS - 1))
+  /** Another tab of this browser saved a step for `vendorId`. */
+  const saveInAnotherTab = (vendorId = '91') => act(() => {
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: ACCOUNT_WRITE_SIGNAL_KEY,
+      newValue: JSON.stringify({ vendorId, at: Date.now() }),
+    }))
+  })
+  /** The window loses and regains focus without the tab being hidden: DevTools, a file picker. */
+  const blurWindow = () => act(() => {
     window.dispatchEvent(new Event('blur'))
     window.dispatchEvent(new Event('focus'))
-  })
-  /** The vendor switches to another tab and back. */
-  const leaveTab = () => act(() => {
-    document.dispatchEvent(new Event('visibilitychange'))
-    document.dispatchEvent(new Event('visibilitychange'))
   })
 
   beforeEach(() => {
@@ -3205,7 +3333,7 @@ describe('account freshness after the page was away', () => {
     vi.mocked(vendorOnboardingService.getCheckoutOptions)
       .mockResolvedValue({ ...SAVED_CHECKOUT, schedulingConfig: { min_delivery_days: 1, max_delivery_days: 5 } })
 
-    leaveWindow()
+    leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await currentStepIs(9)
@@ -3239,7 +3367,7 @@ describe('account freshness after the page was away', () => {
     fireEvent.change(deliveryCharge(), { target: { value: '45' } })
     vi.mocked(vendorOnboardingService.getVendorContext).mockRejectedValueOnce(new Error('Could not reach the server'))
 
-    leaveWindow()
+    leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     expect(await screen.findAllByText('Could not reach the server')).not.toHaveLength(0)
@@ -3261,7 +3389,7 @@ describe('account freshness after the page was away', () => {
     // An earlier save dropped the shared context, so the header reads it afresh on its own
     // after the vendor came back.
     invalidateVendorContext('91')
-    leaveWindow()
+    leaveTab()
     void loadVendorContext('91', (id) => vendorOnboardingService.getVendorContext(id))
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await currentStepIs(9)
@@ -3278,7 +3406,7 @@ describe('account freshness after the page was away', () => {
     const before = accountReadCounts()
     fireEvent.change(deliveryCharge(), { target: { value: '45' } })
     vi.mocked(vendorOnboardingService.getVendorContext).mockRejectedValueOnce(new Error('Could not reach the server'))
-    leaveWindow()
+    leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findAllByText('Could not reach the server')).not.toHaveLength(0)
 
@@ -3303,12 +3431,104 @@ describe('account freshness after the page was away', () => {
     expect(accountReadCounts()).toEqual(before)
   })
 
+  it('reads nothing more before a save after only a short tab switch', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    const before = accountReadCounts()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    switchTabBriefly()
+    switchTabBriefly()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(9)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(accountReadCounts()).toEqual(before)
+  })
+
+  it('reads again before the next save once another tab saved for this vendor, merging what it saved', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    const before = accountReadCounts()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    vi.mocked(vendorOnboardingService.getCheckoutOptions)
+      .mockResolvedValue({ ...SAVED_CHECKOUT, schedulingConfig: { min_delivery_days: 1, max_delivery_days: 5 } })
+
+    saveInAnotherTab()
+    // Nothing is read until this tab writes.
+    expect(accountReadCounts()).toEqual(before)
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(accountReadCounts()).toEqual({
+      ...before,
+      getVendorContext: before.getVendorContext! + 1,
+      getCheckoutOptions: before.getCheckoutOptions! + 1,
+    })
+    const [, delivery] = save.mock.calls[0]!
+    expect(delivery.shipping.charge).toBe(45)
+    expect(delivery.fixedWindow.maxDeliveryDays).toBe(5)
+  })
+
+  it('reads nothing more before a save when another tab saved for another vendor', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    const before = accountReadCounts()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    saveInAnotherTab('92')
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(9)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(accountReadCounts()).toEqual(before)
+  })
+
+  it('tells this browser’s other tabs which vendor a save was for, and nothing else', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    expect(localStorage.getItem(ACCOUNT_WRITE_SIGNAL_KEY)).toBeNull()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(9)
+    const note = JSON.parse(localStorage.getItem(ACCOUNT_WRITE_SIGNAL_KEY)!)
+    expect(Object.keys(note).sort()).toEqual(['at', 'vendorId'])
+    expect(note.vendorId).toBe('91')
+  })
+
+  it('reads nothing more before a save when the window only lost and regained focus', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    const before = accountReadCounts()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    blurWindow()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(9)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(accountReadCounts()).toEqual(before)
+  })
+
+  it('sends this tab’s edit when the re-check after an away finds the account unchanged', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    await openStep7()
+    const before = accountReadCounts()
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+
+    leaveTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(accountReadCounts()).toEqual({
+      ...before,
+      getVendorContext: before.getVendorContext! + 1,
+      getCheckoutOptions: before.getCheckoutOptions! + 1,
+    })
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0]![1].shipping.charge).toBe(45)
+  })
+
   it('re-reads only the context and the step’s own resource after an away, sharing each read', async () => {
     vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
     await openStep7()
     const before = accountReadCounts()
     fireEvent.change(deliveryCharge(), { target: { value: '45' } })
-    leaveWindow()
+    leaveTab()
     leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await currentStepIs(9)
@@ -3327,7 +3547,7 @@ describe('account freshness after the page was away', () => {
       data: contextData({ onboarding: { status: 'COMPLETED', next_step: 11 } }),
     }))
 
-    leaveWindow()
+    leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await currentStepIs(10)
@@ -3359,7 +3579,7 @@ describe('account freshness after the page was away', () => {
     const context = mapVendorContext({ data: contextData() })
     await loadVendorContext('91', async () => context)
     await loadOnboardingResource('91', 'profile', async () => ({ businessName: 'Test Store', businessType: 'Beverages', contactNumber: '' }))
-    leaveWindow()
+    leaveTab()
 
     renderAccount('PENDING', 9)
     await currentStepIs(9)
@@ -3390,7 +3610,7 @@ describe('account freshness after the page was away', () => {
     })
     render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
     await currentStepIs(7)
-    leaveWindow()
+    leaveTab()
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await currentStepIs(8)
     expect(context).not.toHaveBeenCalled()

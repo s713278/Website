@@ -355,9 +355,11 @@ Step 3 save fixes it; only support may change it afterwards. The contract suppor
 (cleared on sign-out; see [SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)) and
 locks the type. Otherwise, once the context's `next_step` is past 3, the wizard takes a type the
 vendor record names other than `"Others"`, else the one type whose category list
-(`GET /v1/categories/?business_type_id=`, one read per type, 30 types on QA) holds every assigned
-category; that answer is recorded like a confirmed save, so the per-type reads run once per
-browser. With none of these it never guesses: Steps 3-4 offer **Try again**, then support, and
+(`GET /v1/categories/?business_type_id=`) holds every assigned category. A record saying
+`"Others"` costs one read when the Others list holds every assigned category; otherwise every
+type's list is read (one read per type, 30 types on QA). That answer is recorded like a confirmed
+save, so these reads run once per browser, and the resolved type's first page stands in for Step
+4's own read. With none of these it never guesses: Steps 3-4 offer **Try again**, then support, and
 submission waits. A pending first save whose response was lost is checked the same way before the
 vendor may choose again.
 
@@ -392,7 +394,7 @@ above and is **not** a frontend defect — the frontend cannot fix any of them a
 | "My theme, tagline, welcome message and badges reset to defaults on every resume." | Same 404. `GET /{identifier}/storefront` is the only read carrying them, by `store_identifier` **and** by `vendor_id` — both verified `404` on a live `PENDING` vendor. | A read a vendor may call on their own unapproved store. |
 | "A SKU I set to pickup-only comes back as delivery + pickup." | The SKU read omits `home_delivery` and `store_pickup` entirely (verified: the row returns `vendor_product_id, sku_id, sku_name, image_path, sku_size, sku_type, is_active, valid_days, price_id, list_price, sale_price, effective_date, eligible_subscription_details, discount, on_sale, description`). Both are writable but unreadable, so resume defaults them to `true`. | Return the two flags on the SKU read. |
 | "I can't remove a category or product I picked by mistake." | 403 / no endpoint, above. | A vendor-callable un-assign for both. |
-| "A change I saved on my phone was undone when I saved on my laptop." | No onboarding read carries a version or `ETag`, and no write accepts `If-Match`; checkout and storefront writes replace the whole resource, and Step 6 reconciles every size. The frontend reads again before a write once its page has been away (tab or window), and merges silently ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)), but cannot guarantee cross-device atomicity: two devices both in view, or saves crossing in flight, can still overwrite each other. | A version (or `ETag`) on each onboarding resource read, and `If-Match` on its write answered with `409`/`412` when the resource changed since. |
+| "A change I saved on my phone was undone when I saved on my laptop." | No onboarding read carries a version or `ETag`, and no write accepts `If-Match`; checkout and storefront writes replace the whole resource, and Step 6 reconciles every size. The frontend reads again before a write once its tab was hidden for 15 minutes or another tab of the browser saved, and merges silently ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)), but cannot guarantee cross-device atomicity: a save from another device followed within 15 minutes by one here, or saves crossing in flight, can still overwrite each other. | A version (or `ETag`) on each onboarding resource read, and `If-Match` on its write answered with `409`/`412` when the resource changed since. |
 | "A product I don't want to sell blocks go-live." | Follows from the above: the product cannot be un-assigned, and Step 6 requires every assigned product to carry at least one *active* valid SKU. So a mistakenly assigned product must be priced and sold. | Same un-assign. Until then the only escape is support. |
 
 Normal size and price edits now preserve `sku_id`. The remaining legacy fulfillment-only

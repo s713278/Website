@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { ReferencePage } from '@/shared/api'
 import {
   businessTypeCacheKey,
+  categoryReferenceCacheKey,
   readReferenceCache,
   seedBusinessTypeFirstPage,
+  seedCategoryFirstPage,
   writeReferenceCache,
 } from './onboarding-catalog-cache'
 
@@ -100,5 +102,30 @@ describe('seedBusinessTypeFirstPage', () => {
 
     expect(readReferenceCache<Item>(accountKey)).toMatchObject({ pageNumber: 0, lastPage: false })
     expect(readReferenceCache<Item>(accountKey)?.items).toHaveLength(9)
+  })
+})
+
+describe('seedCategoryFirstPage', () => {
+  const key = categoryReferenceCacheKey('account', 30)
+
+  it('files the first six of a wider read as Step 4’s first page, leaving page 1 to Show more', () => {
+    seedCategoryFirstPage('account', 30, page(14))
+
+    expect(readReferenceCache<Item>(key)).toEqual({ items: [1, 2, 3, 4, 5, 6].map(item), pageNumber: 0, lastPage: false })
+    expect(readReferenceCache<Item>(categoryReferenceCacheKey('account', 7))).toBeNull()
+  })
+
+  it('keeps a list that fits in one Step 4 page the last', () => {
+    seedCategoryFirstPage('account', 30, page(6))
+
+    expect(readReferenceCache<Item>(key)).toMatchObject({ pageNumber: 0, lastPage: true })
+  })
+
+  it('never replaces a page Step 4 already holds', () => {
+    writeReferenceCache(key, page(2, { lastPage: false }), false)
+
+    seedCategoryFirstPage('account', 30, page(14))
+
+    expect(readReferenceCache<Item>(key)?.items).toEqual([item(1), item(2)])
   })
 })

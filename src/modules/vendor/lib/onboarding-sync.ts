@@ -7,6 +7,7 @@ import {
   type CheckoutPaymentInput,
   type SkuCreateInput,
   type StorefrontConfigInput,
+  type VendorCategoryRef,
   type VendorProductRef,
   type VendorSkuRef,
 } from '@/shared/api'
@@ -578,16 +579,23 @@ export function categoriesToAssign(
   return draftCategoryIds.filter((id) => !assigned.has(id))
 }
 
+/**
+ * `cachedCategories` is this visit's current read of the account's categories, if it holds one
+ * (`peekOnboardingResource`: none from before an away, and a Step 4 save, or a failed one,
+ * clears it). Only Step 4 assigns categories, so it is what the account holds; without it the
+ * save reads the account.
+ */
 async function persistCategories(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
+  cachedCategories?: VendorCategoryRef[],
 ): Promise<void> {
   // Author any pending categories first, recording their platform ids into the draft before
   // the assign below ever runs. The assign then works on positive ids only.
   const minted = await mintPendingEntries(draft, 4, onCreated)
-  const existing = await vendorOnboardingService.getVendorCategories(vendorId)
+  const existing = cachedCategories ?? await vendorOnboardingService.getVendorCategories(vendorId)
   const categoryIds = categoriesToAssign(
     minted.categories.map((category) => category.id),
     existing.map((category) => category.platformCategoryId),
@@ -603,16 +611,18 @@ type ProductPersistenceService = Pick<
   'getVendorProducts' | 'assignProducts'
 >
 
+/** `cachedProducts` stands in for a read of the account's products, as in `persistCategories`. */
 export async function persistProducts(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
   service: ProductPersistenceService = vendorOnboardingService,
+  cachedProducts?: VendorProductRef[],
 ): Promise<void> {
   // Author any pending products first, so their platform ids are recorded and assigned below.
   const minted = await mintPendingEntries(draft, 5, onCreated)
-  const existing = await service.getVendorProducts(vendorId)
+  const existing = cachedProducts ?? await service.getVendorProducts(vendorId)
   const assigned = new Set(existing.map((product) => product.platformProductId))
 
   // `category_id` here is the PLATFORM category, despite the endpoint description.
@@ -857,8 +867,15 @@ export async function persistStep(
   // Category and product writes only ever assign (PATCH is additive; a vendor cannot
   // unassign — 403, Admin only). Sizes reconcile the draft against the account. A store under
   // review never persists Step 6; an approved store does, as in setup.
-  if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
-  if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
+  // Each is diffed against this visit's current read when it holds one.
+  if (step === 4) {
+    return persistCategories(vendorId, draft, onAssigned, onCreated,
+      peekOnboardingResource(vendorId, 'categories')?.value)
+  }
+  if (step === 5) {
+    return persistProducts(vendorId, draft, onAssigned, onCreated, vendorOnboardingService,
+      peekOnboardingResource(vendorId, 'products')?.value)
+  }
   if (step === 6) {
     return persistSkus(vendorId, draft, onAssigned, vendorOnboardingService, knownSkuIds,
       peekOnboardingResource(vendorId, 'products')?.value)

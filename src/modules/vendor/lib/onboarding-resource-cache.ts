@@ -43,7 +43,7 @@ type Entry<R extends OnboardingResource> = {
   promise: Promise<OnboardingResourceData[R]>
   /** Wrapped so a resolved `null` checkout differs from "not resolved yet". */
   resolved: { value: OnboardingResourceData[R] } | null
-  /** `pageAwayEpoch()` when the read started, or when a confirmed write set the value. */
+  /** `pageAwayEpoch(vendorId)` when the read started, or when a confirmed write set the value. */
   epoch: number
 }
 
@@ -60,7 +60,7 @@ export function setOnboardingResource<R extends OnboardingResource>(
     vendorEntries = new Map()
     entries.set(vendorId, vendorEntries)
   }
-  vendorEntries.set(resource, { promise: Promise.resolve(value), resolved: { value }, epoch: pageAwayEpoch() })
+  vendorEntries.set(resource, { promise: Promise.resolve(value), resolved: { value }, epoch: pageAwayEpoch(vendorId) })
 }
 
 function readEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
@@ -70,7 +70,7 @@ function readEntry<R extends OnboardingResource>(vendorId: string, resource: R):
 /** The entry, unless it holds account data and the page has been away since its read started. */
 function currentEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
   const entry = readEntry(vendorId, resource)
-  return entry && (resource === 'businessTypes' || entry.epoch === pageAwayEpoch()) ? entry : undefined
+  return entry && (resource === 'businessTypes' || entry.epoch === pageAwayEpoch(vendorId)) ? entry : undefined
 }
 
 export function loadOnboardingResource<R extends OnboardingResource>(
@@ -82,7 +82,7 @@ export function loadOnboardingResource<R extends OnboardingResource>(
   if (existing) return existing.promise
 
   // Replaces an entry from before an away; its late result is then never stored.
-  const entry: Entry<R> = { resolved: null, epoch: pageAwayEpoch(), promise: read() }
+  const entry: Entry<R> = { resolved: null, epoch: pageAwayEpoch(vendorId), promise: read() }
   let vendorEntries = entries.get(vendorId)
   if (!vendorEntries) {
     vendorEntries = new Map()

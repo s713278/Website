@@ -1,4 +1,4 @@
-import type { BusinessTypeReference } from '@/shared/api'
+import type { BusinessTypeReference, CategoryReference, ReferencePage } from '@/shared/api'
 
 /**
  * Which business type a vendor's account has saved, and so whether Step 3 is still a choice.
@@ -34,11 +34,19 @@ export type SavedTypeEvidence = {
   businessTypes: readonly BusinessTypeReference[]
   /** The account's assigned categories, as platform category ids; absent until read. */
   assignedCategoryIds?: readonly number[]
-  /** Every business type with the category ids it lists; absent until read. */
+  /**
+   * Every business type with the category ids it lists; absent until read. Or `"Others"` alone
+   * when it lists every assigned category (`readTypeCategories`): no other list can.
+   */
   typeCategories?: readonly TypeCategories[]
 }
 
-export type TypeCategories = { type: BusinessTypeReference; categoryIds: readonly number[] }
+export type TypeCategories = {
+  type: BusinessTypeReference
+  categoryIds: readonly number[]
+  /** The list's first page as read, which Step 4 can show without reading it again. */
+  firstPage?: ReferencePage<CategoryReference>
+}
 
 export type SavedTypeResolution =
   /** Step 3 is not saved yet: the type is still a choice. `preselect` is the record's match. */

@@ -19,7 +19,7 @@ import { pageAwayEpoch } from './page-away'
 type Entry = {
   promise: Promise<VendorContext>
   resolved: VendorContext | null
-  /** `pageAwayEpoch()` when the read started. */
+  /** `pageAwayEpoch(vendorId)` when the read started. */
   epoch: number
 }
 
@@ -46,7 +46,7 @@ export function contextSnapshotMayReplace(previous: VendorContext, next: VendorC
  * (`page-away`). The dashboard keeps reusing an older one; setup, which writes, does not.
  */
 export function vendorContextIsCurrent(vendorId: string): boolean {
-  return entries.get(vendorId)?.epoch === pageAwayEpoch()
+  return entries.get(vendorId)?.epoch === pageAwayEpoch(vendorId)
 }
 
 /** The already-resolved context, or `null`. Never fetches. */
@@ -61,7 +61,7 @@ export function loadVendorContext(
   const existing = entries.get(vendorId)
   if (existing) return existing.promise
 
-  const entry: Entry = { resolved: null, epoch: pageAwayEpoch(), promise: read(vendorId) }
+  const entry: Entry = { resolved: null, epoch: pageAwayEpoch(vendorId), promise: read(vendorId) }
   entries.set(vendorId, entry)
 
   // Chained after the entry is stored so these callbacks can compare by identity: a

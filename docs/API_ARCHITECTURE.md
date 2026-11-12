@@ -384,9 +384,12 @@ session. The rules live in `onboarding-progress.ts`.
 **The saved business type is locked** from its first confirmed Step 3 save (`resolveSavedType` in
 `onboarding-saved-type.ts`): this browser's record of that save, else, once the context's
 `next_step` is past 3, the type the profile names (not `"Others"`), else the one type whose category
-list holds every assigned category. The category evidence costs a read per business type, so it is
-read only when Step 3, Step 4 or an unsubmitted Step 10 needs the type; those steps show the page
-loader meanwhile. A locked type replaces any unsaved Step 3 choice in the draft. Step 3's cards stay
+list holds every assigned category. When the profile says `"Others"`, that type's list is read
+alone first and settles it (one request) when it holds every assigned category, since a category
+belongs to one type; otherwise, or without that hint, every type's list is read (30 on QA). The
+category evidence is read only when Step 3, Step 4 or an unsubmitted Step 10 needs the type; those
+steps show the page loader meanwhile. The resolved type's first page from those reads (sorted as
+Step 4 sorts it) is filed as Step 4's first page, so Step 4 does not read that list again. A locked type replaces any unsaved Step 3 choice in the draft. Step 3's cards stay
 pressable and another type only shows a warning; with no answer Steps 3-4 show **Try again**
 instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
 temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
@@ -497,17 +500,36 @@ response belonging to an entry that has already been invalidated. Submission's r
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
 
-**Account reads go stale once the page has been away.** `lib/page-away.ts` counts each time the
-tab is hidden or shown and the window loses or regains focus: only then can another tab or device
-have saved. A per-resource cache entry whose read started before the latest count is not reused
+A Step 4 or 5 save assigns only what the account does not hold yet (the PATCH is additive and
+answers 417 for an id already held), judged against this visit's categories or products read when
+the cache holds a current one, as Step 6 maps its products; without one the save reads the account.
+Only these saves assign, and each drops the entry, so a current entry is what the account holds as
+far as this tab can tell; after the page was away the re-check below refreshes it first. A failed
+Step 4 or 5 save drops its entry too, since part of it may have landed, so the retry reads again.
+An assignment from another device that the away rule below does not catch goes unseen: the save
+then fails with the 417 and the retry reads the account.
+
+**Account reads go stale once the page has been away.** `lib/page-away.ts` keeps a count per
+vendor that moves when another tab or device may have saved:
+
+- **Long away:** the tab is shown again after being hidden for 15 minutes or more
+  (`AWAY_AFTER_MS`); this counts for every vendor. Shorter tab switches, window blur and focus
+  (DevTools, a file picker, a window side by side) do not count, so they cost no reads.
+- **Saved in another tab:** every wizard write that reaches the account (a step save, a Step 9 or
+  first type save that may have landed, go-live) writes the note
+  `md-vendor-onboarding-saved-signal-v1` (`{ vendorId, at }`, nothing else) to `localStorage`.
+  The browser's other tabs receive it as a `storage` event and move the count for that vendor
+  only; the writing tab does not receive it. Unreadable notes and unavailable storage are ignored.
+
+A per-resource cache entry whose read started before the latest count is not reused
 (business types, platform data, excepted);
 the next load reads again, every caller asking meanwhile shares that one read, and a peek finds
 nothing. The context cache keeps serving the dashboard as before, but on entry the wizard takes a
-cached context only when it was read since the page last left (`vendorContextIsCurrent`). Sign-in's
-head start is still reused, while a context the dashboard read before the vendor switched away is
+cached context only when it was read since the latest count (`vendorContextIsCurrent`). Sign-in's
+head start is still reused, while a context the dashboard read before a long away or a note is
 read again. A reload starts with empty caches, so entry always reads the context and profile then.
 
-Within a visit nothing is read when the page comes back. The next press of Continue, Save changes
+Within a visit nothing is read when the page comes back or a note arrives. The next press of Continue, Save changes
 or Submit for review that would write first reads again, when read before the latest away, the
 context and what that write is built from (`revalidationReads` in `onboarding-freshness.ts`):
 
@@ -527,10 +549,11 @@ sends back an older value over one saved elsewhere since this visit read it. If 
 submitted, or its approval changed, elsewhere, nothing is written and the visit starts again as on
 entry. A press with nothing to write, a read-only step, and demo mode or a sample draft read nothing.
 A failed read keeps the input, shows the step's save error (on Step 10, the submission error) and
-writes nothing; pressing again retries. Choosing a logo or banner opens the system file picker,
-which leaves the window, so that Step 9 save reads the context again. This narrows the window for an
-overwrite but cannot close it: two devices both in view can still save over each other
-([gap](./API_GAPS.md#onboarding-continuity-a-vendor-still-loses)).
+writes nothing; pressing again retries. This narrows the window for an overwrite but cannot close
+it: a save from another device, followed within 15 minutes by a save of the same step here (with no
+long away between), still replaces what that device saved on the field-based Steps 3, 7, 8 and 9,
+and saves crossing in flight can overwrite each other. Removable once the backend adds a version
+token ([gap](./API_GAPS.md#onboarding-continuity-a-vendor-still-loses)).
 
 The marketing header and the general header (`RootLayout`) decide a vendor's actions from the context
 alone, through `useHeaderActions`. On every route, `/onboarding` included, it calls

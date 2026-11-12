@@ -273,35 +273,53 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
   return Math.max(earliest, next) as OnboardingStep
 }
 
-/** Category ids one business type lists, as `GET /v1/categories/?business_type_id=` pages them. */
-async function readBusinessTypeCategoryIds(businessTypeId: number): Promise<number[]> {
+/** One business type's category list, as `GET /v1/categories/?business_type_id=` pages it. */
+async function readBusinessTypeCategories(type: BusinessTypeReference): Promise<TypeCategories> {
   const ids: number[] = []
+  let firstPage: TypeCategories['firstPage']
   // A list longer than this is not a list the check can trust to be whole.
   for (let pageNumber = 0; pageNumber < 20; pageNumber++) {
+    // Sorted as Step 4 reads it, so the first page can stand in for Step 4's own.
     const page = await vendorOnboardingService.getCategories({
-      business_type_id: businessTypeId, pageNumber, pageSize: 100, sortBy: 'id', sortOrder: 'ASC',
+      business_type_id: type.id, pageNumber, pageSize: 100, sortBy: 'id', sortOrder: 'ASC',
     })
+    firstPage ??= page
     // Only categories the list attributes to this type count, whatever the filter returned.
-    ids.push(...page.items.filter((item) => item.businessTypeId === businessTypeId).map((item) => item.id))
-    if (page.lastPage || !page.items.length) return ids
+    ids.push(...page.items.filter((item) => item.businessTypeId === type.id).map((item) => item.id))
+    if (page.lastPage || !page.items.length) return { type, categoryIds: ids, firstPage }
   }
   throw new Error('A business type lists too many categories to check.')
 }
 
 /**
- * Every business type's category ids, for telling a saved type from the assigned categories.
+ * The business types' category lists, for telling a saved type from the assigned categories.
  * TEMP(onboarding-saved-type): the last evidence of a saved type, read only when this browser
  * has no confirmed save and the vendor record does not name one; see `onboarding-saved-type.ts`.
- * QA lists 30 types, so a few reads run at a time. Rejects if any read fails.
+ *
+ * A vendor record saying `"Others"` may mean it: that type's list is read alone first, and
+ * when it holds every assigned category it is the only list returned. A category belongs to
+ * one type, so no other list can hold them all. Otherwise, or with no such hint, every type's
+ * list is read (QA lists 30), a few at a time. Rejects if any read fails.
  */
 export async function readTypeCategories(
   businessTypes: readonly BusinessTypeReference[],
+  hint: { profileTypeName: string | null; assignedCategoryIds: readonly number[] },
 ): Promise<TypeCategories[]> {
   const lists: TypeCategories[] = []
   const queue = [...businessTypes]
+  const others = hint.profileTypeName?.trim() === AMBIGUOUS_BUSINESS_TYPE
+    ? queue.find((type) => type.name === AMBIGUOUS_BUSINESS_TYPE)
+    : undefined
+  if (others) {
+    const list = await readBusinessTypeCategories(others)
+    const listed = new Set(list.categoryIds)
+    if (hint.assignedCategoryIds.length && hint.assignedCategoryIds.every((id) => listed.has(id))) return [list]
+    lists.push(list)
+    queue.splice(queue.indexOf(others), 1)
+  }
   const worker = async () => {
     for (let type = queue.shift(); type; type = queue.shift()) {
-      lists.push({ type, categoryIds: await readBusinessTypeCategoryIds(type.id) })
+      lists.push(await readBusinessTypeCategories(type))
     }
   }
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker))

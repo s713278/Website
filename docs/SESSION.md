@@ -213,6 +213,10 @@ The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: a
 clears it, and the ownership check covers every other path — the header ignores a record whose
 `vendorId` is not the signed-in vendor's.
 
+The onboarding save note (`md-vendor-onboarding-saved-signal-v1`) is not session state: it holds a
+vendor id and a time, is never read back, and only tells this browser's other tabs to re-check the
+account before their next write ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)).
+
 ### Onboarding draft format and sync
 
 The draft (`md-vendor-onboarding-draft-v3`, envelope version 5) holds, besides the safe draft and its

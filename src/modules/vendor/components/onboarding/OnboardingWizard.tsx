@@ -32,7 +32,7 @@ import { readCategoryReferenceFirstPage, readProductReferenceFirstPage } from '.
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
-import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache } from '../../lib/onboarding-catalog-cache'
+import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache, seedCategoryFirstPage } from '../../lib/onboarding-catalog-cache'
 import {
   invalidateOnboardingResources,
   peekOnboardingResource,
@@ -126,7 +126,7 @@ import { ImageSaveError } from '../../lib/onboarding-images'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext, vendorContextIsCurrent } from '../../lib/vendor-context-cache'
 import { mergeRuntimeRecord, mergeRuntimeValue, revalidationReads } from '../../lib/onboarding-freshness'
-import { pageAwayEpoch } from '../../lib/page-away'
+import { announceAccountWrite, pageAwayEpoch } from '../../lib/page-away'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -248,11 +248,13 @@ const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 /**
  * Clear what an account write made stale in the shared caches: the written resources and the
  * vendor context (it carries `next_step`, plan usage and store state). Business types and
- * units are platform data, so they stay.
+ * units are platform data, so they stay. This browser's other tabs are told too, so their next
+ * write reads the account again first.
  */
 function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
   invalidateOnboardingResources(vendorId, resources)
   invalidateVendorContext(vendorId)
+  announceAccountWrite(vendorId)
 }
 
 /**
@@ -400,7 +402,7 @@ function startAccountEntry(
   const isCurrent = () => !cancelled && useAuthStore.getState().user?.vendorId === vendorId
   const publish = () => hooks.setView({ ...view, resources: { ...view.resources } })
 
-  const landValue = <R extends OnboardingResource>(resource: R, value: OnboardingResourceData[R], at = pageAwayEpoch()) => {
+  const landValue = <R extends OnboardingResource>(resource: R, value: OnboardingResourceData[R], at = pageAwayEpoch(vendorId)) => {
     if (view.resources[resource] === 'loaded') return
     values[resource] = value
     readAt[resource] = at
@@ -660,7 +662,8 @@ function startAccountEntry(
 
   /**
    * TEMP(onboarding-saved-type): the last evidence of a saved type. The assigned categories,
-   * then every business type's category list (`readTypeCategories`).
+   * then the business types' category lists (`readTypeCategories`): "Others" alone first when
+   * the vendor record says so, otherwise every type's.
    */
   const startTypeEvidence = (read: 'categories' | 'type-categories') => {
     if (store().savedType.status !== 'checking') store().setSavedType({ status: 'checking' })
@@ -671,7 +674,12 @@ function startAccountEntry(
     if (typeLists.status !== 'idle') return
     typeLists = { status: 'loading' }
     const version = ++typeListsVersion
-    loadAccountResource(vendorId, 'businessTypes').then(readTypeCategories).then(
+    // Asked for only once the assigned categories have landed (`resolveSavedType`).
+    const hint = {
+      profileTypeName: (typeFresh ? typeFresh.profile : values.profile)?.businessType ?? null,
+      assignedCategoryIds: values.categories!.map((category) => category.platformCategoryId),
+    }
+    loadAccountResource(vendorId, 'businessTypes').then((types) => readTypeCategories(types, hint)).then(
       (lists) => {
         if (!isCurrent() || version !== typeListsVersion) return
         typeLists = { status: 'loaded', lists }
@@ -713,7 +721,9 @@ function startAccountEntry(
     typeWanted = true
     typeFresh = null
     typeRecheck = 'loading'
-    if (typeLists.status === 'failed') typeLists = { status: 'idle' }
+    // "Others" alone held the assigned categories when read; read every list should they not now.
+    const othersOnly = typeLists.status === 'loaded' && typeLists.lists!.length < (values.businessTypes?.length ?? 0)
+    if (typeLists.status === 'failed' || othersOnly) typeLists = { status: 'idle' }
     if (view.resources.categories === 'failed') track('categories', loadAccountResource(vendorId, 'categories'))
     store().setSavedType({ status: 'checking' })
     // The vendor record can be stale and the context predates the save, so both are read again.
@@ -803,6 +813,9 @@ function startAccountEntry(
     // Running already, or failed this visit: the step's own read takes a failure over.
     if (key === categoryListKey && (view.categoryList === 'loading' || view.categoryList === 'failed')) return
     categoryListKey = key
+    // The saved-type fallback read this type's whole list already: its first page is Step 4's.
+    const fromFallback = typeLists.lists?.find(({ type }) => type.id === businessTypeId)?.firstPage
+    if (fromFallback) seedCategoryFirstPage(mode, businessTypeId, fromFallback)
     if (readReferenceCache(key)) {
       view.categoryList = 'loaded'
       return
@@ -832,7 +845,7 @@ function startAccountEntry(
   const track = (resource: OnboardingResource | 'units', read: Promise<unknown>) => {
     const version = (versions[resource] ?? 0) + 1
     versions[resource] = version
-    const startedAt = pageAwayEpoch()
+    const startedAt = pageAwayEpoch(vendorId)
     if (resource === 'units') view.units = 'loading'
     else view.resources[resource] = 'loading'
     read.then(
@@ -946,7 +959,7 @@ function startAccountEntry(
       : null)
   }
 
-  const applyContext = (loaded: VendorContext, at = pageAwayEpoch()) => {
+  const applyContext = (loaded: VendorContext, at = pageAwayEpoch(vendorId)) => {
     applyAccountState(loaded)
     contextReadAt = at
     const submitted = isStoreSubmitted({ context: loaded })
@@ -969,7 +982,7 @@ function startAccountEntry(
     if (known) return applyContext(known)
     view.context = 'loading'
     publish()
-    const startedAt = pageAwayEpoch()
+    const startedAt = pageAwayEpoch(vendorId)
     loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)).then(
       (loaded) => {
         if (isCurrent()) applyContext(loaded, startedAt)
@@ -997,13 +1010,13 @@ function startAccountEntry(
 
   const isStale = (step: OnboardingStep) => {
     if (!isCurrent() || !context) return false
-    const now = pageAwayEpoch()
+    const now = pageAwayEpoch(vendorId)
     return contextReadAt !== now || staleReads(step, now).length > 0
   }
 
   const revalidate = async (step: OnboardingStep): Promise<RevalidationOutcome> => {
     if (!isCurrent() || !context) return { kind: 'ended' }
-    const now = pageAwayEpoch()
+    const now = pageAwayEpoch(vendorId)
     const reads = staleReads(step, now)
     const readsContext = contextReadAt !== now
     if (!readsContext && !reads.length) return { kind: 'current' }
@@ -1871,6 +1884,8 @@ function OnboardingWizardContent() {
         if (firstTypeSave) settleFailedTypeSave(access.vendorId, error)
         // Part of the step may have landed, so it no longer matches anything known.
         if (step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
+        // Step 4 and 5 saves are diffed against the cached read, so a retry reads afresh.
+        if (step === 4 || step === 5) invalidateOnboardingResources(access.vendorId, savedResources(step))
         for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
         if (isAccountStep(step)) recordSavedBaselines({ [step]: undefined })
         if (!persistenceIsCurrent()) return
