@@ -4,7 +4,11 @@ import type {
   ProductReference,
 } from '@/shared/api'
 
-export const ONBOARDING_DRAFT_VERSION = 4 as const
+/**
+ * The persisted draft's format. 5 records, per edited field, the saved value its edit started
+ * from. A version-4 draft is still read and migrated (see `parsePersistedEnvelope`).
+ */
+export const ONBOARDING_DRAFT_VERSION = 5 as const
 export const ONBOARDING_CONFIG = {
   /** Fallback only. The real limit comes from the vendor context's `limits`. */
   maxCategories: 2,
@@ -233,6 +237,9 @@ export type LocalPreviewSnapshotV1 = {
   draft: PersistedOnboardingDraftV1
 }
 
+/** An unsaved field: when it was last edited (ms), and the saved value its edit started from. */
+export type DraftFieldEdit = { at: number; saved?: unknown }
+
 export type VendorOnboardingPersistedEnvelopeV1 = {
   version: typeof ONBOARDING_DRAFT_VERSION
   revision: number
@@ -250,17 +257,18 @@ export type VendorOnboardingPersistedEnvelopeV1 = {
    * Steps 3-9 whose part of the draft holds edits not yet written to the vendor account.
    *
    * The account is the record; this browser only buffers what has not reached it yet.
-   * On entry the wizard takes the account copy for every step not listed here, so a stale
-   * local copy can never outlive one visit, while a listed step keeps the vendor's unsaved
-   * work. Once the store is submitted the account wins for every step.
+   * On entry the wizard takes the account copy for every step not listed here, and merges a
+   * listed step's unsaved fields with it (`mergeAccountFields`), so a stale local copy can
+   * never outlive one visit. Once the store is submitted the account wins for every step.
    */
   editedSteps?: OnboardingStep[]
   /**
-   * Legacy, read only: the single flag `editedSteps` replaced. No longer written. An
-   * envelope without `editedSteps` reads `false` as nothing edited, and `true` or absent as
-   * every step edited, which preserves whatever it holds rather than overwriting it.
+   * Per edited field of Steps 3-9 (`DraftField` in `onboarding-draft-merge.ts`): when it was
+   * last edited (ms) and, when known, the saved value its edit started from. Never a private
+   * payment or contact value. A step listed in `editedSteps` with no field here has no known
+   * saved values (a draft written before version 5).
    */
-  hasLocalEdits?: boolean
+  edits?: Partial<Record<string, DraftFieldEdit>>
   draft: PersistedOnboardingDraftV1
   previewSnapshot: LocalPreviewSnapshotV1 | null
 }
@@ -271,8 +279,6 @@ export type OnboardingPersistenceStatus =
   | 'saving'
   | 'saved'
   | 'unavailable'
-  | 'conflict'
-  | 'corrupt'
   /**
    * A draft exists in this browser but no one is signed in to claim it.
    *

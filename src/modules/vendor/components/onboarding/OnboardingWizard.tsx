@@ -86,6 +86,7 @@ import {
   pendingEditIssues,
   pendingSteps,
   stepSnapshot,
+  type AccountStep,
   type SavedBaselines,
 } from '../../lib/onboarding-progress'
 import {
@@ -103,6 +104,16 @@ import {
   type TypeCategories,
 } from '../../lib/onboarding-saved-type'
 import { assignedCatalogIsMixed, dropOtherTypeSelections, MIXED_CATALOG_MESSAGE, mixedCatalogIssues } from '../../lib/onboarding-draft-repair'
+import {
+  RESOURCE_FIELDS,
+  mergeAccountFields,
+  pruneOrphans,
+  stepFields,
+  withSavedValues,
+  withoutSteps,
+  withUnknownEdits,
+  type DraftField,
+} from '../../lib/onboarding-draft-merge'
 import {
   clearTypeSaveInFlight,
   markTypeSaveInFlight,
@@ -133,7 +144,6 @@ import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpSentTo, OtpStep, PhoneStep } from './IdentitySteps'
 import { DeliveryStep, PaymentStep, SkuStep } from './OperationsSteps'
-import { CorruptDraftDialog, DraftConflictDialog } from './RecoveryDialogs'
 import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
@@ -301,8 +311,9 @@ function stepNeedsSavedType(step: OnboardingStep, submitted: boolean): boolean {
  *
  * The context and the profile are read at once; every other resource only when a step
  * that needs it opens. Each result is applied the moment it lands, whatever step is on
- * screen, through the per-resource appliers: a step with unsaved edits keeps them unless
- * the store is submitted. Nothing is applied without a context. A result for a visit that
+ * screen, through the per-resource appliers, merged field by field with unsaved edits
+ * (`mergeAccountFields`); a submitted store takes the account's copy everywhere. Nothing is
+ * applied without a context. A result for a visit that
  * has ended, or for another vendor, is dropped.
  */
 function startAccountEntry(
@@ -395,14 +406,18 @@ function startAccountEntry(
     )
   }
 
-  /** Every applier whose inputs have landed and that has not run yet, in one draft write. */
+  /**
+   * Every applier whose inputs have landed and that has not run yet, in one draft write. Each
+   * read is merged with the draft's unsaved fields it can tell (`mergeAccountFields`), as it
+   * lands: a read still on its way leaves its fields as they are.
+   */
   const applyReady = () => {
     if (!context) return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
     const approved = selectStoreIsApproved(state)
-    const options = { edited: new Set(state.editedSteps), submitted }
-    const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
+    // An edited step with no fields of its own (an old-format draft) has no known saved values.
+    let edits = withUnknownEdits(state.fieldEdits, state.editedSteps)
     let draft = state.draft
     let paymentDetails = state.runtime.paymentDetails
     let orderWhatsapp: string | undefined
@@ -413,15 +428,21 @@ function startAccountEntry(
     const baselines: SavedBaselines = {}
     const accountOnly = { edited: new Set<OnboardingStep>(), submitted }
     const empty = createEmptyOnboardingDraft()
+    const merge = (account: OnboardingState['draft'], fields: readonly DraftField[], accountEmpty = false) => {
+      const merged = mergeAccountFields({ local: draft, account, fields, edits, submitted, accountEmpty })
+      draft = merged.draft
+      edits = merged.edits
+    }
+    const stillEdited = (step: AccountStep) => !submitted && stepFields(step).some((field) => edits[field])
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
-      draft = applyProfile(draft, values.profile!, options, context.businessName)
-      if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
+      merge(applyProfile(draft, values.profile!, accountOnly, context.businessName), RESOURCE_FIELDS.profile)
+      if (!stillEdited(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
       ran('profile')
     }
     // Profile resets new-store branding, so the saved storefront applies only after it.
     if (!applied.has('storefront') && view.resources.storefront === 'loaded' && applied.has('profile')) {
-      draft = applyStorefront(draft, values.storefront!)
+      merge(applyStorefront(draft, values.storefront!), RESOURCE_FIELDS.storefront)
       const numbers = resumeStorefrontWhatsapp(values.storefront!)
       orderWhatsapp = numbers.orderWhatsapp
       supportWhatsapp = numbers.supportWhatsapp
@@ -434,7 +455,14 @@ function startAccountEntry(
       // An unresolved type is unknown: Step 3 keeps its copy and has no saved value.
       if (typeOutcome.kind !== 'unresolved') {
         const saved = typeOutcome.kind === 'saved' ? typeOutcome.type : typeOutcome.preselect
-        draft = applyBusinessType(draft, saved, { ...options, locked: typeOutcome.kind === 'saved' })
+        // A saved type is locked, so it replaces any unsaved choice; an open one is only a
+        // preselection, which an unsaved choice outranks.
+        if (typeOutcome.kind === 'saved') {
+          draft = applyBusinessType(draft, saved, { ...accountOnly, locked: true })
+          edits = withoutSteps(edits, [3])
+        } else {
+          merge(applyBusinessType(draft, saved, accountOnly), RESOURCE_FIELDS.businessType, true)
+        }
         baselines[3] = { businessType: saved }
       }
       typeState = savedTypeState(typeOutcome, typeRechecks > 0)
@@ -442,28 +470,32 @@ function startAccountEntry(
     }
     if (!applied.has('businessTypes') && businessType !== undefined) ran('businessTypes')
     if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
-      draft = applyCategories(draft, values.categories!, businessType, options)
+      merge(applyCategories(draft, values.categories!, businessType, accountOnly), RESOURCE_FIELDS.categories)
       baselines[4] = { categories: applyCategories(empty, values.categories!, businessType, accountOnly).categories }
       ran('categories')
     }
     if (!applied.has('products') && view.resources.products === 'loaded') {
-      draft = applyProducts(draft, values.products!, options)
+      merge(applyProducts(draft, values.products!, accountOnly), RESOURCE_FIELDS.products)
       baselines[5] = { products: applyProducts(empty, values.products!, accountOnly).products }
       ran('products')
     }
     // Saved sizes are rebuilt against the units, so they wait for them (or their fallback).
     if (!applied.has('skus') && view.resources.skus === 'loaded' && view.resources.products === 'loaded' && units !== undefined) {
       const measurements = measurementCatalogsForResume(units).measurements
-      draft = applySkus(draft, values.skus!, values.products!, measurements, options)
+      merge(applySkus(draft, values.skus!, values.products!, measurements, accountOnly), RESOURCE_FIELDS.skus)
       baselines[6] = { skus: applySkus(empty, values.skus!, values.products!, measurements, accountOnly).skus }
       ran('skus')
     }
     if (!applied.has('checkout') && view.resources.checkout === 'loaded') {
-      draft = applyCheckout(draft, values.checkout!, options)
-      if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
+      // No checkout saved yet: an old-format draft's delivery and payments may fill it.
+      merge(applyCheckout(draft, values.checkout!, accountOnly), RESOURCE_FIELDS.checkout, values.checkout === null)
+      if (!stillEdited(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
       Object.assign(baselines, checkoutBaselines(values.checkout!))
       ran('checkout')
     }
+    // Local additions whose category or product left the draft go with it, once the parent
+    // list has been merged.
+    draft = pruneOrphans(draft, { products: applied.has('categories'), skus: applied.has('products') })
     for (const kind of ['logo', 'banner'] as const) {
       if (!applied.has(kind) && view.resources[kind] === 'loaded') {
         state.restoreImage(kind, values[kind]!)
@@ -476,15 +508,18 @@ function startAccountEntry(
       repairedFor = typeOutcome.type.id
       draft = dropOtherTypeSelections(draft, typeOutcome.type.id, state.accountCatalog)
     }
-    if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
-      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false })
+    if (draft !== state.draft || edits !== state.fieldEdits || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
+      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false, edits })
     }
     if (typeState) store().setSavedType(typeState)
     // Step 9's branding is unreadable until approval, so its saved values are the store
-    // details as applied, and unknown while an unsaved local copy is kept.
+    // details as applied, with each unsaved field's recorded saved value in its place; unknown
+    // while an unsaved field records none (an old-format draft), so the step stays pending.
     if (!storeDetailsBaselined && applied.has('profile') && (!(submitted && approved) || applied.has('storefront'))) {
       storeDetailsBaselined = true
-      if (!keptLocal(9)) baselines[9] = stepSnapshot(9, store().draft, store().runtime)
+      const latest = store()
+      const saved = withSavedValues(latest.draft, latest.fieldEdits, stepFields(9))
+      if (saved) baselines[9] = stepSnapshot(9, saved, latest.runtime)
     }
     if (Object.keys(baselines).length) store().recordSavedBaselines(baselines)
     checkCatalogMixed()
@@ -1014,9 +1049,6 @@ function OnboardingWizardContent() {
   const goToStep = useOnboardingStore((state) => state.goToStep)
   const completePrototype = useOnboardingStore((state) => state.completePrototype)
   const flushPersistence = useOnboardingStore((state) => state.flushPersistence)
-  const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
-  const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
-  const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setProductLimit = useOnboardingStore((state) => state.setProductLimit)
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
@@ -1163,8 +1195,8 @@ function OnboardingWizardContent() {
    *
    * The account is the record and this browser only buffers what has not reached it, so
    * this runs on every entry — not once per browser. It reads the context and the profile
-   * now and each step's other resources when that step opens (below). It never overwrites
-   * a step the vendor has edited and not yet saved.
+   * now and each step's other resources when that step opens (below). An unsaved edit stays
+   * while the account still holds the value it started from.
    */
   useLayoutEffect(() => {
     savedStepRef.current = {}
@@ -1230,13 +1262,6 @@ function OnboardingWizardContent() {
     formScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
     window.setTimeout(() => headingRef.current?.focus(), 0)
   }, [currentStep, feedback])
-
-  useEffect(() => {
-    if (persistenceStatus !== 'conflict') return
-    requestControllerRef.current?.abort()
-    requestControllerRef.current = null
-    setBusy(false)
-  }, [persistenceStatus])
 
   const requestConfirmation: RequestConfirmation = (request) => {
     setConfirmState({ ...request, open: true })
@@ -2050,8 +2075,6 @@ function OnboardingWizardContent() {
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />
-      <DraftConflictDialog open={persistenceStatus === 'conflict'} onLoad={() => { cancelActiveRequest(); loadNewerDraft() }} onOverwrite={overwriteWithCurrentDraft} />
-      <CorruptDraftDialog open={persistenceStatus === 'corrupt'} onReset={clearCorruptDraft} />
     </div>
   )
 }

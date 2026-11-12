@@ -179,7 +179,9 @@ behavior lives in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-image
 The persisted draft buffers unsaved input only; it never decides setup progress, which every entry
 takes from the account's `next_step`. Each step's saved baseline, including Step 8's private payment
 details, and the step a save returns to are kept in memory only and reset on entry; neither is
-written to the draft. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
+written to the draft. The draft does record, per unsaved field, the safe saved value its edit
+started from ([below](#onboarding-draft-format-and-sync)). See
+[API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
 
 The saved business type has its own session-owned record, `md-vendor-onboarding-saved-type-v1`,
 separate from the draft so that discarding or replacing a draft never unlocks the type. Per vendor
@@ -210,6 +212,34 @@ backend pointer still wins over activation. Settings hydration and save behavior
 The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: an explicit sign-out
 clears it, and the ownership check covers every other path — the header ignores a record whose
 `vendorId` is not the signed-in vendor's.
+
+### Onboarding draft format and sync
+
+The draft (`md-vendor-onboarding-draft-v3`, envelope version 5) holds, besides the safe draft and its
+owner, `editedSteps` and `edits`: for each unsaved field of Steps 3-9 (a list such as categories, one
+delivery or store-details setting, the business type, or payments) when it was last edited and, when
+the visit knew it, the saved value the edit started from. Step 8's payment details and Step 9's
+WhatsApp numbers are never fields: they stay in memory. Saved catalog values follow the draft's
+asset rules (no local file or object URLs). How entry reads merge these fields with the account is
+in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
+
+- **Version 4 drafts** (no recorded saved values) are migrated when read: their edited steps keep
+  their fields, which then only fill what the account has not saved; the saved account value wins
+  everywhere else. Store details the account cannot show before approval keep this browser's copy
+  either way. A draft that lists Step 9 as edited keeps it unsaved, recorded with no known saved
+  value, so Step 10 asks to save or undo it on every load until it is saved. The oldest shape (no
+  edited steps and the legacy flag absent or set) marked every step edited whatever changed, so
+  its store details other than the name count as saved.
+- **An unreadable draft** (damaged, or a version this build cannot read) is discarded without a
+  notice, and the wizard rebuilds from the account.
+- **Other tabs.** A newer revision of the same vendor's draft written by another tab is taken in
+  without a prompt: its unsaved edits are adopted; this tab's edits made since its own last write
+  stay unless the other tab edited the same field later; an edit this tab had already written that
+  the other tab no longer holds (saved or undone there) goes; a field neither tab edited keeps this
+  tab's copy, since account data comes from each tab's own reads. Where each tab is, and its
+  progress, stay its own. If any of this tab's edits survived, it writes the merged draft at once.
+  A draft written for another vendor, or arriving while this tab's draft is parked, is ignored.
+  Edits made in both tabs within the same few milliseconds can still lose one of them.
 
 ### Temporary: vendor header hint — TEMP(vendor-header-hint)
 

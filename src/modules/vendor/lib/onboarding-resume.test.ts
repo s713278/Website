@@ -41,7 +41,7 @@ import {
   type ServerOnboardingState,
 } from './onboarding-resume'
 import { resolveSavedType } from './onboarding-saved-type'
-import type { OnboardingStep } from '../types/onboarding'
+import { ONBOARDING_DRAFT_VERSION, type OnboardingStep } from '../types/onboarding'
 import { readinessIssues } from './onboarding-validation'
 import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
 import { deriveStoreState } from './store-state'
@@ -445,7 +445,7 @@ describe('a partial resume still produces a loadable draft', () => {
   it('round-trips through the draft validator', () => {
     const { draft } = composeByHand(stateWithoutBusinessTypes())
     const envelope = {
-      version: 4,
+      version: ONBOARDING_DRAFT_VERSION,
       revision: 1,
       updatedAt: new Date().toISOString(),
       ownerId: '91',

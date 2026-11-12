@@ -39,6 +39,7 @@ function seedAt(step: OnboardingStep) {
     persistenceInitialized: true,
     persistenceStatus: 'idle',
     editedSteps: [],
+    fieldEdits: {},
     loadedSteps: [],
     savedBaselines: {},
     returnStep: null,
@@ -197,13 +198,17 @@ describe('completeStep and saved input', () => {
   // leaves the step's input saved, and only that step's.
   beforeEach(() => {
     seedAt(5)
-    useOnboardingStore.setState({ editedSteps: [4, 5, 7, 8] })
+    useOnboardingStore.setState({
+      editedSteps: [4, 5, 7, 8],
+      fieldEdits: { products: { at: 1, saved: [] }, 'delivery.shipping': { at: 2, saved: { charge: 30, freeDeliveryThreshold: 0 } } },
+    })
   })
 
   it('removes only the step that was saved', () => {
     useOnboardingStore.getState().completeStep(5, 6)
 
     expect(useOnboardingStore.getState().editedSteps).toEqual([4, 7, 8])
+    expect(Object.keys(useOnboardingStore.getState().fieldEdits)).toEqual(['delivery.shipping'])
     expect(useOnboardingStore.getState().furthestVisitedStep).toBe(6)
   })
 
@@ -217,15 +222,21 @@ describe('completeStep and saved input', () => {
     useOnboardingStore.getState().completeStep(2, 3)
 
     expect(useOnboardingStore.getState().editedSteps).toEqual([])
+    expect(useOnboardingStore.getState().fieldEdits).toEqual({})
   })
 
-  it('writes the edited steps to storage and never the legacy flag', () => {
+  it('writes the edited steps and their fields to storage, and never the legacy flag', () => {
     const write = vi.spyOn(onboardingDraftAdapter.drafts, 'write').mockImplementation(() => {})
     try {
       useOnboardingStore.getState().completeStep(5, 6)
 
       const envelope = write.mock.calls.at(-1)?.[0]
       expect(envelope?.editedSteps).toEqual([4, 7, 8])
+      expect(envelope?.edits?.['delivery.shipping']).toEqual({ at: 2, saved: { charge: 30, freeDeliveryThreshold: 0 } })
+      // Steps edited with no field record (no saved value known) are written field by field.
+      expect(envelope?.edits?.categories).toEqual({ at: 0 })
+      expect(envelope?.edits?.payments).toEqual({ at: 0 })
+      expect(envelope?.edits?.products).toBeUndefined()
       expect(envelope && 'hasLocalEdits' in envelope).toBe(false)
     } finally {
       write.mockRestore()
@@ -364,6 +375,7 @@ describe('editedSteps against a saved baseline', () => {
       persistenceStatus: 'idle',
       storeSubmission: null,
       editedSteps: [],
+      fieldEdits: {},
       loadedSteps: [3, 4, 5, 6, 7, 8, 9],
       savedBaselines: { 7: { delivery }, 8: { payments: draft.payments, paymentDetails: createEmptyRuntimeState().paymentDetails } },
     })
@@ -382,6 +394,16 @@ describe('editedSteps against a saved baseline', () => {
     expect(state.editedSteps).toEqual([])
     expect(state.furthestVisitedStep).toBe(9)
     expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('records the saved value the edit started from, and forgets it once changed back', () => {
+    setCharge(45)
+    expect(useOnboardingStore.getState().fieldEdits).toEqual({
+      'delivery.shipping': { at: expect.any(Number), saved: delivery.shipping },
+    })
+
+    setCharge(delivery.shipping.charge)
+    expect(useOnboardingStore.getState().fieldEdits).toEqual({})
   })
 
   it('leaves a step it did not touch as it was', () => {

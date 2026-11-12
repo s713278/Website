@@ -362,8 +362,8 @@ in the browser, so while one is active each further set loads only on a press, n
 first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not a failure.
 
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
-step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
-applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
+step is on screen, and merged field by field with the draft's unsaved edits (below); a submitted
+store takes the account copy everywhere, and nothing is applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
 change; a save does not reset it. A step shows the page loader until its reads have loaded (Steps 3-4
 keep the same page loader until their first reference list arrives, so the two reads show as one load),
 and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
@@ -391,11 +391,38 @@ pressable and another type only shows a warning; with no answer Steps 3-4 show *
 instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
 temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
 
+**Unsaved edits merge with the account silently** (`mergeAccountFields` in
+`onboarding-draft-merge.ts`). The draft records, per edited field, the saved value the edit started
+from (see [SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)). Each read merges only the
+fields it can tell, as it lands, so a read still on its way never counts as saved data: the profile
+tells Step 9's store name, the checkout read Steps 7-8, each catalog read its own list, and an
+approved submitted store's storefront read the rest of Step 9. Per field:
+
+| Unsaved edit | Account value | Result |
+|---|---|---|
+| None | Any | Account value |
+| Recorded saved value | Still that value | The edit stays |
+| Recorded saved value | Changed since | Account value |
+| No recorded saved value (draft from before version 5) | Empty, or no checkout saved yet | The edit fills it |
+| No recorded saved value | Holds a value | Account value |
+
+Categories, products and sizes merge entry by entry: entries the account holds are kept (an
+assigned category or product is never dropped), local additions stay, a changed entry stays only
+while the account's copy is the one it started from, and a removed size stays removed while the
+account's copy is unchanged. An old-format list counts the account's entries as saved and its own
+other entries as additions. Products and sizes whose category or product left the draft go with it,
+once that parent list has merged. An open (unsaved) business type is only a preselection, so an
+unsaved choice outranks it; a locked type replaces any choice. Step 9's other store details are
+unreadable before approval: an edit stays pending against its recorded saved value, or, from an
+old-format draft that lists Step 9 as edited, until Step 9 is saved, since no saved value is
+known. The oldest drafts marked every step edited, so their other store details count as saved
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)). No notice of any of this is shown.
+
 Unsaved input is measured against each step's **saved baseline**: the account copy the step's
-reads produced (whether or not an edited step kept its local copy), or what the last confirmed save
-sent. Step 9's branding is unreadable before approval, so its baseline is the store details as
-applied, and unknown while an edited local copy is kept. Baselines live in store memory only,
-reset on every entry, because Step 8's include private payment details. A step is pending while it
+reads produced, or what the last confirmed save sent. Step 9's branding is unreadable before
+approval, so its baseline is the store details as applied, with each unsaved field's recorded saved
+value in its place. Baselines live in store memory only, reset on every entry, because Step 8's
+include private payment details. A step is pending while it
 differs from its baseline, runtime fields included, so changing a value back leaves nothing to
 save; without a baseline the persisted edited set stands in, and a chosen but unsent logo or banner
 is always pending. An edit that returns a step's draft section to its baseline also drops it from
@@ -1091,8 +1118,9 @@ persists only a versioned, validated safe draft through `onboardingDraftAdapter`
 1200 ms trailing timer followed by `requestIdleCallback` (with a timeout fallback), plus immediate
 flushes on step transitions, completion, and page hiding. It deliberately does not use Zustand's
 per-mutation persistence middleware. The safe snapshot excludes phones, OTP digits, payment
-credentials, files, object URLs, tokens, vendor IDs, and backend error bodies. Newer cross-tab
-revisions pause writes until the user chooses which draft wins.
+credentials, files, object URLs, tokens, vendor IDs, and backend error bodies. A newer revision
+from another tab is merged in silently, field by field
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)).
 
 The onboarding catalog hooks separately use a bounded module-memory result cache keyed by reference
 kind, Live/Sample provenance, query, and parent ID. Business-type keys additionally include the
@@ -1182,7 +1210,7 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
 | `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders` | demo services | mutable demo-mode state. The vendor dashboard keeps none: its demo data is read-only wire-shaped fixtures, so `md-vendor-orders` and `md-vendor-products` no longer exist |
-| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
+| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-5 safe wizard draft (version 4 read and migrated), owner ID, each unsaved field's edit time and safe saved value, and optional same-browser preview snapshot; no phone/OTP, payment credentials, WhatsApp numbers, tokens, files, or object URLs |
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
 object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated

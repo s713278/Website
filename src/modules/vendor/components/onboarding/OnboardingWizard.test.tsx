@@ -21,7 +21,9 @@ import { useOnboardingStore } from '../../store/onboarding-store'
 import { markTypeSaveInFlight, readSavedTypeRecord } from '../../lib/onboarding-saved-type-record'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import { ONBOARDING_CONFIG, ONBOARDING_DRAFT_VERSION, type OnboardingStep } from '../../types/onboarding'
+type OnboardingStoreState = ReturnType<typeof useOnboardingStore.getState>
 import { ONBOARDING_DRAFT_STORAGE_KEY, parsePersistedEnvelope, toPersistedDraft } from '../../lib/onboarding-persistence'
+import { pendingSteps } from '../../lib/onboarding-progress'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
@@ -511,7 +513,7 @@ describe('account copy per step around unsaved edits', () => {
     measurementId: null, measurementName: null, categoryId: 10,
   }
 
-  function seedEdited(editedSteps: OnboardingStep[]) {
+  function seedEdited(editedSteps: OnboardingStep[], fieldEdits: OnboardingStoreState['fieldEdits'] = {}) {
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
@@ -523,11 +525,13 @@ describe('account copy per step around unsaved edits', () => {
       furthestVisitedStep: 5,
       draftOwnerId: '91',
       editedSteps,
+      fieldEdits,
     })
   }
 
-  it('takes the account copy for unedited steps, keeps the edited one, and opens the account’s step', async () => {
-    seedEdited([5])
+  it('takes the account copy for unedited steps, merges the edited one, and opens the account’s step', async () => {
+    // The product was added when the account held none.
+    seedEdited([5], { products: { at: 1, saved: [] } })
     renderAccount('PENDING', 6)
 
     // Saved progress is the account's: the unsaved Step 5 edit does not hold the vendor there.
@@ -535,7 +539,9 @@ describe('account copy per step around unsaved edits', () => {
     const state = useOnboardingStore.getState()
     expect(state.draft.categories.map((category) => category.id)).toEqual([10])
     expect(state.draft.business.businessType?.id).toBe(7)
-    expect(state.draft.products).toEqual([localProduct])
+    // The unsaved addition stays, and so does the product the account has saved since.
+    expect(state.draft.products.map((product) => product.id)).toEqual([localProduct.id, 31])
+    expect(state.draft.products[0]).toEqual(localProduct)
     expect(state.draft.currentStep).toBe(6)
     expect(state.furthestVisitedStep).toBe(6)
     // Step 6 scaffolds a size for the local product, which is new, unsaved input too.
@@ -599,7 +605,9 @@ describe('saved progress belongs to the account', () => {
   })
 
   it('opens the account’s step on reload even with an unsaved earlier edit, keeping the edit', async () => {
-    // A saved business type is locked, so the unsaved earlier edit here is a store detail.
+    // A saved business type is locked, so the unsaved earlier edit here is a store detail,
+    // recorded with the saved value it started from (store details are unreadable before
+    // approval, so that record is what keeps it pending).
     const storefront = { ...createEmptyOnboardingDraft().storefront, tagline: 'Unsaved tagline' }
     useOnboardingStore.setState({
       draft: {
@@ -612,6 +620,7 @@ describe('saved progress belongs to the account', () => {
       furthestVisitedStep: 3,
       draftOwnerId: '91',
       editedSteps: [9],
+      fieldEdits: { 'storefront.tagline': { at: 1, saved: '' } },
     })
     renderAccount('PENDING', 10)
 
@@ -1585,9 +1594,10 @@ describe('the business type locks at its first confirmed save', () => {
         skus: [size('sku-4001', 31), size('draft-sku-41', 41), size('draft-sku-pending', PENDING_PRODUCT)],
         storefront: { ...empty.storefront, tagline: 'Unsaved tagline' },
       }
+      // Written before drafts recorded saved values (version 4).
       localStorage.setItem(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
-        version: ONBOARDING_DRAFT_VERSION, revision: 3, updatedAt: '2026-11-01T10:00:00.000Z', ownerId: '91',
-        furthestVisitedStep: 4, ...edited, draft: toPersistedDraft(draft), previewSnapshot: null,
+        version: 4, revision: 3, updatedAt: '2026-11-01T10:00:00.000Z', ownerId: '91',
+        furthestVisitedStep: 4, ...edited, draft: { ...toPersistedDraft(draft), version: 4 }, previewSnapshot: null,
       }))
       // Read the browser's draft as a fresh page load does.
       useOnboardingStore.setState({ persistenceInitialized: false })
@@ -2160,7 +2170,9 @@ describe('per-step account reads', () => {
     ]))
 
     await waitFor(() => expect(useOnboardingStore.getState().accountCatalog.productIds).toEqual([31]))
-    expect(useOnboardingStore.getState().draft.products).toEqual([local])
+    // The edit stays, and the account's saved product joins it: assigned products are never dropped.
+    expect(useOnboardingStore.getState().draft.products.map((product) => product.id)).toEqual([77, 31])
+    expect(useOnboardingStore.getState().draft.products[0]).toEqual(local)
     expect(useOnboardingStore.getState().editedSteps).toContain(5)
   })
 
@@ -2886,5 +2898,236 @@ describe('resumed vendor image-read failure', () => {
     expect(screen.queryByRole('button', { name: 'Retry logo' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry banner' })).toBeNull()
     expect(continueDisabled('Save changes')).toBe(false)
+  })
+})
+
+describe('silent draft sync', () => {
+  const beverages = { id: 7, name: 'Beverages', icon: null, displayOrder: 1 }
+  const currentStepIs = (step: number) => screen.findByRole('button', { name: new RegExp(`^Step ${step},.*You are here`) })
+  const shipping = (charge: number) => ({ charge, freeDeliveryThreshold: 0 })
+  const storedEnvelope = () => parsePersistedEnvelope(JSON.parse(localStorage.getItem(ONBOARDING_DRAFT_STORAGE_KEY) ?? 'null'))
+
+  /**
+   * This browser's draft as a fresh page load finds it: an unsaved delivery charge of 45 and
+   * a store detail, written in `version`'s format with the given edit record.
+   */
+  function plantDraft(version: number, record: Record<string, unknown>, patch: Partial<ReturnType<typeof createEmptyOnboardingDraft>> = {}) {
+    const empty = createEmptyOnboardingDraft()
+    const draft = {
+      ...empty,
+      mobileVerified: true,
+      currentStep: 7 as OnboardingStep,
+      completedSteps: [1, 2, 3, 4, 5, 6] as OnboardingStep[],
+      business: { businessType: beverages, businessName: 'Test Store' },
+      delivery: { ...empty.delivery, fulfillmentType: 'BOTH' as const, shipping: shipping(45) },
+      storefront: { ...empty.storefront, storeName: 'Test Store', businessLocation: 'Test City', tagline: 'Old tagline' },
+      ...patch,
+    }
+    localStorage.setItem(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
+      version, revision: 3, updatedAt: '2026-11-01T10:00:00.000Z', ownerId: '91', furthestVisitedStep: 7,
+      ...record, draft: { ...toPersistedDraft(draft), version }, previewSnapshot: null,
+    }))
+    useOnboardingStore.setState({ persistenceInitialized: false })
+  }
+
+  beforeEach(() => {
+    stubReferencePages()
+    // Delivery charge 30, home delivery only.
+    vi.mocked(vendorOnboardingService.getCheckoutOptions).mockResolvedValue(READY_CHECKOUT)
+    vi.mocked(vendorOnboardingService.getVendorProfile).mockResolvedValue({
+      businessName: 'Test Store', businessType: 'Beverages', contactNumber: '+919876543210',
+    })
+  })
+
+  it('keeps an edit whose saved value the account still holds, and takes the account’s newer value for another', async () => {
+    plantDraft(ONBOARDING_DRAFT_VERSION, {
+      editedSteps: [7],
+      edits: {
+        // Started from the charge the account still holds: the vendor's edit stands.
+        'delivery.shipping': { at: 1, saved: shipping(30) },
+        // Started from store pickup, but the account has since saved home delivery.
+        'delivery.fulfillmentType': { at: 1, saved: 'STORE_PICKUP' },
+      },
+    })
+    renderAccount('PENDING', 7)
+
+    await currentStepIs(7)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(7))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.delivery.shipping).toEqual(shipping(45))
+    expect(state.draft.delivery.fulfillmentType).toBe('HOME_DELIVERY')
+    expect(state.editedSteps).toEqual([7])
+    expect(pendingSteps(state)).toEqual([7])
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    // What the next load needs to judge the kept edit again: the saved value it started from.
+    act(() => useOnboardingStore.getState().flushPersistence())
+    expect(storedEnvelope()?.edits).toEqual({ 'delivery.shipping': { at: 1, saved: shipping(30) } })
+  })
+
+  it('lets the account’s newer value win over an edit that started from an older one', async () => {
+    plantDraft(ONBOARDING_DRAFT_VERSION, {
+      editedSteps: [7],
+      edits: { 'delivery.shipping': { at: 1, saved: shipping(20) } },
+    })
+    renderAccount('PENDING', 7)
+
+    await currentStepIs(7)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(7))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.delivery.shipping).toEqual(shipping(30))
+    expect(state.editedSteps).toEqual([])
+    expect(pendingSteps(state)).toEqual([])
+  })
+
+  it('keeps an old-format draft’s explicitly edited store details pending, across reloads', async () => {
+    seedReadyAccount('Test City')
+    plantDraft(4, { editedSteps: [7, 9] })
+    renderAccount('PENDING', 10)
+
+    await currentStepIs(10)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+    let state = useOnboardingStore.getState()
+    // The account holds a delivery setup, so it wins over the unsaved copy.
+    expect(state.draft.delivery.shipping).toEqual(shipping(30))
+    expect(state.draft.delivery.fulfillmentType).toBe('HOME_DELIVERY')
+    // Store details are unreadable before approval: this browser's copy stays, still unsaved.
+    expect(state.draft.storefront.tagline).toBe('Old tagline')
+    expect(pendingSteps(state)).toEqual([9])
+    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    // Written back in the current format, it stays pending on the next load.
+    act(() => useOnboardingStore.getState().flushPersistence())
+    expect(storedEnvelope()?.version).toBe(ONBOARDING_DRAFT_VERSION)
+    expect(storedEnvelope()?.editedSteps).toEqual([9])
+    cleanup()
+    invalidateAll()
+    useOnboardingStore.setState({ persistenceInitialized: false })
+    renderAccount('PENDING', 10)
+    await currentStepIs(10)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+    state = useOnboardingStore.getState()
+    expect(state.draft.storefront.tagline).toBe('Old tagline')
+    expect(pendingSteps(state)).toEqual([9])
+    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
+  })
+
+  it.each([
+    ['the legacy flag absent', {}],
+    ['the legacy flag set', { hasLocalEdits: true }],
+  ])('treats the oldest draft’s store details as saved, as it marks every step edited (%s)', async (_, record) => {
+    seedReadyAccount('Test City')
+    plantDraft(4, record)
+    renderAccount('PENDING', 10)
+
+    await currentStepIs(10)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.delivery.shipping).toEqual(shipping(30))
+    expect(state.draft.storefront.tagline).toBe('Old tagline')
+    expect(pendingSteps(state)).toEqual([])
+    expect(screen.queryByText('Save or undo your changes to store details.')).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('lets an old-format draft fill what the account has not saved yet', async () => {
+    vi.mocked(vendorOnboardingService.getCheckoutOptions).mockResolvedValue(null)
+    plantDraft(4, { editedSteps: [7] })
+    renderAccount('PENDING', 7)
+
+    await currentStepIs(7)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(7))
+    const state = useOnboardingStore.getState()
+    expect(state.draft.delivery.shipping).toEqual(shipping(45))
+    expect(state.draft.delivery.fulfillmentType).toBe('BOTH')
+    expect(state.editedSteps).toEqual([7])
+  })
+
+  it('discards an unreadable draft without a word and opens the account’s setup', async () => {
+    localStorage.setItem(ONBOARDING_DRAFT_STORAGE_KEY, '{"version": 2, "draft": "damaged"')
+    useOnboardingStore.setState({ persistenceInitialized: false })
+    renderAccount('PENDING', 9)
+
+    await currentStepIs(9)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.queryByText(/cannot be opened/i)).toBeNull()
+    await waitFor(() => expect(useOnboardingStore.getState().draft.business.businessName).toBe('Test Store'))
+    expect(useOnboardingStore.getState().persistenceStatus).not.toBe('corrupt')
+    // Nothing of the damaged copy survives the next write.
+    act(() => useOnboardingStore.getState().flushPersistence())
+    const stored = localStorage.getItem(ONBOARDING_DRAFT_STORAGE_KEY)
+    expect(stored === null || storedEnvelope() !== null).toBe(true)
+  })
+
+  describe('across tabs', () => {
+    /** What another tab writes: this tab's last stored draft with `change` applied on top. */
+    function otherTabWrites(change: (draft: ReturnType<typeof createEmptyOnboardingDraft>) => ReturnType<typeof createEmptyOnboardingDraft>, edits: Record<string, unknown>) {
+      const state = useOnboardingStore.getState()
+      const envelope = {
+        version: ONBOARDING_DRAFT_VERSION,
+        revision: state.persistenceRevision + 1,
+        updatedAt: new Date(Date.now() + 1000).toISOString(),
+        ownerId: '91',
+        furthestVisitedStep: state.furthestVisitedStep,
+        editedSteps: [9],
+        edits,
+        draft: toPersistedDraft(change(state.draft)),
+        previewSnapshot: null,
+      }
+      act(() => {
+        window.dispatchEvent(new StorageEvent('storage', { key: ONBOARDING_DRAFT_STORAGE_KEY, newValue: JSON.stringify(envelope) }))
+      })
+    }
+    const withStorefront = (patch: Partial<ReturnType<typeof createEmptyOnboardingDraft>['storefront']>) =>
+      (draft: ReturnType<typeof createEmptyOnboardingDraft>) => ({ ...draft, storefront: { ...draft.storefront, ...patch } })
+
+    async function openStep9() {
+      useOnboardingStore.setState({ persistenceInitialized: false })
+      renderAccount('PENDING', 9)
+      await currentStepIs(9)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(9))
+      act(() => useOnboardingStore.getState().flushPersistence())
+    }
+
+    it('adopts the other tab’s newer draft silently', async () => {
+      await openStep9()
+
+      otherTabWrites(withStorefront({ tagline: 'From the other tab' }), {
+        'storefront.tagline': { at: Date.now(), saved: '' },
+      })
+
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      expect(screen.queryByText(/newer draft/i)).toBeNull()
+      const state = useOnboardingStore.getState()
+      expect(state.draft.storefront.tagline).toBe('From the other tab')
+      expect(state.editedSteps).toEqual([9])
+      expect(state.persistenceStatus).not.toBe('conflict')
+      // This tab still writes: its next edit reaches storage.
+      act(() => {
+        state.updateDraft((draft) => ({ ...draft, storefront: { ...draft.storefront, welcomeMessage: 'Later' } }), 9)
+        useOnboardingStore.getState().flushPersistence()
+      })
+      expect(storedEnvelope()?.draft.storefront).toMatchObject({ tagline: 'From the other tab', welcomeMessage: 'Later' })
+    })
+
+    it('keeps both tabs’ unsaved edits to different fields, and the more recent edit of the same field', async () => {
+      await openStep9()
+      act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft, storefront: { ...draft.storefront, welcomeMessage: 'This tab', announcementBar: 'This tab, earlier' },
+      }), 9))
+
+      otherTabWrites(withStorefront({ tagline: 'Other tab', announcementBar: 'Other tab, later' }), {
+        'storefront.tagline': { at: Date.now() + 500, saved: '' },
+        'storefront.announcementBar': { at: Date.now() + 500, saved: '' },
+      })
+
+      const { storefront } = useOnboardingStore.getState().draft
+      expect(storefront.welcomeMessage).toBe('This tab')
+      expect(storefront.tagline).toBe('Other tab')
+      expect(storefront.announcementBar).toBe('Other tab, later')
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      // This tab's own unsaved edit is written back, so the other tab can have it too.
+      expect(storedEnvelope()?.draft.storefront).toMatchObject({ welcomeMessage: 'This tab', tagline: 'Other tab' })
+    })
   })
 })

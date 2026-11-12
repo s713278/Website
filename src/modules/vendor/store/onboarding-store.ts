@@ -31,12 +31,22 @@ import { isApprovalGranted } from '../lib/onboarding-account-status'
 import {
   cancelScheduledDraftSave,
   flushScheduledDraftSave,
+  hydratePersistedDraft,
   normalizeEditedSteps,
   reconcilePersistedDraft,
   restoredEditedSteps,
   scheduleDraftSave,
   toPersistedDraft,
+  toPersistedEdits,
 } from '../lib/onboarding-persistence'
+import {
+  editedStepsOf,
+  mergeTabDraft,
+  trackEdits,
+  withoutSteps,
+  withUnknownEdits,
+  type FieldEdits,
+} from '../lib/onboarding-draft-merge'
 import {
   ONBOARDING_CONFIG,
   ONBOARDING_DRAFT_VERSION,
@@ -104,7 +114,6 @@ type OnboardingStore = {
   persistenceRevision: number
   persistenceUpdatedAt: string | null
   recoveryMessage: string | null
-  pendingConflict: VendorOnboardingPersistedEnvelopeV1 | null
   /** Vendor the current draft belongs to; `null` before verification. */
   draftOwnerId: string | null
   /**
@@ -119,6 +128,13 @@ type OnboardingStore = {
    * unsaved and the account's `next_step` for what is done.
    */
   editedSteps: OnboardingStep[]
+  /**
+   * The edited steps' unsaved fields: when each was last edited and, when known, the saved
+   * value its edit started from (see `onboarding-draft-merge.ts`). Persisted with the draft;
+   * entry reads merge them with the account field by field, and another tab's newer draft is
+   * merged with them the same way. Never holds a private payment or contact value.
+   */
+  fieldEdits: FieldEdits
   /**
    * Each step's last saved values this visit, from an account read or a confirmed (or demo
    * simulated) save. In memory only, never persisted: Step 8's carry private payment details.
@@ -268,9 +284,6 @@ type OnboardingStore = {
   recordCreatedEntry: (entry: CreatedCatalogEntry) => void
   initializePersistence: (ownerId: string | null) => void
   flushPersistence: () => void
-  loadNewerDraft: () => void
-  overwriteWithCurrentDraft: () => void
-  clearCorruptDraft: () => void
   updateDraft: (
     updater: (draft: VendorOnboardingDraftV1) => VendorOnboardingDraftV1,
     invalidateFrom?: OnboardingStep,
@@ -303,15 +316,16 @@ type OnboardingStore = {
   adoptVerifiedSession: (maskedPhone: string | null) => void
   /**
    * Replace the draft with what the vendor's account already holds. `frameApplied: false`
-   * means only unedited steps took the account copy: the edited set and the notice stay.
-   * A frame always sets position and progress from the account; `editsKept` says unsaved
-   * steps kept their local copy, so the edited set stays and there is no resume notice.
+   * means account reads were merged into the draft: `edits`, when given, are the unsaved
+   * fields left after the merge. A frame always sets position and progress from the account;
+   * `editsKept` says unsaved steps kept their local copy, so the edited set stays and there
+   * is no resume notice.
    */
   applyResumedDraft: (
     draft: VendorOnboardingDraftV1,
     furthestVisitedStep: OnboardingStep,
     runtime: Pick<OnboardingRuntimeState, 'paymentDetails'> & Partial<Pick<OnboardingRuntimeState, 'orderWhatsapp' | 'supportWhatsapp'>>,
-    options?: { frameApplied?: boolean; editsKept?: boolean },
+    options?: { frameApplied?: boolean; editsKept?: boolean; edits?: FieldEdits },
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
   revokeVerifiedSession: () => void
@@ -423,12 +437,12 @@ function emptyDraftState(
     persistenceRevision: 0,
     persistenceUpdatedAt: null,
     recoveryMessage,
-    pendingConflict: null,
     storeSubmission: null,
     catalogPreview: null,
     ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
     draftOwnerId: ownerId,
     editedSteps: [],
+    fieldEdits: {},
     loadedSteps: [],
     savedBaselines: {},
     returnStep: null,
@@ -466,6 +480,7 @@ function applyPersistedEnvelope(
 ) {
   revokeRuntimeUrls(useOnboardingStore.getState().runtime)
   const restored = reconcilePersistedDraft(envelope.draft, envelope.furthestVisitedStep)
+  const fieldEdits = restoredFieldEdits(envelope)
   set({
     draft: restored.draft,
     runtime: createEmptyRuntimeState(),
@@ -473,24 +488,56 @@ function applyPersistedEnvelope(
     furthestVisitedStep: restored.furthestVisitedStep,
     previewSnapshot: envelope.previewSnapshot,
     previewRestored: Boolean(envelope.previewSnapshot),
-    editedSteps: restoredEditedSteps(envelope),
+    editedSteps: editedStepsOf(fieldEdits),
+    fieldEdits,
     returnStep: null,
     persistenceInitialized: true,
     persistenceStatus: 'saved',
     persistenceRevision: envelope.revision,
     persistenceUpdatedAt: envelope.updatedAt,
     recoveryMessage: restorationMessage(restored.draft),
-    pendingConflict: null,
   })
 }
 
+/**
+ * An envelope's unsaved fields. A step it lists as edited without fields of its own (a draft
+ * from before version 5) counts every field as edited with no known saved value.
+ */
+function restoredFieldEdits(envelope: VendorOnboardingPersistedEnvelopeV1): FieldEdits {
+  const edits = (envelope.edits ?? {}) as FieldEdits
+  return withUnknownEdits(edits, normalizeEditedSteps([...restoredEditedSteps(envelope), ...editedStepsOf(edits)]))
+}
+
+/**
+ * Another tab wrote a newer draft of the same vendor: take it in silently. Each unsaved field
+ * this tab edited after its own last write stays unless the other tab edited it later still
+ * (`mergeTabDraft`); where this tab is and its account reads stay its own. If any of this
+ * tab's fields stayed, the merged draft is written at once so the other tab has them too.
+ */
+function adoptOtherTabDraft(envelope: VendorOnboardingPersistedEnvelopeV1): void {
+  const state = useOnboardingStore.getState()
+  const writtenAt = state.persistenceUpdatedAt ? Date.parse(state.persistenceUpdatedAt) : 0
+  const merged = mergeTabDraft({
+    local: state.draft,
+    localEdits: withUnknownEdits(state.fieldEdits, state.editedSteps),
+    incoming: hydratePersistedDraft(envelope.draft),
+    incomingEdits: restoredFieldEdits(envelope),
+    writtenAt,
+  })
+  cancelScheduledDraftSave()
+  useOnboardingStore.setState({
+    draft: { ...merged.draft, maskedPhone: state.draft.maskedPhone },
+    fieldEdits: merged.edits,
+    editedSteps: editedStepsOf(merged.edits),
+    persistenceRevision: envelope.revision,
+    persistenceUpdatedAt: envelope.updatedAt,
+    persistenceStatus: merged.kept ? 'saving' : 'saved',
+  })
+  if (merged.kept) flushScheduledDraftSave(persistCurrentDraft)
+}
+
 function isWritable(state: OnboardingStore): boolean {
-  return (
-    state.persistenceInitialized &&
-    state.persistenceStatus !== 'conflict' &&
-    state.persistenceStatus !== 'corrupt' &&
-    state.persistenceStatus !== 'deferred'
-  )
+  return state.persistenceInitialized && state.persistenceStatus !== 'deferred'
 }
 
 function persistCurrentDraft(): void {
@@ -505,6 +552,7 @@ function persistCurrentDraft(): void {
     ownerId: state.draftOwnerId,
     furthestVisitedStep: state.furthestVisitedStep,
     editedSteps: state.editedSteps,
+    edits: toPersistedEdits(withUnknownEdits(state.fieldEdits, state.editedSteps)),
     draft: toPersistedDraft(state.draft),
     previewSnapshot: state.previewSnapshot,
   }
@@ -533,8 +581,8 @@ function queuePersistence(): void {
  * Write a queued save now.
  *
  * `flushScheduledDraftSave(task)` arms the task even when nothing was scheduled, so this
- * must not be called speculatively: an unconditional write bumps the revision, wakes
- * every other tab's conflict dialog, and can recreate a draft that sign-out just removed.
+ * must not be called speculatively: an unconditional write bumps the revision, makes every
+ * other tab merge it, and can recreate a draft that sign-out just removed.
  */
 function flushPendingSave(): void {
   const state = useOnboardingStore.getState()
@@ -709,7 +757,6 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   persistenceRevision: 0,
   persistenceUpdatedAt: null,
   recoveryMessage: null,
-  pendingConflict: null,
   categoryLimit: ONBOARDING_CONFIG.maxCategories,
   productLimit: ONBOARDING_CONFIG.maxProducts,
   skuLimit: ONBOARDING_CONFIG.maxSkus,
@@ -720,6 +767,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   ...accountCatalogSlice(EMPTY_ACCOUNT_CATALOG),
   draftOwnerId: null,
   editedSteps: [],
+  fieldEdits: {},
   loadedSteps: [],
   savedBaselines: {},
   returnStep: null,
@@ -743,7 +791,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       const holdsSaved = savedType.status === 'saved'
         && state.draft.business.businessType?.id === savedType.type.id
       return holdsSaved && state.editedSteps.includes(3)
-        ? { savedType, editedSteps: state.editedSteps.filter((step) => step !== 3) }
+        ? {
+            savedType,
+            editedSteps: state.editedSteps.filter((step) => step !== 3),
+            fieldEdits: withoutSteps(state.fieldEdits, [3]),
+          }
         : { savedType }
     })
   },
@@ -970,12 +1022,9 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     } else if (result.kind === 'empty') {
       set({ persistenceInitialized: true, persistenceStatus: 'idle', draftOwnerId: ownerId })
     } else if (result.kind === 'corrupt') {
-      set({
-        persistenceInitialized: true,
-        persistenceStatus: 'corrupt',
-        draftOwnerId: ownerId,
-        recoveryMessage: 'The saved onboarding draft is unsupported or damaged.',
-      })
+      // A draft this version cannot read is set aside without a word: the account is the
+      // record, and the wizard rebuilds from it.
+      discardDraft(ownerId, null)
     } else {
       set({ persistenceInitialized: true, persistenceStatus: 'unavailable', draftOwnerId: ownerId })
     }
@@ -988,52 +1037,18 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         // with no session — the reclaim path re-reads storage anyway.
         if (current.persistenceStatus === 'deferred') return
         // Another tab signed in as a different vendor. That is not a newer version of
-        // this draft, so it must never be offered as one.
-        if (envelope.ownerId !== current.draftOwnerId) return
+        // this draft, so it must never be taken in as one.
+        if (!current.persistenceInitialized || envelope.ownerId !== current.draftOwnerId) return
         const currentUpdatedAt = current.persistenceUpdatedAt ?? ''
         const isNewer = envelope.revision > current.persistenceRevision ||
           (envelope.revision === current.persistenceRevision && envelope.updatedAt > currentUpdatedAt)
         if (!isNewer) return
-        cancelScheduledDraftSave()
-        useOnboardingStore.setState({
-          persistenceStatus: 'conflict',
-          pendingConflict: envelope,
-        })
+        adoptOtherTabDraft(envelope)
       })
     }
   },
 
   flushPersistence,
-
-  loadNewerDraft() {
-    const conflict = useOnboardingStore.getState().pendingConflict
-    if (conflict) applyPersistedEnvelope(conflict, set)
-  },
-
-  overwriteWithCurrentDraft() {
-    const conflict = useOnboardingStore.getState().pendingConflict
-    if (!conflict) return
-    set({
-      pendingConflict: null,
-      persistenceRevision: conflict.revision,
-      persistenceStatus: 'saving',
-    })
-    flushScheduledDraftSave(persistCurrentDraft)
-  },
-
-  clearCorruptDraft() {
-    try {
-      onboardingDraftAdapter.drafts.clear()
-      set({
-        persistenceStatus: 'idle',
-        persistenceRevision: 0,
-        persistenceUpdatedAt: null,
-        recoveryMessage: null,
-      })
-    } catch {
-      set({ persistenceStatus: 'unavailable' })
-    }
-  },
 
   updateDraft(updater, invalidateFrom) {
     set((state) => {
@@ -1043,11 +1058,13 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       // ("Submitted").
       const from = state.storeSubmission ? undefined : invalidateFrom
       const updated = updater(state.draft)
+      // Edited here and not yet written to the account, so this copy now outranks it.
+      const editedSteps = editedAfterUpdate(state, updated, invalidateFrom ?? state.draft.currentStep)
       return {
         draft: invalidateDraft(updated, from),
         furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, from),
-        // Edited here and not yet written to the account, so this copy now outranks it.
-        editedSteps: editedAfterUpdate(state, updated, invalidateFrom ?? state.draft.currentStep),
+        editedSteps,
+        fieldEdits: trackEdits(state.fieldEdits, state.draft, updated, editedSteps, state.savedBaselines, Date.now()),
         recoveryMessage: null,
       }
     })
@@ -1145,6 +1162,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       // saved values, so that step's edits stay unsaved. Verifying the number starts a
       // fresh session, so nothing from before it outranks the account.
       editedSteps: step === 2 ? [] : state.editedSteps.filter((edited) => edited !== step),
+      fieldEdits: step === 2 ? {} : withoutSteps(state.fieldEdits, [step]),
       returnStep: returnStepAfterMove(state.returnStep, step, nextStep),
       draft: {
         ...state.draft,
@@ -1193,7 +1211,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     flushScheduledDraftSave(persistCurrentDraft)
   },
 
-  applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true, editsKept = false } = {}) {
+  applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true, editsKept = false, edits } = {}) {
     // A brand-new account resumes to an empty wizard, which is not something to
     // announce. On a rebuilt draft `furthestVisitedStep` is the account's resume step, and
     // one past Step 3 means work was saved there, whether or not it has been read yet.
@@ -1210,11 +1228,13 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       },
       // The account decides where an entry opens, so a remembered return step is gone.
       ...(frameApplied ? { returnStep: null } : {}),
+      ...(edits ? { fieldEdits: edits, editedSteps: editedStepsOf(edits) } : {}),
       // A rebuilt draft *is* the account copy. Taking it for some steps only leaves the
       // edited ones as they were, and is not a resume worth announcing.
       ...(frameApplied && !editsKept
         ? {
             editedSteps: [],
+            fieldEdits: {},
             recoveryMessage: restored
               ? 'Picked up where you left off, using the setup saved to your store.'
               : null,

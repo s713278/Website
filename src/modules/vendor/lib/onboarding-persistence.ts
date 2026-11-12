@@ -12,8 +12,11 @@ import {
   type StorefrontDraft,
   type VendorOnboardingDraftV1,
   type VendorOnboardingPersistedEnvelopeV1,
+  type DraftFieldEdit,
 } from '../types/onboarding'
+import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
 import { clearOnboardingDraft, ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
+import { isDraftField, RESOURCE_FIELDS, type DraftField, type FieldEdits } from './onboarding-draft-merge'
 import { isPendingId } from './onboarding-pending-id'
 
 export { ONBOARDING_DRAFT_STORAGE_KEY } from './onboarding-draft-keys'
@@ -308,7 +311,10 @@ function isPublication(value: unknown): boolean {
     value.draftSlug.length > 0 && isIsoDate(value.completedAt)
 }
 
-function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
+/** The format before version 5: no per-field saved values. Read and migrated, never written. */
+const PREVIOUS_DRAFT_VERSION = 4
+
+function isPersistedDraft(value: unknown, version: number = ONBOARDING_DRAFT_VERSION): value is PersistedOnboardingDraftV1 {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     'version',
     'currentStep',
@@ -324,7 +330,7 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
     'storefront',
     'publication',
   ])) return false
-  if (value.version !== ONBOARDING_DRAFT_VERSION || !isStep(value.currentStep)) return false
+  if (value.version !== version || !isStep(value.currentStep)) return false
   if (!Array.isArray(value.completedSteps) || !value.completedSteps.every(isStep)) return false
   if (value.catalogSource !== 'account' && value.catalogSource !== 'sample') return false
   if (!isBoolean(value.mobileVerified)) return false
@@ -371,39 +377,94 @@ function isPersistedDraft(value: unknown): value is PersistedOnboardingDraftV1 {
   return true
 }
 
-function isPreviewSnapshot(value: unknown): value is LocalPreviewSnapshotV1 {
+function isPreviewSnapshot(value: unknown, version: number): value is LocalPreviewSnapshotV1 {
   return isRecord(value) &&
     hasOnlyKeys(value, ['slug', 'completedAt', 'draft']) &&
     isString(value.slug) &&
     isIsoDate(value.completedAt) &&
-    isPersistedDraft(value.draft) &&
+    isPersistedDraft(value.draft, version) &&
     value.draft.publication.state === 'prototype-complete' &&
     value.draft.publication.draftSlug === value.slug &&
     value.draft.publication.completedAt === value.completedAt
 }
 
+const EMPTY_DRAFT = createEmptyOnboardingDraft()
+
+/** A recorded saved value, checked as strictly as the draft field it stands for. */
+function isSavedValue(field: DraftField, value: unknown): boolean {
+  if (field === 'businessType') return value === null || isBusinessTypeReference(value)
+  if (field === 'businessName') return isString(value)
+  if (field === 'categories') return Array.isArray(value) && value.every(isCategoryReference)
+  if (field === 'products') return Array.isArray(value) && value.every(isSelectedProduct)
+  if (field === 'skus') return Array.isArray(value) && value.every(isDraftSku)
+  if (field === 'payments') return Array.isArray(value) && value.every(isPayment)
+  const [section, key] = field.split('.')
+  if (section === 'delivery') return isDelivery({ ...EMPTY_DRAFT.delivery, [key]: value })
+  return isStorefront({ ...EMPTY_DRAFT.storefront, [key]: value })
+}
+
+function isFieldEdits(value: unknown): value is FieldEdits {
+  return isRecord(value) && Object.entries(value).every(([field, entry]) =>
+    isDraftField(field) &&
+    isRecord(entry) &&
+    hasOnlyKeys(entry, ['at', 'saved']) &&
+    isFiniteNumber(entry.at) && entry.at >= 0 &&
+    (!('saved' in entry) || isSavedValue(field, entry.saved)))
+}
+
+const ENVELOPE_KEYS = [
+  'version',
+  'revision',
+  'updatedAt',
+  'ownerId',
+  'furthestVisitedStep',
+  'editedSteps',
+  'draft',
+  'previewSnapshot',
+] as const
+
+/**
+ * A stored envelope, or `null` when it cannot be read: unknown or damaged drafts are
+ * discarded, silently, and the wizard rebuilds from the account.
+ *
+ * A version-4 envelope (no per-field saved values) is migrated: it keeps its edited steps,
+ * whose fields then count as edited with no known saved value (an edit with no `saved`), so
+ * they only fill what the account has not saved (`mergeAccountFields`). Step 9's details the
+ * account cannot show before approval then stay pending until saved. The oldest shape, with
+ * no `editedSteps` and `hasLocalEdits` absent or true, marked every step edited whatever was
+ * changed, so its Step 9 records only the store name the account can show: the other details
+ * count as saved. `hasLocalEdits` is read for the last time here.
+ */
 export function parsePersistedEnvelope(value: unknown): VendorOnboardingPersistedEnvelopeV1 | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, [
-    'version',
-    'revision',
-    'updatedAt',
-    'ownerId',
-    'furthestVisitedStep',
-    'hasLocalEdits',
-    'editedSteps',
-    'draft',
-    'previewSnapshot',
-  ])) return null
-  if (value.version !== ONBOARDING_DRAFT_VERSION) return null
+  if (!isRecord(value)) return null
+  const previous = value.version === PREVIOUS_DRAFT_VERSION
+  if (!previous && value.version !== ONBOARDING_DRAFT_VERSION) return null
+  if (!hasOnlyKeys(value, [...ENVELOPE_KEYS, previous ? 'hasLocalEdits' : 'edits'])) return null
   if (value.ownerId !== null && !isString(value.ownerId)) return null
   if (!Number.isSafeInteger(value.revision) || Number(value.revision) < 0) return null
   if (!isIsoDate(value.updatedAt) || !isStep(value.furthestVisitedStep)) return null
   // Optional: envelopes written before the field existed are still valid.
   if (value.hasLocalEdits !== undefined && typeof value.hasLocalEdits !== 'boolean') return null
   if (value.editedSteps !== undefined && !(Array.isArray(value.editedSteps) && value.editedSteps.every(isStep))) return null
-  if (!isPersistedDraft(value.draft)) return null
-  if (value.previewSnapshot !== null && !isPreviewSnapshot(value.previewSnapshot)) return null
-  return value as VendorOnboardingPersistedEnvelopeV1
+  if (value.edits !== undefined && !isFieldEdits(value.edits)) return null
+  const version = Number(value.version)
+  if (!isPersistedDraft(value.draft, version)) return null
+  if (value.previewSnapshot !== null && !isPreviewSnapshot(value.previewSnapshot, version)) return null
+  if (!previous) return value as VendorOnboardingPersistedEnvelopeV1
+
+  const snapshot = value.previewSnapshot as LocalPreviewSnapshotV1 | null
+  const everyStep = value.editedSteps === undefined && value.hasLocalEdits !== false
+  return {
+    version: ONBOARDING_DRAFT_VERSION,
+    revision: value.revision as number,
+    updatedAt: value.updatedAt as string,
+    ownerId: value.ownerId as string | null,
+    furthestVisitedStep: value.furthestVisitedStep as OnboardingStep,
+    editedSteps: restoredEditedSteps(value as LegacyEditedSteps),
+    ...(everyStep ? { edits: Object.fromEntries(RESOURCE_FIELDS.profile.map((field) => [field, { at: 0 }])) } : {}),
+    draft: { ...(value.draft as PersistedOnboardingDraftV1), version: ONBOARDING_DRAFT_VERSION },
+    previewSnapshot: snapshot && { ...snapshot, draft: { ...snapshot.draft, version: ONBOARDING_DRAFT_VERSION } },
+  }
 }
 
 /** Steps 3-9 only, sorted and unique: the only steps an account copy can replace. */
@@ -411,14 +472,37 @@ export function normalizeEditedSteps(steps: Iterable<OnboardingStep>): Onboardin
   return [...new Set(steps)].filter((step) => step >= 3 && step <= 9).sort((a, b) => a - b)
 }
 
+type LegacyEditedSteps = { editedSteps?: OnboardingStep[]; hasLocalEdits?: boolean }
+
 /**
  * The edited steps an envelope restores. Envelopes written before `editedSteps` existed
  * carry the legacy flag: `false` means nothing edited; `true` or absent means every step
- * edited, so restoring one never overwrites it with the account copy.
+ * edited, with no known saved values.
  */
-export function restoredEditedSteps(envelope: VendorOnboardingPersistedEnvelopeV1): OnboardingStep[] {
+export function restoredEditedSteps(envelope: LegacyEditedSteps): OnboardingStep[] {
   if (envelope.editedSteps) return normalizeEditedSteps(envelope.editedSteps)
   return envelope.hasLocalEdits === false ? [] : [3, 4, 5, 6, 7, 8, 9]
+}
+
+/** The edit record as stored: saved catalog values with the same asset rules as the draft. */
+export function toPersistedEdits(edits: FieldEdits): FieldEdits {
+  const persisted: FieldEdits = {}
+  for (const [field, entry] of Object.entries(edits) as [DraftField, DraftFieldEdit][]) {
+    if (!('saved' in entry)) {
+      persisted[field] = { at: entry.at }
+      continue
+    }
+    const sections = { ...EMPTY_DRAFT, business: { ...EMPTY_DRAFT.business } }
+    if (field === 'businessType') sections.business.businessType = entry.saved as typeof sections.business.businessType
+    if (field === 'categories') sections.categories = entry.saved as typeof sections.categories
+    if (field === 'products') sections.products = entry.saved as typeof sections.products
+    const safe = toPersistedDraft(sections)
+    const saved = field === 'businessType' ? safe.business.businessType
+      : field === 'categories' || field === 'products' ? safe[field]
+        : entry.saved
+    persisted[field] = { at: entry.at, saved }
+  }
+  return persisted
 }
 
 function safeAssetUrl(value: string | null): string | null {
