@@ -22,6 +22,7 @@ import {
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { categoriesWithoutProducts } from '../../lib/onboarding-catalog-dependencies'
 import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { isPendingId } from '../../lib/onboarding-pending-id'
 import { BUSINESS_TYPE_LOCKED_MESSAGE } from '../../lib/onboarding-saved-type'
@@ -588,11 +589,14 @@ function ProductCategoryPicker({
   onToggle,
   createControlVisible,
   onRefusal,
+  attention,
 }: {
   onRefusal: (message: string | null) => void
   categoryId: number
   categoryName: string
   error?: string
+  /** An earlier catalog edit left this chosen category without a product. */
+  attention: boolean
   confirm: RequestConfirmation
   onUseSample?: () => void
   open: boolean
@@ -683,9 +687,10 @@ function ProductCategoryPicker({
       open={open}
       onToggle={onToggle}
       name={categoryName}
-      meta={selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
+      meta={attention ? 'Needs a product' : selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
       count={selectedCount}
       error={error}
+      attention={attention}
     >
       {firstLoad ? (
         references.error && draft.catalogSource === 'account'
@@ -871,13 +876,21 @@ function MeasurementChips({ measurement, units }: { measurement: string | null; 
   )
 }
 
-export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
+export function ProductStep({ issues, confirm, onUseSample, markMissing = false }: CatalogStepProps & {
+  /** Step 5 is done but needs attention: mark the categories still without a product. */
+  markMissing?: boolean
+}) {
   const feedback = useOnboardingFeedback()
   const setBlocked = (message: string | null) => {
     if (message) feedback.show(message, 'warning')
     else feedback.clear()
   }
   const categories = useOnboardingStore((state) => state.draft.categories)
+  const products = useOnboardingStore((state) => state.draft.products)
+  const missing = useMemo(
+    () => markMissing ? categoriesWithoutProducts({ categories, products }) : [],
+    [markMissing, categories, products],
+  )
   const productLimit = useOnboardingStore(selectProductLimit)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const liveApi = isLiveApi()
@@ -885,7 +898,8 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
   )
   const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
-  const { openId, onToggle } = useSingleOpen(categoryIds)
+  // Arriving to finish missing work opens the first category that needs a product.
+  const { openId, onToggle } = useSingleOpen(categoryIds, missing[0])
 
   if (!categories.length) {
     return <EmptyState title="Choose categories first" description="Return to Step 4 to select at least one category." />
@@ -909,6 +923,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             open={openId === category.id}
             onToggle={onToggle(category.id)}
             createControlVisible={createControlVisible}
+            attention={missing.includes(category.id)}
           />
         ))}
       </div>

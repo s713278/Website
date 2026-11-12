@@ -85,10 +85,14 @@ import {
   isAccountStep,
   pendingEditIssues,
   pendingSteps,
-  stepAfterSave,
   stepSnapshot,
   type SavedBaselines,
 } from '../../lib/onboarding-progress'
+import {
+  catalogDependencyGaps,
+  stepAfterCatalogSave,
+  stepsNeedingAttention,
+} from '../../lib/onboarding-catalog-dependencies'
 import {
   BUSINESS_TYPE_LOCKED_MESSAGE,
   resolveSavedType,
@@ -987,6 +991,17 @@ function OnboardingWizardContent() {
   const resetSavedBaselines = useOnboardingStore((state) => state.resetSavedBaselines)
   const recordSavedBaselines = useOnboardingStore((state) => state.recordSavedBaselines)
   const returnStep = useOnboardingStore((state) => state.returnStep)
+  // Done catalog steps an edit left with missing work, as a string so the wizard re-renders
+  // only when that set changes, not on every keystroke.
+  const attentionKey = useOnboardingStore((state) => stepsNeedingAttention(
+    catalogDependencyGaps(state.draft),
+    state.draft.completedSteps,
+    selectStoreIsSubmitted(state),
+  ).join(','))
+  const attentionSteps = useMemo(
+    () => attentionKey ? attentionKey.split(',').map(Number) as OnboardingStep[] : [],
+    [attentionKey],
+  )
   const savedType = useOnboardingStore((state) => state.savedType)
   const setSavedType = useOnboardingStore((state) => state.setSavedType)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
@@ -1516,9 +1531,14 @@ function OnboardingWizardContent() {
       return
     }
     const inPlace = savesInPlace(step, storeIsSubmitted, storeIsApproved)
-    // A save from an earlier step returns to where the vendor came from; a first-time step
-    // moves on as usual. A submitted store keeps its own rules.
-    const nextStep = inPlace ? step : stepAfterSave(step, storeIsSubmitted ? null : state.returnStep)
+    // A save from an earlier step returns to where the vendor came from, first stopping at
+    // any catalog step it left with missing work; a first-time step moves on as usual. A
+    // submitted store keeps its own rules.
+    const nextStep = inPlace ? step : stepAfterCatalogSave(
+      step,
+      storeIsSubmitted ? null : state.returnStep,
+      stepsNeedingAttention(catalogDependencyGaps(draft), draft.completedSteps, storeIsSubmitted),
+    )
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.
     // Units are left to the step that needs them. A save in place opens no next step.
@@ -1780,7 +1800,7 @@ function OnboardingWizardContent() {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
   }
-  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted, storeIsApproved }
+  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted, storeIsApproved, attentionSteps }
 
   // A live, signed-in step from 3 on shows its form only once what it needs has loaded.
   const accountReadsApply = liveApi && access.state === 'ready' && catalogUnlocked && currentStep >= 3
@@ -1941,14 +1961,14 @@ function OnboardingWizardContent() {
                         {stepState === 'loaded' ? <>
                           {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={inlineIssues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
                           {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} markMissing={attentionSteps.includes(5)} /> : null}
                           {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
                             <StepNotice message={currentStep === 3
                               ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
                               : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
                             />
                           ) : null}
-                          {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} /> : null}
+                          {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} markMissing={attentionSteps.includes(6)} /> : null}
                           {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                           {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
                           {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} savesInPlace={stepSavesInPlace} imageStates={writesReachAccount(catalogSource) ? { logo: loadView.resources.logo, banner: loadView.resources.banner } : undefined} onRetryImage={submittedStepIsReadOnly(9, storeIsSubmitted, storeIsApproved) ? undefined : (kind) => entryRef.current?.retryImage(kind)} /> : null}

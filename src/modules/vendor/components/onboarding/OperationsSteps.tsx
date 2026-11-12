@@ -8,8 +8,9 @@ import {
   XIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button, EmptyState, Input } from '@/shared/components/ui'
+import { Badge, Button, EmptyState, Input } from '@/shared/components/ui'
 import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
+import { productsWithoutSize } from '../../lib/onboarding-catalog-dependencies'
 import { useSingleOpen } from '../../hooks/use-single-open'
 import {
   selectProjectedSkuTotal,
@@ -246,7 +247,11 @@ function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   )
 }
 
-export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
+export function SkuStep({ issues, markMissing = false }: {
+  issues: ValidationIssue[]
+  /** Step 6 is done but needs attention: mark the products still without a valid size. */
+  markMissing?: boolean
+}) {
   const draft = useOnboardingStore((state) => state.draft)
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
@@ -265,7 +270,16 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     () => [...draft.categories.map((category) => category.id), ...(hasOrphanProducts ? ['other' as const] : [])],
     [draft.categories, hasOrphanProducts],
   )
-  const { openId, setOpenId, onToggle } = useSingleOpen<SkuGroupId>(groupIds)
+  const missing = useMemo(
+    () => markMissing ? productsWithoutSize(draft) : [],
+    [markMissing, draft],
+  )
+  // Arriving to finish missing work opens the group holding the first product without a size.
+  const firstMissing = draft.products.find((product) => product.id === missing[0])
+  const { openId, setOpenId, onToggle } = useSingleOpen<SkuGroupId>(
+    groupIds,
+    firstMissing ? (draft.categories.some((category) => category.id === firstMissing.categoryId) ? firstMissing.categoryId : 'other') : undefined,
+  )
 
   // Scaffold a size for any product without one, and reconcile every existing size to its
   // product's measurement — a size resumed from the account or restored from persistence can
@@ -496,17 +510,25 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     const unitSummary = measurementSummary.units.length
       ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
       : 'Units unavailable'
+    const attention = missing.includes(product.id)
     return (
       <div
         key={product.id}
         id={`product-${product.id}`}
         role="group"
         aria-labelledby={`sku-product-${product.id}`}
-        className="overflow-x-auto rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-3 max-[30rem]:p-2"
+        data-attention={attention || undefined}
+        className={cn(
+          'overflow-x-auto rounded-xl border bg-[var(--ob-canvas)] p-3 max-[30rem]:p-2',
+          attention ? 'border-[var(--md-warning)]' : 'border-[var(--ob-line)]',
+        )}
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h4 id={`sku-product-${product.id}`} className="truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{product.name}</h4>
+            <div className="flex min-w-0 items-center gap-2">
+              <h4 id={`sku-product-${product.id}`} className="truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{product.name}</h4>
+              {attention ? <Badge tone="warning">Needs a size</Badge> : null}
+            </div>
             <p className="mt-0.5 text-[0.7rem] leading-4 text-[var(--ob-ink-soft)]">
               {measurementSummary.measurement ? `${measurementSummary.measurement} · ${unitSummary}` : 'Measurement unavailable'}
             </p>
@@ -567,7 +589,9 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
         <div className="space-y-3">
           {groups.map((group) => {
             const count = group.products.length
-            const meta = count ? `${count} ${count === 1 ? 'product' : 'products'}` : 'No products'
+            const needSize = group.products.filter((product) => missing.includes(product.id)).length
+            const meta = (count ? `${count} ${count === 1 ? 'product' : 'products'}` : 'No products')
+              + (needSize ? ` · ${needSize} ${needSize === 1 ? 'needs' : 'need'} a size` : '')
             return (
               <CategoryPanel
                 key={group.id}
@@ -577,6 +601,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
                 name={group.name}
                 meta={meta}
                 count={count}
+                attention={needSize > 0}
               >
                 {count ? (
                   <div className="space-y-3">{group.products.map(renderProduct)}</div>

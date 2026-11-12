@@ -26,6 +26,12 @@ export type StepperProps = {
    */
   catalogAdditiveOpen?: boolean
   storeIsApproved?: boolean
+  /**
+   * Steps already done that an earlier catalog edit left with missing work (see
+   * `stepsNeedingAttention`). Each carries an amber ring and "!" badge on its dot, and says
+   * so in its name; the bar adds no text, and the step stays as reachable as before.
+   */
+  attentionSteps?: readonly OnboardingStep[]
   onNavigate: (step: OnboardingStep) => void
 }
 
@@ -44,6 +50,7 @@ export function OnboardingStepper({
   firstNavigableStep,
   catalogAdditiveOpen = false,
   storeIsApproved = false,
+  attentionSteps = [],
   onNavigate,
 }: StepperProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -107,6 +114,8 @@ export function OnboardingStepper({
             // A submitted store's catalog steps stay open for additions, so they carry a
             // small marker even while every other submitted step reads as done-and-locked.
             const additive = catalogAdditiveOpen && isAdditiveCatalogStep(item.step, storeIsApproved)
+            // Only a step the vendor can open is marked; the current step keeps its own ring.
+            const attention = reachable && attentionSteps.includes(item.step)
             const previous = ONBOARDING_STEPS[index - 1]
             const linkDone = previous
               ? ['done', 'settled'].includes(stateOf(previous.step))
@@ -132,8 +141,8 @@ export function OnboardingStepper({
                   type="button"
                   disabled={!reachable || state === 'current'}
                   aria-current={state === 'current' ? 'step' : undefined}
-                  aria-label={`Step ${item.step}, ${item.short}. ${STATE_LABEL[state]}.${additive ? ' You can still add here.' : ''}`}
-                  title={`${item.short}: ${STATE_LABEL[state].toLowerCase()}${additive ? ', still open for additions' : ''}`}
+                  aria-label={`Step ${item.step}, ${item.short}. ${STATE_LABEL[state]}.${attention ? ' Needs attention.' : ''}${additive ? ' You can still add here.' : ''}`}
+                  title={`${item.short}: ${STATE_LABEL[state].toLowerCase()}${attention ? ', needs attention' : ''}${additive ? ', still open for additions' : ''}`}
                   onClick={() => onNavigate(item.step)}
                   className={cn(
                     'group relative block size-7 shrink-0 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand-soft)]',
@@ -149,6 +158,7 @@ export function OnboardingStepper({
                       state === 'open' && 'border-[var(--ob-brand)]/40 bg-transparent text-[var(--ob-brand)] group-hover:border-[var(--ob-brand)] group-hover:bg-[var(--ob-brand-soft)]',
                       state === 'locked' && 'border-[var(--ob-line)] bg-transparent text-[var(--ob-pending)]',
                       state === 'settled' && 'border-[var(--ob-brand)]/50 bg-[var(--ob-brand)]/60 text-white',
+                      attention && state !== 'current' && 'ring-2 ring-[var(--md-warning)] ring-offset-2 ring-offset-[var(--ob-canvas-base)]',
                     )}
                   >
                     {state === 'done' ? (
@@ -158,7 +168,15 @@ export function OnboardingStepper({
                     ) : (
                       item.step
                     )}
-                    {additive ? (
+                    {attention ? (
+                      <span
+                        aria-hidden="true"
+                        data-attention-badge=""
+                        className="absolute -top-1 -right-1 grid size-3.5 place-items-center rounded-full bg-[var(--md-warning)] text-[9px] leading-none font-extrabold text-white ring-2 ring-[var(--ob-canvas-base)]"
+                      >
+                        !
+                      </span>
+                    ) : additive ? (
                       <span
                         aria-hidden="true"
                         className="absolute -top-1 -right-1 grid size-3.5 place-items-center rounded-full bg-[var(--ob-brand)] text-white ring-2 ring-[var(--ob-canvas-base)]"

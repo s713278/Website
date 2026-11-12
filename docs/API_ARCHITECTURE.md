@@ -404,7 +404,12 @@ the persisted edited set.
 Going back to an earlier step remembers where the vendor was (`returnStep`, in memory only, never
 for a submitted store); browsing other earlier steps keeps it, and reaching it or any later step
 forgets it. While it is set the primary action reads **Save changes**, and a successful save lands
-on that step instead of the next one; first-time steps keep **Continue**. Clicking any reachable
+on that step instead of the next one; first-time steps keep **Continue**. Catalog Steps 4-6 depend
+on each other (every chosen category needs a product, every product a valid size that is switched
+on), so a save stops first at a done Step 5 or 6 that now has missing work, keeping the remembered
+step: 9 → 4 (add a category) → 5 → 6 → 9 (`lib/onboarding-catalog-dependencies.ts`). Such a step
+is marked on the stepper but never locked, and catalog edits leave Steps 7-9 as they were; Step 10's
+readiness check is what blocks submission. A submitted store is not guided. Clicking any reachable
 step keeps unsaved input without saving it. A save writes only the current step: a step the
 account already counts as done that matches a known baseline makes no request. Steps 7 and 8 share
 one full checkout write, so it carries the other step's baseline, never its pending edits, which

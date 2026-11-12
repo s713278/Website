@@ -734,6 +734,140 @@ describe('saved progress belongs to the account', () => {
   })
 })
 
+describe('catalog dependencies guide a revisit save', () => {
+  // Sample catalog in demo mode: references come from local sample data, so no read or
+  // write reaches an account and Step 4-6 choices are real cards.
+  const freshProduce = { id: -201, businessTypeId: -101, name: 'Fresh produce', description: 'Everyday fruit and vegetables', imageUrl: null, displayOrder: 1 }
+  const pantry = { id: -202, businessTypeId: -101, name: 'Pantry', description: 'Staples, grains, and cooking essentials', imageUrl: null, displayOrder: 2 }
+  const tomatoes = { id: -301, name: 'Tomatoes', description: 'Fresh local tomatoes', imageUrl: null, measurementId: null, measurementName: 'WEIGHT', categoryId: -201 }
+  const bananas = { id: -302, name: 'Bananas', description: 'Naturally ripened bananas', imageUrl: null, measurementId: null, measurementName: 'COUNT', categoryId: -201 }
+  const sizeOf = (productId: number, measurementType: 'WEIGHT' | 'COUNT', unit: string) => ({
+    id: `draft-sku-${Math.abs(productId)}-1`, productId, name: '', description: '', skuType: 'ITEM' as const,
+    measurementType, unit, quantity: 1, listPrice: 100, salePrice: 90, active: true, homeDelivery: true, storePickup: false,
+  })
+  const currentStepIs = (step: number) => screen.findByRole('button', { name: new RegExp(`^Step ${step},.*You are here`) })
+  const stepLabel = (step: number) => screen.getByRole('button', { name: new RegExp(`^Step ${step},`) }).getAttribute('aria-label')
+  const saveChanges = () => fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  const fillSize = (productId: number) => {
+    const card = within(document.getElementById(`product-${productId}`)!)
+    fireEvent.change(card.getByLabelText('Quantity'), { target: { value: '1' } })
+    fireEvent.change(card.getByLabelText('MRP (₹)'), { target: { value: '100' } })
+    fireEvent.change(card.getByLabelText('Discounted price (₹)'), { target: { value: '90' } })
+  }
+
+  function renderReadyDemo(patch: Partial<ReturnType<typeof createEmptyOnboardingDraft>> = {}, currentStep: OnboardingStep = 9) {
+    vi.stubEnv('VITE_USE_API', 'false')
+    configureApiClient({ useApi: false })
+    const empty = createEmptyOnboardingDraft()
+    useOnboardingStore.setState({
+      draft: {
+        ...empty,
+        catalogSource: 'sample',
+        mobileVerified: true,
+        currentStep,
+        completedSteps: ([1, 2, 3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).filter((step) => step < currentStep),
+        business: { businessType: { id: -101, name: 'Grocery & essentials', icon: null, displayOrder: 1 }, businessName: 'Test Store' },
+        categories: [freshProduce],
+        products: [tomatoes],
+        skus: [sizeOf(tomatoes.id, 'WEIGHT', 'kg')],
+        delivery: { ...empty.delivery, shipping: { ...empty.delivery.shipping, charge: 45 } },
+        payments: empty.payments.map((option) => option.type === 'CASH_ON_DELIVERY' ? { ...option, enabled: true, isDefault: true } : option),
+        storefront: { ...empty.storefront, storeName: 'Test Store', businessLocation: 'Test City', tagline: 'Unchanged tagline' },
+        ...patch,
+      },
+      runtime: { ...useOnboardingStore.getState().runtime, orderWhatsapp: '9876543210' },
+      furthestVisitedStep: currentStep,
+      draftOwnerId: '91',
+    })
+    render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
+  }
+
+  it('9 → 4 adds a category: Save goes to 5, then 6, then back to 9, leaving Steps 7-9 untouched', async () => {
+    renderReadyDemo()
+    await currentStepIs(9)
+    const before = useOnboardingStore.getState().draft
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
+    await currentStepIs(4)
+    fireEvent.click(await screen.findByRole('button', { name: /^Pantry/ }))
+    // The new category has no product yet, so Step 5 needs attention; nothing is locked.
+    expect(stepLabel(5)).toMatch(/needs attention/i)
+    expect(screen.getByRole('button', { name: /^Step 9,/ }).matches(':disabled')).toBe(false)
+    saveChanges()
+
+    await currentStepIs(5)
+    // The category without a product is marked in place and opened.
+    const panel = document.getElementById(`category-products-${pantry.id}`) as HTMLDetailsElement
+    expect(panel.open).toBe(true)
+    expect(panel.getAttribute('data-attention')).toBe('true')
+    expect(within(panel).getByText('Needs a product')).toBeTruthy()
+    fireEvent.click(within(panel).getByRole('button', { name: /^Toor dal/ }))
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+    expect(stepLabel(6)).toMatch(/needs attention/i)
+    saveChanges()
+
+    await currentStepIs(6)
+    const product = document.getElementById('product--312')!
+    expect(product.getAttribute('data-attention')).toBe('true')
+    expect(within(product).getByText('Needs a size')).toBeTruthy()
+    fillSize(-312)
+    expect(stepLabel(6)).not.toMatch(/needs attention/i)
+    saveChanges()
+
+    await currentStepIs(9)
+    const after = useOnboardingStore.getState().draft
+    expect(after.completedSteps).toEqual(before.completedSteps)
+    expect(after.delivery).toEqual(before.delivery)
+    expect(after.payments).toEqual(before.payments)
+    expect(after.storefront).toEqual(before.storefront)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+  })
+
+  it('a new product without a size goes to 6, then back to 9', async () => {
+    renderReadyDemo()
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 5,/ }))
+    await currentStepIs(5)
+    fireEvent.click(await screen.findByRole('button', { name: /^Bananas/ }))
+    saveChanges()
+
+    await currentStepIs(6)
+    fillSize(bananas.id)
+    saveChanges()
+    await currentStepIs(9)
+  })
+
+  it('a catalog edit that leaves everything valid returns straight to 9', async () => {
+    renderReadyDemo({ products: [tomatoes, bananas], skus: [sizeOf(tomatoes.id, 'WEIGHT', 'kg'), sizeOf(bananas.id, 'COUNT', 'pc')] })
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 5,/ }))
+    await currentStepIs(5)
+    fireEvent.click(await screen.findByRole('button', { name: /^Bananas/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove product' }))
+    saveChanges()
+
+    await currentStepIs(9)
+  })
+
+  it('keeps Step 10 submission blocked while a category has no product', async () => {
+    renderReadyDemo({ categories: [freshProduce, pantry] }, 10)
+    await currentStepIs(10)
+    expect(stepLabel(5)).toMatch(/needs attention/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save private preview' }))
+
+    const readiness = await waitFor(() => document.getElementById('readiness-issues')!)
+    expect(within(readiness).getByText('Choose at least one product in Pantry.')).toBeTruthy()
+    expect(useOnboardingStore.getState().draft.publication.state).not.toBe('prototype-complete')
+    // Let the readiness list's focus and scroll timers finish inside the test.
+    await waitFor(() => expect(document.activeElement?.id).toBe('readiness-issues'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  })
+})
+
 describe('stale validation errors', () => {
   const lastField = (label: string) => screen.getAllByLabelText(label).at(-1) as HTMLInputElement
   const fieldError = (input: HTMLInputElement) => document.getElementById(`${input.id}-error`)
