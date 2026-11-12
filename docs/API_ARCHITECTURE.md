@@ -497,6 +497,41 @@ response belonging to an entry that has already been invalidated. Submission's r
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
 
+**Account reads go stale once the page has been away.** `lib/page-away.ts` counts each time the
+tab is hidden or shown and the window loses or regains focus: only then can another tab or device
+have saved. A per-resource cache entry whose read started before the latest count is not reused
+(business types, platform data, excepted);
+the next load reads again, every caller asking meanwhile shares that one read, and a peek finds
+nothing. The context cache keeps serving the dashboard as before, but on entry the wizard takes a
+cached context only when it was read since the page last left (`vendorContextIsCurrent`). Sign-in's
+head start is still reused, while a context the dashboard read before the vendor switched away is
+read again. A reload starts with empty caches, so entry always reads the context and profile then.
+
+Within a visit nothing is read when the page comes back. The next press of Continue, Save changes
+or Submit for review that would write first reads again, when read before the latest away, the
+context and what that write is built from (`revalidationReads` in `onboarding-freshness.ts`):
+
+| Step | Read again, besides the context |
+|------|---------------------------------|
+| 3 | The profile, only while no type is saved: a type saved elsewhere replaces the choice and locks |
+| 4, 5 | Categories; products |
+| 6 | Products and sizes |
+| 7, 8 | Checkout settings |
+| 9 | An approved store's storefront settings. Before approval the store name comes from the context and nothing else is readable; images are sent only when picked |
+| 10 | What each step with unsaved input needs |
+
+Each read merges by the unsaved-edit rules above (payment details and WhatsApp numbers by the same
+rule against their saved baselines) and replaces the step's saved baselines, so a save made in
+another tab stops counting as unsaved here. Only then does the press validate and write, so it never
+sends back an older value over one saved elsewhere since this visit read it. If the store was
+submitted, or its approval changed, elsewhere, nothing is written and the visit starts again as on
+entry. A press with nothing to write, a read-only step, and demo mode or a sample draft read nothing.
+A failed read keeps the input, shows the step's save error (on Step 10, the submission error) and
+writes nothing; pressing again retries. Choosing a logo or banner opens the system file picker,
+which leaves the window, so that Step 9 save reads the context again. This narrows the window for an
+overwrite but cannot close it: two devices both in view can still save over each other
+([gap](./API_GAPS.md#onboarding-continuity-a-vendor-still-loses)).
+
 The marketing header and the general header (`RootLayout`) decide a vendor's actions from the context
 alone, through `useHeaderActions`. On every route, `/onboarding` included, it calls
 `loadVendorAccountContext`: one `GET /v1/vendors/{id}/context`, filed in the

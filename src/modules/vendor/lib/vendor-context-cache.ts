@@ -1,5 +1,6 @@
 import type { VendorContext } from '@/shared/api'
 import { rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-hint-store'
+import { pageAwayEpoch } from './page-away'
 
 /**
  * One in-flight context read per vendor.
@@ -15,7 +16,12 @@ import { rememberVendorHeaderHint } from '@/modules/vendor/store/vendor-header-h
  * Only successful reads are retained. A failure is dropped so the next caller retries
  * rather than inheriting an error nobody can clear.
  */
-type Entry = { promise: Promise<VendorContext>; resolved: VendorContext | null }
+type Entry = {
+  promise: Promise<VendorContext>
+  resolved: VendorContext | null
+  /** `pageAwayEpoch()` when the read started. */
+  epoch: number
+}
 
 const entries = new Map<string, Entry>()
 const accepted = new Map<string, VendorContext>()
@@ -35,6 +41,14 @@ export function contextSnapshotMayReplace(previous: VendorContext, next: VendorC
   return priorRevision === null || (nextRevision !== null && nextRevision >= priorRevision)
 }
 
+/**
+ * Whether the cached context, resolved or in flight, was read since the page was last away
+ * (`page-away`). The dashboard keeps reusing an older one; setup, which writes, does not.
+ */
+export function vendorContextIsCurrent(vendorId: string): boolean {
+  return entries.get(vendorId)?.epoch === pageAwayEpoch()
+}
+
 /** The already-resolved context, or `null`. Never fetches. */
 export function peekVendorContext(vendorId: string): VendorContext | null {
   return entries.get(vendorId)?.resolved ?? null
@@ -47,7 +61,7 @@ export function loadVendorContext(
   const existing = entries.get(vendorId)
   if (existing) return existing.promise
 
-  const entry: Entry = { resolved: null, promise: read(vendorId) }
+  const entry: Entry = { resolved: null, epoch: pageAwayEpoch(), promise: read(vendorId) }
   entries.set(vendorId, entry)
 
   // Chained after the entry is stored so these callbacks can compare by identity: a

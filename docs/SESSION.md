@@ -239,7 +239,10 @@ in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
   tab's copy, since account data comes from each tab's own reads. Where each tab is, and its
   progress, stay its own. If any of this tab's edits survived, it writes the merged draft at once.
   A draft written for another vendor, or arriving while this tab's draft is parked, is ignored.
-  Edits made in both tabs within the same few milliseconds can still lose one of them.
+  Edits made in both tabs within the same few milliseconds can still lose one of them. A step the
+  other tab saved counts as unsaved here until this tab next saves that step or submits: switching
+  tabs leaves the page, so that press reads the account again first
+  ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)).
 
 ### Temporary: vendor header hint — TEMP(vendor-header-hint)
 

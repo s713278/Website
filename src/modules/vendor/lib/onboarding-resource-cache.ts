@@ -8,6 +8,7 @@ import type {
   VendorStorefrontSettings,
 } from '@/shared/api'
 import type { OnboardingResource } from './onboarding-resume'
+import { pageAwayEpoch } from './page-away'
 
 /**
  * One in-flight, then one resolved, read per vendor and account resource.
@@ -19,6 +20,11 @@ import type { OnboardingResource } from './onboarding-resume'
  * Only successful reads are retained. A failure is dropped so the next caller retries. A
  * late result for an entry that was invalidated meanwhile still reaches its own caller but
  * is never stored, judged by entry identity as in `vendor-context-cache`.
+ *
+ * An account entry is current only while the page has not been away since its read started
+ * (`page-away`): another tab or device may have saved meanwhile. A later load reads again,
+ * and every caller asking while that read is in flight shares it; peek sees nothing. Business
+ * types are platform data no vendor saves, so they stay until invalidated.
  */
 export type OnboardingResourceData = {
   profile: VendorProfile | null
@@ -37,6 +43,8 @@ type Entry<R extends OnboardingResource> = {
   promise: Promise<OnboardingResourceData[R]>
   /** Wrapped so a resolved `null` checkout differs from "not resolved yet". */
   resolved: { value: OnboardingResourceData[R] } | null
+  /** `pageAwayEpoch()` when the read started, or when a confirmed write set the value. */
+  epoch: number
 }
 
 const entries = new Map<string, Map<OnboardingResource, Entry<OnboardingResource>>>()
@@ -52,11 +60,17 @@ export function setOnboardingResource<R extends OnboardingResource>(
     vendorEntries = new Map()
     entries.set(vendorId, vendorEntries)
   }
-  vendorEntries.set(resource, { promise: Promise.resolve(value), resolved: { value } })
+  vendorEntries.set(resource, { promise: Promise.resolve(value), resolved: { value }, epoch: pageAwayEpoch() })
 }
 
 function readEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
   return entries.get(vendorId)?.get(resource) as Entry<R> | undefined
+}
+
+/** The entry, unless it holds account data and the page has been away since its read started. */
+function currentEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
+  const entry = readEntry(vendorId, resource)
+  return entry && (resource === 'businessTypes' || entry.epoch === pageAwayEpoch()) ? entry : undefined
 }
 
 export function loadOnboardingResource<R extends OnboardingResource>(
@@ -64,10 +78,11 @@ export function loadOnboardingResource<R extends OnboardingResource>(
   resource: R,
   read: () => Promise<OnboardingResourceData[R]>,
 ): Promise<OnboardingResourceData[R]> {
-  const existing = readEntry(vendorId, resource)
+  const existing = currentEntry(vendorId, resource)
   if (existing) return existing.promise
 
-  const entry: Entry<R> = { resolved: null, promise: read() }
+  // Replaces an entry from before an away; its late result is then never stored.
+  const entry: Entry<R> = { resolved: null, epoch: pageAwayEpoch(), promise: read() }
   let vendorEntries = entries.get(vendorId)
   if (!vendorEntries) {
     vendorEntries = new Map()
@@ -89,12 +104,12 @@ export function loadOnboardingResource<R extends OnboardingResource>(
   return entry.promise
 }
 
-/** The resolved value, or `null` while not loaded or still in flight. Never fetches. */
+/** The current resolved value, or `null` while not loaded, in flight or from before an away. Never fetches. */
 export function peekOnboardingResource<R extends OnboardingResource>(
   vendorId: string,
   resource: R,
 ): { value: OnboardingResourceData[R] } | null {
-  return readEntry(vendorId, resource)?.resolved ?? null
+  return currentEntry(vendorId, resource)?.resolved ?? null
 }
 
 /** No vendorId: every vendor. No resources: every resource for the vendor(s). */
