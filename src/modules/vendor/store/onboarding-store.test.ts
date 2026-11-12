@@ -792,6 +792,9 @@ describe('changeBusinessType', () => {
       furthestVisitedStep: 5,
       persistenceInitialized: true,
       persistenceStatus: 'idle',
+      editedSteps: [],
+      // Before the first confirmed save the type is still a choice.
+      savedType: { status: 'unknown' },
     })
     // The account holds only category 11, product 31, and size 4001.
     useOnboardingStore.getState().setAccountCatalog({ categoryIds: [11], productIds: [31], skuIds: [4001] })
@@ -821,6 +824,34 @@ describe('changeBusinessType', () => {
     // on an empty step they cannot leave — even though no further category can be added.
     expect(state.draft.categories.length).toBe(1)
     expect(selectCategoryLimitReached(state)).toBe(true)
+  })
+
+  it('refuses another type once one is saved, changing nothing', () => {
+    seedAssignedCatalog()
+    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeA })
+    const before = useOnboardingStore.getState().draft
+
+    expect(useOnboardingStore.getState().changeBusinessType(typeB)).toBe(false)
+    expect(useOnboardingStore.getState().changeBusinessType(typeA)).toBe(true)
+
+    expect(useOnboardingStore.getState().draft).toBe(before)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+  })
+
+  it.each([{ status: 'checking' }, { status: 'unresolved', retried: false }] as const)('offers no choice while the saved type is %j', (savedType) => {
+    seedAssignedCatalog()
+    useOnboardingStore.getState().setSavedType(savedType)
+    expect(useOnboardingStore.getState().changeBusinessType(typeB)).toBe(false)
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(typeA)
+  })
+
+  it('retires Step 3 from the edited set once the draft holds the locked type', () => {
+    seedAssignedCatalog()
+    useOnboardingStore.setState({ editedSteps: [3, 5] })
+    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeB })
+    expect(useOnboardingStore.getState().editedSteps).toEqual([3, 5])
+    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeA })
+    expect(useOnboardingStore.getState().editedSteps).toEqual([5])
   })
 
   it('is a no-op for the same business type, so it cannot silently drop progress', () => {

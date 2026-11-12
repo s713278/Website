@@ -624,15 +624,20 @@ describe('catalog lists in sets of one page', () => {
     vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValueOnce({
       items: ids(5401, 9).map(type), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false,
     })
-    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account', business: { ...current.business, businessType: type(5402) } }), 3)
     render(<BusinessStep issues={[]} readOnly />)
 
+    // Locked cards stay pressable, so a press on another type can explain the lock.
     const card = await screen.findByRole('button', { name: /Business 5401/ })
-    expect(card.matches(':disabled')).toBe(true)
+    expect(card.matches(':disabled')).toBe(false)
+    expect(card.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(card)
+    expect((await screen.findByText('Business type cannot be changed now. Contact support to change it.')).closest('[data-slot="toast"]')).toBeTruthy()
+    expect(useOnboardingStore.getState().draft.business.businessType?.id).toBe(5402)
     expect(screen.getByRole('button', { name: 'Show more business types' }).getAttribute('aria-disabled')).toBe('false')
   })
 
-  it('moves focus to the list when a press reveals locked business types', async () => {
+  it('moves focus to the first revealed card when a press reveals locked business types', async () => {
     emptyReferenceCache()
     const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
     vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
@@ -645,7 +650,7 @@ describe('catalog lists in sets of one page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
 
     await screen.findByRole('button', { name: /Business 5518/ })
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Business type choices' })))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Business 5510/ })))
   })
 
   it('shows a category the vendor authors at once, even with a full set already shown', async () => {

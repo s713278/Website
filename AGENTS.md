@@ -216,6 +216,10 @@ Update the session document with the implementation, not in advance of it.
   Live API billing reads in memory. A caching-layer migration (e.g. TanStack Query) must first remove
   both, per [docs/SESSION.md](./docs/SESSION.md#temporary-vendor-header-hint--tempvendor-header-hint)
   and [docs/VENDOR_BILLING_READS_TARGET.md](./docs/VENDOR_BILLING_READS_TARGET.md#removal).
+- `TEMP(onboarding-saved-type)`: the business type locks at its first confirmed Step 3 save. This
+  browser's record of that save is permanent; the vendor-record and category-list fallbacks are
+  temporary until the backend returns the saved type, per
+  [API_GAPS.md](./docs/API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
 - `TEMP(vendor-orders-read-only)`: vendor orders are read-only while status handling is decided.
   `VENDOR_ORDER_WRITES_ENABLED` in `src/modules/vendor/lib/order-actions.ts` hides the status,
   cancel and payment-record controls; their handlers, helpers and service writes stay for a likely

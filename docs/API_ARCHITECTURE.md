@@ -381,6 +381,16 @@ one) adds to that progress during a visit, and an edit never takes it away: chan
 step locks nothing after it. Only Steps 1-2 still reset progress, because a new number is a new
 session. The rules live in `onboarding-progress.ts`.
 
+**The saved business type is locked** from its first confirmed Step 3 save (`resolveSavedType` in
+`onboarding-saved-type.ts`): this browser's record of that save, else, once the context's
+`next_step` is past 3, the type the profile names (not `"Others"`), else the one type whose category
+list holds every assigned category. The category evidence costs a read per business type, so it is
+read only when Step 3, Step 4 or an unsubmitted Step 10 needs the type; those steps show the page
+loader meanwhile. A locked type replaces any unsaved Step 3 choice in the draft. Step 3's cards stay
+pressable and another type only shows a warning; with no answer Steps 3-4 show **Try again**
+instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
+temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
+
 Unsaved input is measured against each step's **saved baseline**: the account copy the step's
 reads produced (whether or not an edited step kept its local copy), or what the last confirmed save
 sent. Step 9's branding is unreadable before approval, so its baseline is the store details as
@@ -406,7 +416,7 @@ and is blocked until none remain.
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
 (first) category panel's first product page, alongside the step's account reads, into the reference
 cache the list paints from; the step's page loader waits for both, and the list then makes no request of
-its own. Each starts as soon as its input is applied (the business type for Step 4, the categories for
+its own. Each starts as soon as its input is known (the saved business type for Step 4, the categories for
 Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not
 cached: the list reads it again itself, and shows "Something went wrong" with **Try again** if that
 fails too. A first-page read in flight is shared by key, so a second prefetch or a list that mounts

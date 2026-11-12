@@ -24,6 +24,7 @@ import { useSingleOpen } from '../../hooks/use-single-open'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
 import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { isPendingId } from '../../lib/onboarding-pending-id'
+import { BUSINESS_TYPE_LOCKED_MESSAGE } from '../../lib/onboarding-saved-type'
 import { StepNotice } from './AccessNotice'
 import {
   selectCatalogPolicy,
@@ -231,9 +232,13 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   readOnly?: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
+  // The first confirmed save fixes the type. Its cards stay browsable and pressable, so a
+  // press on another type can say why nothing changes.
+  const locked = useOnboardingStore((state) => readOnly || state.savedType.status === 'saved')
   // A locked store keeps its catalog source, so the sample switch is not offered.
-  const onUseSample = readOnly ? undefined : offerSample
+  const onUseSample = locked ? undefined : offerSample
   const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
+  const feedback = useOnboardingFeedback()
   const references = useBusinessTypeReferences(draft.catalogSource)
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const selected = draft.business.businessType
@@ -252,11 +257,6 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
       item.name.toLowerCase().includes(references.committedQuery),
   })
   const items = sets.visible
-  const choicesRef = useRef<HTMLDivElement>(null)
-  // A locked card cannot take focus, so a press on a read-only step lands on the list instead.
-  useEffect(() => {
-    if (readOnly && sets.focusIndex !== null) choicesRef.current?.focus()
-  }, [readOnly, sets.focusIndex])
   const initialError = Boolean(references.error && !references.items.length)
   const incrementalError = Boolean(references.error && references.items.length)
   const listLoading = references.loading || (
@@ -264,7 +264,8 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   )
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
-    if (selected?.id !== businessType.id) changeBusinessType(businessType)
+    if (selected?.id === businessType.id) return
+    if (locked || !changeBusinessType(businessType)) feedback.show(BUSINESS_TYPE_LOCKED_MESSAGE, 'warning')
   }
 
   if (firstLoad) {
@@ -314,7 +315,6 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
         ) : null}
         {listLoading || items.length ? (
           <div
-            ref={choicesRef}
             id="business-type"
             role="region"
             aria-label="Business type choices"
@@ -324,18 +324,19 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
           >
             {listLoading ? <PageLoader label="Loading business types" /> : null}
             {items.length ? (
-              <fieldset disabled={readOnly} className={cn(choiceGrid, 'min-w-0 border-0 p-0', listLoading && 'mt-3')}>
+              <div className={cn(choiceGrid, listLoading && 'mt-3')}>
                 {items.map((item, index) => (
                   <ChoiceCard
                     key={item.id}
                     autoFocus={index === sets.focusIndex}
                     selected={selected?.id === item.id}
+                    inactive={locked && selected?.id !== item.id}
                     title={item.name}
                     leading={<BusinessTypeIcon key={item.icon ?? `fallback-${item.id}`} src={item.icon} />}
                     onClick={() => chooseBusinessType(item)}
                   />
                 ))}
-              </fieldset>
+              </div>
             ) : null}
             {references.loadingMore && !references.searchPending ? (
               <div className="mt-3">

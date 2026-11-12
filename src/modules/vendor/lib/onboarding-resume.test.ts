@@ -30,7 +30,6 @@ import {
   isVendorApproved,
   isStoreSubmitted,
   measurementCatalogsForResume,
-  resolveBusinessType,
   resumeOrderWhatsapp,
   resumePaymentDetails,
   accountResumeState,
@@ -41,6 +40,7 @@ import {
   type ResumeApplyOptions,
   type ServerOnboardingState,
 } from './onboarding-resume'
+import { resolveSavedType } from './onboarding-saved-type'
 import type { OnboardingStep } from '../types/onboarding'
 import { readinessIssues } from './onboarding-validation'
 import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
@@ -152,7 +152,10 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
 /** Every applier in dependency order over the whole state, as the wizard composes them. */
 function composeByHand(state: ServerOnboardingState) {
   const options = { edited: new Set<OnboardingStep>(), submitted: isStoreSubmitted(state) }
-  const businessType = resolveBusinessType(state.profile, state.businessTypes)
+  const resolution = resolveSavedType({
+    confirmed: null, stepSaved: true, profileTypeName: state.profile?.businessType ?? null, businessTypes: state.businessTypes,
+  })
+  const businessType = resolution.kind === 'saved' ? resolution.type : null
   let draft = applyResumeFrame(createEmptyOnboardingDraft(), derivedResumeStep(state), options)
   draft = applyProfile(draft, state.profile, options, state.context.businessName)
   draft = applyBusinessType(draft, businessType, options)

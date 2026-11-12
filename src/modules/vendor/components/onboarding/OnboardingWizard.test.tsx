@@ -18,6 +18,7 @@ import {
 import type { OnboardingResource } from '../../lib/onboarding-resume'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
 import { useOnboardingStore } from '../../store/onboarding-store'
+import { markTypeSaveInFlight, readSavedTypeRecord } from '../../lib/onboarding-saved-type-record'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import { ONBOARDING_CONFIG, type OnboardingStep } from '../../types/onboarding'
 import { OnboardingWizard } from './OnboardingWizard'
@@ -97,6 +98,10 @@ beforeEach(() => {
   vi.spyOn(vendorOnboardingService, 'getVendorSku').mockResolvedValue(null)
   vi.spyOn(vendorOnboardingService, 'updateSkuPrice').mockResolvedValue(undefined)
   vi.spyOn(vendorOnboardingService, 'deleteSku').mockResolvedValue(undefined)
+  // Every other network seam a step can reach, so nothing escapes to a real API.
+  vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue(EMPTY_PAGE)
+  vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(EMPTY_PAGE)
+  vi.spyOn(vendorOnboardingService, 'saveBusinessType').mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -593,18 +598,19 @@ describe('saved progress belongs to the account', () => {
   })
 
   it('opens the account’s step on reload even with an unsaved earlier edit, keeping the edit', async () => {
-    const otherType = { id: 8, name: 'Bakery', icon: null, displayOrder: 2 }
+    // A saved business type is locked, so the unsaved earlier edit here is a store detail.
+    const storefront = { ...createEmptyOnboardingDraft().storefront, tagline: 'Unsaved tagline' }
     useOnboardingStore.setState({
       draft: {
         ...createEmptyOnboardingDraft(),
         mobileVerified: true,
         currentStep: 3,
         completedSteps: [1, 2] as OnboardingStep[],
-        business: { businessType: otherType, businessName: 'Test Store' },
+        storefront,
       },
       furthestVisitedStep: 3,
       draftOwnerId: '91',
-      editedSteps: [3],
+      editedSteps: [9],
     })
     renderAccount('PENDING', 10)
 
@@ -612,10 +618,10 @@ describe('saved progress belongs to the account', () => {
     const state = useOnboardingStore.getState()
     expect(state.furthestVisitedStep).toBe(10)
     expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    expect(state.draft.business.businessType).toEqual(otherType)
-    expect(state.editedSteps).toEqual([3])
-    // Submission waits until the unsaved business type is saved or undone.
-    expect(await screen.findByText('Save or undo your changes to business type.')).toBeTruthy()
+    expect(state.draft.storefront.tagline).toBe('Unsaved tagline')
+    expect(state.editedSteps).toEqual([9])
+    // Submission waits until the unsaved store details are saved or undone.
+    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
   })
 
   it('leaves later steps reachable after an earlier edit is reverted, writing nothing', async () => {
@@ -1134,13 +1140,282 @@ const ALL_RESOURCES: readonly OnboardingResource[] = [
 
 /** Fill the shared account cache for vendor 91, as an earlier visit would have. */
 async function cacheEveryResource() {
+  // The vendor record names the saved type, so Steps 3-4 know it without further reads.
+  const cached: Partial<Record<OnboardingResource, unknown>> = {
+    profile: { businessName: 'Test Store', businessType: 'Beverages', contactNumber: '' },
+    businessTypes: [{ id: 7, name: 'Beverages', icon: null, displayOrder: 1 }],
+    checkout: null,
+  }
   await Promise.all(ALL_RESOURCES.map((resource) => loadOnboardingResource('91', resource, async () => (
-    resource === 'profile' || resource === 'checkout' ? null : []
+    (resource in cached ? cached[resource] : []) as never
   ))))
 }
 
 /** The resources still resolved in the shared cache for vendor 91. */
 const cachedResources = () => ALL_RESOURCES.filter((resource) => peekOnboardingResource('91', resource))
+
+describe('the business type locks at its first confirmed save', () => {
+  const beverages = { id: 7, name: 'Beverages', icon: null, displayOrder: 1 }
+  const bakery = { id: 8, name: 'Bakery', icon: null, displayOrder: 2 }
+  const others = { id: 30, name: 'Others', icon: null, displayOrder: 30 }
+  const LOCKED = 'Business type cannot be changed now. Contact support to change it.'
+  const UNRESOLVED = 'We couldn’t confirm your saved business type. Try again.'
+  const currentStepIs = (step: number) => screen.findByRole('button', { name: new RegExp(`^Step ${step},.*You are here`) })
+  const card = (name: string) => screen.findByRole('button', { name: new RegExp(`${name}$`) })
+  const toast = () => document.querySelector('[data-slot="toast"]:not([data-ending-style]) [data-slot="toast-title"]')?.textContent ?? ''
+  const profileNames = (businessType: string) => vi.mocked(vendorOnboardingService.getVendorProfile)
+    .mockResolvedValue({ businessName: 'Test Store', businessType, contactNumber: '' })
+  const contextAt = (nextStep: number) => vi.mocked(vendorOnboardingService.getVendorContext).mockResolvedValue(mapVendorContext({
+    data: {
+      vendor_id: 91, vendor_status: 'ACTIVE', approval_status: 'PENDING', store_identifier: 'test-store', business_name: 'Test Store',
+      onboarding: { status: 'IN_PROGRESS', next_step: nextStep },
+      subscription: { limits: { max_categories: 3, max_products: 10, max_skus: 2 }, usage: { skus: 0 } },
+    },
+  }))
+  /** Each business type's category list, as `GET /v1/categories/?business_type_id=` pages it. */
+  function listCategories(lists: Record<number, number[]>) {
+    vi.mocked(vendorOnboardingService.getCategories).mockImplementation(async (params = {}) => {
+      const typeId = params.business_type_id ?? 0
+      const ids = lists[typeId] ?? []
+      return {
+        items: ids.map((id) => ({ id, name: `Category ${id}`, icon: null, businessTypeId: typeId, description: null, imageUrl: null, displayOrder: id })),
+        pageNumber: params.pageNumber ?? 0, pageSize: params.pageSize ?? 12, totalPages: 1, totalElements: ids.length, lastPage: true,
+      }
+    })
+  }
+  const typeListReads = () => vi.mocked(vendorOnboardingService.getCategories).mock.calls
+    .filter(([params]) => params?.pageSize === 100).map(([params]) => params?.business_type_id)
+  /** A new account: no catalog saved yet. */
+  function emptyAccount() {
+    vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([])
+    vi.mocked(vendorOnboardingService.getVendorProducts).mockResolvedValue([])
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockResolvedValue([])
+  }
+  /** This browser's draft from a visit whose first type save was still pending. */
+  function seedPendingChoice(type: typeof bakery) {
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        mobileVerified: true,
+        currentStep: 3,
+        completedSteps: [1, 2] as OnboardingStep[],
+        business: { businessType: type, businessName: 'Test Store' },
+      },
+      furthestVisitedStep: 3,
+      draftOwnerId: '91',
+      editedSteps: [3],
+    })
+    markTypeSaveInFlight('91', type)
+  }
+
+  beforeEach(() => {
+    // The reference cache is module-level; 48 other keys push an earlier test's list out.
+    for (let index = 0; index < 48; index++) writeReferenceCache(`test-filler:${index}`, EMPTY_PAGE, false)
+    vi.mocked(vendorOnboardingService.getBusinessTypes).mockResolvedValue({
+      items: [beverages, bakery, others], pageNumber: 0, pageSize: 100, totalPages: 1, totalElements: 3, lastPage: true,
+    })
+  })
+
+  it('refuses another type once saved: it warns, keeps the selection and writes nothing', async () => {
+    const save = vi.mocked(vendorOnboardingService.saveBusinessType)
+    renderAccount('PENDING', 5)
+    await currentStepIs(5)
+    fireEvent.click(screen.getByRole('button', { name: /^Step 3,/ }))
+    await currentStepIs(3)
+
+    // Locked cards stay focusable and pressable, so the press can say why nothing changes.
+    const other = await card('Bakery')
+    expect(other.matches(':disabled')).toBe(false)
+    other.focus()
+    expect(document.activeElement).toBe(other)
+    fireEvent.click(other)
+    await waitFor(() => expect(toast()).toBe(LOCKED))
+    expect(screen.getAllByText(LOCKED)).toHaveLength(1)
+    expect((await card('Beverages')).getAttribute('aria-pressed')).toBe('true')
+    expect(other.getAttribute('aria-pressed')).toBe('false')
+    const state = useOnboardingStore.getState()
+    expect(state.draft.business.businessType).toEqual(beverages)
+    expect(state.editedSteps).not.toContain(3)
+    expect(state.draft.completedSteps).toContain(4)
+
+    // Saving the unchanged type returns to where the vendor was, without a write.
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(5)
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('lets the vendor change the type freely before the first confirmed save', async () => {
+    profileNames('Others')
+    emptyAccount()
+    renderAccount('PENDING', 3)
+    await currentStepIs(3)
+
+    fireEvent.click(await card('Beverages'))
+    fireEvent.click(await card('Bakery'))
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(bakery)
+    expect(toast()).not.toBe(LOCKED)
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+  })
+
+  it('locks the type a save confirms, and a stale vendor record read afterwards does not unlock it', async () => {
+    profileNames('Others')
+    emptyAccount()
+    listCategories({ 7: [10], 8: [20], 30: [301] })
+    renderAccount('PENDING', 3)
+    await currentStepIs(3)
+    fireEvent.click(await card('Bakery'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await currentStepIs(4)
+    expect(vendorOnboardingService.saveBusinessType).toHaveBeenCalledWith('91', { businessType: 'Bakery' })
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: bakery })
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: bakery, inFlight: null })
+    expect(await screen.findByRole('button', { name: /Category 20/ })).toBeTruthy()
+
+    // Reload: the context has moved on, but the vendor record still reports "Others".
+    cleanup()
+    invalidateAll()
+    renderAccount('PENDING', 4)
+    await currentStepIs(4)
+    expect(await screen.findByRole('button', { name: /Category 20/ })).toBeTruthy()
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: bakery })
+    expect(screen.queryByText(UNRESOLVED)).toBeNull()
+    // The browser's record settles it: no category evidence is read.
+    expect(typeListReads()).toEqual([])
+  })
+
+  it('resumes a vendor who chose Others past Step 3, locked to Others by the assigned categories', async () => {
+    profileNames('Others')
+    vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+      { vendorCategoryId: 500, platformCategoryId: 301, name: 'Misc', imageUrl: null },
+    ])
+    vi.mocked(vendorOnboardingService.getVendorProducts).mockResolvedValue([
+      { vendorProductId: 900, platformProductId: 31, platformCategoryId: 301, name: 'Test Juice', measurementId: 2 },
+    ])
+    listCategories({ 7: [10, 11], 8: [20], 30: [301] })
+    renderAccount('PENDING', 4)
+
+    await currentStepIs(4)
+    // Step 4 lists Others' categories, with the saved one chosen.
+    expect((await screen.findByRole('button', { name: /Misc/ })).getAttribute('aria-pressed')).toBe('true')
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: others })
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(others)
+    expect(typeListReads().sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([7, 8, 30])
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 3,/ }))
+    await currentStepIs(3)
+    expect((await card('Others')).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(await card('Beverages'))
+    await waitFor(() => expect(toast()).toBe(LOCKED))
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(others)
+
+    // The answer is recorded, so a later entry tells it without reading every list again.
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: others, inFlight: null })
+    cleanup()
+    invalidateAll()
+    vi.mocked(vendorOnboardingService.getCategories).mockClear()
+    vi.mocked(vendorOnboardingService.getBusinessTypes).mockClear()
+    renderAccount('PENDING', 4)
+    await currentStepIs(4)
+    expect((await screen.findByRole('button', { name: /Misc/ })).getAttribute('aria-pressed')).toBe('true')
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: others })
+    expect(typeListReads()).toEqual([])
+    expect(vendorOnboardingService.getBusinessTypes).not.toHaveBeenCalled()
+  })
+
+  it('records no type when the record names one, and none the categories cannot settle', async () => {
+    renderAccount('PENDING', 4)
+    await currentStepIs(4)
+    await waitFor(() => expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: beverages }))
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+
+    cleanup()
+    invalidateAll()
+    profileNames('Others')
+    // Category 10 is listed by two types, so nothing is told and nothing recorded.
+    listCategories({ 7: [10], 8: [10], 30: [301] })
+    renderAccount('PENDING', 4)
+    expect(await screen.findByText(UNRESOLVED)).toBeTruthy()
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+  })
+
+  it('verifies a save still pending at reload instead of reopening the choice, then points to support', async () => {
+    seedPendingChoice(bakery)
+    profileNames('Others')
+    emptyAccount()
+    // The save landed: the account counts Step 3 as saved, but nothing says which type.
+    renderAccount('PENDING', 4)
+
+    await currentStepIs(4)
+    expect(await screen.findByText(UNRESOLVED)).toBeTruthy()
+    expect(continueDisabled()).toBe(true)
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(bakery)
+    expect(readSavedTypeRecord('91').inFlight).toEqual(bakery)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 3,/ }))
+    await currentStepIs(3)
+    expect(await screen.findByText(UNRESOLVED)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Beverages$/ })).toBeNull()
+
+    const profileReads = vi.mocked(vendorOnboardingService.getVendorProfile).mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText(/contact support to continue/)).toBeTruthy()
+    // The check read the vendor record again rather than reusing the earlier copy.
+    expect(vi.mocked(vendorOnboardingService.getVendorProfile).mock.calls.length).toBe(profileReads + 1)
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(bakery)
+    expect(vendorOnboardingService.saveBusinessType).not.toHaveBeenCalled()
+  })
+
+  it('reopens the choice with the vendor’s input when the pending save did not land', async () => {
+    seedPendingChoice(bakery)
+    profileNames('Others')
+    emptyAccount()
+    renderAccount('PENDING', 3)
+
+    await currentStepIs(3)
+    expect((await card('Bakery')).getAttribute('aria-pressed')).toBe('true')
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+    fireEvent.click(await card('Beverages'))
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(beverages)
+  })
+
+  it('checks a save whose response was lost against fresh reads before allowing another choice', async () => {
+    profileNames('Others')
+    emptyAccount()
+    listCategories({ 8: [20] })
+    vi.mocked(vendorOnboardingService.saveBusinessType).mockRejectedValue(new Error('Network Error'))
+    renderAccount('PENDING', 3)
+    await currentStepIs(3)
+    fireEvent.click(await card('Bakery'))
+    // The save reached the account after all; the fresh reads say so.
+    contextAt(4)
+    profileNames('Bakery')
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => expect(useOnboardingStore.getState().savedType).toEqual({ status: 'saved', type: bakery }))
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: bakery, inFlight: null })
+    fireEvent.click(await card('Beverages'))
+    await waitFor(() => expect(toast()).toBe(LOCKED))
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(bakery)
+  })
+
+  it('reopens the choice at once when the server refuses the first save', async () => {
+    profileNames('Others')
+    emptyAccount()
+    vi.mocked(vendorOnboardingService.saveBusinessType).mockRejectedValue(apiErrorFromResponse(400, { success: false, status: 400, message: 'Invalid business type' }))
+    renderAccount('PENDING', 3)
+    await currentStepIs(3)
+    fireEvent.click(await card('Bakery'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => expect(vendorOnboardingService.saveBusinessType).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('aria-busy')).toBe(false))
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+    expect(useOnboardingStore.getState().savedType).toEqual({ status: 'open' })
+    fireEvent.click(await card('Beverages'))
+    expect(useOnboardingStore.getState().draft.business.businessType).toEqual(beverages)
+  })
+})
 
 describe('what a save clears from the shared account cache', () => {
   it('drops only the categories and the context after a Step 4 save', async () => {

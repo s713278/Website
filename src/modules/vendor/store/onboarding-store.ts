@@ -26,6 +26,7 @@ import {
   type SavedBaselines,
 } from '../lib/onboarding-progress'
 import { accountSkuId } from '../lib/onboarding-sku-id'
+import type { SavedTypeState } from '../lib/onboarding-saved-type'
 import { isApprovalGranted } from '../lib/onboarding-account-status'
 import {
   cancelScheduledDraftSave,
@@ -132,6 +133,17 @@ type OnboardingStore = {
    * `returnStepAfterMove`). In memory only: an entry or reload opens the account's step.
    */
   returnStep: OnboardingStep | null
+  /**
+   * The account's saved business type this visit (see `resolveSavedType`). Once saved it is
+   * locked: `changeBusinessType` refuses another type. In memory only; the wizard sets it on
+   * entry from this browser's confirmed-save record and the account.
+   */
+  savedType: SavedTypeState
+  /**
+   * Record where the saved type stands. Locking it also retires Step 3 from the edited set
+   * when the draft already holds that type, since Step 3 then has no input of its own.
+   */
+  setSavedType: (savedType: SavedTypeState) => void
   /**
    * Steps 3-9 whose account data was read in this wizard visit. In memory only, never
    * persisted: every entry re-reads the account, so the wizard resets it on entry, on a
@@ -262,8 +274,11 @@ type OnboardingStore = {
    * The unsaved selections belong to the previous business type and are cleared; the
    * assigned categories, products, and account sizes are one-way and stay, so the switch
    * neither blanks the live preview nor strands a vendor whose account is at a plan limit.
+   *
+   * Refused, changing nothing, while the saved type is locked, still being checked or
+   * unknown; returns whether the draft now holds `businessType`.
    */
-  changeBusinessType: (businessType: BusinessTypeReference) => void
+  changeBusinessType: (businessType: BusinessTypeReference) => boolean
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
   updatePhone: (phone: string) => void
   setImage: (kind: ImageKind, file: File | null, url: string | null) => void
@@ -410,6 +425,7 @@ function emptyDraftState(
     loadedSteps: [],
     savedBaselines: {},
     returnStep: null,
+    savedType: { status: 'unknown' },
   }
 }
 
@@ -699,6 +715,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   loadedSteps: [],
   savedBaselines: {},
   returnStep: null,
+  savedType: { status: 'unknown' },
 
   setLoadedSteps(steps) {
     set({ loadedSteps: normalizeEditedSteps(steps) })
@@ -710,6 +727,16 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   resetSavedBaselines() {
     set({ savedBaselines: {} })
+  },
+
+  setSavedType(savedType) {
+    set((state) => {
+      const holdsSaved = savedType.status === 'saved'
+        && state.draft.business.businessType?.id === savedType.type.id
+      return holdsSaved && state.editedSteps.includes(3)
+        ? { savedType, editedSteps: state.editedSteps.filter((step) => step !== 3) }
+        : { savedType }
+    })
   },
 
   setDraftOwner(ownerId) {
@@ -1014,9 +1041,12 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     queuePersistence()
   },
 
-  changeBusinessType(businessType) {
-    const state = useOnboardingStore.getState()
-    if (state.draft.business.businessType?.id === businessType.id) return
+  changeBusinessType(businessType): boolean {
+    const state: OnboardingStore = useOnboardingStore.getState()
+    const { savedType } = state
+    if (savedType.status === 'saved') return savedType.type.id === businessType.id
+    if (savedType.status === 'checking' || savedType.status === 'unresolved') return false
+    if (state.draft.business.businessType?.id === businessType.id) return true
     const { accountCatalog } = state
     state.updateDraft(
       (current) => ({
@@ -1026,6 +1056,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       }),
       3,
     )
+    return true
   },
 
   updateRuntime(patch, invalidateFrom) {

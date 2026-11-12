@@ -181,6 +181,17 @@ takes from the account's `next_step`. Each step's saved baseline, including Step
 details, and the step a save returns to are kept in memory only and reset on entry; neither is
 written to the draft. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
 
+The saved business type has its own session-owned record, `md-vendor-onboarding-saved-type-v1`,
+separate from the draft so that discarding or replacing a draft never unlocks the type. Per vendor
+id it holds the type a Step 3 save was confirmed for, or that the assigned categories alone
+settled so that check (a read per business type) runs once (the lock's first evidence), and an in-flight
+marker written before a first save is sent and cleared once its outcome is known: a confirmed
+response, a server refusal, or a fresh account check. A reload or lost response while the marker
+stands is checked against fresh account reads before the vendor may choose again. Reads and writes
+use the signed-in vendor's entry only, an explicit sign-out clears every entry (so a fresh demo
+starts unlocked), and involuntary session loss keeps them. The full rule and its temporary account
+fallbacks are in [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
+
 Completed active stores with granted approval may edit Step 9 in the wizard; pending-review stores
 remain locked. Eligibility uses the verified account context and the existing completion predicate,
 including its legacy ACTIVE fallback when onboarding evidence is absent. A usable unfinished

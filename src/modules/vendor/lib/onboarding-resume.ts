@@ -16,6 +16,7 @@ import {
 } from '@/shared/api'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { completedBefore, type SavedBaselines } from './onboarding-progress'
+import { AMBIGUOUS_BUSINESS_TYPE, type TypeCategories } from './onboarding-saved-type'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { loadMeasurementCatalog } from './measurement-catalog-cache'
@@ -55,9 +56,6 @@ export type ServerOnboardingState = {
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
 }
-
-/** A never-configured vendor reports this, so it cannot be read as a real choice. */
-const UNSET_BUSINESS_TYPE = 'Others'
 
 const WEEKDAYS = new Set<Weekday>([
   'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
@@ -172,10 +170,15 @@ function readAccountResource<R extends OnboardingResource>(
   return reads[resource]()
 }
 
-/** The profile's business type, or `null` while the vendor has not chosen one. */
+/**
+ * The type the vendor record names, or `null` for none or the ambiguous `"Others"` (also what
+ * a never-configured vendor reports). Decides only whether a step reads the business types to
+ * match the name, and the resource-derived fallback; the saved type itself is
+ * `resolveSavedType`'s. TEMP(onboarding-saved-type): see `onboarding-saved-type.ts`.
+ */
 export function savedBusinessType(profile: VendorProfile | null): string | null {
   const type = profile?.businessType?.trim()
-  return type && type !== UNSET_BUSINESS_TYPE ? type : null
+  return type && type !== AMBIGUOUS_BUSINESS_TYPE ? type : null
 }
 
 function hasBusinessType(state: ServerOnboardingState): boolean {
@@ -270,14 +273,39 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
   return Math.max(earliest, next) as OnboardingStep
 }
 
-/** The reference object for the profile's saved business type, or `null` when unmatched. */
-export function resolveBusinessType(
-  profile: VendorProfile | null,
-  businessTypes: BusinessTypeReference[],
-): BusinessTypeReference | null {
-  const name = savedBusinessType(profile)
-  if (!name) return null
-  return businessTypes.find((item) => item.name === name) ?? null
+/** Category ids one business type lists, as `GET /v1/categories/?business_type_id=` pages them. */
+async function readBusinessTypeCategoryIds(businessTypeId: number): Promise<number[]> {
+  const ids: number[] = []
+  // A list longer than this is not a list the check can trust to be whole.
+  for (let pageNumber = 0; pageNumber < 20; pageNumber++) {
+    const page = await vendorOnboardingService.getCategories({
+      business_type_id: businessTypeId, pageNumber, pageSize: 100, sortBy: 'id', sortOrder: 'ASC',
+    })
+    // Only categories the list attributes to this type count, whatever the filter returned.
+    ids.push(...page.items.filter((item) => item.businessTypeId === businessTypeId).map((item) => item.id))
+    if (page.lastPage || !page.items.length) return ids
+  }
+  throw new Error('A business type lists too many categories to check.')
+}
+
+/**
+ * Every business type's category ids, for telling a saved type from the assigned categories.
+ * TEMP(onboarding-saved-type): the last evidence of a saved type, read only when this browser
+ * has no confirmed save and the vendor record does not name one; see `onboarding-saved-type.ts`.
+ * QA lists 30 types, so a few reads run at a time. Rejects if any read fails.
+ */
+export async function readTypeCategories(
+  businessTypes: readonly BusinessTypeReference[],
+): Promise<TypeCategories[]> {
+  const lists: TypeCategories[] = []
+  const queue = [...businessTypes]
+  const worker = async () => {
+    for (let type = queue.shift(); type; type = queue.shift()) {
+      lists.push({ type, categoryIds: await readBusinessTypeCategoryIds(type.id) })
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker))
+  return lists
 }
 
 function selectedProducts(products: VendorProductRef[]): SelectedProduct[] {
@@ -534,13 +562,16 @@ export function resumeStorefrontWhatsapp(saved: VendorStorefrontSettings) {
   return { orderWhatsapp: toNationalMobile(saved.orderWhatsapp), supportWhatsapp: toNationalMobile(saved.supportWhatsapp) }
 }
 
-/** Step 3: the saved business type, resolved by `resolveBusinessType`. */
+/**
+ * Step 3: the account's business type (see `resolveSavedType`). A saved type is locked, so
+ * `locked` takes it over an unsaved local choice: Step 3 then holds no input of its own.
+ */
 export function applyBusinessType(
   draft: VendorOnboardingDraftV1,
   businessType: BusinessTypeReference | null,
-  options: ResumeApplyOptions,
+  options: ResumeApplyOptions & { locked?: boolean },
 ): VendorOnboardingDraftV1 {
-  if (keepsLocal(3, options)) return draft
+  if (!options.locked && keepsLocal(3, options)) return draft
   return { ...draft, business: { ...draft.business, businessType } }
 }
 

@@ -47,7 +47,8 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Approval status vocabulary | Identifying approved vendors consistently | The documented contract and existing fixtures use `approval_status: APPROVED`, while a current supplied vendor context reports `approval_status: ACTIVE`. The frontend treats both as approved at its status boundary; the backend should publish one canonical enum and clarify whether `ACTIVE` belongs to `vendor_status` only. |
 | ~~QR sharing~~ **closed 21 Sep 2026** | The ticket's offline-friendly QR requirement | The dashboard and approved setup Step 10 generate the QR in-browser from the canonical storefront URL. Vendors can save the PNG, and the native file-share action appears only when the device supports sharing that file. |
 | Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates the store name from the vendor context (falling back to the vendor record) and keeps this owner's local copy of the other Step 9 fields, including the required business location (QA, 10 Nov 2026: saved, but unreadable until approval). On another device or after the local draft is cleared they return to defaults, and Step 10 asks for the location again. Logo/banner URLs restore separately through the authenticated images read. |
-| Stale vendor record after a write | Reading back the business type and store name | `GET /v1/vendors/{id}` serves a cached copy for about 30 minutes; the business-type PATCH and storefront PUT do not refresh it (QA, 11 Nov 2026). Resume loses a just-chosen business type; resume and dashboard Settings prefer the context name. See [below](#stale-vendor-record-after-a-write). |
+| Stale vendor record after a write | Reading back the business type and store name | `GET /v1/vendors/{id}` serves a cached copy for about 30 minutes; the business-type PATCH and storefront PUT do not refresh it (QA, 11 Nov 2026). Resume and dashboard Settings prefer the context name. See [below](#stale-vendor-record-after-a-write). |
+| Saved business type is not readable or enforced | Locking the business type at its first save | No read returns the saved type's id, `"Others"` doubles as "not chosen", vendor categories carry no type, and nothing stops a later PATCH from changing the type. The wizard keeps its own record of a confirmed save and falls back to temporary evidence (`TEMP(onboarding-saved-type)`). See [below](#saved-business-type-is-not-readable-or-enforced). |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
@@ -308,12 +309,11 @@ refresh it:
   the cached name while `GET /v1/vendors/{vendor_id}/context` shows the new one immediately.
 - Signing in again or opening new connections does not clear it.
 
-**Effect on vendors:** the wizard reads the vendor record when it opens. A vendor who reloads,
-opens another tab or signs in again within about 30 minutes of choosing or changing the business
-type resumes with the old or no business type: Step 3 shows no selection, Step 4 asks for a
-business type first, and Step 10 lists it as a readiness item. Choosing it again resends the
-PATCH, which also moves `next_step` back to 4. Dashboard Settings can show a stale
-"What you sell".
+**Effect on vendors:** the wizard reads the vendor record when it opens. In the browser that saved
+the type, its own record of the confirmed save stands in; in another browser within about 30
+minutes, the saved type can be unknown until a later check (see
+[saved business type](#saved-business-type-is-not-readable-or-enforced)). Dashboard Settings can
+show a stale "What you sell".
 
 **Required backend change:** every vendor write, including the business-type PATCH and the
 storefront PUT, must refresh or evict the cached vendor record, so the next
@@ -322,8 +322,51 @@ accept the chosen type's `id` (`business_type_id`) and the reads should return i
 
 **Current frontend behavior:** setup Step 9 saves the name through the storefront PUT only. Wizard
 resume and dashboard Settings show the context name and fall back to the vendor record when the
-context has none. Nothing works around the stale business type. When the record read reflects
-writes immediately, remove the context-name preference and reverify the business-type resume.
+context has none. The stale business type is handled as described in the next section. When the
+record read reflects writes immediately, remove the context-name preference and reverify the
+business-type resume.
+
+### Saved business type is not readable or enforced
+
+Product rule: one vendor has one business type, and its catalog belongs to it. The first confirmed
+Step 3 save fixes it; only support may change it afterwards. The contract supports neither half:
+
+- **No enforcement.** `PATCH /v1/vendors/{vendor_id}/business-type` accepts a different type at any
+  time and moves `next_step` back to 4. **Required:** after the first successful save, reject a
+  change to another type for every client (a distinct error code), while still accepting a re-save
+  of the same type and its details.
+- **No id on read.** `GET /v1/vendors/{vendor_id}` returns the type's display name only
+  (`business_type`), and the PATCH takes a name too. **Required:** return `business_type_id` (and
+  accept it on the PATCH), so a renamed type or one past the first 100 still resolves.
+- **`"Others"` means two things.** A never-configured vendor reports `business_type: "Others"`,
+  which is indistinguishable from a vendor who chose Others. **Required:** `null` until a type is
+  saved.
+- **Stale after a save.** The record keeps the earlier value for about 30 minutes
+  ([stale vendor record](#stale-vendor-record-after-a-write)); QA, 12 November 2026, fresh vendor:
+  the record still read `"Others"` right after the PATCH while the context already said
+  `next_step: 4`.
+- **Categories carry no type.** `GET /v1/vendors/{vendor_id}/categories` returns `id`, `ref_id`,
+  `name`, `image_path`, `icon`. `ref_id` is the platform category id (QA, 12 November 2026: an
+  assigned category 117 from `GET /v1/categories/?business_type_id=1` came back as `ref_id: 117`),
+  but nothing says which type it belongs to, so an already mixed catalog cannot be detected from
+  this read alone.
+
+**Current frontend behavior:** the browser that confirms a Step 3 save records it per vendor
+(cleared on sign-out; see [SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)) and
+locks the type. Otherwise, once the context's `next_step` is past 3, the wizard takes a type the
+vendor record names other than `"Others"`, else the one type whose category list
+(`GET /v1/categories/?business_type_id=`, one read per type, 30 types on QA) holds every assigned
+category; that answer is recorded like a confirmed save, so the per-type reads run once per
+browser. With none of these it never guesses: Steps 3-4 offer **Try again**, then support, and
+submission waits. A pending first save whose response was lost is checked the same way before the
+vendor may choose again.
+
+**TEMP(onboarding-saved-type), removal condition:** once the vendor record (or the context) returns
+the saved type, ideally its id, immediately after a Step 3 save and no longer defaults to
+`"Others"`, delete the vendor-record and category-list fallbacks marked
+`TEMP(onboarding-saved-type)` in `src/modules/vendor/lib/` and the wizard, and resolve from that
+read and this browser's record. Backend enforcement of the lock is still required either way: the
+frontend lock does not cover other clients.
 
 ### Onboarding continuity a vendor still loses
 
@@ -483,8 +526,9 @@ the frontend works around it with an inline comment at the call site.
   `user_id`, `vendor_status` and `approval_status`; an earlier entry here claimed the record
   held the first few "and nothing else", which direct measurement disproved (see corrections).
   A never-configured vendor reports `business_type: "Others"`, which is indistinguishable from a
-  vendor who genuinely chose Others; the frontend treats it as unset and re-asks. The read can
-  also be up to about 30 minutes stale after a write; see
+  vendor who genuinely chose Others; see
+  [saved business type](#saved-business-type-is-not-readable-or-enforced) for how the wizard tells
+  them apart. The read can also be up to about 30 minutes stale after a write; see
   [stale vendor record after a write](#stale-vendor-record-after-a-write).
 - **A vendor can only remove SKUs. Categories and products are additive for this role,
   permanently.** Verified live against the dev API with a `VENDOR` token:
