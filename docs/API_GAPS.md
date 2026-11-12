@@ -349,7 +349,7 @@ Step 3 save fixes it; only support may change it afterwards. The contract suppor
   `name`, `image_path`, `icon`. `ref_id` is the platform category id (QA, 12 November 2026: an
   assigned category 117 from `GET /v1/categories/?business_type_id=1` came back as `ref_id: 117`),
   but nothing says which type it belongs to, so an already mixed catalog cannot be detected from
-  this read alone.
+  this read alone. **Required:** return the category's `business_type_id` on this read.
 
 **Current frontend behavior:** the browser that confirms a Step 3 save records it per vendor
 (cleared on sign-out; see [SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)) and
@@ -360,6 +360,18 @@ category; that answer is recorded like a confirmed save, so the per-type reads r
 browser. With none of these it never guesses: Steps 3-4 offer **Try again**, then support, and
 submission waits. A pending first save whose response was lost is checked the same way before the
 vendor may choose again.
+
+Before the lock, a vendor could save a second type and assign its categories on top of the first
+type's, so some accounts already hold a mixed catalog. The frontend never removes or reassigns
+assigned entries. It calls the catalog mixed only when the saved type's complete category list
+holds some assigned categories but not all, judging the assigned categories as read on entry
+(never what a save adds during the visit) against a list that visit read anyway: the per-type
+lists above, or Step 4's first page of the saved type (6 categories) when it is also the last. It
+reads nothing for this check alone and uses no cached list, so a mixed catalog goes undetected when
+the type came from this browser's record or the vendor record and its list runs past one Step 4
+page. When detected, Steps 4-6 and submission point the vendor to support. A category missing from
+its type's list for another reason (unverified whether the list hides an inactive category) would
+read as mixed too. With `business_type_id` on the assigned-categories read, detection needs no list.
 
 **TEMP(onboarding-saved-type), removal condition:** once the vendor record (or the context) returns
 the saved type, ideally its id, immediately after a Step 3 save and no longer defaults to

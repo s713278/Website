@@ -447,14 +447,14 @@ async function loadCategoryReferencePage(
 
 /**
  * Read a business type's first category page into the cache Step 4 paints from as it
- * mounts, so the step shows it without a request of its own. A failure caches nothing
- * and rejects; the step then reads, and retries, the page itself.
+ * mounts, so the step shows it without a request of its own, and resolve with the page
+ * read. A failure caches nothing and rejects; the step then reads, and retries, the page itself.
  */
-export async function readCategoryReferenceFirstPage(
+export function readCategoryReferenceFirstPage(
   mode: CatalogSource,
   businessTypeId: number,
-): Promise<void> {
-  await readFirstPageOnce(
+): Promise<ReferencePage<CategoryReference>> {
+  return readFirstPageOnce(
     categoryReferenceCacheKey(mode, businessTypeId),
     () => loadCategoryReferencePage(mode, businessTypeId, 0),
   )

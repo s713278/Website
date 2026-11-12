@@ -192,6 +192,15 @@ use the signed-in vendor's entry only, an explicit sign-out clears every entry (
 starts unlocked), and involuntary session loss keeps them. The full rule and its temporary account
 fallbacks are in [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
 
+A draft written before the type locked can hold another type than the saved one, with that
+type's catalog picked on top and its progress collapsed. Restoring it repairs it silently, with no
+notice: progress and the open step come from the account as for any draft; once the saved type
+is resolved it replaces the draft's, and once the assigned categories are read too, unsaved
+categories recorded under another type leave the draft with their products and sizes. Assigned
+entries and entries with no recorded type stay; an unresolved type changes nothing. Other unsaved
+input is kept. A saved catalog already mixed on the account is never changed; when it is confirmed
+(see the API gap above), catalog steps and submission point the vendor to support.
+
 Completed active stores with granted approval may edit Step 9 in the wizard; pending-review stores
 remain locked. Eligibility uses the verified account context and the existing completion predicate,
 including its legacy ACTIVE fallback when onboarding evidence is absent. A usable unfinished

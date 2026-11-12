@@ -145,6 +145,13 @@ type OnboardingStore = {
    */
   setSavedType: (savedType: SavedTypeState) => void
   /**
+   * The account's assigned categories are confirmed to reach outside the saved type (see
+   * `assignedCatalogIsMixed`), as the old type change could leave them. Catalog changes and
+   * submission then wait for support. In memory only; the wizard resets it on entry.
+   */
+  catalogMixed: boolean
+  setCatalogMixed: (mixed: boolean) => void
+  /**
    * Steps 3-9 whose account data was read in this wizard visit. In memory only, never
    * persisted: every entry re-reads the account, so the wizard resets it on entry, on a
    * change of vendor and while there is no ready session, then sets it from what that read
@@ -426,6 +433,7 @@ function emptyDraftState(
     savedBaselines: {},
     returnStep: null,
     savedType: { status: 'unknown' },
+    catalogMixed: false,
   }
 }
 
@@ -716,6 +724,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   savedBaselines: {},
   returnStep: null,
   savedType: { status: 'unknown' },
+  catalogMixed: false,
 
   setLoadedSteps(steps) {
     set({ loadedSteps: normalizeEditedSteps(steps) })
@@ -737,6 +746,10 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         ? { savedType, editedSteps: state.editedSteps.filter((step) => step !== 3) }
         : { savedType }
     })
+  },
+
+  setCatalogMixed(catalogMixed) {
+    set({ catalogMixed })
   },
 
   setDraftOwner(ownerId) {

@@ -32,6 +32,7 @@ import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { pendingEditIssues, pendingSteps } from '../../lib/onboarding-progress'
+import { mixedCatalogIssues } from '../../lib/onboarding-draft-repair'
 import type { ResourceStatus } from '../../lib/onboarding-resume'
 import { StoreSharePanels } from '../StoreSharePanels'
 import {
@@ -584,9 +585,11 @@ export function ReviewStep({
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const editedSteps = useOnboardingStore((state) => state.editedSteps)
   const savedBaselines = useOnboardingStore((state) => state.savedBaselines)
+  const catalogMixed = useOnboardingStore((state) => state.catalogMixed)
   // Unsaved changes on an earlier step come first: they are the work still to finish there.
   const issues = [
     ...pendingEditIssues(pendingSteps({ draft, runtime, editedSteps, savedBaselines })),
+    ...mixedCatalogIssues(catalogMixed),
     ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, {
       maxProducts: productLimit,
       maxSkus: skuLimit,

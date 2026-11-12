@@ -20,7 +20,8 @@ import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '.
 import { useOnboardingStore } from '../../store/onboarding-store'
 import { markTypeSaveInFlight, readSavedTypeRecord } from '../../lib/onboarding-saved-type-record'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
-import { ONBOARDING_CONFIG, type OnboardingStep } from '../../types/onboarding'
+import { ONBOARDING_CONFIG, ONBOARDING_DRAFT_VERSION, type OnboardingStep } from '../../types/onboarding'
+import { ONBOARDING_DRAFT_STORAGE_KEY, parsePersistedEnvelope, toPersistedDraft } from '../../lib/onboarding-persistence'
 import { OnboardingWizard } from './OnboardingWizard'
 
 const savedSize: VendorSkuRef = {
@@ -1548,6 +1549,201 @@ describe('the business type locks at its first confirmed save', () => {
     expect(useOnboardingStore.getState().savedType).toEqual({ status: 'open' })
     fireEvent.click(await card('Beverages'))
     expect(useOnboardingStore.getState().draft.business.businessType).toEqual(beverages)
+  })
+
+  describe('drafts left by the old type change', () => {
+    const MIXED = 'Your catalog has categories from more than one business type. Contact support to continue.'
+    const PENDING_CATEGORY = -1_000_001
+    const PENDING_PRODUCT = -1_000_002
+    const category = (id: number, businessTypeId: number, pending?: true) => ({
+      id, businessTypeId, name: `Category ${id}`, description: null, imageUrl: null, displayOrder: null, ...(pending ? { pending } : {}),
+    })
+    const product = (id: number, categoryId: number, pending?: true) => ({
+      id, categoryId, name: `Product ${id}`, description: null, imageUrl: null, measurementId: null, measurementName: null, ...(pending ? { pending } : {}),
+    })
+    const size = (id: string, productId: number) => ({
+      id, productId, name: '', description: '', skuType: 'ITEM' as const, measurementType: 'COUNT' as const, unit: 'pc',
+      quantity: 1, listPrice: 100, salePrice: 90, active: true, homeDelivery: true, storePickup: false,
+    })
+
+    /**
+     * What a vendor's browser held after the old behaviour: Beverages saved with its catalog,
+     * then Bakery chosen and never saved, with Bakery categories (one listed, one authored),
+     * products and sizes picked on top; progress collapsed to Step 4; and an unrelated unsaved
+     * tagline. `edited` is the envelope's edited-steps field; absent is the legacy shape.
+     */
+    function plantOldDraft(edited: { editedSteps?: OnboardingStep[]; hasLocalEdits?: boolean }) {
+      const empty = createEmptyOnboardingDraft()
+      const draft = {
+        ...empty,
+        mobileVerified: true,
+        currentStep: 4 as OnboardingStep,
+        completedSteps: [1, 2, 3] as OnboardingStep[],
+        business: { businessType: bakery, businessName: 'Test Store' },
+        categories: [category(10, 7), category(20, 8), category(PENDING_CATEGORY, 8, true)],
+        products: [product(31, 10), product(41, 20), product(PENDING_PRODUCT, PENDING_CATEGORY, true)],
+        skus: [size('sku-4001', 31), size('draft-sku-41', 41), size('draft-sku-pending', PENDING_PRODUCT)],
+        storefront: { ...empty.storefront, tagline: 'Unsaved tagline' },
+      }
+      localStorage.setItem(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
+        version: ONBOARDING_DRAFT_VERSION, revision: 3, updatedAt: '2026-11-01T10:00:00.000Z', ownerId: '91',
+        furthestVisitedStep: 4, ...edited, draft: toPersistedDraft(draft), previewSnapshot: null,
+      }))
+      // Read the browser's draft as a fresh page load does.
+      useOnboardingStore.setState({ persistenceInitialized: false })
+    }
+    const storedDraft = () => parsePersistedEnvelope(JSON.parse(localStorage.getItem(ONBOARDING_DRAFT_STORAGE_KEY) ?? 'null'))
+
+    it.each([
+      ['edited steps', { editedSteps: [3, 4, 5, 6, 9] as OnboardingStep[] }],
+      ['the legacy flag absent', {}],
+      ['the legacy flag set', { hasLocalEdits: true }],
+    ])('restores the saved type and drops the other type’s unsaved catalog, silently (%s)', async (_, edited) => {
+      seedReadyAccount('Test City')
+      plantOldDraft(edited)
+      renderAccount('PENDING', 10)
+
+      await currentStepIs(10)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(6))
+      const state = useOnboardingStore.getState()
+      expect(state.savedType).toEqual({ status: 'saved', type: beverages })
+      expect(state.draft.business.businessType).toEqual(beverages)
+      expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+      // The saved catalog stays; Bakery's unsaved selections and everything under them go.
+      expect(state.draft.categories.map(({ id }) => id)).toEqual([10])
+      expect(state.draft.products.map(({ id }) => id)).toEqual([31])
+      expect(state.draft.skus.map(({ id }) => id)).toEqual(['sku-4001'])
+      // Unrelated unsaved input is kept.
+      expect(state.draft.storefront.tagline).toBe('Unsaved tagline')
+      // No notice of any kind, and nothing written to the account.
+      expect(toast()).toBe('')
+      expect(screen.queryByText(LOCKED)).toBeNull()
+      expect(screen.queryByText(MIXED)).toBeNull()
+      expect(vendorOnboardingService.saveBusinessType).not.toHaveBeenCalled()
+      // The repaired draft is one the next page load can open.
+      act(() => useOnboardingStore.getState().flushPersistence())
+      expect(storedDraft()?.draft.business.businessType).toEqual(beverages)
+      expect(storedDraft()?.draft.categories.map(({ id }) => id)).toEqual([10])
+    })
+
+    it('keeps the draft’s catalog while the saved type is unresolved, guessing nothing', async () => {
+      seedReadyAccount('Test City')
+      profileNames('Others')
+      // Category 10 sits in two types' lists, so the categories cannot tell the type.
+      listCategories({ 7: [10], 8: [10, 20], 30: [] })
+      plantOldDraft({ editedSteps: [3, 4, 5, 6] })
+      renderAccount('PENDING', 10)
+
+      await currentStepIs(10)
+      await waitFor(() => expect(useOnboardingStore.getState().savedType.status).toBe('unresolved'))
+      const state = useOnboardingStore.getState()
+      expect(state.draft.business.businessType).toEqual(bakery)
+      expect(state.draft.categories.map(({ id }) => id)).toEqual([10, 20, PENDING_CATEGORY])
+      expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+    })
+
+    it('sends a vendor whose saved catalog is mixed to support, blocking catalog changes and submission', async () => {
+      // Category 20 is saved on the account but is not on Beverages' complete list.
+      vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+        { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+        { vendorCategoryId: 501, platformCategoryId: 20, name: 'Bread', imageUrl: null },
+      ])
+      listCategories({ 7: [10, 11], 8: [20] })
+      renderAccount('PENDING', 6)
+      await currentStepIs(6)
+      // Nothing in hand says so yet: no list is read for this check alone.
+      expect(screen.queryByText(MIXED)).toBeNull()
+      expect(typeListReads()).toEqual([])
+
+      // Step 4 reads Beverages' list anyway; it is complete, and category 20 is not on it.
+      fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
+      await currentStepIs(4)
+      expect(await screen.findByText(MIXED)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Category 11/ })).toBeNull()
+      expect(continueDisabled('Save changes')).toBe(true)
+      // Nothing saved on the account is dropped or reassigned.
+      expect(useOnboardingStore.getState().draft.categories.map(({ id }) => id)).toEqual([10, 20])
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 5,/ }))
+      await currentStepIs(5)
+      expect(await screen.findByText(MIXED)).toBeTruthy()
+      expect(continueDisabled('Save changes')).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 6,/ }))
+      await currentStepIs(6)
+      expect(await screen.findByText(MIXED)).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 3,/ }))
+      await currentStepIs(3)
+      expect(screen.queryByText(MIXED)).toBeNull()
+    })
+
+    it('blocks submission on Step 10 once the mixed catalog is known', async () => {
+      seedReadyAccount('Test City')
+      vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+        { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+        { vendorCategoryId: 501, platformCategoryId: 20, name: 'Bread', imageUrl: null },
+      ])
+      listCategories({ 7: [10, 11], 8: [20] })
+      renderAccount('PENDING', 10)
+      await currentStepIs(10)
+      fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
+      await currentStepIs(4)
+      expect(await screen.findByText(MIXED)).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 10,/ }))
+      await currentStepIs(10)
+      await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
+      const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
+      fireEvent.click(await screen.findByRole('button', { name: 'Submit for review' }))
+      const list = await waitFor(() => {
+        const found = document.getElementById('readiness-issues')
+        expect(found).not.toBeNull()
+        return found!
+      })
+      expect(within(list).getByText(MIXED)).toBeTruthy()
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      expect(goLive).not.toHaveBeenCalled()
+    })
+
+    it('never calls a category the vendor authors and saves this visit mixed', async () => {
+      // Beverages' list fits one page; the authored category is not on it.
+      listCategories({ 7: [10, 11], 8: [20] })
+      vi.spyOn(vendorOnboardingService, 'createCategory').mockResolvedValue(900)
+      const save = vi.spyOn(vendorOnboardingService, 'saveCategories').mockResolvedValue(undefined)
+      renderAccount('PENDING', 4)
+      await currentStepIs(4)
+      expect(await screen.findByRole('button', { name: /Category 11/ })).toBeTruthy()
+
+      act(() => { useOnboardingStore.getState().addPendingCategory({ name: 'Zed Two Cat', businessTypeId: 7 }) })
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      await currentStepIs(5)
+      expect(save).toHaveBeenCalled()
+      expect(useOnboardingStore.getState().accountCatalog.categoryIds).toContain(900)
+      expect(screen.queryByText(MIXED)).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
+      await currentStepIs(4)
+      expect(await screen.findByRole('button', { name: /Category 11/ })).toBeTruthy()
+      expect(screen.queryByText(MIXED)).toBeNull()
+      expect(useOnboardingStore.getState().catalogMixed).toBe(false)
+    })
+
+    it('does not call the catalog mixed while the saved type’s list is only partly read', async () => {
+      vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+        { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+        { vendorCategoryId: 501, platformCategoryId: 20, name: 'Bread', imageUrl: null },
+      ])
+      vi.mocked(vendorOnboardingService.getCategories).mockResolvedValue({
+        items: [{ id: 10, name: 'Juices', icon: null, businessTypeId: 7, description: null, imageUrl: null, displayOrder: 1 }],
+        pageNumber: 0, pageSize: 6, totalPages: 2, totalElements: 7, lastPage: false,
+      })
+      renderAccount('PENDING', 4)
+
+      await currentStepIs(4)
+      expect(await screen.findByRole('button', { name: /Juices/ })).toBeTruthy()
+      expect(screen.queryByText(MIXED)).toBeNull()
+    })
   })
 })
 

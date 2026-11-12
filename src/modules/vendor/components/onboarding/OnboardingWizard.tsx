@@ -102,6 +102,7 @@ import {
   type SavedTypeState,
   type TypeCategories,
 } from '../../lib/onboarding-saved-type'
+import { assignedCatalogIsMixed, dropOtherTypeSelections, MIXED_CATALOG_MESSAGE, mixedCatalogIssues } from '../../lib/onboarding-draft-repair'
 import {
   clearTypeSaveInFlight,
   markTypeSaveInFlight,
@@ -344,6 +345,11 @@ function startAccountEntry(
   let recheckVersion = 0
   let typeLists: { status: 'idle' | 'loading' | 'loaded' | 'failed'; lists?: TypeCategories[] } = { status: 'idle' }
   let typeListsVersion = 0
+  // The saved type a restored draft's catalog was last repaired against (`dropOtherTypeSelections`).
+  let repairedFor: number | null = null
+  // A business type's whole category list, when this visit's own Step 4 first-page read
+  // returned it complete. Evidence for `checkCatalogMixed`; a cached page is not.
+  let shownTypeList: { typeId: number; categoryIds: number[] } | null = null
 
   const store = () => useOnboardingStore.getState()
   const isCurrent = () => !cancelled && useAuthStore.getState().user?.vendorId === vendorId
@@ -464,6 +470,12 @@ function startAccountEntry(
         ran(kind)
       }
     }
+    // A draft the old type change left can hold another type's unsaved catalog; once the
+    // saved type and the assigned categories are known, those selections go, silently.
+    if (typeOutcome?.kind === 'saved' && applied.has('categories') && repairedFor !== typeOutcome.type.id) {
+      repairedFor = typeOutcome.type.id
+      draft = dropOtherTypeSelections(draft, typeOutcome.type.id, state.accountCatalog)
+    }
     if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
       state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false })
     }
@@ -475,6 +487,7 @@ function startAccountEntry(
       if (!keptLocal(9)) baselines[9] = stepSnapshot(9, store().draft, store().runtime)
     }
     if (Object.keys(baselines).length) store().recordSavedBaselines(baselines)
+    checkCatalogMixed()
 
     if (derivePending && requiredStepResources(10, { submitted, approved }).every((resource) => applied.has(resource))) {
       derivePending = false
@@ -512,6 +525,23 @@ function startAccountEntry(
       if (hooks.savedSteps.current[step]) continue
       hooks.savedSteps.current[step] = print
     }
+  }
+
+  /**
+   * Whether the assigned catalog is confirmed mixed (`assignedCatalogIsMixed`). Only this
+   * visit's own reads count: the assigned categories as read on entry, never what a save adds
+   * later, against a complete category list of the saved type this visit read anyway (the
+   * saved-type fallback's lists, or Step 4's first page when it is the last). Nothing is read
+   * for this check alone.
+   */
+  const checkCatalogMixed = () => {
+    const state = store()
+    if (typeOutcome?.kind !== 'saved' || view.resources.categories !== 'loaded' || state.catalogMixed || selectStoreIsSubmitted(state)) return
+    const typeId = typeOutcome.type.id
+    const listed = typeLists.lists?.find(({ type }) => type.id === typeId)?.categoryIds
+      ?? (shownTypeList?.typeId === typeId ? shownTypeList.categoryIds : undefined)
+    const assigned = values.categories!.map((category) => category.platformCategoryId)
+    if (assignedCatalogIsMixed(assigned, listed)) state.setCatalogMixed(true)
   }
 
   /**
@@ -699,9 +729,16 @@ function startAccountEntry(
     }
     view.categoryList = 'loading'
     readCategoryReferenceFirstPage(mode, businessTypeId).then(
-      () => {
+      (page) => {
         if (!isCurrent() || categoryListKey !== key) return
         view.categoryList = 'loaded'
+        if (page.lastPage) {
+          shownTypeList = {
+            typeId: businessTypeId,
+            categoryIds: page.items.filter((item) => item.businessTypeId === businessTypeId).map((item) => item.id),
+          }
+        }
+        checkCatalogMixed()
         publish()
       },
       () => {
@@ -926,6 +963,8 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
     return [
       ...pendingEditIssues(pendingSteps(state)),
       ...typeIssues,
+      // A mixed saved catalog waits for support, as Steps 4-6 do.
+      ...mixedCatalogIssues(state.catalogMixed && !selectStoreIsSubmitted(state)),
       ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
         .filter((issue) => !typeIssues.length || issue.step !== 3),
     ]
@@ -1004,6 +1043,8 @@ function OnboardingWizardContent() {
   )
   const savedType = useOnboardingStore((state) => state.savedType)
   const setSavedType = useOnboardingStore((state) => state.setSavedType)
+  const catalogMixed = useOnboardingStore((state) => state.catalogMixed)
+  const setCatalogMixed = useOnboardingStore((state) => state.setCatalogMixed)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
   // offering controls that cannot reach a store already under review.
@@ -1132,6 +1173,7 @@ function OnboardingWizardContent() {
     setLoadedSteps([])
     resetSavedBaselines()
     setSavedType({ status: 'unknown' })
+    setCatalogMixed(false)
     setLoadView(IDLE_LOAD_VIEW)
     setContextError(null)
     if (access.state !== 'ready') {
@@ -1169,7 +1211,7 @@ function OnboardingWizardContent() {
       entry.cancel()
       if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines, setSavedType])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines, setSavedType, setCatalogMixed])
 
   // Each step reads what it needs when it opens; a read already made this visit is reused.
   // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
@@ -1817,9 +1859,12 @@ function OnboardingWizardContent() {
   const typeState = accountState !== 'loaded' || !typeGated ? accountState
     : savedType.status === 'checking' ? 'loading'
       : typeUnresolved ? 'failed' : 'loaded'
-  const stepState = typeUnresolved || !accountReadsApply || catalogSource !== 'account'
-    ? typeState
-    : waitsForFirstList(typeState, currentStep, loadView)
+  // A confirmed mixed saved catalog: Steps 4-6 offer support instead of changes.
+  const catalogBlocked = accountReadsApply && catalogMixed && !storeIsSubmitted && currentStep >= 4 && currentStep <= 6
+  const stepState = catalogBlocked ? 'failed'
+    : typeUnresolved || !accountReadsApply || catalogSource !== 'account'
+      ? typeState
+      : waitsForFirstList(typeState, currentStep, loadView)
   const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
 
   if (!persistenceInitialized || contextPending) {
@@ -1943,7 +1988,8 @@ function OnboardingWizardContent() {
                         {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
                         {stepState === 'failed' ? <>
                           {currentStep === 9 && storeIsSubmitted && storeIsApproved ? <p className="mb-3 text-sm text-destructive">Could not load your saved store settings. Retry before making changes.</p> : null}
-                          {typeUnresolved && savedType.status === 'unresolved'
+                          {catalogBlocked ? <StepNotice tone="error" message={MIXED_CATALOG_MESSAGE} />
+                            : typeUnresolved && savedType.status === 'unresolved'
                             ? <LoadError message={unresolvedTypeMessage(savedType.retried)} onRetry={() => entryRef.current?.recheckSavedType()} />
                             : <LoadError onRetry={() => entryRef.current?.retry(currentStep)} />}
                         </> : null}
