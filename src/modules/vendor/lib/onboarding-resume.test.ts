@@ -625,10 +625,19 @@ describe('per-resource appliers', () => {
     expect(fallback.storefront.storeName).toBe(PROFILE.businessName)
   })
 
-  it('frame the draft only when nothing is edited or the store is submitted', () => {
+  it('take position and progress from the account even while a step is edited', () => {
     const local = localDraft()
 
-    expect(applyResumeFrame(local, 7, { edited: new Set([4]), submitted: false })).toBe(local)
+    const framed = applyResumeFrame(local, 7, { edited: new Set([4]), submitted: false })
+
+    expect(framed).toMatchObject({ currentStep: 7, completedSteps: [1, 2, 3, 4, 5, 6], mobileVerified: true })
+    // An edited draft keeps its catalog source, so a sample draft stays refused at Continue.
+    expect(framed.catalogSource).toBe('sample')
+    expect(framed.categories).toBe(local.categories)
+  })
+
+  it('reset the fields no resource owns only when nothing is edited or the store is submitted', () => {
+    const local = localDraft()
 
     for (const options of [NONE, { edited: new Set<OnboardingStep>([4]), submitted: true }]) {
       const framed = applyResumeFrame(local, 7, options)

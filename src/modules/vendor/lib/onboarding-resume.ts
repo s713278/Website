@@ -14,7 +14,8 @@ import {
   type VendorSkuRef,
   type VendorStorefrontSettings,
 } from '@/shared/api'
-import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { completedBefore, type SavedBaselines } from './onboarding-progress'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { loadMeasurementCatalog } from './measurement-catalog-cache'
@@ -455,15 +456,27 @@ function keepsLocal(step: OnboardingStep, options: ResumeApplyOptions): boolean 
 }
 
 /**
- * Where the draft stands: the open step, the steps counted as done and every field no
- * account resource owns. Applied only when nothing is edited or the store is submitted.
+ * Where the draft stands: the open step and the steps counted as done, always from the
+ * account, whatever is edited. Saved progress is the account's, so unsaved local work never
+ * holds a vendor on an earlier step or locks a step the account has finished.
+ *
+ * The fields no account resource owns (catalog source, preview state) reset only when nothing
+ * is edited or the store is submitted: an edited draft keeps its catalog source, so a sample
+ * draft stays refused at Continue rather than writing sample ids to the account.
  */
 export function applyResumeFrame(
   draft: VendorOnboardingDraftV1,
   openAt: OnboardingStep,
   options: ResumeApplyOptions,
 ): VendorOnboardingDraftV1 {
-  if (options.edited.size && !options.submitted) return draft
+  const position = {
+    currentStep: openAt,
+    // Steps 1-2 are settled by the session that got us here; everything before the first
+    // unfinished step is saved on the account, so it counts as done.
+    completedSteps: completedBefore(openAt),
+    mobileVerified: true,
+  }
+  if (options.edited.size && !options.submitted) return { ...draft, ...position }
   const base = createEmptyOnboardingDraft()
   return {
     ...draft,
@@ -471,11 +484,7 @@ export function applyResumeFrame(
     catalogSource: base.catalogSource,
     maskedPhone: base.maskedPhone,
     publication: base.publication,
-    currentStep: openAt,
-    // Steps 1-2 are settled by the session that got us here; everything before the first
-    // unfinished step is saved on the account, so it counts as done.
-    completedSteps: ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as OnboardingStep[]).filter((step) => step < openAt),
-    mobileVerified: true,
+    ...position,
   }
 }
 
@@ -596,6 +605,22 @@ export function applyCheckout(
     payments: keepsLocal(8, options)
       ? draft.payments
       : checkout ? resumePayments(checkout, base.payments) : base.payments,
+  }
+}
+
+/**
+ * Steps 7 and 8's saved values from one checkout read, as save baselines. Payment details
+ * are included because they are part of what Step 8 saves; baselines live in memory only.
+ */
+export function checkoutBaselines(checkout: CheckoutOptionsSnapshot | null): Pick<SavedBaselines, 7 | 8> {
+  const none: ResumeApplyOptions = { edited: new Set(), submitted: false }
+  const saved = applyCheckout(createEmptyOnboardingDraft(), checkout, none)
+  return {
+    7: { delivery: saved.delivery },
+    8: {
+      payments: saved.payments,
+      paymentDetails: resumePaymentDetails(checkout, createEmptyRuntimeState().paymentDetails),
+    },
   }
 }
 

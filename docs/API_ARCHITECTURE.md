@@ -374,6 +374,35 @@ A submitted store's Step 10 is the exception: it shows its status once the profi
 blocks; a failed profile leaves the store name to its fallback. Requests time out at 15 s and then
 fail.
 
+**Saved progress belongs to the account.** On every entry the context's `next_step` decides the
+open step, the steps counted as done and how far the stepper reaches, whether or not the draft holds
+unsaved edits; a submitted store opens on Step 10. Only a confirmed save (or demo mode's simulated
+one) adds to that progress during a visit, and an edit never takes it away: changing an earlier
+step locks nothing after it. Only Steps 1-2 still reset progress, because a new number is a new
+session. The rules live in `onboarding-progress.ts`.
+
+Unsaved input is measured against each step's **saved baseline**: the account copy the step's
+reads produced (whether or not an edited step kept its local copy), or what the last confirmed save
+sent. Step 9's branding is unreadable before approval, so its baseline is the store details as
+applied, and unknown while an edited local copy is kept. Baselines live in store memory only,
+reset on every entry, because Step 8's include private payment details. A step is pending while it
+differs from its baseline, runtime fields included, so changing a value back leaves nothing to
+save; without a baseline the persisted edited set stands in, and a chosen but unsent logo or banner
+is always pending. An edit that returns a step's draft section to its baseline also drops it from
+the persisted edited set.
+
+Going back to an earlier step remembers where the vendor was (`returnStep`, in memory only, never
+for a submitted store); browsing other earlier steps keeps it, and reaching it or any later step
+forgets it. While it is set the primary action reads **Save changes**, and a successful save lands
+on that step instead of the next one; first-time steps keep **Continue**. Clicking any reachable
+step keeps unsaved input without saving it. A save writes only the current step: a step the
+account already counts as done that matches a known baseline makes no request. Steps 7 and 8 share
+one full checkout write, so it carries the other step's baseline, never its pending edits, which
+stay pending and are not marked saved; if that baseline is unknown, the save reads the checkout
+first. A failed save forgets the step's baseline, so the next attempt writes. Submission lists each
+pending step on Step 10 ("Save or undo your changes to …", linking to it) with the readiness items,
+and is blocked until none remain.
+
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
 (first) category panel's first product page, alongside the step's account reads, into the reference
 cache the list paints from; the step's page loader waits for both, and the list then makes no request of
@@ -444,9 +473,8 @@ the dashboard never uses. For `/onboarding`, `prefetchOnboardingLanding` starts 
 the one just read), the profile, and the landing step's account reads from the table above, without
 the units and not awaited, so they overlap navigation and the wizard's route chunk and the wizard
 joins them. The landing step is the `verify-otp` `next_step`, or else the context's, clamped to 3–10
-exactly as the wizard clamps it; with no usable pointer only the context and profile start. Local
-edits that keep the wizard on another step can leave that set unused. A failed prefetch is evicted as
-usual and the wizard retries it.
+exactly as the wizard clamps it; with no usable pointer only the context and profile start. A
+failed prefetch is evicted as usual and the wizard retries it.
 
 #### Vendor setup sizes (Step 6)
 
@@ -527,8 +555,8 @@ local edits on that step or an earlier catalog step that outrank the account on 
 of vendor leave the step unvouched, so it saves as before.
 
 Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
-the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the
-storefront write for Step 9. These steps are vouched for only by a save in
+the checkout options for Steps 7 and 8, which share one payload (each step's section plus the
+other's saved values) and so one comparison, and the storefront write for Step 9. These steps are vouched for only by a save in
 this visit, except approved Step 9 whose complete editable settings are now hydrated from the
 storefront read. Unfinished setup's defaults and stored checkout options still need an explicit save.
 

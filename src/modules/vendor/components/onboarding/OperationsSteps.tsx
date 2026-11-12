@@ -276,11 +276,10 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
   // Submitted stores add sizes explicitly after approval. Do not scaffold phantom rows,
   // consume plan capacity on a read, or reconcile already saved sizes behind their backs.
   //
-  // Otherwise, deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an
-  // edit the vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6
-  // and filter `completedSteps`. A vendor who resumed at Step 9 with one unpriced product
-  // left over (the exact case `furthestSavedStep` exists to protect) would lose Steps 7-10
-  // just by opening Step 6 to look at it.
+  // Otherwise, deliberately no `invalidateFrom`: neither scaffolding nor reconciling is an
+  // edit the vendor made. (Invalidation once dropped progress, so a vendor who resumed at
+  // Step 9 with one unpriced product lost Steps 7-10 just by opening Step 6; edits no longer
+  // take progress away.)
   useEffect(() => {
     if (storeIsSubmitted) return
     const productById = new Map(draft.products.map((product) => [product.id, product]))

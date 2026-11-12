@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { apiErrorFromResponse, getHttp, mapVendorContext, vendorImagesService, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef, type VendorStorefrontSettings } from '@/shared/api'
+import { apiErrorFromResponse, configureApiClient, getHttp, mapVendorContext, vendorImagesService, vendorOnboardingService, type MeasurementCatalog, type VendorSkuRef, type VendorStorefrontSettings } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../../data/onboarding-measurement-sample'
 import { invalidateMeasurementCatalog } from '../../lib/measurement-catalog-cache'
@@ -183,6 +183,34 @@ function accountReadCounts() {
   return Object.fromEntries(ACCOUNT_READS
     .map((name) => [name, vi.mocked(vendorOnboardingService[name]).mock.calls.length] as const)
     .filter(([, count]) => count > 0))
+}
+
+const READY_CHECKOUT = {
+  fulfillmentType: 'HOME_DELIVERY' as const,
+  schedulingStrategy: 'FIXED_WINDOW' as const,
+  schedulingConfig: { min_delivery_days: 1, max_delivery_days: 3 },
+  shippingConfig: { deliveryCharge: 30, freeDeliveryThreshold: 0 },
+  slots: [],
+  consentTitle: '',
+  consentText: '',
+  payments: [{ type: 'CASH_ON_DELIVERY' as const, isDefault: true, details: {} }],
+}
+
+/**
+ * An account whose saved setup passes Step 10's readiness: payments and the order number from
+ * the account, and a location in the store details saved earlier (unreadable before approval,
+ * so this browser's copy holds it). Edits made on Step 10 itself would be unsaved changes.
+ */
+function seedReadyAccount(businessLocation: string) {
+  vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(READY_CHECKOUT)
+  vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
+    businessName: 'Test Store', businessType: 'Beverages', contactNumber: '+919876543210',
+  })
+  const draft = createEmptyOnboardingDraft()
+  useOnboardingStore.setState({
+    draft: { ...draft, mobileVerified: true, storefront: { ...draft.storefront, businessLocation } },
+    draftOwnerId: '91',
+  })
 }
 
 const stepSpinner = () => screen.queryByRole('status', { name: 'Loading this step' })
@@ -492,20 +520,21 @@ describe('account copy per step around unsaved edits', () => {
     })
   }
 
-  it('takes the account copy for unedited steps and keeps the edited one', async () => {
+  it('takes the account copy for unedited steps, keeps the edited one, and opens the account’s step', async () => {
     seedEdited([5])
     renderAccount('PENDING', 6)
 
-    // Step 5's reads cover Steps 3, 4 and 9 too; Step 6's sizes wait until it opens.
-    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5]))
+    // Saved progress is the account's: the unsaved Step 5 edit does not hold the vendor there.
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6]))
     const state = useOnboardingStore.getState()
     expect(state.draft.categories.map((category) => category.id)).toEqual([10])
     expect(state.draft.business.businessType?.id).toBe(7)
     expect(state.draft.products).toEqual([localProduct])
-    expect(state.draft.currentStep).toBe(5)
-    expect(state.furthestVisitedStep).toBe(5)
-    expect(state.editedSteps).toEqual([5])
-    expect(state.recoveryMessage).not.toMatch(/Picked up/)
+    expect(state.draft.currentStep).toBe(6)
+    expect(state.furthestVisitedStep).toBe(6)
+    // Step 6 scaffolds a size for the local product, which is new, unsaved input too.
+    expect(state.editedSteps).toEqual([5, 6])
+    expect(state.recoveryMessage ?? '').not.toMatch(/Picked up/)
   })
 
   it('rebuilds the whole draft from the account when nothing is edited', async () => {
@@ -536,17 +565,166 @@ describe('account copy per step around unsaved edits', () => {
     vi.spyOn(vendorOnboardingService, 'getVendorSkus').mockRejectedValue(new Error('down'))
     stubReferencePages()
     seedEdited([5])
-    renderAccount('PENDING', 9)
-    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5]))
-
-    act(() => {
-      useOnboardingStore.setState({ furthestVisitedStep: 6 })
-      useOnboardingStore.getState().goToStep(6)
-    })
+    renderAccount('PENDING', 6)
 
     expect(await screen.findByText('Something went wrong')).toBeTruthy()
     expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5])
     expect(useOnboardingStore.getState().draft.skus).toEqual([])
+  })
+})
+
+describe('saved progress belongs to the account', () => {
+  const SAVED_CHECKOUT = {
+    fulfillmentType: 'HOME_DELIVERY' as const,
+    schedulingStrategy: 'FIXED_WINDOW' as const,
+    schedulingConfig: { min_delivery_days: 1, max_delivery_days: 3 },
+    shippingConfig: { deliveryCharge: 30, freeDeliveryThreshold: 0 },
+    slots: [],
+    consentTitle: '',
+    consentText: '',
+    payments: [{ type: 'CASH_ON_DELIVERY' as const, isDefault: true, details: {} }],
+  }
+  const deliveryCharge = () => screen.getByLabelText('Delivery charge (₹)') as HTMLInputElement
+  const currentStepIs = (step: number) => screen.findByRole('button', { name: new RegExp(`^Step ${step},.*You are here`) })
+
+  beforeEach(() => {
+    stubReferencePages()
+    vi.spyOn(vendorOnboardingService, 'getCheckoutOptions').mockResolvedValue(SAVED_CHECKOUT)
+  })
+
+  it('opens the account’s step on reload even with an unsaved earlier edit, keeping the edit', async () => {
+    const otherType = { id: 8, name: 'Bakery', icon: null, displayOrder: 2 }
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        mobileVerified: true,
+        currentStep: 3,
+        completedSteps: [1, 2] as OnboardingStep[],
+        business: { businessType: otherType, businessName: 'Test Store' },
+      },
+      furthestVisitedStep: 3,
+      draftOwnerId: '91',
+      editedSteps: [3],
+    })
+    renderAccount('PENDING', 10)
+
+    await currentStepIs(10)
+    const state = useOnboardingStore.getState()
+    expect(state.furthestVisitedStep).toBe(10)
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(state.draft.business.businessType).toEqual(otherType)
+    expect(state.editedSteps).toEqual([3])
+    // Submission waits until the unsaved business type is saved or undone.
+    expect(await screen.findByText('Save or undo your changes to business type.')).toBeTruthy()
+  })
+
+  it('leaves later steps reachable after an earlier edit is reverted, writing nothing', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 9)
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    expect(useOnboardingStore.getState().editedSteps).toEqual([7])
+    fireEvent.change(deliveryCharge(), { target: { value: '30' } })
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
+    await currentStepIs(9)
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await currentStepIs(9)
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('saves an edit to an earlier step and returns to where the vendor came from', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 9)
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0]![1].shipping.charge).toBe(45)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+    expect(screen.getByRole('button', { name: 'Review readiness' })).toBeTruthy()
+  })
+
+  it('saves Step 7 with Step 8’s saved values, leaving Step 8’s edit unsaved and unsent', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 9)
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 8,/ }))
+    await currentStepIs(8)
+    fireEvent.click(screen.getByRole('checkbox', { name: /cash on delivery/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(save).toHaveBeenCalledTimes(1)
+    const [, delivery, payments] = save.mock.calls[0]!
+    expect(delivery.shipping.charge).toBe(45)
+    expect(payments.options.find((option) => option.type === 'CASH_ON_DELIVERY')).toMatchObject({ enabled: true, isDefault: true })
+    // Still unsaved: it stays in the draft, and still counts as an edit.
+    const state = useOnboardingStore.getState()
+    expect(state.draft.payments.find((option) => option.type === 'CASH_ON_DELIVERY')?.enabled).toBe(false)
+    expect(state.editedSteps).toEqual([8])
+  })
+
+  it('reads the saved checkout first when Step 8’s saved values are unknown', async () => {
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 9)
+    await currentStepIs(9)
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    const reads = vi.mocked(vendorOnboardingService.getCheckoutOptions).mock.calls.length
+    act(() => useOnboardingStore.getState().recordSavedBaselines({ 8: undefined }))
+
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(vendorOnboardingService.getCheckoutOptions).toHaveBeenCalledTimes(reads + 1)
+    expect(save.mock.calls[0]![2].options.find((option) => option.type === 'CASH_ON_DELIVERY')).toMatchObject({ enabled: true })
+  })
+
+  it('follows the same rules in demo mode, with no account reads or writes', async () => {
+    vi.stubEnv('VITE_USE_API', 'false')
+    configureApiClient({ useApi: false })
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    const context = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockRejectedValue(new Error('no reads in demo'))
+    useOnboardingStore.setState({
+      draft: {
+        ...createEmptyOnboardingDraft(),
+        mobileVerified: true,
+        currentStep: 9,
+        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8] as OnboardingStep[],
+      },
+      furthestVisitedStep: 9,
+      draftOwnerId: '91',
+    })
+    render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
+    await currentStepIs(9)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.change(deliveryCharge(), { target: { value: '45' } })
+    expect(useOnboardingStore.getState().furthestVisitedStep).toBe(9)
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(9)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([])
+    expect(save).not.toHaveBeenCalled()
+    expect(context).not.toHaveBeenCalled()
   })
 })
 
@@ -700,7 +878,8 @@ describe('Continue on an unchanged catalog step', () => {
     const productReads = products.mock.calls.length
     const skuReads = skus.mock.calls.length
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    // Revisiting a saved step: saving returns to Step 7, where the vendor came from.
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
 
     expect(products.mock.calls.length).toBe(productReads)
@@ -711,7 +890,7 @@ describe('Continue on an unchanged catalog step', () => {
     await openSizes()
     fireEvent.click(screen.getByRole('button', { name: 'Add another size to Test Juice' }))
     fillNewSize()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(vendorOnboardingService.createSkus).toHaveBeenCalledTimes(1))
   })
 })
@@ -728,7 +907,7 @@ describe('Continue on unchanged checkout settings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
     await screen.findByRole('button', { name: /Step 7,.*You are here/ })
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByRole('button', { name: /Step 8,.*You are here/ })
     expect(save).toHaveBeenCalledTimes(1)
 
@@ -787,17 +966,10 @@ describe('save failures shown inline on their own step', () => {
   })
 
   it('shows a failed go-live on Step 10 above the consequence sentence', async () => {
+    seedReadyAccount('Test Road')
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
-    act(() => {
-      const store = useOnboardingStore.getState()
-      store.updateDraft((draft) => ({
-        ...draft,
-        payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
-        storefront: { ...draft.storefront, businessLocation: 'Test Road' },
-      }))
-      store.updateRuntime({ orderWhatsapp: '9876543210' })
-    })
+    await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
     vi.spyOn(vendorOnboardingService, 'goLive').mockRejectedValue(new Error('Could not submit the store'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
@@ -978,15 +1150,15 @@ describe('what a save clears from the shared account cache', () => {
     renderAccount('APPROVED', 7)
     fireEvent.click(await screen.findByRole('button', { name: /^Step 4,/ }))
     await screen.findByRole('button', { name: /Step 4,.*You are here/ })
-    await waitFor(() => expect(continueDisabled()).toBe(false))
+    await waitFor(() => expect(continueDisabled('Save changes')).toBe(false))
     act(() => useOnboardingStore.getState().updateDraft((draft) => ({
       ...draft,
       categories: [...draft.categories, { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }],
     }), 4))
     expect(peekVendorContext('91')).not.toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(useOnboardingStore.getState().draft.currentStep).not.toBe(4))
 
     expect(save).toHaveBeenCalledWith('91', [11])
     expect(cachedResources()).toEqual(['profile', 'businessTypes', 'products', 'skus', 'checkout'])
@@ -1010,17 +1182,9 @@ describe('what a save clears from the shared account cache', () => {
 
 describe('submitting the store for review', () => {
   it('reads the submitted context back once and shares it with the dashboard', async () => {
+    seedReadyAccount('Test Road')
     renderAccount('APPROVED', 10)
     await screen.findByRole('button', { name: /Step 10,.*You are here/ })
-    act(() => {
-      const store = useOnboardingStore.getState()
-      store.updateDraft((draft) => ({
-        ...draft,
-        payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
-        storefront: { ...draft.storefront, businessLocation: 'Test Road' },
-      }))
-      store.updateRuntime({ orderWhatsapp: '9876543210' })
-    })
     // An unsubmitted Step 10 reads every account resource.
     await waitFor(() => expect(cachedResources()).toEqual(ALL_RESOURCES))
     const goLive = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
@@ -1411,7 +1575,7 @@ describe('per-step account reads', () => {
     expect(useOnboardingStore.getState().draft.products.map((product) => product.id)).toEqual([31])
     expect(useOnboardingStore.getState().draft.currentStep).toBe(4)
     expect(stepSpinner()).toBeNull()
-    expect(continueDisabled()).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
   })
 
   it('drops a read that lands after the wizard has gone', async () => {
@@ -1650,13 +1814,14 @@ describe('wizard logo and banner', () => {
       .mockResolvedValueOnce('https://images.example.test/logo.png')
     await openBranding(10)
     await screen.findByRole('button', { name: 'Retry logo' })
-    expect(continueDisabled('Review readiness')).toBe(false)
+    // Opened from Step 10, so saving returns there.
+    expect(continueDisabled('Save changes')).toBe(false)
     expect(screen.getByRole('button', { name: 'Choose logo image' }).matches(':disabled')).toBe(false)
     expect(screen.getByAltText('Banner upload preview').getAttribute('src')).toBe('https://images.example.test/banner.png')
     fireEvent.click(screen.getByRole('button', { name: 'Retry logo' }))
     await screen.findByAltText('Logo upload preview')
     expect(useOnboardingStore.getState().runtime.savedLogoUrl).toBe('https://images.example.test/logo.png')
-    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
     expect(vi.mocked(vendorImagesService.getImage).mock.calls.map(([, kind]) => kind)).toEqual(['logo', 'banner', 'logo'])
   })
 
@@ -1978,16 +2143,10 @@ describe('independent optional image reads', () => {
   it('allows review submission with an unavailable optional image', async () => {
     vi.mocked(vendorImagesService.getImage).mockRejectedValue(new Error('Saved image unavailable'))
     const submit = vi.spyOn(vendorOnboardingService, 'goLive').mockResolvedValue(undefined)
+    seedReadyAccount('Test Market')
     renderAccount('PENDING', 10)
     await screen.findByRole('button', { name: 'Retry logo' })
     await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
-    act(() => {
-      useOnboardingStore.getState().updateDraft((draft) => ({
-        ...draft, payments: [{ type: 'CASH_ON_DELIVERY', enabled: true, isDefault: true }],
-        storefront: { ...draft.storefront, businessLocation: 'Test Market' },
-      }))
-      useOnboardingStore.getState().updateRuntime({ orderWhatsapp: '9876543210' })
-    })
     fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Submit for review' }))
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
@@ -2068,7 +2227,7 @@ describe('independent optional image reads', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
     expect((await screen.findByRole('button', { name: `Choose ${failedKind} image` })).matches(':disabled')).toBe(false)
     expect(screen.getByAltText(`${savedKind === 'logo' ? 'Logo' : 'Banner'} upload preview`).getAttribute('src')).toBe(`https://images.example.test/${savedKind}.png`)
-    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
   })
 })
 
@@ -2080,7 +2239,7 @@ describe('resumed vendor image-read failure', () => {
     await waitFor(() => expect(continueDisabled('Submit for review')).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: /^Step 9,/ }))
     expect((await screen.findByRole('button', { name: 'Choose logo image' })).matches(':disabled')).toBe(false)
-    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
     expect(screen.getByRole('status', { name: 'Loading saved logo' })).toBeTruthy()
     await act(async () => image.resolve(null))
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading saved logo' })).toBeNull())
@@ -2101,7 +2260,7 @@ describe('resumed vendor image-read failure', () => {
     ])
     expect(screen.getByLabelText('Store name')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry banner' })).toBeTruthy()
-    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
     expect(screen.getByRole('button', { name: 'Choose logo image' })).toBeTruthy()
     expect(screen.queryByText('Something went wrong')).toBeNull()
   })
@@ -2121,6 +2280,6 @@ describe('resumed vendor image-read failure', () => {
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading saved banner' })).toBeNull())
     expect(screen.queryByRole('button', { name: 'Retry logo' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry banner' })).toBeNull()
-    expect(continueDisabled('Review readiness')).toBe(false)
+    expect(continueDisabled('Save changes')).toBe(false)
   })
 })

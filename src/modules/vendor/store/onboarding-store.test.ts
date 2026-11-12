@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
 import { ONBOARDING_CONFIG, type CatalogSource, type OnboardingStep } from '../types/onboarding'
 import { PENDING_ID_BASE } from '../lib/onboarding-pending-id'
 import { onboardingDraftAdapter } from '../lib/onboarding-adapter'
@@ -20,15 +20,13 @@ import {
 } from './onboarding-store'
 
 /**
- * `updateDraft`'s second argument is destructive by design: it exists to throw away
- * progress that a change has invalidated. The hazard is passing it for a write that is
- * not a vendor edit at all.
+ * Saved progress is the account's. `updateDraft`'s second argument names the step an edit
+ * came from; for Steps 3-9 it marks that input unsaved and never takes progress away. Only
+ * an identity step (a new phone number, a new session) still resets it.
  *
- * `SkuStep` used to scaffold empty SKU rows with `updateDraft(…, 6)`. A vendor resuming
- * at Step 9 with one leftover unpriced product — the exact case `furthestSavedStep` was
- * written to protect — lost Steps 7-10 just by opening Step 6 to look at it. There is no
- * DOM runner here to assert against the component, so these lock the store behaviour the
- * fix depends on.
+ * `SkuStep` used to scaffold empty SKU rows with `updateDraft(…, 6)`, when that argument
+ * dropped progress: a vendor resuming at Step 9 with one leftover unpriced product lost
+ * Steps 7-10 just by opening Step 6. These lock the store behaviour that now prevents it.
  */
 function seedAt(step: OnboardingStep) {
   useOnboardingStore.setState({
@@ -40,6 +38,10 @@ function seedAt(step: OnboardingStep) {
     furthestVisitedStep: step,
     persistenceInitialized: true,
     persistenceStatus: 'idle',
+    editedSteps: [],
+    loadedSteps: [],
+    savedBaselines: {},
+    returnStep: null,
   })
 }
 
@@ -100,15 +102,24 @@ describe('updateDraft and earlier progress', () => {
     expect(state.draft.currentStep).toBe(9)
   })
 
-  it('collapses the frontier when invalidateFrom is given', () => {
-    // The destructive behaviour is intended — this documents what passing the argument
-    // costs, which is why a scaffolding write must not pass it.
+  it('keeps setup progress when an edit names a setup step', () => {
+    // Saved progress is the account's: an edit to Step 6 marks it unsaved, never undone.
     useOnboardingStore.getState().updateDraft((draft) => ({ ...draft }), 6)
 
     const state = useOnboardingStore.getState()
-    expect(state.furthestVisitedStep).toBe(6)
-    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5])
-    expect(state.draft.currentStep).toBe(6)
+    expect(state.furthestVisitedStep).toBe(9)
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(state.draft.currentStep).toBe(9)
+    expect(state.editedSteps).toEqual([6])
+  })
+
+  it('still resets progress from an identity step, since a new number is a new session', () => {
+    useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, mobileVerified: false }), 1)
+
+    const state = useOnboardingStore.getState()
+    expect(state.furthestVisitedStep).toBe(1)
+    expect(state.draft.completedSteps).toEqual([])
+    expect(state.draft.currentStep).toBe(1)
   })
 })
 
@@ -130,6 +141,9 @@ describe('updateDraft on a submitted store never collapses its completion', () =
       furthestVisitedStep: 10,
       persistenceInitialized: true,
       persistenceStatus: 'idle',
+      editedSteps: [],
+      loadedSteps: [],
+      savedBaselines: {},
     })
     useOnboardingStore.getState().setStoreSubmission({
       storeIdentifier: 'sk-store',
@@ -164,49 +178,39 @@ describe('updateDraft on a submitted store never collapses its completion', () =
     expect(state.draft.products).toHaveLength(1)
   })
 
-  it('still collapses the frontier for a store that is not submitted', () => {
+  it('keeps progress for a store in setup too, retiring only its finished private preview', () => {
     seedSubmittedAt(4)
     useOnboardingStore.getState().setStoreSubmission(null)
     useOnboardingStore.getState().addPendingCategory({ name: 'Snacks', businessTypeId: 1 })
 
     const state = useOnboardingStore.getState()
-    // Not submitted: adding a category is a genuine setup edit, so downstream steps collapse.
-    expect(state.draft.completedSteps).toEqual([1, 2, 3])
-    expect(state.furthestVisitedStep).toBe(4)
+    // Not submitted: the category is unsaved input, and later steps stay reachable.
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(state.furthestVisitedStep).toBe(10)
+    expect(state.draft.publication.state).toBe('draft')
+    expect(state.editedSteps).toEqual([4])
   })
 })
 
-describe('completeStep and account sync', () => {
-  // Demo and sample mode deliberately skip the backend write. Reporting those steps as
-  // synced let the next account read overwrite work the vendor could still see.
+describe('completeStep and saved input', () => {
+  // A save, real or simulated in demo mode (which has no account read to take its place),
+  // leaves the step's input saved, and only that step's.
   beforeEach(() => {
     seedAt(5)
     useOnboardingStore.setState({ editedSteps: [4, 5, 7, 8] })
   })
 
-  it('keeps the edited steps when the step was not written to the account', () => {
-    useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: false })
-
-    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5, 7, 8])
-    expect(useOnboardingStore.getState().furthestVisitedStep).toBe(6)
-  })
-
-  it('removes only the step that reached the account', () => {
-    useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: true })
-
-    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 7, 8])
-  })
-
-  it('defaults to synced', () => {
+  it('removes only the step that was saved', () => {
     useOnboardingStore.getState().completeStep(5, 6)
 
     expect(useOnboardingStore.getState().editedSteps).toEqual([4, 7, 8])
+    expect(useOnboardingStore.getState().furthestVisitedStep).toBe(6)
   })
 
-  it('clears Steps 7 and 8 together, since one write saves both', () => {
+  it('keeps Step 8 unsaved when Step 7 is saved, since their shared write sends Step 8’s saved values', () => {
     useOnboardingStore.getState().completeStep(7, 8)
 
-    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5])
+    expect(useOnboardingStore.getState().editedSteps).toEqual([4, 5, 8])
   })
 
   it('clears every step once the OTP step completes, as a new session starts', () => {
@@ -218,10 +222,10 @@ describe('completeStep and account sync', () => {
   it('writes the edited steps to storage and never the legacy flag', () => {
     const write = vi.spyOn(onboardingDraftAdapter.drafts, 'write').mockImplementation(() => {})
     try {
-      useOnboardingStore.getState().completeStep(5, 6, { syncedWithAccount: false })
+      useOnboardingStore.getState().completeStep(5, 6)
 
       const envelope = write.mock.calls.at(-1)?.[0]
-      expect(envelope?.editedSteps).toEqual([4, 5, 7, 8])
+      expect(envelope?.editedSteps).toEqual([4, 7, 8])
       expect(envelope && 'hasLocalEdits' in envelope).toBe(false)
     } finally {
       write.mockRestore()
@@ -345,6 +349,84 @@ describe('editedSteps on updateDraft', () => {
     useOnboardingStore.getState().updateDraft((current) => ({ ...current, categories: [...current.categories, category(13)] }), 4)
 
     expect(useOnboardingStore.getState().editedSteps).toEqual([4])
+  })
+})
+
+describe('editedSteps against a saved baseline', () => {
+  const draft = createEmptyOnboardingDraft()
+  const delivery = draft.delivery
+
+  beforeEach(() => {
+    useOnboardingStore.setState({
+      draft: { ...draft, currentStep: 7, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8] as OnboardingStep[] },
+      furthestVisitedStep: 9,
+      persistenceInitialized: true,
+      persistenceStatus: 'idle',
+      storeSubmission: null,
+      editedSteps: [],
+      loadedSteps: [3, 4, 5, 6, 7, 8, 9],
+      savedBaselines: { 7: { delivery }, 8: { payments: draft.payments, paymentDetails: createEmptyRuntimeState().paymentDetails } },
+    })
+  })
+
+  const setCharge = (charge: number) => useOnboardingStore.getState().updateDraft((current) => ({
+    ...current, delivery: { ...current.delivery, shipping: { ...current.delivery.shipping, charge } },
+  }), 7)
+
+  it('marks a change and clears it again when the value is changed back, keeping every step reachable', () => {
+    setCharge(45)
+    expect(useOnboardingStore.getState().editedSteps).toEqual([7])
+
+    setCharge(delivery.shipping.charge)
+    const state = useOnboardingStore.getState()
+    expect(state.editedSteps).toEqual([])
+    expect(state.furthestVisitedStep).toBe(9)
+    expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('leaves a step it did not touch as it was', () => {
+    useOnboardingStore.setState({ editedSteps: [8] })
+
+    setCharge(45)
+
+    expect(useOnboardingStore.getState().editedSteps).toEqual([7, 8])
+  })
+})
+
+describe('the step a save returns to', () => {
+  beforeEach(() => {
+    seedAt(9)
+    useOnboardingStore.setState({ returnStep: null, storeSubmission: null })
+  })
+
+  it('is remembered on going back, kept while browsing earlier steps, and forgotten on arrival', () => {
+    const store = useOnboardingStore.getState()
+    store.goToStep(7)
+    expect(useOnboardingStore.getState().returnStep).toBe(9)
+    store.goToStep(4)
+    store.goToStep(8)
+    expect(useOnboardingStore.getState().returnStep).toBe(9)
+    store.goToStep(9)
+    expect(useOnboardingStore.getState().returnStep).toBeNull()
+  })
+
+  it('is forgotten once a save lands on it', () => {
+    useOnboardingStore.getState().goToStep(7)
+    useOnboardingStore.getState().completeStep(7, 9)
+
+    const state = useOnboardingStore.getState()
+    expect(state.returnStep).toBeNull()
+    expect(state.draft.currentStep).toBe(9)
+  })
+
+  it('is never set for a submitted store', () => {
+    useOnboardingStore.setState({
+      storeSubmission: { storeIdentifier: 's', vendorStatus: 'ACTIVE', approvalStatus: 'PENDING' },
+    })
+    useOnboardingStore.getState().goToStep(4)
+
+    expect(useOnboardingStore.getState().returnStep).toBeNull()
+    useOnboardingStore.setState({ storeSubmission: null })
   })
 })
 

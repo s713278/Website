@@ -47,6 +47,7 @@ import {
   applySkus,
   applyStorefront,
   backendResumeStep,
+  checkoutBaselines,
   derivedResumeStep,
   isStoreSubmitted,
   loadAccountResource,
@@ -76,6 +77,16 @@ import {
   stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
+import {
+  checkoutWriteInput,
+  isAccountStep,
+  pendingEditIssues,
+  pendingSteps,
+  stepAfterSave,
+  stepSnapshot,
+  type SavedBaselines,
+} from '../../lib/onboarding-progress'
+import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import { ImageSaveError } from '../../lib/onboarding-images'
 import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
@@ -272,6 +283,7 @@ function startAccountEntry(
   let resumeAt: OnboardingStep | null = null
   // No usable pointer: the step is derived once every resource has been read.
   let derivePending = false
+  let storeDetailsBaselined = false
   // Step 4 or 5 is open, so its first list page is wanted; and the list each was read for.
   let categoryListWanted = false
   let categoryListKey: string | null = null
@@ -305,17 +317,20 @@ function startAccountEntry(
     store().setProductMeasurementCatalog(catalogs.productMeasurementCatalog)
   }
 
+  /**
+   * Open where the account says and count what it says is done. Unsaved local edits keep
+   * their sections (the appliers leave them alone) but never decide the step or progress.
+   */
   const applyFrame = (openAt: OnboardingStep) => {
     const state = store()
-    const draft = applyResumeFrame(state.draft, openAt, {
-      edited: new Set(),
-      submitted: selectStoreIsSubmitted(state),
-    })
+    const submitted = selectStoreIsSubmitted(state)
+    const edited = new Set(state.editedSteps)
+    const draft = applyResumeFrame(state.draft, openAt, { edited, submitted })
     state.applyResumedDraft(
       draft,
       openAt,
       { paymentDetails: state.runtime.paymentDetails },
-      { frameApplied: true },
+      { frameApplied: true, editsKept: edited.size > 0 && !submitted },
     )
   }
 
@@ -332,6 +347,11 @@ function startAccountEntry(
     let orderWhatsapp: string | undefined
     let supportWhatsapp: string | undefined
     const ran = (resource: OnboardingResource) => applied.add(resource)
+    // Each step's saved values, as the account copy alone would set them: what pending
+    // edits are measured against, whether or not the step kept its local copy.
+    const baselines: SavedBaselines = {}
+    const accountOnly = { edited: new Set<OnboardingStep>(), submitted }
+    const empty = createEmptyOnboardingDraft()
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
       draft = applyProfile(draft, values.profile!, options, context.businessName)
@@ -351,24 +371,30 @@ function startAccountEntry(
       : undefined
     if (!applied.has('businessTypes') && businessType !== undefined) {
       draft = applyBusinessType(draft, businessType, options)
+      baselines[3] = { businessType }
       ran('businessTypes')
     }
     if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
       draft = applyCategories(draft, values.categories!, businessType, options)
+      baselines[4] = { categories: applyCategories(empty, values.categories!, businessType, accountOnly).categories }
       ran('categories')
     }
     if (!applied.has('products') && view.resources.products === 'loaded') {
       draft = applyProducts(draft, values.products!, options)
+      baselines[5] = { products: applyProducts(empty, values.products!, accountOnly).products }
       ran('products')
     }
     // Saved sizes are rebuilt against the units, so they wait for them (or their fallback).
     if (!applied.has('skus') && view.resources.skus === 'loaded' && view.resources.products === 'loaded' && units !== undefined) {
-      draft = applySkus(draft, values.skus!, values.products!, measurementCatalogsForResume(units).measurements, options)
+      const measurements = measurementCatalogsForResume(units).measurements
+      draft = applySkus(draft, values.skus!, values.products!, measurements, options)
+      baselines[6] = { skus: applySkus(empty, values.skus!, values.products!, measurements, accountOnly).skus }
       ran('skus')
     }
     if (!applied.has('checkout') && view.resources.checkout === 'loaded') {
       draft = applyCheckout(draft, values.checkout!, options)
       if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
+      Object.assign(baselines, checkoutBaselines(values.checkout!))
       ran('checkout')
     }
     for (const kind of ['logo', 'banner'] as const) {
@@ -380,13 +406,19 @@ function startAccountEntry(
     if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
       state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false })
     }
+    // Step 9's branding is unreadable until approval, so its saved values are the store
+    // details as applied, and unknown while an unsaved local copy is kept.
+    if (!storeDetailsBaselined && applied.has('profile') && (!(submitted && approved) || applied.has('storefront'))) {
+      storeDetailsBaselined = true
+      if (!keptLocal(9)) baselines[9] = stepSnapshot(9, store().draft, store().runtime)
+    }
+    if (Object.keys(baselines).length) store().recordSavedBaselines(baselines)
 
     if (derivePending && requiredStepResources(10, { submitted, approved }).every((resource) => applied.has(resource))) {
       derivePending = false
       resumeAt = derivedResumeStep(accountResumeState(context, values as OnboardingResourceData))
-      // Only while the vendor is still where the fallback put them, with nothing edited.
-      const latest = store()
-      if (!latest.editedSteps.length && latest.draft.currentStep === 10) applyFrame(resumeAt)
+      // Only while the vendor is still where the fallback put them.
+      if (store().draft.currentStep === 10) applyFrame(resumeAt)
     }
 
     // Step 3 shares Step 9's required reads. Do not mark store details restored before
@@ -612,13 +644,10 @@ function startAccountEntry(
         }
       : null)
     resumeAt = submitted ? 10 : backendResumeStep(loaded)
-    // Unsaved local work is newest only while setup can still accept it: the vendor's own
-    // progress then stands. Once the store is submitted the account wins every step.
-    if (!state.editedSteps.length || submitted) {
-      // Without a usable pointer, Step 10 reads everything and the step is derived from it.
-      derivePending = resumeAt === null
-      applyFrame(resumeAt ?? 10)
-    }
+    // The account owns progress: every entry opens its step, unsaved local work or not.
+    // Without a usable pointer, Step 10 reads everything and the step is derived from it.
+    derivePending = resumeAt === null
+    applyFrame(resumeAt ?? 10)
     view.context = 'loaded'
     applyReady()
     publish()
@@ -695,7 +724,11 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
   const categoryLimit = selectCategoryLimit(state)
   const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
   if (draft.currentStep === 10) {
-    return readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
+    // Submission waits for every unsaved step to be saved or undone, as well as for readiness.
+    return [
+      ...pendingEditIssues(pendingSteps(state)),
+      ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement),
+    ]
   }
   // Validate additions without reopening whole-store readiness for submitted vendors.
   return selectStoreIsSubmitted(state) && draft.currentStep !== 9
@@ -755,6 +788,9 @@ function OnboardingWizardContent() {
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
   const setLoadedSteps = useOnboardingStore((state) => state.setLoadedSteps)
+  const resetSavedBaselines = useOnboardingStore((state) => state.resetSavedBaselines)
+  const recordSavedBaselines = useOnboardingStore((state) => state.recordSavedBaselines)
+  const returnStep = useOnboardingStore((state) => state.returnStep)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
   // offering controls that cannot reach a store already under review.
@@ -878,9 +914,10 @@ function OnboardingWizardContent() {
    */
   useLayoutEffect(() => {
     savedStepRef.current = {}
-    // Which steps hold account data is known only for this visit; the entry sets it again
-    // as each read lands.
+    // Which steps hold account data, and their saved values, are known only for this visit;
+    // the entry sets them again as each read lands.
     setLoadedSteps([])
+    resetSavedBaselines()
     setLoadView(IDLE_LOAD_VIEW)
     setContextError(null)
     if (access.state !== 'ready') {
@@ -915,7 +952,7 @@ function OnboardingWizardContent() {
       entry.cancel()
       if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps])
+  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines])
 
   // Each step reads what it needs when it opens; a read already made this visit is reused.
   // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
@@ -1270,58 +1307,75 @@ function OnboardingWizardContent() {
 
     const step = draft.currentStep
     const inPlace = savesInPlace(step, storeIsSubmitted, storeIsApproved)
+    // A save from an earlier step returns to where the vendor came from; a first-time step
+    // moves on as usual. A submitted store keeps its own rules.
+    const nextStep = inPlace ? step : stepAfterSave(step, storeIsSubmitted ? null : state.returnStep)
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.
     // Units are left to the step that needs them. A save in place opens no next step.
     if (!inPlace && writesReachAccount(draft.catalogSource) && access.state === 'ready') {
-      entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
+      entryRef.current?.prefetchStep(nextStep)
     }
-    const fingerprint = stepSaveFingerprint(step, draft, runtime)
     const hasPendingImages = step === 9 && Boolean(runtime.logoFile || runtime.bannerFile)
-    const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
-    const shouldPersist =
+    // A step the account already counts as done, with nothing different from its known
+    // saved values, has nothing to write.
+    const savedAndUnchanged = !hasPendingImages && draft.completedSteps.includes(step)
+      && isAccountStep(step) && Boolean(state.savedBaselines[step]) && !pendingSteps(state).includes(step)
+    const reachesAccount =
       writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
-      access.state === 'ready' &&
-      !unchanged
+      access.state === 'ready'
 
-    if (shouldPersist && access.state === 'ready') {
+    if (reachesAccount && !savedAndUnchanged && access.state === 'ready') {
       const controller = beginRequest()
       const persistenceIsCurrent = () => requestIsCurrent(controller, step)
         && useAuthStore.getState().user?.vendorId === access.vendorId
         && useOnboardingStore.getState().draftOwnerId === access.vendorId
       setStatusMessage('Saving to your store…')
+      // Steps 7 and 8 share one full checkout write; it carries the other step's saved
+      // values, so neither step's unsaved edits reach the account through the other.
+      const sharesCheckout = step === 7 || step === 8
       try {
-        // Each write reports what it put on the account, so a step that fails part way
-        // still records the part that landed. SKU creates also reread their saved IDs.
-        // Submitted stores reach this for categories/products and, once approved, sizes.
-        // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
-        await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
-          if (persistenceIsCurrent()) recordAssignment(assignment)
-        }, recordCreatedEntry, state.accountCatalog.skuIds, {
-          signal: controller.signal,
-          approvedStore: storeIsSubmitted && storeIsApproved,
-          isCurrent: persistenceIsCurrent,
-          onUploaded: (kind, file, url) => {
-            if (!persistenceIsCurrent()) return
-            useOnboardingStore.getState().recordUploadedImage(kind, file, url)
-            setOnboardingResource(access.vendorId, kind, url)
-            entryRef.current?.recordImage(kind, url)
-          },
-        })
-        // This step is now on the account, so a cached read from before it is stale. The
-        // open wizard keeps what it holds: the draft is now the account copy.
-        dropWrittenAccountData(access.vendorId, savedResources(step))
+        const input = sharesCheckout
+          ? await checkoutSaveInput(step, access.vendorId, draft, runtime)
+          : { draft, runtime }
         if (!persistenceIsCurrent()) return
-        // Read after the save: minting authored entries rewrites their ids in the draft.
-        const latest = useOnboardingStore.getState()
-        const saved = stepSaveFingerprint(step, latest.draft, latest.runtime)
-        if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
+        const fingerprint = stepSaveFingerprint(step, input.draft, input.runtime)
+        const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
+        if (!unchanged) {
+          // Each write reports what it put on the account, so a step that fails part way
+          // still records the part that landed. SKU creates also reread their saved IDs.
+          // Submitted stores reach this for categories/products and, once approved, sizes.
+          // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
+          await persistStep(step, access.vendorId, input.draft, input.runtime, (assignment) => {
+            if (persistenceIsCurrent()) recordAssignment(assignment)
+          }, recordCreatedEntry, state.accountCatalog.skuIds, {
+            signal: controller.signal,
+            approvedStore: storeIsSubmitted && storeIsApproved,
+            isCurrent: persistenceIsCurrent,
+            onUploaded: (kind, file, url) => {
+              if (!persistenceIsCurrent()) return
+              useOnboardingStore.getState().recordUploadedImage(kind, file, url)
+              setOnboardingResource(access.vendorId, kind, url)
+              entryRef.current?.recordImage(kind, url)
+            },
+          })
+          // This step is now on the account, so a cached read from before it is stale. The
+          // open wizard keeps what it holds: the draft is now the account copy.
+          dropWrittenAccountData(access.vendorId, savedResources(step))
+          if (!persistenceIsCurrent()) return
+          // Read after the save: minting authored entries rewrites their ids in the draft.
+          const latest = useOnboardingStore.getState()
+          const saved = sharesCheckout ? fingerprint : stepSaveFingerprint(step, latest.draft, latest.runtime)
+          if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
+        }
+        recordSavedStep(step, input)
         setStatusMessage(null)
       } catch (error) {
         // Part of the step may have landed, so it no longer matches anything known.
         if (step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
         for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
+        if (isAccountStep(step)) recordSavedBaselines({ [step]: undefined })
         if (!persistenceIsCurrent()) return
         setStatusMessage(null)
         // A failed write is never reported as local success.
@@ -1343,13 +1397,45 @@ function OnboardingWizardContent() {
       } finally {
         finishRequest(controller)
       }
+    } else if (!reachesAccount) {
+      // Demo mode simulates the save, so the step's input counts as saved here too.
+      recordSavedStep(step, { draft, runtime })
     }
 
-    // `syncedWithAccount` must reflect whether this step actually reached the account.
-    // Demo and sample mode skip the write, and claiming otherwise lets the next account
-    // read overwrite work the vendor can still see on screen.
-    completeStep(step, inPlace ? step : (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
+    completeStep(step, nextStep)
     if (inPlace) feedback.show('Changes saved.', 'success')
+  }
+
+  /**
+   * What a Step 7 or 8 save sends: this step's input with the other step's saved values. If
+   * those are unknown this visit, the account's checkout is read first.
+   */
+  const checkoutSaveInput = async (
+    step: 7 | 8,
+    vendorId: string,
+    draft: OnboardingState['draft'],
+    runtime: OnboardingState['runtime'],
+  ) => {
+    const known = checkoutWriteInput(step, draft, runtime, useOnboardingStore.getState().savedBaselines)
+    if (known) return known
+    invalidateOnboardingResources(vendorId, ['checkout'])
+    const fromAccount = checkoutBaselines(await loadAccountResource(vendorId, 'checkout'))
+    const sibling: SavedBaselines = step === 7 ? { 8: fromAccount[8] } : { 7: fromAccount[7] }
+    if (useAuthStore.getState().user?.vendorId === vendorId) recordSavedBaselines(sibling)
+    return checkoutWriteInput(step, draft, runtime, sibling)!
+  }
+
+  /**
+   * The saved step's values become its baseline: what was sent, or, for catalog steps whose
+   * save rewrites authored ids, the draft as it stands after the save.
+   */
+  const recordSavedStep = (
+    step: OnboardingStep,
+    sent: { draft: OnboardingState['draft']; runtime: OnboardingState['runtime'] },
+  ) => {
+    if (!isAccountStep(step)) return
+    const source = step >= 4 && step <= 6 ? useOnboardingStore.getState() : sent
+    recordSavedBaselines({ [step]: stepSnapshot(step, source.draft, source.runtime) })
   }
 
   const handleContinue = async () => {
@@ -1440,6 +1526,8 @@ function OnboardingWizardContent() {
       // A submitted store only writes on the additive catalog steps; everywhere else
       // Continue is pure navigation, so the label must not promise a save.
       : storeIsSubmitted ? (isAdditiveCatalogStep(currentStep, storeIsApproved) ? 'Save and continue' : 'Continue')
+        // Revisiting an earlier step: saving returns to where the vendor came from.
+        : returnStep !== null && currentStep < returnStep ? 'Save changes'
         : currentStep === 9 ? 'Review readiness'
           // Live submits for administrator review; demo/sample only saves a private preview.
           : currentStep === 10 ? (step10SubmitsToAccount ? 'Submit for review' : 'Save private preview')

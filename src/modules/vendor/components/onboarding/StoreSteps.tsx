@@ -31,6 +31,7 @@ import {
 import { isApprovalGranted } from '../../lib/onboarding-account-status'
 import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
+import { pendingEditIssues, pendingSteps } from '../../lib/onboarding-progress'
 import type { ResourceStatus } from '../../lib/onboarding-resume'
 import { StoreSharePanels } from '../StoreSharePanels'
 import {
@@ -581,11 +582,17 @@ export function ReviewStep({
   const skuLimit = useOnboardingStore(selectSkuLimit)
   const accountCatalog = useOnboardingStore((state) => state.accountCatalog)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
-  const issues = readinessIssues(draft, runtime, categoryLimit, measurementCatalog, {
-    maxProducts: productLimit,
-    maxSkus: skuLimit,
-    account: accountCatalog,
-  })
+  const editedSteps = useOnboardingStore((state) => state.editedSteps)
+  const savedBaselines = useOnboardingStore((state) => state.savedBaselines)
+  // Unsaved changes on an earlier step come first: they are the work still to finish there.
+  const issues = [
+    ...pendingEditIssues(pendingSteps({ draft, runtime, editedSteps, savedBaselines })),
+    ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, {
+      maxProducts: productLimit,
+      maxSkus: skuLimit,
+      account: accountCatalog,
+    }),
+  ]
   const submitIssues = shownIssues.filter((item) => item.step === 10)
   const completed =
     draft.publication.state === 'prototype-complete' &&

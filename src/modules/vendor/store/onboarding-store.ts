@@ -15,10 +15,16 @@ import {
 } from '../lib/onboarding-catalog-limits'
 import {
   applyCreatedEntry,
-  stepsSavedTogether,
   type AccountAssignment,
   type CreatedCatalogEntry,
 } from '../lib/onboarding-sync'
+import {
+  ACCOUNT_STEPS,
+  draftMatchesBaseline,
+  returnStepAfterMove,
+  stepSnapshot,
+  type SavedBaselines,
+} from '../lib/onboarding-progress'
 import { accountSkuId } from '../lib/onboarding-sku-id'
 import { isApprovalGranted } from '../lib/onboarding-account-status'
 import {
@@ -104,12 +110,28 @@ type OnboardingStore = {
    * Steps 3-9 whose part of the draft holds edits that have not reached the vendor account
    * (sorted, unique). Persisted with the draft.
    *
-   * A step leaves the set when it is written on Continue, and the whole set clears when a
-   * resume rebuilds the draft from the account. The wizard re-reads the account on entry
-   * and takes its copy for every step not in the set, so the account stays the record and
-   * a stale local copy cannot outlive one visit.
+   * A step leaves the set when it is saved (or, in demo, when its save is simulated), and
+   * when an edit brings it back to its saved baseline; the whole set clears when a resume
+   * rebuilds the draft from the account. The wizard re-reads the account on entry and takes
+   * its copy for every step not in the set, so the account stays the record and a stale local
+   * copy cannot outlive one visit. It never decides progress: see `pendingSteps` for what is
+   * unsaved and the account's `next_step` for what is done.
    */
   editedSteps: OnboardingStep[]
+  /**
+   * Each step's last saved values this visit, from an account read or a confirmed (or demo
+   * simulated) save. In memory only, never persisted: Step 8's carry private payment details.
+   * The wizard resets it on entry.
+   */
+  savedBaselines: SavedBaselines
+  /** Merge in saved values for the given steps. */
+  recordSavedBaselines: (baselines: SavedBaselines) => void
+  resetSavedBaselines: () => void
+  /**
+   * The step a save returns to after the vendor went back to an earlier one (see
+   * `returnStepAfterMove`). In memory only: an entry or reload opens the account's step.
+   */
+  returnStep: OnboardingStep | null
   /**
    * Steps 3-9 whose account data was read in this wizard visit. In memory only, never
    * persisted: every entry re-reads the account, so the wizard resets it on entry, on a
@@ -248,16 +270,11 @@ type OnboardingStore = {
   restoreImage: (kind: ImageKind, url: string | null) => void
   recordUploadedImage: (kind: ImageKind, file: File, url: string) => void
   /**
-   * Advance past `step`. `syncedWithAccount` says whether the step actually reached the
-   * vendor account — false for demo and sample mode, where the write is deliberately
-   * skipped. Defaults to true so identity Steps 1-2, which have nothing to persist, keep
-   * letting the account read hydrate.
+   * Record `step` as saved and open `nextStep`. A saved step's input is no longer unsaved,
+   * whether the save reached the account or was simulated in demo mode, which has no account
+   * read that could take its place.
    */
-  completeStep: (
-    step: OnboardingStep,
-    nextStep: OnboardingStep,
-    options?: { syncedWithAccount?: boolean },
-  ) => void
+  completeStep: (step: OnboardingStep, nextStep: OnboardingStep) => void
   goToStep: (step: OnboardingStep) => void
   completePrototype: (draftSlug: string) => void
   /** Steps 1-2 already satisfied by an existing vendor session. */
@@ -265,12 +282,14 @@ type OnboardingStore = {
   /**
    * Replace the draft with what the vendor's account already holds. `frameApplied: false`
    * means only unedited steps took the account copy: the edited set and the notice stay.
+   * A frame always sets position and progress from the account; `editsKept` says unsaved
+   * steps kept their local copy, so the edited set stays and there is no resume notice.
    */
   applyResumedDraft: (
     draft: VendorOnboardingDraftV1,
     furthestVisitedStep: OnboardingStep,
     runtime: Pick<OnboardingRuntimeState, 'paymentDetails'> & Partial<Pick<OnboardingRuntimeState, 'orderWhatsapp' | 'supportWhatsapp'>>,
-    options?: { frameApplied?: boolean },
+    options?: { frameApplied?: boolean; editsKept?: boolean },
   ) => void
   /** Session lost while the draft claimed a verified number — reopen Step 1. */
   revokeVerifiedSession: () => void
@@ -295,22 +314,28 @@ function constrainVisitedStep(
   furthestVisitedStep: OnboardingStep,
   invalidateFrom: OnboardingStep | undefined,
 ): OnboardingStep {
-  return invalidateFrom
+  return invalidateFrom && invalidateFrom < 3
     ? Math.min(furthestVisitedStep, invalidateFrom) as OnboardingStep
     : furthestVisitedStep
 }
 
+/**
+ * What an edit made from `from` undoes. Only the identity steps reset progress: a new phone
+ * number is a new session. Setup progress is the account's, so a Steps 3-9 edit leaves it,
+ * and only retires a demo's finished private preview, which no longer matches the draft.
+ */
 function invalidateDraft(
   draft: VendorOnboardingDraftV1,
   from: OnboardingStep | undefined,
 ): VendorOnboardingDraftV1 {
   if (!from) return draft
-  const completedSteps = draft.completedSteps.some((step) => step >= from)
-    ? draft.completedSteps.filter((step) => step < from)
-    : draft.completedSteps
   const publication = from <= 9 && draft.publication.state !== 'draft'
     ? { state: 'draft' as const, draftSlug: null, completedAt: null }
     : draft.publication
+  if (from >= 3) return publication === draft.publication ? draft : { ...draft, publication }
+  const completedSteps = draft.completedSteps.some((step) => step >= from)
+    ? draft.completedSteps.filter((step) => step < from)
+    : draft.completedSteps
   const currentStep = Math.min(draft.currentStep, from) as OnboardingStep
 
   if (
@@ -321,45 +346,35 @@ function invalidateDraft(
   return { ...draft, currentStep, completedSteps, publication }
 }
 
-/** The part of the draft a step owns, the unit an account copy replaces. */
-function stepSection(draft: VendorOnboardingDraftV1, step: OnboardingStep): unknown[] {
-  switch (step) {
-    case 3: return [draft.business.businessType]
-    case 4: return [draft.categories]
-    case 5: return [draft.products]
-    case 6: return [draft.skus]
-    case 7: return [draft.delivery]
-    case 8: return [draft.payments]
-    case 9: return [
-      draft.business.businessName,
-      draft.storefront,
-    ]
-    default: return []
-  }
-}
+const NO_RUNTIME = createEmptyRuntimeState()
 
 /**
- * The edited set after an edit made from `origin`. That step is always added. Another
- * step whose section the edit rewrote (a category toggle drops products and sizes) is
- * added only if its account data was loaded this visit or it was already edited, and only
- * if the section changed by value: an unloaded section takes the account copy when it
- * loads, and a rebuilt but equal one holds nothing new.
+ * The edited set after an edit made from `origin`, judged per step whose section the edit
+ * touched. With a saved baseline the answer is simply whether the section now differs from
+ * it, so changing a step back leaves it unedited. Without one the origin step is added, and
+ * another rewritten step (a category toggle drops products and sizes) only if its account
+ * data was loaded this visit or it was already edited, and only if it changed by value: an
+ * unloaded section takes the account copy when it loads.
  */
 function editedAfterUpdate(
-  state: Pick<OnboardingStore, 'draft' | 'editedSteps' | 'loadedSteps'>,
+  state: Pick<OnboardingStore, 'draft' | 'editedSteps' | 'loadedSteps' | 'savedBaselines'>,
   updated: VendorOnboardingDraftV1,
   origin: OnboardingStep,
 ): OnboardingStep[] {
-  const added = ([3, 4, 5, 6, 7, 8, 9] as OnboardingStep[]).filter((step) => {
+  const next = ACCOUNT_STEPS.filter((step) => {
+    const was = state.editedSteps.includes(step)
+    const before = Object.values(stepSnapshot(step, state.draft, NO_RUNTIME))
+    const after = Object.values(stepSnapshot(step, updated, NO_RUNTIME))
+    const touched = before.some((part, index) => part !== after[index])
+    if (step !== origin && !touched) return was
+    const matches = draftMatchesBaseline(step, updated, state.savedBaselines)
+    if (matches !== null) return !matches
     if (step === origin) return true
-    if (state.editedSteps.includes(step) || !state.loadedSteps.includes(step)) return false
-    const before = stepSection(state.draft, step)
-    const after = stepSection(updated, step)
-    if (before.every((part, index) => part === after[index])) return false
+    if (was || !state.loadedSteps.includes(step)) return was
     return JSON.stringify(before) !== JSON.stringify(after)
   })
-  if (added.every((step) => state.editedSteps.includes(step))) return state.editedSteps
-  return normalizeEditedSteps([...state.editedSteps, ...added])
+  const same = next.length === state.editedSteps.length && next.every((step, index) => step === state.editedSteps[index])
+  return same ? state.editedSteps : next
 }
 
 function restorationMessage(draft: VendorOnboardingDraftV1): string {
@@ -393,6 +408,8 @@ function emptyDraftState(
     draftOwnerId: ownerId,
     editedSteps: [],
     loadedSteps: [],
+    savedBaselines: {},
+    returnStep: null,
   }
 }
 
@@ -433,6 +450,7 @@ function applyPersistedEnvelope(
     previewSnapshot: envelope.previewSnapshot,
     previewRestored: Boolean(envelope.previewSnapshot),
     editedSteps: restoredEditedSteps(envelope),
+    returnStep: null,
     persistenceInitialized: true,
     persistenceStatus: 'saved',
     persistenceRevision: envelope.revision,
@@ -679,9 +697,19 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draftOwnerId: null,
   editedSteps: [],
   loadedSteps: [],
+  savedBaselines: {},
+  returnStep: null,
 
   setLoadedSteps(steps) {
     set({ loadedSteps: normalizeEditedSteps(steps) })
+  },
+
+  recordSavedBaselines(baselines) {
+    set((state) => ({ savedBaselines: { ...state.savedBaselines, ...baselines } }))
+  },
+
+  resetSavedBaselines() {
+    set({ savedBaselines: {} })
   },
 
   setDraftOwner(ownerId) {
@@ -969,13 +997,10 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   updateDraft(updater, invalidateFrom) {
     set((state) => {
-      // A submitted store is past onboarding: its later steps are already saved to the
-      // account, so an additive category/product write must not tear that completion down.
-      // Invalidation exists to force a still-in-setup vendor to revisit the downstream
-      // steps a change reopens; a submitted store has none to revisit, and its adds are
-      // validated additively. So skip invalidation entirely when submitted — completedSteps,
-      // furthestVisitedStep, currentStep, and publication all stay intact, and the stepper
-      // does not re-lock on an add. See `CONTEXT.md` ("Submitted").
+      // An edit never takes setup progress away (see `invalidateDraft`). A submitted store
+      // keeps even its publication: it is with an administrator, and an additive
+      // category/product write must leave everything else as it is. See `CONTEXT.md`
+      // ("Submitted").
       const from = state.storeSubmission ? undefined : invalidateFrom
       const updated = updater(state.draft)
       return {
@@ -1004,6 +1029,8 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   },
 
   updateRuntime(patch, invalidateFrom) {
+    // Runtime fields are never persisted, so they are not in the edited set; `pendingSteps`
+    // compares them with the step's saved baseline instead.
     set((state) => ({
       runtime: { ...state.runtime, ...patch },
       furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, invalidateFrom),
@@ -1067,19 +1094,14 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     })
   },
 
-  completeStep(step, nextStep, options = {}) {
-    const { syncedWithAccount = true } = options
+  completeStep(step, nextStep) {
     set((state) => ({
       furthestVisitedStep: Math.max(state.furthestVisitedStep, nextStep) as OnboardingStep,
-      // Only clear a step when it genuinely reached the account. Clearing it after a
-      // skipped write tells the next account read that there is nothing local worth
-      // keeping, and it overwrites work still visible on screen. Verifying the number
-      // starts a fresh session, so nothing from before it outranks the account.
-      editedSteps: !syncedWithAccount
-        ? state.editedSteps
-        : step === 2
-          ? []
-          : state.editedSteps.filter((edited) => !stepsSavedTogether(step).includes(edited)),
+      // Only the saved step: Steps 7 and 8 share one write, but it sends the other step's
+      // saved values, so that step's edits stay unsaved. Verifying the number starts a
+      // fresh session, so nothing from before it outranks the account.
+      editedSteps: step === 2 ? [] : state.editedSteps.filter((edited) => edited !== step),
+      returnStep: returnStepAfterMove(state.returnStep, step, nextStep),
       draft: {
         ...state.draft,
         currentStep: nextStep,
@@ -1094,7 +1116,13 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   goToStep(step) {
     set((state) => {
       const target = Math.min(step, state.furthestVisitedStep) as OnboardingStep
-      return { draft: { ...state.draft, currentStep: target } }
+      return {
+        draft: { ...state.draft, currentStep: target },
+        // A submitted store keeps its own save-in-place and additive rules.
+        returnStep: state.storeSubmission
+          ? null
+          : returnStepAfterMove(state.returnStep, state.draft.currentStep, target),
+      }
     })
     flushScheduledDraftSave(persistCurrentDraft)
   },
@@ -1121,7 +1149,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     flushScheduledDraftSave(persistCurrentDraft)
   },
 
-  applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true } = {}) {
+  applyResumedDraft(draft, furthestVisitedStep, runtime, { frameApplied = true, editsKept = false } = {}) {
     // A brand-new account resumes to an empty wizard, which is not something to
     // announce. On a rebuilt draft `furthestVisitedStep` is the account's resume step, and
     // one past Step 3 means work was saved there, whether or not it has been read yet.
@@ -1136,9 +1164,11 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         ...(runtime.orderWhatsapp === undefined ? {} : { orderWhatsapp: runtime.orderWhatsapp }),
         ...(runtime.supportWhatsapp === undefined ? {} : { supportWhatsapp: runtime.supportWhatsapp }),
       },
+      // The account decides where an entry opens, so a remembered return step is gone.
+      ...(frameApplied ? { returnStep: null } : {}),
       // A rebuilt draft *is* the account copy. Taking it for some steps only leaves the
       // edited ones as they were, and is not a resume worth announcing.
-      ...(frameApplied
+      ...(frameApplied && !editsKept
         ? {
             editedSteps: [],
             recoveryMessage: restored
@@ -1155,6 +1185,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       if (!state.draft.mobileVerified) return {}
       return {
         furthestVisitedStep: 1,
+        returnStep: null,
         runtime: { ...state.runtime, otpDigits: ['', '', '', ''] },
         draft: {
           ...state.draft,

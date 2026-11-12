@@ -176,6 +176,11 @@ draft, or start a subsequent image/storefront write. Explicit sign-out clears th
 Sign-out, session loss and foreign-draft replacement clear runtime and revoke its object URLs. Image save/retry
 behavior lives in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-images).
 
+The persisted draft buffers unsaved input only; it never decides setup progress, which every entry
+takes from the account's `next_step`. Each step's saved baseline, including Step 8's private payment
+details, and the step a save returns to are kept in memory only and reset on entry; neither is
+written to the draft. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
+
 Completed active stores with granted approval may edit Step 9 in the wizard; pending-review stores
 remain locked. Eligibility uses the verified account context and the existing completion predicate,
 including its legacy ACTIVE fallback when onboarding evidence is absent. A usable unfinished
