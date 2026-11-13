@@ -436,10 +436,22 @@ for a submitted store); browsing other earlier steps keeps it, and reaching it o
 forgets it. While it is set the primary action reads **Save changes**, and a successful save lands
 on that step instead of the next one; first-time steps keep **Continue**. Catalog Steps 4-6 depend
 on each other (every chosen category needs a product, every product a valid size that is switched
-on), so a save stops first at a done Step 5 or 6 that now has missing work, keeping the remembered
-step: 9 → 4 (add a category) → 5 → 6 → 9 (`lib/onboarding-catalog-dependencies.ts`). Such a step
-is marked on the stepper but never locked, and catalog edits leave Steps 7-9 as they were; Step 10's
-readiness check is what blocks submission. A submitted store is not guided. Clicking any reachable
+on), so a save stops first at a done Step 5 or 6 that its save leaves with missing work, keeping the
+remembered step: 9 → 4 (add a category) → 5 → 6 → 9 (`lib/onboarding-catalog-dependencies.ts`).
+Such a step is marked on the stepper but never locked, and catalog edits leave Steps 7-9 as they
+were; Step 10's readiness check is what blocks submission. A submitted store is not guided.
+
+Each catalog step builds only from the step before it **as saved** (`lib/onboarding-saved-catalog.ts`):
+saved is the step's baseline, else its draft copy while it holds no unsaved input, plus anything the
+account reports assigned (in demo mode, whose entry takes each unedited catalog step's draft copy as
+its baseline, what its simulated save stored). Step 5 lists product panels only for saved categories,
+so an unsaved Step 4 pick reads no product list; Step 6 lists, and starts a blank size for, only saved
+products. A pick under an unsaved parent stays in the draft, hidden: the step's Continue neither
+checks nor sends it, and it reappears once the parent is saved; removing an unsaved category drops
+its products without a prompt. The stepper's marker, and Step 10's catalog summary and readiness
+items ("Choose at least one product in …", "Add a size for …"), come from the saved catalog only;
+unsaved catalog input there is just the step's pending line. While setting up, Step 6 refuses to
+switch off or remove a product's last switched-on size ("Turn on at least one size for …"). Clicking any reachable
 step keeps unsaved input without saving it. A save writes only the current step: a step the
 account already counts as done that matches a known baseline makes no request. Steps 7 and 8 share
 one full checkout write, so it carries the other step's baseline, never its pending edits, which
@@ -449,7 +461,7 @@ pending step on Step 10 ("Save or undo your changes to …", linking to it) with
 and is blocked until none remain.
 
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
-(first) category panel's first product page, alongside the step's account reads, into the reference
+(first saved) category panel's first product page, alongside the step's account reads, into the reference
 cache the list paints from; the step's page loader waits for both, and the list then makes no request of
 its own. Each starts as soon as its input is known (the saved business type for Step 4, the categories for
 Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not

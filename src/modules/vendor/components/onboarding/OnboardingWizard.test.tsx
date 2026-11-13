@@ -557,8 +557,9 @@ describe('account copy per step around unsaved edits', () => {
     expect(state.draft.products[0]).toEqual(localProduct)
     expect(state.draft.currentStep).toBe(6)
     expect(state.furthestVisitedStep).toBe(6)
-    // Step 6 scaffolds a size for the local product, which is new, unsaved input too.
-    expect(state.editedSteps).toEqual([5, 6])
+    // Step 6 builds only from saved products, so the unsaved local product gets no size.
+    expect(state.draft.skus.some((sku) => sku.productId === localProduct.id)).toBe(false)
+    expect(state.editedSteps).toEqual([5])
     expect(state.recoveryMessage ?? '').not.toMatch(/Picked up/)
   })
 
@@ -778,7 +779,7 @@ describe('catalog dependencies guide a revisit save', () => {
     fireEvent.change(card.getByLabelText('Discounted price (₹)'), { target: { value: '90' } })
   }
 
-  function renderReadyDemo(patch: Partial<ReturnType<typeof createEmptyOnboardingDraft>> = {}, currentStep: OnboardingStep = 9) {
+  function renderReadyDemo(patch: Partial<ReturnType<typeof createEmptyOnboardingDraft>> = {}, currentStep: OnboardingStep = 9, unsaved: Partial<OnboardingStoreState> = {}) {
     vi.stubEnv('VITE_USE_API', 'false')
     configureApiClient({ useApi: false })
     const empty = createEmptyOnboardingDraft()
@@ -801,6 +802,7 @@ describe('catalog dependencies guide a revisit save', () => {
       runtime: { ...useOnboardingStore.getState().runtime, orderWhatsapp: '9876543210' },
       furthestVisitedStep: currentStep,
       draftOwnerId: '91',
+      ...unsaved,
     })
     render(<MemoryRouter><OnboardingWizard /></MemoryRouter>)
   }
@@ -814,31 +816,36 @@ describe('catalog dependencies guide a revisit save', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
     await currentStepIs(4)
     fireEvent.click(await screen.findByRole('button', { name: /^Pantry/ }))
-    // The new category has no product yet, so Step 5 needs attention; nothing is locked.
-    expect(stepLabel(5)).toMatch(/needs attention/i)
+    // An unsaved pick lights no other step, and nothing is locked.
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
     expect(screen.getByRole('button', { name: /^Step 9,/ }).matches(':disabled')).toBe(false)
     saveChanges()
 
     await currentStepIs(5)
-    // The category without a product is marked in place and opened.
+    // Saved without a product, the category needs attention: marked in place and opened.
+    expect(stepLabel(5)).toMatch(/needs attention/i)
     const panel = document.getElementById(`category-products-${pantry.id}`) as HTMLDetailsElement
     expect(panel.open).toBe(true)
     expect(panel.getAttribute('data-attention')).toBe('true')
     expect(within(panel).getByText('Needs a product')).toBeTruthy()
     fireEvent.click(within(panel).getByRole('button', { name: /^Toor dal/ }))
-    expect(stepLabel(5)).not.toMatch(/needs attention/i)
-    expect(stepLabel(6)).toMatch(/needs attention/i)
+    // The pick is unsaved: Step 5 stays marked until it is saved, and Step 6 is not lit.
+    expect(stepLabel(5)).toMatch(/needs attention/i)
+    expect(stepLabel(6)).not.toMatch(/needs attention/i)
     saveChanges()
 
     await currentStepIs(6)
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+    expect(stepLabel(6)).toMatch(/needs attention/i)
     const product = document.getElementById('product--312')!
     expect(product.getAttribute('data-attention')).toBe('true')
     expect(within(product).getByText('Needs a size')).toBeTruthy()
     fillSize(-312)
-    expect(stepLabel(6)).not.toMatch(/needs attention/i)
+    expect(stepLabel(6)).toMatch(/needs attention/i)
     saveChanges()
 
     await currentStepIs(9)
+    expect(stepLabel(6)).not.toMatch(/needs attention/i)
     const after = useOnboardingStore.getState().draft
     expect(after.completedSteps).toEqual(before.completedSteps)
     expect(after.delivery).toEqual(before.delivery)
@@ -888,6 +895,87 @@ describe('catalog dependencies guide a revisit save', () => {
     // Let the readiness list's focus and scroll timers finish inside the test.
     await waitFor(() => expect(document.activeElement?.id).toBe('readiness-issues'))
     await new Promise((resolve) => setTimeout(resolve, 50))
+  })
+
+  describe('saved and unsaved catalog', () => {
+    const toorDal = { id: -312, name: 'Toor dal', description: 'Cleaned pigeon peas', imageUrl: null, measurementId: null, measurementName: 'WEIGHT', categoryId: -202 }
+    const readiness = () => within(document.getElementById('readiness-issues')!).getAllByRole('button')
+      .map((item) => item.firstElementChild?.textContent)
+    const summaryValue = (label: string) => within(screen.getByLabelText('Store summary')).getByText(label).nextElementSibling?.textContent
+    const goTo = async (step: number) => {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Step ${step},`) }))
+      await currentStepIs(step)
+    }
+
+    it('keeps an unsaved product pick off Step 6 and counts it on Step 10 as one unsaved step', async () => {
+      renderReadyDemo({}, 10)
+      await currentStepIs(10)
+
+      await goTo(5)
+      fireEvent.click(await screen.findByRole('button', { name: /^Bananas/ }))
+      expect(stepLabel(6)).not.toMatch(/needs attention/i)
+
+      await goTo(6)
+      expect(document.getElementById(`product-${bananas.id}`)).toBeNull()
+      expect(useOnboardingStore.getState().draft.skus.map((sku) => sku.productId)).toEqual([tomatoes.id])
+
+      await goTo(10)
+      expect(readiness()).toEqual(['Save or undo your changes to products.'])
+      expect(summaryValue('Products')).toBe('1')
+    })
+
+    it('counts a blank unsaved size row on Step 10 as one unsaved step, not as sizes or fields', async () => {
+      renderReadyDemo({}, 10)
+      await currentStepIs(10)
+
+      await goTo(6)
+      fireEvent.click(screen.getByRole('button', { name: 'Add another size to Tomatoes' }))
+
+      await goTo(10)
+      expect(readiness()).toEqual(['Save or undo your changes to sizes and prices.'])
+      expect(summaryValue('Sizes')).toBe('1 active · 0 inactive')
+    })
+
+    it('asks for a size for a saved product without one, judged on what is saved', async () => {
+      renderReadyDemo({ products: [tomatoes, bananas] }, 10)
+      await currentStepIs(10)
+      expect(readiness()).toEqual(['Add a size for Bananas.'])
+      expect(stepLabel(6)).toMatch(/needs attention/i)
+
+      await goTo(6)
+      // Saved without a size, the product gets a starter row; filling it saves nothing yet.
+      fillSize(bananas.id)
+
+      await goTo(10)
+      expect(readiness()).toEqual(['Save or undo your changes to sizes and prices.', 'Add a size for Bananas.'])
+    })
+
+    it('keeps products under an unsaved category hidden and unsent until the category is saved', async () => {
+      renderReadyDemo({ categories: [freshProduce, pantry], products: [tomatoes, toorDal] }, 10, {
+        editedSteps: [4, 5],
+        fieldEdits: { categories: { at: 1, saved: [freshProduce] }, products: { at: 1, saved: [tomatoes] } },
+      })
+      await currentStepIs(10)
+      expect(readiness()).toEqual(['Save or undo your changes to categories.', 'Save or undo your changes to products.'])
+      expect(summaryValue('Products')).toBe('1')
+
+      await goTo(5)
+      expect(document.getElementById(`category-products-${pantry.id}`)).toBeNull()
+      saveChanges()
+      await currentStepIs(10)
+      expect(useOnboardingStore.getState().savedBaselines[5]?.products).toEqual([tomatoes])
+      expect(useOnboardingStore.getState().draft.products).toEqual([tomatoes, toorDal])
+
+      // Saving the category brings its product back, still to be saved, then its size.
+      await goTo(4)
+      saveChanges()
+      await currentStepIs(5)
+      const panel = document.getElementById(`category-products-${pantry.id}`) as HTMLDetailsElement
+      expect(within(panel).getByRole('button', { name: /^Toor dal/ }).getAttribute('aria-pressed')).toBe('true')
+      saveChanges()
+      await currentStepIs(6)
+      expect(document.getElementById(`product-${toorDal.id}`)).toBeTruthy()
+    })
   })
 })
 
@@ -1178,13 +1266,17 @@ describe('Products action feedback', () => {
     await toProducts()
     const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView)
     scroll.mockClear()
+    // A saved category: Step 5 offers products only under those.
     const second = { id: 11, name: 'Smoothies', businessTypeId: 7, description: null, imageUrl: null, displayOrder: 2 }
-    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
-      ...draft,
-      categories: [...draft.categories, second],
-      products: draft.products.filter((product) => product.categoryId !== second.id),
-      skus: [],
-    }), 5))
+    act(() => {
+      useOnboardingStore.getState().setAccountCatalog({ categoryIds: [10, second.id] })
+      useOnboardingStore.getState().updateDraft((draft) => ({
+        ...draft,
+        categories: [...draft.categories, second],
+        products: draft.products.filter((product) => product.categoryId !== second.id),
+        skus: [],
+      }), 5)
+    })
     fireEvent.click(screen.getByRole('button', { name: /^Continue/ }))
     const message = `Choose at least one product in ${second.name}.`
     expect(liveRegion().textContent).toBe(message)
@@ -2108,6 +2200,26 @@ describe('per-step account reads', () => {
       expect(panel().queryByRole('status', { name: 'Loading products' })).toBeNull()
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
       expect(getProducts).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads no products for a category picked on Step 4 and not saved, and shows no panel for it', async () => {
+      const juices = { id: 10, name: 'Juices', imageUrl: null, businessTypeId: 7, description: null, displayOrder: null }
+      const smoothies = { ...juices, id: 12, name: 'Smoothies' }
+      const empty = createEmptyOnboardingDraft()
+      useOnboardingStore.setState({
+        draft: { ...empty, mobileVerified: true, categories: [smoothies, juices] },
+        editedSteps: [4],
+        fieldEdits: { categories: { at: Date.now(), saved: [juices] } },
+        draftOwnerId: '91',
+      })
+      const getProducts = vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue(listed)
+      renderAccount('PENDING', 5)
+
+      expect(await screen.findByRole('button', { name: /Apple Juice/ })).toBeTruthy()
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      expect(useOnboardingStore.getState().draft.categories.map((category) => category.id)).toEqual([12, 10])
+      expect(document.getElementById('category-products-12')).toBeNull()
+      expect(getProducts.mock.calls.map((call) => call[0])).toEqual([10])
     })
 
     it('opens the step when the panel’s read fails, the panel showing only its error until a retry lists every product', async () => {

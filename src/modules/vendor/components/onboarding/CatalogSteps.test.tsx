@@ -210,6 +210,29 @@ describe('category step messages', () => {
     expect(screen.getByText('Pickles is saved and can’t be removed here.').closest('[data-slot="toast"]')?.className).toContain('bg-amber-50')
   })
 
+  it('drops an unsaved category’s hidden products without asking', async () => {
+    const pickles = { id: 4401, businessTypeId: 44, name: 'Pickles', description: null, imageUrl: null, displayOrder: 1 }
+    const jams = { ...pickles, id: 4402, name: 'Jams', displayOrder: 2 }
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({
+      items: [{ ...pickles, icon: null }, { ...jams, icon: null }],
+      pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    setCatalogDraft(44, [pickles, jams])
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      products: [{ id: 9901, categoryId: jams.id, name: 'Mango jam', description: null, imageUrl: null, measurementId: null, measurementName: 'COUNT' }],
+    }), 5)
+    useOnboardingStore.setState({ editedSteps: [4, 5], savedBaselines: { 4: { categories: [pickles] }, 5: { products: [] } } })
+    const confirm = vi.fn()
+    render(<CategoryStep issues={[]} confirm={confirm} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Jams/ }))
+
+    expect(confirm).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.categories).toEqual([pickles])
+    expect(useOnboardingStore.getState().draft.products).toEqual([])
+  })
+
   it('shows three skeleton tiles below the list, not a spinner, while more categories load', async () => {
     const category = (id: number) => ({ id, businessTypeId: 45, name: `Category ${id}`, description: null, icon: null, imageUrl: null, displayOrder: id })
     let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getCategories>>) => void = () => undefined
@@ -480,6 +503,20 @@ describe('product step reads a category only once its panel has been opened', ()
     expect(fruit.getByRole('button', { name: /Saved Mango/ })).toBeTruthy()
     expect(fruit.queryByRole('alert')).toBeNull()
     expect(readIds(read)).toEqual([510, 510])
+  })
+
+  it('shows no box and reads no products for a category picked but not saved', async () => {
+    const read = setup()
+    act(() => useOnboardingStore.setState({
+      editedSteps: [4],
+      savedBaselines: { 4: { categories: [category(511, 'Dairy'), category(512, 'Bakery')] } },
+    }))
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+
+    expect(await screen.findByRole('button', { name: /Item of 511/ })).toBeTruthy()
+    await settle()
+    expect(document.getElementById('category-products-510')).toBeNull()
+    expect(readIds(read)).toEqual([511])
   })
 
   it('shows an empty category issue first in that panel, right under its summary', async () => {

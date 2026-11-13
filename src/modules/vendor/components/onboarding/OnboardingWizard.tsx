@@ -96,6 +96,13 @@ import {
   stepsNeedingAttention,
 } from '../../lib/onboarding-catalog-dependencies'
 import {
+  savedCatalog,
+  savedCatalogAfterSave,
+  stepCatalog,
+  stepSaveDraft,
+  withSavedCatalog,
+} from '../../lib/onboarding-saved-catalog'
+import {
   BUSINESS_TYPE_LOCKED_MESSAGE,
   resolveSavedType,
   savedTypeState,
@@ -760,9 +767,11 @@ function startAccountEntry(
    * it caches nothing, and the panel reads and retries the page itself.
    */
   const startProductPanel = () => {
-    const { catalogSource: mode, categories } = store().draft
+    const state = store()
+    const mode = state.draft.catalogSource
     if (!productPanelWanted || mode !== 'account' || !applied.has('categories')) return
-    const first = categories[0]
+    // The panel Step 5 opens first: an unsaved category has none, so nothing is read for it.
+    const first = stepCatalog(5, state.draft, savedCatalog(state)).categories[0]
     if (!first) {
       productPanelKey = null
       view.productPanel = 'loaded'
@@ -1157,14 +1166,17 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
       ...typeIssues,
       // A mixed saved catalog waits for support, as Steps 4-6 do.
       ...mixedCatalogIssues(state.catalogMixed && !selectStoreIsSubmitted(state)),
-      ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
+      // The catalog is judged as saved: its unsaved input is the pending lines above.
+      ...readinessIssues(withSavedCatalog(draft, savedCatalog(state)), runtime, categoryLimit, measurementCatalog, enforcement)
         .filter((issue) => !typeIssues.length || issue.step !== 3),
     ]
   }
+  // Steps 5 and 6 check what they show and save, not picks hidden under an unsaved parent.
+  const checked = stepSaveDraft(draft.currentStep, state)
   // Validate additions without reopening whole-store readiness for submitted vendors.
   return selectStoreIsSubmitted(state) && draft.currentStep !== 9
-    ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
-    : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
+    ? additiveCatalogIssues(draft.currentStep, checked, categoryLimit, enforcement, measurementCatalog)
+    : validateStep(draft.currentStep, checked, runtime, categoryLimit, measurementCatalog, enforcement)
 }
 
 const phoneIssues: IssueRecheck = (state) => validateStep(1, state.draft, state.runtime)
@@ -1219,10 +1231,10 @@ function OnboardingWizardContent() {
   const resetSavedBaselines = useOnboardingStore((state) => state.resetSavedBaselines)
   const recordSavedBaselines = useOnboardingStore((state) => state.recordSavedBaselines)
   const returnStep = useOnboardingStore((state) => state.returnStep)
-  // Done catalog steps an edit left with missing work, as a string so the wizard re-renders
-  // only when that set changes, not on every keystroke.
+  // Done catalog steps whose saved catalog has missing work, as a string so the wizard
+  // re-renders only when that set changes, not on every keystroke. Unsaved picks never count.
   const attentionKey = useOnboardingStore((state) => stepsNeedingAttention(
-    catalogDependencyGaps(state.draft),
+    catalogDependencyGaps(savedCatalog(state)),
     state.draft.completedSteps,
     selectStoreIsSubmitted(state),
   ).join(','))
@@ -1382,6 +1394,12 @@ function OnboardingWizardContent() {
     // counts as loaded.
     if (!isLiveApi()) {
       setLoadedSteps([...ACCOUNT_STEPS])
+      // Its saved catalog is what its simulated saves stored: each catalog step's copy that
+      // holds no unsaved input. Picks made from here on are measured against it.
+      const { draft, runtime, editedSteps } = useOnboardingStore.getState()
+      recordSavedBaselines(Object.fromEntries(([4, 5, 6] as const)
+        .filter((step) => !editedSteps.includes(step))
+        .map((step) => [step, stepSnapshot(step, draft, runtime)])))
       // The demo's own simulated Step 3 save is its only saved type.
       const confirmed = readSavedTypeRecord(access.vendorId).confirmed
       setSavedType(confirmed ? { status: 'saved', type: confirmed } : { status: 'open' })
@@ -1404,7 +1422,7 @@ function OnboardingWizardContent() {
       entry.cancel()
       if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, entryRun, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines, setSavedType, setCatalogMixed])
+  }, [access, entryRun, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines, recordSavedBaselines, setSavedType, setCatalogMixed])
 
   // Each step reads what it needs when it opens; a read already made this visit is reused.
   // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
@@ -1815,7 +1833,7 @@ function OnboardingWizardContent() {
     const nextStep = inPlace ? step : stepAfterCatalogSave(
       step,
       storeIsSubmitted ? null : state.returnStep,
-      stepsNeedingAttention(catalogDependencyGaps(draft), draft.completedSteps, storeIsSubmitted),
+      stepsNeedingAttention(catalogDependencyGaps(savedCatalogAfterSave(step, state)), draft.completedSteps, storeIsSubmitted),
     )
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.
@@ -1845,7 +1863,7 @@ function OnboardingWizardContent() {
       try {
         const input = sharesCheckout
           ? await checkoutSaveInput(step, access.vendorId, draft, runtime)
-          : { draft, runtime }
+          : { draft: stepSaveDraft(step, state), runtime }
         if (!persistenceIsCurrent()) return
         const fingerprint = stepSaveFingerprint(step, input.draft, input.runtime)
         const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
@@ -1875,7 +1893,7 @@ function OnboardingWizardContent() {
           if (!persistenceIsCurrent()) return
           // Read after the save: minting authored entries rewrites their ids in the draft.
           const latest = useOnboardingStore.getState()
-          const saved = sharesCheckout ? fingerprint : stepSaveFingerprint(step, latest.draft, latest.runtime)
+          const saved = sharesCheckout ? fingerprint : stepSaveFingerprint(step, stepSaveDraft(step, latest), latest.runtime)
           if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
         }
         recordSavedStep(step, input)
@@ -1972,7 +1990,9 @@ function OnboardingWizardContent() {
     sent: { draft: OnboardingState['draft']; runtime: OnboardingState['runtime'] },
   ) => {
     if (!isAccountStep(step)) return
-    const source = step >= 4 && step <= 6 ? useOnboardingStore.getState() : sent
+    // Hidden picks under an unsaved parent were not sent, so they stay unsaved.
+    const latest = useOnboardingStore.getState()
+    const source = step >= 4 && step <= 6 ? { draft: stepSaveDraft(step, latest), runtime: latest.runtime } : sent
     recordSavedBaselines({ [step]: stepSnapshot(step, source.draft, source.runtime) })
   }
 

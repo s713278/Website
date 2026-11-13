@@ -33,6 +33,8 @@ import { buildReviewSummary } from '../../lib/onboarding-review-summary'
 import { readinessIssues } from '../../lib/onboarding-validation'
 import { pendingEditIssues, pendingSteps } from '../../lib/onboarding-progress'
 import { mixedCatalogIssues } from '../../lib/onboarding-draft-repair'
+import { withSavedCatalog } from '../../lib/onboarding-saved-catalog'
+import { useSavedCatalog } from '../../hooks/use-saved-catalog'
 import type { ResourceStatus } from '../../lib/onboarding-resume'
 import { StoreSharePanels } from '../StoreSharePanels'
 import {
@@ -586,11 +588,14 @@ export function ReviewStep({
   const editedSteps = useOnboardingStore((state) => state.editedSteps)
   const savedBaselines = useOnboardingStore((state) => state.savedBaselines)
   const catalogMixed = useOnboardingStore((state) => state.catalogMixed)
+  // The catalog is counted and judged as saved; its unsaved input is one pending line per step.
+  const savedCatalog = useSavedCatalog()
+  const savedDraft = withSavedCatalog(draft, savedCatalog)
   // Unsaved changes on an earlier step come first: they are the work still to finish there.
   const issues = [
     ...pendingEditIssues(pendingSteps({ draft, runtime, editedSteps, savedBaselines })),
     ...mixedCatalogIssues(catalogMixed),
-    ...readinessIssues(draft, runtime, categoryLimit, measurementCatalog, {
+    ...readinessIssues(savedDraft, runtime, categoryLimit, measurementCatalog, {
       maxProducts: productLimit,
       maxSkus: skuLimit,
       account: accountCatalog,
@@ -628,7 +633,7 @@ export function ReviewStep({
           </ul>
         ) : null}
         {/* The journey brief is shown on every visit to Step 10, resolved or not. */}
-        <JourneyBrief draft={draft} runtime={runtime} onGoToStep={onGoToStep} />
+        <JourneyBrief draft={savedDraft} runtime={runtime} onGoToStep={onGoToStep} />
         {/* A submission failure sits beside the action that raised it. Step 10 renders no
             store-name input, so this container takes the field's id as the focus target. */}
         {submitIssues.length ? (

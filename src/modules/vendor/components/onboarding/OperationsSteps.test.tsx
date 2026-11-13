@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as renderBare, screen, waitFor, within } from '@testing-library/react'
 import { accountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
 import { useOnboardingStore } from '../../store/onboarding-store'
 import type { DraftCategory, DraftSku, SelectedProduct, ValidationIssue } from '../../types/onboarding'
+import { OnboardingFeedbackProvider } from './OnboardingFeedbackProvider'
 import { SkuStep } from './OperationsSteps'
+
+const render = (ui: ReactNode) => renderBare(ui, { wrapper: OnboardingFeedbackProvider })
 
 afterEach(() => {
   cleanup()
@@ -477,6 +481,63 @@ describe('SkuStep remove and new sizes', () => {
     expect(skus).toHaveLength(1)
     expect(skus[0]).toMatchObject({ productId: productA.id, quantity: null, listPrice: null, salePrice: null, unit: 'pcs' })
     expect((input(`sku-${skus[0].id}-quantity`) as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('SkuStep builds from saved products only', () => {
+  // Apples is saved without a size; Butter was picked on Step 5 and not saved.
+  function seedPickedButter() {
+    seedDraft([productA, productB], [], [fruits, dairy])
+    act(() => useOnboardingStore.setState({
+      editedSteps: [5],
+      savedBaselines: { 4: { categories: [fruits, dairy] }, 5: { products: [productA] }, 6: { skus: [] } },
+    }))
+  }
+
+  it('shows no product box and scaffolds no size for an unsaved product', () => {
+    seedPickedButter()
+    render(<SkuStep issues={[]} />)
+
+    expect(document.getElementById(`product-${productB.id}`)).toBeNull()
+    expect(metaOf(panel(dairy.id))).toBe('No products')
+    const skus = useOnboardingStore.getState().draft.skus
+    expect(skus.map((sku) => sku.productId)).toEqual([productA.id])
+  })
+
+  it('gives a saved product without a size a normal starter row', () => {
+    seedPickedButter()
+    render(<SkuStep issues={[]} />)
+
+    const [starter] = useOnboardingStore.getState().draft.skus
+    expect(starter).toMatchObject({ productId: productA.id, quantity: null, active: true })
+    expect((input(`sku-${starter.id}-quantity`) as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('SkuStep keeps one size switched on', () => {
+  const second: DraftSku = { ...skuA, id: localSkuId(productA.id, [skuA]), quantity: 6, active: false }
+  const statusOf = (heading: string) => within(panel(fruits.id)).getByRole('switch', { name: new RegExp(`^${heading} status`) })
+  const refusal = () => screen.queryByText('Turn on at least one size for Apples.')
+
+  it('refuses to switch off or remove a product’s last switched-on size', () => {
+    seedDraft([productA], [skuA, second], [fruits])
+    render(<SkuStep issues={[]} />)
+
+    fireEvent.click(statusOf('1 pcs'))
+    expect(refusal()?.closest('[data-slot="toast"]')).toBeTruthy()
+    fireEvent.click(within(panel(fruits.id)).getByRole('button', { name: 'Remove 1 pcs' }))
+    expect(useOnboardingStore.getState().draft.skus).toEqual([skuA, second])
+  })
+
+  it('lets any other size be switched off or removed', () => {
+    seedDraft([productA], [skuA, { ...second, active: true }], [fruits])
+    render(<SkuStep issues={[]} />)
+
+    fireEvent.click(statusOf('1 pcs'))
+    expect(useOnboardingStore.getState().draft.skus.map((sku) => sku.active)).toEqual([false, true])
+    fireEvent.click(within(panel(fruits.id)).getByRole('button', { name: 'Remove 1 pcs' }))
+    expect(useOnboardingStore.getState().draft.skus.map((sku) => sku.id)).toEqual([second.id])
+    expect(refusal()).toBeNull()
   })
 })
 

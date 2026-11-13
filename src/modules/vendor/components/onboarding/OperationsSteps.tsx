@@ -12,6 +12,9 @@ import { Badge, Button, EmptyState, Input } from '@/shared/components/ui'
 import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
 import { productsWithoutSize } from '../../lib/onboarding-catalog-dependencies'
 import { useSingleOpen } from '../../hooks/use-single-open'
+import { useSavedCatalog } from '../../hooks/use-saved-catalog'
+import { stepCatalog } from '../../lib/onboarding-saved-catalog'
+import { useOnboardingFeedback } from './onboarding-feedback'
 import {
   selectProjectedSkuTotal,
   selectSkuLimit,
@@ -252,7 +255,12 @@ export function SkuStep({ issues, markMissing = false }: {
   /** Step 6 is done but needs attention: mark the products still without a valid size. */
   markMissing?: boolean
 }) {
-  const draft = useOnboardingStore((state) => state.draft)
+  const fullDraft = useOnboardingStore((state) => state.draft)
+  const saved = useSavedCatalog()
+  // Only saved products take sizes: a product picked on Step 5 waits, hidden, for its save.
+  const draft = useMemo(() => stepCatalog(6, fullDraft, saved), [fullDraft, saved])
+  const savedProductKey = saved.products.map((product) => product.id).join(',')
+  const feedback = useOnboardingFeedback()
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
@@ -281,7 +289,7 @@ export function SkuStep({ issues, markMissing = false }: {
     firstMissing ? (draft.categories.some((category) => category.id === firstMissing.categoryId) ? firstMissing.categoryId : 'other') : undefined,
   )
 
-  // Scaffold a size for any product without one, and reconcile every existing size to its
+  // Scaffold a size for any saved product without one, and reconcile every existing size to its
   // product's measurement — a size resumed from the account or restored from persistence can
   // carry a measurement that drifted off its product, and Step 6 no longer offers a control
   // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
@@ -303,6 +311,7 @@ export function SkuStep({ issues, markMissing = false }: {
       return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) !== sku : false
     })
     if (!missingSize && !driftedSize) return
+    const savedProductIds = new Set(savedProductKey.split(',').map(Number))
     updateDraft((current) => {
       const currentProductById = new Map(current.products.map((product) => [product.id, product]))
       const skus = current.skus.map((sku) => {
@@ -310,11 +319,12 @@ export function SkuStep({ issues, markMissing = false }: {
         return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) : sku
       })
       for (const product of current.products) {
+        if (!savedProductIds.has(product.id)) continue
         if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus, measurementCatalog))
       }
       return { ...current, skus }
     })
-  }, [draft.products, draft.skus, updateDraft, measurementCatalog, storeIsSubmitted])
+  }, [draft.products, draft.skus, savedProductKey, updateDraft, measurementCatalog, storeIsSubmitted])
 
   // A problem inside a closed category would otherwise be reported with nothing on
   // screen to fix. Only one panel can be open, so open the category holding the first
@@ -341,6 +351,15 @@ export function SkuStep({ issues, markMissing = false }: {
     setOpenId(categories.some((category) => category.id === faulty.categoryId) ? faulty.categoryId : 'other')
   }, [issues, setOpenId])
 
+  // Every product keeps a switched-on size while setting up (Continue checks the rest). A
+  // submitted store keeps its own rules: its Continue checks this for approved edits.
+  const lastActiveSize = (sku: DraftSku) => !storeIsSubmitted && sku.active
+    && !draft.skus.some((item) => item.productId === sku.productId && item.id !== sku.id && item.active)
+  const refuseLastActive = (sku: DraftSku) => {
+    const product = draft.products.find((item) => item.id === sku.productId)
+    feedback.show(`Turn on at least one size for ${product?.name ?? 'this product'}.`, 'warning')
+  }
+
   const updateSku = (skuId: string, patch: Partial<DraftSku>) => updateDraft(
     (current) => ({
       ...current,
@@ -352,6 +371,7 @@ export function SkuStep({ issues, markMissing = false }: {
   const removeSku = (sku: DraftSku) => {
     const productSkuCount = draft.skus.filter((item) => item.productId === sku.productId).length
     if (productSkuCount <= 1) return
+    if (lastActiveSize(sku)) return refuseLastActive(sku)
 
     updateDraft(
       (current) => {
@@ -481,7 +501,11 @@ export function SkuStep({ issues, markMissing = false }: {
           </div>
           {/* Input height, so the switch and cross stay level with the inputs when an error grows a column. */}
           <div className="flex h-9 items-center">
-            <SkuStatusSwitch heading={heading} active={sku.active} onChange={(active) => updateSku(sku.id, { active })} />
+            <SkuStatusSwitch
+              heading={heading}
+              active={sku.active}
+              onChange={(active) => active || !lastActiveSize(sku) ? updateSku(sku.id, { active }) : refuseLastActive(sku)}
+            />
           </div>
           <SkuRemoveButton
             heading={heading}

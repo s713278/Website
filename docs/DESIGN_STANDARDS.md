@@ -35,10 +35,11 @@ design reference.
   category with no product on Step 5, whose panel still opens and scrolls into view. Plan-limit
   messages stay inline and in the toast. The toast
   supplies the announcement; do not duplicate it in another live region.
-- A done Step 5 or 6 that an earlier catalog edit left with missing work carries a **Needs
-  attention** marker on its stepper dot: an amber (`--md-warning`) ring and a small amber "!" badge
-  in the corner the submitted-store "+" badge uses (the current step shows only the badge, keeping
-  its own ring). The bar adds no text; the dot's accessible name and title say "needs attention",
+- A done Step 5 or 6 whose saved catalog has missing work (a saved category without a saved
+  product, a saved product without a saved switched-on size) carries a **Needs attention** marker
+  on its stepper dot; an unsaved pick never marks another step. The marker is an amber
+  (`--md-warning`) ring and a small amber "!" badge in the corner the submitted-store "+" badge
+  uses (the current step shows only the badge, keeping its own ring). The bar adds no text; the dot's accessible name and title say "needs attention",
   and the step stays reachable. Inside the step the missing item is marked in place, with no banner:
   a category without a product gets an amber outline and "Needs a product", a product without a
   valid size an amber outline and a warning "Needs a size" badge, and the first such group opens.

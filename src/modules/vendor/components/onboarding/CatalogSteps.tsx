@@ -21,10 +21,12 @@ import {
   useProductReferences,
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
+import { useSavedCatalog } from '../../hooks/use-saved-catalog'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
 import { categoriesWithoutProducts } from '../../lib/onboarding-catalog-dependencies'
 import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { isPendingId } from '../../lib/onboarding-pending-id'
+import { stepCatalog } from '../../lib/onboarding-saved-catalog'
 import { BUSINESS_TYPE_LOCKED_MESSAGE } from '../../lib/onboarding-saved-type'
 import { StepNotice } from './AccessNotice'
 import {
@@ -421,6 +423,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   // holds — so a business-type change cannot reopen a fresh allowance on a full account.
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
+  const savedCategories = useSavedCatalog().categories
   const liveApi = isLiveApi()
   const createControlVisible = useOnboardingStore(
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
@@ -471,7 +474,9 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         4,
       )
     }
-    const dependentCount = draft.products.filter((item) => item.categoryId === category.id).length
+    // Products under an unsaved category are hidden on Step 5, so they go without a word.
+    const shown = savedCategories.some((item) => item.id === category.id)
+    const dependentCount = shown ? draft.products.filter((item) => item.categoryId === category.id).length : 0
     if (choice.chosen && dependentCount) {
       confirm({
         title: `Remove ${category.name}?`,
@@ -885,8 +890,10 @@ export function ProductStep({ issues, confirm, onUseSample, markMissing = false 
     if (message) feedback.show(message, 'warning')
     else feedback.clear()
   }
-  const categories = useOnboardingStore((state) => state.draft.categories)
-  const products = useOnboardingStore((state) => state.draft.products)
+  // Only saved categories offer products: a pick under an unsaved one waits, hidden, for it.
+  const draft = useOnboardingStore((state) => state.draft)
+  const saved = useSavedCatalog()
+  const { categories, products } = useMemo(() => stepCatalog(5, draft, saved), [draft, saved])
   const missing = useMemo(
     () => markMissing ? categoriesWithoutProducts({ categories, products }) : [],
     [markMissing, categories, products],
