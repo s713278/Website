@@ -5,6 +5,7 @@ import {
   INSTAGRAM_URL,
   shareListUrl,
   shareMessage,
+  shareWithImage,
   whatsappShareHref,
   type ShareItem,
 } from '@/modules/storefront/lib/product-share'
@@ -94,7 +95,26 @@ function ShareSelectedPanel({
     }
   }
 
+  async function shareImage(openLink: () => void) {
+    const result = await shareWithImage({
+      title: card?.title ?? item?.name ?? storeName,
+      text: message,
+      imageUrl: item?.imageUrl,
+    })
+    if (result === 'unavailable') openLink()
+  }
+
+  function openWhatsApp() {
+    window.open(whatsappShareHref(message), '_blank', 'noopener,noreferrer')
+  }
+
   async function instagram() {
+    const result = await shareWithImage({
+      title: card?.title ?? item?.name ?? storeName,
+      text: message,
+      imageUrl: item?.imageUrl,
+    })
+    if (result !== 'unavailable') return
     try {
       await navigator.clipboard.writeText(message)
       setInstagramNote('Copied. Paste it into Instagram.')
@@ -152,17 +172,16 @@ function ShareSelectedPanel({
       </div>
       <p className="mt-4 text-center text-xs text-slate-400">Or share via</p>
       <div className="mt-3 flex items-start justify-center gap-6">
-        <a
-          href={whatsappShareHref(message)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => void shareImage(openWhatsApp)}
           className="flex w-16 flex-col items-center gap-1.5 text-xs font-medium text-slate-600"
         >
           <span className="inline-flex size-11 items-center justify-center rounded-full bg-[#25D366] text-white">
             <WhatsAppMark />
           </span>
           WhatsApp
-        </a>
+        </button>
         <button
           type="button"
           onClick={() => void instagram()}

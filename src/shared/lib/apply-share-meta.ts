@@ -1,4 +1,4 @@
-import { shareCardText, type ShareCard } from './share-preview'
+import { imageMediaType, shareCardText, type ShareCard } from './share-preview'
 
 /** Point the open page at this product. Crawlers never run this; the worker does. */
 export function applyShareCard(card: ShareCard) {
@@ -12,7 +12,11 @@ export function applyShareCard(card: ShareCard) {
     setMeta('property', 'og:description', description),
     setMeta('property', 'og:url', card.url),
     setMeta('property', 'og:site_name', card.siteName),
+    setMeta('name', 'twitter:card', card.image ? 'summary_large_image' : 'summary'),
     card.image ? setMeta('property', 'og:image', card.image) : null,
+    card.image ? setMeta('property', 'og:image:type', imageMediaType(card.image)) : null,
+    card.image?.startsWith('https://') ? setMeta('property', 'og:image:secure_url', card.image) : null,
+    card.image ? setMeta('name', 'twitter:image', card.image) : null,
   ]
   return () => {
     document.title = previousTitle

@@ -1,5 +1,5 @@
 import { storePath, storeProductPath } from '@/modules/storefront/lib/store-paths'
-import { productShareCard, shareCardLines } from '@/shared/lib/share-preview'
+import { productShareCard, shareCardLines, shareImageUrl } from '@/shared/lib/share-preview'
 import { formatCurrency } from '@/shared/lib/utils'
 
 /** A WhatsApp status stays readable, and the shared URL stays short. */
@@ -92,12 +92,47 @@ export function shareMessage(storeName: string, items: ShareItem[], url: string)
       storeName,
       unit: item.unit,
       priceLabel: item.priceLabel,
+      image: item.imageUrl,
       url,
     })
     return `${shareCardLines(card)}\n\n${link}`
   }
   const lines = list.map((item) => `• ${line(item)}`).join('\n')
   return `${storeName}\n${lines}\n\n${link}`
+}
+
+function imageFileName(title: string, type: string) {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'product'
+  const subtype = type.slice('image/'.length).split('+')[0]?.split(';')[0] || 'jpeg'
+  return `${base}.${subtype === 'jpeg' ? 'jpg' : subtype}`
+}
+
+/**
+ * Phones that accept an image file get the product photo in the share sheet.
+ * A desktop chat link cannot carry a file, so the caller keeps the text link.
+ */
+export async function shareWithImage(input: {
+  title: string
+  text: string
+  imageUrl?: string
+}): Promise<'shared' | 'unavailable' | 'dismissed'> {
+  const image = shareImageUrl(input.imageUrl)
+  if (!image || typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+    return 'unavailable'
+  }
+  try {
+    const response = await fetch(image)
+    if (!response.ok) return 'unavailable'
+    const blob = await response.blob()
+    if (!blob.type.startsWith('image/')) return 'unavailable'
+    const file = new File([blob], imageFileName(input.title, blob.type), { type: blob.type })
+    if (!navigator.canShare?.({ files: [file] })) return 'unavailable'
+    await navigator.share({ files: [file], text: input.text, title: input.title })
+    return 'shared'
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return 'dismissed'
+    return 'unavailable'
+  }
 }
 
 export function facebookShareHref(url: string, quote?: string) {

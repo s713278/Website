@@ -43,7 +43,7 @@ export function productShareCard(input: {
     priceLine,
     blurb: clip(firstSentence(input.description)),
     siteName: input.storeName.trim() || 'Shop',
-    image: httpUrl(input.image),
+    image: shareImageUrl(input.image),
     url: input.url,
   }
 }
@@ -58,15 +58,27 @@ export function shareCardLines(card: ShareCard) {
   return [card.title, card.priceLine, card.siteName].filter(Boolean).join('\n')
 }
 
+/** File type WhatsApp and Facebook read from `og:image:type`. */
+export function imageMediaType(url: string): string {
+  const options = /\/cdn-cgi\/image\/([^/]+)/.exec(url)?.[1] ?? ''
+  if (options.includes('format=png')) return 'image/png'
+  if (options.includes('format=gif')) return 'image/gif'
+  if (options.includes('format=webp')) return 'image/webp'
+  if (options.includes('format=jpeg') || options.includes('format=jpg')) return 'image/jpeg'
+  const path = url.split(/[?#]/)[0]?.toLowerCase() ?? ''
+  if (path.endsWith('.png')) return 'image/png'
+  if (path.endsWith('.gif')) return 'image/gif'
+  if (path.endsWith('.webp')) return 'image/webp'
+  return 'image/jpeg'
+}
+
 export function sharePreviewDocument(card: ShareCard) {
   const title = escapeHtml(card.title)
   const description = escapeHtml(shareCardText(card) || card.siteName)
   const site = escapeHtml(card.siteName)
   const url = escapeHtml(card.url)
-  const image = card.image
-    ? `<meta property="og:image" content="${escapeHtml(card.image)}">
-<meta name="twitter:image" content="${escapeHtml(card.image)}">`
-    : ''
+  const preview = card.image ? 'summary_large_image' : 'summary'
+  const image = card.image ? imageMeta(card.image) : ''
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -78,7 +90,7 @@ export function sharePreviewDocument(card: ShareCard) {
 <meta property="og:description" content="${description}">
 <meta property="og:url" content="${url}">
 <meta property="og:site_name" content="${site}">
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="${preview}">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
 ${image}
@@ -89,6 +101,17 @@ ${image}
 <p>${site}</p>
 </body>
 </html>`
+}
+
+function imageMeta(image: string) {
+  const safe = escapeHtml(image)
+  const type = escapeHtml(imageMediaType(image))
+  const secure = image.startsWith('https://')
+    ? `\n<meta property="og:image:secure_url" content="${safe}">`
+    : ''
+  return `<meta property="og:image" content="${safe}">
+<meta property="og:image:type" content="${type}">${secure}
+<meta name="twitter:image" content="${safe}">`
 }
 
 function firstSentence(value: string | undefined) {
@@ -103,8 +126,14 @@ function clip(value: string, max = 140) {
   return `${value.slice(0, max - 1).trimEnd()}…`
 }
 
-function httpUrl(value: string | undefined) {
-  return value && /^https?:\/\//.test(value) ? value : undefined
+/**
+ * A chat preview needs a JPEG. Cloudflare's `format=auto` answer is often WebP,
+ * which WhatsApp shows as a bare address instead of a photo.
+ */
+export function shareImageUrl(url: string | undefined): string | undefined {
+  if (!url || !/^https?:\/\//.test(url)) return undefined
+  if (!url.includes('/cdn-cgi/image/')) return url
+  return url.replaceAll('format=auto', 'format=jpeg')
 }
 
 function escapeHtml(value: string) {

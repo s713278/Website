@@ -6,6 +6,7 @@ import {
   shareListUrl,
   shareMessage,
   shareMessageUrl,
+  shareWithImage,
   type ShareItem,
 } from './product-share'
 
@@ -72,6 +73,15 @@ describe('shareMessage', () => {
     )
   })
 
+  it('keeps the photo address out of the chat text', () => {
+    const photo =
+      'https://mithradirect.com/cdn-cgi/image/width=800,quality=85,format=auto,fit=contain,onerror=redirect/https://mithradirect-s3.example/Original_Amla_Pickle.webp'
+    const message = shareMessage('Anitha\'s Pickles', [{ ...tomato, imageUrl: photo }], 'https://example.test/p')
+
+    expect(message).toBe('Tomatoes\n1 kg · ₹40\nAnitha\'s Pickles\n\nhttps://example.test/p#')
+    expect(message.includes('cdn-cgi')).toBe(false)
+  })
+
   it('keeps a product name out of the sku query', () => {
     const url = 'https://mithradirect.com/stores/273/products/418?sku=6053'
     const message = shareMessage('SRK Traditional Foods and Pickles', [
@@ -99,6 +109,21 @@ describe('parseShareItems', () => {
     expect(items[1]).toEqual({ productId: '424', skuId: undefined })
     expect(items).toHaveLength(SHARE_ITEM_LIMIT)
     expect(items.some((item) => item.productId === 'not an id')).toBe(false)
+  })
+})
+
+describe('shareWithImage', () => {
+  it('leaves the text link in place when the phone cannot attach a photo', async () => {
+    vi.stubGlobal('navigator', { share: vi.fn(), canShare: () => false })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['img'], { type: 'image/jpeg' }))))
+
+    await expect(
+      shareWithImage({
+        title: 'Tomatoes',
+        text: 'Tomatoes',
+        imageUrl: 'https://cdn.example.com/tomato.jpg',
+      }),
+    ).resolves.toBe('unavailable')
   })
 })
 

@@ -3,6 +3,7 @@ import {
   isShareCrawler,
   productShareCard,
   productShareTarget,
+  shareImageUrl,
   shareCardLines,
   sharePreviewDocument,
 } from './share-preview'
@@ -33,9 +34,31 @@ describe('product share card', () => {
     const html = sharePreviewDocument(card)
     expect(html).toContain('property="og:title" content="Amla Pickle"')
     expect(html).toContain('property="og:site_name" content="SRK Traditional Foods and Pickles"')
+    expect(html).toContain('name="twitter:card" content="summary_large_image"')
     expect(html).toContain('property="og:image" content="https://mithradirect.com/cdn/amla.webp"')
+    expect(html).toContain('property="og:image:type" content="image/webp"')
+    expect(html).toContain('property="og:image:secure_url" content="https://mithradirect.com/cdn/amla.webp"')
     expect(html).toContain('4 kg · ₹400')
     expect(html).not.toContain('MithraDirect')
+  })
+
+  it('asks Cloudflare for a JPEG so the chat can show the photo', () => {
+    const source =
+      'https://mithradirect.com/cdn-cgi/image/width=800,quality=85,format=auto,fit=contain,onerror=redirect/https://mithradirect-s3.example/Original_Amla_Pickle.webp'
+    const image = shareImageUrl(source)
+
+    expect(image).toBe(source.replace('format=auto', 'format=jpeg'))
+    const html = sharePreviewDocument(
+      productShareCard({
+        name: 'Amla Pickle',
+        storeName: 'Shop',
+        image: source,
+        url: 'https://mithradirect.com/stores/273/products/418',
+      }),
+    )
+    expect(html).toContain('property="og:image:type" content="image/jpeg"')
+    expect(html).toContain('format=jpeg')
+    expect(html).not.toContain('format=auto')
   })
 
   it('escapes a name that would break the tag', () => {
@@ -43,6 +66,8 @@ describe('product share card', () => {
       productShareCard({ name: 'Tom & Jerry', storeName: 'Shop', url: 'https://example.test/p' }),
     )
     expect(html).toContain('content="Tom &amp; Jerry"')
+    expect(html).toContain('name="twitter:card" content="summary"')
+    expect(html).not.toContain('og:image')
   })
 })
 
