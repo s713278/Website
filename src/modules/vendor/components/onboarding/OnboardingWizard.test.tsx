@@ -443,7 +443,7 @@ describe('onboarding account hydration and size permissions', () => {
     fireEvent.click(add)
     fillNewSize()
 
-    const card = screen.getByRole('group', { name: 'Test Juice, 2 L size' })
+    const card = screen.getByRole('group', { name: 'Test Juice, 2 L size, not saved' })
     const activeSwitch = within(card).getByRole('switch', { name: '2 L status: active' })
     const removeButton = within(card).getByRole('button', { name: 'Remove 2 L' })
     expect(activeSwitch.matches(':disabled')).toBe(false)
@@ -457,7 +457,7 @@ describe('onboarding account hydration and size permissions', () => {
     expect(activeSwitch.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(removeButton)
     // Removal is immediate: no confirmation dialog stands between the click and the row going.
-    expect(screen.queryByRole('group', { name: 'Test Juice, 2 L size' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Test Juice, 2 L size, not saved' })).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(screen.queryByText('Remove this size?')).toBeNull()

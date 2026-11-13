@@ -43,6 +43,19 @@ design reference.
   and the step stays reachable. Inside the step the missing item is marked in place, with no banner:
   a category without a product gets an amber outline and "Needs a product", a product without a
   valid size an amber outline and a warning "Needs a size" badge, and the first such group opens.
+- On Steps 4 and 5 an unsaved catalog card (a picked or vendor-authored category or product)
+  wears a **dashed outline only**: no tag, badge or extra colour, and saved cards keep the solid
+  look. While the step shows any unsaved card, one muted line sits at the top of its list: "Items
+  with a dashed outline aren't saved yet. Continue saves them."
+- On Step 6 an unsaved size row (a new size, or a saved size with a changed quantity, unit, price
+  or on/off state) takes the `--ob-brand-soft` wash and a 3px `--ob-brand` bar on its left edge,
+  with no outline or tag. Every row keeps the same padding, so marking one never moves its
+  columns. A saved product's blank starter size stays unmarked until the vendor fills it in. The
+  key line is a small brand bar glyph and "Rows marked like this aren't saved yet. Continue saves
+  them."
+- The keys and marks clear once the step saves. Marks are visual only, so an unsaved item's
+  accessible name ends with "not saved". Explanations of why a saved item can't be removed stay;
+  there is no "Saved to your store" or "Not saved yet" text.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
   submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
 

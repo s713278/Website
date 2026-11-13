@@ -38,7 +38,7 @@ import {
 } from '../../store/onboarding-store'
 import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
 import { AuthorCategoryForm, AuthorProductForm } from './CatalogAuthoring'
-import { CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, MoreTilesLoading, LoadMoreButton, type RequestConfirmation } from './StepPrimitives'
+import { CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, MoreTilesLoading, LoadMoreButton, UnsavedKey, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -447,6 +447,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     endFocusRef: searchRef,
   })
   const loadedItems = sets.visible
+  const isUnsaved = (categoryId: number) => !savedCategories.some((item) => item.id === categoryId)
+  const hasUnsaved = draft.categories.some((category) => isUnsaved(category.id))
 
   const toggle = (category: (typeof draft.categories)[number]) => {
     const choice = catalogChoiceState(draft.categories, category.id)
@@ -521,25 +523,21 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
+      {hasUnsaved && loadedItems.length ? <UnsavedKey /> : null}
       {loadedItems.length ? (
         <div id="categories" className={choiceGrid}>
           {loadedItems.map((category, index) => {
             const choice = catalogChoiceState(draft.categories, category.id)
             const atLimit = !choice.chosen && categoryLimitReached
-            const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
               <ChoiceCard
                 key={category.id}
                 ref={revealRef(category.id)}
                 autoFocus={index === sets.focusIndex}
                 selected={choice.chosen}
+                unsaved={choice.chosen && isUnsaved(category.id)}
                 inactive={atLimit}
                 title={category.name}
-                description={onStore
-                  ? 'Saved to your store'
-                  : choice.pending
-                    ? 'Not saved yet — select to remove'
-                    : null}
                 leading={(
                   <ReferenceThumb
                     iconSrc={category.icon}
@@ -623,6 +621,7 @@ function ProductCategoryPicker({
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const [search, setSearch] = useState('')
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
+  const savedProducts = useSavedCatalog().products
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
@@ -730,7 +729,6 @@ function ProductCategoryPicker({
             <div className={choiceGrid}>
               {items.map((product, index) => {
                 const choice = catalogChoiceState(draft.products, product.id)
-                const onStore = choice.chosen && isProductAssigned(product.id)
                 const atLimit = !choice.chosen && productLimitReached
                 const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
                 const units = measurementSummary.additionalUnitCount
@@ -745,9 +743,9 @@ function ProductCategoryPicker({
                     ref={revealRef(product.id)}
                     autoFocus={index === sets.focusIndex}
                     selected={choice.chosen}
+                    unsaved={choice.chosen && !savedProducts.some((item) => item.id === product.id)}
                     inactive={atLimit}
                     title={product.name}
-                    description={onStore ? 'Saved to your store' : null}
                     leading={(
                       <ReferenceThumb
                         iconSrc={product.icon}
@@ -817,7 +815,7 @@ function PendingProductCard({ productId, onRemove, ref }: { productId: number; o
       <button
         type="button"
         aria-pressed="true"
-        aria-label={`${product.name}, added by you and not saved yet. Select to remove.`}
+        aria-label={`${product.name}, not saved`}
         onClick={onRemove}
         className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand)]/40"
       />
@@ -905,6 +903,7 @@ export function ProductStep({ issues, confirm, onUseSample, markMissing = false 
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
   )
   const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
+  const hasUnsaved = products.some((product) => !saved.products.some((item) => item.id === product.id))
   // Arriving to finish missing work opens the first category that needs a product.
   const { openId, onToggle } = useSingleOpen(categoryIds, missing[0])
 
@@ -917,6 +916,7 @@ export function ProductStep({ issues, confirm, onUseSample, markMissing = false 
       {productLimitReached ? (
         <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
       ) : null}
+      {hasUnsaved ? <UnsavedKey /> : null}
       <div id="products" className="space-y-3">
         {categories.map((category) => (
           <ProductCategoryPicker

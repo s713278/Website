@@ -620,3 +620,91 @@ describe('SkuStep saved size status after submission', () => {
     expect(remove.getAttribute('title')).toBe('Sizes and prices unlock after approval.')
   })
 })
+
+describe('SkuStep marks unsaved sizes', () => {
+  const KEY = "Rows marked like this aren't saved yet. Continue saves them."
+  const rowOf = (sku: DraftSku) => {
+    const row = document.getElementById(`sku-${sku.id}`)
+    if (!(row instanceof HTMLFieldSetElement)) throw new Error(`Expected a size row for ${sku.id}`)
+    return row
+  }
+  // A brand wash with a left bar, never the dashed outline Steps 4 and 5 use.
+  const dashed = (row: HTMLElement) => {
+    expect(row.className).not.toContain('dashed')
+    // The same padding in both states, so marking a row never moves its columns.
+    expect(row.className).toContain('-mx-1.5')
+    return row.className.includes('bg-[var(--ob-brand-soft)]') && row.className.includes('inset_3px_0_0_var(--ob-brand)')
+  }
+
+  function seedSaved(skus: DraftSku[]) {
+    seedDraft([productA], skus, [fruits])
+    act(() => useOnboardingStore.setState({
+      savedBaselines: { 4: { categories: [fruits] }, 5: { products: [productA] }, 6: { skus: [skuA] } },
+    }))
+  }
+
+  it('leaves a saved, untouched size unmarked and shows no key', () => {
+    seedSaved([skuA])
+    render(<SkuStep issues={[]} />)
+
+    expect(dashed(rowOf(skuA))).toBe(false)
+    expect(rowOf(skuA).getAttribute('aria-label')).not.toMatch(/not saved/)
+    expect(screen.queryByText(KEY)).toBeNull()
+  })
+
+  it('marks a saved size once its price changes, names it not saved, and shows the key', () => {
+    seedSaved([skuA])
+    render(<SkuStep issues={[]} />)
+
+    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
+
+    expect(dashed(rowOf(skuA))).toBe(true)
+    expect(rowOf(skuA).getAttribute('aria-label')).toMatch(/, not saved$/)
+    const key = screen.getByText(KEY)
+    expect(key.querySelector('[aria-hidden="true"]')).toBeTruthy()
+  })
+
+  it('marks a saved size switched off and a size added with "+ Size"', () => {
+    const second: DraftSku = { ...skuA, id: localSkuId(productA.id, [skuA]), quantity: 6 }
+    seedSaved([skuA, second])
+    render(<SkuStep issues={[]} />)
+    expect(dashed(rowOf(second))).toBe(true)
+
+    fireEvent.click(within(panel(fruits.id)).getByRole('switch', { name: /^1 pcs status/ }))
+    expect(dashed(rowOf(skuA))).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add another size to Apples' }))
+    const added = useOnboardingStore.getState().draft.skus.at(-1)!
+    expect(dashed(rowOf(added))).toBe(true)
+  })
+
+  it('drops the marks and the key once the sizes are saved', () => {
+    seedSaved([skuA])
+    render(<SkuStep issues={[]} />)
+    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
+    expect(screen.getByText(KEY)).toBeTruthy()
+
+    act(() => useOnboardingStore.setState((state) => ({
+      editedSteps: [], savedBaselines: { ...state.savedBaselines, 6: { skus: state.draft.skus } },
+    })))
+
+    expect(dashed(rowOf(skuA))).toBe(false)
+    expect(screen.queryByText(KEY)).toBeNull()
+  })
+
+  it('leaves a saved product’s blank starter row unmarked until the vendor fills it in', () => {
+    seedDraft([productA], [], [fruits])
+    act(() => useOnboardingStore.setState({
+      savedBaselines: { 4: { categories: [fruits] }, 5: { products: [productA] }, 6: { skus: [] } },
+    }))
+    render(<SkuStep issues={[]} />)
+    const [starter] = useOnboardingStore.getState().draft.skus
+
+    expect(dashed(rowOf(starter))).toBe(false)
+    expect(screen.queryByText(KEY)).toBeNull()
+
+    fireEvent.change(input(`sku-${starter.id}-quantity`), { target: { value: '2' } })
+    expect(dashed(rowOf(starter))).toBe(true)
+    expect(screen.getByText(KEY)).toBeTruthy()
+  })
+})

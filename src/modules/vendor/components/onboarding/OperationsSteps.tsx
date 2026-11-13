@@ -219,6 +219,9 @@ const SKU_FIELDS = [
 
 type SkuGroupId = number | 'other'
 
+/** What a vendor can change on a saved size; a change to any of them leaves the size unsaved. */
+const SKU_SAVED_FIELDS = ['quantity', 'unit', 'listPrice', 'salePrice', 'active'] as const
+
 function SkuHeaderRow() {
   return (
     <div aria-hidden="true" className={cn(SKU_ROW_GRID, 'mb-1.5 items-end px-0.5 text-[0.7rem] leading-tight text-[var(--ob-ink-soft)]')}>
@@ -250,6 +253,19 @@ function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   )
 }
 
+/**
+ * Step 6's key while it shows unsaved sizes. Rows are not cards, so they take a brand wash and
+ * a left bar rather than the dashed outline Steps 4 and 5 use; the glyph repeats the bar.
+ */
+function UnsavedSizeKey() {
+  return (
+    <p className="flex items-center gap-2 text-xs text-[var(--ob-ink-soft)]">
+      <span aria-hidden="true" className="h-3 w-[3px] shrink-0 rounded-full bg-[var(--ob-brand)]" />
+      {"Rows marked like this aren't saved yet. Continue saves them."}
+    </p>
+  )
+}
+
 export function SkuStep({ issues, markMissing = false }: {
   issues: ValidationIssue[]
   /** Step 6 is done but needs attention: mark the products still without a valid size. */
@@ -260,6 +276,17 @@ export function SkuStep({ issues, markMissing = false }: {
   // Only saved products take sizes: a product picked on Step 5 waits, hidden, for its save.
   const draft = useMemo(() => stepCatalog(6, fullDraft, saved), [fullDraft, saved])
   const savedProductKey = saved.products.map((product) => product.id).join(',')
+  const savedSkuById = useMemo(() => new Map(saved.skus.map((sku) => [sku.id, sku])), [saved.skus])
+  // New sizes and edited saved ones are unsaved. A saved product's blank starter row is the
+  // wizard's, not the vendor's, so it stays solid until the vendor fills it in.
+  const isUnsaved = (sku: DraftSku) => {
+    const savedSku = savedSkuById.get(sku.id)
+    if (savedSku) return SKU_SAVED_FIELDS.some((key) => savedSku[key] !== sku[key])
+    const starter = sku.quantity === null && sku.listPrice === null && sku.salePrice === null
+      && !saved.skus.some((item) => item.productId === sku.productId)
+      && draft.skus.find((item) => item.productId === sku.productId) === sku
+    return !starter
+  }
   const feedback = useOnboardingFeedback()
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
@@ -428,6 +455,7 @@ export function SkuStep({ issues, markMissing = false }: {
     // one of its inputs, so they describe the whole row and are the focus target for it.
     const rowId = `sku-${sku.id}`
     const rowIssue = issues.find((item) => item.field === rowId)?.message
+    const unsaved = isUnsaved(sku)
     // A field's error sits directly under its own input, so only that column grows.
     const fieldError = (key: (typeof SKU_FIELDS)[number]['key']) => {
       const message = issueFor(key)
@@ -439,8 +467,14 @@ export function SkuStep({ issues, markMissing = false }: {
       <fieldset
         key={sku.id}
         id={rowId}
-        className="min-w-0 border-0 p-0"
-        aria-label={groupLabel}
+        className={cn(
+          // Padded out by as much as it is pulled back, in both states, so the columns stay
+          // level with the header and marking a row never moves it.
+          '-mx-1.5 min-w-0 rounded-lg border-0 px-1.5 py-1',
+          unsaved && 'bg-[var(--ob-brand-soft)] shadow-[inset_3px_0_0_var(--ob-brand)]',
+        )}
+        // The mark is visual only.
+        aria-label={unsaved ? `${groupLabel}, not saved` : groupLabel}
         aria-describedby={rowIssue ? `${rowId}-error` : undefined}
       >
         <div className={cn(SKU_ROW_GRID, 'items-start', !sku.active && 'opacity-55')}>
@@ -611,6 +645,7 @@ export function SkuStep({ issues, markMissing = false }: {
       </div>
       <div>
         <div className="space-y-3">
+          {draft.skus.some(isUnsaved) ? <UnsavedSizeKey /> : null}
           {groups.map((group) => {
             const count = group.products.length
             const needSize = group.products.filter((product) => missing.includes(product.id)).length
