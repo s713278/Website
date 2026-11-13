@@ -394,6 +394,12 @@ pressable and another type only shows a warning; with no answer Steps 3-4 show *
 instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
 temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
 
+**After a page load, saved values come from the account.** The stored draft first puts each saved
+step's recorded saved values back in place of unsaved edits (`restoreSavedValues`; steps the draft
+records as saved, lists keeping their unsaved additions), so the reads below show the account's copy
+and Step 10 lists nothing for a discarded edit. A step not saved yet keeps its input
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)).
+
 **Unsaved edits merge with the account silently** (`mergeAccountFields` in
 `onboarding-draft-merge.ts`). The draft records, per edited field, the saved value the edit started
 from (see [SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)). Each read merges only the
@@ -408,6 +414,10 @@ approved submitted store's storefront read the rest of Step 9. Per field:
 | Recorded saved value | Changed since | Account value |
 | No recorded saved value (draft from before version 5) | Empty, or no checkout saved yet | The edit fills it |
 | No recorded saved value | Holds a value | Account value |
+
+Only what the vendor sets is compared, so what the account stores its own way is no change made
+elsewhere: a size's name and description (filled by the server), slot ids (renumbered by the
+account), and a flat charge's free-delivery threshold (written as zero).
 
 Categories, products and sizes merge entry by entry: entries the account holds are kept (an
 assigned category or product is never dropped), local additions stay, a changed entry stays only

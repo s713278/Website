@@ -7,10 +7,13 @@ import {
   mergeAccountFields,
   mergeTabDraft,
   pruneOrphans,
+  releaseHeld,
   RESOURCE_FIELDS,
+  restoreSavedValues,
   stepFields,
   trackEdits,
   withSavedValues,
+  withHeldEdits,
   withUnknownEdits,
   type FieldEdits,
 } from './onboarding-draft-merge'
@@ -127,6 +130,102 @@ describe('merging an account read with unsaved fields', () => {
         { 'delivery.shipping': { at: 0 } }, { accountEmpty: true })
       expect(result.draft.delivery.shipping).toEqual(shipping(45))
     })
+  })
+})
+
+describe('an unsaved edit the account only appears to have changed', () => {
+  it('is kept when the account differs only in what the server fills or renames', () => {
+    // Sizes come back with a description the server wrote; slots with the account's own ids.
+    const sent = size('sku-1', 1)
+    const local = draftWith({ skus: [size('sku-1', 1, 80)] })
+    const account = draftWith({ skus: [{ ...sent, name: 'Test Juice', description: 'Test Juice' }] })
+    const result = merge(local, account, ['skus'], { skus: { at: 1, saved: [sent] } })
+    expect(result.draft.skus.map(({ salePrice }) => salePrice)).toEqual([80])
+
+    const slot = (id: string) => ({ id, startTime: '09:00', endTime: '12:00' })
+    const slots = merge(withDelivery({ slots: [slot('draft-slot-1'), slot('draft-slot-2')] }), withDelivery({ slots: [slot('slot-1')] }),
+      ['delivery.slots'], { 'delivery.slots': { at: 1, saved: [slot('draft-slot-1')] } })
+    expect(slots.draft.delivery.slots).toHaveLength(2)
+  })
+
+  it('is kept when a flat charge comes back without the free-delivery threshold it was sent with', () => {
+    // A flat charge is written with a zero threshold, so the account never holds the draft's one.
+    const local = withDelivery({ shippingStrategy: 'FLAT', shipping: { charge: 25, freeDeliveryThreshold: 300 } })
+    const account = withDelivery({ shippingStrategy: 'FLAT', shipping: { charge: 30, freeDeliveryThreshold: 0 } })
+    const result = merge(local, account, ['delivery.shipping'], { 'delivery.shipping': { at: 1, saved: { charge: 30, freeDeliveryThreshold: 300 } } })
+    expect(result.draft.delivery.shipping).toEqual({ charge: 25, freeDeliveryThreshold: 300 })
+  })
+
+  it('still gives way to a real change of a value the vendor can edit', () => {
+    const sent = size('sku-1', 1)
+    const result = merge(draftWith({ skus: [size('sku-1', 1, 80)] }), draftWith({ skus: [{ ...sent, listPrice: 120 }] }), ['skus'], { skus: { at: 1, saved: [sent] } })
+    expect(result.draft.skus[0]).toMatchObject({ listPrice: 120, salePrice: 90 })
+  })
+})
+
+describe('a draft restored on a page load', () => {
+  const restore = (draft: VendorOnboardingDraftV1, edits: FieldEdits, savedSteps: number[]) =>
+    restoreSavedValues({ draft, edits, savedSteps: savedSteps as never })
+
+  it('shows the saved value in place of an unsaved edit of a saved step, and drops the edit', () => {
+    const edit = { at: 1, saved: shipping(30) }
+    const result = restore(withDelivery({ shipping: shipping(25) }), { 'delivery.shipping': edit }, [3, 4, 5, 6, 7])
+    expect(result.draft.delivery.shipping).toEqual(shipping(30))
+    expect(result.edits).toEqual({})
+    // What was set aside is still written, for another tab that may have it open.
+    expect(result.held).toEqual({ 'delivery.shipping': { value: shipping(25), edit } })
+    const stored = withHeldEdits(result.draft, result.edits, result.held)
+    expect(stored.draft.delivery.shipping).toEqual(shipping(25))
+    expect(stored.edits).toEqual({ 'delivery.shipping': edit })
+  })
+
+  it('stops writing a set-aside edit once this tab edits the field or saves its step', () => {
+    const held = { 'delivery.shipping': { value: shipping(25), edit: { at: 1, saved: shipping(30) } } }
+    expect(releaseHeld(held, { before: withDelivery({}), after: withDelivery({ consentTitle: 'Other' }) })).toBe(held)
+    expect(releaseHeld(held, { before: withDelivery({}), after: withDelivery({ shipping: shipping(40) }) })).toEqual({})
+    expect(releaseHeld(held, { steps: [6] })).toBe(held)
+    expect(releaseHeld(held, { steps: [7] })).toEqual({})
+  })
+
+  it('keeps input of a step not saved yet, and of a field whose saved value is empty', () => {
+    const edits = { 'delivery.shipping': { at: 1, saved: shipping(30) }, 'storefront.tagline': { at: 1, saved: '' } }
+    const draft = draftWith({ delivery: { ...empty.delivery, shipping: shipping(25) }, storefront: { ...empty.storefront, tagline: 'First tagline' } })
+    const result = restore(draft, edits, [3, 4, 5, 6, 9])
+    expect(result.draft).toBe(draft)
+    expect(result.edits).toBe(edits)
+  })
+
+  it('keeps an edit with no recorded saved value, which the account read judges', () => {
+    const edits = { 'delivery.shipping': { at: 0 } }
+    const draft = withDelivery({ shipping: shipping(25) })
+    expect(restore(draft, edits, [7])).toEqual({ draft, edits, held: {} })
+  })
+
+  it('puts saved sizes back as saved, keeping unsaved new ones', () => {
+    const saved = [size('sku-1', 1), size('sku-2', 1)]
+    // sku-1's price edited, sku-2 removed, one new row added.
+    const draft = draftWith({ skus: [size('sku-1', 1, 70), size('draft-sku-1-1', 1, 50)] })
+    const result = restore(draft, { skus: { at: 1, saved } }, [6])
+    expect(result.draft.skus.map(({ id, salePrice }) => [id, salePrice])).toEqual([['sku-1', 90], ['draft-sku-1-1', 50], ['sku-2', 90]])
+    expect(result.edits).toEqual({ skus: { at: 1, saved } })
+  })
+
+  it('keeps unsaved category and product picks of saved steps', () => {
+    const draft = draftWith({ categories: [category(10), category(11)], products: [product(1, 10), product(2, 10)] })
+    const result = restore(draft, {
+      categories: { at: 1, saved: [category(10)] },
+      products: { at: 1, saved: [product(1, 10)] },
+    }, [4, 5])
+    expect(result.draft.categories.map(({ id }) => id)).toEqual([10, 11])
+    expect(result.draft.products.map(({ id }) => id)).toEqual([1, 2])
+    expect(Object.keys(result.edits)).toEqual(['categories', 'products'])
+  })
+
+  it('drops a list edit that only changed saved entries', () => {
+    const saved = [size('sku-1', 1)]
+    const result = restore(draftWith({ skus: [size('sku-1', 1, 70)] }), { skus: { at: 1, saved } }, [6])
+    expect(result.draft.skus).toEqual(saved)
+    expect(result.edits).toEqual({})
   })
 })
 

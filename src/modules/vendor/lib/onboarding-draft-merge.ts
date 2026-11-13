@@ -14,10 +14,14 @@ import type { AccountStep, SavedBaselines } from './onboarding-progress'
  * when it was last edited (`at`). Only fields Steps 3-9 save are tracked, and never a private
  * value: Step 8's payment details and Step 9's WhatsApp numbers live in runtime state only.
  *
+ * - **Page load.** The draft restored from storage shows each saved step's saved values: an
+ *   edit of a saved step goes back to the saved value it recorded, keeping only unsaved
+ *   additions to a list (`restoreSavedValues`). Input of a step not saved yet stays.
  * - **Account read lands.** For each field that read can tell: no unsaved edit, or a submitted
  *   store, takes the account's value. An edit whose saved value the account still holds is
- *   kept; one the account has moved past gives way to the account. An edit with no recorded
- *   saved value (an old-format draft) only fills a field the account holds nothing for.
+ *   kept; one the account has moved past gives way to the account. Only what the vendor sets
+ *   is compared, never what the server fills in or renames (`vendorValue`). An edit with no
+ *   recorded saved value (an old-format draft) only fills a field the account holds nothing for.
  * - **Lists.** Categories, products and sizes merge entry by entry: fresh account entries are
  *   kept, local additions stay, and an entry the vendor changed stays only while the account's
  *   copy is the one it started from. The account only ever adds categories and products, so
@@ -241,6 +245,30 @@ export function withoutSteps(edits: FieldEdits, steps: readonly OnboardingStep[]
 
 type Entry = { id: number | string }
 
+/** The parts of a size the vendor sets; the server fills in or renames its name and description. */
+const SIZE_KEYS = ['id', 'productId', 'unit', 'quantity', 'listPrice', 'salePrice', 'active'] as const
+
+function vendorEntry(field: DraftField, entry: Entry | undefined): unknown {
+  if (field !== 'skus' || !entry) return entry
+  return Object.fromEntries(SIZE_KEYS.map((key) => [key, (entry as Record<string, unknown>)[key]]))
+}
+
+/**
+ * A field's value as far as the vendor sets it, so a value the account only stores in its own
+ * way is not taken for a change made elsewhere: sizes without what the server fills in, slots
+ * without the ids the account numbers itself, and a flat charge without the free-delivery
+ * threshold, which is written as zero (`account` is the draft with the account copy applied).
+ */
+function vendorValue(field: DraftField, value: unknown, account: VendorOnboardingDraftV1): unknown {
+  if (!Array.isArray(value)) {
+    const flat = field === 'delivery.shipping' && account.delivery.shippingStrategy === 'FLAT'
+    return flat && value ? { charge: (value as DeliveryDraft['shipping']).charge } : value
+  }
+  if (field === 'skus') return value.map((entry: Entry) => vendorEntry(field, entry))
+  if (field === 'delivery.slots') return value.map(({ id: _id, ...slot }: Entry) => slot)
+  return value
+}
+
 /**
  * One list, entry by entry, against the account's copy. `base` is the saved list the local
  * edit started from; without one (an old-format draft) the account's entries win and local
@@ -249,7 +277,8 @@ type Entry = { id: number | string }
 function mergeEntries(field: DraftField, base: readonly Entry[] | undefined, local: readonly Entry[], account: readonly Entry[]): Entry[] {
   const baseById = base ? new Map(base.map((entry) => [entry.id, entry])) : null
   const accountById = new Map(account.map((entry) => [entry.id, entry]))
-  const unchanged = (id: Entry['id']) => Boolean(baseById?.has(id)) && sameValue(baseById!.get(id), accountById.get(id))
+  const unchanged = (id: Entry['id']) => Boolean(baseById?.has(id))
+    && sameValue(vendorEntry(field, baseById!.get(id)), vendorEntry(field, accountById.get(id)))
   const merged: Entry[] = []
   const placed = new Set<Entry['id']>()
   for (const entry of local) {
@@ -297,7 +326,9 @@ export function mergeAccountFields(input: {
       const known = 'saved' in entry
       if (LIST_FIELDS.has(field)) {
         value = mergeEntries(field, known ? entry.saved as Entry[] : undefined, mine as Entry[], theirs as Entry[])
-      } else if (known ? sameValue(entry.saved, theirs) : input.accountEmpty || isEmptyValue(theirs)) {
+      } else if (known
+        ? sameValue(vendorValue(field, entry.saved, input.account), vendorValue(field, theirs, input.account))
+        : input.accountEmpty || isEmptyValue(theirs)) {
         value = mine
       }
     }
@@ -310,6 +341,76 @@ export function mergeAccountFields(input: {
     }
   }
   return { draft, edits }
+}
+
+/**
+ * Stored edits a page load set aside (`restoreSavedValues`): the value and edit record as stored.
+ * Another tab may still have them open, so this tab keeps writing them until it edits the field
+ * itself, saves its step, or takes in another tab's draft (`withHeldEdits`).
+ */
+export type HeldEdits = Partial<Record<DraftField, { value: unknown; edit: DraftFieldEdit }>>
+
+/**
+ * The draft restored on a page load, with what the browser knows is saved in place of unsaved
+ * edits. An edit of a saved step (`savedSteps`) that records the saved value it started from
+ * goes back to it; for a list, its saved entries go back and the unsaved ones it added stay.
+ * The account read that follows then shows its own copy. An edit of a step not saved yet, of a
+ * field whose saved value is empty, or with no recorded saved value (an old-format draft) stays
+ * as input, for the account read to judge. `held` is what was set aside, as stored.
+ */
+export function restoreSavedValues(input: {
+  draft: VendorOnboardingDraftV1
+  edits: FieldEdits
+  savedSteps: readonly OnboardingStep[]
+}): { draft: VendorOnboardingDraftV1; edits: FieldEdits; held: HeldEdits } {
+  let { draft, edits } = input
+  const held: HeldEdits = {}
+  for (const [field, entry] of Object.entries(input.edits) as [DraftField, DraftFieldEdit][]) {
+    if (!('saved' in entry) || isEmptyValue(entry.saved) || !input.savedSteps.includes(fieldStep(field))) continue
+    const stored = readField(draft, field)
+    const value = LIST_FIELDS.has(field)
+      ? mergeEntries(field, undefined, stored as Entry[], entry.saved as Entry[])
+      : entry.saved
+    held[field] = { value: stored, edit: entry }
+    draft = writeField(draft, field, value)
+    if (!sameValue(value, entry.saved)) continue
+    if (edits === input.edits) edits = { ...edits }
+    delete edits[field]
+  }
+  return { draft, edits, held }
+}
+
+/** The draft and edits to store: this tab's, with the edits a page load set aside still in place. */
+export function withHeldEdits(
+  draft: VendorOnboardingDraftV1,
+  edits: FieldEdits,
+  held: HeldEdits,
+): { draft: VendorOnboardingDraftV1; edits: FieldEdits } {
+  const fields = Object.keys(held) as DraftField[]
+  if (!fields.length) return { draft, edits }
+  const stored = { ...edits }
+  for (const field of fields) {
+    draft = writeField(draft, field, held[field]!.value)
+    stored[field] = held[field]!.edit
+  }
+  return { draft, edits: stored }
+}
+
+/**
+ * Held edits this tab has since taken over: fields whose value an edit here changed, or of the
+ * given saved steps. Returns `held` when nothing is released.
+ */
+export function releaseHeld(
+  held: HeldEdits,
+  change: { before?: VendorOnboardingDraftV1; after?: VendorOnboardingDraftV1; steps?: readonly OnboardingStep[] },
+): HeldEdits {
+  const released = (Object.keys(held) as DraftField[]).filter((field) =>
+    change.steps?.includes(fieldStep(field))
+    || (change.before && change.after && readField(change.before, field) !== readField(change.after, field)))
+  if (!released.length) return held
+  const next = { ...held }
+  for (const field of released) delete next[field]
+  return next
 }
 
 /**

@@ -3196,11 +3196,13 @@ describe('silent draft sync', () => {
     })
   })
 
-  it('keeps an edit whose saved value the account still holds, and takes the account’s newer value for another', async () => {
+  it('keeps input of a step not saved yet while the account holds what it started from, and takes a value saved elsewhere', async () => {
+    // Step 7 is not among the draft's saved steps, so its input is first-time input, which a
+    // page load keeps (a saved step's edits give way to its saved values, below).
     plantDraft(ONBOARDING_DRAFT_VERSION, {
       editedSteps: [7],
       edits: {
-        // Started from the charge the account still holds: the vendor's edit stands.
+        // Started from the charge the account still holds: the vendor's input stands.
         'delivery.shipping': { at: 1, saved: shipping(30) },
         // Started from store pickup, but the account has since saved home delivery.
         'delivery.fulfillmentType': { at: 1, saved: 'STORE_PICKUP' },
@@ -3216,9 +3218,145 @@ describe('silent draft sync', () => {
     expect(state.editedSteps).toEqual([7])
     expect(pendingSteps(state)).toEqual([7])
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    // What the next load needs to judge the kept edit again: the saved value it started from.
+    // What the next load needs to judge the kept input again: the saved value it started from.
     act(() => useOnboardingStore.getState().flushPersistence())
     expect(storedEnvelope()?.edits).toEqual({ 'delivery.shipping': { at: 1, saved: shipping(30) } })
+  })
+
+  describe('after a reload, saved values come from the account', () => {
+    const juices = { id: 10, name: 'Juices', imageUrl: null, businessTypeId: 7, description: null, displayOrder: null }
+    const smoothies = { ...juices, id: 12, name: 'Smoothies' }
+    const pick = (id: number, name: string) => ({ id, name, categoryId: 10, description: null, imageUrl: null, measurementId: 2, measurementName: null })
+    const juiceSize = (id: string, quantity: number, listPrice: number, salePrice: number) => ({
+      id, productId: 31, name: 'Test Juice', description: '', skuType: 'ITEM' as const, measurementType: 'VOLUME' as const,
+      unit: 'L', quantity, listPrice, salePrice, active: true, homeDelivery: true, storePickup: true,
+    })
+
+    it('shows a saved Step 7 value in place of an unsaved edit, with nothing left to save', async () => {
+      seedReadyAccount('Test City')
+      plantDraft(ONBOARDING_DRAFT_VERSION, {
+        editedSteps: [7],
+        // Both edits started from what the account still holds.
+        edits: {
+          'delivery.shipping': { at: 1, saved: shipping(30) },
+          'delivery.fulfillmentType': { at: 1, saved: 'HOME_DELIVERY' },
+        },
+      }, { completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9] as OnboardingStep[] })
+      renderAccount('PENDING', 10)
+
+      await currentStepIs(10)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+      const state = useOnboardingStore.getState()
+      expect(state.draft.delivery.shipping).toEqual(shipping(30))
+      expect(state.draft.delivery.fulfillmentType).toBe('HOME_DELIVERY')
+      expect(state.editedSteps).toEqual([])
+      expect(pendingSteps(state)).toEqual([])
+      expect(screen.queryByText('Save or undo your changes to delivery.')).toBeNull()
+    })
+
+    it('never undoes another open tab’s unsaved edit by what this page load shows', async () => {
+      // Tab A, still open, wrote an unsaved charge of 45 for saved Step 7; this tab loads now.
+      seedReadyAccount('Test City')
+      const edit = { at: 1, saved: shipping(30) }
+      plantDraft(ONBOARDING_DRAFT_VERSION, { editedSteps: [7], edits: { 'delivery.shipping': edit } },
+        { completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9] as OnboardingStep[] })
+      renderAccount('PENDING', 10)
+
+      await currentStepIs(10)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+      expect(useOnboardingStore.getState().draft.delivery.shipping).toEqual(shipping(30))
+      // What this tab writes, even after an edit of its own elsewhere, still holds tab A's edit,
+      // so tab A does not take it for a save or an undo.
+      act(() => {
+        useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, storefront: { ...draft.storefront, welcomeMessage: 'Here' } }), 9)
+        useOnboardingStore.getState().flushPersistence()
+      })
+      expect(storedEnvelope()?.edits?.['delivery.shipping']).toEqual(edit)
+      expect(storedEnvelope()?.draft.delivery.shipping).toEqual(shipping(45))
+      expect(storedEnvelope()?.draft.storefront.welcomeMessage).toBe('Here')
+
+      // Once this tab edits that field itself, its own value is what it writes.
+      act(() => {
+        useOnboardingStore.getState().updateDraft((draft) => ({ ...draft, delivery: { ...draft.delivery, shipping: shipping(35) } }), 7)
+        useOnboardingStore.getState().flushPersistence()
+      })
+      expect(storedEnvelope()?.draft.delivery.shipping).toEqual(shipping(35))
+      expect(storedEnvelope()?.edits?.['delivery.shipping']?.at).toBeGreaterThan(1)
+    })
+
+    it('shows saved store details this browser recorded, which no read can tell before approval', async () => {
+      seedReadyAccount('Test City')
+      plantDraft(ONBOARDING_DRAFT_VERSION, {
+        editedSteps: [9],
+        edits: { 'storefront.tagline': { at: 1, saved: 'Saved tagline' } },
+      }, { completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9] as OnboardingStep[] })
+      renderAccount('PENDING', 10)
+
+      await currentStepIs(10)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toEqual([3, 4, 5, 6, 7, 8, 9]))
+      const state = useOnboardingStore.getState()
+      expect(state.draft.storefront.tagline).toBe('Saved tagline')
+      expect(pendingSteps(state)).toEqual([])
+      expect(screen.queryByText('Save or undo your changes to store details.')).toBeNull()
+    })
+
+    it('keeps Step 7 input that was never saved', async () => {
+      vi.mocked(vendorOnboardingService.getCheckoutOptions).mockResolvedValue(null)
+      const defaults = createEmptyOnboardingDraft().delivery
+      plantDraft(ONBOARDING_DRAFT_VERSION, {
+        editedSteps: [7],
+        edits: {
+          'delivery.shipping': { at: 1, saved: defaults.shipping },
+          'delivery.fulfillmentType': { at: 1, saved: defaults.fulfillmentType },
+        },
+      })
+      renderAccount('PENDING', 7)
+
+      await currentStepIs(7)
+      await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(7))
+      const state = useOnboardingStore.getState()
+      expect(state.draft.delivery.shipping).toEqual(shipping(45))
+      expect(state.draft.delivery.fulfillmentType).toBe('BOTH')
+      expect(state.editedSteps).toEqual([7])
+    })
+
+    it('shows a saved Step 6 price in place of an unsaved edit, keeping unsaved picks and sizes marked', async () => {
+      vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({ ...EMPTY_PAGE, totalPages: 1, totalElements: 2, items: [juices, smoothies] })
+      vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue({
+        ...EMPTY_PAGE, totalPages: 1, totalElements: 2,
+        items: [pick(31, 'Test Juice'), pick(32, 'Apple Juice')].map(({ categoryId: _, ...product }) => ({ ...product, icon: null })),
+      })
+      plantDraft(ONBOARDING_DRAFT_VERSION, {
+        editedSteps: [4, 5, 6],
+        edits: {
+          categories: { at: 1, saved: [juices] },
+          products: { at: 1, saved: [pick(31, 'Test Juice')] },
+          skus: { at: 1, saved: [juiceSize('sku-4001', 1, 100, 90)] },
+        },
+      }, {
+        currentStep: 6 as OnboardingStep,
+        categories: [juices, smoothies],
+        products: [pick(31, 'Test Juice'), pick(32, 'Apple Juice')],
+        // The saved size's price edited to 70, and a new 2 L size added.
+        skus: [juiceSize('sku-4001', 1, 100, 70), juiceSize('draft-sku-31-1', 2, 180, 160)],
+      })
+      renderAccount('PENDING', 7)
+
+      await currentStepIs(7)
+      const sizes = await openSizes()
+      expect(sizes).toBeTruthy()
+      const state = useOnboardingStore.getState()
+      expect(state.draft.skus.map(({ id, salePrice }) => [id, salePrice])).toEqual([['sku-4001', 90], ['draft-sku-31-1', 160]])
+      expect(screen.getByRole('group', { name: 'Test Juice, 1 L size' })).toBeTruthy()
+      expect(screen.getByRole('group', { name: 'Test Juice, 2 L size, not saved' })).toBeTruthy()
+      expect(state.draft.categories.map(({ id }) => id)).toEqual([10, 12])
+      expect(state.draft.products.map(({ id }) => id)).toEqual([31, 32])
+
+      fireEvent.click(screen.getByRole('button', { name: /^Step 5,/ }))
+      expect(await screen.findByRole('button', { name: /Apple Juice, not saved/ })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: /^Step 4,/ }))
+      expect(await screen.findByRole('button', { name: /Smoothies, not saved/ })).toBeTruthy()
+    })
   })
 
   it('lets the account’s newer value win over an edit that started from an older one', async () => {
@@ -3471,6 +3609,29 @@ describe('account freshness after the page was away', () => {
     const state = useOnboardingStore.getState()
     expect(state.draft.delivery.shipping.charge).toBe(60)
     expect(state.editedSteps).toEqual([])
+  })
+
+  it('keeps an edit made after this tab’s own save, which the account stores without the hidden free-delivery threshold', async () => {
+    // Step 7 saved for the first time here: a flat charge goes out with a zero threshold, so the
+    // account never holds the draft's default one. That is no change made elsewhere.
+    vi.mocked(vendorOnboardingService.getCheckoutOptions).mockResolvedValue(null)
+    const save = vi.spyOn(vendorOnboardingService, 'saveCheckoutOptions').mockResolvedValue(undefined)
+    renderAccount('PENDING', 7)
+    await currentStepIs(7)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(7))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await currentStepIs(8)
+    vi.mocked(vendorOnboardingService.getCheckoutOptions).mockResolvedValue(SAVED_CHECKOUT)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Step 7,/ }))
+    await currentStepIs(7)
+    fireEvent.change(deliveryCharge(), { target: { value: '25' } })
+    leaveTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await currentStepIs(8)
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save.mock.calls[1]![1].shipping.charge).toBe(25)
   })
 
   it('keeps the input and blocks the save while the check fails, then saves on the next press', async () => {

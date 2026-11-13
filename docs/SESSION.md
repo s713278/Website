@@ -227,6 +227,16 @@ WhatsApp numbers are never fields: they stay in memory. Saved catalog values fol
 asset rules (no local file or object URLs). How entry reads merge these fields with the account is
 in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
 
+- **A page load** (reload, new visit or new tab reading the stored draft) shows saved values, not
+  unsaved edits of them: each edited field of a step the draft records as saved goes back to its
+  recorded saved value, without a notice; a list keeps the categories, products and sizes it added.
+  Input of a step not saved yet, of a field whose saved value is empty, or with no recorded saved
+  value stays. The stored draft still keeps the edits set aside (in memory, `heldEdits`): another
+  tab may have them open, so this tab writes them back unchanged until it edits that field, saves
+  its step, or takes in another tab's draft, and never undoes them there. Within an open page,
+  including a return to the wizard without a reload and drafts taken in from another tab, unsaved
+  edits stay as below.
+
 - **Version 4 drafts** (no recorded saved values) are migrated when read: their edited steps keep
   their fields, which then only fill what the account has not saved; the saved account value wins
   everywhere else. Store details the account cannot show before approval keep this browser's copy

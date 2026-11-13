@@ -42,10 +42,14 @@ import {
 import {
   editedStepsOf,
   mergeTabDraft,
+  releaseHeld,
+  restoreSavedValues,
   trackEdits,
+  withHeldEdits,
   withoutSteps,
   withUnknownEdits,
   type FieldEdits,
+  type HeldEdits,
 } from '../lib/onboarding-draft-merge'
 import {
   ONBOARDING_CONFIG,
@@ -131,10 +135,18 @@ type OnboardingStore = {
   /**
    * The edited steps' unsaved fields: when each was last edited and, when known, the saved
    * value its edit started from (see `onboarding-draft-merge.ts`). Persisted with the draft;
-   * entry reads merge them with the account field by field, and another tab's newer draft is
-   * merged with them the same way. Never holds a private payment or contact value.
+   * a page load puts saved steps' recorded saved values back, entry reads merge the rest with
+   * the account field by field, and another tab's newer draft is merged with them the same
+   * way. Never holds a private payment or contact value.
    */
   fieldEdits: FieldEdits
+  /**
+   * Stored edits this page load set aside to show saved values (`restoreSavedValues`). In
+   * memory only: written back with the draft, so another tab that still has them open never
+   * takes this load for a save or an undo, until this tab edits the field, saves its step or
+   * takes in another tab's draft.
+   */
+  heldEdits: HeldEdits
   /**
    * Each step's last saved values this visit, from an account read or a confirmed (or demo
    * simulated) save. In memory only, never persisted: Step 8's carry private payment details.
@@ -443,6 +455,7 @@ function emptyDraftState(
     draftOwnerId: ownerId,
     editedSteps: [],
     fieldEdits: {},
+    heldEdits: {},
     loadedSteps: [],
     savedBaselines: {},
     returnStep: null,
@@ -480,9 +493,15 @@ function applyPersistedEnvelope(
 ) {
   revokeRuntimeUrls(useOnboardingStore.getState().runtime)
   const restored = reconcilePersistedDraft(envelope.draft, envelope.furthestVisitedStep)
-  const fieldEdits = restoredFieldEdits(envelope)
-  set({
+  // A page load shows saved values, not unsaved edits of them (`restoreSavedValues`). The
+  // steps saved are the draft's own record, before reconciling reopens the last ones.
+  const { draft, edits: fieldEdits, held: heldEdits } = restoreSavedValues({
     draft: restored.draft,
+    edits: restoredFieldEdits(envelope),
+    savedSteps: envelope.draft.completedSteps,
+  })
+  set({
+    draft,
     runtime: createEmptyRuntimeState(),
     draftOwnerId: envelope.ownerId,
     furthestVisitedStep: restored.furthestVisitedStep,
@@ -490,6 +509,7 @@ function applyPersistedEnvelope(
     previewRestored: Boolean(envelope.previewSnapshot),
     editedSteps: editedStepsOf(fieldEdits),
     fieldEdits,
+    heldEdits,
     returnStep: null,
     persistenceInitialized: true,
     persistenceStatus: 'saved',
@@ -529,6 +549,8 @@ function adoptOtherTabDraft(envelope: VendorOnboardingPersistedEnvelopeV1): void
     draft: { ...merged.draft, maskedPhone: state.draft.maskedPhone },
     fieldEdits: merged.edits,
     editedSteps: editedStepsOf(merged.edits),
+    // The other tab's draft is the newer record of what it holds open.
+    heldEdits: {},
     persistenceRevision: envelope.revision,
     persistenceUpdatedAt: envelope.updatedAt,
     persistenceStatus: merged.kept ? 'saving' : 'saved',
@@ -545,6 +567,7 @@ function persistCurrentDraft(): void {
   if (!isWritable(state)) return
 
   const updatedAt = new Date().toISOString()
+  const stored = withHeldEdits(state.draft, withUnknownEdits(state.fieldEdits, state.editedSteps), state.heldEdits)
   const envelope: VendorOnboardingPersistedEnvelopeV1 = {
     version: ONBOARDING_DRAFT_VERSION,
     revision: state.persistenceRevision + 1,
@@ -552,8 +575,8 @@ function persistCurrentDraft(): void {
     ownerId: state.draftOwnerId,
     furthestVisitedStep: state.furthestVisitedStep,
     editedSteps: state.editedSteps,
-    edits: toPersistedEdits(withUnknownEdits(state.fieldEdits, state.editedSteps)),
-    draft: toPersistedDraft(state.draft),
+    edits: toPersistedEdits(stored.edits),
+    draft: toPersistedDraft(stored.draft),
     previewSnapshot: state.previewSnapshot,
   }
   try {
@@ -768,6 +791,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   draftOwnerId: null,
   editedSteps: [],
   fieldEdits: {},
+  heldEdits: {},
   loadedSteps: [],
   savedBaselines: {},
   returnStep: null,
@@ -1065,6 +1089,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
         furthestVisitedStep: constrainVisitedStep(state.furthestVisitedStep, from),
         editedSteps,
         fieldEdits: trackEdits(state.fieldEdits, state.draft, updated, editedSteps, state.savedBaselines, Date.now()),
+        heldEdits: releaseHeld(state.heldEdits, { before: state.draft, after: updated }),
         recoveryMessage: null,
       }
     })
@@ -1163,6 +1188,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       // fresh session, so nothing from before it outranks the account.
       editedSteps: step === 2 ? [] : state.editedSteps.filter((edited) => edited !== step),
       fieldEdits: step === 2 ? {} : withoutSteps(state.fieldEdits, [step]),
+      heldEdits: step === 2 ? {} : releaseHeld(state.heldEdits, { steps: [step] }),
       returnStep: returnStepAfterMove(state.returnStep, step, nextStep),
       draft: {
         ...state.draft,
