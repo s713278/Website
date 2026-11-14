@@ -20,7 +20,8 @@ export function publicSiteOrigin(): string {
   // Read per call rather than at module load, so a test can stub the variable and so a
   // build that injects it late is not answered from a value captured before it arrived.
   const configured = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
-  if (!configured) return currentOrigin()
+  // A value without a protocol would yield a relative `host/stores/…` link that opens nowhere.
+  if (!configured || !/^https?:\/\//i.test(configured)) return currentOrigin()
   // A trailing slash here would produce `https://mithradirect.com//stores/…`, which works
   // but is what a vendor reads out loud and pastes into an Instagram bio.
   return configured.replace(/\/+$/, '')
