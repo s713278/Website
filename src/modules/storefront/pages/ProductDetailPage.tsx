@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { ProductDetailPanel } from '@/modules/storefront/components/ProductDetailPanel'
 import { StorePageStates } from '@/modules/storefront/components/StorePageStates'
 import { useStorePage } from '@/modules/storefront/hooks/useStorePage'
+import { ungluedSkuId } from '@/modules/storefront/lib/product-variants'
 import { storePath } from '@/modules/storefront/lib/store-paths'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product } from '@/modules/storefront/types'
@@ -12,7 +13,7 @@ import { getErrorMessage, getStorefrontProduct, isApiError } from '@/shared/api'
 
 export function ProductDetailPage() {
   const { storeId = '', productId = '' } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const skuId = searchParams.get('sku')?.trim() ?? ''
 
   const itemCount = useCartStore((s) => s.itemCount(storeId))
@@ -71,6 +72,15 @@ export function ProductDetailPage() {
       cancelled = true
     }
   }, [storeId, productId, shopClosed, reloadKey])
+  useEffect(() => {
+    if (!product || !skuId) return
+    const healed = ungluedSkuId(product, skuId)
+    if (!healed) return
+    const next = new URLSearchParams(searchParams)
+    next.set('sku', healed)
+    setSearchParams(next, { replace: true })
+  }, [product, skuId, searchParams, setSearchParams])
+
   const loading = shopClosed ? storeLoading : storeLoading || productLoading
   const error = shopClosed ? storeError : storeError || productError
 

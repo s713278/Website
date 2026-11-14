@@ -17,6 +17,7 @@ type ProductGridProps = {
   loading?: boolean
   skeletonCount?: number
   className?: string
+  skuForProduct?: (product: Product) => string | undefined
 }
 
 export function ProductGrid({
@@ -32,6 +33,7 @@ export function ProductGrid({
   loading = false,
   skeletonCount = 6,
   className,
+  skuForProduct,
 }: ProductGridProps) {
   const showSkeleton = loading && products.length === 0
 
@@ -58,6 +60,7 @@ export function ProductGrid({
               storeId={storeId}
               storeName={storeName}
               product={product}
+              preferredSkuId={skuForProduct?.(product)}
             />
           ))}
         </div>

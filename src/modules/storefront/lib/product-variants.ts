@@ -16,11 +16,31 @@ export function getProductVariants(product: Product): ProductVariant[] {
   ]
 }
 
+/**
+ * WhatsApp keeps reading the next word onto a query value, so a shared
+ * `?sku=6053` arrives as `?sku=6053Amla`. The letters are the product name.
+ */
+export function ungluedSkuId(product: Product, raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const variants = getProductVariants(product)
+  if (variants.some((variant) => variant.id === raw)) return undefined
+  return variants
+    .map((variant) => variant.id)
+    .filter((id) => id !== DEFAULT_VARIANT_ID && raw.startsWith(id))
+    .sort((a, b) => b.length - a.length)
+    .find((id) => /^[A-Za-z]/.test(raw.slice(id.length)))
+}
+
 export function selectInitialVariant(product: Product, preferredSkuId?: string): ProductVariant {
   const variants = getProductVariants(product)
   if (preferredSkuId) {
     const match = variants.find((variant) => variant.id === preferredSkuId)
     if (match) return match
+    const glued = ungluedSkuId(product, preferredSkuId)
+    if (glued) {
+      const recovered = variants.find((variant) => variant.id === glued)
+      if (recovered) return recovered
+    }
   }
   return getDefaultVariant(product)
 }

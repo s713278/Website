@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Star } from 'lucide-react'
 import { ProductCartControl } from './ProductCartControl'
 import { ProductGallery } from './ProductGallery'
+import { ProductShareButton } from './ProductPickChrome'
 import { ProductPrice } from './ProductPrice'
 import { resolveTrustIcon } from '@/modules/storefront/lib/trust-icons'
 import { StoreCartBar } from './StoreCartBar'
@@ -10,6 +11,9 @@ import { StorefrontHeader } from './StorefrontHeader'
 import { VariantPicker } from './VariantPicker'
 import { useSelectedVariant } from '@/modules/storefront/hooks/useSelectedVariant'
 import { formatStorefrontPriceSummary } from '@/modules/storefront/lib/product-price'
+import { shareItemFromSelection, shareListUrl } from '@/modules/storefront/lib/product-share'
+import { applyShareCard } from '@/shared/lib/apply-share-meta'
+import { productShareCard } from '@/shared/lib/share-preview'
 import { getProductImages, hasMultipleVariants } from '@/modules/storefront/lib/product-variants'
 import { useCartStore } from '@/modules/storefront/store/cart-store'
 import type { Product, Store } from '@/modules/storefront/types'
@@ -42,6 +46,32 @@ export function ProductDetailPanel({
     preferredSkuId,
   )
   const priceSummary = formatStorefrontPriceSummary(product)
+  const shareItem = shareItemFromSelection(product, selected)
+  const shareUrl = shareListUrl(store.id, [shareItem])
+
+  useEffect(
+    () =>
+      applyShareCard(
+        productShareCard({
+          name: shareItem.name,
+          storeName: store.name,
+          unit: shareItem.unit,
+          priceLabel: shareItem.priceLabel,
+          description: shareItem.description,
+          image: shareItem.imageUrl,
+          url: shareUrl,
+        }),
+      ),
+    [
+      shareItem.name,
+      shareItem.unit,
+      shareItem.priceLabel,
+      shareItem.description,
+      shareItem.imageUrl,
+      shareUrl,
+      store.name,
+    ],
+  )
 
   // Live PDP: API `is_active` → product.inStock / variant.active
   const inStock = selected.active !== false && product.inStock !== false
@@ -56,7 +86,17 @@ export function ProductDetailPanel({
         }`}
       >
         <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:items-start lg:gap-8">
-          <ProductGallery images={images} alt={product.name} />
+          <ProductGallery
+            images={images}
+            alt={product.name}
+            corner={
+              <ProductShareButton
+                storeId={store.id}
+                storeName={store.name}
+                item={shareItem}
+              />
+            }
+          />
 
           <div className="flex min-w-0 flex-col overflow-visible">
             <h1 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
