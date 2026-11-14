@@ -101,17 +101,12 @@ export function productReferenceCacheKey(mode: CatalogSource, categoryId: number
 }
 
 /**
- * File Step 3's first unsearched page from a wider read of the same list, so the step's
- * first visit costs no request. `page` must be page 0 of the unfiltered list sorted by id
- * ascending. Later pages are left to the step's Show more button, and an entry the step
- * already holds is never replaced.
+ * File a step's first page under `key` from page 0 of a wider read of the same list, sorted
+ * the same way, so the step's first visit costs no request. Later pages are left to the
+ * step's Show more button, which reads page 1 onward at the step's own size: the seeded items
+ * are exactly that size's page 0. An entry the step already holds is never replaced.
  */
-export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(
-  mode: CatalogSource,
-  page: ReferencePage<T>,
-): void {
-  const key = businessTypeCacheKey(mode, '')
-  const size = ONBOARDING_CONFIG.businessTypePageSize
+function seedFirstPage<T extends IdentifiedReference>(key: string, size: number, page: ReferencePage<T>): void {
   // A short page that is not the last cannot stand in for a full first page.
   const complete = page.lastPage || page.items.length >= size
   if (page.pageNumber !== 0 || !complete || referenceCache.has(key)) return
@@ -121,4 +116,27 @@ export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(
     pageNumber: 0,
     lastPage: page.lastPage && page.items.length <= size,
   })
+}
+
+/**
+ * File Step 3's first unsearched page from a wider read of the same list. `page` must be
+ * page 0 of the unfiltered list sorted by id ascending.
+ */
+export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(
+  mode: CatalogSource,
+  page: ReferencePage<T>,
+): void {
+  seedFirstPage(businessTypeCacheKey(mode, ''), ONBOARDING_CONFIG.businessTypePageSize, page)
+}
+
+/**
+ * File Step 4's first page of a business type's categories from a wider read of the same
+ * list. `page` must be page 0 of that type's list sorted by id ascending, as Step 4 reads it.
+ */
+export function seedCategoryFirstPage<T extends IdentifiedReference>(
+  mode: CatalogSource,
+  businessTypeId: number,
+  page: ReferencePage<T>,
+): void {
+  seedFirstPage(categoryReferenceCacheKey(mode, businessTypeId), ONBOARDING_CONFIG.categoryPageSize, page)
 }

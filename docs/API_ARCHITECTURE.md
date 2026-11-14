@@ -221,7 +221,7 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `auth.service.ts` | `requestOtp`, `verifyOtp`, `login`, `register`, `getProfile`, `signOut` | `shared/auth/api/demo-auth.ts` (in-memory `DEMO_USERS`); demo OTP is **`1234`** | `/v1/auth/*`. `login`/`register` are email+password and **throw in live mode** — see §5. |
 | `catalog.service.ts` | `listStores`, `listLandingStores`, `getStore` | `modules/storefront/data/catalog.ts` (`STORES`, `getStoreById`) | Public `GET /v1/home` plus `/v1/vendors/{id}` and `/v1/vendors/{id}/products`; landing rows use `mapLandingStore`, established storefront views use `mapVendorToStore` |
 | `orders.service.ts` | `placeOrder`, `listMyOrders`, `listMyOrdersPage`, `getMyOrder` | localStorage `md-customer-orders` | `POST /v1/orders/from-cart` (live checkout; `POST /v1/orders` is unimplemented), `GET /v1/users/{userId}/orders/history/paged` (`page` + `size`, default 20), `GET /v1/users/{userId}/orders/{orderId}` |
-| `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings, read-only — `PUT` fails with a JPA transaction error) |
+| `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings editor is not built; profile PUT caveats live in [API_GAPS.md](./API_GAPS.md#approved-store-profile-updates)) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
 | `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
@@ -237,6 +237,97 @@ select the reserved-negative-ID sample catalog, then answers from module-local s
 silently converts a live failure into sample data. A persisted sample draft carried into Live API
 mode is blocked at Continue because its synthetic IDs cannot reach an account.
 
+#### Vendor setup images
+
+The onboarding wizard uses `vendorImagesService` → package `imagesService` for authenticated
+`GET`/`POST /v1/vendors/{vendor_id}/images`. Logo uses `THUMBNAIL`; banner uses `HOMEBANNER`.
+`image_type` is a query parameter, and the multipart body contains only the original `file`.
+`mapVendorImageUrl` accepts the documented null for an absent image and requires an HTTP(S) URL
+otherwise; the frontend uses the returned URL without constructing Cloudflare transformations.
+
+With verified context `onboarding.status: IN_PROGRESS` and `next_step` from 1 through 9,
+Step 9 starts with empty image selectors without fetching saved URLs or waiting on an image read.
+Earlier pointers cover a continuous wizard visit whose context was loaded before reaching Step 9.
+Sign-in prefetch waits for context before deciding whether image restoration is needed. An empty
+initial-setup result stays local to the visit; it is not cached as an account response, and an
+already-cached successful image read takes precedence. Selection and Continue are available after
+the other required step reads succeed. Recovery after a browser reload following a partially
+successful image save while the context still points to Step 9 is deferred: without a cached
+confirmed image, that entry also assumes empty images.
+
+Other contexts restore logo and banner independently through `vendorImagesService.getImage`
+and separate per-vendor resource-cache entries. A successful read applies immediately even if
+the sibling is pending or fails. A successful null means empty; a failed read remains unknown,
+retains any known URL, and offers **Retry logo** or **Retry banner** for that resource alone.
+Neither loading nor failure of these optional reads blocks selection, Step 9 saving, Step 10
+review, or submission. Required profile, settings and catalog reads retain their existing gates.
+The picker shows its own loading indicator/failure notice; Step 10 keeps review visible with a
+nonblocking image notice. Pending-review Step 9 stays locked, with image retry outside its disabled
+fieldset. A 404 from the image read is temporarily treated as a successful empty image, because QA
+returns it for an image never uploaded (`TEMP(vendor-image-404)`,
+[removal](./API_GAPS.md#temporary-image-404-as-no-image)). An unsubmitted Step 10 restores
+images unless the initial-setup rule applies or the visit/cache already holds them. Saved URLs
+and pending Files/object URLs are separate runtime state and follow draft/session ownership.
+Selecting a replacement previews it locally; Continue uploads pending images before saving store details
+through the storefront PUT, which carries the store name. Setup Step 9 never sends the Step 3
+business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). The vendor record
+read can serve a cached name for about 30 minutes after a write, so resume and dashboard Settings
+prefer the context name ([gap](./API_GAPS.md#stale-vendor-record-after-a-write)). Each successful upload is recorded immediately in runtime, its resource
+cache and the active visit, superseding any older in-flight read. It survives a sibling upload
+or later settings-write failure; retry sends only remaining pending files. Storefront/profile
+writes invalidate only their own reads, keeping confirmed image results for back-navigation and
+wizard re-entry. Unknown untouched image URLs are omitted from the storefront request rather
+than sent as null/empty strings. Selected-file upload failures still block the save and keep the
+vendor on Step 9. A canceled or foreign-session result cannot update runtime/cache or start the
+next write. Step 9 controls are disabled during saving. Files and URLs are not persisted to the
+browser draft; successful reads/writes in the shared resource cache remain session-owned.
+
+Both images are optional. PNG, JPEG and GIF are accepted up to 5 × 1024 × 1024 bytes each. The UI
+recommends logo 512×512 (1:1, minimum guidance 200×200) and banner 2400×800 (3:1, minimum guidance
+1200×400); it performs no dimension validation, resizing, compression or cropping of the upload.
+Wizard logo previews contain the whole image; banner previews centre-crop visually to 3:1.
+Each image box is the keyboard-accessible file picker, with a strong 2px dashed border and brand
+border/background feedback on hover or keyboard focus, following the static design reference.
+A subtle Upload/Replace button below each preview also opens the same file picker.
+A pending preview has a top-right remove control,
+separate from the picker so removing does not open a file dialog, that restores the saved image
+(or the empty chooser). The control is absent for saved images; no image DELETE exists, so
+saved images support replacement only. Demo/sample images remain local preview selections and
+must be selected again after reload. Pending-review Step 9 stays read-only; approved-store
+editing follows the settings flow below.
+
+MFPS-166 is wizard-only: dashboard/settings and the public storefront are unchanged, including
+the public banner's existing 16:9 layout. Backend upload/Cloudflare/cache guarantees still require
+live verification; see [image gaps](./API_GAPS.md#vendor-onboarding-images-mfps-166).
+
+#### Approved-store settings (Step 9)
+
+A submitted store with verified `ACTIVE` vendor status and granted approval can edit all existing
+Step 9 fields. Completion follows the existing account predicate: a usable unfinished `next_step`
+wins over activation, while legacy active contexts without onboarding evidence retain their
+completion fallback. Other submitted steps keep their existing gates; dashboard Settings is unchanged.
+
+Before editing, Step 9 additionally reads `GET /v1/vendors/{vendor_id}/storefront` through
+`vendorOnboardingService.getStorefrontSettings`. Its onboarding mapper preserves saved theme,
+messages, Instagram, empty badge collections, and both WhatsApp numbers, rather than customer-display
+fallbacks. It checks the returned vendor ID and waits for the profile before applying branding.
+A failed settings read blocks the form/save and offers Retry; image-read failures retain the
+separate visible-details behavior described above.
+
+**Save changes** saves in place without go-live or another review submission. Pending image uploads
+run first, followed by storefront PUT and a general profile PUT containing only the business name.
+Completed stores never use the business-type PATCH: that endpoint
+documents a reset to `STEP_3_COMPLETED`. The frontend sends no approval, activation or onboarding
+fields. The profile contract exception and live-verification limits are owned by
+[API_GAPS.md](./API_GAPS.md#approved-store-profile-updates).
+
+Successful hydration vouches for unchanged approved Step 9 settings, so Save sends no redundant
+writes. Failed saves retain edits and uploaded-image successes; retries do not upload those images
+again. Both successful and failed Step 9 writes invalidate cached profile and storefront reads,
+since a later failure may follow an already successful write; confirmed image uploads remain
+cached independently. Re-entry restores the account copy. Optional-text clearing retains the
+existing mapper limitations; no deletion semantics are added.
+
 #### Vendor setup account hydration
 
 The setup wizard reads the vendor's account per step. On every entry (Live API, ready session) it
@@ -248,13 +339,14 @@ shows the page loader (screen-reader label "Restoring your setup").
 
 | Step | Account reads | Units |
 |---|---|---|
-| Business type (3), store details (9) | Profile, business types | No |
+| Business type (3) | Profile, business types | No |
+| Store details (9) | Profile, business types, logo/banner URLs; approved submitted stores also read saved storefront settings | No |
 | Categories (4) | Step 3's plus vendor categories | No |
 | Products (5) | Step 4's plus vendor products | Yes |
 | Sizes (6) | Step 5's plus vendor sizes | Yes |
 | Delivery, payments (7, 8) | Checkout options (one read for both) | No |
 | Review (10), store submitted | Profile | No |
-| Review (10), not submitted | All six | Yes |
+| Review (10), not submitted | All required account reads, plus optional logo/banner | Yes |
 
 The business-type catalog (one 100-item page) maps a saved business type name back to the reference
 Step 3 stores. On Step 3, and in a prefetch for it, it is read at once alongside the profile, saved
@@ -270,8 +362,8 @@ in the browser, so while one is active each further set loads only on a press, n
 first-time vendor's checkout 404 arrives as `null`, meaning no settings yet, not a failure.
 
 Each result is applied to the draft as it lands, through one pure applier per resource, whatever
-step is on screen. A step with unsaved edits keeps them unless the store is submitted, and nothing is
-applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
+step is on screen, and merged field by field with the draft's unsaved edits (below); a submitted
+store takes the account copy everywhere, and nothing is applied without a context. Which resources loaded is wizard memory, reset on every entry and vendor
 change; a save does not reset it. A step shows the page loader until its reads have loaded (Steps 3-4
 keep the same page loader until their first reference list arrives, so the two reads show as one load),
 and "Something went wrong" with **Try again** when one failed; Try again re-reads only that step's
@@ -282,10 +374,109 @@ A submitted store's Step 10 is the exception: it shows its status once the profi
 blocks; a failed profile leaves the store name to its fallback. Requests time out at 15 s and then
 fail.
 
+**Saved progress belongs to the account.** On every entry the context's `next_step` decides the
+open step, the steps counted as done and how far the stepper reaches, whether or not the draft holds
+unsaved edits; a submitted store opens on Step 10. Only a confirmed save (or demo mode's simulated
+one) adds to that progress during a visit, and an edit never takes it away: changing an earlier
+step locks nothing after it. Only Steps 1-2 still reset progress, because a new number is a new
+session. The rules live in `onboarding-progress.ts`.
+
+**The saved business type is locked** from its first confirmed Step 3 save (`resolveSavedType` in
+`onboarding-saved-type.ts`): this browser's record of that save, else, once the context's
+`next_step` is past 3, the type the profile names (not `"Others"`), else the one type whose category
+list holds every assigned category. When the profile says `"Others"`, that type's list is read
+alone first and settles it (one request) when it holds every assigned category, since a category
+belongs to one type; otherwise, or without that hint, every type's list is read (30 on QA). The
+category evidence is read only when Step 3, Step 4 or an unsubmitted Step 10 needs the type; those
+steps show the page loader meanwhile. The resolved type's first page from those reads (sorted as
+Step 4 sorts it) is filed as Step 4's first page, so Step 4 does not read that list again. A locked type replaces any unsaved Step 3 choice in the draft. Step 3's cards stay
+pressable and another type only shows a warning; with no answer Steps 3-4 show **Try again**
+instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
+temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
+
+**After a page load, saved values come from the account.** The stored draft first puts each saved
+step's recorded saved values back in place of unsaved edits (`restoreSavedValues`; steps the draft
+records as saved, lists keeping their unsaved additions), so the reads below show the account's copy
+and Step 10 lists nothing for a discarded edit. A step not saved yet keeps its input
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)).
+
+**Unsaved edits merge with the account silently** (`mergeAccountFields` in
+`onboarding-draft-merge.ts`). The draft records, per edited field, the saved value the edit started
+from (see [SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)). Each read merges only the
+fields it can tell, as it lands, so a read still on its way never counts as saved data: the profile
+tells Step 9's store name, the checkout read Steps 7-8, each catalog read its own list, and an
+approved submitted store's storefront read the rest of Step 9. Per field:
+
+| Unsaved edit | Account value | Result |
+|---|---|---|
+| None | Any | Account value |
+| Recorded saved value | Still that value | The edit stays |
+| Recorded saved value | Changed since | Account value |
+| No recorded saved value (draft from before version 5) | Empty, or no checkout saved yet | The edit fills it |
+| No recorded saved value | Holds a value | Account value |
+
+Only what the vendor sets is compared, so what the account stores its own way is no change made
+elsewhere: a size's name and description (filled by the server), slot ids (renumbered by the
+account), and a flat charge's free-delivery threshold (written as zero).
+
+Categories, products and sizes merge entry by entry: entries the account holds are kept (an
+assigned category or product is never dropped), local additions stay, a changed entry stays only
+while the account's copy is the one it started from, and a removed size stays removed while the
+account's copy is unchanged. An old-format list counts the account's entries as saved and its own
+other entries as additions. Products and sizes whose category or product left the draft go with it,
+once that parent list has merged. An open (unsaved) business type is only a preselection, so an
+unsaved choice outranks it; a locked type replaces any choice. Step 9's other store details are
+unreadable before approval: an edit stays pending against its recorded saved value, or, from an
+old-format draft that lists Step 9 as edited, until Step 9 is saved, since no saved value is
+known. The oldest drafts marked every step edited, so their other store details count as saved
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)). No notice of any of this is shown.
+
+Unsaved input is measured against each step's **saved baseline**: the account copy the step's
+reads produced, or what the last confirmed save sent. Step 9's branding is unreadable before
+approval, so its baseline is the store details as applied, with each unsaved field's recorded saved
+value in its place. Baselines live in store memory only, reset on every entry, because Step 8's
+include private payment details. A step is pending while it
+differs from its baseline, runtime fields included, so changing a value back leaves nothing to
+save; without a baseline the persisted edited set stands in, and a chosen but unsent logo or banner
+is always pending. An edit that returns a step's draft section to its baseline also drops it from
+the persisted edited set.
+
+Going back to an earlier step remembers where the vendor was (`returnStep`, in memory only, never
+for a submitted store); browsing other earlier steps keeps it, and reaching it or any later step
+forgets it. While it is set the primary action reads **Save changes**, and a successful save lands
+on that step instead of the next one; first-time steps keep **Continue**. Catalog Steps 4-6 depend
+on each other (every chosen category needs a product, every product a valid size that is switched
+on), so a save stops first at a done Step 5 or 6 that its save leaves with missing work, keeping the
+remembered step: 9 → 4 (add a category) → 5 → 6 → 9 (`lib/onboarding-catalog-dependencies.ts`).
+Such a step is marked on the stepper but never locked, and catalog edits leave Steps 7-9 as they
+were; Step 10's readiness check is what blocks submission. A submitted store is not guided, but
+keeps the rules: Step 5's Continue needs a product in every category, and the stepper marks Step 5;
+an approved store's Step 6 likewise, while a store under review keeps Step 6 read-only and unmarked.
+
+Each catalog step builds only from the step before it **as saved** (`lib/onboarding-saved-catalog.ts`):
+saved is the step's baseline, else its draft copy while it holds no unsaved input, plus anything the
+account reports assigned (in demo mode, whose entry takes each unedited catalog step's draft copy as
+its baseline, what its simulated save stored). Step 5 lists product panels only for saved categories,
+so an unsaved Step 4 pick reads no product list; Step 6 lists, and starts a blank size for, only saved
+products. A pick under an unsaved parent stays in the draft, hidden: the step's Continue neither
+checks nor sends it, and it reappears once the parent is saved; removing an unsaved category drops
+its products without a prompt. The stepper's marker, and Step 10's catalog summary and readiness
+items ("Choose at least one product in …", "Add a size for …"), come from the saved catalog only;
+unsaved catalog input there is just the step's pending line. While setting up, Step 6 refuses to
+switch off or remove a product's last switched-on size ("Turn on at least one size for …"). Clicking any reachable
+step keeps unsaved input without saving it. A save writes only the current step: a step the
+account already counts as done that matches a known baseline makes no request. Steps 7 and 8 share
+one full checkout write, so it carries the other step's baseline, never its pending edits, which
+stay pending and are not marked saved; if that baseline is unknown, the save reads the checkout
+first. A failed save forgets the step's baseline, so the next attempt writes. Submission lists each
+pending step on Step 10 ("Save or undo your changes to …", linking to it) with the readiness items,
+leaving out a step that already has a more specific item (so "Add a size for …" stands alone), and
+is blocked until none remain.
+
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
-(first) category panel's first product page, alongside the step's account reads, into the reference
+(first saved) category panel's first product page, alongside the step's account reads, into the reference
 cache the list paints from; the step's page loader waits for both, and the list then makes no request of
-its own. Each starts as soon as its input is applied (the business type for Step 4, the categories for
+its own. Each starts as soon as its input is known (the saved business type for Step 4, the categories for
 Step 5), and Continue's prefetch never starts it. A failed page does not block the step and is not
 cached: the list reads it again itself, and shows "Something went wrong" with **Try again** if that
 fails too. A first-page read in flight is shared by key, so a second prefetch or a list that mounts
@@ -318,13 +509,13 @@ failed read does not block: sizes fall back to the sample units and products car
 metadata, and it is not retried within the visit.
 
 The per-resource cache (`onboarding-resource-cache`, one entry per vendor for profile, business
-types, categories, products, sizes and checkout options) is what the wizard and sign-in share. Each
+types, categories, products, sizes, checkout options, logo, banner and approved storefront settings) is what the wizard and sign-in share. Each
 entry is single-flight, a failed read is evicted so the next load retries it, and a late response
 for an invalidated entry reaches its caller but is not stored; the wizard additionally applies a
 result only while the same visit and vendor are current.
 
-A successful step save drops only the resource it wrote (Step 3 or 9 the profile, Step 4
-categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
+A successful step save drops only the resources it wrote (Step 3 the profile, Step 9 the profile
+and storefront settings, Step 4 categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
 every account resource except business types, and sign-out drops every resource for every vendor
 plus the units; business types and units otherwise stay cached until sign-out. Each of these also
 drops the dashboard's context cache, so a later visit re-reads only what changed and returning from
@@ -333,6 +524,61 @@ what it already applied: after a save its draft is the account copy. Both caches
 response belonging to an entry that has already been invalidated. Submission's read-back of the
 context after go-live goes through the dashboard's context cache, so opening the dashboard next
 reuses it rather than reading the context again.
+
+A Step 4 or 5 save assigns only what the account does not hold yet (the PATCH is additive and
+answers 417 for an id already held), judged against this visit's categories or products read when
+the cache holds a current one, as Step 6 maps its products; without one the save reads the account.
+Only these saves assign, and each drops the entry, so a current entry is what the account holds as
+far as this tab can tell; after the page was away the re-check below refreshes it first. A failed
+Step 4 or 5 save drops its entry too, since part of it may have landed, so the retry reads again.
+An assignment from another device that the away rule below does not catch goes unseen: the save
+then fails with the 417 and the retry reads the account.
+
+**Account reads go stale once the page has been away.** `lib/page-away.ts` keeps a count per
+vendor that moves when another tab or device may have saved:
+
+- **Long away:** the tab is shown again after being hidden for 15 minutes or more
+  (`AWAY_AFTER_MS`); this counts for every vendor. Shorter tab switches, window blur and focus
+  (DevTools, a file picker, a window side by side) do not count, so they cost no reads.
+- **Saved in another tab:** every wizard write that reaches the account (a step save, a Step 9 or
+  first type save that may have landed, go-live) writes the note
+  `md-vendor-onboarding-saved-signal-v1` (`{ vendorId, at }`, nothing else) to `localStorage`.
+  The browser's other tabs receive it as a `storage` event and move the count for that vendor
+  only; the writing tab does not receive it. Unreadable notes and unavailable storage are ignored.
+
+A per-resource cache entry whose read started before the latest count is not reused
+(business types, platform data, excepted);
+the next load reads again, every caller asking meanwhile shares that one read, and a peek finds
+nothing. The context cache keeps serving the dashboard as before, but on entry the wizard takes a
+cached context only when it was read since the latest count (`vendorContextIsCurrent`). Sign-in's
+head start is still reused, while a context the dashboard read before a long away or a note is
+read again. A reload starts with empty caches, so entry always reads the context and profile then.
+
+Within a visit nothing is read when the page comes back or a note arrives. The next press of Continue, Save changes
+or Submit for review that would write first reads again, when read before the latest away, the
+context and what that write is built from (`revalidationReads` in `onboarding-freshness.ts`):
+
+| Step | Read again, besides the context |
+|------|---------------------------------|
+| 3 | The profile, only while no type is saved: a type saved elsewhere replaces the choice and locks |
+| 4, 5 | Categories; products |
+| 6 | Products and sizes |
+| 7, 8 | Checkout settings |
+| 9 | An approved store's storefront settings. Before approval the store name comes from the context and nothing else is readable; images are sent only when picked |
+| 10 | What each step with unsaved input needs |
+
+Each read merges by the unsaved-edit rules above (payment details and WhatsApp numbers by the same
+rule against their saved baselines) and replaces the step's saved baselines, so a save made in
+another tab stops counting as unsaved here. Only then does the press validate and write, so it never
+sends back an older value over one saved elsewhere since this visit read it. If the store was
+submitted, or its approval changed, elsewhere, nothing is written and the visit starts again as on
+entry. A press with nothing to write, a read-only step, and demo mode or a sample draft read nothing.
+A failed read keeps the input, shows the step's save error (on Step 10, the submission error) and
+writes nothing; pressing again retries. This narrows the window for an overwrite but cannot close
+it: a save from another device, followed within 15 minutes by a save of the same step here (with no
+long away between), still replaces what that device saved on the field-based Steps 3, 7, 8 and 9,
+and saves crossing in flight can overwrite each other. Removable once the backend adds a version
+token ([gap](./API_GAPS.md#onboarding-continuity-a-vendor-still-loses)).
 
 The marketing header and the general header (`RootLayout`) decide a vendor's actions from the context
 alone, through `useHeaderActions`. On every route, `/onboarding` included, it calls
@@ -352,25 +598,25 @@ the dashboard never uses. For `/onboarding`, `prefetchOnboardingLanding` starts 
 the one just read), the profile, and the landing step's account reads from the table above, without
 the units and not awaited, so they overlap navigation and the wizard's route chunk and the wizard
 joins them. The landing step is the `verify-otp` `next_step`, or else the context's, clamped to 3–10
-exactly as the wizard clamps it; with no usable pointer only the context and profile start. Local
-edits that keep the wizard on another step can leave that set unused. A failed prefetch is evicted as
-usual and the wizard retries it.
+exactly as the wizard clamps it; with no usable pointer only the context and profile start. A
+failed prefetch is evicted as usual and the wizard retries it.
 
 #### Vendor setup sizes (Step 6)
 
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
 sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
 wire values are accepted for compatibility); pending vendors keep a
-read-only step with saved sizes locked. An approved store edits saved sizes in place as in setup
+read-only step with saved sizes locked and no starter rows. An approved store gets a blank starter
+size for each saved product without one, as in setup, and edits saved sizes in place
 (quantity, unit, prices, on/off) and can remove one while its product keeps another; a product's
 only size cannot be removed. The controls and Continue handler use the same approval-aware
-rule, and saving validates size details, duplicates, at least one switched-on size per product
-with sizes, and the projected account total against the context's `limits.max_skus` (top level since the flat
+rule, and saving validates size details, duplicates, a valid switched-on size for every product
+(saved products included, as in setup), and the projected account total against the context's `limits.max_skus` (top level since the flat
 context of 29 September 2026; the demo seed's nested `subscription.limits` is still read). When
 the context sends `subscription.usage.skus`, any usage missing from the SKU list is added, so
 unlisted inactive sizes still consume capacity; the flat context sends no usage, so in Live API
-that count is zero. That count survives subsequent additions in the same visit. It does not demand pricing
-for unrelated products already on a submitted account. An approved store's Step 6 button reads
+that count is zero. That count survives subsequent additions in the same visit. Unlike setup, saved
+sizes are not checked against their product's measurement. An approved store's Step 6 button reads
 Save changes: a save (or a press with nothing changed, which writes nothing) keeps the vendor on
 Step 6 with a "Changes saved." status line and starts no next-step prefetch, so Step 7's checkout
 settings are not read; the vendor leaves by the stepper or Step 10. Completed approved stores also
@@ -435,10 +681,10 @@ local edits on that step or an earlier catalog step that outrank the account on 
 of vendor leave the step unvouched, so it saves as before.
 
 Steps 7-9 apply the same rule to their request bodies, compared exactly as they would be sent:
-the checkout options for Steps 7 and 8, which share one payload and so one comparison, and the
-storefront plus business-details writes for Step 9. These steps are vouched for only by a save in
-this visit, never by a resume, because the account's stored checkout options and storefront need
-not match the payload a resumed draft would send.
+the checkout options for Steps 7 and 8, which share one payload (each step's section plus the
+other's saved values) and so one comparison, and the storefront write for Step 9. These steps are vouched for only by a save in
+this visit, except approved Step 9 whose complete editable settings are now hydrated from the
+storefront read. Unfinished setup's defaults and stored checkout options still need an explicit save.
 
 Only explicit removals and the existing legacy fulfillment-only workaround delete sizes. Removal
 uses `DELETE /v1/vendors/{vendor_id}/skus/{sku_id}`, a hard delete: re-adding the same size creates
@@ -956,8 +1202,9 @@ persists only a versioned, validated safe draft through `onboardingDraftAdapter`
 1200 ms trailing timer followed by `requestIdleCallback` (with a timeout fallback), plus immediate
 flushes on step transitions, completion, and page hiding. It deliberately does not use Zustand's
 per-mutation persistence middleware. The safe snapshot excludes phones, OTP digits, payment
-credentials, files, object URLs, tokens, vendor IDs, and backend error bodies. Newer cross-tab
-revisions pause writes until the user chooses which draft wins.
+credentials, files, object URLs, tokens, vendor IDs, and backend error bodies. A newer revision
+from another tab is merged in silently, field by field
+([SESSION.md](./SESSION.md#onboarding-draft-format-and-sync)).
 
 The onboarding catalog hooks separately use a bounded module-memory result cache keyed by reference
 kind, Live/Sample provenance, query, and parent ID. Business-type keys additionally include the
@@ -1047,7 +1294,7 @@ any code in this repo** — treat it as a proposal, not a supported knob.
 | `md-delivery-location` | `shared/lib/customer-location.ts` | the latest delivery label, service area, latitude, and longitude shared across customer routes |
 | `md-delivery-location-photon-confirmation` | landing location module | matching validation provenance; Live landing discovery ignores legacy/shared coordinates without it |
 | `md-customer-orders` | demo services | mutable demo-mode state. The vendor dashboard keeps none: its demo data is read-only wire-shaped fixtures, so `md-vendor-orders` and `md-vendor-products` no longer exist |
-| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-4 safe wizard draft, owner ID, and optional same-browser preview snapshot; no phone/OTP, payment credentials, tokens, files, or object URLs |
+| `md-vendor-onboarding-draft-v3` | `onboardingDraftAdapter` | schema-version-5 safe wizard draft (version 4 read and migrated), owner ID, each unsaved field's edit time and safe saved value, and optional same-browser preview snapshot; no phone/OTP, payment credentials, WhatsApp numbers, tokens, files, or object URLs |
 
 Onboarding phone/OTP/order and support WhatsApp values, UPI and bank-account details, files, and
 object URLs remain in memory. The browser draft is crash/reload recovery only, not authenticated

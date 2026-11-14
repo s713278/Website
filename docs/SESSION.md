@@ -169,9 +169,94 @@ writes until the same vendor verifies again. A draft read under the wrong identi
 disclosure and a write hazard, because Continue would submit the previous vendor's details to the
 account signed in now.
 
+Onboarding image reads and uploads use the same ownership checks. Saved image URLs are held in
+runtime and the vendor-keyed in-memory resource cache; pending files and preview object URLs stay
+in runtime only. A late upload from an ended wizard/session cannot update that cache or the next
+draft, or start a subsequent image/storefront write. Explicit sign-out clears the resource cache.
+Sign-out, session loss and foreign-draft replacement clear runtime and revoke its object URLs. Image save/retry
+behavior lives in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-images).
+
+The persisted draft buffers unsaved input only; it never decides setup progress, which every entry
+takes from the account's `next_step`. Each step's saved baseline, including Step 8's private payment
+details, and the step a save returns to are kept in memory only and reset on entry; neither is
+written to the draft. The draft does record, per unsaved field, the safe saved value its edit
+started from ([below](#onboarding-draft-format-and-sync)). See
+[API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
+
+The saved business type has its own session-owned record, `md-vendor-onboarding-saved-type-v1`,
+separate from the draft so that discarding or replacing a draft never unlocks the type. Per vendor
+id it holds the type a Step 3 save was confirmed for, or that the assigned categories alone
+settled so that check (a read per business type) runs once (the lock's first evidence), and an in-flight
+marker written before a first save is sent and cleared once its outcome is known: a confirmed
+response, a server refusal, or a fresh account check. A reload or lost response while the marker
+stands is checked against fresh account reads before the vendor may choose again. Reads and writes
+use the signed-in vendor's entry only, an explicit sign-out clears every entry (so a fresh demo
+starts unlocked), and involuntary session loss keeps them. The full rule and its temporary account
+fallbacks are in [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
+
+A draft written before the type locked can hold another type than the saved one, with that
+type's catalog picked on top and its progress collapsed. Restoring it repairs it silently, with no
+notice: progress and the open step come from the account as for any draft; once the saved type
+is resolved it replaces the draft's, and once the assigned categories are read too, unsaved
+categories recorded under another type leave the draft with their products and sizes. Assigned
+entries and entries with no recorded type stay; an unresolved type changes nothing. Other unsaved
+input is kept. A saved catalog already mixed on the account is never changed; when it is confirmed
+(see the API gap above), catalog steps and submission point the vendor to support.
+
+Completed active stores with granted approval may edit Step 9 in the wizard; pending-review stores
+remain locked. Eligibility uses the verified account context and the existing completion predicate,
+including its legacy ACTIVE fallback when onboarding evidence is absent. A usable unfinished
+backend pointer still wins over activation. Settings hydration and save behavior are owned by
+[API_ARCHITECTURE.md](./API_ARCHITECTURE.md#approved-store-settings-step-9).
+
 The vendor header hint (`md-vendor-header-hint`, below) is also session-owned: an explicit sign-out
 clears it, and the ownership check covers every other path — the header ignores a record whose
 `vendorId` is not the signed-in vendor's.
+
+The onboarding save note (`md-vendor-onboarding-saved-signal-v1`) is not session state: it holds a
+vendor id and a time, is never read back, and only tells this browser's other tabs to re-check the
+account before their next write ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)).
+
+### Onboarding draft format and sync
+
+The draft (`md-vendor-onboarding-draft-v3`, envelope version 5) holds, besides the safe draft and its
+owner, `editedSteps` and `edits`: for each unsaved field of Steps 3-9 (a list such as categories, one
+delivery or store-details setting, the business type, or payments) when it was last edited and, when
+the visit knew it, the saved value the edit started from. Step 8's payment details and Step 9's
+WhatsApp numbers are never fields: they stay in memory. Saved catalog values follow the draft's
+asset rules (no local file or object URLs). How entry reads merge these fields with the account is
+in [API_ARCHITECTURE.md](./API_ARCHITECTURE.md#vendor-setup-account-hydration).
+
+- **A page load** (reload, new visit or new tab reading the stored draft) shows saved values, not
+  unsaved edits of them: each edited field of a step the draft records as saved goes back to its
+  recorded saved value, without a notice; a list keeps the categories, products and sizes it added.
+  Input of a step not saved yet, of a field whose saved value is empty, or with no recorded saved
+  value stays. The stored draft still keeps the edits set aside (in memory, `heldEdits`): another
+  tab may have them open, so this tab writes them back unchanged until it edits that field, saves
+  its step, or takes in another tab's draft, and never undoes them there. Within an open page,
+  including a return to the wizard without a reload and drafts taken in from another tab, unsaved
+  edits stay as below.
+
+- **Version 4 drafts** (no recorded saved values) are migrated when read: their edited steps keep
+  their fields, which then only fill what the account has not saved; the saved account value wins
+  everywhere else. Store details the account cannot show before approval keep this browser's copy
+  either way. A draft that lists Step 9 as edited keeps it unsaved, recorded with no known saved
+  value, so Step 10 asks to save or undo it on every load until it is saved. The oldest shape (no
+  edited steps and the legacy flag absent or set) marked every step edited whatever changed, so
+  its store details other than the name count as saved.
+- **An unreadable draft** (damaged, or a version this build cannot read) is discarded without a
+  notice, and the wizard rebuilds from the account.
+- **Other tabs.** A newer revision of the same vendor's draft written by another tab is taken in
+  without a prompt: its unsaved edits are adopted; this tab's edits made since its own last write
+  stay unless the other tab edited the same field later; an edit this tab had already written that
+  the other tab no longer holds (saved or undone there) goes; a field neither tab edited keeps this
+  tab's copy, since account data comes from each tab's own reads. Where each tab is, and its
+  progress, stay its own. If any of this tab's edits survived, it writes the merged draft at once.
+  A draft written for another vendor, or arriving while this tab's draft is parked, is ignored.
+  Edits made in both tabs within the same few milliseconds can still lose one of them. A step the
+  other tab saved counts as unsaved here until this tab next saves that step or submits: switching
+  tabs leaves the page, so that press reads the account again first
+  ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)).
 
 ### Temporary: vendor header hint — TEMP(vendor-header-hint)
 

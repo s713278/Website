@@ -21,9 +21,13 @@ import {
   useProductReferences,
 } from '../../hooks/use-onboarding-catalog'
 import { useSingleOpen } from '../../hooks/use-single-open'
+import { useSavedCatalog } from '../../hooks/use-saved-catalog'
 import { appendMissingReferenceItems } from '../../lib/onboarding-catalog-cache'
+import { categoriesWithoutProducts } from '../../lib/onboarding-catalog-dependencies'
 import { measurementLabel, productMeasurementSummary } from '../../lib/onboarding-measurement'
 import { isPendingId } from '../../lib/onboarding-pending-id'
+import { stepCatalog } from '../../lib/onboarding-saved-catalog'
+import { BUSINESS_TYPE_LOCKED_MESSAGE } from '../../lib/onboarding-saved-type'
 import { StepNotice } from './AccessNotice'
 import {
   selectCatalogPolicy,
@@ -231,9 +235,13 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   readOnly?: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
+  // The first confirmed save fixes the type. Its cards stay browsable and pressable, so a
+  // press on another type can say why nothing changes.
+  const locked = useOnboardingStore((state) => readOnly || state.savedType.status === 'saved')
   // A locked store keeps its catalog source, so the sample switch is not offered.
-  const onUseSample = readOnly ? undefined : offerSample
+  const onUseSample = locked ? undefined : offerSample
   const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
+  const feedback = useOnboardingFeedback()
   const references = useBusinessTypeReferences(draft.catalogSource)
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const selected = draft.business.businessType
@@ -252,11 +260,6 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
       item.name.toLowerCase().includes(references.committedQuery),
   })
   const items = sets.visible
-  const choicesRef = useRef<HTMLDivElement>(null)
-  // A locked card cannot take focus, so a press on a read-only step lands on the list instead.
-  useEffect(() => {
-    if (readOnly && sets.focusIndex !== null) choicesRef.current?.focus()
-  }, [readOnly, sets.focusIndex])
   const initialError = Boolean(references.error && !references.items.length)
   const incrementalError = Boolean(references.error && references.items.length)
   const listLoading = references.loading || (
@@ -264,7 +267,8 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   )
 
   const chooseBusinessType = (businessType: NonNullable<typeof selected>) => {
-    if (selected?.id !== businessType.id) changeBusinessType(businessType)
+    if (selected?.id === businessType.id) return
+    if (locked || !changeBusinessType(businessType)) feedback.show(BUSINESS_TYPE_LOCKED_MESSAGE, 'warning')
   }
 
   if (firstLoad) {
@@ -314,7 +318,6 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
         ) : null}
         {listLoading || items.length ? (
           <div
-            ref={choicesRef}
             id="business-type"
             role="region"
             aria-label="Business type choices"
@@ -324,18 +327,19 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
           >
             {listLoading ? <PageLoader label="Loading business types" /> : null}
             {items.length ? (
-              <fieldset disabled={readOnly} className={cn(choiceGrid, 'min-w-0 border-0 p-0', listLoading && 'mt-3')}>
+              <div className={cn(choiceGrid, listLoading && 'mt-3')}>
                 {items.map((item, index) => (
                   <ChoiceCard
                     key={item.id}
                     autoFocus={index === sets.focusIndex}
                     selected={selected?.id === item.id}
+                    inactive={locked && selected?.id !== item.id}
                     title={item.name}
                     leading={<BusinessTypeIcon key={item.icon ?? `fallback-${item.id}`} src={item.icon} />}
                     onClick={() => chooseBusinessType(item)}
                   />
                 ))}
-              </fieldset>
+              </div>
             ) : null}
             {references.loadingMore && !references.searchPending ? (
               <div className="mt-3">
@@ -419,6 +423,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
   // holds — so a business-type change cannot reopen a fresh allowance on a full account.
   const categoryLimitReached = useOnboardingStore(selectCategoryLimitReached)
   const isCategoryAssigned = useOnboardingStore((state) => state.isCategoryAssigned)
+  const savedCategories = useSavedCatalog().categories
   const liveApi = isLiveApi()
   const createControlVisible = useOnboardingStore(
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
@@ -442,6 +447,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     endFocusRef: searchRef,
   })
   const loadedItems = sets.visible
+  // Only an optional extra is marked: a pick not saved yet once the account holds a category.
+  const isExtra = (categoryId: number) => savedCategories.length > 0 && !savedCategories.some((item) => item.id === categoryId)
 
   const toggle = (category: (typeof draft.categories)[number]) => {
     const choice = catalogChoiceState(draft.categories, category.id)
@@ -469,7 +476,9 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
         4,
       )
     }
-    const dependentCount = draft.products.filter((item) => item.categoryId === category.id).length
+    // Products under an unsaved category are hidden on Step 5, so they go without a word.
+    const shown = savedCategories.some((item) => item.id === category.id)
+    const dependentCount = shown ? draft.products.filter((item) => item.categoryId === category.id).length : 0
     if (choice.chosen && dependentCount) {
       confirm({
         title: `Remove ${category.name}?`,
@@ -519,20 +528,15 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
           {loadedItems.map((category, index) => {
             const choice = catalogChoiceState(draft.categories, category.id)
             const atLimit = !choice.chosen && categoryLimitReached
-            const onStore = choice.chosen && isCategoryAssigned(category.id)
             return (
               <ChoiceCard
                 key={category.id}
                 ref={revealRef(category.id)}
                 autoFocus={index === sets.focusIndex}
                 selected={choice.chosen}
+                unsaved={choice.chosen && isExtra(category.id)}
                 inactive={atLimit}
                 title={category.name}
-                description={onStore
-                  ? 'Saved to your store'
-                  : choice.pending
-                    ? 'Not saved yet — select to remove'
-                    : null}
                 leading={(
                   <ReferenceThumb
                     iconSrc={category.icon}
@@ -587,11 +591,14 @@ function ProductCategoryPicker({
   onToggle,
   createControlVisible,
   onRefusal,
+  attention,
 }: {
   onRefusal: (message: string | null) => void
   categoryId: number
   categoryName: string
   error?: string
+  /** An earlier catalog edit left this chosen category without a product. */
+  attention: boolean
   confirm: RequestConfirmation
   onUseSample?: () => void
   open: boolean
@@ -613,6 +620,10 @@ function ProductCategoryPicker({
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const [search, setSearch] = useState('')
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
+  const savedProducts = useSavedCatalog().products
+  // Only an optional extra is marked: a pick not saved yet once this category holds a saved product.
+  const isExtra = (productId: number) => savedProducts.some((item) => item.categoryId === categoryId)
+    && !savedProducts.some((item) => item.id === productId)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
@@ -682,9 +693,10 @@ function ProductCategoryPicker({
       open={open}
       onToggle={onToggle}
       name={categoryName}
-      meta={selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
+      meta={attention ? 'Needs a product' : selectedCount ? `${selectedCount} selected` : 'Nothing selected yet'}
       count={selectedCount}
       error={error}
+      attention={attention}
     >
       {firstLoad ? (
         references.error && draft.catalogSource === 'account'
@@ -719,14 +731,13 @@ function ProductCategoryPicker({
             <div className={choiceGrid}>
               {items.map((product, index) => {
                 const choice = catalogChoiceState(draft.products, product.id)
-                const onStore = choice.chosen && isProductAssigned(product.id)
                 const atLimit = !choice.chosen && productLimitReached
                 const measurementSummary = productMeasurementSummary(product, productMeasurementCatalog)
                 const units = measurementSummary.additionalUnitCount
                   ? [...measurementSummary.units, `+${measurementSummary.additionalUnitCount}`]
                   : measurementSummary.units
                 if (choice.pending) {
-                  return <PendingProductCard key={product.id} ref={revealRef(product.id)} productId={product.id} onRemove={() => toggle(product)} />
+                  return <PendingProductCard key={product.id} ref={revealRef(product.id)} productId={product.id} extra={isExtra(product.id)} onRemove={() => toggle(product)} />
                 }
                 return (
                   <ChoiceCard
@@ -734,9 +745,9 @@ function ProductCategoryPicker({
                     ref={revealRef(product.id)}
                     autoFocus={index === sets.focusIndex}
                     selected={choice.chosen}
+                    unsaved={choice.chosen && isExtra(product.id)}
                     inactive={atLimit}
                     title={product.name}
-                    description={onStore ? 'Saved to your store' : null}
                     leading={(
                       <ReferenceThumb
                         iconSrc={product.icon}
@@ -788,12 +799,12 @@ function ProductCategoryPicker({
 }
 
 /**
- * A product the vendor authored here, after the reference's dashed custom card. Until
- * Continue creates it, its measurement can still change, so the card carries the picker.
- * The whole card stays the remove target: a full-size button sits under the picker,
- * since a select cannot live inside a button.
+ * A product the vendor authored here, chosen like any other card and dashed, as they are,
+ * only as an optional extra. Until Continue creates it, its measurement can still change, so
+ * the card carries the picker. The whole card stays the remove target: a full-size button
+ * sits under the picker, since a select cannot live inside a button.
  */
-function PendingProductCard({ productId, onRemove, ref }: { productId: number; onRemove: () => void; ref?: Ref<HTMLDivElement> }) {
+function PendingProductCard({ productId, extra, onRemove, ref }: { productId: number; extra: boolean; onRemove: () => void; ref?: Ref<HTMLDivElement> }) {
   const product = useOnboardingStore((state) => state.draft.products.find((item) => item.id === productId))
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const setPendingProductMeasurement = useOnboardingStore((state) => state.setPendingProductMeasurement)
@@ -802,11 +813,11 @@ function PendingProductCard({ productId, onRemove, ref }: { productId: number; o
   const selectId = `pending-product-measurement-${productId}`
 
   return (
-    <div ref={ref} className="relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5">
+    <div ref={ref} className={cn('relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5', extra && 'border-2 border-dashed')}>
       <button
         type="button"
         aria-pressed="true"
-        aria-label={`${product.name}, added by you and not saved yet. Select to remove.`}
+        aria-label={extra ? `${product.name}, not saved` : product.name}
         onClick={onRemove}
         className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand)]/40"
       />
@@ -870,13 +881,23 @@ function MeasurementChips({ measurement, units }: { measurement: string | null; 
   )
 }
 
-export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) {
+export function ProductStep({ issues, confirm, onUseSample, markMissing = false }: CatalogStepProps & {
+  /** Step 5 is done but needs attention: mark the categories still without a product. */
+  markMissing?: boolean
+}) {
   const feedback = useOnboardingFeedback()
   const setBlocked = (message: string | null) => {
     if (message) feedback.show(message, 'warning')
     else feedback.clear()
   }
-  const categories = useOnboardingStore((state) => state.draft.categories)
+  // Only saved categories offer products: a pick under an unsaved one waits, hidden, for it.
+  const draft = useOnboardingStore((state) => state.draft)
+  const saved = useSavedCatalog()
+  const { categories, products } = useMemo(() => stepCatalog(5, draft, saved), [draft, saved])
+  const missing = useMemo(
+    () => markMissing ? categoriesWithoutProducts({ categories, products }) : [],
+    [markMissing, categories, products],
+  )
   const productLimit = useOnboardingStore(selectProductLimit)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const liveApi = isLiveApi()
@@ -884,7 +905,8 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
   )
   const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
-  const { openId, onToggle } = useSingleOpen(categoryIds)
+  // Arriving to finish missing work opens the first category that needs a product.
+  const { openId, onToggle } = useSingleOpen(categoryIds, missing[0])
 
   if (!categories.length) {
     return <EmptyState title="Choose categories first" description="Return to Step 4 to select at least one category." />
@@ -908,6 +930,7 @@ export function ProductStep({ issues, confirm, onUseSample }: CatalogStepProps) 
             open={openId === category.id}
             onToggle={onToggle(category.id)}
             createControlVisible={createControlVisible}
+            attention={missing.includes(category.id)}
           />
         ))}
       </div>

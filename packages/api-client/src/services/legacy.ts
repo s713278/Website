@@ -1,6 +1,6 @@
 import { apiRequest, getHttp } from '../client/http';
 import type { ApiEnvelope } from '../client/types';
-import type { components } from '../schema';
+import type { components, operations } from '../schema';
 import { vendorsService } from './vendors';
 import { catalogService } from './catalog';
 import { cartService } from './cart';
@@ -110,8 +110,12 @@ export async function checkDeliveryEligibility(
   >;
 }
 
-export async function uploadVendorImage(vendorId: number | string, formData: FormData) {
-  return imagesService.upload(vendorId, formData);
+export async function uploadVendorImage(
+  vendorId: number | string,
+  formData: FormData,
+  params: operations['uploadVendorImage']['parameters']['query'],
+) {
+  return imagesService.upload(vendorId, formData, params);
 }
 
 export async function createSku(

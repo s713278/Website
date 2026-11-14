@@ -36,6 +36,15 @@ describe('storefrontUrl', () => {
 
     expect(publicSiteOrigin()).toBe('')
   })
+
+  it('ignores a value without an http(s) protocol rather than building a relative link', () => {
+    // Production once shipped `" mithradirect-prod.mithradirect.workers.dev"`: no protocol,
+    // so every copied link and printed QR pointed at a path, not a site.
+    vi.stubEnv('VITE_PUBLIC_SITE_URL', ' mithradirect-prod.mithradirect.workers.dev')
+
+    expect(publicSiteOrigin()).toBe('')
+    expect(storefrontUrl('uma-dairy-7')).toBe('/stores/uma-dairy-7')
+  })
 })
 
 describe('readableUrl', () => {

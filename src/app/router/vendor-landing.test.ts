@@ -100,7 +100,7 @@ describe('resolveLandingPath', () => {
     const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(SETTING_UP)
     const [getProfile, getBusinessTypes, getCategories, getProducts, getSkus, getCheckout, getMeasurements] = holdSetupReads()
     getProfile.mockResolvedValue({
-      businessName: 'Store', businessType: 'Beverages', ownerName: '', contactPerson: '', contactNumber: '',
+      businessName: 'Store', businessType: 'Beverages', contactNumber: '',
     })
 
     await resolveLandingPath(vendor)

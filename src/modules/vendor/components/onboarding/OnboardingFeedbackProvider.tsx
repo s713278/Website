@@ -11,7 +11,7 @@ export function OnboardingFeedbackProvider({ children }: { children: ReactNode }
         id: 'onboarding-feedback',
         title: message,
         type: tone,
-        timeout: tone === 'error' ? 6000 : 4000,
+        timeout: tone === 'error' ? 5000 : 3000,
         priority: 'low',
       })
     },
@@ -21,7 +21,9 @@ export function OnboardingFeedbackProvider({ children }: { children: ReactNode }
   return (
     <OnboardingFeedbackContext value={feedback}>
       {children}
-      <Toaster toastManager={manager} limit={1} />
+      {/* The footer is 69px tall: a 5rem lift clears it. From 1400px the toast column sits right of
+          the footer's Continue button (384px toast + 16px edge), so it can use the corner. */}
+      <Toaster toastManager={manager} limit={1} viewportClassName="[--toast-lift:5rem] min-[1400px]:[--toast-lift:1rem]" />
     </OnboardingFeedbackContext>
   )
 }

@@ -154,7 +154,7 @@ export function OnboardingStatus({
     : approved
       ? {
           label: 'Approved',
-          detail: 'You can add to your catalog and edit sizes; other setup is locked.',
+          detail: 'You can add to your catalog, edit sizes and update store details.',
           Icon: CheckCircle2Icon,
           iconClassName: 'text-[var(--ob-brand)]',
         }

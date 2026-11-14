@@ -52,11 +52,15 @@ function EditSetupLink() {
  * Until then the panel's one control sends the vendor to the wizard that *can* change these
  * — the same "Edit setup" the shared design puts here.
  */
-function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; planName: ReactNode }) {
+function StoreSettings({ profile, storeName, planName }: {
+  profile: VendorStoreProfile
+  storeName: string | null
+  planName: ReactNode
+}) {
   return (
     <DashboardPanel title="Store settings" action={<EditSetupLink />}>
       <dl className="grid gap-2.5">
-        <Row label="Store name" value={profile.businessName} />
+        <Row label="Store name" value={storeName} />
         <Row label="What you sell" value={profile.businessType} />
         <Row label="Description" value={profile.description} />
         <Row label="Owner" value={profile.ownerName} />
@@ -156,7 +160,7 @@ function AccountPanel() {
 }
 
 export function VendorSettingsPage() {
-  const { vendorId, plan } = useVendorAccount()
+  const { vendorId, plan, context } = useVendorAccount()
   const [profile, setProfile] = useState<VendorStoreProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -190,7 +194,13 @@ export function VendorSettingsPage() {
       {loading ? <StoreSettingsSkeleton /> : null}
 
       {!loading && profile ? (
-        <StoreSettings profile={profile} planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />
+        <StoreSettings
+          profile={profile}
+          // The vendor record read can serve a cached name for about 30 minutes after a write
+          // (backend gap, QA 11 Nov 2026); the context is current, so its name wins.
+          storeName={context.businessName || profile.businessName}
+          planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'}
+        />
       ) : null}
 
       {/*

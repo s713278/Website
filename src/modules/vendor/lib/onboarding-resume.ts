@@ -3,6 +3,7 @@ import {
   schedulingConfigNumber,
   schedulingConfigString,
   vendorOnboardingService,
+  vendorImagesService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
   type MeasurementCatalog,
@@ -11,8 +12,11 @@ import {
   type VendorProductRef,
   type VendorProfile,
   type VendorSkuRef,
+  type VendorStorefrontSettings,
 } from '@/shared/api'
-import { createEmptyOnboardingDraft } from '../data/onboarding-defaults'
+import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
+import { completedBefore, type SavedBaselines } from './onboarding-progress'
+import { AMBIGUOUS_BUSINESS_TYPE, type TypeCategories } from './onboarding-saved-type'
 import { isValidIndianMobile } from './onboarding-validation'
 import { isStoreSubmitted } from './onboarding-account-status'
 import { loadMeasurementCatalog } from './measurement-catalog-cache'
@@ -39,8 +43,9 @@ import type {
  * selections have to come back from the server.
  *
  * Step 9 is the exception: `GET /{identifier}/storefront` is the only read that carries
- * branding and it returns 404 until an admin approves the store, so a vendor still in the
- * wizard can never read it. Branding therefore falls back to defaults.
+ * theme/text branding and it returns 404 until an admin approves the store. Unfinished
+ * setup therefore keeps branding defaults; approved completed stores hydrate editable
+ * settings from that read. Logo/banner URLs restore through the authenticated images endpoint.
  */
 export type ServerOnboardingState = {
   context: VendorContext
@@ -51,9 +56,6 @@ export type ServerOnboardingState = {
   checkout: CheckoutOptionsSnapshot | null
   businessTypes: BusinessTypeReference[]
 }
-
-/** A never-configured vendor reports this, so it cannot be read as a real choice. */
-const UNSET_BUSINESS_TYPE = 'Others'
 
 const WEEKDAYS = new Set<Weekday>([
   'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
@@ -67,6 +69,9 @@ export type OnboardingResource =
   | 'products'
   | 'skus'
   | 'checkout'
+  | 'logo'
+  | 'banner'
+  | 'storefront'
 
 const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus']
 
@@ -80,15 +85,18 @@ const CATALOG_CHAIN: readonly OnboardingResource[] = ['profile', 'businessTypes'
  */
 export function stepResources(
   step: OnboardingStep,
-  options: { submitted: boolean },
+  options: { submitted: boolean; approved?: boolean },
 ): { account: readonly OnboardingResource[]; units: boolean } {
   switch (step) {
     case 1:
     case 2:
       return { account: [], units: false }
     case 3:
-    case 9:
       return { account: CATALOG_CHAIN.slice(0, 2), units: false }
+    case 9:
+      return { account: options.submitted && options.approved
+        ? ['profile', 'businessTypes', 'logo', 'banner', 'storefront']
+        : ['profile', 'businessTypes', 'logo', 'banner'], units: false }
     case 4:
       return { account: CATALOG_CHAIN.slice(0, 3), units: false }
     case 5:
@@ -101,8 +109,13 @@ export function stepResources(
     case 10:
       return options.submitted
         ? { account: ['profile'], units: false }
-        : { account: [...CATALOG_CHAIN, 'checkout'], units: true }
+        : { account: [...CATALOG_CHAIN, 'checkout', 'logo', 'banner'], units: true }
   }
+}
+
+/** Optional image reads never gate the form, review or resource-derived resume. */
+export function requiredStepResources(step: OnboardingStep, options: { submitted: boolean; approved?: boolean }): readonly OnboardingResource[] {
+  return stepResources(step, options).account.filter((resource) => resource !== 'logo' && resource !== 'banner')
 }
 
 /** The platform measurement catalog, read at most once per session. */
@@ -150,14 +163,22 @@ function readAccountResource<R extends OnboardingResource>(
     skus: () => vendorOnboardingService.getVendorSkus(vendorId),
     // A first-time vendor legitimately 404s here; the service already maps that to null.
     checkout: () => vendorOnboardingService.getCheckoutOptions(vendorId),
+    logo: () => vendorImagesService.getImage(vendorId, 'logo'),
+    banner: () => vendorImagesService.getImage(vendorId, 'banner'),
+    storefront: () => vendorOnboardingService.getStorefrontSettings(vendorId),
   }
   return reads[resource]()
 }
 
-/** The profile's business type, or `null` while the vendor has not chosen one. */
+/**
+ * The type the vendor record names, or `null` for none or the ambiguous `"Others"` (also what
+ * a never-configured vendor reports). Decides only whether a step reads the business types to
+ * match the name, and the resource-derived fallback; the saved type itself is
+ * `resolveSavedType`'s. TEMP(onboarding-saved-type): see `onboarding-saved-type.ts`.
+ */
 export function savedBusinessType(profile: VendorProfile | null): string | null {
   const type = profile?.businessType?.trim()
-  return type && type !== UNSET_BUSINESS_TYPE ? type : null
+  return type && type !== AMBIGUOUS_BUSINESS_TYPE ? type : null
 }
 
 function hasBusinessType(state: ServerOnboardingState): boolean {
@@ -252,14 +273,57 @@ export function derivedResumeStep(state: ServerOnboardingState): OnboardingStep 
   return Math.max(earliest, next) as OnboardingStep
 }
 
-/** The reference object for the profile's saved business type, or `null` when unmatched. */
-export function resolveBusinessType(
-  profile: VendorProfile | null,
-  businessTypes: BusinessTypeReference[],
-): BusinessTypeReference | null {
-  const name = savedBusinessType(profile)
-  if (!name) return null
-  return businessTypes.find((item) => item.name === name) ?? null
+/** One business type's category list, as `GET /v1/categories/?business_type_id=` pages it. */
+async function readBusinessTypeCategories(type: BusinessTypeReference): Promise<TypeCategories> {
+  const ids: number[] = []
+  let firstPage: TypeCategories['firstPage']
+  // A list longer than this is not a list the check can trust to be whole.
+  for (let pageNumber = 0; pageNumber < 20; pageNumber++) {
+    // Sorted as Step 4 reads it, so the first page can stand in for Step 4's own.
+    const page = await vendorOnboardingService.getCategories({
+      business_type_id: type.id, pageNumber, pageSize: 100, sortBy: 'id', sortOrder: 'ASC',
+    })
+    firstPage ??= page
+    // Only categories the list attributes to this type count, whatever the filter returned.
+    ids.push(...page.items.filter((item) => item.businessTypeId === type.id).map((item) => item.id))
+    if (page.lastPage || !page.items.length) return { type, categoryIds: ids, firstPage }
+  }
+  throw new Error('A business type lists too many categories to check.')
+}
+
+/**
+ * The business types' category lists, for telling a saved type from the assigned categories.
+ * TEMP(onboarding-saved-type): the last evidence of a saved type, read only when this browser
+ * has no confirmed save and the vendor record does not name one; see `onboarding-saved-type.ts`.
+ *
+ * A vendor record saying `"Others"` may mean it: that type's list is read alone first, and
+ * when it holds every assigned category it is the only list returned. A category belongs to
+ * one type, so no other list can hold them all. Otherwise, or with no such hint, every type's
+ * list is read (QA lists 30), a few at a time. Rejects if any read fails.
+ */
+export async function readTypeCategories(
+  businessTypes: readonly BusinessTypeReference[],
+  hint: { profileTypeName: string | null; assignedCategoryIds: readonly number[] },
+): Promise<TypeCategories[]> {
+  const lists: TypeCategories[] = []
+  const queue = [...businessTypes]
+  const others = hint.profileTypeName?.trim() === AMBIGUOUS_BUSINESS_TYPE
+    ? queue.find((type) => type.name === AMBIGUOUS_BUSINESS_TYPE)
+    : undefined
+  if (others) {
+    const list = await readBusinessTypeCategories(others)
+    const listed = new Set(list.categoryIds)
+    if (hint.assignedCategoryIds.length && hint.assignedCategoryIds.every((id) => listed.has(id))) return [list]
+    lists.push(list)
+    queue.splice(queue.indexOf(others), 1)
+  }
+  const worker = async () => {
+    for (let type = queue.shift(); type; type = queue.shift()) {
+      lists.push(await readBusinessTypeCategories(type))
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker))
+  return lists
 }
 
 function selectedProducts(products: VendorProductRef[]): SelectedProduct[] {
@@ -438,15 +502,27 @@ function keepsLocal(step: OnboardingStep, options: ResumeApplyOptions): boolean 
 }
 
 /**
- * Where the draft stands: the open step, the steps counted as done and every field no
- * account resource owns. Applied only when nothing is edited or the store is submitted.
+ * Where the draft stands: the open step and the steps counted as done, always from the
+ * account, whatever is edited. Saved progress is the account's, so unsaved local work never
+ * holds a vendor on an earlier step or locks a step the account has finished.
+ *
+ * The fields no account resource owns (catalog source, preview state) reset only when nothing
+ * is edited or the store is submitted: an edited draft keeps its catalog source, so a sample
+ * draft stays refused at Continue rather than writing sample ids to the account.
  */
 export function applyResumeFrame(
   draft: VendorOnboardingDraftV1,
   openAt: OnboardingStep,
   options: ResumeApplyOptions,
 ): VendorOnboardingDraftV1 {
-  if (options.edited.size && !options.submitted) return draft
+  const position = {
+    currentStep: openAt,
+    // Steps 1-2 are settled by the session that got us here; everything before the first
+    // unfinished step is saved on the account, so it counts as done.
+    completedSteps: completedBefore(openAt),
+    mobileVerified: true,
+  }
+  if (options.edited.size && !options.submitted) return { ...draft, ...position }
   const base = createEmptyOnboardingDraft()
   return {
     ...draft,
@@ -454,43 +530,66 @@ export function applyResumeFrame(
     catalogSource: base.catalogSource,
     maskedPhone: base.maskedPhone,
     publication: base.publication,
-    currentStep: openAt,
-    // Steps 1-2 are settled by the session that got us here; everything before the first
-    // unfinished step is saved on the account, so it counts as done.
-    completedSteps: ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as OnboardingStep[]).filter((step) => step < openAt),
-    mobileVerified: true,
+    ...position,
   }
 }
 
-/** Step 9's part of the profile: the business names and the store name. */
+/**
+ * Step 9's store name. The vendor record read can serve a cached name for about 30 minutes
+ * after a write (backend gap, QA 11 Nov 2026), while the context is current, so the context
+ * name wins and the vendor record is the fallback.
+ */
 export function applyProfile(
   draft: VendorOnboardingDraftV1,
   profile: VendorProfile | null,
   options: ResumeApplyOptions,
+  contextBusinessName: string | null,
 ): VendorOnboardingDraftV1 {
   if (keepsLocal(9, options)) return draft
-  const base = createEmptyOnboardingDraft()
+  const storeName = contextBusinessName || profile?.businessName || ''
   return {
     ...draft,
-    business: {
-      ...draft.business,
-      businessName: profile?.businessName ?? base.business.businessName,
-      ownerName: profile?.ownerName ?? base.business.ownerName,
-      contactPerson: profile?.contactPerson ?? base.business.contactPerson,
-    },
-    // Branding is unreadable until approval, so Step 9 keeps its defaults and the
-    // store name is the one field the vendor record can supply.
-    storefront: { ...base.storefront, storeName: profile?.businessName ?? '' },
+    business: { ...draft.business, businessName: storeName },
+    // The rest of Step 9 is saved but unreadable until approval (storefront read 404s), so
+    // this owner's local copy is the only source; resetting it to defaults lost the saved
+    // business location and tagline on reload. An approved store's storefront read
+    // replaces it afterwards (`applyStorefront`).
+    storefront: { ...draft.storefront, storeName },
   }
 }
 
-/** Step 3: the saved business type, resolved by `resolveBusinessType`. */
+/** Approved stores have a readable storefront; use it instead of new-store branding defaults. */
+export function applyStorefront(
+  draft: VendorOnboardingDraftV1,
+  saved: VendorStorefrontSettings,
+): VendorOnboardingDraftV1 {
+  const { theme, orderWhatsapp: _order, supportWhatsapp: _support, ...details } = saved
+  return {
+    ...draft,
+    business: { ...draft.business, businessName: saved.storeName },
+    storefront: {
+      ...createEmptyOnboardingDraft().storefront,
+      ...details,
+      ...theme,
+      trustStrip: saved.trustStrip.map((badge, index) => ({ ...badge, id: `saved-badge-${index}` })),
+    },
+  }
+}
+
+export function resumeStorefrontWhatsapp(saved: VendorStorefrontSettings) {
+  return { orderWhatsapp: toNationalMobile(saved.orderWhatsapp), supportWhatsapp: toNationalMobile(saved.supportWhatsapp) }
+}
+
+/**
+ * Step 3: the account's business type (see `resolveSavedType`). A saved type is locked, so
+ * `locked` takes it over an unsaved local choice: Step 3 then holds no input of its own.
+ */
 export function applyBusinessType(
   draft: VendorOnboardingDraftV1,
   businessType: BusinessTypeReference | null,
-  options: ResumeApplyOptions,
+  options: ResumeApplyOptions & { locked?: boolean },
 ): VendorOnboardingDraftV1 {
-  if (keepsLocal(3, options)) return draft
+  if (!options.locked && keepsLocal(3, options)) return draft
   return { ...draft, business: { ...draft.business, businessType } }
 }
 
@@ -558,6 +657,22 @@ export function applyCheckout(
   }
 }
 
+/**
+ * Steps 7 and 8's saved values from one checkout read, as save baselines. Payment details
+ * are included because they are part of what Step 8 saves; baselines live in memory only.
+ */
+export function checkoutBaselines(checkout: CheckoutOptionsSnapshot | null): Pick<SavedBaselines, 7 | 8> {
+  const none: ResumeApplyOptions = { edited: new Set(), submitted: false }
+  const saved = applyCheckout(createEmptyOnboardingDraft(), checkout, none)
+  return {
+    7: { delivery: saved.delivery },
+    8: {
+      payments: saved.payments,
+      paymentDetails: resumePaymentDetails(checkout, createEmptyRuntimeState().paymentDetails),
+    },
+  }
+}
+
 /** Step 9's order number from the profile; runtime state, never part of the draft. */
 export function resumeOrderWhatsapp(profile: VendorProfile | null): string {
   return toNationalMobile(profile?.contactNumber)
@@ -569,7 +684,8 @@ export type ResourceStatus = 'idle' | 'loading' | 'loaded' | 'failed'
 /**
  * Whether a step can show its form: every account resource it lists has loaded and, where
  * it uses them, the units have settled. A units failure is not a block: the sample units
- * stand in. A failed resource fails the step even while another still loads, so the vendor
+ * stand in. Step 9 renders its details independently of its image reads; their own region
+ * handles loading/failure, and Continue still waits for them. A failed resource fails other steps even while another still loads, so the vendor
  * can retry at once. A submitted store's Step 10 shows its status and never blocks: it waits
  * only for the profile to settle, and a failed profile just leaves the store name to its
  * fallback.
@@ -578,6 +694,7 @@ export function stepLoadState(
   step: OnboardingStep,
   options: {
     submitted: boolean
+    approved?: boolean
     resources: Readonly<Record<OnboardingResource, ResourceStatus>>
     units: ResourceStatus
   },
@@ -587,7 +704,8 @@ export function stepLoadState(
     return profile === 'loaded' || profile === 'failed' ? 'loaded' : 'loading'
   }
   const needs = stepResources(step, options)
-  const statuses = needs.account.map((resource) => options.resources[resource])
+  const statuses = requiredStepResources(step, options)
+    .map((resource) => options.resources[resource])
   if (statuses.includes('failed')) return 'failed'
   if (statuses.some((status) => status !== 'loaded')) return 'loading'
   if (needs.units && (options.units === 'idle' || options.units === 'loading')) return 'loading'
@@ -600,7 +718,7 @@ export function stepLoadState(
  */
 export function accountResumeState(
   context: VendorContext,
-  values: OnboardingResourceData,
+  values: Omit<OnboardingResourceData, 'storefront' | 'logo' | 'banner'>,
 ): ServerOnboardingState {
   return { context, ...values }
 }

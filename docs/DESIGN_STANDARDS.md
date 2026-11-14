@@ -22,13 +22,46 @@ design reference.
 
 ### Onboarding action feedback
 
-- Use the wizard-scoped shadcn toast for refused saved-category/product removal, validation on
-  Continue or Add, image selection errors, failed actions, in-place saves, and OTP resend success.
+- Use the wizard-scoped shadcn toast for refused saved-category/product removal, missing choices
+  on Steps 3-5, failed saves on Steps 3-5 and 10, in-place saves, and OTP resend success.
 - Keep messages concise and regular weight: amber cautions, red errors, green success.
-- Show only the latest toast. Warnings/successes last 4 seconds; errors last 6 seconds. Hover/focus
+- Show only the latest toast. Warnings/successes last 3 seconds; errors last 5 seconds. Hover/focus
   pauses dismissal; close and swipe remain available. Clear on step changes and wizard exit.
-- Validation toasts supplement persistent inline errors and existing first-error focus/scroll.
-  The toast supplies the action announcement; do not duplicate it in another live region.
+- Wizard toasts sit just above its footer so Continue and upload retry stay reachable; from 1400px
+  wide they sit in the corner, clear of the footer's buttons.
+- Show each error once. A message tied to one field (Steps 1, 2 and 6-9, including image selection
+  errors) is inline only, with first-error focus/scroll. A missing choice on Steps 3-5 (business
+  type, category, product) is a toast only, with no inline message or scroll; the exception is a
+  category with no product on Step 5, whose panel still opens and scrolls into view. Plan-limit
+  messages stay inline and in the toast. The toast
+  supplies the announcement; do not duplicate it in another live region.
+- A done Step 5 or 6 whose saved catalog has missing work (a saved category without a saved
+  product, a saved product without a saved switched-on size) carries a **Needs attention** marker
+  on its stepper dot, after submission too (under review, Step 5 only), once that step's own
+  account reads have landed; an unsaved pick never marks another step. The marker is an amber
+  (`--md-warning`) ring and a small amber "!" badge in the corner the submitted-store "+" badge
+  uses (the current step shows only the badge, keeping its own ring). The bar adds no text; the dot's accessible name and title say "needs attention",
+  and the step stays reachable. Inside the step the missing item is marked in place, with no banner:
+  a category without a product gets an amber outline and "Needs a product", a product without a
+  valid size an amber outline and a warning "Needs a size" badge, and the first such group opens.
+- Steps 4-6 mark only an **optional extra the vendor could drop**: an item not saved yet once
+  the account already holds one of its kind. On Step 4 that is a pick (or vendor-authored
+  category) once a category is saved; on Step 5 a pick (or authored product) in a category that
+  already has a saved product; on Step 6 a size added to a product that already has a saved
+  size. A first item is never marked: no saved category, a category without a saved product, or
+  a product without a saved size (its starter row, filled or not, and sizes added before its
+  first save) all look as they will once saved.
+- An optional extra wears a **dashed outline only**: no tag, badge, key line or extra colour.
+  Cards switch to a 2px dashed border; a Step 6 size row always carries a 2px border and swaps
+  it from transparent to a dashed `--ob-brand` one, so marking a row never moves or resizes it.
+- A saved Step 6 size with unsaved changes is not outlined. Only each changed control is
+  tinted: a changed input or unit takes the `--ob-brand-soft` fill and a light `--ob-brand`
+  border, a changed on/off switch a `--ob-brand-soft` halo. Its cross becomes an ↺ Undo
+  button ("Undo changes") that restores the saved values, unless that would leave the
+  product with no switched-on size; the cross returns after Undo.
+- Marks clear once the step saves. They are visual only, so an extra's accessible name ends with
+  "not saved" and an edited saved size's with "unsaved changes". Explanations of why a saved
+  item can't be removed stay; there is no "Saved to your store" or "Not saved yet" text.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
   submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
 
@@ -52,7 +85,7 @@ design reference.
 | `Skeleton` | `@/shared/components` | [skeleton.tsx](../src/components/ui/skeleton.tsx). `aria-hidden`; shimmer from `.md-skeleton` in `global.css`. |
 | `RowSkeleton` (vendor) | `@/modules/vendor/components/RowSkeleton` | [RowSkeleton.tsx](../src/modules/vendor/components/RowSkeleton.tsx). Row placeholders under one status label; screen skeletons such as [PlanSkeleton.tsx](../src/modules/vendor/components/PlanSkeleton.tsx) follow the same pattern. |
 | `Spinner`, `Button` `pending` | `@/shared/components` | [ui/index.tsx](../src/shared/components/ui/index.tsx). `pending` disables the button, sets `aria-busy` and adds a decorative spinner before the label. |
-| `LoadError` | `@/shared/components` | [LoadError.tsx](../src/shared/components/LoadError.tsx). `role="alert"`, "Something went wrong" and **Try again** (`onRetry`); extra actions go in `children`. |
+| `LoadError` | `@/shared/components` | [LoadError.tsx](../src/shared/components/LoadError.tsx). `role="alert"`; defaults to "Something went wrong" and **Try again** (`onRetry`). `message` and `retryLabel` allow contextual failures/retries, such as optional onboarding images; extra actions go in `children`. |
 | `RouteErrorBoundary` | `@/app/router/RouteErrorBoundary` | [RouteErrorBoundary.tsx](../src/app/router/RouteErrorBoundary.tsx). Wraps the routes in [router/index.tsx](../src/app/router/index.tsx); a render error or failed route chunk shows `LoadError`, and Try again reloads the page. |
 | `useShowAfterDelay` | `@/shared/hooks/useShowAfterDelay` | [useShowAfterDelay.ts](../src/shared/hooks/useShowAfterDelay.ts). Owns the shared delay, `LOADER_SHOW_DELAY_MS`. |
 

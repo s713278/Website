@@ -35,6 +35,32 @@ describe('getVendorContext', () => {
   })
 })
 
+describe('approved store settings', () => {
+  it('reads the public storefront with cancellation and maps its saved settings', async () => {
+    const signal = new AbortController().signal
+    const request = vi.spyOn(getHttp(), 'get').mockResolvedValue({ data: {
+      vendor_id: 91, business_name: 'Test Store', tagline: 'Saved tagline', hero_badges: [], trust_strip: [],
+      theme: { primary_color: '#123456', button_shape: 'SQUARE' },
+    } })
+    await expect(vendorOnboardingService.getStorefrontSettings('91', { signal })).resolves.toMatchObject({
+      storeName: 'Test Store', tagline: 'Saved tagline', heroBadges: [], trustStrip: [],
+      theme: { primaryColor: '#123456', buttonShape: 'SQUARE' },
+    })
+    expect(request).toHaveBeenCalledWith('/v1/vendors/91/storefront', expect.objectContaining({ skipAuth: true, signal }))
+  })
+
+  it('propagates unavailable settings instead of supplying a default configuration', async () => {
+    vi.spyOn(getHttp(), 'get').mockRejectedValue(new Error('Storefront unavailable'))
+    await expect(vendorOnboardingService.getStorefrontSettings('91')).rejects.toThrow('Storefront unavailable')
+  })
+
+  it('updates only the business name without onboarding, category, approval or status fields', async () => {
+    const request = vi.spyOn(getHttp(), 'put').mockResolvedValue({ data: { success: true } })
+    await vendorOnboardingService.saveStoreProfile('91', { businessName: ' Test Store ' })
+    expect(request).toHaveBeenCalledWith('/v1/vendors/91', { business_name: 'Test Store' }, expect.anything())
+  })
+})
+
 describe('createSkus', () => {
   it('sends a numeric quantity_value instead of the rejected price value field', async () => {
     const request = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true } })

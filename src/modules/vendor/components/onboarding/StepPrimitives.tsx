@@ -127,6 +127,7 @@ export function CategoryPanel({
   meta,
   count,
   error,
+  attention = false,
   children,
 }: {
   id: string
@@ -135,6 +136,11 @@ export function CategoryPanel({
   name: string
   meta: string
   count: number
+  /**
+   * The group holds catalog work an earlier edit left missing: an amber outline, with the
+   * `meta` line (which should say what is missing) in amber too.
+   */
+  attention?: boolean
   /**
    * A validation message for the whole group, shown first in the body, right under the summary.
    * Not below the panel: a list that loads after the panel opens would push it out of view.
@@ -147,7 +153,13 @@ export function CategoryPanel({
       id={id}
       open={open}
       onToggle={onToggle}
-      className="group overflow-hidden rounded-2xl border border-[var(--ob-line)] bg-[var(--ob-sheet)] shadow-xs transition-[border-color,box-shadow] open:border-[color-mix(in_srgb,var(--ob-brand)_35%,var(--ob-line))] open:shadow-[0_0_0_1px_color-mix(in_srgb,var(--ob-brand)_18%,transparent)] motion-reduce:transition-none"
+      data-attention={attention || undefined}
+      className={cn(
+        'group overflow-hidden rounded-2xl border bg-[var(--ob-sheet)] shadow-xs transition-[border-color,box-shadow] motion-reduce:transition-none',
+        attention
+          ? 'border-[color-mix(in_srgb,var(--md-warning)_60%,var(--ob-line))] shadow-[0_0_0_1px_color-mix(in_srgb,var(--md-warning)_22%,transparent)]'
+          : 'border-[var(--ob-line)] open:border-[color-mix(in_srgb,var(--ob-brand)_35%,var(--ob-line))] open:shadow-[0_0_0_1px_color-mix(in_srgb,var(--ob-brand)_18%,transparent)]',
+      )}
     >
       <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-2.5 px-3.5 py-3 outline-none transition-colors hover:bg-[var(--ob-brand-soft)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ob-brand)] motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
         <span
@@ -158,7 +170,7 @@ export function CategoryPanel({
         </span>
         <div className="min-w-0">
           <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--ob-ink)]">{name}</h3>
-          <p className="mt-0.5 text-xs text-[var(--ob-ink-soft)]">{meta}</p>
+          <p className={cn('mt-0.5 text-xs', attention ? 'font-medium text-amber-800 dark:text-amber-200' : 'text-[var(--ob-ink-soft)]')}>{meta}</p>
         </div>
         <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-bold text-[var(--ob-ink-soft)] group-open:bg-[var(--ob-brand-soft)] group-open:text-[color-mix(in_srgb,var(--ob-brand)_80%,var(--ob-ink))]">
           {count}
@@ -190,9 +202,12 @@ export function ChoiceCard({
   leading,
   footer,
   autoFocus,
+  unsaved = false,
   ref,
 }: {
   selected: boolean
+  /** An optional extra chosen here and not in the account yet: a dashed outline, nothing else. */
+  unsaved?: boolean
   title: string
   description?: string | null
   onClick: () => void
@@ -224,6 +239,7 @@ export function ChoiceCard({
         selected
           ? 'border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] ring-3 ring-[var(--ob-brand-soft)]'
           : 'border-[var(--ob-line)] bg-[var(--ob-sheet)]',
+        unsaved && 'border-2 border-dashed',
         !selected && !muted && 'hover:-translate-y-0.5 hover:border-[var(--ob-brand)] motion-reduce:hover:translate-y-0',
         muted && 'cursor-not-allowed opacity-50',
       )}
@@ -231,6 +247,8 @@ export function ChoiceCard({
       {leading}
       <span className="min-w-0">
         <span className={cn('line-clamp-2 text-sm leading-5 font-semibold text-[var(--ob-ink)]', selected && 'text-[var(--md-green-800)] dark:text-[var(--ob-ink)]')}>{title}</span>
+        {/* The outline is visual only. */}
+        {unsaved ? <span className="sr-only">, not saved</span> : null}
         {description ? <span className="mt-1 line-clamp-2 block text-xs leading-4 text-[var(--ob-ink-soft)]">{description}</span> : null}
       </span>
       {footer}

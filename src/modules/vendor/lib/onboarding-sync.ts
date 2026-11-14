@@ -7,6 +7,7 @@ import {
   type CheckoutPaymentInput,
   type SkuCreateInput,
   type StorefrontConfigInput,
+  type VendorCategoryRef,
   type VendorProductRef,
   type VendorSkuRef,
 } from '@/shared/api'
@@ -23,6 +24,7 @@ import type {
 import type { OnboardingResource } from './onboarding-resume'
 import { peekOnboardingResource } from './onboarding-resource-cache'
 import { serverSkuIdOf } from './onboarding-sku-id'
+import { assertImageSaveCurrent, savePendingImages, type ImageSaveOptions } from './onboarding-images'
 
 /**
  * Steps written to the vendor account on Continue.
@@ -114,7 +116,6 @@ export function stepSaveFingerprint(
     return JSON.stringify({
       source: draft.catalogSource,
       storefront: toStorefrontInput(draft, runtime),
-      business: toBusinessDetailsInput(draft),
     })
   }
   return catalogFingerprint(step, draft)
@@ -127,7 +128,8 @@ export function stepsSavedTogether(step: OnboardingStep): OnboardingStep[] {
 
 /** The account resource a step's save writes, so only its cached read goes stale. */
 export function savedResources(step: OnboardingStep): readonly OnboardingResource[] {
-  if (step === 3 || step === 9) return ['profile']
+  if (step === 3) return ['profile']
+  if (step === 9) return ['profile', 'storefront']
   if (step === 4) return ['categories']
   if (step === 5) return ['products']
   if (step === 6) return ['skus']
@@ -137,7 +139,7 @@ export function savedResources(step: OnboardingStep): readonly OnboardingResourc
 
 /** Go-live can change every account resource; business types are platform data it never touches. */
 export const GO_LIVE_RESOURCES: readonly OnboardingResource[] = [
-  'profile', 'categories', 'products', 'skus', 'checkout',
+  'profile', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront',
 ]
 
 /** Field to focus when a save for this step fails. */
@@ -202,10 +204,8 @@ function toStorefrontInput(
       cardStyle: draft.storefront.cardStyle,
       themePreset: draft.storefront.themePreset,
     },
-    // Image upload stays out until the wizard uploads through the images endpoint;
-    // a local object URL must never be sent.
-    uploadedLogoUrl: null,
-    uploadedBannerUrl: null,
+    uploadedLogoUrl: runtime.savedLogoUrl,
+    uploadedBannerUrl: runtime.savedBannerUrl,
   }
 }
 
@@ -240,22 +240,6 @@ function toPaymentInput(
       isDefault: option.isDefault,
     })),
     details: runtime.paymentDetails,
-  }
-}
-
-/**
- * owner_name and contact_person have no home in the storefront config, so Step 9 sends
- * them on the business-type record where the contract defines them. `null` until a
- * business type is chosen, since that write needs one.
- */
-function toBusinessDetailsInput(draft: VendorOnboardingDraftV1) {
-  const businessType = draft.business.businessType
-  if (!businessType) return null
-  return {
-    businessType: businessType.name,
-    businessName: draft.storefront.storeName,
-    ownerName: draft.business.ownerName,
-    contactPerson: draft.business.contactPerson,
   }
 }
 
@@ -595,16 +579,23 @@ export function categoriesToAssign(
   return draftCategoryIds.filter((id) => !assigned.has(id))
 }
 
+/**
+ * `cachedCategories` is this visit's current read of the account's categories, if it holds one
+ * (`peekOnboardingResource`: none from before an away, and a Step 4 save, or a failed one,
+ * clears it). Only Step 4 assigns categories, so it is what the account holds; without it the
+ * save reads the account.
+ */
 async function persistCategories(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
+  cachedCategories?: VendorCategoryRef[],
 ): Promise<void> {
   // Author any pending categories first, recording their platform ids into the draft before
   // the assign below ever runs. The assign then works on positive ids only.
   const minted = await mintPendingEntries(draft, 4, onCreated)
-  const existing = await vendorOnboardingService.getVendorCategories(vendorId)
+  const existing = cachedCategories ?? await vendorOnboardingService.getVendorCategories(vendorId)
   const categoryIds = categoriesToAssign(
     minted.categories.map((category) => category.id),
     existing.map((category) => category.platformCategoryId),
@@ -620,16 +611,18 @@ type ProductPersistenceService = Pick<
   'getVendorProducts' | 'assignProducts'
 >
 
+/** `cachedProducts` stands in for a read of the account's products, as in `persistCategories`. */
 export async function persistProducts(
   vendorId: string,
   draft: VendorOnboardingDraftV1,
   onAssigned: OnAssigned,
   onCreated: OnCreated,
   service: ProductPersistenceService = vendorOnboardingService,
+  cachedProducts?: VendorProductRef[],
 ): Promise<void> {
   // Author any pending products first, so their platform ids are recorded and assigned below.
   const minted = await mintPendingEntries(draft, 5, onCreated)
-  const existing = await service.getVendorProducts(vendorId)
+  const existing = cachedProducts ?? await service.getVendorProducts(vendorId)
   const assigned = new Set(existing.map((product) => product.platformProductId))
 
   // `category_id` here is the PLATFORM category, despite the endpoint description.
@@ -861,6 +854,7 @@ export async function persistStep(
   onAssigned: OnAssigned,
   onCreated: OnCreated,
   knownSkuIds: readonly number[] = [],
+  imageOptions: ImageSaveOptions & { approvedStore?: boolean } = {},
 ): Promise<void> {
   if (step === 3) {
     const businessType = draft.business.businessType
@@ -873,8 +867,15 @@ export async function persistStep(
   // Category and product writes only ever assign (PATCH is additive; a vendor cannot
   // unassign — 403, Admin only). Sizes reconcile the draft against the account. A store under
   // review never persists Step 6; an approved store does, as in setup.
-  if (step === 4) return persistCategories(vendorId, draft, onAssigned, onCreated)
-  if (step === 5) return persistProducts(vendorId, draft, onAssigned, onCreated)
+  // Each is diffed against this visit's current read when it holds one.
+  if (step === 4) {
+    return persistCategories(vendorId, draft, onAssigned, onCreated,
+      peekOnboardingResource(vendorId, 'categories')?.value)
+  }
+  if (step === 5) {
+    return persistProducts(vendorId, draft, onAssigned, onCreated, vendorOnboardingService,
+      peekOnboardingResource(vendorId, 'products')?.value)
+  }
   if (step === 6) {
     return persistSkus(vendorId, draft, onAssigned, vendorOnboardingService, knownSkuIds,
       peekOnboardingResource(vendorId, 'products')?.value)
@@ -892,8 +893,18 @@ export async function persistStep(
   }
 
   if (step === 9) {
-    await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, runtime))
-    const businessDetails = toBusinessDetailsInput(draft)
-    if (businessDetails) await vendorOnboardingService.saveBusinessType(vendorId, businessDetails)
+    const images = await savePendingImages(vendorId, runtime, imageOptions)
+    assertImageSaveCurrent(imageOptions)
+    // The storefront PUT carries the store name. Step 9 never sends the Step 3 business-type
+    // PATCH: it resets onboarding to Step 3, which resumed vendors on Step 4 (QA, 10 Nov 2026).
+    await vendorOnboardingService.saveStorefront(vendorId, toStorefrontInput(draft, {
+      ...runtime, savedLogoUrl: images.logo, savedBannerUrl: images.banner,
+    }))
+    assertImageSaveCurrent(imageOptions)
+    if (imageOptions.approvedStore) {
+      await vendorOnboardingService.saveStoreProfile(vendorId, {
+        businessName: draft.storefront.storeName,
+      })
+    }
   }
 }

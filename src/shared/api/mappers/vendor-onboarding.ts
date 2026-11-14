@@ -498,9 +498,6 @@ export function mapVendorContext(payload: unknown): VendorContext {
 export type BusinessTypeSaveInput = {
   /** The exact backend `type` value, not the display label. */
   businessType: string
-  businessName?: string
-  ownerName?: string
-  contactPerson?: string
 }
 
 export type BusinessTypeSaveRequest = components['schemas']['VendorBusinessTypeRequest']
@@ -509,9 +506,6 @@ export type AssignCategoriesRequest = components['schemas']['AssignCategoriesReq
 export function mapBusinessTypeRequest(input: BusinessTypeSaveInput): BusinessTypeSaveRequest {
   return {
     business_type: input.businessType.trim(),
-    business_name: optionalTrimmed(input.businessName ?? ''),
-    owner_name: optionalTrimmed(input.ownerName ?? ''),
-    contact_person: optionalTrimmed(input.contactPerson ?? ''),
   }
 }
 
@@ -786,8 +780,6 @@ export type VendorProfile = {
   businessName: string
   /** Display string, e.g. "Beverages & Juice Center" — not an id. */
   businessType: string | null
-  ownerName: string
-  contactPerson: string
   contactNumber: string
 }
 
@@ -804,8 +796,6 @@ export function mapVendorProfile(payload: unknown): VendorProfile {
   return {
     businessName: lenientString(data.business_name) ?? '',
     businessType: lenientString(data.business_type),
-    ownerName: lenientString(data.owner_name) ?? '',
-    contactPerson: lenientString(data.contact_person) ?? '',
     contactNumber: lenientString(data.contact_number) ?? '',
   }
 }

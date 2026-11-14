@@ -11,7 +11,7 @@ import {
   type VendorOnboardingDraftV1,
 } from '../types/onboarding'
 import type { MeasurementCatalog } from './onboarding-measurement'
-import { additiveCatalogIssues, readinessIssues, validateStep } from './onboarding-validation'
+import { approvedSizeIssues, readinessIssues, validateStep } from './onboarding-validation'
 
 function product(id: number, name: string): SelectedProduct {
   return {
@@ -491,15 +491,6 @@ describe('validateStep — step 5 needs a product in every chosen category', () 
     expect(validateStep(5, draft, runtime).map((item) => item.field)).toEqual(['products'])
   })
 
-  it('does not require a product per category for a submitted store', () => {
-    const draft = {
-      ...createEmptyOnboardingDraft(),
-      categories: [category(10), category(20)],
-      products: [productIn(1, 10)],
-    }
-    expect(additiveCatalogIssues(5, draft)).toEqual([])
-  })
-
   it('allows Continue when every chosen category has a product', () => {
     const draft = {
       ...createEmptyOnboardingDraft(),
@@ -576,49 +567,13 @@ describe('isAdditiveCatalogStep', () => {
   })
 })
 
-describe('additiveCatalogIssues — a submitted store only validates the delta', () => {
-  function category(id: number): VendorOnboardingDraftV1['categories'][number] {
-    return { id, name: `Category ${id}`, businessTypeId: 1, description: null, imageUrl: null, displayOrder: null }
-  }
-
-  it('does not require a category the way validateStep does', () => {
-    // The account still holds its categories; adding none is allowed for a submitted store.
-    const draft = createEmptyOnboardingDraft()
-    const enforcement = { account: { categoryIds: [11, 12], productIds: [], skuIds: [] } }
-    expect(additiveCatalogIssues(4, draft, 2, enforcement)).toEqual([])
-    // validateStep, by contrast, would demand at least one category.
-    expect(validateStep(4, draft, runtime, 2, [], enforcement).some((item) => item.field === 'categories')).toBe(true)
-  })
-
-  it('still rejects categories past the plan limit', () => {
-    const draft = { ...createEmptyOnboardingDraft(), categories: [category(21)] }
-    expect(additiveCatalogIssues(4, draft, 2, {
-      account: { categoryIds: [11, 12], productIds: [], skuIds: [] },
-    }).some((item) => item.field === 'categories')).toBe(true)
-  })
-
-  it('does not require a product or flag whole-store readiness on step 5', () => {
-    const draft = createEmptyOnboardingDraft()
-    expect(additiveCatalogIssues(5, draft, undefined, {
-      maxProducts: 3,
-      account: { categoryIds: [], productIds: [31], skuIds: [] },
-    })).toEqual([])
-  })
-
-  it('still rejects products past the plan limit', () => {
-    const draft = draftWith([product(41, 'New')], [])
-    expect(additiveCatalogIssues(5, draft, undefined, {
-      maxProducts: 3,
-      account: { categoryIds: [], productIds: [31, 32, 33], skuIds: [] },
-    }).some((item) => item.field === 'products')).toBe(true)
-  })
-
+describe('approvedSizeIssues — an approved store keeps setup\'s size rules', () => {
   it('rejects new sizes with missing prices and a total past the plan limit', () => {
     const draft = draftWith(
       [product(41, 'Juice')],
       [sku({ id: 'draft-sku-41-1', productId: 41, name: 'Large', listPrice: null, salePrice: null })],
     )
-    const issues = additiveCatalogIssues(6, draft, undefined, {
+    const issues = approvedSizeIssues(draft, {
       maxSkus: 3,
       account: { categoryIds: [], productIds: [], skuIds: [4001, 4002, 4003] },
     })
@@ -626,15 +581,25 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
     expect(issues.some((item) => item.field === 'sku-draft-sku-41-1-list-price')).toBe(true)
   })
 
-  it('allows an approved size addition without requiring every saved product to be priced', () => {
+  it('allows an approved size addition within the plan limit', () => {
     const draft = draftWith(
-      [product(41, 'Juice'), product(42, 'Unpriced product')],
+      [product(41, 'Juice')],
       [sku({ id: 'sku-4001', productId: 41 }), sku({ id: 'draft-sku-41-1', productId: 41, quantity: 2 })],
     )
-    expect(additiveCatalogIssues(6, draft, undefined, {
+    expect(approvedSizeIssues(draft, {
       maxSkus: 2,
       account: { categoryIds: [], productIds: [], skuIds: [4001] },
     })).toEqual([])
+  })
+
+  it('requires a size for every product, saved products included, as in setup', () => {
+    const draft = draftWith(
+      [product(41, 'Juice'), product(42, 'Unpriced product')],
+      [sku({ id: 'sku-4001', productId: 41 })],
+    )
+    expect(approvedSizeIssues(draft)).toEqual([
+      { step: 6, field: 'product-42', message: 'Add a size for Unpriced product.' },
+    ])
   })
 
   it('checks new sizes for duplicates against saved sizes', () => {
@@ -642,7 +607,7 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
       [product(41, 'Juice')],
       [sku({ id: 'sku-4001', productId: 41 }), sku({ id: 'draft-sku-41-1', productId: 41 })],
     )
-    expect(additiveCatalogIssues(6, draft).length).toBeGreaterThan(0)
+    expect(approvedSizeIssues(draft).length).toBeGreaterThan(0)
   })
 
   it('validates edits to saved sizes, duplicates among them included', () => {
@@ -650,7 +615,7 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
       [product(41, 'Juice')],
       [sku({ id: 'sku-4001', productId: 41, salePrice: 999 }), sku({ id: 'sku-4002', productId: 41 })],
     )
-    expect(additiveCatalogIssues(6, draft)).toEqual(expect.arrayContaining([
+    expect(approvedSizeIssues(draft)).toEqual(expect.arrayContaining([
       { step: 6, field: 'sku-sku-4001-sale-price', message: 'Discounted price cannot exceed MRP.' },
       { step: 6, field: 'sku-sku-4002-quantity', message: 'Each size needs a unique quantity and unit.' },
     ]))
@@ -661,15 +626,16 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
       [product(41, 'Juice'), product(42, 'Unpriced product')],
       [sku({ id: 'sku-4001', productId: 41, active: false }), sku({ id: 'sku-4002', productId: 41, quantity: 2, active: false })],
     )
-    expect(additiveCatalogIssues(6, allOff)).toEqual([
+    expect(approvedSizeIssues(allOff)).toEqual([
       { step: 6, field: 'product-41', message: 'Turn on at least one size for Juice.' },
+      { step: 6, field: 'product-42', message: 'Add a size for Unpriced product.' },
     ])
 
     const oneOn = draftWith(
       [product(41, 'Juice')],
       [sku({ id: 'sku-4001', productId: 41, active: false }), sku({ id: 'draft-sku-41-1', productId: 41, quantity: 2 })],
     )
-    expect(additiveCatalogIssues(6, oneOn)).toEqual([])
+    expect(approvedSizeIssues(oneOn)).toEqual([])
   })
 
   it('blocks removing the only switched-on size while the remaining one is off', () => {
@@ -677,7 +643,7 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
       [product(41, 'Juice')],
       [sku({ id: 'sku-4002', productId: 41, quantity: 2, active: false })],
     )
-    expect(additiveCatalogIssues(6, removedActive)).toEqual([
+    expect(approvedSizeIssues(removedActive)).toEqual([
       { step: 6, field: 'product-41', message: 'Turn on at least one size for Juice.' },
     ])
   })
@@ -685,7 +651,7 @@ describe('additiveCatalogIssues — a submitted store only validates the delta',
   it('rejects additions past the limit when inactive account sizes are not listed', () => {
     const draft = draftWith([product(41, 'Juice')], [sku({ id: 'draft-sku-41-1', productId: 41 })])
     const account = { categoryIds: [], productIds: [], skuIds: [4001], unlistedSkuCount: 1 }
-    expect(additiveCatalogIssues(6, draft, undefined, { maxSkus: 2, account })
+    expect(approvedSizeIssues(draft, { maxSkus: 2, account })
       .some((item) => item.field === 'skus')).toBe(true)
   })
 })
@@ -776,11 +742,6 @@ describe('validateStep — step 4 leaves room for a product in every category', 
       products: [{ ...product(1, 'Milk'), categoryId: 10 }, { ...product(2, 'Rice'), categoryId: 20 }],
     }
     expect(validateStep(4, draft, runtime, 5, [], { maxProducts: 2 })).toEqual([])
-  })
-
-  it('does not apply to a submitted store, which need not fill every category', () => {
-    const draft = { ...createEmptyOnboardingDraft(), categories: [category(10), category(20)] }
-    expect(additiveCatalogIssues(4, draft, 5, { maxProducts: 0 })).toEqual([])
   })
 })
 
@@ -942,7 +903,6 @@ describe('validateStep — step 9 matches what the account accepts', () => {
     const draft = createEmptyOnboardingDraft()
     return {
       ...draft,
-      business: { ...draft.business, ownerName: 'Asha Rao', contactPerson: 'Asha Rao' },
       storefront: { ...draft.storefront, storeName: 'Asha Dairy', businessLocation: 'Indiranagar' },
     }
   }
@@ -990,18 +950,23 @@ describe('validateStep — step 9 matches what the account accepts', () => {
     }
   })
 
-  it('rejects whitespace-only names and location', () => {
+  it('rejects a whitespace-only store name and location', () => {
     const draft = validStoreDraft()
     const blank = {
       ...draft,
-      business: { ...draft.business, ownerName: '   ', contactPerson: '  ' },
       storefront: { ...draft.storefront, storeName: '     ', businessLocation: '   ' },
     }
     expect(validateStep(9, blank, storeRuntime).map((item) => item.field)).toEqual([
       'store-name',
-      'owner-name',
-      'contact-person',
       'business-location',
+    ])
+  })
+})
+
+describe('validateStep — step 1 phone', () => {
+  it('asks for a valid mobile number in plain words', () => {
+    expect(validateStep(1, createEmptyOnboardingDraft(), { ...runtime, phone: '123' })).toEqual([
+      { step: 1, field: 'phone', message: 'Enter a valid mobile number.' },
     ])
   })
 })

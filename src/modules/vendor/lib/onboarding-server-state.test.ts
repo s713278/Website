@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapVendorContext, vendorOnboardingService, type VendorContext, type VendorProfile } from '@/shared/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mapVendorContext, vendorImagesService, vendorOnboardingService, type VendorContext, type VendorProfile } from '@/shared/api'
 import { clearVendorHeaderHint, readVendorHeaderHint } from '../store/vendor-header-hint-store'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import { loadStepResources, loadVendorAccountContext, prefetchOnboardingLanding } from './onboarding-server-state'
 import { invalidateMeasurementCatalog } from './measurement-catalog-cache'
 import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
-import { invalidateOnboardingResources, loadOnboardingResource } from './onboarding-resource-cache'
+import { invalidateOnboardingResources, loadOnboardingResource, peekOnboardingResource } from './onboarding-resource-cache'
 import { invalidateVendorContext, peekVendorContext } from './vendor-context-cache'
+
+beforeEach(() => {
+  vi.spyOn(vendorImagesService, 'getImage').mockResolvedValue(null)
+})
 
 const VENDOR_ID = '96'
 
@@ -101,7 +105,7 @@ describe('loadStepResources', () => {
   function stubReads(profileType = 'Beverages') {
     return {
       profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-        businessName: 'Store', businessType: profileType, ownerName: '', contactPerson: '', contactNumber: '',
+        businessName: 'Store', businessType: profileType, contactNumber: '',
       }),
       businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
         items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
@@ -117,6 +121,51 @@ describe('loadStepResources', () => {
   const settled = (reads: Partial<Record<string, Promise<unknown>>>) => Promise.allSettled(Object.values(reads))
   const called = (spies: ReturnType<typeof stubReads>) =>
     Object.entries(spies).filter(([, spy]) => spy.mock.calls.length).map(([name]) => name)
+
+  it.each([1, 8, 9])('starts with empty images at in-progress pointer %i without fetching or caching an assumption', async (nextStep) => {
+    stubReads()
+    const context = contextFor(VENDOR_ID)
+    context.onboarding = { status: 'IN_PROGRESS', nextStep, description: null }
+    const reads = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: false, context })
+    await expect(reads.logo).resolves.toBeNull()
+    await expect(reads.banner).resolves.toBeNull()
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    expect(peekOnboardingResource(VENDOR_ID, 'logo')).toBeNull()
+    expect(peekOnboardingResource(VENDOR_ID, 'banner')).toBeNull()
+    await settled(reads)
+  })
+
+  it.each([
+    { status: 'IN_PROGRESS', next_step: 10 },
+    { status: 'COMPLETED', next_step: 11 },
+    { status: 'COMPLETED', next_step: 9 },
+    { status: 'IN_PROGRESS' },
+    { next_step: 9 },
+  ])('restores images without first-time evidence: %j', async (onboarding) => {
+    stubReads()
+    const context = mapVendorContext({ data: { vendor_id: VENDOR_ID, onboarding } })
+    const images = { logo: 'https://images.example.test/saved.png', banner: null }
+    vi.mocked(vendorImagesService.getImage).mockImplementation(async (_vendorId, kind) => images[kind])
+    const reads = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: false, context })
+    await expect(reads.logo).resolves.toBe(images.logo)
+    await expect(reads.banner).resolves.toBeNull()
+    expect(vendorImagesService.getImage).toHaveBeenCalledWith(VENDOR_ID, 'logo')
+    expect(vendorImagesService.getImage).toHaveBeenCalledWith(VENDOR_ID, 'banner')
+    await settled(reads)
+  })
+
+  it('keeps already-loaded saved images even with an initial-setup pointer', async () => {
+    stubReads()
+    const context = contextFor(VENDOR_ID)
+    context.onboarding = { status: 'IN_PROGRESS', nextStep: 9, description: null }
+    const logo = 'https://images.example.test/saved.png'
+    await loadOnboardingResource(VENDOR_ID, 'logo', async () => logo)
+    const reads = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: false, context })
+    expect(reads.logo).toBeUndefined()
+    expect(peekOnboardingResource(VENDOR_ID, 'logo')?.value).toBe(logo)
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    await settled(reads)
+  })
 
   it('starts only what each step lists', async () => {
     const spies = stubReads()
@@ -154,7 +203,7 @@ describe('loadStepResources', () => {
     const pending = loadStepResources(VENDOR_ID, 9, { submitted: false, withUnits: true })
     await Promise.resolve()
     expect(spies.businessTypes).not.toHaveBeenCalled()
-    answer({ businessName: 'Store', businessType: null, ownerName: '', contactPerson: '', contactNumber: '' })
+    answer({ businessName: 'Store', businessType: null, contactNumber: '' })
     await settled(pending)
     expect(spies.businessTypes).not.toHaveBeenCalled()
   })
@@ -177,7 +226,7 @@ describe('loadStepResources', () => {
     expect(spies.businessTypes).toHaveBeenCalledTimes(1)
     expect(spies.businessTypes.mock.calls[0][0]).toEqual({ pageNumber: 0, pageSize: 100, sortBy: 'id', sortOrder: 'ASC' })
 
-    answer({ businessName: 'Store', businessType: 'Others', ownerName: '', contactPerson: '', contactNumber: '' })
+    answer({ businessName: 'Store', businessType: 'Others', contactNumber: '' })
     await settled(reads)
     await expect(reads.businessTypes).resolves.toHaveLength(12)
     expect(readReferenceCache(businessTypeCacheKey('account', ''))).toMatchObject({ pageNumber: 0, lastPage: false })
@@ -224,7 +273,7 @@ describe('prefetchOnboardingLanding', () => {
     return {
       context: vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(context),
       profile: vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-        businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
+        businessName: 'Store', businessType, contactNumber: '',
       }),
       businessTypes: vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValue({
         items: [], pageNumber: 0, pageSize: 100, totalPages: 0, totalElements: 0, lastPage: true,
@@ -241,6 +290,19 @@ describe('prefetchOnboardingLanding', () => {
   const drain = () => new Promise((resolve) => setTimeout(resolve, 0))
   const called = (spies: ReturnType<typeof stubReads>) =>
     Object.entries(spies).filter(([, spy]) => spy.mock.calls.length).map(([name]) => name)
+
+  it('waits for context before Step 9 prefetch and skips first-time image reads', async () => {
+    let answer!: (context: VendorContext) => void
+    const spies = stubReads(contextAtStep(9))
+    spies.context.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    prefetchOnboardingLanding(VENDOR_ID, { nextStep: 9 })
+    await drain()
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+    answer(contextAtStep(9))
+    await drain()
+    expect(called(spies)).toEqual(['context', 'profile', 'businessTypes'])
+    expect(vendorImagesService.getImage).not.toHaveBeenCalled()
+  })
 
   it.each([
     [7, ['context', 'profile', 'checkout']],

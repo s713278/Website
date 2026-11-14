@@ -14,23 +14,29 @@ import { cn } from '@/lib/utils'
 import {
   authService,
   getErrorMessage,
+  isApiError,
   isLiveApi,
   vendorOnboardingService,
+  type BusinessTypeReference,
   type MeasurementCatalog,
   type VendorContext,
+  type VendorImageKind,
+  type VendorProfile,
 } from '@/shared/api'
 import { useAuthStore } from '@/shared/auth/store/auth-store'
 import { LoadError } from '@/shared/components/LoadError'
+import { StoreImageLoadNotice } from './StoreImageInput'
 import { PageLoader } from '@/shared/components/PageLoader'
 import { Button } from '@/shared/components/ui'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage } from '../../hooks/use-onboarding-catalog'
 import { useOnboardingDraftSession } from '../../hooks/use-onboarding-draft-session'
 import { canEnterCatalogSteps, navigationFloor } from '../../lib/onboarding-access'
 import { peekMeasurementCatalog } from '../../lib/measurement-catalog-cache'
-import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache } from '../../lib/onboarding-catalog-cache'
+import { categoryReferenceCacheKey, productReferenceCacheKey, readReferenceCache, seedCategoryFirstPage } from '../../lib/onboarding-catalog-cache'
 import {
   invalidateOnboardingResources,
   peekOnboardingResource,
+  setOnboardingResource,
   type OnboardingResourceData,
 } from '../../lib/onboarding-resource-cache'
 import {
@@ -42,14 +48,19 @@ import {
   applyProfile,
   applyResumeFrame,
   applySkus,
+  applyStorefront,
   backendResumeStep,
+  checkoutBaselines,
   derivedResumeStep,
   isStoreSubmitted,
+  isVendorApproved,
   loadAccountResource,
   measurementCatalogsForResume,
-  resolveBusinessType,
+  readTypeCategories,
+  requiredStepResources,
   resumeOrderWhatsapp,
   resumePaymentDetails,
+  resumeStorefrontWhatsapp,
   savedBusinessType,
   stepLoadState,
   stepResources,
@@ -70,8 +81,59 @@ import {
   stepsSavedTogether,
   writesReachAccount,
 } from '../../lib/onboarding-sync'
-import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
-import { invalidateVendorContext, loadVendorContext, peekVendorContext } from '../../lib/vendor-context-cache'
+import {
+  checkoutWriteInput,
+  isAccountStep,
+  pendingEditIssues,
+  pendingSteps,
+  stepSnapshot,
+  type AccountStep,
+  type SavedBaselines,
+} from '../../lib/onboarding-progress'
+import {
+  catalogDependencyGaps,
+  stepAfterCatalogSave,
+  stepsNeedingAttention,
+} from '../../lib/onboarding-catalog-dependencies'
+import {
+  savedCatalog,
+  savedCatalogAfterSave,
+  stepCatalog,
+  stepSaveDraft,
+  withSavedCatalog,
+} from '../../lib/onboarding-saved-catalog'
+import {
+  BUSINESS_TYPE_LOCKED_MESSAGE,
+  resolveSavedType,
+  savedTypeState,
+  unresolvedTypeMessage,
+  type SavedTypeResolution,
+  type SavedTypeState,
+  type TypeCategories,
+} from '../../lib/onboarding-saved-type'
+import { assignedCatalogIsMixed, dropOtherTypeSelections, MIXED_CATALOG_MESSAGE, mixedCatalogIssues } from '../../lib/onboarding-draft-repair'
+import {
+  RESOURCE_FIELDS,
+  mergeAccountFields,
+  pruneOrphans,
+  stepFields,
+  withSavedValues,
+  withoutSteps,
+  withUnknownEdits,
+  type DraftField,
+} from '../../lib/onboarding-draft-merge'
+import {
+  clearTypeSaveInFlight,
+  markTypeSaveInFlight,
+  readSavedTypeRecord,
+  recordConfirmedType,
+} from '../../lib/onboarding-saved-type-record'
+import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
+import { ImageSaveError } from '../../lib/onboarding-images'
+import { approvedSizeIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
+import { invalidateVendorContext, loadVendorContext, peekVendorContext, vendorContextIsCurrent } from '../../lib/vendor-context-cache'
+import { mergeRuntimeRecord, mergeRuntimeValue, revalidationReads } from '../../lib/onboarding-freshness'
+import { announceAccountWrite, pageAwayEpoch } from '../../lib/page-away'
 import {
   continueWithCatalogPolicy,
   selectCatalogPolicy,
@@ -92,7 +154,6 @@ import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
 import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
 import { OtpSentTo, OtpStep, PhoneStep } from './IdentitySteps'
 import { DeliveryStep, PaymentStep, SkuStep } from './OperationsSteps'
-import { CorruptDraftDialog, DraftConflictDialog } from './RecoveryDialogs'
 import { OnboardingStepper } from './OnboardingStepper'
 import { ReviewStep, StorefrontStep } from './StoreSteps'
 import { StorefrontPreview } from './StorefrontPreview'
@@ -112,7 +173,7 @@ function LivePreviewPane({ accountParts }: { accountParts: PhonePreviewAccountPa
   const logoUrl = useOnboardingStore((state) => state.runtime.logoUrl)
   const bannerUrl = useOnboardingStore((state) => state.runtime.bannerUrl)
   const deferredDraft = useDeferredValue(draft)
-  return <StorefrontPreview draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
+  return <StorefrontPreview onboardingBranding draft={deferredDraft} logoUrl={logoUrl} bannerUrl={bannerUrl} accountParts={accountParts} />
 }
 
 /** The bay where the shop takes shape: the storefront as a customer will see it. */
@@ -166,14 +227,27 @@ type OnboardingState = ReturnType<typeof useOnboardingStore.getState>
  */
 type IssueRecheck = (state: OnboardingState) => ValidationIssue[]
 
-type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck }
+/** `toastOnly` issues are announced by the toast alone: they have no inline message. */
+type ShownIssues = { issues: ValidationIssue[]; recheck?: IssueRecheck; toastOnly?: boolean }
 
 const NO_ISSUES: ShownIssues = { issues: [] }
+const NO_INLINE_ISSUES: ValidationIssue[] = []
 
-const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout']
+/**
+ * Steps whose Continue problems sit beside one specific field, so the inline message says
+ * everything and a toast would repeat it. Steps 3-5 are the opposite: a missing choice has no
+ * single field worth marking, so the toast carries it. Step 10 lists its issues itself and keeps
+ * its toast.
+ */
+const INLINE_ONLY_STEPS: readonly OnboardingStep[] = [1, 2, 6, 7, 8, 9]
+// The "Choose …" messages are the missing choices. Plan-limit messages share the `categories` and
+// `products` fields but are guidance the vendor must keep seeing, so they stay inline.
+const isMissingChoice = (item: ValidationIssue) => item.message.startsWith('Choose ')
+
+const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront']
 /** The steps whose draft each resource's applier fills. */
 const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
-  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8],
+  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8], logo: [9], banner: [9], storefront: [9],
 }
 
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
@@ -181,11 +255,13 @@ const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 /**
  * Clear what an account write made stale in the shared caches: the written resources and the
  * vendor context (it carries `next_step`, plan usage and store state). Business types and
- * units are platform data, so they stay.
+ * units are platform data, so they stay. This browser's other tabs are told too, so their next
+ * write reads the account again first.
  */
 function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
   invalidateOnboardingResources(vendorId, resources)
   invalidateVendorContext(vendorId)
+  announceAccountWrite(vendorId)
 }
 
 /**
@@ -203,7 +279,7 @@ type AccountLoadView = {
 const IDLE_LOAD_VIEW: AccountLoadView = {
   context: 'idle',
   resources: {
-    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle',
+    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle', logo: 'idle', banner: 'idle', storefront: 'idle',
   },
   units: 'idle',
   categoryList: 'idle',
@@ -217,7 +293,50 @@ type AccountEntry = {
   prefetchStep: (step: OnboardingStep) => void
   /** Re-read the context if it failed, and the step's failed resources. */
   retry: (step: OnboardingStep) => void
+  retryImage: (kind: VendorImageKind) => void
+  recordImage: (kind: VendorImageKind, url: string) => void
+  /** A Step 3 save of `type` was confirmed: it is the saved type from now on. */
+  confirmSavedType: (type: BusinessTypeReference) => void
+  /** Work the saved type out again from a fresh context and vendor record. */
+  recheckSavedType: () => void
+  /** Whether a write from the step must read the account again first: the page has been away since. */
+  isStale: (step: OnboardingStep) => boolean
+  /** Read again what a write from the step is built from, and merge it in (`onboarding-freshness`). */
+  revalidate: (step: OnboardingStep) => Promise<RevalidationOutcome>
   cancel: () => void
+}
+
+/**
+ * `current`: the write may go ahead on what the draft now holds. `blocked`: the account moved on
+ * in a way the visit is still catching up with (a type to settle, or a new entry), so not now.
+ */
+type RevalidationOutcome = { kind: 'current' } | { kind: 'blocked' } | { kind: 'failed'; error: unknown } | { kind: 'ended' }
+
+/**
+ * Whether the account changed beyond what a merge applies: submission, or a submitted store's
+ * approval, which decide what is editable and where the wizard opens. Judged against what the
+ * wizard holds, which this tab's own submission also updates. The visit then starts again.
+ */
+function accountStatusChanged(state: OnboardingState, next: VendorContext): boolean {
+  const submitted = isStoreSubmitted({ context: next })
+  return selectStoreIsSubmitted(state) !== submitted
+    || (submitted && selectStoreIsApproved(state) !== isVendorApproved({ context: next }))
+}
+
+/**
+ * Whether the account counts Step 3 as saved. The context is current after a write, so its
+ * `next_step` decides; without one, only a named business type on the vendor record does.
+ */
+function stepThreeSaved(context: VendorContext, profile: VendorProfile | null, submitted: boolean): boolean {
+  if (submitted || isStoreSubmitted({ context })) return true
+  const next = context.onboarding.nextStep
+  if (next != null && Number.isInteger(next)) return next > 3
+  return savedBusinessType(profile) !== null
+}
+
+/** Steps that show or check the saved type, and so read the evidence for it when needed. */
+function stepNeedsSavedType(step: OnboardingStep, submitted: boolean): boolean {
+  return step === 3 || step === 4 || (step === 10 && !submitted)
 }
 
 /**
@@ -225,8 +344,9 @@ type AccountEntry = {
  *
  * The context and the profile are read at once; every other resource only when a step
  * that needs it opens. Each result is applied the moment it lands, whatever step is on
- * screen, through the per-resource appliers: a step with unsaved edits keeps them unless
- * the store is submitted. Nothing is applied without a context. A result for a visit that
+ * screen, through the per-resource appliers, merged field by field with unsaved edits
+ * (`mergeAccountFields`); a submitted store takes the account's copy everywhere. Nothing is
+ * applied without a context. A result for a visit that
  * has ended, or for another vendor, is dropped.
  */
 function startAccountEntry(
@@ -235,6 +355,8 @@ function startAccountEntry(
     setView: (view: AccountLoadView) => void
     setContextError: (message: string | null) => void
     savedSteps: { current: Partial<Record<OnboardingStep, string>> }
+    /** Start the visit again, as on entry. */
+    restart: () => void
   },
 ): AccountEntry {
   let cancelled = false
@@ -243,25 +365,54 @@ function startAccountEntry(
   // `undefined` while unsettled; `null` after a failed read, which falls back to sample units.
   let units: MeasurementCatalog | null | undefined
   const applied = new Set<OnboardingResource>()
+  const versions: Partial<Record<OnboardingResource | 'units', number>> = {}
   const vouched = new Set<OnboardingStep>()
   let context: VendorContext | null = null
+  // The away count (`page-away`) each applied read started in; an older one predates an away.
+  let contextReadAt = -1
+  const readAt: Partial<Record<OnboardingResource, number>> = {}
+  // While a revalidation applies fresh reads: the saved baselines from before them, against
+  // which runtime-only values (payment details, WhatsApp numbers) are merged.
+  let priorBaselines: SavedBaselines | null = null
+  // The account's WhatsApp numbers from a storefront read a revalidation applied.
+  let accountWhatsapp: { orderWhatsapp: string; supportWhatsapp: string } | null = null
   // The step the account resumes at, which bounds the steps a resume vouches for.
   let resumeAt: OnboardingStep | null = null
   // No usable pointer: the step is derived once every resource has been read.
   let derivePending = false
+  let storeDetailsBaselined = false
   // Step 4 or 5 is open, so its first list page is wanted; and the list each was read for.
   let categoryListWanted = false
   let categoryListKey: string | null = null
   let productPanelWanted = false
   let productPanelKey: string | null = null
+  // The saved business type (`resolveSavedType`), worked out once the profile and the business
+  // types have landed. The category evidence costs a read per business type, so it is read only
+  // once a step that needs the type opens; until then the type stays unknown.
+  let typeOutcome: Exclude<SavedTypeResolution, { kind: 'needs' }> | null = null
+  let typeApplied = false
+  let typeWanted = false
+  let typeRechecks = 0
+  // A recheck's fresh context and vendor record, used for the saved type alone.
+  let typeFresh: { context: VendorContext; profile: VendorProfile | null } | null = null
+  let typeRecheck: 'idle' | 'loading' | 'failed' = 'idle'
+  let recheckVersion = 0
+  let typeLists: { status: 'idle' | 'loading' | 'loaded' | 'failed'; lists?: TypeCategories[] } = { status: 'idle' }
+  let typeListsVersion = 0
+  // The saved type a restored draft's catalog was last repaired against (`dropOtherTypeSelections`).
+  let repairedFor: number | null = null
+  // A business type's whole category list, when this visit's own Step 4 first-page read
+  // returned it complete. Evidence for `checkCatalogMixed`; a cached page is not.
+  let shownTypeList: { typeId: number; categoryIds: number[] } | null = null
 
   const store = () => useOnboardingStore.getState()
   const isCurrent = () => !cancelled && useAuthStore.getState().user?.vendorId === vendorId
   const publish = () => hooks.setView({ ...view, resources: { ...view.resources } })
 
-  const landValue = <R extends OnboardingResource>(resource: R, value: OnboardingResourceData[R]) => {
+  const landValue = <R extends OnboardingResource>(resource: R, value: OnboardingResourceData[R], at = pageAwayEpoch(vendorId)) => {
     if (view.resources[resource] === 'loaded') return
     values[resource] = value
+    readAt[resource] = at
     view.resources[resource] = 'loaded'
     // What the account holds counts against the plan limits whatever the draft says.
     if (resource === 'categories') {
@@ -282,77 +433,171 @@ function startAccountEntry(
     store().setProductMeasurementCatalog(catalogs.productMeasurementCatalog)
   }
 
+  /**
+   * Open where the account says and count what it says is done. Unsaved local edits keep
+   * their sections (the appliers leave them alone) but never decide the step or progress.
+   */
   const applyFrame = (openAt: OnboardingStep) => {
     const state = store()
-    const draft = applyResumeFrame(state.draft, openAt, {
-      edited: new Set(),
-      submitted: selectStoreIsSubmitted(state),
-    })
+    const submitted = selectStoreIsSubmitted(state)
+    const edited = new Set(state.editedSteps)
+    const draft = applyResumeFrame(state.draft, openAt, { edited, submitted })
     state.applyResumedDraft(
       draft,
       openAt,
-      { paymentDetails: state.runtime.paymentDetails, orderWhatsapp: '' },
-      { frameApplied: true },
+      { paymentDetails: state.runtime.paymentDetails },
+      { frameApplied: true, editsKept: edited.size > 0 && !submitted },
     )
   }
 
-  /** Every applier whose inputs have landed and that has not run yet, in one draft write. */
+  /**
+   * Every applier whose inputs have landed and that has not run yet, in one draft write. Each
+   * read is merged with the draft's unsaved fields it can tell (`mergeAccountFields`), as it
+   * lands: a read still on its way leaves its fields as they are.
+   */
   const applyReady = () => {
     if (!context) return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
-    const options = { edited: new Set(state.editedSteps), submitted }
-    const keptLocal = (step: OnboardingStep) => !submitted && options.edited.has(step)
+    const approved = selectStoreIsApproved(state)
+    // An edited step with no fields of its own (an old-format draft) has no known saved values.
+    let edits = withUnknownEdits(state.fieldEdits, state.editedSteps)
     let draft = state.draft
     let paymentDetails = state.runtime.paymentDetails
-    let orderWhatsapp = ''
+    let orderWhatsapp: string | undefined
+    let supportWhatsapp: string | undefined
     const ran = (resource: OnboardingResource) => applied.add(resource)
+    // Each step's saved values, as the account copy alone would set them: what pending
+    // edits are measured against, whether or not the step kept its local copy.
+    const baselines: SavedBaselines = {}
+    const accountOnly = { edited: new Set<OnboardingStep>(), submitted }
+    const empty = createEmptyOnboardingDraft()
+    const merge = (account: OnboardingState['draft'], fields: readonly DraftField[], accountEmpty = false) => {
+      const merged = mergeAccountFields({ local: draft, account, fields, edits, submitted, accountEmpty })
+      draft = merged.draft
+      edits = merged.edits
+    }
+    const stillEdited = (step: AccountStep) => !submitted && stepFields(step).some((field) => edits[field])
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
-      draft = applyProfile(draft, values.profile!, options)
-      if (!keptLocal(9)) orderWhatsapp = resumeOrderWhatsapp(values.profile!)
+      merge(applyProfile(draft, values.profile!, accountOnly, context.businessName), RESOURCE_FIELDS.profile)
+      // Not on a revalidation: the vendor record can be served stale after a write.
+      if (!stillEdited(9) && !priorBaselines) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
       ran('profile')
     }
-    const businessType = view.resources.profile === 'loaded' && view.resources.businessTypes === 'loaded'
-      ? resolveBusinessType(values.profile!, values.businessTypes!)
-      : undefined
-    if (!applied.has('businessTypes') && businessType !== undefined) {
-      draft = applyBusinessType(draft, businessType, options)
-      ran('businessTypes')
+    // Profile resets new-store branding, so the saved storefront applies only after it.
+    if (!applied.has('storefront') && view.resources.storefront === 'loaded' && applied.has('profile')) {
+      merge(applyStorefront(draft, values.storefront!), RESOURCE_FIELDS.storefront)
+      const numbers = resumeStorefrontWhatsapp(values.storefront!)
+      const prior = priorBaselines?.[9]
+      orderWhatsapp = priorBaselines ? mergeRuntimeValue(state.runtime.orderWhatsapp, prior?.orderWhatsapp, numbers.orderWhatsapp) : numbers.orderWhatsapp
+      supportWhatsapp = priorBaselines ? mergeRuntimeValue(state.runtime.supportWhatsapp, prior?.supportWhatsapp, numbers.supportWhatsapp) : numbers.supportWhatsapp
+      if (priorBaselines) accountWhatsapp = numbers
+      ran('storefront')
     }
+    const businessType = settleType()
+    let typeState: SavedTypeState | null = null
+    if (typeOutcome && !typeApplied) {
+      typeApplied = true
+      // An unresolved type is unknown: Step 3 keeps its copy and has no saved value.
+      if (typeOutcome.kind !== 'unresolved') {
+        const saved = typeOutcome.kind === 'saved' ? typeOutcome.type : typeOutcome.preselect
+        // A saved type is locked, so it replaces any unsaved choice; an open one is only a
+        // preselection, which an unsaved choice outranks.
+        if (typeOutcome.kind === 'saved') {
+          draft = applyBusinessType(draft, saved, { ...accountOnly, locked: true })
+          edits = withoutSteps(edits, [3])
+        } else {
+          merge(applyBusinessType(draft, saved, accountOnly), RESOURCE_FIELDS.businessType, true)
+        }
+        baselines[3] = { businessType: saved }
+      }
+      typeState = savedTypeState(typeOutcome, typeRechecks > 0)
+      settleTypeSave(typeOutcome)
+    }
+    if (!applied.has('businessTypes') && businessType !== undefined) ran('businessTypes')
     if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
-      draft = applyCategories(draft, values.categories!, businessType, options)
+      merge(applyCategories(draft, values.categories!, businessType, accountOnly), RESOURCE_FIELDS.categories)
+      baselines[4] = { categories: applyCategories(empty, values.categories!, businessType, accountOnly).categories }
       ran('categories')
     }
     if (!applied.has('products') && view.resources.products === 'loaded') {
-      draft = applyProducts(draft, values.products!, options)
+      merge(applyProducts(draft, values.products!, accountOnly), RESOURCE_FIELDS.products)
+      baselines[5] = { products: applyProducts(empty, values.products!, accountOnly).products }
       ran('products')
     }
     // Saved sizes are rebuilt against the units, so they wait for them (or their fallback).
     if (!applied.has('skus') && view.resources.skus === 'loaded' && view.resources.products === 'loaded' && units !== undefined) {
-      draft = applySkus(draft, values.skus!, values.products!, measurementCatalogsForResume(units).measurements, options)
+      const measurements = measurementCatalogsForResume(units).measurements
+      merge(applySkus(draft, values.skus!, values.products!, measurements, accountOnly), RESOURCE_FIELDS.skus)
+      baselines[6] = { skus: applySkus(empty, values.skus!, values.products!, measurements, accountOnly).skus }
       ran('skus')
     }
     if (!applied.has('checkout') && view.resources.checkout === 'loaded') {
-      draft = applyCheckout(draft, values.checkout!, options)
-      if (!keptLocal(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
+      // No checkout saved yet: an old-format draft's delivery and payments may fill it.
+      merge(applyCheckout(draft, values.checkout!, accountOnly), RESOURCE_FIELDS.checkout, values.checkout === null)
+      const saved = checkoutBaselines(values.checkout!)
+      if (priorBaselines) {
+        paymentDetails = mergeRuntimeRecord(paymentDetails, priorBaselines[8]?.paymentDetails, saved[8]!.paymentDetails)
+      } else if (!stillEdited(8)) paymentDetails = resumePaymentDetails(values.checkout!, paymentDetails)
+      Object.assign(baselines, saved)
       ran('checkout')
     }
-    if (draft !== state.draft || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp) {
-      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp }, { frameApplied: false })
+    // Local additions whose category or product left the draft go with it, once the parent
+    // list has been merged.
+    draft = pruneOrphans(draft, { products: applied.has('categories'), skus: applied.has('products') })
+    for (const kind of ['logo', 'banner'] as const) {
+      if (!applied.has(kind) && view.resources[kind] === 'loaded') {
+        state.restoreImage(kind, values[kind]!)
+        ran(kind)
+      }
     }
+    // A draft the old type change left can hold another type's unsaved catalog; once the
+    // saved type and the assigned categories are known, those selections go, silently.
+    if (typeOutcome?.kind === 'saved' && applied.has('categories') && repairedFor !== typeOutcome.type.id) {
+      repairedFor = typeOutcome.type.id
+      draft = dropOtherTypeSelections(draft, typeOutcome.type.id, state.accountCatalog)
+    }
+    if (draft !== state.draft || edits !== state.fieldEdits || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
+      state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false, edits })
+    }
+    if (typeState) store().setSavedType(typeState)
+    // Step 9's branding is unreadable until approval, so its saved values are the store
+    // details as applied, with each unsaved field's recorded saved value in its place; unknown
+    // while an unsaved field records none (an old-format draft), so the step stays pending.
+    if (!storeDetailsBaselined && applied.has('profile') && (!(submitted && approved) || applied.has('storefront'))) {
+      storeDetailsBaselined = true
+      const latest = store()
+      const saved = withSavedValues(latest.draft, latest.fieldEdits, stepFields(9))
+      // A revalidation keeps the saved WhatsApp numbers it knew, unless a storefront read
+      // told new ones: the runtime may hold unsaved numbers.
+      const prior = priorBaselines?.[9]
+      const runtime = prior ? { ...latest.runtime, ...(accountWhatsapp ?? { orderWhatsapp: prior.orderWhatsapp, supportWhatsapp: prior.supportWhatsapp }) } : latest.runtime
+      if (saved) baselines[9] = stepSnapshot(9, saved, runtime)
+    }
+    if (Object.keys(baselines).length) store().recordSavedBaselines(baselines)
+    checkCatalogMixed()
 
-    if (derivePending && ACCOUNT_RESOURCES.every((resource) => applied.has(resource))) {
+    if (derivePending && requiredStepResources(10, { submitted, approved }).every((resource) => applied.has(resource))) {
       derivePending = false
       resumeAt = derivedResumeStep(accountResumeState(context, values as OnboardingResourceData))
-      // Only while the vendor is still where the fallback put them, with nothing edited.
-      const latest = store()
-      if (!latest.editedSteps.length && latest.draft.currentStep === 10) applyFrame(resumeAt)
+      // Only while the vendor is still where the fallback put them.
+      if (store().draft.currentStep === 10) applyFrame(resumeAt)
     }
 
-    const loadedSteps = ACCOUNT_STEPS.filter((step) =>
-      stepResources(step, { submitted }).account.every((resource) => applied.has(resource)))
+    // Step 3 shares Step 9's required reads. Do not mark store details restored before
+    // their own reads have started; optional images may still be loading or failed.
+    const storeReadsStarted = view.resources.logo !== 'idle' && view.resources.banner !== 'idle'
+    const loadedSteps = ACCOUNT_STEPS.filter((step) => (step !== 9 || storeReadsStarted)
+      && requiredStepResources(step, { submitted, approved }).every((resource) => applied.has(resource)))
     store().setLoadedSteps(loadedSteps)
+    const imageReadsSettled = (['logo', 'banner'] as const).every((kind) => view.resources[kind] === 'loaded' || view.resources[kind] === 'failed')
+    if (submitted && approved && loadedSteps.includes(9) && imageReadsSettled && !vouched.has(9)) {
+      vouched.add(9)
+      if (!store().editedSteps.includes(9)) {
+        hooks.savedSteps.current[9] = stepSaveFingerprint(9, store().draft, store().runtime) ?? undefined
+      }
+    }
 
     // A catalog step before the resume step, taken whole from the account (with every
     // catalog step before it), already matches it: its Continue need not save again.
@@ -372,6 +617,149 @@ function startAccountEntry(
   }
 
   /**
+   * Whether the assigned catalog is confirmed mixed (`assignedCatalogIsMixed`). Only this
+   * visit's own reads count: the assigned categories as read on entry, never what a save adds
+   * later, against a complete category list of the saved type this visit read anyway (the
+   * saved-type fallback's lists, or Step 4's first page when it is the last). Nothing is read
+   * for this check alone.
+   */
+  const checkCatalogMixed = () => {
+    const state = store()
+    if (typeOutcome?.kind !== 'saved' || view.resources.categories !== 'loaded' || state.catalogMixed || selectStoreIsSubmitted(state)) return
+    const typeId = typeOutcome.type.id
+    const listed = typeLists.lists?.find(({ type }) => type.id === typeId)?.categoryIds
+      ?? (shownTypeList?.typeId === typeId ? shownTypeList.categoryIds : undefined)
+    const assigned = values.categories!.map((category) => category.platformCategoryId)
+    if (assignedCatalogIsMixed(assigned, listed)) state.setCatalogMixed(true)
+  }
+
+  /**
+   * The business type the account's Step 3 holds, as far as is known now: `undefined` while
+   * it waits for a read, `null` for none or unknown. Sets `typeOutcome` once the evidence is in.
+   * Without a step that needs the type, evidence still to be read leaves it unknown (`null`)
+   * rather than holding the catalog steps back.
+   */
+  const settleType = (): BusinessTypeReference | null | undefined => {
+    if (!context || view.resources.profile !== 'loaded' || view.resources.businessTypes !== 'loaded') return undefined
+    if (!typeOutcome && typeRecheck === 'loading') return undefined
+    if (!typeOutcome && typeRecheck === 'failed') typeOutcome = { kind: 'unresolved' }
+    if (!typeOutcome) {
+      const fresh = typeFresh ?? { context, profile: values.profile! }
+      const resolution = resolveSavedType({
+        confirmed: readSavedTypeRecord(vendorId).confirmed,
+        stepSaved: stepThreeSaved(fresh.context, fresh.profile, selectStoreIsSubmitted(store())),
+        profileTypeName: fresh.profile?.businessType ?? null,
+        businessTypes: values.businessTypes!,
+        assignedCategoryIds: view.resources.categories === 'loaded'
+          ? values.categories!.map((category) => category.platformCategoryId)
+          : undefined,
+        typeCategories: typeLists.lists,
+      })
+      if (resolution.kind !== 'needs') typeOutcome = resolution
+      else if (!typeWanted) return null
+      else if (resolution.read === 'categories' ? view.resources.categories === 'failed' : typeLists.status === 'failed') {
+        typeOutcome = { kind: 'unresolved' }
+      } else {
+        startTypeEvidence(resolution.read)
+        return undefined
+      }
+    }
+    return typeOutcome.kind === 'saved' ? typeOutcome.type : typeOutcome.kind === 'open' ? typeOutcome.preselect : null
+  }
+
+  /**
+   * TEMP(onboarding-saved-type): the last evidence of a saved type. The assigned categories,
+   * then the business types' category lists (`readTypeCategories`): "Others" alone first when
+   * the vendor record says so, otherwise every type's.
+   */
+  const startTypeEvidence = (read: 'categories' | 'type-categories') => {
+    if (store().savedType.status !== 'checking') store().setSavedType({ status: 'checking' })
+    if (read === 'categories') {
+      if (view.resources.categories === 'idle') track('categories', loadAccountResource(vendorId, 'categories'))
+      return
+    }
+    if (typeLists.status !== 'idle') return
+    typeLists = { status: 'loading' }
+    const version = ++typeListsVersion
+    // Asked for only once the assigned categories have landed (`resolveSavedType`).
+    const hint = {
+      profileTypeName: (typeFresh ? typeFresh.profile : values.profile)?.businessType ?? null,
+      assignedCategoryIds: values.categories!.map((category) => category.platformCategoryId),
+    }
+    loadAccountResource(vendorId, 'businessTypes').then((types) => readTypeCategories(types, hint)).then(
+      (lists) => {
+        if (!isCurrent() || version !== typeListsVersion) return
+        typeLists = { status: 'loaded', lists }
+        applyReady()
+        startCategoryList()
+        publish()
+      },
+      () => {
+        if (!isCurrent() || version !== typeListsVersion) return
+        typeLists = { status: 'failed' }
+        applyReady()
+        publish()
+      },
+    )
+  }
+
+  /**
+   * A first Step 3 save whose outcome was unknown is settled by a resolved type: confirmed if
+   * the account holds the type it sent, otherwise it did not land (the fresh context says Step
+   * 3 is not saved) or another save did. Left pending while the type is unresolved.
+   *
+   * A type only the category lists could tell is recorded too, so later entries settle from
+   * the record instead of reading every list again. A named type is not: it costs one cached
+   * read to tell again, and the account's own answer stays the one in use.
+   */
+  const settleTypeSave = (outcome: NonNullable<typeof typeOutcome>) => {
+    if (outcome.kind === 'saved' && outcome.source === 'categories') return recordConfirmedType(vendorId, outcome.type)
+    const pending = readSavedTypeRecord(vendorId).inFlight
+    if (!pending || outcome.kind === 'unresolved') return
+    if (outcome.kind === 'saved' && outcome.type.id === pending.id) recordConfirmedType(vendorId, outcome.type)
+    else clearTypeSaveInFlight(vendorId)
+  }
+
+  const recheckSavedType = () => {
+    if (!isCurrent() || !context) return
+    typeRechecks += 1
+    typeOutcome = null
+    typeApplied = false
+    typeWanted = true
+    typeFresh = null
+    typeRecheck = 'loading'
+    // "Others" alone held the assigned categories when read; read every list should they not now.
+    const othersOnly = typeLists.status === 'loaded' && typeLists.lists!.length < (values.businessTypes?.length ?? 0)
+    if (typeLists.status === 'failed' || othersOnly) typeLists = { status: 'idle' }
+    if (view.resources.categories === 'failed') track('categories', loadAccountResource(vendorId, 'categories'))
+    store().setSavedType({ status: 'checking' })
+    // The vendor record can be stale and the context predates the save, so both are read again.
+    invalidateVendorContext(vendorId)
+    invalidateOnboardingResources(vendorId, ['profile'])
+    const version = ++recheckVersion
+    Promise.all([
+      loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)),
+      loadAccountResource(vendorId, 'profile'),
+    ]).then(
+      ([freshContext, profile]) => {
+        if (!isCurrent() || version !== recheckVersion) return
+        typeFresh = { context: freshContext, profile }
+        typeRecheck = 'idle'
+        applyReady()
+        startCategoryList()
+        publish()
+      },
+      () => {
+        if (!isCurrent() || version !== recheckVersion) return
+        typeRecheck = 'failed'
+        applyReady()
+        publish()
+      },
+    )
+    publish()
+  }
+
+  /**
    * Step 5's default (first) panel's first product page, read alongside the step's account
    * reads into the cache the panel paints from, so the step opens with saved and listed
    * products at once and the panel makes no request of its own. It starts once the
@@ -379,9 +767,11 @@ function startAccountEntry(
    * it caches nothing, and the panel reads and retries the page itself.
    */
   const startProductPanel = () => {
-    const { catalogSource: mode, categories } = store().draft
+    const state = store()
+    const mode = state.draft.catalogSource
     if (!productPanelWanted || mode !== 'account' || !applied.has('categories')) return
-    const first = categories[0]
+    // The panel Step 5 opens first: an unsaved category has none, so nothing is read for it.
+    const first = stepCatalog(5, state.draft, savedCatalog(state)).categories[0]
     if (!first) {
       productPanelKey = null
       view.productPanel = 'loaded'
@@ -413,14 +803,15 @@ function startAccountEntry(
   /**
    * Step 4's first category page, read alongside the step's account reads into the cache the
    * step paints from, so it opens with saved and listed categories at once and makes no
-   * request of its own. It starts once the business type is applied, since it names the
+   * request of its own. It starts once the saved business type is known, since it names the
    * list. A failure does not block the step: it caches nothing, and the step reads, and
    * retries, the page itself.
    */
   const startCategoryList = () => {
     const { catalogSource: mode, business } = store().draft
-    if (!categoryListWanted || mode !== 'account' || !applied.has('businessTypes')) return
-    const businessTypeId = business.businessType?.id ?? null
+    if (!categoryListWanted || mode !== 'account' || !typeOutcome) return
+    // An unknown saved type names no list: the step offers a fresh check instead.
+    const businessTypeId = typeOutcome.kind === 'unresolved' ? null : business.businessType?.id ?? null
     if (businessTypeId === null) {
       // The step asks for a business type first and reads nothing.
       categoryListKey = null
@@ -431,15 +822,25 @@ function startAccountEntry(
     // Running already, or failed this visit: the step's own read takes a failure over.
     if (key === categoryListKey && (view.categoryList === 'loading' || view.categoryList === 'failed')) return
     categoryListKey = key
+    // The saved-type fallback read this type's whole list already: its first page is Step 4's.
+    const fromFallback = typeLists.lists?.find(({ type }) => type.id === businessTypeId)?.firstPage
+    if (fromFallback) seedCategoryFirstPage(mode, businessTypeId, fromFallback)
     if (readReferenceCache(key)) {
       view.categoryList = 'loaded'
       return
     }
     view.categoryList = 'loading'
     readCategoryReferenceFirstPage(mode, businessTypeId).then(
-      () => {
+      (page) => {
         if (!isCurrent() || categoryListKey !== key) return
         view.categoryList = 'loaded'
+        if (page.lastPage) {
+          shownTypeList = {
+            typeId: businessTypeId,
+            categoryIds: page.items.filter((item) => item.businessTypeId === businessTypeId).map((item) => item.id),
+          }
+        }
+        checkCatalogMixed()
         publish()
       },
       () => {
@@ -451,20 +852,23 @@ function startAccountEntry(
   }
 
   const track = (resource: OnboardingResource | 'units', read: Promise<unknown>) => {
+    const version = (versions[resource] ?? 0) + 1
+    versions[resource] = version
+    const startedAt = pageAwayEpoch(vendorId)
     if (resource === 'units') view.units = 'loading'
     else view.resources[resource] = 'loading'
     read.then(
       (value) => {
-        if (!isCurrent()) return
+        if (!isCurrent() || versions[resource] !== version) return
         if (resource === 'units') settleUnits(value as MeasurementCatalog)
-        else landValue(resource, value as OnboardingResourceData[typeof resource])
+        else landValue(resource, value as OnboardingResourceData[typeof resource], startedAt)
         applyReady()
         startCategoryList()
         startProductPanel()
         publish()
       },
       () => {
-        if (!isCurrent()) return
+        if (!isCurrent() || versions[resource] !== version) return
         if (resource === 'units') settleUnits(null)
         else view.resources[resource] = 'failed'
         applyReady()
@@ -483,7 +887,9 @@ function startAccountEntry(
   const requestStep = (step: OnboardingStep) => {
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const submitted = selectStoreIsSubmitted(store())
-    const needs = stepResources(step, { submitted })
+    const approved = selectStoreIsApproved(store())
+    const needs = stepResources(step, { submitted, approved })
+    if (stepNeedsSavedType(step, submitted)) typeWanted = true
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
@@ -511,7 +917,7 @@ function startAccountEntry(
     if (view.units !== 'idle') skip.push('units')
     // A failed profile stays failed until Try again, so business types do not re-read it.
     if (view.resources.profile === 'failed') skip.push('businessTypes')
-    const reads = loadStepResources(vendorId, step, { submitted, withUnits: true, skip })
+    const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip, context })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
     }
@@ -527,19 +933,21 @@ function startAccountEntry(
     if (cancelled || !context || store().draft.catalogSource !== 'account') return
     const state = store()
     const submitted = selectStoreIsSubmitted(state)
+    const approved = selectStoreIsApproved(state)
     const edited = new Set(state.editedSteps)
     // Anything this visit holds or is reading is left out, and so is a read that failed: it
     // stays failed until the open step's Try again reads it. An unsubmitted store keeps an
     // edited step's own copy, so a resource only edited steps use is not wanted yet.
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
       view.resources[resource] !== 'idle'
-      || (!submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
+      || (resource !== 'logo' && resource !== 'banner' && !submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
     if (view.resources.profile === 'failed') skip.push('businessTypes')
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
-    loadStepResources(vendorId, step, { submitted, withUnits: false, skip })
+    loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip, context })
   }
 
-  const applyContext = (loaded: VendorContext) => {
+  /** What the context alone sets: the plan limits and usage, the catalog summary and submission. */
+  const applyAccountState = (loaded: VendorContext) => {
     context = loaded
     const state = store()
     hooks.setContextError(null)
@@ -558,14 +966,17 @@ function startAccountEntry(
           vendorStatus: loaded.vendorStatus,
         }
       : null)
+  }
+
+  const applyContext = (loaded: VendorContext, at = pageAwayEpoch(vendorId)) => {
+    applyAccountState(loaded)
+    contextReadAt = at
+    const submitted = isStoreSubmitted({ context: loaded })
     resumeAt = submitted ? 10 : backendResumeStep(loaded)
-    // Unsaved local work is newest only while setup can still accept it: the vendor's own
-    // progress then stands. Once the store is submitted the account wins every step.
-    if (!state.editedSteps.length || submitted) {
-      // Without a usable pointer, Step 10 reads everything and the step is derived from it.
-      derivePending = resumeAt === null
-      applyFrame(resumeAt ?? 10)
-    }
+    // The account owns progress: every entry opens its step, unsaved local work or not.
+    // Without a usable pointer, Step 10 reads everything and the step is derived from it.
+    derivePending = resumeAt === null
+    applyFrame(resumeAt ?? 10)
     view.context = 'loaded'
     applyReady()
     publish()
@@ -573,14 +984,17 @@ function startAccountEntry(
 
   const readContext = () => {
     // Sign-in or the header may have read it already: applying it now keeps the very
-    // first paint correct, instead of one frame of the un-hydrated draft.
+    // first paint correct, instead of one frame of the un-hydrated draft. Not one read
+    // before the page was last away: the account may have changed since.
+    if (!vendorContextIsCurrent(vendorId)) invalidateVendorContext(vendorId)
     const known = peekVendorContext(vendorId)
     if (known) return applyContext(known)
     view.context = 'loading'
     publish()
+    const startedAt = pageAwayEpoch(vendorId)
     loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)).then(
       (loaded) => {
-        if (isCurrent()) applyContext(loaded)
+        if (isCurrent()) applyContext(loaded, startedAt)
       },
       (error: unknown) => {
         if (!isCurrent()) return
@@ -592,14 +1006,106 @@ function startAccountEntry(
     )
   }
 
+  /** What a write from the step is built from and this visit read before the latest away. */
+  const staleReads = (step: OnboardingStep, now: number) => {
+    const state = store()
+    return revalidationReads(step, {
+      submitted: selectStoreIsSubmitted(state),
+      approved: selectStoreIsApproved(state),
+      typeSaved: typeOutcome?.kind === 'saved',
+      pending: pendingSteps(state),
+    }).filter((resource) => view.resources[resource] === 'loaded' && readAt[resource] !== now)
+  }
+
+  const isStale = (step: OnboardingStep) => {
+    if (!isCurrent() || !context) return false
+    const now = pageAwayEpoch(vendorId)
+    return contextReadAt !== now || staleReads(step, now).length > 0
+  }
+
+  const revalidate = async (step: OnboardingStep): Promise<RevalidationOutcome> => {
+    if (!isCurrent() || !context) return { kind: 'ended' }
+    const now = pageAwayEpoch(vendorId)
+    const reads = staleReads(step, now)
+    const readsContext = contextReadAt !== now
+    if (!readsContext && !reads.length) return { kind: 'current' }
+    // A read started since the away, here or elsewhere (a header, a failed attempt's reads that
+    // succeeded), is joined. The resource cache already replaces older entries itself.
+    if (readsContext && !vendorContextIsCurrent(vendorId)) invalidateVendorContext(vendorId)
+    let fresh: VendorContext
+    let results: unknown[]
+    try {
+      [fresh, ...results] = await Promise.all([
+        readsContext ? loadVendorContext(vendorId, (id) => vendorOnboardingService.getVendorContext(id)) : context,
+        ...reads.map((resource) => loadAccountResource(vendorId, resource)),
+      ])
+    } catch (error) {
+      return isCurrent() ? { kind: 'failed', error } : { kind: 'ended' }
+    }
+    if (!isCurrent() || !context) return { kind: 'ended' }
+    if (accountStatusChanged(store(), fresh)) {
+      hooks.restart()
+      return { kind: 'blocked' }
+    }
+    if (readsContext) {
+      applyAccountState(fresh)
+      contextReadAt = now
+      // Step 9's store name comes from the context.
+      if (applied.has('profile')) applied.delete('profile')
+    }
+    reads.forEach((resource, index) => {
+      // A read of the same resource still on its way lands nothing.
+      versions[resource] = (versions[resource] ?? 0) + 1
+      applied.delete(resource)
+      view.resources[resource] = 'idle'
+      landValue(resource, results[index] as OnboardingResourceData[typeof resource], now)
+    })
+    if (reads.includes('profile') && typeOutcome?.kind !== 'saved') {
+      // A type saved elsewhere meanwhile is worked out again, as a recheck does.
+      typeFresh = { context: fresh, profile: values.profile! }
+      typeOutcome = null
+      typeApplied = false
+      typeWanted = true
+    }
+    // Step 9's saved values are worked out again from what was re-applied.
+    if (readsContext || reads.includes('profile') || reads.includes('storefront')) storeDetailsBaselined = false
+    // A fingerprint of what this visit last sent no longer proves the account holds it.
+    hooks.savedSteps.current = {}
+    priorBaselines = store().savedBaselines
+    try {
+      applyReady()
+    } finally {
+      priorBaselines = null
+      accountWhatsapp = null
+    }
+    publish()
+    return store().savedType.status === 'checking' ? { kind: 'blocked' } : { kind: 'current' }
+  }
+
   startProfile()
   readContext()
 
   return {
+    isStale,
+    revalidate,
     requestStep,
     prefetchStep,
+    retryImage(kind) {
+      if (!isCurrent() || view.resources[kind] !== 'failed') return
+      applied.delete(kind)
+      track(kind, loadAccountResource(vendorId, kind))
+      publish()
+    },
+    recordImage(kind, url) {
+      if (!isCurrent()) return
+      versions[kind] = (versions[kind] ?? 0) + 1
+      values[kind] = url
+      view.resources[kind] = 'loaded'
+      applied.add(kind)
+      publish()
+    },
     retry(step) {
-      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()) })
+      const needs = stepResources(step, { submitted: selectStoreIsSubmitted(store()), approved: selectStoreIsApproved(store()) })
       for (const resource of needs.account) {
         if (view.resources[resource] === 'failed') view.resources[resource] = 'idle'
       }
@@ -609,12 +1115,33 @@ function startAccountEntry(
         // The step's reads start once the context lands.
         readContext()
       } else requestStep(step)
+      if (typeOutcome?.kind === 'unresolved') recheckSavedType()
       publish()
     },
+    confirmSavedType(type) {
+      if (!isCurrent()) return
+      // Whatever an earlier read or recheck says, the save is what the account holds now.
+      recheckVersion += 1
+      typeRecheck = 'idle'
+      typeOutcome = { kind: 'saved', type, source: 'record' }
+      typeApplied = true
+      publish()
+    },
+    recheckSavedType,
     cancel() {
       cancelled = true
     },
   }
+}
+
+/**
+ * A step the account already counts as done, with nothing different from its known saved
+ * values (and no image waiting to upload), has nothing to write.
+ */
+function savedAndUnchanged(state: OnboardingState, step: OnboardingStep): boolean {
+  const hasPendingImages = step === 9 && Boolean(state.runtime.logoFile || state.runtime.bannerFile)
+  return !hasPendingImages && state.draft.completedSteps.includes(step)
+    && isAccountStep(step) && Boolean(state.savedBaselines[step]) && !pendingSteps(state).includes(step)
 }
 
 /**
@@ -628,12 +1155,28 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
   const categoryLimit = selectCategoryLimit(state)
   const enforcement = { maxProducts: productLimit, maxSkus: skuLimit, account: accountCatalog }
   if (draft.currentStep === 10) {
-    return readinessIssues(draft, runtime, categoryLimit, measurementCatalog, enforcement)
+    // Submission waits for every unsaved step to be saved or undone, as well as for readiness.
+    // An unconfirmed saved type replaces Step 3's own check: there is nothing to choose.
+    const { savedType } = state
+    const typeIssues: ValidationIssue[] = savedType.status === 'unresolved'
+      ? [{ step: 3, field: 'business-type', message: unresolvedTypeMessage(savedType.retried) }]
+      : []
+    const specific = [
+      ...typeIssues,
+      // A mixed saved catalog waits for support, as Steps 4-6 do.
+      ...mixedCatalogIssues(state.catalogMixed && !selectStoreIsSubmitted(state)),
+      // The catalog is judged as saved: its unsaved input is the pending lines below.
+      ...readinessIssues(withSavedCatalog(draft, savedCatalog(state)), runtime, categoryLimit, measurementCatalog, enforcement)
+        .filter((issue) => !typeIssues.length || issue.step !== 3),
+    ]
+    return [...pendingEditIssues(pendingSteps(state), specific), ...specific]
   }
-  // Validate additions without reopening whole-store readiness for submitted vendors.
-  return selectStoreIsSubmitted(state)
-    ? additiveCatalogIssues(draft.currentStep, draft, categoryLimit, enforcement, measurementCatalog)
-    : validateStep(draft.currentStep, draft, runtime, categoryLimit, measurementCatalog, enforcement)
+  // Steps 5 and 6 check what they show and save, not picks hidden under an unsaved parent.
+  const checked = stepSaveDraft(draft.currentStep, state)
+  // A submitted store keeps setup's catalog rules; only an approved store's Step 6 differs.
+  return selectStoreIsSubmitted(state) && draft.currentStep === 6
+    ? approvedSizeIssues(checked, enforcement, measurementCatalog)
+    : validateStep(draft.currentStep, checked, runtime, categoryLimit, measurementCatalog, enforcement)
 }
 
 const phoneIssues: IssueRecheck = (state) => validateStep(1, state.draft, state.runtime)
@@ -642,20 +1185,19 @@ const OTP_INCOMPLETE: ValidationIssue = { step: 2, field: 'otp-0', message: 'Ent
 const otpIssues: IssueRecheck = (state) => state.runtime.otpDigits.some((digit) => !digit) ? [OTP_INCOMPLETE] : []
 
 /**
- * A submitted store is read-only except for categories/products, an approved store's sizes,
+ * A submitted store is read-only except for categories/products, an approved store's sizes and branding,
  * and the Step 10 status view. The Continue handler and the
  * `fieldset` guard both read this one predicate so they cannot drift out of lockstep.
  */
 function submittedStepIsReadOnly(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
-  return submitted && step < 10 && !isAdditiveCatalogStep(step, approved)
+  return submitted && step < 10 && !(approved && step === 9) && !isAdditiveCatalogStep(step, approved)
 }
 
 /**
- * An approved store's Step 6 saves without moving on: Steps 7-9 are read-only for it, so a
- * sizes update has nowhere useful to continue to. The vendor leaves by the stepper or Step 10.
+ * Approved-store size and branding edits save without reopening the review flow.
  */
 function savesInPlace(step: OnboardingStep, submitted: boolean, approved: boolean): boolean {
-  return submitted && approved && step === 6
+  return submitted && approved && (step === 6 || step === 9)
 }
 
 export function OnboardingWizard() {
@@ -676,9 +1218,6 @@ function OnboardingWizardContent() {
   const goToStep = useOnboardingStore((state) => state.goToStep)
   const completePrototype = useOnboardingStore((state) => state.completePrototype)
   const flushPersistence = useOnboardingStore((state) => state.flushPersistence)
-  const loadNewerDraft = useOnboardingStore((state) => state.loadNewerDraft)
-  const overwriteWithCurrentDraft = useOnboardingStore((state) => state.overwriteWithCurrentDraft)
-  const clearCorruptDraft = useOnboardingStore((state) => state.clearCorruptDraft)
   const setCategoryLimit = useOnboardingStore((state) => state.setCategoryLimit)
   const setProductLimit = useOnboardingStore((state) => state.setProductLimit)
   const setSkuLimit = useOnboardingStore((state) => state.setSkuLimit)
@@ -689,6 +1228,26 @@ function OnboardingWizardContent() {
   const recordAssignment = useOnboardingStore((state) => state.recordAssignment)
   const recordCreatedEntry = useOnboardingStore((state) => state.recordCreatedEntry)
   const setLoadedSteps = useOnboardingStore((state) => state.setLoadedSteps)
+  const resetSavedBaselines = useOnboardingStore((state) => state.resetSavedBaselines)
+  const recordSavedBaselines = useOnboardingStore((state) => state.recordSavedBaselines)
+  const returnStep = useOnboardingStore((state) => state.returnStep)
+  // Done catalog steps whose saved catalog has missing work, as a string so the wizard
+  // re-renders only when that set changes, not on every keystroke. Unsaved picks never count,
+  // and a step is marked only once its own reads are in: an unread list is unknown, not empty.
+  const attentionKey = useOnboardingStore((state) => stepsNeedingAttention(
+    catalogDependencyGaps(savedCatalog(state)),
+    state.draft.completedSteps,
+    selectStoreIsSubmitted(state),
+    selectStoreIsApproved(state),
+  ).filter((step) => state.loadedSteps.includes(step)).join(','))
+  const attentionSteps = useMemo(
+    () => attentionKey ? attentionKey.split(',').map(Number) as OnboardingStep[] : [],
+    [attentionKey],
+  )
+  const savedType = useOnboardingStore((state) => state.savedType)
+  const setSavedType = useOnboardingStore((state) => state.setSavedType)
+  const catalogMixed = useOnboardingStore((state) => state.catalogMixed)
+  const setCatalogMixed = useOnboardingStore((state) => state.setCatalogMixed)
   // Read from the account, not the draft: a browser can claim setup needs no more work when
   // nothing ever reached an account. Once true, setup shows what was sent and stops
   // offering controls that cannot reach a store already under review.
@@ -732,6 +1291,8 @@ function OnboardingWizardContent() {
     const kept = new Set(stillShownKey.split(','))
     return shownIssues.issues.filter((_, index) => kept.has(String(index)))
   }, [shownIssues, stillShownKey])
+  // What the step components render inline; a toast-only issue still counts as shown above.
+  const inlineIssues = shownIssues.toastOnly ? NO_INLINE_ISSUES : issues
   useEffect(() => {
     if (shownIssues.issues.length && !issues.length) feedback.clear()
   }, [shownIssues, issues.length, feedback])
@@ -745,6 +1306,9 @@ function OnboardingWizardContent() {
   // resume lands), and a step's form waits for the resources that step needs.
   const [loadView, setLoadView] = useState<AccountLoadView>(IDLE_LOAD_VIEW)
   const entryRef = useRef<AccountEntry | null>(null)
+  // Bumped to start the visit again, as on entry, when a revalidation finds the store
+  // submitted or its approval changed elsewhere.
+  const [entryRun, setEntryRun] = useState(0)
   // Steps 4-9 whose draft is known to match the account, as `stepSaveFingerprint` values.
   // A Continue on a matching step skips the save and the reads it makes. Anything not
   // vouched for by a save (or, for catalog steps, a resume) in this visit is absent, so it
@@ -805,14 +1369,17 @@ function OnboardingWizardContent() {
    *
    * The account is the record and this browser only buffers what has not reached it, so
    * this runs on every entry — not once per browser. It reads the context and the profile
-   * now and each step's other resources when that step opens (below). It never overwrites
-   * a step the vendor has edited and not yet saved.
+   * now and each step's other resources when that step opens (below). An unsaved edit stays
+   * while the account still holds the value it started from.
    */
   useLayoutEffect(() => {
     savedStepRef.current = {}
-    // Which steps hold account data is known only for this visit; the entry sets it again
-    // as each read lands.
+    // Which steps hold account data, and their saved values, are known only for this visit;
+    // the entry sets them again as each read lands.
     setLoadedSteps([])
+    resetSavedBaselines()
+    setSavedType({ status: 'unknown' })
+    setCatalogMixed(false)
     setLoadView(IDLE_LOAD_VIEW)
     setContextError(null)
     if (access.state !== 'ready') {
@@ -829,6 +1396,15 @@ function OnboardingWizardContent() {
     // counts as loaded.
     if (!isLiveApi()) {
       setLoadedSteps([...ACCOUNT_STEPS])
+      // Its saved catalog is what its simulated saves stored: each catalog step's copy that
+      // holds no unsaved input. Picks made from here on are measured against it.
+      const { draft, runtime, editedSteps } = useOnboardingStore.getState()
+      recordSavedBaselines(Object.fromEntries(([4, 5, 6] as const)
+        .filter((step) => !editedSteps.includes(step))
+        .map((step) => [step, stepSnapshot(step, draft, runtime)])))
+      // The demo's own simulated Step 3 save is its only saved type.
+      const confirmed = readSavedTypeRecord(access.vendorId).confirmed
+      setSavedType(confirmed ? { status: 'saved', type: confirmed } : { status: 'open' })
       return
     }
 
@@ -841,13 +1417,14 @@ function OnboardingWizardContent() {
       setView: setLoadView,
       setContextError,
       savedSteps: savedStepRef,
+      restart: () => setEntryRun((run) => run + 1),
     })
     entryRef.current = entry
     return () => {
       entry.cancel()
       if (entryRef.current === entry) entryRef.current = null
     }
-  }, [access, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps])
+  }, [access, entryRun, setCategoryLimit, setProductLimit, setSkuLimit, setStoreSubmission, setAccountCatalog, setCatalogPreview, setProductMeasurementCatalog, setLoadedSteps, resetSavedBaselines, recordSavedBaselines, setSavedType, setCatalogMixed])
 
   // Each step reads what it needs when it opens; a read already made this visit is reused.
   // A layout effect, so a step whose data is cached paints its form without a skeleton frame.
@@ -867,13 +1444,6 @@ function OnboardingWizardContent() {
     window.setTimeout(() => headingRef.current?.focus(), 0)
   }, [currentStep, feedback])
 
-  useEffect(() => {
-    if (persistenceStatus !== 'conflict') return
-    requestControllerRef.current?.abort()
-    requestControllerRef.current = null
-    setBusy(false)
-  }, [persistenceStatus])
-
   const requestConfirmation: RequestConfirmation = (request) => {
     setConfirmState({ ...request, open: true })
   }
@@ -884,7 +1454,8 @@ function OnboardingWizardContent() {
       // A disclosure is focused by its summary. The field's message is what gets centred: a
       // group such as an open panel or a list of panels is taller than the screen, so centring
       // the field itself pushes its message out of view.
-      const element = target instanceof HTMLDetailsElement ? target.querySelector(':scope > summary') : target
+      const element = target instanceof HTMLDetailsElement ? target.querySelector(':scope > summary')
+        : target instanceof HTMLInputElement && target.type === 'file' ? document.getElementById(`${field}-button`) : target
       if (element instanceof HTMLElement) {
         const scrollTarget = document.getElementById(`${field}-error`) ?? element
         const reveal = () => {
@@ -912,13 +1483,19 @@ function OnboardingWizardContent() {
    * or go-live, the blocked sample catalog) omit it and stay until the next action.
    */
   const showIssues = (nextIssues: ValidationIssue[], recheck?: IssueRecheck) => {
-    setShownIssues({ issues: nextIssues, recheck })
+    const current = useOnboardingStore.getState().draft.currentStep
+    // Only a validation re-run (`recheck`) marks a missing choice; a failed save on the same
+    // step keeps its inline message, which outlives the toast.
+    const toastOnly = Boolean(recheck) && current >= 3 && current <= 5 && nextIssues.every(isMissingChoice)
+    setShownIssues({ issues: nextIssues, recheck, toastOnly })
     const first = nextIssues[0]
-    if (first) feedback.show(first.message, 'error')
-    // Every issue renders inline on its own step. Step 10's readiness check raises issues
+    if (first && !INLINE_ONLY_STEPS.includes(current)) feedback.show(first.message, 'error')
+    // Every other issue renders inline on its own step. Step 10's readiness check raises issues
     // for Steps 3-9, whose fields are not on screen; Step 10 lists those in its readiness list.
-    const onScreen = first?.step === useOnboardingStore.getState().draft.currentStep
-    if (first) focusField(onScreen ? first.field : 'readiness-issues')
+    // A toast-only issue has nothing to scroll to, except a category's panel, which still opens.
+    if (first && (!toastOnly || first.field.startsWith('category-products-'))) {
+      focusField(first.step === current ? first.field : 'readiness-issues')
+    }
   }
 
   const requestSampleCatalog = () => {
@@ -1081,6 +1658,47 @@ function OnboardingWizardContent() {
   }
 
   /**
+   * Whether a press of the step's primary action must first read the account again: it writes,
+   * and the page has been away since this visit read what the write is built from. Demo mode,
+   * sample drafts, read-only steps and saves with nothing to write never do.
+   */
+  const needsRevalidation = () => {
+    const state = useOnboardingStore.getState()
+    const step = state.draft.currentStep
+    const entry = entryRef.current
+    if (!entry || access.state !== 'ready' || !writesReachAccount(state.draft.catalogSource)) return false
+    const writes = step === 10
+      ? !storeIsSubmitted
+      : !submittedStepIsReadOnly(step, storeIsSubmitted, storeIsApproved) && !savedAndUnchanged(state, step)
+    return writes && entry.isStale(step)
+  }
+
+  /**
+   * Read again what the write is built from and merge it silently, as on entry. A failed read
+   * keeps the input and stops the write with the step's own error; pressing again retries.
+   * `true` when the write may go ahead on what the draft now holds.
+   */
+  const revalidateBeforeWrite = async (): Promise<boolean> => {
+    const entry = entryRef.current
+    const step = useOnboardingStore.getState().draft.currentStep
+    if (!entry) return false
+    const controller = beginRequest()
+    if (step !== 10) setStatusMessage('Saving to your store…')
+    try {
+      const outcome = await entry.revalidate(step)
+      if (!requestIsCurrent(controller, step)) return false
+      setStatusMessage(null)
+      if (outcome.kind === 'failed') {
+        const fallback = step === 10 ? 'Could not submit your store. Please try again.' : 'Could not save this step. Please try again.'
+        showIssues([{ step, field: stepErrorField(step), message: getErrorMessage(outcome.error, fallback) }])
+      }
+      return outcome.kind === 'current'
+    } finally {
+      finishRequest(controller)
+    }
+  }
+
+  /**
    * The one-way live submission, run only after the Step 10 confirmation is accepted.
    *
    * Kept separate from the Continue handler so the confirmation's `onConfirm` performs the
@@ -1155,6 +1773,7 @@ function OnboardingWizardContent() {
   }
 
   const handleCatalogContinue = async () => {
+    if (needsRevalidation() && !(await revalidateBeforeWrite())) return
     const state = useOnboardingStore.getState()
     const { draft, runtime } = state
     if (draft.currentStep === 10) {
@@ -1179,7 +1798,15 @@ function OnboardingWizardContent() {
         description:
           'MithraDirect reviews your store before any decision is made. While it is under review your setup is read-only — you can still add more categories and products, but everything else stays locked until the review is done.',
         confirmLabel: 'Submit for review',
-        onConfirm: () => void submitStoreForReview(slug),
+        onConfirm: () => void (async () => {
+          // The page may have been away while the confirmation was open.
+          if (needsRevalidation()) {
+            if (!(await revalidateBeforeWrite())) return
+            const issues = catalogStepIssues(useOnboardingStore.getState())
+            if (issues.length) return showIssues(issues, catalogStepIssues)
+          }
+          await submitStoreForReview(slug)
+        })(),
       })
       return
     }
@@ -1194,50 +1821,103 @@ function OnboardingWizardContent() {
     if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
+    // A locked type is never sent over: Step 3 can only re-save the saved type.
+    const typeChoice = step === 3 ? draft.business.businessType : null
+    const lockedType = state.savedType.status === 'saved' ? state.savedType.type : null
+    if (step === 3 && lockedType && typeChoice?.id !== lockedType.id) {
+      feedback.show(BUSINESS_TYPE_LOCKED_MESSAGE, 'warning')
+      return
+    }
     const inPlace = savesInPlace(step, storeIsSubmitted, storeIsApproved)
+    // A save from an earlier step returns to where the vendor came from, first stopping at
+    // any catalog step it left with missing work; a first-time step moves on as usual. A
+    // submitted store keeps its own rules.
+    const nextStep = inPlace ? step : stepAfterCatalogSave(
+      step,
+      storeIsSubmitted ? null : state.returnStep,
+      stepsNeedingAttention(catalogDependencyGaps(savedCatalogAfterSave(step, state)), draft.completedSteps, storeIsSubmitted, storeIsApproved),
+    )
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.
     // Units are left to the step that needs them. A save in place opens no next step.
     if (!inPlace && writesReachAccount(draft.catalogSource) && access.state === 'ready') {
-      entryRef.current?.prefetchStep((step + 1) as OnboardingStep)
+      entryRef.current?.prefetchStep(nextStep)
     }
-    const fingerprint = stepSaveFingerprint(step, draft, runtime)
-    const unchanged = fingerprint !== null && savedStepRef.current[step] === fingerprint
-    const shouldPersist =
+    const hasPendingImages = step === 9 && Boolean(runtime.logoFile || runtime.bannerFile)
+    const nothingToWrite = savedAndUnchanged(state, step)
+    const reachesAccount =
       writesReachAccount(draft.catalogSource) &&
       isLivePersistedStep(step) &&
-      access.state === 'ready' &&
-      !unchanged
+      access.state === 'ready'
 
-    if (shouldPersist && access.state === 'ready') {
+    if (reachesAccount && !nothingToWrite && access.state === 'ready') {
       const controller = beginRequest()
       const persistenceIsCurrent = () => requestIsCurrent(controller, step)
         && useAuthStore.getState().user?.vendorId === access.vendorId
         && useOnboardingStore.getState().draftOwnerId === access.vendorId
       setStatusMessage('Saving to your store…')
+      // Steps 7 and 8 share one full checkout write; it carries the other step's saved
+      // values, so neither step's unsaved edits reach the account through the other.
+      const sharesCheckout = step === 7 || step === 8
+      // A first type save is marked before it is sent, so a reload or a lost response while
+      // it is pending is checked against the account before the vendor may choose again.
+      const firstTypeSave = typeChoice !== null && !lockedType
       try {
-        // Each write reports what it put on the account, so a step that fails part way
-        // still records the part that landed. SKU creates also reread their saved IDs.
-        // Submitted stores reach this for categories/products and, once approved, sizes.
-        // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
-        await persistStep(step, access.vendorId, draft, runtime, (assignment) => {
-          if (persistenceIsCurrent()) recordAssignment(assignment)
-        }, recordCreatedEntry, state.accountCatalog.skuIds)
-        // This step is now on the account, so a cached read from before it is stale. The
-        // open wizard keeps what it holds: the draft is now the account copy.
-        dropWrittenAccountData(access.vendorId, savedResources(step))
+        const input = sharesCheckout
+          ? await checkoutSaveInput(step, access.vendorId, draft, runtime)
+          : { draft: stepSaveDraft(step, state), runtime }
         if (!persistenceIsCurrent()) return
-        // Read after the save: minting authored entries rewrites their ids in the draft.
-        const latest = useOnboardingStore.getState()
-        const saved = stepSaveFingerprint(step, latest.draft, latest.runtime)
-        if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
+        const fingerprint = stepSaveFingerprint(step, input.draft, input.runtime)
+        const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
+        if (!unchanged) {
+          if (firstTypeSave) markTypeSaveInFlight(access.vendorId, typeChoice)
+          // Each write reports what it put on the account, so a step that fails part way
+          // still records the part that landed. SKU creates also reread their saved IDs.
+          // Submitted stores reach this for categories/products and, once approved, sizes.
+          // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
+          await persistStep(step, access.vendorId, input.draft, input.runtime, (assignment) => {
+            if (persistenceIsCurrent()) recordAssignment(assignment)
+          }, recordCreatedEntry, state.accountCatalog.skuIds, {
+            signal: controller.signal,
+            approvedStore: storeIsSubmitted && storeIsApproved,
+            isCurrent: persistenceIsCurrent,
+            onUploaded: (kind, file, url) => {
+              if (!persistenceIsCurrent()) return
+              useOnboardingStore.getState().recordUploadedImage(kind, file, url)
+              setOnboardingResource(access.vendorId, kind, url)
+              entryRef.current?.recordImage(kind, url)
+            },
+          })
+          if (typeChoice) confirmTypeSave(access.vendorId, typeChoice)
+          // This step is now on the account, so a cached read from before it is stale. The
+          // open wizard keeps what it holds: the draft is now the account copy.
+          dropWrittenAccountData(access.vendorId, savedResources(step))
+          if (!persistenceIsCurrent()) return
+          // Read after the save: minting authored entries rewrites their ids in the draft.
+          const latest = useOnboardingStore.getState()
+          const saved = sharesCheckout ? fingerprint : stepSaveFingerprint(step, stepSaveDraft(step, latest), latest.runtime)
+          if (saved) for (const sharing of stepsSavedTogether(step)) savedStepRef.current[sharing] = saved
+        }
+        recordSavedStep(step, input)
         setStatusMessage(null)
       } catch (error) {
+        if (firstTypeSave) settleFailedTypeSave(access.vendorId, error)
         // Part of the step may have landed, so it no longer matches anything known.
+        if (step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
+        // Step 4 and 5 saves are diffed against the cached read, so a retry reads afresh.
+        if (step === 4 || step === 5) invalidateOnboardingResources(access.vendorId, savedResources(step))
         for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
+        if (isAccountStep(step)) recordSavedBaselines({ [step]: undefined })
         if (!persistenceIsCurrent()) return
         setStatusMessage(null)
         // A failed write is never reported as local success.
+        if (error instanceof ImageSaveError) {
+          showIssues(error.issues, (latest) => error.issues.filter((issue) =>
+            issue.field === 'store-logo-file'
+              ? latest.runtime.logoFile === runtime.logoFile
+              : latest.runtime.bannerFile === runtime.bannerFile))
+          return
+        }
         showIssues([
           {
             step,
@@ -1249,13 +1929,73 @@ function OnboardingWizardContent() {
       } finally {
         finishRequest(controller)
       }
+    } else if (!reachesAccount) {
+      // Demo mode simulates the save, so the step's input counts as saved here too, and a
+      // simulated type save locks the type as a real one does.
+      recordSavedStep(step, { draft, runtime })
+      if (typeChoice && !lockedType) {
+        if (access.state === 'ready') recordConfirmedType(access.vendorId, typeChoice)
+        setSavedType({ status: 'saved', type: typeChoice })
+      }
     }
 
-    // `syncedWithAccount` must reflect whether this step actually reached the account.
-    // Demo and sample mode skip the write, and claiming otherwise lets the next account
-    // read overwrite work the vendor can still see on screen.
-    completeStep(step, inPlace ? step : (step + 1) as OnboardingStep, { syncedWithAccount: shouldPersist || unchanged })
+    completeStep(step, nextStep)
     if (inPlace) feedback.show('Changes saved.', 'success')
+  }
+
+  /** A Step 3 save of `type` reached the account: lock it now and for later visits. */
+  const confirmTypeSave = (vendorId: string, type: BusinessTypeReference) => {
+    if (useAuthStore.getState().user?.vendorId !== vendorId) return
+    recordConfirmedType(vendorId, type)
+    setSavedType({ status: 'saved', type })
+    entryRef.current?.confirmSavedType(type)
+  }
+
+  /**
+   * A first type save failed. A refusal from the server is definite, so the choice reopens.
+   * Anything else (a timeout, a lost connection, a server error, leaving mid-request) may have
+   * saved it, so the type is checked against a fresh account read before anything else.
+   */
+  const settleFailedTypeSave = (vendorId: string, error: unknown) => {
+    const definite = isApiError(error) && error.status >= 400 && error.status < 500
+    if (!definite) dropWrittenAccountData(vendorId, savedResources(3))
+    if (useAuthStore.getState().user?.vendorId !== vendorId) return
+    if (definite) clearTypeSaveInFlight(vendorId)
+    else entryRef.current?.recheckSavedType()
+  }
+
+  /**
+   * What a Step 7 or 8 save sends: this step's input with the other step's saved values. If
+   * those are unknown this visit, the account's checkout is read first.
+   */
+  const checkoutSaveInput = async (
+    step: 7 | 8,
+    vendorId: string,
+    draft: OnboardingState['draft'],
+    runtime: OnboardingState['runtime'],
+  ) => {
+    const known = checkoutWriteInput(step, draft, runtime, useOnboardingStore.getState().savedBaselines)
+    if (known) return known
+    invalidateOnboardingResources(vendorId, ['checkout'])
+    const fromAccount = checkoutBaselines(await loadAccountResource(vendorId, 'checkout'))
+    const sibling: SavedBaselines = step === 7 ? { 8: fromAccount[8] } : { 7: fromAccount[7] }
+    if (useAuthStore.getState().user?.vendorId === vendorId) recordSavedBaselines(sibling)
+    return checkoutWriteInput(step, draft, runtime, sibling)!
+  }
+
+  /**
+   * The saved step's values become its baseline: what was sent, or, for catalog steps whose
+   * save rewrites authored ids, the draft as it stands after the save.
+   */
+  const recordSavedStep = (
+    step: OnboardingStep,
+    sent: { draft: OnboardingState['draft']; runtime: OnboardingState['runtime'] },
+  ) => {
+    if (!isAccountStep(step)) return
+    // Hidden picks under an unsaved parent were not sent, so they stay unsaved.
+    const latest = useOnboardingStore.getState()
+    const source = step >= 4 && step <= 6 ? { draft: stepSaveDraft(step, latest), runtime: latest.runtime } : sent
+    recordSavedBaselines({ [step]: stepSnapshot(step, source.draft, source.runtime) })
   }
 
   const handleContinue = async () => {
@@ -1325,8 +2065,7 @@ function OnboardingWizardContent() {
       }
     : ONBOARDING_STEPS[currentStep - 1]
   const stepDescription = stepMeta.description.replace('{categoryLimit}', String(categoryLimit))
-  // Only when this Continue writes to the account. Step 9 saves in Live API whatever the
-  // catalog source, and once the store is submitted it is read-only and saves nothing.
+  // Step 9's approval note applies only to unfinished setup, not published-store editing.
   const saveNote = !stepMeta.saveNote || !catalogUnlocked ? null
     : currentStep === 9 ? (liveApi && !storeIsSubmitted ? stepMeta.saveNote : null)
       : writesReachAccount(catalogSource) ? stepMeta.saveNote : null
@@ -1342,11 +2081,13 @@ function OnboardingWizardContent() {
   // "Review readiness" promises a check that only means something before submission.
   const continueLabel = currentStep === 1 ? 'Send OTP'
     : currentStep === 2 ? 'Verify & continue'
-      // An approved store's Step 6 saves without moving on, so the label promises no continue.
+      // Approved size and branding edits save without moving on.
       : stepSavesInPlace ? 'Save changes'
       // A submitted store only writes on the additive catalog steps; everywhere else
       // Continue is pure navigation, so the label must not promise a save.
       : storeIsSubmitted ? (isAdditiveCatalogStep(currentStep, storeIsApproved) ? 'Save and continue' : 'Continue')
+        // Revisiting an earlier step: saving returns to where the vendor came from.
+        : returnStep !== null && currentStep < returnStep ? 'Save changes'
         : currentStep === 9 ? 'Review readiness'
           // Live submits for administrator review; demo/sample only saves a private preview.
           : currentStep === 10 ? (step10SubmitsToAccount ? 'Submit for review' : 'Save private preview')
@@ -1358,20 +2099,29 @@ function OnboardingWizardContent() {
     setMobileView(view)
     window.setTimeout(() => document.getElementById(`onboarding-${view}-tab`)?.focus(), 0)
   }
-  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted, storeIsApproved }
+  const stepperProps = { currentStep, completedSteps, furthestVisitedStep, firstNavigableStep, catalogAdditiveOpen: storeIsSubmitted, storeIsApproved, attentionSteps }
 
   // A live, signed-in step from 3 on shows its form only once what it needs has loaded.
   const accountReadsApply = liveApi && access.state === 'ready' && catalogUnlocked && currentStep >= 3
-  const stepState = !accountReadsApply ? 'loaded'
+  // Steps 3 and 4 show the saved type and Step 10 checks it, so they wait while it is checked.
+  // Steps 3 and 4 have nothing to offer while it is unconfirmed but a fresh check.
+  const typeGated = accountReadsApply && catalogSource === 'account' && stepNeedsSavedType(currentStep, storeIsSubmitted)
+  const typeUnresolved = typeGated && currentStep !== 10 && savedType.status === 'unresolved'
+  const accountState = !accountReadsApply ? 'loaded'
     // Every step's reads depend on the context, so none is usable without it.
     : loadView.context === 'failed' ? 'failed'
       // A sample draft has no account copy to wait for.
       : catalogSource !== 'account' ? 'loaded'
-        : waitsForFirstList(
-          stepLoadState(currentStep, { submitted: storeIsSubmitted, resources: loadView.resources, units: loadView.units }),
-          currentStep,
-          loadView,
-        )
+        : stepLoadState(currentStep, { submitted: storeIsSubmitted, approved: storeIsApproved, resources: loadView.resources, units: loadView.units })
+  const typeState = accountState !== 'loaded' || !typeGated ? accountState
+    : savedType.status === 'checking' ? 'loading'
+      : typeUnresolved ? 'failed' : 'loaded'
+  // A confirmed mixed saved catalog: Steps 4-6 offer support instead of changes.
+  const catalogBlocked = accountReadsApply && catalogMixed && !storeIsSubmitted && currentStep >= 4 && currentStep <= 6
+  const stepState = catalogBlocked ? 'failed'
+    : typeUnresolved || !accountReadsApply || catalogSource !== 'account'
+      ? typeState
+      : waitsForFirstList(typeState, currentStep, loadView)
   const contextPending = liveApi && access.state === 'ready' && (loadView.context === 'idle' || loadView.context === 'loading')
 
   if (!persistenceInitialized || contextPending) {
@@ -1485,33 +2235,46 @@ function OnboardingWizardContent() {
                           <AccessNotice access={access} onSelectVendor={selectVendor} onSignOut={confirmStartOver} />
                         ) : null}
                         {/* A `fieldset` rather than a per-input `disabled` prop: read-only has to
-                            hold for every control on the locked steps (3, 7, 8, 9), and threading
+                            hold for every control on the locked steps, and threading
                             a flag through those step components is a rule anything new can be added
-                            without. Categories/products and an approved store's sizes stay interactive so the catalog
-                            can still grow within plan limits; Step 10 is the landing step and stays
+                            without. Categories/products and an approved store's sizes/branding stay interactive;
+                            Step 10 is the landing step and stays
                             interactive too. The notices above carry the sign-out action, which
                             stays available because it is the only route backwards. Step 3 locks
                             only its cards, so its list can still be searched and paged. */}
+                        {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
+                        {stepState === 'failed' ? <>
+                          {currentStep === 9 && storeIsSubmitted && storeIsApproved ? <p className="mb-3 text-sm text-destructive">Could not load your saved store settings. Retry before making changes.</p> : null}
+                          {catalogBlocked ? <StepNotice tone="error" message={MIXED_CATALOG_MESSAGE} />
+                            : typeUnresolved && savedType.status === 'unresolved'
+                            ? <LoadError message={unresolvedTypeMessage(savedType.retried)} onRetry={() => entryRef.current?.recheckSavedType()} />
+                            : <LoadError onRetry={() => entryRef.current?.retry(currentStep)} />}
+                        </> : null}
+                        {stepState === 'loaded' && writesReachAccount(catalogSource) && (currentStep === 10 || (currentStep === 9 && submittedStepIsReadOnly(9, storeIsSubmitted, storeIsApproved))) ? (
+                          <div className="space-y-3 empty:hidden [&:not(:empty)]:mb-5">
+                            {(['logo', 'banner'] as const).filter((kind) => loadView.resources[kind] === 'failed').map((kind) => (
+                              <StoreImageLoadNotice key={kind} kind={kind} onRetry={() => entryRef.current?.retryImage(kind)} />
+                            ))}
+                          </div>
+                        ) : null}
                         <fieldset
-                          disabled={currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved)}
+                          disabled={(currentStep === 9 && busy) || (currentStep !== 3 && submittedStepIsReadOnly(currentStep, storeIsSubmitted, storeIsApproved))}
                           className="min-w-0 border-0 p-0"
                         >
-                        {stepState === 'loading' ? <PageLoader label="Loading this step" /> : null}
-                        {stepState === 'failed' ? <LoadError onRetry={() => entryRef.current?.retry(currentStep)} /> : null}
                         {stepState === 'loaded' ? <>
-                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={issues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
-                          {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
-                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={issues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 3 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <BusinessStep issues={inlineIssues} onUseSample={sampleCatalogFallback} readOnly={submittedStepIsReadOnly(3, storeIsSubmitted, storeIsApproved)} /> : null}
+                          {currentStep === 4 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <CategoryStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} /> : null}
+                          {currentStep === 5 && catalogUnlocked && catalogPolicy.referenceReadsAllowed ? <ProductStep issues={inlineIssues} confirm={requestConfirmation} onUseSample={sampleCatalogFallback} markMissing={attentionSteps.includes(5)} /> : null}
                           {currentStep >= 3 && currentStep <= 5 && catalogUnlocked && !catalogPolicy.referenceReadsAllowed ? (
                             <StepNotice message={currentStep === 3
                               ? 'Demo mode does not load your account catalog. Choose Sample catalog above to continue.'
                               : 'Demo mode cannot load an account-catalog draft. Start over and choose Sample catalog before continuing.'}
                             />
                           ) : null}
-                          {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} /> : null}
+                          {currentStep === 6 && catalogUnlocked ? <SkuStep issues={issues} markMissing={attentionSteps.includes(6)} /> : null}
                           {currentStep === 7 && catalogUnlocked ? <DeliveryStep issues={issues} /> : null}
                           {currentStep === 8 && catalogUnlocked ? <PaymentStep issues={issues} /> : null}
-                          {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} /> : null}
+                          {currentStep === 9 && catalogUnlocked ? <StorefrontStep issues={issues} savesInPlace={stepSavesInPlace} imageStates={writesReachAccount(catalogSource) ? { logo: loadView.resources.logo, banner: loadView.resources.banner } : undefined} onRetryImage={submittedStepIsReadOnly(9, storeIsSubmitted, storeIsApproved) ? undefined : (kind) => entryRef.current?.retryImage(kind)} /> : null}
                           {currentStep === 10 && catalogUnlocked ? <ReviewStep issues={issues} onGoToStep={navigateToStep} submitsToAccount={step10SubmitsToAccount} /> : null}
                         </> : null}
                         </fieldset>
@@ -1544,8 +2307,6 @@ function OnboardingWizardContent() {
       </div>
 
       <ConfirmDialog {...confirmState} onOpenChange={(open) => setConfirmState((current) => ({ ...current, open }))} />
-      <DraftConflictDialog open={persistenceStatus === 'conflict'} onLoad={() => { cancelActiveRequest(); loadNewerDraft() }} onOverwrite={overwriteWithCurrentDraft} />
-      <CorruptDraftDialog open={persistenceStatus === 'corrupt'} onReset={clearCorruptDraft} />
     </div>
   )
 }
