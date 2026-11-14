@@ -43,19 +43,24 @@ design reference.
   and the step stays reachable. Inside the step the missing item is marked in place, with no banner:
   a category without a product gets an amber outline and "Needs a product", a product without a
   valid size an amber outline and a warning "Needs a size" badge, and the first such group opens.
-- On Steps 4 and 5 an unsaved catalog card (a picked or vendor-authored category or product)
-  wears a **dashed outline only**: no tag, badge or extra colour, and saved cards keep the solid
-  look. While the step shows any unsaved card, one muted line sits at the top of its list: "Items
-  with a dashed outline aren't saved yet. Continue saves them."
-- On Step 6 an unsaved size row (a new size, or a saved size with a changed quantity, unit, price
-  or on/off state) takes the `--ob-brand-soft` wash and a 3px `--ob-brand` bar on its left edge,
-  with no outline or tag. Every row keeps the same padding, so marking one never moves its
-  columns. A saved product's blank starter size stays unmarked until the vendor fills it in. The
-  key line is a small brand bar glyph and "Rows marked like this aren't saved yet. Continue saves
-  them."
-- The keys and marks clear once the step saves. Marks are visual only, so an unsaved item's
-  accessible name ends with "not saved". Explanations of why a saved item can't be removed stay;
-  there is no "Saved to your store" or "Not saved yet" text.
+- Steps 4-6 mark only an **optional extra the vendor could drop**: an item not saved yet once
+  the account already holds one of its kind. On Step 4 that is a pick (or vendor-authored
+  category) once a category is saved; on Step 5 a pick (or authored product) in a category that
+  already has a saved product; on Step 6 a size added to a product that already has a saved
+  size. A first item is never marked: no saved category, a category without a saved product, or
+  a product without a saved size (its starter row, filled or not, and sizes added before its
+  first save) all look as they will once saved.
+- An optional extra wears a **dashed outline only**: no tag, badge, key line or extra colour.
+  Cards switch to a 2px dashed border; a Step 6 size row always carries a 2px border and swaps
+  it from transparent to a dashed `--ob-brand` one, so marking a row never moves or resizes it.
+- A saved Step 6 size with unsaved changes is not outlined. Only each changed control is
+  tinted: a changed input or unit takes the `--ob-brand-soft` fill and a light `--ob-brand`
+  border, a changed on/off switch a `--ob-brand-soft` halo. Its cross becomes an ↺ Undo
+  button ("Undo changes") that restores the saved values, unless that would leave the
+  product with no switched-on size; the cross returns after Undo.
+- Marks clear once the step saves. They are visual only, so an extra's accessible name ends with
+  "not saved" and an edited saved size's with "unsaved changes". Explanations of why a saved
+  item can't be removed stay; there is no "Saved to your store" or "Not saved yet" text.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
   submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
 

@@ -468,7 +468,8 @@ one full checkout write, so it carries the other step's baseline, never its pend
 stay pending and are not marked saved; if that baseline is unknown, the save reads the checkout
 first. A failed save forgets the step's baseline, so the next attempt writes. Submission lists each
 pending step on Step 10 ("Save or undo your changes to …", linking to it) with the readiness items,
-and is blocked until none remain.
+leaving out a step that already has a more specific item (so "Add a size for …" stands alone), and
+is blocked until none remain.
 
 On opening, Step 4 also reads its business type's first category page, and Step 5 its default
 (first saved) category panel's first product page, alongside the step's account reads, into the reference

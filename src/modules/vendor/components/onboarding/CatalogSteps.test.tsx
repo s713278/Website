@@ -971,7 +971,7 @@ describe('a freshly authored entry scrolls into view', () => {
     fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
 
-    const remove = await screen.findByRole('button', { name: 'Mango pickle, not saved' })
+    const remove = await screen.findByRole('button', { name: 'Mango pickle' })
     expect(scrolls).toHaveBeenCalledTimes(1)
     expect(scrolls).toHaveBeenCalledWith({ behavior: 'auto', block: 'nearest' })
     expect(scrolls.mock.contexts[0]).toBe(remove.parentElement)
@@ -979,15 +979,17 @@ describe('a freshly authored entry scrolls into view', () => {
   })
 })
 
-describe('unsaved catalog items wear a dashed outline', () => {
-  const KEY = 'Items with a dashed outline aren’t saved yet. Continue saves them.'
+describe('only optional extra catalog picks wear a dashed outline', () => {
   const category = (id: number, name: string) => ({ id, businessTypeId: 71, name, description: null, imageUrl: null, displayOrder: id })
   const product = (id: number, name: string) => ({
     id, name, description: null, icon: null, imageUrl: null, measurementId: null, measurementName: 'COUNT',
   })
   const pickles = category(7101, 'Pickles')
   const jams = category(7102, 'Jams')
+  const skim = product(7201, 'Skim Milk')
   const dashed = (element: HTMLElement) => element.className.includes('border-dashed')
+  // No key line explains the outline: it made the list jump as it came and went.
+  const keyLine = () => screen.queryByText(/dashed outline|saved yet/i)
 
   // An authored entry scrolls into view, which jsdom cannot do.
   function stubScrolling() {
@@ -1010,7 +1012,19 @@ describe('unsaved catalog items wear a dashed outline', () => {
     render(<CategoryStep issues={[]} confirm={() => undefined} />)
   }
 
-  it('dashes a picked category, tells screen readers it is not saved, and shows the key', async () => {
+  it('marks no first pick while the account holds no saved category', async () => {
+    renderCategories([])
+
+    const jamsCard = await screen.findByRole('button', { name: /Jams/ })
+    const picklesCard = screen.getByRole('button', { name: /Pickles/ })
+    for (const card of [jamsCard, picklesCard]) {
+      expect(dashed(card)).toBe(false)
+      expect(card.textContent).not.toContain('not saved')
+    }
+    expect(keyLine()).toBeNull()
+  })
+
+  it('dashes a pick added once a category is saved, telling screen readers it is not saved', async () => {
     renderCategories([pickles])
 
     const jamsCard = await screen.findByRole('button', { name: /Jams/ })
@@ -1019,24 +1033,21 @@ describe('unsaved catalog items wear a dashed outline', () => {
     expect(jamsCard.textContent).toContain('not saved')
     expect(dashed(picklesCard)).toBe(false)
     expect(picklesCard.textContent).not.toContain('not saved')
-    expect(screen.getByText(KEY)).toBeTruthy()
+    expect(keyLine()).toBeNull()
     expect(screen.queryByText(/Saved to your store|Not saved yet/)).toBeNull()
   })
 
-  it('shows no dashed outline and no key once every chosen category is saved', async () => {
+  it('shows no dashed outline once every chosen category is saved', async () => {
     renderCategories([pickles, jams])
 
-    const jamsCard = await screen.findByRole('button', { name: /Jams/ })
-    expect(dashed(jamsCard)).toBe(false)
-    expect(screen.queryByText(KEY)).toBeNull()
+    expect(dashed(await screen.findByRole('button', { name: /Jams/ }))).toBe(false)
   })
 
-  it('dashes a vendor-authored category until it is saved', async () => {
+  it('dashes a vendor-authored category only once a category is saved', async () => {
     stubScrolling()
     // One chosen, so the plan's category limit leaves room to author another.
     renderCategories([pickles], [pickles])
     await screen.findByRole('button', { name: /Jams/ })
-    expect(screen.queryByText(KEY)).toBeNull()
 
     fireEvent.change(screen.getByPlaceholderText('Category name'), { target: { value: 'Chutneys' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Category' }))
@@ -1044,53 +1055,86 @@ describe('unsaved catalog items wear a dashed outline', () => {
     const authored = await screen.findByRole('button', { name: /Chutneys/ })
     expect(dashed(authored)).toBe(true)
     expect(authored.textContent).toContain('not saved')
-    expect(screen.getByText(KEY)).toBeTruthy()
+    expect(keyLine()).toBeNull()
   })
 
-  function renderProducts() {
+  it('leaves a vendor-authored first category unmarked', async () => {
+    stubScrolling()
+    renderCategories([], [])
+    await screen.findByRole('button', { name: /Jams/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Category name'), { target: { value: 'Chutneys' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Category' }))
+
+    const authored = await screen.findByRole('button', { name: /Chutneys/ })
+    expect(dashed(authored)).toBe(false)
+    expect(authored.textContent).not.toContain('not saved')
+  })
+
+  /** Pickles saved, holding `saved` products. */
+  function renderProducts(saved: Array<typeof skim>) {
     emptyReferenceCache()
     vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue({
-      items: [product(7201, 'Skim Milk'), product(7202, 'Cow Milk')],
+      items: [skim, product(7202, 'Cow Milk')],
       pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
     })
     setCatalogDraft(71, [pickles])
-    useOnboardingStore.getState().updateDraft((current) => ({
-      ...current,
-      products: [{ ...product(7201, 'Skim Milk'), categoryId: pickles.id }],
-    }))
+    const products = saved.map((item) => ({ ...item, categoryId: pickles.id }))
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, products }))
+    useOnboardingStore.setState({ editedSteps: [], savedBaselines: { 4: { categories: [pickles] }, 5: { products } } })
     render(<ProductStep issues={[]} confirm={() => undefined} />)
   }
 
-  it('keeps saved products solid, dashes a newly picked one and shows the key until it is saved', async () => {
-    renderProducts()
-    const skim = await screen.findByRole('button', { name: /Skim Milk/ })
-    expect(dashed(skim)).toBe(false)
-    expect(screen.queryByText(KEY)).toBeNull()
-    expect(screen.queryByText('Saved to your store')).toBeNull()
+  it('marks no pick in a category without a saved product', async () => {
+    renderProducts([])
+    fireEvent.click(await screen.findByRole('button', { name: /Cow Milk/ }))
+
+    const cow = screen.getByRole('button', { name: /Cow Milk/ })
+    expect(cow.getAttribute('aria-pressed')).toBe('true')
+    expect(dashed(cow)).toBe(false)
+    expect(cow.textContent).not.toContain('not saved')
+    expect(keyLine()).toBeNull()
+  })
+
+  it('dashes a new pick in a category with a saved product until it is saved', async () => {
+    renderProducts([skim])
+    expect(dashed(await screen.findByRole('button', { name: /Skim Milk/ }))).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: /Cow Milk/ }))
     const cow = screen.getByRole('button', { name: /Cow Milk/ })
     expect(dashed(cow)).toBe(true)
     expect(cow.textContent).toContain('not saved')
-    expect(screen.getByText(KEY)).toBeTruthy()
+    expect(keyLine()).toBeNull()
 
     act(() => useOnboardingStore.setState((state) => ({
       editedSteps: [], savedBaselines: { ...state.savedBaselines, 5: { products: state.draft.products } },
     })))
     expect(dashed(screen.getByRole('button', { name: /Cow Milk/ }))).toBe(false)
-    expect(screen.queryByText(KEY)).toBeNull()
   })
 
-  it('names an authored product as not saved, without the old added-by-you wording', async () => {
+  it('dashes an authored product only in a category with a saved product', async () => {
     stubScrolling()
-    renderProducts()
+    renderProducts([skim])
     await screen.findByRole('button', { name: /Skim Milk/ })
 
     fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
 
-    expect(await screen.findByRole('button', { name: 'Mango pickle, not saved' })).toBeTruthy()
+    const remove = await screen.findByRole('button', { name: 'Mango pickle, not saved' })
+    expect(dashed(remove.parentElement!)).toBe(true)
     expect(screen.queryByText(/added by you/)).toBeNull()
-    expect(screen.getByText(KEY)).toBeTruthy()
+    expect(keyLine()).toBeNull()
+  })
+
+  it('leaves an authored first product unmarked', async () => {
+    stubScrolling()
+    renderProducts([])
+    await screen.findByRole('button', { name: /Skim Milk/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
+
+    const remove = await screen.findByRole('button', { name: 'Mango pickle' })
+    expect(dashed(remove.parentElement!)).toBe(false)
   })
 })

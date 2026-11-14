@@ -1161,15 +1161,15 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
     const typeIssues: ValidationIssue[] = savedType.status === 'unresolved'
       ? [{ step: 3, field: 'business-type', message: unresolvedTypeMessage(savedType.retried) }]
       : []
-    return [
-      ...pendingEditIssues(pendingSteps(state)),
+    const specific = [
       ...typeIssues,
       // A mixed saved catalog waits for support, as Steps 4-6 do.
       ...mixedCatalogIssues(state.catalogMixed && !selectStoreIsSubmitted(state)),
-      // The catalog is judged as saved: its unsaved input is the pending lines above.
+      // The catalog is judged as saved: its unsaved input is the pending lines below.
       ...readinessIssues(withSavedCatalog(draft, savedCatalog(state)), runtime, categoryLimit, measurementCatalog, enforcement)
         .filter((issue) => !typeIssues.length || issue.step !== 3),
     ]
+    return [...pendingEditIssues(pendingSteps(state), specific), ...specific]
   }
   // Steps 5 and 6 check what they show and save, not picks hidden under an unsaved parent.
   const checked = stepSaveDraft(draft.currentStep, state)

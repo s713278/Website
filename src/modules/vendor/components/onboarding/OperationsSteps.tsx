@@ -3,6 +3,7 @@ import {
   BanknoteIcon,
   LandmarkIcon,
   PlusIcon,
+  RotateCcwIcon,
   SmartphoneIcon,
   Trash2Icon,
   XIcon,
@@ -126,11 +127,14 @@ function SkuStatusSwitch({
   heading,
   active,
   disabled = false,
+  changed = false,
   onChange,
 }: {
   heading: string
   active: boolean
   disabled?: boolean
+  /** Switched away from its saved state: a light brand halo, the switch's own field tint. */
+  changed?: boolean
   onChange?: (active: boolean) => void
 }) {
   return (
@@ -145,6 +149,7 @@ function SkuStatusSwitch({
       className={cn(
         'relative h-7 w-12 shrink-0 rounded-full transition-colors max-[30rem]:h-6 max-[30rem]:w-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
         active ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700',
+        changed && 'ring-4 ring-[var(--ob-brand-soft)]',
       )}
     >
       <span
@@ -160,7 +165,9 @@ function SkuStatusSwitch({
 
 /**
  * A bare red cross with a fixed hit area, so the header and every row stay aligned. It is
- * always rendered; `inert` marks a product's only size, which cannot be removed.
+ * always rendered; `inert` marks a product's only size, which cannot be removed. A saved size
+ * with unsaved changes offers Undo in its place: the same button, so focus stays on it when
+ * Undo brings the cross back.
  */
 function SkuRemoveButton({
   heading,
@@ -168,13 +175,28 @@ function SkuRemoveButton({
   disabled = false,
   inert = false,
   onClick,
+  onUndo,
 }: {
   heading: string
   active: boolean
   disabled?: boolean
   inert?: boolean
   onClick?: () => void
+  onUndo?: () => void
 }) {
+  if (onUndo) {
+    return (
+      <button
+        type="button"
+        aria-label="Undo changes"
+        title="Undo changes"
+        onClick={onUndo}
+        className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--ob-brand)] transition-colors hover:bg-[var(--ob-brand-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand)] max-[30rem]:w-7"
+      >
+        <RotateCcwIcon className="size-4" strokeWidth={2.2} aria-hidden="true" />
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -221,6 +243,10 @@ type SkuGroupId = number | 'other'
 
 /** What a vendor can change on a saved size; a change to any of them leaves the size unsaved. */
 const SKU_SAVED_FIELDS = ['quantity', 'unit', 'listPrice', 'salePrice', 'active'] as const
+type SkuSavedField = (typeof SKU_SAVED_FIELDS)[number]
+
+/** A changed field of a saved size: a light brand fill and tinted border, nothing else. */
+const skuChangedClass = 'border-[var(--ob-brand)]/45 bg-[var(--ob-brand-soft)]'
 
 function SkuHeaderRow() {
   return (
@@ -253,19 +279,6 @@ function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   )
 }
 
-/**
- * Step 6's key while it shows unsaved sizes. Rows are not cards, so they take a brand wash and
- * a left bar rather than the dashed outline Steps 4 and 5 use; the glyph repeats the bar.
- */
-function UnsavedSizeKey() {
-  return (
-    <p className="flex items-center gap-2 text-xs text-[var(--ob-ink-soft)]">
-      <span aria-hidden="true" className="h-3 w-[3px] shrink-0 rounded-full bg-[var(--ob-brand)]" />
-      {"Rows marked like this aren't saved yet. Continue saves them."}
-    </p>
-  )
-}
-
 export function SkuStep({ issues, markMissing = false }: {
   issues: ValidationIssue[]
   /** Step 6 is done but needs attention: mark the products still without a valid size. */
@@ -277,16 +290,6 @@ export function SkuStep({ issues, markMissing = false }: {
   const draft = useMemo(() => stepCatalog(6, fullDraft, saved), [fullDraft, saved])
   const savedProductKey = saved.products.map((product) => product.id).join(',')
   const savedSkuById = useMemo(() => new Map(saved.skus.map((sku) => [sku.id, sku])), [saved.skus])
-  // New sizes and edited saved ones are unsaved. A saved product's blank starter row is the
-  // wizard's, not the vendor's, so it stays solid until the vendor fills it in.
-  const isUnsaved = (sku: DraftSku) => {
-    const savedSku = savedSkuById.get(sku.id)
-    if (savedSku) return SKU_SAVED_FIELDS.some((key) => savedSku[key] !== sku[key])
-    const starter = sku.quantity === null && sku.listPrice === null && sku.salePrice === null
-      && !saved.skus.some((item) => item.productId === sku.productId)
-      && draft.skus.find((item) => item.productId === sku.productId) === sku
-    return !starter
-  }
   const feedback = useOnboardingFeedback()
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
@@ -387,6 +390,17 @@ export function SkuStep({ issues, markMissing = false }: {
     feedback.show(`Turn on at least one size for ${product?.name ?? 'this product'}.`, 'warning')
   }
 
+  // Undo puts a saved size back as saved, unless that would leave its product with no size on.
+  // Focus stays on the button, which turns back into the cross; a product's only size has an
+  // inert cross, so focus moves to that size's quantity instead.
+  const undoSku = (sku: DraftSku, savedSku: DraftSku) => {
+    if (!savedSku.active && lastActiveSize(sku)) return refuseLastActive(sku)
+    updateSku(sku.id, Object.fromEntries(SKU_SAVED_FIELDS.map((key) => [key, savedSku[key]])))
+    if (draft.skus.filter((item) => item.productId === sku.productId).length <= 1) {
+      window.setTimeout(() => document.getElementById(`sku-${sku.id}-quantity`)?.focus(), 0)
+    }
+  }
+
   const updateSku = (skuId: string, patch: Partial<DraftSku>) => updateDraft(
     (current) => ({
       ...current,
@@ -455,7 +469,12 @@ export function SkuStep({ issues, markMissing = false }: {
     // one of its inputs, so they describe the whole row and are the focus target for it.
     const rowId = `sku-${sku.id}`
     const rowIssue = issues.find((item) => item.field === rowId)?.message
-    const unsaved = isUnsaved(sku)
+    // A saved size shows each changed field and offers Undo. A new size is marked only as an
+    // optional extra, on a product that already has a saved size: never the first.
+    const savedSku = savedSkuById.get(sku.id)
+    const changed = (key: SkuSavedField) => savedSku !== undefined && savedSku[key] !== sku[key]
+    const edited = SKU_SAVED_FIELDS.some(changed)
+    const extra = !savedSku && saved.skus.some((item) => item.productId === sku.productId)
     // A field's error sits directly under its own input, so only that column grows.
     const fieldError = (key: (typeof SKU_FIELDS)[number]['key']) => {
       const message = issueFor(key)
@@ -468,13 +487,13 @@ export function SkuStep({ issues, markMissing = false }: {
         key={sku.id}
         id={rowId}
         className={cn(
-          // Padded out by as much as it is pulled back, in both states, so the columns stay
-          // level with the header and marking a row never moves it.
-          '-mx-1.5 min-w-0 rounded-lg border-0 px-1.5 py-1',
-          unsaved && 'bg-[var(--ob-brand-soft)] shadow-[inset_3px_0_0_var(--ob-brand)]',
+          // Border plus padding equal the pull-back, and the border is always there, so the
+          // columns stay level with the header and marking a row never moves or grows it.
+          '-mx-1.5 min-w-0 rounded-lg border-2 border-transparent px-1 py-0.5',
+          extra && 'border-dashed border-[var(--ob-brand)]',
         )}
-        // The mark is visual only.
-        aria-label={unsaved ? `${groupLabel}, not saved` : groupLabel}
+        // The marks are visual only.
+        aria-label={extra ? `${groupLabel}, not saved` : edited ? `${groupLabel}, unsaved changes` : groupLabel}
         aria-describedby={rowIssue ? `${rowId}-error` : undefined}
       >
         <div className={cn(SKU_ROW_GRID, 'items-start', !sku.active && 'opacity-55')}>
@@ -488,7 +507,7 @@ export function SkuStep({ issues, markMissing = false }: {
               value={sku.quantity ?? ''}
               onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('quantity') && skuChangedClass)}
             />
             {fieldError('quantity')}
           </div>
@@ -497,7 +516,7 @@ export function SkuStep({ issues, markMissing = false }: {
               {...fieldA11y('unit')}
               value={sku.unit}
               onChange={(event) => updateSku(sku.id, { unit: event.target.value })}
-              className={cn(skuFieldClass, 'pr-1')}
+              className={cn(skuFieldClass, 'pr-1', changed('unit') && skuChangedClass)}
             >
               {unitsForMeasurement(measurement, measurementCatalog).map((unit) => (
                 <option key={unit} value={unit}>{unit}</option>
@@ -515,7 +534,7 @@ export function SkuStep({ issues, markMissing = false }: {
               value={sku.listPrice ?? ''}
               onChange={(event) => updateSku(sku.id, { listPrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('listPrice') && skuChangedClass)}
             />
             {fieldError('list-price')}
           </div>
@@ -529,7 +548,7 @@ export function SkuStep({ issues, markMissing = false }: {
               value={sku.salePrice ?? ''}
               onChange={(event) => updateSku(sku.id, { salePrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('salePrice') && skuChangedClass)}
             />
             {fieldError('sale-price')}
           </div>
@@ -538,6 +557,7 @@ export function SkuStep({ issues, markMissing = false }: {
             <SkuStatusSwitch
               heading={heading}
               active={sku.active}
+              changed={changed('active')}
               onChange={(active) => active || !lastActiveSize(sku) ? updateSku(sku.id, { active }) : refuseLastActive(sku)}
             />
           </div>
@@ -546,6 +566,7 @@ export function SkuStep({ issues, markMissing = false }: {
             active={sku.active}
             inert={productSkus.length <= 1}
             onClick={() => removeSku(sku)}
+            onUndo={savedSku && edited ? () => undoSku(sku, savedSku) : undefined}
           />
         </div>
         {rowIssue ? (
@@ -645,7 +666,6 @@ export function SkuStep({ issues, markMissing = false }: {
       </div>
       <div>
         <div className="space-y-3">
-          {draft.skus.some(isUnsaved) ? <UnsavedSizeKey /> : null}
           {groups.map((group) => {
             const count = group.products.length
             const needSize = group.products.filter((product) => missing.includes(product.id)).length

@@ -621,90 +621,142 @@ describe('SkuStep saved size status after submission', () => {
   })
 })
 
-describe('SkuStep marks unsaved sizes', () => {
-  const KEY = "Rows marked like this aren't saved yet. Continue saves them."
+describe('SkuStep marks only optional extra sizes', () => {
   const rowOf = (sku: DraftSku) => {
     const row = document.getElementById(`sku-${sku.id}`)
     if (!(row instanceof HTMLFieldSetElement)) throw new Error(`Expected a size row for ${sku.id}`)
     return row
   }
-  // A brand wash with a left bar, never the dashed outline Steps 4 and 5 use.
+  // Every row keeps the same border width and padding, so marking one never moves it.
   const dashed = (row: HTMLElement) => {
-    expect(row.className).not.toContain('dashed')
-    // The same padding in both states, so marking a row never moves its columns.
-    expect(row.className).toContain('-mx-1.5')
-    return row.className.includes('bg-[var(--ob-brand-soft)]') && row.className.includes('inset_3px_0_0_var(--ob-brand)')
+    expect(row.className).toMatch(/\bborder-2\b/)
+    expect(row.className).not.toMatch(/inset_3px|bg-\[var\(--ob-brand-soft\)\]/)
+    return row.className.includes('border-dashed')
   }
+  // A whole class, not a focus or hover variant of one.
+  const tinted = (element: HTMLElement) => element.className.split(/\s+/)
+    .some((name) => name === 'bg-[var(--ob-brand-soft)]' || name === 'ring-[var(--ob-brand-soft)]')
+  const keyLine = () => screen.queryByText(/saved yet|marked like this/i)
+  const second: DraftSku = { ...skuA, id: localSkuId(productA.id, [skuA]), quantity: 6 }
 
-  function seedSaved(skus: DraftSku[]) {
+  function seedSaved(skus: DraftSku[], savedSkus: DraftSku[] = [skuA]) {
     seedDraft([productA], skus, [fruits])
     act(() => useOnboardingStore.setState({
-      savedBaselines: { 4: { categories: [fruits] }, 5: { products: [productA] }, 6: { skus: [skuA] } },
+      savedBaselines: { 4: { categories: [fruits] }, 5: { products: [productA] }, 6: { skus: savedSkus } },
     }))
   }
 
-  it('leaves a saved, untouched size unmarked and shows no key', () => {
+  it('marks nothing on a product without a saved size: starter, filled or extra rows', () => {
+    seedSaved([], [])
+    render(<SkuStep issues={[]} />)
+    const [starter] = useOnboardingStore.getState().draft.skus
+    expect(dashed(rowOf(starter))).toBe(false)
+
+    fireEvent.change(input(`sku-${starter.id}-quantity`), { target: { value: '2' } })
+    fireEvent.change(input(`sku-${starter.id}-list-price`), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add another size to Apples' }))
+    const extra = useOnboardingStore.getState().draft.skus.at(-1)!
+
+    for (const sku of [starter, extra]) {
+      expect(dashed(rowOf(sku))).toBe(false)
+      expect(rowOf(sku).getAttribute('aria-label')).not.toMatch(/saved|changes/)
+      expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull()
+    }
+    expect(keyLine()).toBeNull()
+  })
+
+  it('dashes a size added to a product that has a saved size, and names it not saved', () => {
     seedSaved([skuA])
     render(<SkuStep issues={[]} />)
-
     expect(dashed(rowOf(skuA))).toBe(false)
-    expect(rowOf(skuA).getAttribute('aria-label')).not.toMatch(/not saved/)
-    expect(screen.queryByText(KEY)).toBeNull()
-  })
-
-  it('marks a saved size once its price changes, names it not saved, and shows the key', () => {
-    seedSaved([skuA])
-    render(<SkuStep issues={[]} />)
-
-    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
-
-    expect(dashed(rowOf(skuA))).toBe(true)
-    expect(rowOf(skuA).getAttribute('aria-label')).toMatch(/, not saved$/)
-    const key = screen.getByText(KEY)
-    expect(key.querySelector('[aria-hidden="true"]')).toBeTruthy()
-  })
-
-  it('marks a saved size switched off and a size added with "+ Size"', () => {
-    const second: DraftSku = { ...skuA, id: localSkuId(productA.id, [skuA]), quantity: 6 }
-    seedSaved([skuA, second])
-    render(<SkuStep issues={[]} />)
-    expect(dashed(rowOf(second))).toBe(true)
-
-    fireEvent.click(within(panel(fruits.id)).getByRole('switch', { name: /^1 pcs status/ }))
-    expect(dashed(rowOf(skuA))).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Add another size to Apples' }))
     const added = useOnboardingStore.getState().draft.skus.at(-1)!
+
     expect(dashed(rowOf(added))).toBe(true)
+    expect(rowOf(added).getAttribute('aria-label')).toMatch(/, not saved$/)
+    expect(dashed(rowOf(skuA))).toBe(false)
+    expect(keyLine()).toBeNull()
   })
 
-  it('drops the marks and the key once the sizes are saved', () => {
+  it('tints only the changed input of an edited saved size and swaps its remove for Undo', () => {
+    seedSaved([skuA, second], [skuA, second])
+    render(<SkuStep issues={[]} />)
+
+    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
+
+    const row = rowOf(skuA)
+    expect(dashed(row)).toBe(false)
+    expect(row.getAttribute('aria-label')).toMatch(/, unsaved changes$/)
+    expect(tinted(salePriceInput(skuA))).toBe(true)
+    for (const key of ['quantity', 'unit', 'list-price']) expect(tinted(input(`sku-${skuA.id}-${key}`))).toBe(false)
+    expect(within(row).queryByRole('button', { name: /^Remove/ })).toBeNull()
+    expect(within(row).getByRole('button', { name: 'Undo changes' })).toBeTruthy()
+    // The untouched saved size keeps its remove action and no marks.
+    expect(within(rowOf(second)).getByRole('button', { name: 'Remove 6 pcs' })).toBeTruthy()
+    expect(tinted(salePriceInput(second))).toBe(false)
+    expect(keyLine()).toBeNull()
+  })
+
+  it('Undo restores the saved values and brings the remove action back', () => {
+    seedSaved([skuA, second], [skuA, second])
+    render(<SkuStep issues={[]} />)
+    fireEvent.change(input(`sku-${skuA.id}-quantity`), { target: { value: '3' } })
+    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
+    fireEvent.click(within(panel(fruits.id)).getByRole('switch', { name: /^3 pcs status/ }))
+
+    const undo = within(rowOf(skuA)).getByRole('button', { name: 'Undo changes' })
+    expect(tinted(within(rowOf(skuA)).getByRole('switch'))).toBe(true)
+    undo.focus()
+    fireEvent.click(undo)
+
+    expect(useOnboardingStore.getState().draft.skus.find((sku) => sku.id === skuA.id)).toEqual(skuA)
+    const remove = within(rowOf(skuA)).getByRole('button', { name: 'Remove 1 pcs' })
+    // The same control changes its job, so focus stays on it.
+    expect(document.activeElement).toBe(remove)
+    expect(rowOf(skuA).getAttribute('aria-label')).not.toMatch(/changes|saved/)
+    expect(tinted(salePriceInput(skuA))).toBe(false)
+    expect(tinted(within(rowOf(skuA)).getByRole('switch'))).toBe(false)
+  })
+
+  it('moves focus to the quantity when Undo leaves a product’s only size with an inert cross', async () => {
     seedSaved([skuA])
     render(<SkuStep issues={[]} />)
     fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
-    expect(screen.getByText(KEY)).toBeTruthy()
+
+    const undo = within(rowOf(skuA)).getByRole('button', { name: 'Undo changes' })
+    undo.focus()
+    fireEvent.click(undo)
+
+    expect(within(rowOf(skuA)).getByRole('button', { name: 'Remove 1 pcs' }).matches(':disabled')).toBe(true)
+    await waitFor(() => expect(document.activeElement).toBe(input(`sku-${skuA.id}-quantity`)))
+  })
+
+  it('refuses an Undo that would switch off the product’s last switched-on size', () => {
+    const savedOff: DraftSku = { ...skuA, active: false }
+    // Saved: 1 pcs off, 6 pcs on. Now 1 pcs is on and 6 pcs off, both unsaved.
+    seedSaved([skuA, { ...second, active: false }], [savedOff, second])
+    render(<SkuStep issues={[]} />)
+
+    fireEvent.click(within(rowOf(skuA)).getByRole('button', { name: 'Undo changes' }))
+
+    expect(screen.getByText('Turn on at least one size for Apples.')).toBeTruthy()
+    expect(useOnboardingStore.getState().draft.skus.find((sku) => sku.id === skuA.id)?.active).toBe(true)
+  })
+
+  it('drops every mark once the sizes are saved', () => {
+    seedSaved([skuA])
+    render(<SkuStep issues={[]} />)
+    fireEvent.change(salePriceInput(skuA), { target: { value: '90' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add another size to Apples' }))
+    const added = useOnboardingStore.getState().draft.skus.at(-1)!
 
     act(() => useOnboardingStore.setState((state) => ({
       editedSteps: [], savedBaselines: { ...state.savedBaselines, 6: { skus: state.draft.skus } },
     })))
 
-    expect(dashed(rowOf(skuA))).toBe(false)
-    expect(screen.queryByText(KEY)).toBeNull()
-  })
-
-  it('leaves a saved product’s blank starter row unmarked until the vendor fills it in', () => {
-    seedDraft([productA], [], [fruits])
-    act(() => useOnboardingStore.setState({
-      savedBaselines: { 4: { categories: [fruits] }, 5: { products: [productA] }, 6: { skus: [] } },
-    }))
-    render(<SkuStep issues={[]} />)
-    const [starter] = useOnboardingStore.getState().draft.skus
-
-    expect(dashed(rowOf(starter))).toBe(false)
-    expect(screen.queryByText(KEY)).toBeNull()
-
-    fireEvent.change(input(`sku-${starter.id}-quantity`), { target: { value: '2' } })
-    expect(dashed(rowOf(starter))).toBe(true)
-    expect(screen.getByText(KEY)).toBeTruthy()
+    expect(dashed(rowOf(added))).toBe(false)
+    expect(tinted(salePriceInput(skuA))).toBe(false)
+    expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull()
   })
 })

@@ -644,8 +644,9 @@ describe('saved progress belongs to the account', () => {
     expect(state.draft.completedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(state.draft.storefront.tagline).toBe('Unsaved tagline')
     expect(state.editedSteps).toEqual([9])
-    // Submission waits until the unsaved store details are saved or undone.
-    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
+    // Submission waits on Step 9: its specific readiness items stand in for the generic line.
+    expect(await screen.findByText('Enter a business location.')).toBeTruthy()
+    expect(screen.queryByText('Save or undo your changes to store details.')).toBeNull()
   })
 
   it('leaves later steps reachable after an earlier edit is reverted, writing nothing', async () => {
@@ -947,7 +948,8 @@ describe('catalog dependencies guide a revisit save', () => {
       fillSize(bananas.id)
 
       await goTo(10)
-      expect(readiness()).toEqual(['Save or undo your changes to sizes and prices.', 'Add a size for Bananas.'])
+      // The size item says what Step 6 needs, so no generic line repeats it.
+      expect(readiness()).toEqual(['Add a size for Bananas.'])
     })
 
     it('keeps products under an unsaved category hidden and unsent until the category is saved', async () => {
@@ -3388,7 +3390,10 @@ describe('silent draft sync', () => {
     // Store details are unreadable before approval: this browser's copy stays, still unsaved.
     expect(state.draft.storefront.tagline).toBe('Old tagline')
     expect(pendingSteps(state)).toEqual([9])
-    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
+    // Step 9's specific readiness items stand in for the generic line.
+    const step9Listed = () => waitFor(() => expect(within(document.getElementById('readiness-issues')!).getAllByText('Step 9')).not.toHaveLength(0))
+    await step9Listed()
+    expect(screen.queryByText('Save or undo your changes to store details.')).toBeNull()
     expect(screen.queryByRole('alertdialog')).toBeNull()
 
     // Written back in the current format, it stays pending on the next load.
@@ -3404,7 +3409,7 @@ describe('silent draft sync', () => {
     state = useOnboardingStore.getState()
     expect(state.draft.storefront.tagline).toBe('Old tagline')
     expect(pendingSteps(state)).toEqual([9])
-    expect(await screen.findByText('Save or undo your changes to store details.')).toBeTruthy()
+    await step9Listed()
   })
 
   it.each([

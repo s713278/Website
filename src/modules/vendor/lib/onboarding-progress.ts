@@ -124,9 +124,12 @@ const PENDING_SUBJECT: Record<AccountStep, string> = {
   9: 'store details',
 }
 
-/** Submission waits until every step's input is saved or undone. */
-export function pendingEditIssues(steps: readonly AccountStep[]): ValidationIssue[] {
-  return steps.map((step) => ({
+/**
+ * Submission waits until every step's input is saved or undone. A step that already has a
+ * more specific item in `listed` (such as "Add a size for …") gets no generic line as well.
+ */
+export function pendingEditIssues(steps: readonly AccountStep[], listed: readonly ValidationIssue[] = []): ValidationIssue[] {
+  return steps.filter((step) => !listed.some((item) => item.step === step)).map((step) => ({
     step,
     field: `pending-step-${step}`,
     message: `Save or undo your changes to ${PENDING_SUBJECT[step]}.`,

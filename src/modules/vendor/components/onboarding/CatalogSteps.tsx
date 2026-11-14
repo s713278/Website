@@ -38,7 +38,7 @@ import {
 } from '../../store/onboarding-store'
 import { ONBOARDING_CONFIG, type ValidationIssue } from '../../types/onboarding'
 import { AuthorCategoryForm, AuthorProductForm } from './CatalogAuthoring'
-import { CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, MoreTilesLoading, LoadMoreButton, UnsavedKey, type RequestConfirmation } from './StepPrimitives'
+import { CategoryPanel, ChoiceCard, choiceGrid, FieldError, FieldLabel, MoreTilesLoading, LoadMoreButton, type RequestConfirmation } from './StepPrimitives'
 
 type CatalogStepProps = {
   issues: ValidationIssue[]
@@ -447,8 +447,8 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
     endFocusRef: searchRef,
   })
   const loadedItems = sets.visible
-  const isUnsaved = (categoryId: number) => !savedCategories.some((item) => item.id === categoryId)
-  const hasUnsaved = draft.categories.some((category) => isUnsaved(category.id))
+  // Only an optional extra is marked: a pick not saved yet once the account holds a category.
+  const isExtra = (categoryId: number) => savedCategories.length > 0 && !savedCategories.some((item) => item.id === categoryId)
 
   const toggle = (category: (typeof draft.categories)[number]) => {
     const choice = catalogChoiceState(draft.categories, category.id)
@@ -523,7 +523,6 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
       {!references.loading && !references.error && !loadedItems.length ? (
         <EmptyState title="No categories found" description={search ? 'Try another search.' : 'This business type has no available categories.'} />
       ) : null}
-      {hasUnsaved && loadedItems.length ? <UnsavedKey /> : null}
       {loadedItems.length ? (
         <div id="categories" className={choiceGrid}>
           {loadedItems.map((category, index) => {
@@ -535,7 +534,7 @@ export function CategoryStep({ issues, confirm, onUseSample }: CatalogStepProps)
                 ref={revealRef(category.id)}
                 autoFocus={index === sets.focusIndex}
                 selected={choice.chosen}
-                unsaved={choice.chosen && isUnsaved(category.id)}
+                unsaved={choice.chosen && isExtra(category.id)}
                 inactive={atLimit}
                 title={category.name}
                 leading={(
@@ -622,6 +621,9 @@ function ProductCategoryPicker({
   const [search, setSearch] = useState('')
   const isProductAssigned = useOnboardingStore((state) => state.isProductAssigned)
   const savedProducts = useSavedCatalog().products
+  // Only an optional extra is marked: a pick not saved yet once this category holds a saved product.
+  const isExtra = (productId: number) => savedProducts.some((item) => item.categoryId === categoryId)
+    && !savedProducts.some((item) => item.id === productId)
   const productLimitReached = useOnboardingStore(selectProductLimitReached)
   const query = search.trim().toLowerCase()
   const selectedForCategory = draft.products.filter((item) => item.categoryId === categoryId)
@@ -735,7 +737,7 @@ function ProductCategoryPicker({
                   ? [...measurementSummary.units, `+${measurementSummary.additionalUnitCount}`]
                   : measurementSummary.units
                 if (choice.pending) {
-                  return <PendingProductCard key={product.id} ref={revealRef(product.id)} productId={product.id} onRemove={() => toggle(product)} />
+                  return <PendingProductCard key={product.id} ref={revealRef(product.id)} productId={product.id} extra={isExtra(product.id)} onRemove={() => toggle(product)} />
                 }
                 return (
                   <ChoiceCard
@@ -743,7 +745,7 @@ function ProductCategoryPicker({
                     ref={revealRef(product.id)}
                     autoFocus={index === sets.focusIndex}
                     selected={choice.chosen}
-                    unsaved={choice.chosen && !savedProducts.some((item) => item.id === product.id)}
+                    unsaved={choice.chosen && isExtra(product.id)}
                     inactive={atLimit}
                     title={product.name}
                     leading={(
@@ -797,12 +799,12 @@ function ProductCategoryPicker({
 }
 
 /**
- * A product the vendor authored here, after the reference's dashed custom card. Until
- * Continue creates it, its measurement can still change, so the card carries the picker.
- * The whole card stays the remove target: a full-size button sits under the picker,
- * since a select cannot live inside a button.
+ * A product the vendor authored here, chosen like any other card and dashed, as they are,
+ * only as an optional extra. Until Continue creates it, its measurement can still change, so
+ * the card carries the picker. The whole card stays the remove target: a full-size button
+ * sits under the picker, since a select cannot live inside a button.
  */
-function PendingProductCard({ productId, onRemove, ref }: { productId: number; onRemove: () => void; ref?: Ref<HTMLDivElement> }) {
+function PendingProductCard({ productId, extra, onRemove, ref }: { productId: number; extra: boolean; onRemove: () => void; ref?: Ref<HTMLDivElement> }) {
   const product = useOnboardingStore((state) => state.draft.products.find((item) => item.id === productId))
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const setPendingProductMeasurement = useOnboardingStore((state) => state.setPendingProductMeasurement)
@@ -811,11 +813,11 @@ function PendingProductCard({ productId, onRemove, ref }: { productId: number; o
   const selectId = `pending-product-measurement-${productId}`
 
   return (
-    <div ref={ref} className="relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5">
+    <div ref={ref} className={cn('relative flex min-h-32 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-[var(--ob-brand)] bg-[var(--ob-brand-soft)] px-3 py-4 text-center ring-3 ring-[var(--ob-brand-soft)] @min-[30rem]:min-h-26 @min-[30rem]:gap-2 @min-[30rem]:py-3.5', extra && 'border-2 border-dashed')}>
       <button
         type="button"
         aria-pressed="true"
-        aria-label={`${product.name}, not saved`}
+        aria-label={extra ? `${product.name}, not saved` : product.name}
         onClick={onRemove}
         className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-3 focus-visible:ring-[var(--ob-brand)]/40"
       />
@@ -903,7 +905,6 @@ export function ProductStep({ issues, confirm, onUseSample, markMissing = false 
     (state) => selectCatalogPolicy(state, { liveApi }).createControlVisible,
   )
   const categoryIds = useMemo(() => categories.map((category) => category.id), [categories])
-  const hasUnsaved = products.some((product) => !saved.products.some((item) => item.id === product.id))
   // Arriving to finish missing work opens the first category that needs a product.
   const { openId, onToggle } = useSingleOpen(categoryIds, missing[0])
 
@@ -916,7 +917,6 @@ export function ProductStep({ issues, confirm, onUseSample, markMissing = false 
       {productLimitReached ? (
         <StepNotice message={`You've reached your plan's limit of ${productLimit} products, counting those already saved to your store.`} />
       ) : null}
-      {hasUnsaved ? <UnsavedKey /> : null}
       <div id="products" className="space-y-3">
         {categories.map((category) => (
           <ProductCategoryPicker

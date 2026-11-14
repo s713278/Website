@@ -188,14 +188,6 @@ export function CategoryPanel({
 export const fieldShell =
   'h-11 w-full rounded-lg border border-[var(--ob-line)] bg-[var(--ob-sheet)] px-3 text-sm text-[var(--ob-ink)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--ob-pending)] focus:border-[var(--ob-brand)] focus:ring-3 focus:ring-[var(--ob-brand-soft)] disabled:opacity-60'
 
-/**
- * Above a catalog step's list (Steps 4 and 5) while it holds unsaved items. Those wear a dashed
- * outline and nothing else, so this one muted line is the only place the outline is explained.
- */
-export function UnsavedKey() {
-  return <p className="text-xs text-[var(--ob-ink-soft)]">Items with a dashed outline aren’t saved yet. Continue saves them.</p>
-}
-
 /** Two tiles a row on phones, three once the form column is tablet-wide. */
 export const choiceGrid = 'grid grid-cols-2 gap-3 @min-[30rem]:grid-cols-3 @min-[30rem]:gap-x-2'
 
@@ -214,7 +206,7 @@ export function ChoiceCard({
   ref,
 }: {
   selected: boolean
-  /** Chosen here but not in the account yet: a dashed outline (see `UnsavedKey`). */
+  /** An optional extra chosen here and not in the account yet: a dashed outline, nothing else. */
   unsaved?: boolean
   title: string
   description?: string | null

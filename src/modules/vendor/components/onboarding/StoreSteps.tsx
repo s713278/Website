@@ -591,9 +591,7 @@ export function ReviewStep({
   // The catalog is counted and judged as saved; its unsaved input is one pending line per step.
   const savedCatalog = useSavedCatalog()
   const savedDraft = withSavedCatalog(draft, savedCatalog)
-  // Unsaved changes on an earlier step come first: they are the work still to finish there.
-  const issues = [
-    ...pendingEditIssues(pendingSteps({ draft, runtime, editedSteps, savedBaselines })),
+  const specific = [
     ...mixedCatalogIssues(catalogMixed),
     ...readinessIssues(savedDraft, runtime, categoryLimit, measurementCatalog, {
       maxProducts: productLimit,
@@ -601,6 +599,8 @@ export function ReviewStep({
       account: accountCatalog,
     }),
   ]
+  // Unsaved changes on an earlier step come first: they are the work still to finish there.
+  const issues = [...pendingEditIssues(pendingSteps({ draft, runtime, editedSteps, savedBaselines }), specific), ...specific]
   const submitIssues = shownIssues.filter((item) => item.step === 10)
   const completed =
     draft.publication.state === 'prototype-complete' &&

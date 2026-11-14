@@ -72,6 +72,13 @@ describe('pendingEditIssues', () => {
       { step: 8, field: 'pending-step-8', message: 'Save or undo your changes to payments.' },
     ])
   })
+
+  it('leaves a step out when a more specific item for it is already listed', () => {
+    const specific = [{ step: 6 as const, field: 'product-7', message: 'Add a size for White Eggs.' }]
+    expect(pendingEditIssues([4, 6], specific)).toEqual([
+      { step: 4, field: 'pending-step-4', message: 'Save or undo your changes to categories.' },
+    ])
+  })
 })
 
 describe('returnStepAfterMove', () => {
