@@ -55,17 +55,22 @@ describe('stepsNeedingAttention', () => {
   const gaps = { categoryIds: [2], productIds: [11] }
 
   it('marks Steps 5 and 6 once each is done and has missing work', () => {
-    expect(stepsNeedingAttention(gaps, ALL_DONE, false)).toEqual([5, 6])
-    expect(stepsNeedingAttention({ categoryIds: [], productIds: [11] }, ALL_DONE, false)).toEqual([6])
+    expect(stepsNeedingAttention(gaps, ALL_DONE, false, false)).toEqual([5, 6])
+    expect(stepsNeedingAttention({ categoryIds: [], productIds: [11] }, ALL_DONE, false, false)).toEqual([6])
   })
 
   it('leaves a step not yet done to its first-time Continue', () => {
-    expect(stepsNeedingAttention(gaps, [1, 2, 3, 4, 5], false)).toEqual([5])
-    expect(stepsNeedingAttention(gaps, [1, 2, 3, 4], false)).toEqual([])
+    expect(stepsNeedingAttention(gaps, [1, 2, 3, 4, 5], false, false)).toEqual([5])
+    expect(stepsNeedingAttention(gaps, [1, 2, 3, 4], false, false)).toEqual([])
   })
 
-  it('marks nothing for a submitted store, whose catalog only grows', () => {
-    expect(stepsNeedingAttention(gaps, ALL_DONE, true)).toEqual([])
+  it('marks only Step 5 for a store under review, which cannot add sizes', () => {
+    expect(stepsNeedingAttention(gaps, ALL_DONE, true, false)).toEqual([5])
+    expect(stepsNeedingAttention({ categoryIds: [], productIds: [11] }, ALL_DONE, true, false)).toEqual([])
+  })
+
+  it('marks an approved store as in setup', () => {
+    expect(stepsNeedingAttention(gaps, ALL_DONE, true, true)).toEqual([5, 6])
   })
 })
 

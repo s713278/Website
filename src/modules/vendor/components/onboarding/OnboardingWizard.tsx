@@ -130,7 +130,7 @@ import {
 } from '../../lib/onboarding-saved-type-record'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import { ImageSaveError } from '../../lib/onboarding-images'
-import { additiveCatalogIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
+import { approvedSizeIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
 import { invalidateVendorContext, loadVendorContext, peekVendorContext, vendorContextIsCurrent } from '../../lib/vendor-context-cache'
 import { mergeRuntimeRecord, mergeRuntimeValue, revalidationReads } from '../../lib/onboarding-freshness'
 import { announceAccountWrite, pageAwayEpoch } from '../../lib/page-away'
@@ -1173,9 +1173,9 @@ function catalogStepIssues(state: OnboardingState): ValidationIssue[] {
   }
   // Steps 5 and 6 check what they show and save, not picks hidden under an unsaved parent.
   const checked = stepSaveDraft(draft.currentStep, state)
-  // Validate additions without reopening whole-store readiness for submitted vendors.
-  return selectStoreIsSubmitted(state) && draft.currentStep !== 9
-    ? additiveCatalogIssues(draft.currentStep, checked, categoryLimit, enforcement, measurementCatalog)
+  // A submitted store keeps setup's catalog rules; only an approved store's Step 6 differs.
+  return selectStoreIsSubmitted(state) && draft.currentStep === 6
+    ? approvedSizeIssues(checked, enforcement, measurementCatalog)
     : validateStep(draft.currentStep, checked, runtime, categoryLimit, measurementCatalog, enforcement)
 }
 
@@ -1232,12 +1232,14 @@ function OnboardingWizardContent() {
   const recordSavedBaselines = useOnboardingStore((state) => state.recordSavedBaselines)
   const returnStep = useOnboardingStore((state) => state.returnStep)
   // Done catalog steps whose saved catalog has missing work, as a string so the wizard
-  // re-renders only when that set changes, not on every keystroke. Unsaved picks never count.
+  // re-renders only when that set changes, not on every keystroke. Unsaved picks never count,
+  // and a step is marked only once its own reads are in: an unread list is unknown, not empty.
   const attentionKey = useOnboardingStore((state) => stepsNeedingAttention(
     catalogDependencyGaps(savedCatalog(state)),
     state.draft.completedSteps,
     selectStoreIsSubmitted(state),
-  ).join(','))
+    selectStoreIsApproved(state),
+  ).filter((step) => state.loadedSteps.includes(step)).join(','))
   const attentionSteps = useMemo(
     () => attentionKey ? attentionKey.split(',').map(Number) as OnboardingStep[] : [],
     [attentionKey],
@@ -1833,7 +1835,7 @@ function OnboardingWizardContent() {
     const nextStep = inPlace ? step : stepAfterCatalogSave(
       step,
       storeIsSubmitted ? null : state.returnStep,
-      stepsNeedingAttention(catalogDependencyGaps(savedCatalogAfterSave(step, state)), draft.completedSteps, storeIsSubmitted),
+      stepsNeedingAttention(catalogDependencyGaps(savedCatalogAfterSave(step, state)), draft.completedSteps, storeIsSubmitted, storeIsApproved),
     )
     // Started alongside this step's save, so the next step's account data is usually ready
     // when it opens. A failure is dropped from the cache and the step's own read retries it.

@@ -3895,3 +3895,127 @@ describe('account freshness after the page was away', () => {
     expect(save).not.toHaveBeenCalled()
   })
 })
+
+describe('catalog rules after submission', () => {
+  const stepLabel = (step: number) => screen.getByRole('button', { name: new RegExp(`^Step ${step},`) }).getAttribute('aria-label')
+  const openStep = async (step: number) => {
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^Step ${step},`) }))
+    await screen.findByRole('button', { name: new RegExp(`^Step ${step},.*You are here`) })
+  }
+  // A category saved after go-live, still without a product.
+  const withEmptyCategory = () => vi.mocked(vendorOnboardingService.getVendorCategories).mockResolvedValue([
+    { vendorCategoryId: 500, platformCategoryId: 10, name: 'Juices', imageUrl: null },
+    { vendorCategoryId: 501, platformCategoryId: 20, name: 'Teas', imageUrl: null },
+  ])
+  // A product saved after go-live, still without a size.
+  const withSizelessProduct = () => vi.mocked(vendorOnboardingService.getVendorProducts).mockResolvedValue([
+    { vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 },
+    { vendorProductId: 901, platformProductId: 32, platformCategoryId: 10, name: 'Test Tea', measurementId: 2 },
+  ])
+
+  it.each(['APPROVED', 'PENDING'])('a %s store marks Step 5 and blocks it while a category has no product', async (approvalStatus) => {
+    withEmptyCategory()
+    renderAccount(approvalStatus)
+    await openStep(5)
+
+    await waitFor(() => expect(stepLabel(5)).toMatch(/needs attention/i))
+    const panel = document.getElementById('category-products-20')!
+    expect(within(panel).getByText('Needs a product')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await waitFor(() => expect(document.body.textContent).toContain('Choose at least one product in Teas.'))
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(5)
+  })
+
+  it('an approved store marks Step 6, starts a blank size for a product without one, and blocks it', async () => {
+    withSizelessProduct()
+    renderAccount('APPROVED', 11, 5)
+    await openSizes()
+
+    await waitFor(() => expect(stepLabel(6)).toMatch(/needs attention/i))
+    const tea = screen.getByRole('group', { name: 'Test Tea' })
+    expect(within(tea).getByText('Needs a size')).toBeTruthy()
+    // The same starter row as setup, unmarked: the product has no saved size yet.
+    const starter = within(tea).getByLabelText('Quantity') as HTMLInputElement
+    expect(starter.value).toBe('')
+    expect(tea.querySelector('.border-dashed')).toBeNull()
+    expect(within(tea).queryByRole('group', { name: /not saved/ })).toBeNull()
+    // The saved product's own size is left as it was.
+    expect(useOnboardingStore.getState().draft.skus.filter((sku) => sku.productId === 31)).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(starter.getAttribute('aria-invalid')).toBe('true'))
+    expect(screen.queryByText('Changes saved.')).toBeNull()
+    expect(vendorOnboardingService.createSkus).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.currentStep).toBe(6)
+  })
+
+  it('lands an approved store on Step 5 after a Step 4 save leaves a category without a product', async () => {
+    vi.spyOn(vendorOnboardingService, 'saveCategories').mockImplementation(async () => { withEmptyCategory() })
+    renderAccount('APPROVED')
+    await openStep(4)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(4))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      categories: [...draft.categories, { id: 20, businessTypeId: 7, name: 'Teas', description: null, imageUrl: null, displayOrder: 2 }],
+    }), 4))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await screen.findByRole('button', { name: /Step 5,.*You are here/ })
+    expect(vendorOnboardingService.saveCategories).toHaveBeenCalledWith('91', [20])
+    await waitFor(() => expect(within(document.getElementById('category-products-20')!).getByText('Needs a product')).toBeTruthy())
+  })
+
+  it('lands an approved store on Step 6 after a Step 5 save, with a starter size for the new product', async () => {
+    vi.spyOn(vendorOnboardingService, 'assignProducts').mockImplementation(async () => { withSizelessProduct() })
+    renderAccount('APPROVED', 11, 5)
+    await openStep(5)
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(5))
+    act(() => useOnboardingStore.getState().updateDraft((draft) => ({
+      ...draft,
+      products: [...draft.products, { id: 32, name: 'Test Tea', description: null, imageUrl: null, measurementId: 2, measurementName: null, categoryId: 10 }],
+    }), 5))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    await screen.findByRole('button', { name: /Step 6,.*You are here/ })
+    expect(vendorOnboardingService.assignProducts).toHaveBeenCalledWith('91', 10, [32])
+    const tea = await screen.findByRole('group', { name: 'Test Tea' })
+    expect((await within(tea).findByLabelText('Quantity') as HTMLInputElement).value).toBe('')
+    expect(tea.querySelector('.border-dashed')).toBeNull()
+  })
+
+  // A list not read yet is unknown, not empty: marking from it would flag a complete catalog.
+  it.each([['an approved store', 11], ['a store in setup', 7]])('%s marks no step before its own reads land', async (_, nextStep) => {
+    vi.mocked(vendorOnboardingService.getVendorSkus).mockReturnValue(new Promise(() => {}))
+    const products = deferred<Awaited<ReturnType<typeof vendorOnboardingService.getVendorProducts>>>()
+    vi.mocked(vendorOnboardingService.getVendorProducts).mockReturnValue(products.promise)
+    renderAccount('APPROVED', nextStep)
+
+    await openStep(4)
+    await waitFor(() => expect(useOnboardingStore.getState().draft.categories.map(({ id }) => id)).toEqual([10]))
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+
+    await openStep(5)
+    products.resolve([{ vendorProductId: 900, platformProductId: 31, platformCategoryId: 10, name: 'Test Juice', measurementId: 2 }])
+    await waitFor(() => expect(useOnboardingStore.getState().loadedSteps).toContain(5))
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+    expect(stepLabel(6)).not.toMatch(/needs attention/i)
+  })
+
+  it('leaves a store under review unmarked and unblocked on Step 6, where sizes cannot be added', async () => {
+    withSizelessProduct()
+    renderAccount('PENDING')
+    await openSizes()
+    // Its catalog is in hand, and Step 5 has nothing missing.
+    expect(stepLabel(5)).not.toMatch(/needs attention/i)
+    expect(stepLabel(6)).not.toMatch(/needs attention/i)
+    expect(screen.queryByText('Needs a size')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await screen.findByRole('button', { name: /Step 7,.*You are here/ })
+    expect(document.body.textContent).not.toContain('Add a size for Test Tea.')
+  })
+})

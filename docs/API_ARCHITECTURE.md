@@ -449,7 +449,9 @@ on each other (every chosen category needs a product, every product a valid size
 on), so a save stops first at a done Step 5 or 6 that its save leaves with missing work, keeping the
 remembered step: 9 → 4 (add a category) → 5 → 6 → 9 (`lib/onboarding-catalog-dependencies.ts`).
 Such a step is marked on the stepper but never locked, and catalog edits leave Steps 7-9 as they
-were; Step 10's readiness check is what blocks submission. A submitted store is not guided.
+were; Step 10's readiness check is what blocks submission. A submitted store is not guided, but
+keeps the rules: Step 5's Continue needs a product in every category, and the stepper marks Step 5;
+an approved store's Step 6 likewise, while a store under review keeps Step 6 read-only and unmarked.
 
 Each catalog step builds only from the step before it **as saved** (`lib/onboarding-saved-catalog.ts`):
 saved is the step's baseline, else its draft copy while it holds no unsaved input, plus anything the
@@ -604,16 +606,17 @@ failed prefetch is evicted as usual and the wizard retries it.
 After setup is submitted, categories and products remain open for additions. Step 6 allows new
 sizes only when the account's real approval status is approved (`APPROVED`; current `ACTIVE`
 wire values are accepted for compatibility); pending vendors keep a
-read-only step with saved sizes locked. An approved store edits saved sizes in place as in setup
+read-only step with saved sizes locked and no starter rows. An approved store gets a blank starter
+size for each saved product without one, as in setup, and edits saved sizes in place
 (quantity, unit, prices, on/off) and can remove one while its product keeps another; a product's
 only size cannot be removed. The controls and Continue handler use the same approval-aware
-rule, and saving validates size details, duplicates, at least one switched-on size per product
-with sizes, and the projected account total against the context's `limits.max_skus` (top level since the flat
+rule, and saving validates size details, duplicates, a valid switched-on size for every product
+(saved products included, as in setup), and the projected account total against the context's `limits.max_skus` (top level since the flat
 context of 29 September 2026; the demo seed's nested `subscription.limits` is still read). When
 the context sends `subscription.usage.skus`, any usage missing from the SKU list is added, so
 unlisted inactive sizes still consume capacity; the flat context sends no usage, so in Live API
-that count is zero. That count survives subsequent additions in the same visit. It does not demand pricing
-for unrelated products already on a submitted account. An approved store's Step 6 button reads
+that count is zero. That count survives subsequent additions in the same visit. Unlike setup, saved
+sizes are not checked against their product's measurement. An approved store's Step 6 button reads
 Save changes: a save (or a press with nothing changed, which writes nothing) keeps the vendor on
 Step 6 with a "Changes saved." status line and starts no next-step prefetch, so Step 7's checkout
 settings are not read; the vendor leaves by the stepper or Step 10. Completed approved stores also

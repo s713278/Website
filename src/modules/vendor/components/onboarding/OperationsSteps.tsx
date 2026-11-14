@@ -325,18 +325,19 @@ export function SkuStep({ issues, markMissing = false }: {
   // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
   // needs to change, so this is idempotent and cannot loop this effect.
   //
-  // Submitted stores add sizes explicitly after approval. Do not scaffold phantom rows,
-  // consume plan capacity on a read, or reconcile already saved sizes behind their backs.
+  // A store under review cannot add sizes, so it gets no starter row. An approved store gets
+  // one as in setup, but its saved sizes are not reconciled behind its back.
   //
   // Otherwise, deliberately no `invalidateFrom`: neither scaffolding nor reconciling is an
   // edit the vendor made. (Invalidation once dropped progress, so a vendor who resumed at
   // Step 9 with one unpriced product lost Steps 7-10 just by opening Step 6; edits no longer
   // take progress away.)
   useEffect(() => {
-    if (storeIsSubmitted) return
+    if (storeIsSubmitted && !storeIsApproved) return
+    const reconcile = !storeIsSubmitted
     const productById = new Map(draft.products.map((product) => [product.id, product]))
     const missingSize = draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))
-    const driftedSize = draft.skus.some((sku) => {
+    const driftedSize = reconcile && draft.skus.some((sku) => {
       const product = productById.get(sku.productId)
       return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) !== sku : false
     })
@@ -344,17 +345,17 @@ export function SkuStep({ issues, markMissing = false }: {
     const savedProductIds = new Set(savedProductKey.split(',').map(Number))
     updateDraft((current) => {
       const currentProductById = new Map(current.products.map((product) => [product.id, product]))
-      const skus = current.skus.map((sku) => {
+      const skus = reconcile ? current.skus.map((sku) => {
         const product = currentProductById.get(sku.productId)
         return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) : sku
-      })
+      }) : [...current.skus]
       for (const product of current.products) {
         if (!savedProductIds.has(product.id)) continue
         if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus, measurementCatalog))
       }
       return { ...current, skus }
     })
-  }, [draft.products, draft.skus, savedProductKey, updateDraft, measurementCatalog, storeIsSubmitted])
+  }, [draft.products, draft.skus, savedProductKey, updateDraft, measurementCatalog, storeIsSubmitted, storeIsApproved])
 
   // A problem inside a closed category would otherwise be reported with nothing on
   // screen to fix. Only one panel can be open, so open the category holding the first

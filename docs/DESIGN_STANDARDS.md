@@ -37,7 +37,8 @@ design reference.
   supplies the announcement; do not duplicate it in another live region.
 - A done Step 5 or 6 whose saved catalog has missing work (a saved category without a saved
   product, a saved product without a saved switched-on size) carries a **Needs attention** marker
-  on its stepper dot; an unsaved pick never marks another step. The marker is an amber
+  on its stepper dot, after submission too (under review, Step 5 only), once that step's own
+  account reads have landed; an unsaved pick never marks another step. The marker is an amber
   (`--md-warning`) ring and a small amber "!" badge in the corner the submitted-store "+" badge
   uses (the current step shows only the badge, keeping its own ring). The bar adds no text; the dot's accessible name and title say "needs attention",
   and the step stays reachable. Inside the step the missing item is marked in place, with no banner:

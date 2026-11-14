@@ -42,18 +42,18 @@ export function catalogDependencyGaps(
 
 /**
  * Steps 5 and 6 that the account counts as done but now have missing work. A step not yet
- * done is left to its first-time Continue, and a submitted store's catalog only grows, so
- * neither is marked.
+ * done is left to its first-time Continue. A store under review cannot add sizes, so only
+ * its Step 5 is marked; an approved store is marked as in setup.
  */
 export function stepsNeedingAttention(
   gaps: CatalogDependencyGaps,
   completedSteps: readonly OnboardingStep[],
   submitted: boolean,
+  approved: boolean,
 ): Array<5 | 6> {
-  if (submitted) return []
   const steps: Array<5 | 6> = []
   if (gaps.categoryIds.length && completedSteps.includes(5)) steps.push(5)
-  if (gaps.productIds.length && completedSteps.includes(6)) steps.push(6)
+  if (gaps.productIds.length && completedSteps.includes(6) && (!submitted || approved)) steps.push(6)
   return steps
 }
 
