@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { ProductImage } from '@/modules/storefront/components/ProductImage'
 
@@ -6,32 +6,33 @@ type ProductGalleryProps = {
   images: string[]
   alt: string
   className?: string
+  corner?: ReactNode
 }
 
 /** Compact product gallery — main image + optional thumbnails. */
-export function ProductGallery({ images, alt, className }: ProductGalleryProps) {
+export function ProductGallery({ images, alt, className, corner }: ProductGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const active = images[activeIndex] ?? images[0]
 
   if (!active) {
     return (
-      <ProductImage
-        alt={alt}
-        className={cn(
-          'mx-auto aspect-[4/3] w-full max-w-[280px] rounded-xl sm:max-w-[300px]',
-          className,
-        )}
-      />
+      <div className={cn('relative mx-auto w-full max-w-[280px] sm:max-w-[300px]', className)}>
+        <ProductImage alt={alt} className="aspect-[4/3] w-full rounded-xl" />
+        {corner}
+      </div>
     )
   }
 
   return (
     <div className={cn('mx-auto w-full max-w-[300px] lg:mx-0', className)}>
-      <ProductImage
-        src={active}
-        alt={alt}
-        className="aspect-[4/3] w-full rounded-xl border border-slate-100 shadow-sm"
-      />
+      <div className="relative">
+        <ProductImage
+          src={active}
+          alt={alt}
+          className="aspect-[4/3] w-full rounded-xl border border-slate-100 shadow-sm"
+        />
+        {corner}
+      </div>
 
       {images.length > 1 ? (
         <div className="mt-2.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
