@@ -129,7 +129,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Fetch vendor profile by vendorId",
-        "description": "Fetch vendor profile by vendorId. Accessible by VENDOR (own profile only) or ADMIN.",
+        "description": "Fetch vendor profile by vendorId. Accessible by VENDOR (own profile only) or ADMIN.\n\nBranding and classification fields:\n- `business_name` - display name of the vendor's business.\n- `business_type` / `business_type_id` - business type name and its id in the\n  business type master (`GET /v1/business-types/`). `business_type_id` is omitted when the\n  vendor's business type does not match a master entry.\n- `banner_image` - home banner URL (uploaded with `image_type=HOMEBANNER`).\n- `logo` - vendor logo URL (uploaded with `image_type=THUMBNAIL`).\n\nImage URLs are returned as delivery URLs (CDN-resized when enabled). Fields without a\nvalue are omitted from the response.\n\nRole-based masking: CUSTOMER_CARE sees legal numbers masked as `**`; USER does not see\nlegal numbers, owner name, statuses or `user_id`.\n",
         "operationId": "getVendorProfile",
         "parameters": [
           {
@@ -146,11 +146,46 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Vendor profile retrieved successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Vendor_Profile_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied to the vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Vendor_Profile_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Profile_Not_Found"
+                  }
                 }
               }
             }
@@ -3003,7 +3038,7 @@
           "13. Image API"
         ],
         "summary": "Fetch vendor image URL from the database",
-        "description": "Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.\n\n<b>Image Types &amp; Parameter Combinations:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).\n      Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown\n      for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>\n</ul>\n\n<b>Request Format:</b><br/>\nGET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>\nGET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>\n\n<b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,\n<code>reference_id</code> (when applicable), and a <code>message</code>.\nThe <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.\n\n<b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.\n",
+        "description": "Retrieves the stored image URL for a specific vendor based on image type and optional reference ID.\n\n<b>Image Types &amp; Parameter Combinations:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (reads tb_vendor.banner_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).\n      Only <code>vendor_id</code> + <code>image_type</code> required.</li>\n  <li><b>PRODUCT</b> - Vendor product image (reads tb_product_vendor.image_path).\n      Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (vendorProductId).\n      Returns a null <code>image_url</code> if the product does not belong to <code>vendor_id</code>.</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown\n      for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>\n</ul>\n\n<b>Request Format:</b><br/>\nGET /v1/vendors/{vendor_id}/images?image_type=HOMEBANNER<br/>\nGET /v1/vendors/{vendor_id}/images?image_type=SKU&amp;reference_id=114<br/>\n\n<b>Response:</b> Returns <code>image_url</code>, <code>image_type</code>,\n<code>reference_id</code> (when applicable), and a <code>message</code>.\nThe <code>image_url</code> will be <code>null</code> if no image has been uploaded yet.\n\n<b>Access:</b> ADMIN can fetch for any vendor. VENDOR can only fetch for their own vendor ID.\n",
         "operationId": "getVendorImageUrl",
         "parameters": [
           {
@@ -3061,8 +3096,8 @@
         "tags": [
           "13. Image API"
         ],
-        "summary": "Upload vendor images (home banner, thumbnail, product and sku)",
-        "description": "Uploads images for a specific vendor. Simple API for back office use.\nSupports vendor banner, thumbnail, product, and SKU images using multipart/form-data.\n\n<b>Image Types:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>\n  <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>\n</ul>\n\n<b>Request Format:</b><br/>\nPOST /v1/vendors/{vendor_id}/images<br/>\nContent-Type: multipart/form-data<br/>\nParameters: image_type, reference_id (optional), fileName (optional), file (required)\n\n<b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.\n",
+        "summary": "Upload vendor images (home banner, thumbnail and product)",
+        "description": "Uploads images for a specific vendor. Simple API for back office use.\nSupports vendor banner, thumbnail and product images using multipart/form-data.\n\n<b>Image Types &amp; max size:</b>\n<ul>\n  <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image). Max 5 MB.</li>\n  <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image). Max 1 MB.</li>\n  <li><b>PRODUCT</b> - Vendor product image (reference_id = vendorProductId, must belong to\n      vendor_id, otherwise 404). Max 3 MB.</li>\n  <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>\n</ul>\n\n<b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file\ncontent, not the Content-Type header; anything else (SVG, HEIC, ...) returns 400.\n\n<b>Request Format:</b><br/>\nPOST /v1/vendors/{vendor_id}/images<br/>\nContent-Type: multipart/form-data<br/>\nParameters: image_type, reference_id (optional), fileName (optional), file (required)\n\n<b>Access:</b> ADMIN can upload for any vendor. VENDOR can only upload for their own vendor ID.\n",
         "operationId": "uploadVendorImage",
         "parameters": [
           {
@@ -16047,6 +16082,41 @@
           "plan_code": "MITHRA_SOCIAL_STARTER_YEARLY"
         }
       },
+      "Resp_Vendor_Profile_Success": {
+        "value": {
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "vendor_id": 91,
+            "business_name": "SK Organic Store",
+            "description": "Fresh vegetables, dairy and millet snacks.",
+            "business_type": "Agriculture",
+            "business_type_id": 12,
+            "owner_name": "Raj A",
+            "contact_person": "Sanjay A",
+            "contact_number": "919948023190",
+            "communication_email": "h2a2@gmail.com",
+            "business_address": {
+              "country": "India",
+              "address1": "Survey No#190,900",
+              "address2": "Kasulabad",
+              "city": "Mirdoddi",
+              "state": "Telangana",
+              "zipCode": "502108",
+              "district": "Siddipet"
+            },
+            "banner_image": "https://example.com/vendors/91/home_banner.jpg",
+            "logo": "https://example.com/vendors/91/thumbnail.jpg",
+            "user_id": 1001,
+            "vendor_status": "ACTIVE",
+            "approval_status": "APPROVED",
+            "created_date": "2026-04-02T10:24:25.461",
+            "created_by": "3",
+            "langauage": "en"
+          }
+        }
+      },
       "Res_Sub_OneTime_With_Fixed_Failed_1": {
         "value": {
           "success": false,
@@ -16384,6 +16454,16 @@
             "id": 15,
             "message": "Category created successfully."
           }
+        }
+      },
+      "Resp_Vendor_Profile_Forbidden": {
+        "value": {
+          "success": false,
+          "status": 403,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Authorization failed!!",
+          "user_message": "Authorization failed!!",
+          "api_details": []
         }
       },
       "Resp_Create_Product_Success": {
@@ -16745,6 +16825,16 @@
           "timestamp": "2026-08-14T10:15:30.123456789",
           "failure_reason": "Business type is required.",
           "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
+      "Resp_Vendor_Profile_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Vendor profile not existed for with ID #91",
+          "user_message": "No data found!!",
           "api_details": []
         }
       },

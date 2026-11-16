@@ -14,6 +14,20 @@ export interface paths {
         /**
          * Fetch vendor profile by vendorId
          * @description Fetch vendor profile by vendorId. Accessible by VENDOR (own profile only) or ADMIN.
+         *
+         *     Branding and classification fields:
+         *     - `business_name` - display name of the vendor's business.
+         *     - `business_type` / `business_type_id` - business type name and its id in the
+         *       business type master (`GET /v1/business-types/`). `business_type_id` is omitted when the
+         *       vendor's business type does not match a master entry.
+         *     - `banner_image` - home banner URL (uploaded with `image_type=HOMEBANNER`).
+         *     - `logo` - vendor logo URL (uploaded with `image_type=THUMBNAIL`).
+         *
+         *     Image URLs are returned as delivery URLs (CDN-resized when enabled). Fields without a
+         *     value are omitted from the response.
+         *
+         *     Role-based masking: CUSTOMER_CARE sees legal numbers masked as `**`; USER does not see
+         *     legal numbers, owner name, statuses or `user_id`.
          */
         get: operations["getVendorProfile"];
         /**
@@ -674,8 +688,9 @@ export interface paths {
          *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
          *       <li><b>THUMBNAIL</b> - Vendor thumbnail (reads tb_vendor.thumbnail_image).
          *           Only <code>vendor_id</code> + <code>image_type</code> required.</li>
-         *       <li><b>PRODUCT</b> - Product image (reads tb_product.image_path).
-         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (productId).</li>
+         *       <li><b>PRODUCT</b> - Vendor product image (reads tb_product_vendor.image_path).
+         *           Requires <code>vendor_id</code> + <code>image_type</code> + <code>reference_id</code> (vendorProductId).
+         *           Returns a null <code>image_url</code> if the product does not belong to <code>vendor_id</code>.</li>
          *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. SKUs do not own an image; the value shown
          *           for a SKU is derived from the owning vendor product. Use PRODUCT instead.</li>
          *     </ul>
@@ -693,17 +708,21 @@ export interface paths {
         get: operations["getVendorImageUrl"];
         put?: never;
         /**
-         * Upload vendor images (home banner, thumbnail, product and sku)
+         * Upload vendor images (home banner, thumbnail and product)
          * @description Uploads images for a specific vendor. Simple API for back office use.
-         *     Supports vendor banner, thumbnail, product, and SKU images using multipart/form-data.
+         *     Supports vendor banner, thumbnail and product images using multipart/form-data.
          *
-         *     <b>Image Types:</b>
+         *     <b>Image Types &amp; max size:</b>
          *     <ul>
-         *       <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image)</li>
-         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image)</li>
-         *       <li><b>PRODUCT</b> - Product image (reference_id = productId)</li>
+         *       <li><b>HOMEBANNER</b> - Vendor home banner (updates tb_vendor.banner_image). Max 5 MB.</li>
+         *       <li><b>THUMBNAIL</b> - Vendor thumbnail (updates tb_vendor.thumbnail_image). Max 1 MB.</li>
+         *       <li><b>PRODUCT</b> - Vendor product image (reference_id = vendorProductId, must belong to
+         *           vendor_id, otherwise 404). Max 3 MB.</li>
          *       <li><b>SKU</b> - <b>DEPRECATED</b>, returns 400. Use PRODUCT instead.</li>
          *     </ul>
+         *
+         *     <b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file
+         *     content, not the Content-Type header; anything else (SVG, HEIC, ...) returns 400.
          *
          *     <b>Request Format:</b><br/>
          *     POST /v1/vendors/{vendor_id}/images<br/>
@@ -5771,13 +5790,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Vendor profile retrieved successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Access denied to the vendor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
