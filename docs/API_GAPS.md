@@ -46,9 +46,8 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Approval reset during go-live | Keeping an approved vendor able to add sizes after completing setup | A September 2026 test report describes an already `APPROVED` account returning to `approval_status: PENDING` after Step 10 called `POST /v1/vendors/{vendor_id}/go-live`. This transition still needs backend review, including how existing approval should be preserved and the intended status after onboarding. The frontend requires an approved status for submitted size additions (`APPROVED`, plus the current `ACTIVE` compatibility value). The completed-and-approved UI flow passes with simulated responses; a live check of that combined state awaits an approved account. |
 | Approval status vocabulary | Identifying approved vendors consistently | The documented contract and existing fixtures use `approval_status: APPROVED`, while a current supplied vendor context reports `approval_status: ACTIVE`. The frontend treats both as approved at its status boundary; the backend should publish one canonical enum and clarify whether `ACTIVE` belongs to `vendor_status` only. |
 | ~~QR sharing~~ **closed 21 Sep 2026** | The ticket's offline-friendly QR requirement | The dashboard and approved setup Step 10 generate the QR in-browser from the canonical storefront URL. Vendors can save the PNG, and the native file-share action appears only when the device supports sharing that file. |
-| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates the store name from the vendor context (falling back to the vendor record) and keeps this owner's local copy of the other Step 9 fields. On another device or after the local draft is cleared they return to defaults. Logo/banner URLs restore separately through the authenticated images read. |
-| Stale vendor record after a write | Reading back the business type and store name | `GET /v1/vendors/{id}` serves a cached copy for about 30 minutes; the business-type PATCH and storefront PUT do not refresh it (QA, 11 Nov 2026). Resume and dashboard Settings prefer the context name. See [below](#stale-vendor-record-after-a-write). |
-| Saved business type is not readable or enforced | Locking the business type at its first save | No read returns the saved type's id, `"Others"` doubles as "not chosen", vendor categories carry no type, and nothing stops a later PATCH from changing the type. The wizard keeps its own record of a confirmed save and falls back to temporary evidence (`TEMP(onboarding-saved-type)`). See [below](#saved-business-type-is-not-readable-or-enforced). |
+| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates the store name from the vendor record and keeps this owner's local copy of the other Step 9 fields. On another device or after the local draft is cleared they return to defaults. Logo/banner URLs restore separately through the authenticated images read. |
+| Saved business type is not readable or enforced | Locking the business type once a category is saved | `"Others"` doubles as "not chosen", vendor categories carry no type, and a type PATCH is accepted even after categories (they stay, mismatched). The wizard locks once categories exist, re-reads before type and first-category writes, and for `"Others"` checks the Others list (temporary, `TEMP(onboarding-saved-type)`). See [below](#saved-business-type-is-not-readable-or-enforced). |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
@@ -275,8 +274,7 @@ writes and does not establish preservation of completed onboarding or approval o
 The existing Step 9 business-type PATCH is unsuitable for completed-store editing: it explicitly
 sets `onboarding_step` to `STEP_3_COMPLETED`, and QA (10 November 2026) moved `next_step` back to 4
 from any later step. It also requires `business_type` (`400` without it). Setup Step 9 therefore
-never sends it: the storefront PUT alone saves the store name (see the
-[stale vendor record gap](#stale-vendor-record-after-a-write)). The storefront PUT rejects
+never sends it: the storefront PUT alone saves the store name. The storefront PUT rejects
 unknown fields (`400`, e.g. `owner_name`). Step 9 no longer collects owner name or contact person.
 Approved Step 9 instead uses general
 profile PUT for `business_name` only, without status, approval, address, category, business-type
@@ -295,92 +293,72 @@ including unchanged vendor/approval/completion status, image replacement and par
 Storefront blank-field clearing remains unverified: its current mapper omits blank optional text,
 and profile PUT historically ignores null. No clearing capability is promised here.
 
-### Stale vendor record after a write
-
-Measured on QA, 11 November 2026, with fresh vendors. `GET /v1/vendors/{vendor_id}` returns a cached
-copy of the vendor record for about 30 minutes after it is first read, and vendor writes do not
-refresh it:
-
-- `PATCH /v1/vendors/{vendor_id}/business-type` returns `200`, but a record read before it keeps
-  `business_type` at the earlier value (`"Others"` for a new vendor). A later read reflected the
-  change between 26 and 31 minutes after the PATCH. With no earlier read, the first read
-  is correct.
-- `PUT /v1/vendors/{vendor_id}/storefront` behaves the same for `business_name`: the record keeps
-  the cached name while `GET /v1/vendors/{vendor_id}/context` shows the new one immediately.
-- Signing in again or opening new connections does not clear it.
-
-**Effect on vendors:** the wizard reads the vendor record when it opens. In the browser that saved
-the type, its own record of the confirmed save stands in; in another browser within about 30
-minutes, the saved type can be unknown until a later check (see
-[saved business type](#saved-business-type-is-not-readable-or-enforced)). Dashboard Settings can
-show a stale "What you sell".
-
-**Required backend change:** every vendor write, including the business-type PATCH and the
-storefront PUT, must refresh or evict the cached vendor record, so the next
-`GET /v1/vendors/{vendor_id}` returns the saved values. Separately, the business-type PATCH should
-accept the chosen type's `id` (`business_type_id`) and the reads should return it alongside the name.
-
-**Current frontend behavior:** setup Step 9 saves the name through the storefront PUT only. Wizard
-resume and dashboard Settings show the context name and fall back to the vendor record when the
-context has none. The stale business type is handled as described in the next section. When the
-record read reflects writes immediately, remove the context-name preference and reverify the
-business-type resume.
-
 ### Saved business type is not readable or enforced
 
-Product rule: one vendor has one business type, and its catalog belongs to it. The first confirmed
-Step 3 save fixes it; only support may change it afterwards. The contract supports neither half:
+Product rule: one vendor has one business type, and its catalog belongs to it. It is fixed once the
+account holds a category; only support may change it afterwards. The contract supports neither half:
+
+MFPS-172 (QA, 16 November 2026): `GET /v1/vendors/{vendor_id}` now returns `business_type_id` (ids
+as in `GET /v1/business-types/`; omitted when the type matches no entry) and reflects a
+business-type PATCH immediately. Untested: whether the PATCH accepts the id; `/context` did not
+return it on two vendors. Still open:
 
 - **No enforcement.** `PATCH /v1/vendors/{vendor_id}/business-type` accepts a different type at any
-  time and moves `next_step` back to 4. **Required:** after the first successful save, reject a
-  change to another type for every client (a distinct error code), while still accepting a re-save
-  of the same type and its details.
-- **No id on read.** `GET /v1/vendors/{vendor_id}` returns the type's display name only
-  (`business_type`), and the PATCH takes a name too. **Required:** return `business_type_id` (and
-  accept it on the PATCH), so a renamed type or one past the first 100 still resolves.
-- **`"Others"` means two things.** A never-configured vendor reports `business_type: "Others"`,
-  which is indistinguishable from a vendor who chose Others. **Required:** `null` until a type is
-  saved.
-- **Stale after a save.** The record keeps the earlier value for about 30 minutes
-  ([stale vendor record](#stale-vendor-record-after-a-write)); QA, 12 November 2026, fresh vendor:
-  the record still read `"Others"` right after the PATCH while the context already said
-  `next_step: 4`.
+  time. QA, 16 November 2026 (fresh vendor): the PATCH always returns 200; a fresh vendor record
+  reads Others/30 with `next_step` 3; a type PATCH moves `next_step` 3→4, and another type with no
+  categories stays at 4; `PATCH …/categories` moves it to 5; a type PATCH after categories keeps
+  them (now mismatched) and moves `next_step` 5→4; an empty categories PATCH is a 400, so
+  categories cannot be cleared. **Required:** reject a business-type change to another type once
+  the vendor has any assigned category (a distinct error code), still accepting a same-type re-save.
+- **`"Others"` means two things.** A never-configured vendor reports `business_type: "Others"`
+  with Others' `business_type_id` (30 on QA), indistinguishable from a vendor who chose Others.
+  **Required:** omit both until a type is saved.
 - **Categories carry no type.** `GET /v1/vendors/{vendor_id}/categories` returns `id`, `ref_id`,
   `name`, `image_path`, `icon`. `ref_id` is the platform category id (QA, 12 November 2026: an
   assigned category 117 from `GET /v1/categories/?business_type_id=1` came back as `ref_id: 117`),
   but nothing says which type it belongs to, so an already mixed catalog cannot be detected from
   this read alone. **Required:** return the category's `business_type_id` on this read.
 
-**Current frontend behavior:** the browser that confirms a Step 3 save records it per vendor
-(cleared on sign-out; see [SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)) and
-locks the type. Otherwise, once the context's `next_step` is past 3, the wizard takes a type the
-vendor record names other than `"Others"`, else the one type whose category list
-(`GET /v1/categories/?business_type_id=`) holds every assigned category. A record saying
-`"Others"` costs one read when the Others list holds every assigned category; otherwise every
-type's list is read (one read per type, 30 types on QA). That answer is recorded like a confirmed
-save, so these reads run once per browser, and the resolved type's first page stands in for Step
-4's own read. With none of these it never guesses: Steps 3-4 offer **Try again**, then support, and
-submission waits. A pending first save whose response was lost is checked the same way before the
-vendor may choose again.
+**Current frontend behavior:** the type locks once the store is submitted, the context's
+`next_step` is past 4, or the assigned categories read holds a category (at `next_step` 4 only that
+read tells, since a type PATCH after categories also gives 4). Until then the fresh vendor record is
+the current type (`"Others"` included once Step 3 is saved), another card switches it, dropping
+unsaved Step 4–6 picks silently, and Step 3 re-saves it. One fresh read stands in for enforcement:
+the assigned categories before an unlocked Step 3 type save (a category found there locks the type
+and the save is refused). A type changed on another device between this browser's Step 3 save and
+its first category save is not detected; that accepted race can produce a mixed catalog until the
+backend enforces the lock. A changed Step 3 must be saved
+before the first category save. The browser that lands the first category assignment records its
+type per vendor (cleared on sign-out; see
+[SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)); the record is consulted only
+once locked, so an older record is ignored until then. Once locked, the wizard takes the type the
+vendor record returns by `business_type_id` and `business_type`, unless it says `"Others"`; then
+this browser's record when it matches the record's id (or the record has none). For `"Others"`
+with an id, it reads that type's category list (`GET /v1/categories/?business_type_id=`) and takes
+Others when it holds every assigned category. That answer is recorded, so the read runs once per
+browser, and its first page stands in for Step 4's own read. With none of these (no id, or a
+category outside the Others list) it never guesses: Steps 3-4 offer **Try again**, then support,
+and submission waits. Only Step 3's picker reads the business-type list, nine at a time.
 
 Before the lock, a vendor could save a second type and assign its categories on top of the first
 type's, so some accounts already hold a mixed catalog. The frontend never removes or reassigns
 assigned entries. It calls the catalog mixed only when the saved type's complete category list
 holds some assigned categories but not all, judging the assigned categories as read on entry
-(never what a save adds during the visit) against a list that visit read anyway: the per-type
-lists above, or Step 4's first page of the saved type (6 categories) when it is also the last. It
+(never what a save adds during the visit) against a list that visit read anyway: the Others list
+above, or Step 4's first page of the saved type (6 categories) when it is also the last. It
 reads nothing for this check alone and uses no cached list, so a mixed catalog goes undetected when
 the type came from this browser's record or the vendor record and its list runs past one Step 4
 page. When detected, Steps 4-6 and submission point the vendor to support. A category missing from
 its type's list for another reason (unverified whether the list hides an inactive category) would
 read as mixed too. With `business_type_id` on the assigned-categories read, detection needs no list.
 
-**TEMP(onboarding-saved-type), removal condition:** once the vendor record (or the context) returns
-the saved type, ideally its id, immediately after a Step 3 save and no longer defaults to
-`"Others"`, delete the vendor-record and category-list fallbacks marked
-`TEMP(onboarding-saved-type)` in `src/modules/vendor/lib/` and the wizard, and resolve from that
-read and this browser's record. Backend enforcement of the lock is still required either way: the
-frontend lock does not cover other clients.
+**TEMP(onboarding-saved-type), removal condition:** once the vendor record no longer reports
+`"Others"` for a vendor that has not saved a type, delete the Others category-list check and the
+`"Others"` exclusions marked `TEMP(onboarding-saved-type)` in `src/modules/vendor/lib/` and the
+wizard, and resolve from this browser's record and the record's `business_type_id` and name. Once
+the backend rejects a type change after categories, delete the Step 3 guard read (`typeGuardReads`).
+Backend enforcement of the lock is still required either way: the frontend lock does not cover other
+clients.
 
 ### Onboarding continuity a vendor still loses
 
@@ -536,15 +514,15 @@ the frontend works around it with an inline comment at the call site.
   `customer_consent_text`. Anyone reading the document would conclude payments cannot be read back
   and rebuild them from scratch; they round-trip fine. Verified on a configured vendor.
 - **`GET /v1/vendors/{id}` is the only read for `business_type`** — while typed as a bare
-  `APIResponseObject` with no example. It also returns `owner_name`, `contact_person`,
+  `APIResponseObject` with no example. It also returns `business_type_id`, `owner_name`, `contact_person`,
   `contact_number`, `description`, `communication_email`, `business_address`, `banner_image`,
   `user_id`, `vendor_status` and `approval_status`; an earlier entry here claimed the record
   held the first few "and nothing else", which direct measurement disproved (see corrections).
   A never-configured vendor reports `business_type: "Others"`, which is indistinguishable from a
   vendor who genuinely chose Others; see
   [saved business type](#saved-business-type-is-not-readable-or-enforced) for how the wizard tells
-  them apart. The read can also be up to about 30 minutes stale after a write; see
-  [stale vendor record after a write](#stale-vendor-record-after-a-write).
+  them apart. Since MFPS-172, the business-type PATCH, the storefront `business_name` and a logo
+  upload are reflected on the next vendor-record read (QA, 16 November 2026).
 - **A vendor can only remove SKUs. Categories and products are additive for this role,
   permanently.** Verified live against the dev API with a `VENDOR` token:
 
@@ -645,32 +623,18 @@ matches the checked-in OpenAPI. The wizard sends `image_type` in the query and `
 multipart body, and uses the returned `image_url`. This contract check does not verify a live
 upload or authorize treating S3/Cloudflare delivery as production-ready.
 
-- **Fresh-vendor image reads return a vendor-not-found error (reported 9 November 2026):**
-  both THUMBNAIL and HOMEBANNER reads returned `success: false`, `status: "404"`,
-  `failure_reason: "Vendor #<id> not found"`, `user_message: "No data found!!"` on reaching
-  Step 9 for a fresh vendor. This differs from the documented successful `image_url: null`
-  response for an existing vendor without an image. The backend must distinguish a genuinely
-  missing vendor from an existing setup vendor with no image, including any status filters in
-  its vendor lookup. Return success with a null URL for the latter and retain 404 for the former.
-  Still returned on QA, 11 November 2026, for a fresh vendor with no images; the frontend now
-  treats this 404 as no image, temporarily ([below](#temporary-image-404-as-no-image)).
-  The same vendor's context and profile reads both succeeded and confirmed `vendor_status:
-  INACTIVE`, `approval_status: PENDING`, and `onboarding.next_step: 9`. The vendor therefore exists;
-  the inconsistent image lookup needs backend investigation. An active-only lookup is a hypothesis,
-  not a confirmed implementation detail. The frontend now
-  skips restoration for initial setup using the agreed progress rule in
-  [vendor setup images](./API_ARCHITECTURE.md#vendor-setup-images), so these GET failures no longer
-  block a first visit to Step 9. A subsequent banner-only upload was reported successful, but
-  restoring at Step 10 failed when the unconfigured logo returned 404. The frontend now reads
-  each image independently and keeps optional read failures nonblocking, retaining a successful
-  sibling and offering per-image Retry. Failed reads stay unknown, not empty, and untouched
-  unknown URL fields are omitted on save. Recovery after a browser reload following a partial
-  upload with an unchanged Step 9 pointer remains deferred. Full fresh-vendor upload support
-  and preservation of omitted existing image fields still require live verification. Remove
-  this open-gap note after a fresh-vendor
-  live read/upload/reload check verifies the documented behavior, and revisit the initial-setup
-  assumption when partial-save re-entry recovery is implemented.
-- **Temporary image 404 as no image:** see the dedicated section below.
+- **Fresh-vendor image reads (MFPS-173, resolved on QA 16 November 2026):** a fresh vendor's
+  THUMBNAIL and HOMEBANNER reads used to return `success: false`, `status: "404"`,
+  `failure_reason: "Vendor #<id> not found"` before any upload (reported 9 November, still on QA
+  11 November 2026). On QA, 16 November 2026, a fresh vendor's two reads both returned `200` with
+  `image_url: null`, and a read after an upload returned the uploaded URL. The frontend skips
+  restoration for initial setup using the agreed progress rule in
+  [vendor setup images](./API_ARCHITECTURE.md#vendor-setup-images), reads each image
+  independently, keeps optional read failures nonblocking with per-image Retry, and omits
+  untouched unknown URL fields on save. Still open: recovery after a browser reload following a
+  partial upload with an unchanged Step 9 pointer, and live verification that omitted existing
+  image fields are preserved; revisit the initial-setup assumption when partial-save re-entry
+  recovery is implemented.
 - **Nullable image read:** GET prose permits `image_url: null` before upload, but
   `ImageUploadResponse.image_url` is an optional, non-nullable string in the schema. Backend
   should publish a nullable response property. The mapper accepts the explicitly documented null;
@@ -687,39 +651,3 @@ upload or authorize treating S3/Cloudflare delivery as production-ready.
   contract before permanent removal can be offered.
 - **Display scope:** the wizard uses the written 3:1 banner guidance. The public storefront still
   uses 16:9 and is explicitly outside this change; its different crop remains unresolved.
-
-### Temporary image 404 as no image
-
-Marker: `TEMP(vendor-image-404)`. Added 11 November 2026 at the product owner's request.
-
-**Backend behavior:** on QA, `GET /v1/vendors/{vendor_id}/images?image_type=THUMBNAIL` (logo) or
-`HOMEBANNER` (banner) returns `404` with `failure_reason: "Vendor #<id> not found"` and
-`user_message: "No data found!!"` when that image was never uploaded, even though the vendor exists.
-Measured on vendor 508, 11 November 2026: the wizard then showed "Could not load your saved
-logo/banner" with Retry on Step 10 for every vendor without images.
-
-**Required backend change:** for an existing vendor with no image of that type, return `200` with
-`data: { image_type: "<type>", image_url: null }`, as the contract already documents. Keep `404` for
-a vendor that does not exist and `403` for another vendor's id. Publish `image_url` as nullable.
-
-**Temporary frontend behavior:** `getImage` in `src/shared/api/services/vendor-images.service.ts`
-returns `null` (no image) on any `404` from this read; other errors still throw. A null URL is
-omitted from the storefront PUT, so this cannot clear a saved image. Trade-off: while it is in
-place, a genuinely failed lookup that returns `404` shows an empty picker instead of Retry.
-
-**Removal, once QA returns 200 with a null URL for a vendor without images:**
-
-1. Verify with a fresh `7…` vendor: read both image types before any upload (expect 200 and
-   `image_url: null`), upload one, and read again (expect its URL).
-2. In `vendor-images.service.ts`, delete the `try`/`catch` in `getImage` and drop the
-   `isApiError` import, returning `mapVendorImageUrl(await imagesService.list(...))` directly.
-3. In `vendor-images.service.test.ts`, turn the `TEMP(vendor-image-404)` test back into "keeps a
-   404 as a failed read": the logo 404 rejects (`rejects.toMatchObject({ status: 404 })`) while
-   the sibling banner still resolves. Keep the 500 test.
-   In `OnboardingWizard.test.tsx`, delete the `TEMP(vendor-image-404)` test "reads a 404 for both
-   images as no saved image, without Retry"; the neighbouring image-failure tests use 500 and stay.
-4. Restore the [vendor setup images](./API_ARCHITECTURE.md#vendor-setup-images) sentence to "No 404
-   is converted into a successful empty image". In the MFPS-166 list above, remove the
-   "Temporary image 404 as no image" bullet and the sentence linking here from the fresh-vendor
-   bullet. Then remove this section. `grep -rn "vendor-image-404"` and
-   `grep -rn "temporary-image-404-as-no-image"` should then find nothing.

@@ -4,60 +4,123 @@ import { resolveSavedType, savedTypeState, type SavedTypeEvidence } from './onbo
 const dairy = { id: 1, name: 'Dairy & Farm Fresh', icon: null, displayOrder: 1 }
 const bakery = { id: 4, name: 'Bakery & Snacks', icon: null, displayOrder: 4 }
 const others = { id: 30, name: 'Others', icon: null, displayOrder: 30 }
-const TYPES = [dairy, bakery, others]
-const LISTS = [
-  { type: dairy, categoryIds: [117, 118] },
-  { type: bakery, categoryIds: [201, 202] },
-  { type: others, categoryIds: [301] },
-]
+const OTHERS_LIST = { type: others, categoryIds: [301] }
+const recordOthers = { id: 30, name: 'Others', icon: null, displayOrder: null }
+const recordDairy = { id: 1, name: 'Dairy & Farm Fresh', icon: null, displayOrder: null }
 
+/** A locked account by default: categories saved, the record saying Others. */
 function evidence(overrides: Partial<SavedTypeEvidence> = {}): SavedTypeEvidence {
-  return { confirmed: null, stepSaved: true, profileTypeName: 'Others', businessTypes: TYPES, ...overrides }
+  return { confirmed: null, stepSaved: true, categoriesSaved: true, profileTypeName: 'Others', profileTypeId: 30, ...overrides }
+}
+
+/** An account that has saved Step 3 but holds no category. */
+function unlocked(overrides: Partial<SavedTypeEvidence> = {}): SavedTypeEvidence {
+  return evidence({ categoriesSaved: false, assignedCategoryIds: [], ...overrides })
 }
 
 describe('resolveSavedType', () => {
-  it('takes this browser’s confirmed save over every account read', () => {
-    expect(resolveSavedType(evidence({ confirmed: bakery, profileTypeName: 'Dairy & Farm Fresh', stepSaved: false })))
-      .toEqual({ kind: 'saved', type: bakery, source: 'record' })
+  it('leaves the type open before Step 3 is saved, with the record’s named type as current', () => {
+    expect(resolveSavedType(evidence({ stepSaved: false, categoriesSaved: false }))).toEqual({ kind: 'open', current: null })
+    expect(resolveSavedType(evidence({ stepSaved: false, categoriesSaved: false, profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 })))
+      .toEqual({ kind: 'open', current: recordDairy })
   })
 
-  it('leaves the type open while the account has not saved Step 3, preselecting a named type', () => {
-    expect(resolveSavedType(evidence({ stepSaved: false }))).toEqual({ kind: 'open', preselect: null })
-    expect(resolveSavedType(evidence({ stepSaved: false, profileTypeName: 'Dairy & Farm Fresh' })))
-      .toEqual({ kind: 'open', preselect: dairy })
+  it('reads the assigned categories once Step 3 is saved but the account may hold none', () => {
+    expect(resolveSavedType(evidence({ categoriesSaved: false }))).toEqual({ kind: 'needs', read: 'categories' })
+    expect(resolveSavedType(evidence({ categoriesSaved: false, profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 })))
+      .toEqual({ kind: 'needs', read: 'categories' })
   })
 
-  it('takes a known type the vendor record names, other than Others', () => {
-    expect(resolveSavedType(evidence({ profileTypeName: ' Dairy & Farm Fresh ' })))
-      .toEqual({ kind: 'saved', type: dairy, source: 'profile' })
+  it('stays open with the record’s type, Others included, while Step 3 is saved and no category is', () => {
+    expect(resolveSavedType(unlocked())).toEqual({ kind: 'open', current: recordOthers })
+    expect(resolveSavedType(unlocked({ profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 })))
+      .toEqual({ kind: 'open', current: recordDairy })
   })
 
-  it.each([['Others'], [null], ['A type no longer listed']])('reads the assigned categories when the record names %j', (name) => {
-    expect(resolveSavedType(evidence({ profileTypeName: name }))).toEqual({ kind: 'needs', read: 'categories' })
-    expect(resolveSavedType(evidence({ profileTypeName: name, assignedCategoryIds: [301] })))
-      .toEqual({ kind: 'needs', read: 'type-categories' })
+  it('ignores this browser’s record while the type is open', () => {
+    expect(resolveSavedType(unlocked({ confirmed: bakery, profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 })))
+      .toEqual({ kind: 'open', current: recordDairy })
+    expect(resolveSavedType(evidence({ confirmed: bakery, stepSaved: false, categoriesSaved: false })))
+      .toEqual({ kind: 'open', current: null })
   })
 
-  it('takes the one type whose list holds every assigned category, Others included', () => {
-    expect(resolveSavedType(evidence({ assignedCategoryIds: [301], typeCategories: LISTS })))
-      .toEqual({ kind: 'saved', type: others, source: 'categories' })
-    expect(resolveSavedType(evidence({ assignedCategoryIds: [118, 117], typeCategories: LISTS })))
-      .toEqual({ kind: 'saved', type: dairy, source: 'categories' })
+  it('locks once the context says categories are saved, or the account holds one', () => {
+    const named = { profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 }
+    expect(resolveSavedType(evidence(named))).toEqual({ kind: 'locked', type: recordDairy, source: 'profile' })
+    expect(resolveSavedType(unlocked({ ...named, assignedCategoryIds: [101] })))
+      .toEqual({ kind: 'locked', type: recordDairy, source: 'profile' })
   })
 
-  it('never guesses: no categories, a mixed catalog or a category two types list stays unresolved', () => {
+  it('takes the record’s named type over this browser’s record once locked', () => {
+    expect(resolveSavedType(evidence({ confirmed: bakery, profileTypeName: 'Dairy & Farm Fresh', profileTypeId: 1 })))
+      .toEqual({ kind: 'locked', type: recordDairy, source: 'profile' })
+  })
+
+  it('takes this browser’s record for a locked Others only when the ids match, or the record has none', () => {
+    expect(resolveSavedType(evidence({ confirmed: others }))).toEqual({ kind: 'locked', type: others, source: 'record' })
+    expect(resolveSavedType(evidence({ confirmed: bakery, profileTypeName: null, profileTypeId: null })))
+      .toEqual({ kind: 'locked', type: bakery, source: 'record' })
+    expect(resolveSavedType(evidence({ confirmed: bakery }))).toEqual({ kind: 'needs', read: 'categories' })
+  })
+
+  it('builds a named type from the record’s id and name, with no list', () => {
+    expect(resolveSavedType(evidence({ profileTypeName: ' Dairy (old name) ', profileTypeId: 1 }))).toEqual({
+      kind: 'locked',
+      type: { id: 1, name: 'Dairy (old name)', icon: null, displayOrder: null },
+      source: 'profile',
+    })
+    expect(resolveSavedType(evidence({ profileTypeName: 'Pet Supplies', profileTypeId: 108 }))).toEqual({
+      kind: 'locked',
+      type: { id: 108, name: 'Pet Supplies', icon: null, displayOrder: null },
+      source: 'profile',
+    })
+  })
+
+  it.each([
+    ['Dairy', null],
+    ['Others', null],
+    [null, null],
+    [null, 108],
+    ['  ', 5],
+  ])('leaves a record naming %j with id %j unresolved when locked and open with nothing current when not', (name, id) => {
+    expect(resolveSavedType(evidence({ profileTypeName: name, profileTypeId: id }))).toEqual({ kind: 'unresolved' })
+    expect(resolveSavedType(evidence({ profileTypeName: name, profileTypeId: id, assignedCategoryIds: [301] })))
+      .toEqual({ kind: 'unresolved' })
+    expect(resolveSavedType(evidence({ profileTypeName: name, profileTypeId: id, stepSaved: false, categoriesSaved: false })))
+      .toEqual({ kind: 'open', current: null })
+  })
+
+  it('reads the assigned categories first for a locked record saying Others', () => {
+    expect(resolveSavedType(evidence())).toEqual({ kind: 'needs', read: 'categories' })
+  })
+
+  it('asks for the Others list by the record’s id', () => {
+    expect(resolveSavedType(evidence({ assignedCategoryIds: [301] }))).toEqual({
+      kind: 'needs',
+      read: 'others-categories',
+      others: recordOthers,
+    })
+  })
+
+  it('locks Others when its list holds every assigned category', () => {
+    expect(resolveSavedType(evidence({ assignedCategoryIds: [301], othersCategories: OTHERS_LIST })))
+      .toEqual({ kind: 'locked', type: others, source: 'categories' })
+  })
+
+  it('stays unresolved when one assigned category is outside Others’ list', () => {
+    expect(resolveSavedType(evidence({ assignedCategoryIds: [301, 117], othersCategories: OTHERS_LIST })))
+      .toEqual({ kind: 'unresolved' })
+  })
+
+  it('a locked Others with no assigned categories is unresolved', () => {
     expect(resolveSavedType(evidence({ assignedCategoryIds: [] }))).toEqual({ kind: 'unresolved' })
-    expect(resolveSavedType(evidence({ assignedCategoryIds: [117, 201], typeCategories: LISTS }))).toEqual({ kind: 'unresolved' })
-    expect(resolveSavedType(evidence({ assignedCategoryIds: [999], typeCategories: LISTS }))).toEqual({ kind: 'unresolved' })
-    const shared = [...LISTS, { type: { id: 5, name: 'Bakery', icon: null, displayOrder: 5 }, categoryIds: [201] }]
-    expect(resolveSavedType(evidence({ assignedCategoryIds: [201], typeCategories: shared }))).toEqual({ kind: 'unresolved' })
   })
 })
 
 describe('savedTypeState', () => {
-  it('locks a saved type and says whether a fresh check already failed', () => {
-    expect(savedTypeState({ kind: 'saved', type: dairy, source: 'profile' }, false)).toEqual({ status: 'saved', type: dairy })
-    expect(savedTypeState({ kind: 'open', preselect: dairy }, false)).toEqual({ status: 'open' })
+  it('locks a locked type and says whether a fresh check already failed', () => {
+    expect(savedTypeState({ kind: 'locked', type: dairy, source: 'profile' }, false)).toEqual({ status: 'locked', type: dairy })
+    expect(savedTypeState({ kind: 'open', current: dairy }, false)).toEqual({ status: 'open' })
     expect(savedTypeState({ kind: 'unresolved' }, true)).toEqual({ status: 'unresolved', retried: true })
   })
 })

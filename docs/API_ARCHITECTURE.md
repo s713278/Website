@@ -263,16 +263,13 @@ Neither loading nor failure of these optional reads blocks selection, Step 9 sav
 review, or submission. Required profile, settings and catalog reads retain their existing gates.
 The picker shows its own loading indicator/failure notice; Step 10 keeps review visible with a
 nonblocking image notice. Pending-review Step 9 stays locked, with image retry outside its disabled
-fieldset. A 404 from the image read is temporarily treated as a successful empty image, because QA
-returns it for an image never uploaded (`TEMP(vendor-image-404)`,
-[removal](./API_GAPS.md#temporary-image-404-as-no-image)). An unsubmitted Step 10 restores
+fieldset. No 404 is converted into a successful empty image. An unsubmitted Step 10 restores
 images unless the initial-setup rule applies or the visit/cache already holds them. Saved URLs
 and pending Files/object URLs are separate runtime state and follow draft/session ownership.
 Selecting a replacement previews it locally; Continue uploads pending images before saving store details
 through the storefront PUT, which carries the store name. Setup Step 9 never sends the Step 3
-business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). The vendor record
-read can serve a cached name for about 30 minutes after a write, so resume and dashboard Settings
-prefer the context name ([gap](./API_GAPS.md#stale-vendor-record-after-a-write)). Each successful upload is recorded immediately in runtime, its resource
+business-type PATCH, which resets onboarding to Step 3 (QA, 10 November 2026). Resume and
+dashboard Settings take the store name from the vendor record. Each successful upload is recorded immediately in runtime, its resource
 cache and the active visit, superseding any older in-flight read. It survives a sibling upload
 or later settings-write failure; retry sends only remaining pending files. Storefront/profile
 writes invalidate only their own reads, keeping confirmed image results for back-navigation and
@@ -339,8 +336,8 @@ shows the page loader (screen-reader label "Restoring your setup").
 
 | Step | Account reads | Units |
 |---|---|---|
-| Business type (3) | Profile, business types | No |
-| Store details (9) | Profile, business types, logo/banner URLs; approved submitted stores also read saved storefront settings | No |
+| Business type (3) | Profile | No |
+| Store details (9) | Profile, logo/banner URLs; approved submitted stores also read saved storefront settings | No |
 | Categories (4) | Step 3's plus vendor categories | No |
 | Products (5) | Step 4's plus vendor products | Yes |
 | Sizes (6) | Step 5's plus vendor sizes | Yes |
@@ -348,13 +345,8 @@ shows the page loader (screen-reader label "Restoring your setup").
 | Review (10), store submitted | Profile | No |
 | Review (10), not submitted | All required account reads, plus optional logo/banner | Yes |
 
-The business-type catalog (one 100-item page) maps a saved business type name back to the reference
-Step 3 stores. On Step 3, and in a prefetch for it, it is read at once alongside the profile, saved
-type or not; on Steps 4-6, 9 and 10 it is read only once the profile shows a saved type, and skipped
-otherwise. A successful read also files Step 3's unsearched first page (its first nine items, with
-**Show more** still reading page 1 of nine) in the catalog reference cache (never over an existing
-entry), so the step's first visit makes no request of its own. If an earlier step this visit already
-skipped the read, Step 3 lists its own first page. Each onboarding catalog (business
+Step 3's picker reads the business-type list itself, like any reference list; no account read
+covers it. Each onboarding catalog (business
 types, categories, products) shows nine items at a time: the first **Show more** press reveals the
 next nine, reading the next page only when loaded items run short, and only after that press do
 later sets load as the list end scrolls into view. Category and product search filters loaded items
@@ -381,16 +373,25 @@ one) adds to that progress during a visit, and an edit never takes it away: chan
 step locks nothing after it. Only Steps 1-2 still reset progress, because a new number is a new
 session. The rules live in `onboarding-progress.ts`.
 
-**The saved business type is locked** from its first confirmed Step 3 save (`resolveSavedType` in
-`onboarding-saved-type.ts`): this browser's record of that save, else, once the context's
-`next_step` is past 3, the type the profile names (not `"Others"`), else the one type whose category
-list holds every assigned category. When the profile says `"Others"`, that type's list is read
-alone first and settles it (one request) when it holds every assigned category, since a category
-belongs to one type; otherwise, or without that hint, every type's list is read (30 on QA). The
-category evidence is read only when Step 3, Step 4 or an unsubmitted Step 10 needs the type; those
-steps show the page loader meanwhile. The resolved type's first page from those reads (sorted as
-Step 4 sorts it) is filed as Step 4's first page, so Step 4 does not read that list again. A locked type replaces any unsaved Step 3 choice in the draft. Step 3's cards stay
-pressable and another type only shows a warning; with no answer Steps 3-4 show **Try again**
+**The business type locks once the account holds a category** (`resolveSavedType` in
+`onboarding-saved-type.ts`), or the store is submitted. A context `next_step` past 4 says so with no
+read; at `next_step` 4 the assigned categories are read (one request, which Step 4 reuses); at
+`next_step` 3 nothing is assigned and nothing is read. Until it locks, the profile's type is the
+current one (`"Others"` included once Step 3 is saved), another card switches it, and Step 3
+re-saves it. A `TEMP(onboarding-saved-type)` guard stands in for backend enforcement: an unlocked
+Step 3 type save first re-reads the assigned categories (one found locks the type and refuses the
+save). The first Step 4 save reads nothing first, so a type changed on another device before it
+goes undetected (an accepted race). A changed, unsaved Step 3 blocks that first
+Step 4 save. The type locks, and this browser records it, as the first category assignment lands.
+Once locked the evidence is the type the profile returns by `business_type_id` and name (not
+`"Others"`), then this browser's record when it matches the profile's id. When the profile says
+`"Others"` with an id, that type's category list is read by the id and settles it when it holds
+every assigned category. The category evidence is read only when Step 3, Step 4 or an unsubmitted
+Step 10 needs the type; those steps show the page loader meanwhile (Step 4's list read for a type
+the profile names starts alongside). That list's first page (sorted as Step 4 sorts it) is filed
+as Step 4's first page, so Step 4 does not read that list again. A locked type replaces any unsaved
+Step 3 choice in the draft. Step 3's cards stay pressable and another locked type only shows a
+warning; with no answer Steps 3-4 show **Try again**
 instead (a fresh context and profile read), and Step 10 lists it as a readiness item. Gap and
 temporary fallbacks: [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
 
@@ -424,8 +425,8 @@ assigned category or product is never dropped), local additions stay, a changed 
 while the account's copy is the one it started from, and a removed size stays removed while the
 account's copy is unchanged. An old-format list counts the account's entries as saved and its own
 other entries as additions. Products and sizes whose category or product left the draft go with it,
-once that parent list has merged. An open (unsaved) business type is only a preselection, so an
-unsaved choice outranks it; a locked type replaces any choice. Step 9's other store details are
+once that parent list has merged. Before the lock the profile's type (once Step 3 is saved) merges
+like any field; at `next_step` 3 an unsaved choice outranks it; a locked type replaces any choice. Step 9's other store details are
 unreadable before approval: an edit stays pending against its recorded saved value, or, from an
 old-format draft that lists Step 9 as edited, until Step 9 is saved, since no saved value is
 known. The oldest drafts marked every step edited, so their other store details count as saved
@@ -516,8 +517,8 @@ result only while the same visit and vendor are current.
 
 A successful step save drops only the resources it wrote (Step 3 the profile, Step 9 the profile
 and storefront settings, Step 4 categories, Step 5 products, Step 6 sizes, Step 7 or 8 the checkout settings), submission drops
-every account resource except business types, and sign-out drops every resource for every vendor
-plus the units; business types and units otherwise stay cached until sign-out. Each of these also
+every account resource, and sign-out drops every resource for every vendor
+plus the units; units otherwise stay cached until sign-out. Each of these also
 drops the dashboard's context cache, so a later visit re-reads only what changed and returning from
 setup cannot reuse pre-write store state, storefront details, or plan usage. The open wizard keeps
 what it already applied: after a save its draft is the account copy. Both caches ignore a late
@@ -546,8 +547,7 @@ vendor that moves when another tab or device may have saved:
   The browser's other tabs receive it as a `storage` event and move the count for that vendor
   only; the writing tab does not receive it. Unreadable notes and unavailable storage are ignored.
 
-A per-resource cache entry whose read started before the latest count is not reused
-(business types, platform data, excepted);
+A per-resource cache entry whose read started before the latest count is not reused;
 the next load reads again, every caller asking meanwhile shares that one read, and a peek finds
 nothing. The context cache keeps serving the dashboard as before, but on entry the wizard takes a
 cached context only when it was read since the latest count (`vendorContextIsCurrent`). Sign-in's
@@ -560,8 +560,8 @@ context and what that write is built from (`revalidationReads` in `onboarding-fr
 
 | Step | Read again, besides the context |
 |------|---------------------------------|
-| 3 | The profile, only while no type is saved: a type saved elsewhere replaces the choice and locks |
-| 4, 5 | Categories; products |
+| 3 | The profile while the type is unlocked; and always, before an unlocked type save, the assigned categories |
+| 4, 5 | Categories (and always, before the first category save, the profile); products |
 | 6 | Products and sizes |
 | 7, 8 | Checkout settings |
 | 9 | An approved store's storefront settings. Before approval the store name comes from the context and nothing else is readable; images are sent only when picked |

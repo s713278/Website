@@ -137,7 +137,7 @@ export function savedResources(step: OnboardingStep): readonly OnboardingResourc
   return []
 }
 
-/** Go-live can change every account resource; business types are platform data it never touches. */
+/** Go-live can change every account resource. */
 export const GO_LIVE_RESOURCES: readonly OnboardingResource[] = [
   'profile', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront',
 ]

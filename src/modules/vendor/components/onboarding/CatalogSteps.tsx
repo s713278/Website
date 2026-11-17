@@ -63,7 +63,8 @@ function catalogChoiceState(
  * choices were already saved. What the vendor had already chosen when the list mounted follows
  * and keeps its place, so a saved choice shows without paging and never jumps when its own page
  * arrives. A ticked card from a loaded page stays where it is. Show more reveals the next set,
- * reading the next page only when the loaded items run short.
+ * reading the next page only when the loaded items run short; that set then shows whole once
+ * the read ends.
  */
 function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPage, loadingMore, loadMore, resetKey, matches, endFocusRef }: {
   items: T[]
@@ -100,8 +101,10 @@ function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPag
     setShown({ key: resetKey, count: count + size })
     if (all.length < count + size && !lastPage) loadMore()
   }
+  // While the read for the next set is out, that set waits for it, so a part set never sits above the loading row.
+  const shownCount = loadingMore && all.length < count && count > size ? count - size : count
   const focusIndex = focusAt?.key === resetKey ? focusAt.index : null
-  const revealed = focusIndex !== null && all.length > focusIndex
+  const revealed = focusIndex !== null && Math.min(all.length, shownCount) > focusIndex
   // A press is settled once its card shows or its read ends without one; a card that mounts
   // there later must not take focus. Without a card, focus stays on the button if it remains.
   const settled = focusIndex !== null && (revealed || !loadingMore)
@@ -115,7 +118,7 @@ function useCatalogSets<T extends { id: number }>({ items, chosen, size, lastPag
   return {
     /** Key the Show more control by this, so a new list brings the button back. */
     key: resetKey,
-    visible: all.slice(0, count),
+    visible: all.slice(0, shownCount),
     hasMore,
     showMore,
     /** The first card a pending press reveals; it takes focus as it mounts. */
@@ -235,9 +238,9 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   readOnly?: boolean
 }) {
   const draft = useOnboardingStore((state) => state.draft)
-  // The first confirmed save fixes the type. Its cards stay browsable and pressable, so a
-  // press on another type can say why nothing changes.
-  const locked = useOnboardingStore((state) => readOnly || state.savedType.status === 'saved')
+  // The type locks once the account holds a category. Its cards stay browsable and pressable,
+  // so a press on another type can say why nothing changes.
+  const locked = useOnboardingStore((state) => readOnly || state.savedType.status === 'locked')
   // A locked store keeps its catalog source, so the sample switch is not offered.
   const onUseSample = locked ? undefined : offerSample
   const changeBusinessType = useOnboardingStore((state) => state.changeBusinessType)
@@ -245,7 +248,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
   const references = useBusinessTypeReferences(draft.catalogSource)
   const firstLoad = useFirstLoad(references.loading || Boolean(references.error))
   const selected = draft.business.businessType
-  const referenceIds = new Set(references.items.map((item) => item.id))
+  const listed = new Map(references.items.map((item) => [item.id, item]))
   const sets = useCatalogSets({
     items: references.items,
     chosen: selected ? [selected] : [],
@@ -255,7 +258,7 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
     loadMore: references.loadMore,
     resetKey: `${draft.catalogSource}:${references.committedQuery}`,
     // The server filters its own pages; a chosen type it did not return must match too.
-    matches: (item) => referenceIds.has(item.id) ||
+    matches: (item) => listed.has(item.id) ||
       !references.committedQuery ||
       item.name.toLowerCase().includes(references.committedQuery),
   })
@@ -328,17 +331,21 @@ export function BusinessStep({ issues, onUseSample: offerSample, readOnly = fals
             {listLoading ? <PageLoader label="Loading business types" /> : null}
             {items.length ? (
               <div className={cn(choiceGrid, listLoading && 'mt-3')}>
-                {items.map((item, index) => (
-                  <ChoiceCard
-                    key={item.id}
-                    autoFocus={index === sets.focusIndex}
-                    selected={selected?.id === item.id}
-                    inactive={locked && selected?.id !== item.id}
-                    title={item.name}
-                    leading={<BusinessTypeIcon key={item.icon ?? `fallback-${item.id}`} src={item.icon} />}
-                    onClick={() => chooseBusinessType(item)}
-                  />
-                ))}
+                {items.map((item, index) => {
+                  // A saved type built from the vendor record carries no icon; the list's copy does.
+                  const icon = listed.get(item.id)?.icon ?? item.icon
+                  return (
+                    <ChoiceCard
+                      key={item.id}
+                      autoFocus={index === sets.focusIndex}
+                      selected={selected?.id === item.id}
+                      inactive={locked && selected?.id !== item.id}
+                      title={item.name}
+                      leading={<BusinessTypeIcon key={icon ?? `fallback-${item.id}`} src={icon} />}
+                      onClick={() => chooseBusinessType(item)}
+                    />
+                  )
+                })}
               </div>
             ) : null}
             {references.loadingMore && !references.searchPending ? (

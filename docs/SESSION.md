@@ -185,11 +185,10 @@ started from ([below](#onboarding-draft-format-and-sync)). See
 
 The saved business type has its own session-owned record, `md-vendor-onboarding-saved-type-v1`,
 separate from the draft so that discarding or replacing a draft never unlocks the type. Per vendor
-id it holds the type a Step 3 save was confirmed for, or that the assigned categories alone
-settled so that check (a read per business type) runs once (the lock's first evidence), and an in-flight
-marker written before a first save is sent and cleared once its outcome is known: a confirmed
-response, a server refusal, or a fresh account check. A reload or lost response while the marker
-stands is checked against fresh account reads before the vendor may choose again. Reads and writes
+id it holds the type the vendor's first category assignment was saved under, written as that
+assignment lands, or that the Others category list alone settled (so that check runs once). It is
+read only once the account holds a category or the store is submitted, so a record an earlier
+Step 3 save wrote is ignored until then. There is no in-flight marker. Reads and writes
 use the signed-in vendor's entry only, an explicit sign-out clears every entry (so a fresh demo
 starts unlocked), and involuntary session loss keeps them. The full rule and its temporary account
 fallbacks are in [API_GAPS.md](./API_GAPS.md#saved-business-type-is-not-readable-or-enforced).
@@ -198,7 +197,8 @@ A draft written before the type locked can hold another type than the saved one,
 type's catalog picked on top and its progress collapsed. Restoring it repairs it silently, with no
 notice: progress and the open step come from the account as for any draft; once the saved type
 is resolved it replaces the draft's, and once the assigned categories are read too, unsaved
-categories recorded under another type leave the draft with their products and sizes. Assigned
+categories recorded under another type leave the draft with their products and sizes. The same
+repair runs when an open type changed elsewhere. Assigned
 entries and entries with no recorded type stay; an unresolved type changes nothing. Other unsaved
 input is kept. A saved catalog already mixed on the account is never changed; when it is confirmed
 (see the API gap above), catalog steps and submission point the vendor to support.

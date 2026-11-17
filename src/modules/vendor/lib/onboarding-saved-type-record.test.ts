@@ -3,8 +3,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   clearSavedTypeRecords,
-  clearTypeSaveInFlight,
-  markTypeSaveInFlight,
   readSavedTypeRecord,
   recordConfirmedType,
   SAVED_TYPE_STORAGE_KEY,
@@ -16,38 +14,27 @@ const bakery = { id: 4, name: 'Bakery & Snacks', icon: 'https://icons.example.te
 afterEach(() => localStorage.clear())
 
 describe('saved business type record', () => {
-  it('keeps a pending save until its outcome is known, then the confirmed type', () => {
-    markTypeSaveInFlight('91', dairy)
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: dairy })
-    recordConfirmedType('91', dairy)
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: dairy, inFlight: null })
-  })
-
-  it('forgets a pending save that did not land, keeping any confirmed type', () => {
-    markTypeSaveInFlight('91', dairy)
-    clearTypeSaveInFlight('91')
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
-    expect(localStorage.getItem(SAVED_TYPE_STORAGE_KEY)).toBeNull()
-
-    recordConfirmedType('91', dairy)
-    markTypeSaveInFlight('91', dairy)
-    clearTypeSaveInFlight('91')
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: dairy, inFlight: null })
+  it('reads an entry holding only an old pending save as absent', () => {
+    localStorage.setItem(SAVED_TYPE_STORAGE_KEY, JSON.stringify({ 91: { inFlight: dairy } }))
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null })
+    recordConfirmedType('91', bakery)
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: bakery })
+    expect(JSON.parse(localStorage.getItem(SAVED_TYPE_STORAGE_KEY)!)).toEqual({ 91: { confirmed: bakery } })
   })
 
   it('answers only for the vendor it belongs to', () => {
     recordConfirmedType('91', dairy)
-    markTypeSaveInFlight('92', bakery)
-    expect(readSavedTypeRecord('92')).toEqual({ confirmed: null, inFlight: bakery })
-    expect(readSavedTypeRecord('93')).toEqual({ confirmed: null, inFlight: null })
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: dairy, inFlight: null })
+    recordConfirmedType('92', bakery)
+    expect(readSavedTypeRecord('92')).toEqual({ confirmed: bakery })
+    expect(readSavedTypeRecord('93')).toEqual({ confirmed: null })
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: dairy })
   })
 
   it('treats a malformed or unreadable record as absent', () => {
     localStorage.setItem(SAVED_TYPE_STORAGE_KEY, '{not json')
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null })
     localStorage.setItem(SAVED_TYPE_STORAGE_KEY, JSON.stringify({ 91: { confirmed: { id: 0, name: '' }, inFlight: 'x' } }))
-    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null, inFlight: null })
+    expect(readSavedTypeRecord('91')).toEqual({ confirmed: null })
   })
 
   it('is cleared for every vendor on sign-out', () => {

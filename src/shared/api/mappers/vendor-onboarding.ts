@@ -780,6 +780,11 @@ export type VendorProfile = {
   businessName: string
   /** Display string, e.g. "Beverages & Juice Center" — not an id. */
   businessType: string | null
+  /**
+   * Id as in `GET /v1/business-types/`; omitted when the type matches no master entry. A
+   * never-configured vendor still reports the `"Others"` id (MFPS-172, QA 16 Nov 2026).
+   */
+  businessTypeId: number | null
   contactNumber: string
 }
 
@@ -787,15 +792,18 @@ export type VendorProfile = {
  * `GET /v1/vendors/{id}`.
  *
  * Typed as a bare `APIResponseObject` in the contract, but the deployed API returns the
- * profile fields below — this is the only read that exposes `business_type`, which Step 3
- * needs. Verified live; do not "simplify" it away because the schema looks empty.
+ * profile fields below — this is the only read that exposes `business_type` and
+ * `business_type_id`, which Step 3 needs. Verified live; do not "simplify" it away because the
+ * schema looks empty. An unusable `business_type_id` reads as null.
  */
 export function mapVendorProfile(payload: unknown): VendorProfile {
   if (!isRecord(payload) || !isRecord(payload.data)) throw new InvalidVendorContextError()
   const data = payload.data
+  const typeId = lenientInteger(data.business_type_id)
   return {
     businessName: lenientString(data.business_name) ?? '',
     businessType: lenientString(data.business_type),
+    businessTypeId: typeId !== null && typeId > 0 ? typeId : null,
     contactNumber: lenientString(data.contact_number) ?? '',
   }
 }

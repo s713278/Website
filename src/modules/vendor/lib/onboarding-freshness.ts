@@ -12,11 +12,11 @@ import type { OnboardingResource } from './onboarding-resume'
  * The context is always read again: it owns progress, submission and the plan limits. These
  * are the resources each step's write is built from, beyond it:
  *
- * - Step 3: the profile, only while no type is saved, to tell a type saved elsewhere. A saved
- *   type is locked, so a save can only send it again.
- * - Step 9: the storefront settings of an approved store. Before approval nothing more is
- *   readable: the store name comes from the context, the vendor record can be served about
- *   30 minutes stale, and images are written only when the vendor picks one.
+ * - Step 3: the profile, only while the type is unlocked, to tell a type saved elsewhere. A
+ *   locked type can only be sent again.
+ * - Step 9: the storefront settings of an approved store, which carry its name. Before
+ *   approval, the vendor record for the store name; the rest is unreadable, and images are
+ *   written only when the vendor picks one.
  * - Step 10: what each step with unsaved input needs, so one saved from another tab stops
  *   counting as unsaved. Submission writes nothing else.
  */
@@ -31,11 +31,11 @@ const STEP_READS: Record<Exclude<AccountStep, 3 | 9>, readonly OnboardingResourc
 
 export function revalidationReads(
   step: OnboardingStep,
-  options: { submitted: boolean; approved: boolean; typeSaved: boolean; pending: readonly AccountStep[] },
+  options: { submitted: boolean; approved: boolean; typeLocked: boolean; pending: readonly AccountStep[] },
 ): OnboardingResource[] {
   const reads = (owner: AccountStep): readonly OnboardingResource[] => {
-    if (owner === 3) return options.typeSaved ? [] : ['profile']
-    if (owner === 9) return options.submitted && options.approved ? ['storefront'] : []
+    if (owner === 3) return options.typeLocked ? [] : ['profile']
+    if (owner === 9) return options.submitted && options.approved ? ['storefront'] : ['profile']
     return STEP_READS[owner]
   }
   if (step === 10) return options.submitted ? [] : [...new Set(options.pending.flatMap(reads))]
