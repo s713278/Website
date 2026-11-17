@@ -119,17 +119,6 @@ function seedFirstPage<T extends IdentifiedReference>(key: string, size: number,
 }
 
 /**
- * File Step 3's first unsearched page from a wider read of the same list. `page` must be
- * page 0 of the unfiltered list sorted by id ascending.
- */
-export function seedBusinessTypeFirstPage<T extends IdentifiedReference>(
-  mode: CatalogSource,
-  page: ReferencePage<T>,
-): void {
-  seedFirstPage(businessTypeCacheKey(mode, ''), ONBOARDING_CONFIG.businessTypePageSize, page)
-}
-
-/**
  * File Step 4's first page of a business type's categories from a wider read of the same
  * list. `page` must be page 0 of that type's list sorted by id ascending, as Step 4 reads it.
  */

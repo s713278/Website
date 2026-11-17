@@ -8,10 +8,7 @@ beforeEach(() => { live = true })
 afterEach(() => vi.restoreAllMocks())
 
 describe('vendor image contract', () => {
-  // TEMP(vendor-image-404): when the backend returns 200 with a null `image_url` for an image
-  // never uploaded, delete this test and restore the 404 assertion described in
-  // docs/API_GAPS.md#temporary-image-404-as-no-image.
-  it('reads a 404 as no image while a sibling image can succeed independently', async () => {
+  it('keeps a 404 as a failed read while a sibling image can succeed independently', async () => {
     vi.spyOn(getHttp(), 'get').mockImplementation(async (_path, config) => {
       const params = config?.params
       if (params && typeof params === 'object' && 'image_type' in params && params.image_type === 'THUMBNAIL') {
@@ -19,8 +16,15 @@ describe('vendor image contract', () => {
       }
       return { data: { success: true, data: { image_url: 'https://images.example.test/banner.png' } } }
     })
-    await expect(vendorImagesService.getImage('91', 'logo')).resolves.toBeNull()
+    await expect(vendorImagesService.getImage('91', 'logo')).rejects.toMatchObject({ status: 404 })
     await expect(vendorImagesService.getImage('91', 'banner')).resolves.toBe('https://images.example.test/banner.png')
+  })
+
+  it('reads a never-uploaded image as no image', async () => {
+    vi.spyOn(getHttp(), 'get').mockResolvedValue({ data: { success: true, data: {
+      message: 'Vendor logo image not found', image_url: null, image_type: 'THUMBNAIL', reference_id: 620,
+    } } })
+    await expect(vendorImagesService.getImage('91', 'logo')).resolves.toBeNull()
   })
 
   it('keeps other read failures as errors', async () => {

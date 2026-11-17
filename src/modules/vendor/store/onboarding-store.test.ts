@@ -815,7 +815,7 @@ describe('changeBusinessType', () => {
       persistenceInitialized: true,
       persistenceStatus: 'idle',
       editedSteps: [],
-      // Before the first confirmed save the type is still a choice.
+      // Before the type locks it is still a choice.
       savedType: { status: 'unknown' },
     })
     // The account holds only category 11, product 31, and size 4001.
@@ -848,9 +848,22 @@ describe('changeBusinessType', () => {
     expect(selectCategoryLimitReached(state)).toBe(true)
   })
 
-  it('refuses another type once one is saved, changing nothing', () => {
+  it('switches an open (saved, unlocked) type, keeping only the assigned catalog', () => {
     seedAssignedCatalog()
-    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeA })
+    useOnboardingStore.getState().setSavedType({ status: 'open' })
+
+    expect(useOnboardingStore.getState().changeBusinessType(typeB)).toBe(true)
+
+    const { draft } = useOnboardingStore.getState()
+    expect(draft.business.businessType).toEqual(typeB)
+    expect(draft.categories.map((c) => c.id)).toEqual([11])
+    expect(draft.products.map((p) => p.id)).toEqual([31])
+    expect(draft.skus.map((s) => s.id)).toEqual(['sku-4001'])
+  })
+
+  it('refuses another type once one is locked, changing nothing', () => {
+    seedAssignedCatalog()
+    useOnboardingStore.getState().setSavedType({ status: 'locked', type: typeA })
     const before = useOnboardingStore.getState().draft
 
     expect(useOnboardingStore.getState().changeBusinessType(typeB)).toBe(false)
@@ -870,9 +883,9 @@ describe('changeBusinessType', () => {
   it('retires Step 3 from the edited set once the draft holds the locked type', () => {
     seedAssignedCatalog()
     useOnboardingStore.setState({ editedSteps: [3, 5] })
-    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeB })
+    useOnboardingStore.getState().setSavedType({ status: 'locked', type: typeB })
     expect(useOnboardingStore.getState().editedSteps).toEqual([3, 5])
-    useOnboardingStore.getState().setSavedType({ status: 'saved', type: typeA })
+    useOnboardingStore.getState().setSavedType({ status: 'locked', type: typeA })
     expect(useOnboardingStore.getState().editedSteps).toEqual([5])
   })
 

@@ -4,10 +4,11 @@ import type { RetainableCatalog } from './onboarding-catalog-limits'
 /**
  * Repairs for drafts and accounts the old business-type behaviour left behind.
  *
- * Before the type locked at its first save, a vendor could switch it after saving, pick the
+ * Before the type locked (ADRs 0010, 0013), a vendor could switch it after saving, pick the
  * new type's categories and products, and leave them unsaved in this browser's draft, or
  * save them too. The saved type itself is restored by the type resolver; these rules settle
- * the catalog around it, silently:
+ * the catalog around it, silently. Also applied when an open type changes elsewhere: the
+ * draft's picks follow the type it holds.
  *
  * - unsaved selections that belong to another type leave the draft;
  * - nothing the account holds is ever dropped or reassigned: a catalog that is already

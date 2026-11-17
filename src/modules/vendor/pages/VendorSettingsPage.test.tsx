@@ -117,14 +117,13 @@ describe('VendorSettingsPage', () => {
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  // Setup saves the name through the storefront PUT, which leaves the vendor record's stale.
-  it('shows the store name from the vendor context before the vendor record', async () => {
-    vi.spyOn(vendorService, 'getStoreProfile').mockResolvedValue({ ...profile, businessName: 'My Store' })
+  it('shows the store name from the vendor record', async () => {
+    vi.spyOn(vendorService, 'getStoreProfile').mockResolvedValue({ ...profile, businessName: 'Saved Store' })
 
-    renderPage({ ...account, context: { businessName: 'Saved Store' } } as unknown as VendorAccount)
+    renderPage({ ...account, context: { businessName: 'Context Store' } } as unknown as VendorAccount)
     await settle()
 
     expect(screen.getByText('Saved Store')).toBeTruthy()
-    expect(screen.queryByText('My Store')).toBeNull()
+    expect(screen.queryByText('Context Store')).toBeNull()
   })
 })

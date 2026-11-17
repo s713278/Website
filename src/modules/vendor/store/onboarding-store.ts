@@ -162,9 +162,10 @@ type OnboardingStore = {
    */
   returnStep: OnboardingStep | null
   /**
-   * The account's saved business type this visit (see `resolveSavedType`). Once saved it is
-   * locked: `changeBusinessType` refuses another type. In memory only; the wizard sets it on
-   * entry from this browser's confirmed-save record and the account.
+   * Whether the business type is locked this visit (see `resolveSavedType`): once the account
+   * holds a category or the store is submitted. Until then `changeBusinessType` switches it and
+   * Step 3 re-saves it. In memory only; the wizard sets it on entry from the account and this
+   * browser's record.
    */
   savedType: SavedTypeState
   /**
@@ -307,8 +308,8 @@ type OnboardingStore = {
    * assigned categories, products, and account sizes are one-way and stay, so the switch
    * neither blanks the live preview nor strands a vendor whose account is at a plan limit.
    *
-   * Refused, changing nothing, while the saved type is locked, still being checked or
-   * unknown; returns whether the draft now holds `businessType`.
+   * Refused, changing nothing, while the type is locked, still being checked or unknown;
+   * returns whether the draft now holds `businessType`.
    */
   changeBusinessType: (businessType: BusinessTypeReference) => boolean
   updateRuntime: (patch: Partial<OnboardingRuntimeState>, invalidateFrom?: OnboardingStep) => void
@@ -812,7 +813,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
 
   setSavedType(savedType) {
     set((state) => {
-      const holdsSaved = savedType.status === 'saved'
+      const holdsSaved = savedType.status === 'locked'
         && state.draft.business.businessType?.id === savedType.type.id
       return holdsSaved && state.editedSteps.includes(3)
         ? {
@@ -1099,7 +1100,7 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   changeBusinessType(businessType): boolean {
     const state: OnboardingStore = useOnboardingStore.getState()
     const { savedType } = state
-    if (savedType.status === 'saved') return savedType.type.id === businessType.id
+    if (savedType.status === 'locked') return savedType.type.id === businessType.id
     if (savedType.status === 'checking' || savedType.status === 'unresolved') return false
     if (state.draft.business.businessType?.id === businessType.id) return true
     const { accountCatalog } = state
