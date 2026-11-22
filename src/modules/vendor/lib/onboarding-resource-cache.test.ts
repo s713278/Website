@@ -13,7 +13,7 @@ vi.mock('./page-away', () => ({ pageAwayEpoch: () => away.epoch }))
 afterEach(() => invalidateOnboardingResources())
 
 const PROFILE: VendorProfile = {
-  businessName: 'Green Bowl Grocers', businessType: null, contactNumber: '',
+  businessName: 'Green Bowl Grocers', businessType: null, businessTypeId: null, contactNumber: '',
 }
 
 const CATEGORIES: VendorCategoryRef[] = [
@@ -179,16 +179,6 @@ describe('after the page has been away', () => {
     old.resolve([])
     await expect(stale).resolves.toEqual([])
     expect(peekOnboardingResource('96', 'categories')?.value).toBe(CATEGORIES)
-  })
-
-  it('keeps the platform’s business types', async () => {
-    const types = [{ id: 7, name: 'Beverages', icon: null, displayOrder: 1 }]
-    await loadOnboardingResource('96', 'businessTypes', async () => types)
-    away.epoch += 1
-    const read = vi.fn(async () => types)
-    await loadOnboardingResource('96', 'businessTypes', read)
-    expect(read).not.toHaveBeenCalled()
-    expect(peekOnboardingResource('96', 'businessTypes')?.value).toBe(types)
   })
 
   it('counts a confirmed write as read now', () => {

@@ -10,7 +10,6 @@ import { useOnboardingStore } from '../../store/onboarding-store'
 import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
 import { ONBOARDING_CONFIG } from '../../types/onboarding'
 import { invalidateOnboardingResources } from '../../lib/onboarding-resource-cache'
-import { loadAccountResource } from '../../lib/onboarding-resume'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage, resetFirstPageReadsForTests } from '../../hooks/use-onboarding-catalog'
 import { OnboardingFeedbackProvider } from './OnboardingFeedbackProvider'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
@@ -268,65 +267,6 @@ function emptyReferenceCache() {
   }
 }
 
-describe('business step after a resume that read the catalog', () => {
-  const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
-  const wide = {
-    items: Array.from({ length: 30 }, (_, index) => type(index + 1)),
-    pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
-  }
-
-  async function resumeThenRender() {
-    emptyReferenceCache()
-    const getBusinessTypes = vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
-    getBusinessTypes.mockResolvedValueOnce(wide)
-    await loadAccountResource('88', 'businessTypes')
-    getBusinessTypes.mockClear()
-    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
-    render(<BusinessStep issues={[]} />)
-    return getBusinessTypes
-  }
-
-  it('shows the first nine types without asking for them', async () => {
-    const getBusinessTypes = await resumeThenRender()
-
-    expect(await screen.findByRole('button', { name: /Business 1$/ })).toBeTruthy()
-    // Let the zero-delay fetch timer run, were there one.
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-
-    expect(getBusinessTypes).not.toHaveBeenCalled()
-    const cards = screen.getAllByRole('button', { name: /^Business \d+$/ })
-    expect(cards.map((card) => card.textContent)).toEqual(
-      Array.from({ length: 9 }, (_, index) => `Business ${index + 1}`),
-    )
-  })
-
-  it('requests page 1 of nine when the vendor shows more', async () => {
-    const getBusinessTypes = await resumeThenRender()
-    getBusinessTypes.mockResolvedValue({
-      items: [type(10), type(11)], pageNumber: 1, pageSize: 9, totalElements: 30, totalPages: 4, lastPage: false,
-    })
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Show more business types' }))
-
-    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
-    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ pageNumber: 1, pageSize: 9 })
-    expect(await screen.findByRole('button', { name: /Business 10$/ })).toBeTruthy()
-  })
-
-  it('still requests a keyword search with the keyword', async () => {
-    const getBusinessTypes = await resumeThenRender()
-    getBusinessTypes.mockResolvedValue({
-      items: [type(21)], pageNumber: 0, pageSize: 9, totalElements: 1, totalPages: 1, lastPage: true,
-    })
-
-    fireEvent.change(await screen.findByLabelText('Search business type'), { target: { value: 'bakery' } })
-    fireEvent.submit(screen.getByRole('search'))
-
-    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
-    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ keyword: 'bakery', pageNumber: 0, pageSize: 9 })
-  })
-})
-
 describe('business step loading', () => {
   const page = (id: number) => ({
     items: [{ id, name: `Business ${id}`, icon: null, displayOrder: id }],
@@ -377,6 +317,29 @@ describe('business step loading', () => {
     expect(await screen.findByRole('button', { name: /Business 63$/ })).toBeTruthy()
     expect(screen.queryByRole('status', { name: 'Loading business types' })).toBeNull()
     expect(screen.getByLabelText('Search business type')).toBe(input)
+  })
+})
+
+describe('business step icons', () => {
+  it('shows the listed icon on the saved card when the draft’s type carries none', async () => {
+    emptyReferenceCache()
+    const icon = 'https://cdn.example.test/business/x.svg'
+    vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValueOnce({
+      items: [
+        { id: 5401, name: 'Business 5401', icon: null, displayOrder: 1 },
+        { id: 5402, name: 'Business 5402', icon, displayOrder: 2 },
+      ],
+      pageNumber: 0, pageSize: 9, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      catalogSource: 'account',
+      business: { ...current.business, businessType: { id: 5402, name: 'Business 5402', icon: null, displayOrder: null } },
+    }), 3)
+    render(<BusinessStep issues={[]} />)
+
+    const card = await screen.findByRole('button', { name: /Business 5402$/ })
+    expect(card.querySelector('img')?.getAttribute('src')).toBe(icon)
   })
 })
 
@@ -688,6 +651,28 @@ describe('catalog lists in sets of one page', () => {
 
     await screen.findByRole('button', { name: /Business 5518/ })
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Business 5510/ })))
+  })
+
+  it('keeps the first set of business types while the next page loads when a saved type off the first page offsets the list', async () => {
+    emptyReferenceCache()
+    const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
+    let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getBusinessTypes>>) => void = () => undefined
+    vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
+      .mockResolvedValueOnce({ items: ids(5701, 9).map(type), pageNumber: 0, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve }))
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account', business: { ...current.business, businessType: type(5799) } }), 3)
+    render(<BusinessStep issues={[]} readOnly />)
+    await screen.findByRole('button', { name: /Business 5701/ })
+    expect(shownNames(/Business \d+/)).toHaveLength(9)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
+
+    expect((await screen.findByRole('status')).textContent).toBe('Loading more business types.')
+    expect(shownNames(/Business \d+/)).toHaveLength(9)
+
+    await act(async () => resolveMore({ items: ids(5710, 9).map(type), pageNumber: 1, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false }))
+    expect(shownNames(/Business \d+/)).toHaveLength(18)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Business 5709/ })))
   })
 
   it('shows a category the vendor authors at once, even with a full set already shown', async () => {

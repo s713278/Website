@@ -331,6 +331,7 @@ describe('mapVendorProfile', () => {
       data: {
         business_name: 'SK Organic Store',
         business_type: 'Beverages & Juice Center',
+        business_type_id: 6,
         owner_name: 'Sanjay Kumar',
         contact_person: 'Sanjay Kumar',
         contact_number: '9876543210',
@@ -338,8 +339,17 @@ describe('mapVendorProfile', () => {
     })).toEqual({
       businessName: 'SK Organic Store',
       businessType: 'Beverages & Juice Center',
+      businessTypeId: 6,
       contactNumber: '9876543210',
     })
+  })
+
+  it.each([[undefined], [null], ['abc'], [0], [-1], [1.5], [{}]])('drops an unusable business_type_id %j', (id) => {
+    expect(mapVendorProfile({ data: { business_type: 'Others', business_type_id: id } }).businessTypeId).toBeNull()
+  })
+
+  it('accepts a numeric-string business_type_id', () => {
+    expect(mapVendorProfile({ data: { business_type_id: '4' } }).businessTypeId).toBe(4)
   })
 })
 

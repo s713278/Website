@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils'
 import {
   authService,
   getErrorMessage,
-  isApiError,
   isLiveApi,
   vendorOnboardingService,
   type BusinessTypeReference,
@@ -56,7 +55,7 @@ import {
   isVendorApproved,
   loadAccountResource,
   measurementCatalogsForResume,
-  readTypeCategories,
+  readBusinessTypeCategories,
   requiredStepResources,
   resumeOrderWhatsapp,
   resumePaymentDetails,
@@ -122,12 +121,7 @@ import {
   withUnknownEdits,
   type DraftField,
 } from '../../lib/onboarding-draft-merge'
-import {
-  clearTypeSaveInFlight,
-  markTypeSaveInFlight,
-  readSavedTypeRecord,
-  recordConfirmedType,
-} from '../../lib/onboarding-saved-type-record'
+import { readSavedTypeRecord, recordConfirmedType } from '../../lib/onboarding-saved-type-record'
 import { createEmptyOnboardingDraft } from '../../data/onboarding-defaults'
 import { ImageSaveError } from '../../lib/onboarding-images'
 import { approvedSizeIssues, normalizeDraftSlug, readinessIssues, validateStep } from '../../lib/onboarding-validation'
@@ -244,19 +238,19 @@ const INLINE_ONLY_STEPS: readonly OnboardingStep[] = [1, 2, 6, 7, 8, 9]
 // `products` fields but are guidance the vendor must keep seeing, so they stay inline.
 const isMissingChoice = (item: ValidationIssue) => item.message.startsWith('Choose ')
 
-const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront']
+const ACCOUNT_RESOURCES: readonly OnboardingResource[] = ['profile', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner', 'storefront']
 /** The steps whose draft each resource's applier fills. */
 const RESOURCE_STEPS: Record<OnboardingResource, readonly OnboardingStep[]> = {
-  profile: [3, 9], businessTypes: [3], categories: [4], products: [5], skus: [6], checkout: [7, 8], logo: [9], banner: [9], storefront: [9],
+  profile: [3, 9], categories: [4], products: [5], skus: [6], checkout: [7, 8], logo: [9], banner: [9], storefront: [9],
 }
 
 const ACCOUNT_STEPS: readonly OnboardingStep[] = [3, 4, 5, 6, 7, 8, 9]
 
 /**
  * Clear what an account write made stale in the shared caches: the written resources and the
- * vendor context (it carries `next_step`, plan usage and store state). Business types and
- * units are platform data, so they stay. This browser's other tabs are told too, so their next
- * write reads the account again first.
+ * vendor context (it carries `next_step`, plan usage and store state). Units are platform
+ * data, so they stay. This browser's other tabs are told too, so their next write reads the
+ * account again first.
  */
 function dropWrittenAccountData(vendorId: string, resources: readonly OnboardingResource[]) {
   invalidateOnboardingResources(vendorId, resources)
@@ -279,7 +273,7 @@ type AccountLoadView = {
 const IDLE_LOAD_VIEW: AccountLoadView = {
   context: 'idle',
   resources: {
-    profile: 'idle', businessTypes: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle', logo: 'idle', banner: 'idle', storefront: 'idle',
+    profile: 'idle', categories: 'idle', products: 'idle', skus: 'idle', checkout: 'idle', logo: 'idle', banner: 'idle', storefront: 'idle',
   },
   units: 'idle',
   categoryList: 'idle',
@@ -295,14 +289,19 @@ type AccountEntry = {
   retry: (step: OnboardingStep) => void
   retryImage: (kind: VendorImageKind) => void
   recordImage: (kind: VendorImageKind, url: string) => void
-  /** A Step 3 save of `type` was confirmed: it is the saved type from now on. */
-  confirmSavedType: (type: BusinessTypeReference) => void
+  /** The account now holds a category saved under `type`: it is locked from now on. */
+  lockSavedType: (type: BusinessTypeReference) => void
+  /** A Step 3 save of `type` landed; the type is still open. */
+  noteTypeSave: (type: BusinessTypeReference) => void
   /** Work the saved type out again from a fresh context and vendor record. */
   recheckSavedType: () => void
   /** Whether a write from the step must read the account again first: the page has been away since. */
   isStale: (step: OnboardingStep) => boolean
-  /** Read again what a write from the step is built from, and merge it in (`onboarding-freshness`). */
-  revalidate: (step: OnboardingStep) => Promise<RevalidationOutcome>
+  /**
+   * Read again what a write from the step is built from, and merge it in (`onboarding-freshness`).
+   * `force` names resources read afresh whether or not the page has been away.
+   */
+  revalidate: (step: OnboardingStep, force?: readonly OnboardingResource[]) => Promise<RevalidationOutcome>
   cancel: () => void
 }
 
@@ -332,6 +331,13 @@ function stepThreeSaved(context: VendorContext, profile: VendorProfile | null, s
   const next = context.onboarding.nextStep
   if (next != null && Number.isInteger(next)) return next > 3
   return savedBusinessType(profile) !== null
+}
+
+/** Whether the account must hold a category: submitted, or `next_step` past Step 4. */
+function stepFourSaved(context: VendorContext, submitted: boolean): boolean {
+  if (submitted || isStoreSubmitted({ context })) return true
+  const next = context.onboarding.nextStep
+  return next != null && Number.isInteger(next) && next > 4
 }
 
 /** Steps that show or check the saved type, and so read the evidence for it when needed. */
@@ -386,19 +392,25 @@ function startAccountEntry(
   let categoryListKey: string | null = null
   let productPanelWanted = false
   let productPanelKey: string | null = null
-  // The saved business type (`resolveSavedType`), worked out once the profile and the business
-  // types have landed. The category evidence costs a read per business type, so it is read only
-  // once a step that needs the type opens; until then the type stays unknown.
+  // The business type and whether it is locked (`resolveSavedType`), worked out once the profile
+  // has landed. The category evidence costs the assigned categories' read (and for a locked
+  // "Others" the Others list's), so it is read only once a step that needs the type opens; until
+  // then the type stays unknown.
   let typeOutcome: Exclude<SavedTypeResolution, { kind: 'needs' }> | null = null
   let typeApplied = false
+  // A Step 3 save landed this visit, which the visit's context predates.
+  let typeSavedHere = false
+  // The type that save sent, which the vendor record read before it predates. A profile read
+  // that lands later is newer, so it clears this and names the type itself.
+  let typeSavedHereAs: BusinessTypeReference | null = null
   let typeWanted = false
   let typeRechecks = 0
   // A recheck's fresh context and vendor record, used for the saved type alone.
   let typeFresh: { context: VendorContext; profile: VendorProfile | null } | null = null
   let typeRecheck: 'idle' | 'loading' | 'failed' = 'idle'
   let recheckVersion = 0
-  let typeLists: { status: 'idle' | 'loading' | 'loaded' | 'failed'; lists?: TypeCategories[] } = { status: 'idle' }
-  let typeListsVersion = 0
+  let othersList: { status: 'idle' | 'loading' | 'loaded' | 'failed'; list?: TypeCategories } = { status: 'idle' }
+  let othersListVersion = 0
   // The saved type a restored draft's catalog was last repaired against (`dropOtherTypeSelections`).
   let repairedFor: number | null = null
   // A business type's whole category list, when this visit's own Step 4 first-page read
@@ -480,8 +492,10 @@ function startAccountEntry(
     const stillEdited = (step: AccountStep) => !submitted && stepFields(step).some((field) => edits[field])
 
     if (!applied.has('profile') && view.resources.profile === 'loaded') {
-      merge(applyProfile(draft, values.profile!, accountOnly, context.businessName), RESOURCE_FIELDS.profile)
-      // Not on a revalidation: the vendor record can be served stale after a write.
+      merge(applyProfile(draft, values.profile!, accountOnly), RESOURCE_FIELDS.profile)
+      // Not on a revalidation: the runtime number may be an unsaved edit, which field edits do
+      // not track, and Step 9's saved numbers stay the prior ones unless a storefront read
+      // tells new ones.
       if (!stillEdited(9) && !priorBaselines) orderWhatsapp = resumeOrderWhatsapp(values.profile!) || undefined
       ran('profile')
     }
@@ -501,21 +515,23 @@ function startAccountEntry(
       typeApplied = true
       // An unresolved type is unknown: Step 3 keeps its copy and has no saved value.
       if (typeOutcome.kind !== 'unresolved') {
-        const saved = typeOutcome.kind === 'saved' ? typeOutcome.type : typeOutcome.preselect
-        // A saved type is locked, so it replaces any unsaved choice; an open one is only a
-        // preselection, which an unsaved choice outranks.
-        if (typeOutcome.kind === 'saved') {
+        const saved = typeOutcome.kind === 'locked' ? typeOutcome.type : typeOutcome.current
+        // A locked type replaces any unsaved choice; an open one merges like any field.
+        if (typeOutcome.kind === 'locked') {
           draft = applyBusinessType(draft, saved, { ...accountOnly, locked: true })
           edits = withoutSteps(edits, [3])
         } else {
-          merge(applyBusinessType(draft, saved, accountOnly), RESOURCE_FIELDS.businessType, true)
+          merge(applyBusinessType(draft, saved, accountOnly), RESOURCE_FIELDS.businessType, saved === null)
         }
         baselines[3] = { businessType: saved }
       }
       typeState = savedTypeState(typeOutcome, typeRechecks > 0)
-      settleTypeSave(typeOutcome)
+      // A type only the Others category list could tell is recorded, so later entries settle
+      // from the record instead of reading the Others list again. A named type is not: the
+      // vendor record tells it again at no extra read.
+      if (typeOutcome.kind === 'locked' && typeOutcome.source === 'categories') recordConfirmedType(vendorId, typeOutcome.type)
     }
-    if (!applied.has('businessTypes') && businessType !== undefined) ran('businessTypes')
+    const typeSettled = businessType !== undefined
     if (!applied.has('categories') && view.resources.categories === 'loaded' && businessType !== undefined) {
       merge(applyCategories(draft, values.categories!, businessType, accountOnly), RESOURCE_FIELDS.categories)
       baselines[4] = { categories: applyCategories(empty, values.categories!, businessType, accountOnly).categories }
@@ -552,11 +568,15 @@ function startAccountEntry(
         ran(kind)
       }
     }
-    // A draft the old type change left can hold another type's unsaved catalog; once the
-    // saved type and the assigned categories are known, those selections go, silently.
-    if (typeOutcome?.kind === 'saved' && applied.has('categories') && repairedFor !== typeOutcome.type.id) {
-      repairedFor = typeOutcome.type.id
-      draft = dropOtherTypeSelections(draft, typeOutcome.type.id, state.accountCatalog)
+    // A draft can hold another type's unsaved catalog: one the old type change left, or one
+    // picked before an open type changed elsewhere. Once the locked type and the assigned
+    // categories are known, or an open type is, those selections go, silently.
+    const repairType = typeOutcome?.kind === 'locked'
+      ? (applied.has('categories') ? typeOutcome.type.id : null)
+      : typeOutcome?.kind === 'open' ? draft.business.businessType?.id ?? null : null
+    if (repairType !== null && repairedFor !== repairType) {
+      repairedFor = repairType
+      draft = dropOtherTypeSelections(draft, repairType, state.accountCatalog)
     }
     if (draft !== state.draft || edits !== state.fieldEdits || paymentDetails !== state.runtime.paymentDetails || orderWhatsapp !== undefined || supportWhatsapp !== undefined) {
       state.applyResumedDraft(draft, state.furthestVisitedStep, { paymentDetails, orderWhatsapp, supportWhatsapp }, { frameApplied: false, edits })
@@ -588,7 +608,7 @@ function startAccountEntry(
     // Step 3 shares Step 9's required reads. Do not mark store details restored before
     // their own reads have started; optional images may still be loading or failed.
     const storeReadsStarted = view.resources.logo !== 'idle' && view.resources.banner !== 'idle'
-    const loadedSteps = ACCOUNT_STEPS.filter((step) => (step !== 9 || storeReadsStarted)
+    const loadedSteps = ACCOUNT_STEPS.filter((step) => (step !== 9 || storeReadsStarted) && (step !== 3 || typeSettled)
       && requiredStepResources(step, { submitted, approved }).every((resource) => applied.has(resource)))
     store().setLoadedSteps(loadedSteps)
     const imageReadsSettled = (['logo', 'banner'] as const).every((kind) => view.resources[kind] === 'loaded' || view.resources[kind] === 'failed')
@@ -620,14 +640,14 @@ function startAccountEntry(
    * Whether the assigned catalog is confirmed mixed (`assignedCatalogIsMixed`). Only this
    * visit's own reads count: the assigned categories as read on entry, never what a save adds
    * later, against a complete category list of the saved type this visit read anyway (the
-   * saved-type fallback's lists, or Step 4's first page when it is the last). Nothing is read
+   * saved-type fallback's Others list, or Step 4's first page when it is the last). Nothing is read
    * for this check alone.
    */
   const checkCatalogMixed = () => {
     const state = store()
-    if (typeOutcome?.kind !== 'saved' || view.resources.categories !== 'loaded' || state.catalogMixed || selectStoreIsSubmitted(state)) return
+    if (typeOutcome?.kind !== 'locked' || view.resources.categories !== 'loaded' || state.catalogMixed || selectStoreIsSubmitted(state)) return
     const typeId = typeOutcome.type.id
-    const listed = typeLists.lists?.find(({ type }) => type.id === typeId)?.categoryIds
+    const listed = (othersList.list?.type.id === typeId ? othersList.list.categoryIds : undefined)
       ?? (shownTypeList?.typeId === typeId ? shownTypeList.categoryIds : undefined)
     const assigned = values.categories!.map((category) => category.platformCategoryId)
     if (assignedCatalogIsMixed(assigned, listed)) state.setCatalogMixed(true)
@@ -640,84 +660,68 @@ function startAccountEntry(
    * rather than holding the catalog steps back.
    */
   const settleType = (): BusinessTypeReference | null | undefined => {
-    if (!context || view.resources.profile !== 'loaded' || view.resources.businessTypes !== 'loaded') return undefined
+    if (!context || view.resources.profile !== 'loaded') return undefined
+    // An open type is worked out again once a category is found assigned: it locks.
+    if (typeOutcome?.kind === 'open' && view.resources.categories === 'loaded' && values.categories!.length) {
+      typeOutcome = null
+      typeApplied = false
+    }
     if (!typeOutcome && typeRecheck === 'loading') return undefined
     if (!typeOutcome && typeRecheck === 'failed') typeOutcome = { kind: 'unresolved' }
     if (!typeOutcome) {
       const fresh = typeFresh ?? { context, profile: values.profile! }
       const resolution = resolveSavedType({
         confirmed: readSavedTypeRecord(vendorId).confirmed,
-        stepSaved: stepThreeSaved(fresh.context, fresh.profile, selectStoreIsSubmitted(store())),
-        profileTypeName: fresh.profile?.businessType ?? null,
-        businessTypes: values.businessTypes!,
+        stepSaved: typeSavedHere || stepThreeSaved(fresh.context, fresh.profile, selectStoreIsSubmitted(store())),
+        categoriesSaved: stepFourSaved(fresh.context, selectStoreIsSubmitted(store())),
+        profileTypeName: typeSavedHereAs ? typeSavedHereAs.name : fresh.profile?.businessType ?? null,
+        profileTypeId: typeSavedHereAs ? typeSavedHereAs.id : fresh.profile?.businessTypeId ?? null,
         assignedCategoryIds: view.resources.categories === 'loaded'
           ? values.categories!.map((category) => category.platformCategoryId)
           : undefined,
-        typeCategories: typeLists.lists,
+        othersCategories: othersList.list,
       })
       if (resolution.kind !== 'needs') typeOutcome = resolution
       else if (!typeWanted) return null
-      else if (resolution.read === 'categories' ? view.resources.categories === 'failed' : typeLists.status === 'failed') {
+      else if (resolution.read === 'categories' ? view.resources.categories === 'failed' : othersList.status === 'failed') {
         typeOutcome = { kind: 'unresolved' }
       } else {
-        startTypeEvidence(resolution.read)
+        startTypeEvidence(resolution)
         return undefined
       }
     }
-    return typeOutcome.kind === 'saved' ? typeOutcome.type : typeOutcome.kind === 'open' ? typeOutcome.preselect : null
+    return typeOutcome.kind === 'locked' ? typeOutcome.type : typeOutcome.kind === 'open' ? typeOutcome.current : null
   }
 
   /**
-   * TEMP(onboarding-saved-type): the last evidence of a saved type. The assigned categories,
-   * then the business types' category lists (`readTypeCategories`): "Others" alone first when
-   * the vendor record says so, otherwise every type's.
+   * The evidence still to read: the assigned categories (to tell whether the type is locked),
+   * then, TEMP(onboarding-saved-type), for a locked record saying "Others" the Others list, read
+   * by the record's id (`readBusinessTypeCategories`).
    */
-  const startTypeEvidence = (read: 'categories' | 'type-categories') => {
+  const startTypeEvidence = (need: Extract<SavedTypeResolution, { kind: 'needs' }>) => {
     if (store().savedType.status !== 'checking') store().setSavedType({ status: 'checking' })
-    if (read === 'categories') {
+    if (need.read === 'categories') {
       if (view.resources.categories === 'idle') track('categories', loadAccountResource(vendorId, 'categories'))
       return
     }
-    if (typeLists.status !== 'idle') return
-    typeLists = { status: 'loading' }
-    const version = ++typeListsVersion
-    // Asked for only once the assigned categories have landed (`resolveSavedType`).
-    const hint = {
-      profileTypeName: (typeFresh ? typeFresh.profile : values.profile)?.businessType ?? null,
-      assignedCategoryIds: values.categories!.map((category) => category.platformCategoryId),
-    }
-    loadAccountResource(vendorId, 'businessTypes').then((types) => readTypeCategories(types, hint)).then(
-      (lists) => {
-        if (!isCurrent() || version !== typeListsVersion) return
-        typeLists = { status: 'loaded', lists }
+    if (othersList.status !== 'idle') return
+    othersList = { status: 'loading' }
+    const version = ++othersListVersion
+    readBusinessTypeCategories(need.others).then(
+      (list) => {
+        if (!isCurrent() || version !== othersListVersion) return
+        othersList = { status: 'loaded', list }
         applyReady()
         startCategoryList()
         publish()
       },
       () => {
-        if (!isCurrent() || version !== typeListsVersion) return
-        typeLists = { status: 'failed' }
+        if (!isCurrent() || version !== othersListVersion) return
+        othersList = { status: 'failed' }
         applyReady()
         publish()
       },
     )
-  }
-
-  /**
-   * A first Step 3 save whose outcome was unknown is settled by a resolved type: confirmed if
-   * the account holds the type it sent, otherwise it did not land (the fresh context says Step
-   * 3 is not saved) or another save did. Left pending while the type is unresolved.
-   *
-   * A type only the category lists could tell is recorded too, so later entries settle from
-   * the record instead of reading every list again. A named type is not: it costs one cached
-   * read to tell again, and the account's own answer stays the one in use.
-   */
-  const settleTypeSave = (outcome: NonNullable<typeof typeOutcome>) => {
-    if (outcome.kind === 'saved' && outcome.source === 'categories') return recordConfirmedType(vendorId, outcome.type)
-    const pending = readSavedTypeRecord(vendorId).inFlight
-    if (!pending || outcome.kind === 'unresolved') return
-    if (outcome.kind === 'saved' && outcome.type.id === pending.id) recordConfirmedType(vendorId, outcome.type)
-    else clearTypeSaveInFlight(vendorId)
   }
 
   const recheckSavedType = () => {
@@ -728,9 +732,7 @@ function startAccountEntry(
     typeWanted = true
     typeFresh = null
     typeRecheck = 'loading'
-    // "Others" alone held the assigned categories when read; read every list should they not now.
-    const othersOnly = typeLists.status === 'loaded' && typeLists.lists!.length < (values.businessTypes?.length ?? 0)
-    if (typeLists.status === 'failed' || othersOnly) typeLists = { status: 'idle' }
+    othersList = { status: 'idle' }
     if (view.resources.categories === 'failed') track('categories', loadAccountResource(vendorId, 'categories'))
     store().setSavedType({ status: 'checking' })
     // The vendor record can be stale and the context predates the save, so both are read again.
@@ -744,6 +746,7 @@ function startAccountEntry(
       ([freshContext, profile]) => {
         if (!isCurrent() || version !== recheckVersion) return
         typeFresh = { context: freshContext, profile }
+        typeSavedHereAs = null
         typeRecheck = 'idle'
         applyReady()
         startCategoryList()
@@ -800,18 +803,31 @@ function startAccountEntry(
     )
   }
 
+  /** The type the vendor record names, other than `"Others"`, while the type is worked out. */
+  const provisionalListType = (): number | null => {
+    if (!context || view.resources.profile !== 'loaded' || typeRecheck !== 'idle') return null
+    const profile = typeFresh ? typeFresh.profile : values.profile!
+    return savedBusinessType(profile) !== null ? profile?.businessTypeId ?? null : null
+  }
+
   /**
    * Step 4's first category page, read alongside the step's account reads into the cache the
    * step paints from, so it opens with saved and listed categories at once and makes no
-   * request of its own. It starts once the saved business type is known, since it names the
-   * list. A failure does not block the step: it caches nothing, and the step reads, and
-   * retries, the page itself.
+   * request of its own. The saved business type names the list, so it starts once that is
+   * known, or earlier for a type other than "Others" that the vendor record names
+   * (`provisionalListType`). A failure does not block the step: it caches nothing, and the
+   * step reads, and retries, the page itself.
    */
   const startCategoryList = () => {
     const { catalogSource: mode, business } = store().draft
-    if (!categoryListWanted || mode !== 'account' || !typeOutcome) return
+    if (!categoryListWanted || mode !== 'account') return
+    // While the assigned categories are still to tell whether a type the vendor record names
+    // is locked, that type names the list either way, so its read need not wait for them.
+    const provisional = typeOutcome ? null : provisionalListType()
+    if (!typeOutcome && provisional === null) return
     // An unknown saved type names no list: the step offers a fresh check instead.
-    const businessTypeId = typeOutcome.kind === 'unresolved' ? null : business.businessType?.id ?? null
+    const businessTypeId = !typeOutcome ? provisional
+      : typeOutcome.kind === 'unresolved' ? null : business.businessType?.id ?? null
     if (businessTypeId === null) {
       // The step asks for a business type first and reads nothing.
       categoryListKey = null
@@ -823,7 +839,7 @@ function startAccountEntry(
     if (key === categoryListKey && (view.categoryList === 'loading' || view.categoryList === 'failed')) return
     categoryListKey = key
     // The saved-type fallback read this type's whole list already: its first page is Step 4's.
-    const fromFallback = typeLists.lists?.find(({ type }) => type.id === businessTypeId)?.firstPage
+    const fromFallback = othersList.list?.type.id === businessTypeId ? othersList.list.firstPage : undefined
     if (fromFallback) seedCategoryFirstPage(mode, businessTypeId, fromFallback)
     if (readReferenceCache(key)) {
       view.categoryList = 'loaded'
@@ -893,18 +909,6 @@ function startAccountEntry(
     // Already-read values apply now, so a step whose data is cached never shows a skeleton.
     for (const resource of needs.account) {
       if (view.resources[resource] !== 'idle') continue
-      if (resource === 'businessTypes' && view.resources.profile === 'loaded') {
-        // Step 3 lists every type, so its read also files the step's first page. Elsewhere
-        // the profile decides whether business types are needed at all.
-        if (step !== 3 && !savedBusinessType(values.profile!)) {
-          landValue('businessTypes', [])
-          continue
-        }
-        const cached = peekOnboardingResource(vendorId, 'businessTypes')
-        if (cached) landValue('businessTypes', cached.value)
-        else track('businessTypes', loadAccountResource(vendorId, 'businessTypes'))
-        continue
-      }
       const cached = peekOnboardingResource(vendorId, resource)
       if (cached) landValue(resource, cached.value)
     }
@@ -915,8 +919,6 @@ function startAccountEntry(
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) => view.resources[resource] !== 'idle')
     // Units are not retried within a visit: their failure has a usable fallback.
     if (view.units !== 'idle') skip.push('units')
-    // A failed profile stays failed until Try again, so business types do not re-read it.
-    if (view.resources.profile === 'failed') skip.push('businessTypes')
     const reads = loadStepResources(vendorId, step, { submitted, approved, withUnits: true, skip, context })
     for (const resource of Object.keys(reads) as (OnboardingResource | 'units')[]) {
       track(resource, reads[resource]!)
@@ -941,7 +943,6 @@ function startAccountEntry(
     const skip: (OnboardingResource | 'units')[] = ACCOUNT_RESOURCES.filter((resource) =>
       view.resources[resource] !== 'idle'
       || (resource !== 'logo' && resource !== 'banner' && !submitted && RESOURCE_STEPS[resource].every((owner) => edited.has(owner))))
-    if (view.resources.profile === 'failed') skip.push('businessTypes')
     // Not tracked: the step's own request joins these reads, or finds them cached, when it opens.
     loadStepResources(vendorId, step, { submitted, approved, withUnits: false, skip, context })
   }
@@ -1012,7 +1013,7 @@ function startAccountEntry(
     return revalidationReads(step, {
       submitted: selectStoreIsSubmitted(state),
       approved: selectStoreIsApproved(state),
-      typeSaved: typeOutcome?.kind === 'saved',
+      typeLocked: typeOutcome?.kind === 'locked',
       pending: pendingSteps(state),
     }).filter((resource) => view.resources[resource] === 'loaded' && readAt[resource] !== now)
   }
@@ -1023,10 +1024,12 @@ function startAccountEntry(
     return contextReadAt !== now || staleReads(step, now).length > 0
   }
 
-  const revalidate = async (step: OnboardingStep): Promise<RevalidationOutcome> => {
+  const revalidate = async (step: OnboardingStep, force: readonly OnboardingResource[] = []): Promise<RevalidationOutcome> => {
     if (!isCurrent() || !context) return { kind: 'ended' }
     const now = pageAwayEpoch(vendorId)
-    const reads = staleReads(step, now)
+    // A forced read is never served from the shared cache.
+    if (force.length) invalidateOnboardingResources(vendorId, force)
+    const reads = [...new Set([...staleReads(step, now), ...force])]
     const readsContext = contextReadAt !== now
     if (!readsContext && !reads.length) return { kind: 'current' }
     // A read started since the away, here or elsewhere (a header, a failed attempt's reads that
@@ -1050,8 +1053,6 @@ function startAccountEntry(
     if (readsContext) {
       applyAccountState(fresh)
       contextReadAt = now
-      // Step 9's store name comes from the context.
-      if (applied.has('profile')) applied.delete('profile')
     }
     reads.forEach((resource, index) => {
       // A read of the same resource still on its way lands nothing.
@@ -1060,9 +1061,11 @@ function startAccountEntry(
       view.resources[resource] = 'idle'
       landValue(resource, results[index] as OnboardingResourceData[typeof resource], now)
     })
-    if (reads.includes('profile') && typeOutcome?.kind !== 'saved') {
-      // A type saved elsewhere meanwhile is worked out again, as a recheck does.
+    if (reads.includes('profile') && typeOutcome?.kind !== 'locked' && stepNeedsSavedType(step, selectStoreIsSubmitted(store()))) {
+      // A type saved elsewhere meanwhile is worked out again, as a recheck does, for a step that
+      // shows or checks it. Step 9 reads the profile only for the store name.
       typeFresh = { context: fresh, profile: values.profile! }
+      typeSavedHereAs = null
       typeOutcome = null
       typeApplied = false
       typeWanted = true
@@ -1078,6 +1081,8 @@ function startAccountEntry(
       priorBaselines = null
       accountWhatsapp = null
     }
+    // An adopted type names another category list.
+    startCategoryList()
     publish()
     return store().savedType.status === 'checking' ? { kind: 'blocked' } : { kind: 'current' }
   }
@@ -1118,20 +1123,40 @@ function startAccountEntry(
       if (typeOutcome?.kind === 'unresolved') recheckSavedType()
       publish()
     },
-    confirmSavedType(type) {
+    lockSavedType(type) {
       if (!isCurrent()) return
-      // Whatever an earlier read or recheck says, the save is what the account holds now.
+      // Whatever an earlier read or recheck says, the assignment is what the account holds now.
       recheckVersion += 1
       typeRecheck = 'idle'
-      typeOutcome = { kind: 'saved', type, source: 'record' }
+      typeOutcome = { kind: 'locked', type, source: 'record' }
       typeApplied = true
       publish()
+    },
+    noteTypeSave(type) {
+      if (!isCurrent()) return
+      typeSavedHere = true
+      typeSavedHereAs = type
+      typeOutcome = { kind: 'open', current: type }
+      typeApplied = true
     },
     recheckSavedType,
     cancel() {
       cancelled = true
     },
   }
+}
+
+/**
+ * TEMP(onboarding-saved-type): a fresh read standing in for backend enforcement of the lock —
+ * the assigned categories before an open type is saved. A type changed on another device
+ * before the first category save goes undetected (accepted race).
+ */
+function typeGuardReads(state: OnboardingState): OnboardingResource[] {
+  if (state.savedType.status !== 'open' || selectStoreIsSubmitted(state)) return []
+  const { currentStep: step, business } = state.draft
+  if (savedAndUnchanged(state, step)) return []
+  if (step === 3 && business.businessType) return ['categories']
+  return []
 }
 
 /**
@@ -1402,9 +1427,10 @@ function OnboardingWizardContent() {
       recordSavedBaselines(Object.fromEntries(([4, 5, 6] as const)
         .filter((step) => !editedSteps.includes(step))
         .map((step) => [step, stepSnapshot(step, draft, runtime)])))
-      // The demo's own simulated Step 3 save is its only saved type.
+      // The first simulated category save locks the demo's type; an older simulated Step 3
+      // record is ignored until then.
       const confirmed = readSavedTypeRecord(access.vendorId).confirmed
-      setSavedType(confirmed ? { status: 'saved', type: confirmed } : { status: 'open' })
+      setSavedType(confirmed && draft.completedSteps.includes(4) ? { status: 'locked', type: confirmed } : { status: 'open' })
       return
     }
 
@@ -1678,14 +1704,14 @@ function OnboardingWizardContent() {
    * keeps the input and stops the write with the step's own error; pressing again retries.
    * `true` when the write may go ahead on what the draft now holds.
    */
-  const revalidateBeforeWrite = async (): Promise<boolean> => {
+  const revalidateBeforeWrite = async (force: readonly OnboardingResource[] = []): Promise<boolean> => {
     const entry = entryRef.current
     const step = useOnboardingStore.getState().draft.currentStep
     if (!entry) return false
     const controller = beginRequest()
     if (step !== 10) setStatusMessage('Saving to your store…')
     try {
-      const outcome = await entry.revalidate(step)
+      const outcome = await entry.revalidate(step, force)
       if (!requestIsCurrent(controller, step)) return false
       setStatusMessage(null)
       if (outcome.kind === 'failed') {
@@ -1773,7 +1799,28 @@ function OnboardingWizardContent() {
   }
 
   const handleCatalogContinue = async () => {
-    if (needsRevalidation() && !(await revalidateBeforeWrite())) return
+    const before = useOnboardingStore.getState()
+    const startStep = before.draft.currentStep
+    // The first category save is made under the type Step 3 saved, never an unsaved one.
+    if (startStep === 4 && before.savedType.status === 'open' && pendingSteps(before).includes(3)) {
+      return showIssues([{ step: 4, field: stepErrorField(4), message: pendingEditIssues([3])[0]!.message }])
+    }
+    const guard = writesReachAccount(before.draft.catalogSource) && access.state === 'ready' ? typeGuardReads(before) : []
+    if (guard.length || needsRevalidation()) {
+      const ok = await revalidateBeforeWrite(guard)
+      const after = useOnboardingStore.getState()
+      if (after.draft.currentStep !== startStep) return
+      const chosen = before.draft.business.businessType
+      if (guard[0] === 'categories' && after.accountCatalog.categoryIds.length) {
+        // Another tab or device assigned a category: the type locked under this choice.
+        const locked = after.savedType.status === 'locked' ? after.savedType.type : null
+        if (locked?.id !== chosen?.id) {
+          feedback.show(BUSINESS_TYPE_LOCKED_MESSAGE, 'warning')
+          return
+        }
+      }
+      if (!ok) return
+    }
     const state = useOnboardingStore.getState()
     const { draft, runtime } = state
     if (draft.currentStep === 10) {
@@ -1821,9 +1868,9 @@ function OnboardingWizardContent() {
     if (nextIssues.length) return showIssues(nextIssues, catalogStepIssues)
 
     const step = draft.currentStep
-    // A locked type is never sent over: Step 3 can only re-save the saved type.
+    // A locked type is never sent over: Step 3 can only re-save it.
     const typeChoice = step === 3 ? draft.business.businessType : null
-    const lockedType = state.savedType.status === 'saved' ? state.savedType.type : null
+    const lockedType = state.savedType.status === 'locked' ? state.savedType.type : null
     if (step === 3 && lockedType && typeChoice?.id !== lockedType.id) {
       feedback.show(BUSINESS_TYPE_LOCKED_MESSAGE, 'warning')
       return
@@ -1859,9 +1906,6 @@ function OnboardingWizardContent() {
       // Steps 7 and 8 share one full checkout write; it carries the other step's saved
       // values, so neither step's unsaved edits reach the account through the other.
       const sharesCheckout = step === 7 || step === 8
-      // A first type save is marked before it is sent, so a reload or a lost response while
-      // it is pending is checked against the account before the vendor may choose again.
-      const firstTypeSave = typeChoice !== null && !lockedType
       try {
         const input = sharesCheckout
           ? await checkoutSaveInput(step, access.vendorId, draft, runtime)
@@ -1870,12 +1914,13 @@ function OnboardingWizardContent() {
         const fingerprint = stepSaveFingerprint(step, input.draft, input.runtime)
         const unchanged = !hasPendingImages && fingerprint !== null && savedStepRef.current[step] === fingerprint
         if (!unchanged) {
-          if (firstTypeSave) markTypeSaveInFlight(access.vendorId, typeChoice)
           // Each write reports what it put on the account, so a step that fails part way
           // still records the part that landed. SKU creates also reread their saved IDs.
           // Submitted stores reach this for categories/products and, once approved, sizes.
           // Known size IDs let Step 6 find switched-off sizes the account's size list omits.
           await persistStep(step, access.vendorId, input.draft, input.runtime, (assignment) => {
+            // Recorded even when the vendor has left the step: the account holds it.
+            if (step === 4 && assignment.categoryIds?.length) lockTypeAtCategorySave(access.vendorId, draft.business.businessType)
             if (persistenceIsCurrent()) recordAssignment(assignment)
           }, recordCreatedEntry, state.accountCatalog.skuIds, {
             signal: controller.signal,
@@ -1888,7 +1933,9 @@ function OnboardingWizardContent() {
               entryRef.current?.recordImage(kind, url)
             },
           })
-          if (typeChoice) confirmTypeSave(access.vendorId, typeChoice)
+          // A retry with nothing new to assign lands no assignment, yet the account holds one.
+          if (step === 4) lockTypeAtCategorySave(access.vendorId, draft.business.businessType)
+          if (step === 3 && typeChoice) entryRef.current?.noteTypeSave(typeChoice)
           // This step is now on the account, so a cached read from before it is stale. The
           // open wizard keeps what it holds: the draft is now the account copy.
           dropWrittenAccountData(access.vendorId, savedResources(step))
@@ -1901,9 +1948,8 @@ function OnboardingWizardContent() {
         recordSavedStep(step, input)
         setStatusMessage(null)
       } catch (error) {
-        if (firstTypeSave) settleFailedTypeSave(access.vendorId, error)
         // Part of the step may have landed, so it no longer matches anything known.
-        if (step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
+        if (step === 3 || step === 9) dropWrittenAccountData(access.vendorId, savedResources(step))
         // Step 4 and 5 saves are diffed against the cached read, so a retry reads afresh.
         if (step === 4 || step === 5) invalidateOnboardingResources(access.vendorId, savedResources(step))
         for (const sharing of stepsSavedTogether(step)) delete savedStepRef.current[sharing]
@@ -1931,11 +1977,12 @@ function OnboardingWizardContent() {
       }
     } else if (!reachesAccount) {
       // Demo mode simulates the save, so the step's input counts as saved here too, and a
-      // simulated type save locks the type as a real one does.
+      // simulated category save locks the type as a real one does.
       recordSavedStep(step, { draft, runtime })
-      if (typeChoice && !lockedType) {
-        if (access.state === 'ready') recordConfirmedType(access.vendorId, typeChoice)
-        setSavedType({ status: 'saved', type: typeChoice })
+      const type = draft.business.businessType
+      if (step === 4 && !isLiveApi() && type && state.savedType.status !== 'locked') {
+        if (access.state === 'ready') recordConfirmedType(access.vendorId, type)
+        setSavedType({ status: 'locked', type })
       }
     }
 
@@ -1943,25 +1990,16 @@ function OnboardingWizardContent() {
     if (inPlace) feedback.show('Changes saved.', 'success')
   }
 
-  /** A Step 3 save of `type` reached the account: lock it now and for later visits. */
-  const confirmTypeSave = (vendorId: string, type: BusinessTypeReference) => {
-    if (useAuthStore.getState().user?.vendorId !== vendorId) return
-    recordConfirmedType(vendorId, type)
-    setSavedType({ status: 'saved', type })
-    entryRef.current?.confirmSavedType(type)
-  }
-
   /**
-   * A first type save failed. A refusal from the server is definite, so the choice reopens.
-   * Anything else (a timeout, a lost connection, a server error, leaving mid-request) may have
-   * saved it, so the type is checked against a fresh account read before anything else.
+   * TEMP(onboarding-saved-type): the account now holds a category saved under `type`, so it
+   * locks, here and in this browser's record.
    */
-  const settleFailedTypeSave = (vendorId: string, error: unknown) => {
-    const definite = isApiError(error) && error.status >= 400 && error.status < 500
-    if (!definite) dropWrittenAccountData(vendorId, savedResources(3))
-    if (useAuthStore.getState().user?.vendorId !== vendorId) return
-    if (definite) clearTypeSaveInFlight(vendorId)
-    else entryRef.current?.recheckSavedType()
+  const lockTypeAtCategorySave = (vendorId: string, type: BusinessTypeReference | null) => {
+    if (!type || useAuthStore.getState().user?.vendorId !== vendorId) return
+    if (useOnboardingStore.getState().savedType.status === 'locked') return
+    recordConfirmedType(vendorId, type)
+    setSavedType({ status: 'locked', type })
+    entryRef.current?.lockSavedType(type)
   }
 
   /**

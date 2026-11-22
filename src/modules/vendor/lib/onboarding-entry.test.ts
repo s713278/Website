@@ -40,6 +40,7 @@ function state(
     profile: {
       businessName: 'SK Organic Store',
       businessType: 'Beverages & Juice Center',
+      businessTypeId: 7,
       contactNumber: '9876543210',
     },
     categories: [{ vendorCategoryId: 501, platformCategoryId: 10, name: 'Juices', imageUrl: null }],
@@ -59,7 +60,6 @@ function state(
       consentText: '',
       payments: [{ type: 'CASH_ON_DELIVERY', isDefault: true, details: {} }],
     },
-    businessTypes: [{ id: 7, name: 'Beverages & Juice Center', icon: null, displayOrder: 1 }],
     ...saved,
   }
 }
@@ -124,7 +124,7 @@ describe('resolveOnboardingEntry', () => {
     const fresh = state('INACTIVE', 'PENDING', {
       categories: [], products: [], skus: [], checkout: null,
     })
-    fresh.profile = { ...fresh.profile!, businessType: 'Others' }
+    fresh.profile = { ...fresh.profile!, businessType: 'Others', businessTypeId: 30 }
     expect(resolveOnboardingEntry(fresh)).toEqual({ kind: 'resume' })
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mergeRuntimeRecord, mergeRuntimeValue, revalidationReads } from './onboarding-freshness'
 
-const setup = { submitted: false, approved: false, typeSaved: true, pending: [] }
+const setup = { submitted: false, approved: false, typeLocked: true, pending: [] }
 
 describe('revalidationReads', () => {
   it('names each catalog and checkout step’s own resources', () => {
@@ -14,18 +14,19 @@ describe('revalidationReads', () => {
 
   it('reads the profile for Step 3 only while no type is saved', () => {
     expect(revalidationReads(3, setup)).toEqual([])
-    expect(revalidationReads(3, { ...setup, typeSaved: false })).toEqual(['profile'])
+    expect(revalidationReads(3, { ...setup, typeLocked: false })).toEqual(['profile'])
   })
 
-  it('reads Step 9’s storefront settings only once they are readable, after approval', () => {
-    expect(revalidationReads(9, setup)).toEqual([])
-    expect(revalidationReads(9, { ...setup, submitted: true, approved: false })).toEqual([])
+  it('reads Step 9’s store name from the vendor record, and the storefront settings once readable, after approval', () => {
+    expect(revalidationReads(9, setup)).toEqual(['profile'])
+    expect(revalidationReads(9, { ...setup, submitted: true, approved: false })).toEqual(['profile'])
     expect(revalidationReads(9, { ...setup, submitted: true, approved: true })).toEqual(['storefront'])
   })
 
   it('reads for Step 10 what its unsaved steps need, once each', () => {
     expect(revalidationReads(10, setup)).toEqual([])
-    expect(revalidationReads(10, { ...setup, pending: [5, 6, 7, 8, 9] })).toEqual(['products', 'skus', 'checkout'])
+    expect(revalidationReads(10, { ...setup, pending: [5, 6, 7, 8, 9] })).toEqual(['products', 'skus', 'checkout', 'profile'])
+    expect(revalidationReads(10, { ...setup, typeLocked: false, pending: [3, 9] })).toEqual(['profile'])
     expect(revalidationReads(10, { ...setup, submitted: true, pending: [7] })).toEqual([])
   })
 

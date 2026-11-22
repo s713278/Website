@@ -1,5 +1,4 @@
 import type {
-  BusinessTypeReference,
   CheckoutOptionsSnapshot,
   VendorCategoryRef,
   VendorProductRef,
@@ -23,12 +22,10 @@ import { pageAwayEpoch } from './page-away'
  *
  * An account entry is current only while the page has not been away since its read started
  * (`page-away`): another tab or device may have saved meanwhile. A later load reads again,
- * and every caller asking while that read is in flight shares it; peek sees nothing. Business
- * types are platform data no vendor saves, so they stay until invalidated.
+ * and every caller asking while that read is in flight shares it; peek sees nothing.
  */
 export type OnboardingResourceData = {
   profile: VendorProfile | null
-  businessTypes: BusinessTypeReference[]
   categories: VendorCategoryRef[]
   products: VendorProductRef[]
   skus: VendorSkuRef[]
@@ -70,7 +67,7 @@ function readEntry<R extends OnboardingResource>(vendorId: string, resource: R):
 /** The entry, unless it holds account data and the page has been away since its read started. */
 function currentEntry<R extends OnboardingResource>(vendorId: string, resource: R): Entry<R> | undefined {
   const entry = readEntry(vendorId, resource)
-  return entry && (resource === 'businessTypes' || entry.epoch === pageAwayEpoch(vendorId)) ? entry : undefined
+  return entry && entry.epoch === pageAwayEpoch(vendorId) ? entry : undefined
 }
 
 export function loadOnboardingResource<R extends OnboardingResource>(
