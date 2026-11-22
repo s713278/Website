@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="Find shops near you on MithraDirect Neighbourhood Market — support local owners. WhatsApp ordering, owners keep 100%.">
-    <title>Find shops near you — MithraDirect Neighbourhood Market</title>
+    <meta name="description" content="Find independent shops by address on MithraDirect Neighbourhood Market. Search uses the pincode and map point, with an optional shop or category name.">
+    <title>Find shops by address — MithraDirect Neighbourhood Market</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="assets/css/global.css">
@@ -73,24 +73,25 @@
                 <p class="market-kicker">MithraDirect Neighbourhood Market</p>
                 <h1 id="market-heading">Shop your street.<span class="accent"> Keep money local.</span></h1>
                 <p class="market-lead">
-                    A digital bazaar for independent kitchens, farms, and makers near you —
+                    A digital bazaar for independent kitchens, farms, and makers —
                     order on WhatsApp, and they keep every rupee.
                 </p>
 
                 <form class="market-search" id="market-search-form" role="search" novalidate>
                     <div class="market-search-fields">
-                        <label class="market-field market-field--place">
-                            <span>Near</span>
-                            <input type="text" id="market-address" name="address" placeholder="Area, landmark, or pincode" autocomplete="street-address">
-                        </label>
+                        <div class="market-field market-field--place">
+                            <label for="market-address">Address</label>
+                            <input type="text" id="market-address" name="address" placeholder="Start typing your address" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="market-address-suggestions" autocomplete="off" required>
+                            <ul class="market-suggestions" id="market-address-suggestions" role="listbox" hidden></ul>
+                        </div>
                         <label class="market-field market-field--query">
-                            <span>Looking for</span>
-                            <input type="search" id="market-query" name="q" placeholder="Pickles, milk, home food…" autocomplete="off">
+                            <span>Category or shop <span class="market-optional">optional</span></span>
+                            <input type="search" id="market-query" name="q" placeholder="Pickles, dairy, a shop name…" autocomplete="off">
                         </label>
                     </div>
+                    <p class="market-field-error" id="market-address-error" role="alert" hidden></p>
                     <div class="market-search-actions">
-                        <button type="button" class="btn btn-secondary" id="market-locate">Near me</button>
-                        <button type="submit" class="btn btn-primary">Show shops near me</button>
+                        <button type="submit" class="btn btn-primary">Find shops</button>
                     </div>
                 </form>
 
@@ -127,16 +128,16 @@
                 </div>
 
                 <div class="market-results-head">
-                    <h2 id="market-results-title">Shops near you</h2>
-                    <p id="market-results-meta" class="market-results-meta">Local owners near you · they keep 100%</p>
+                    <h2 id="market-results-title">Shops for this address</h2>
+                    <p id="market-results-meta" class="market-results-meta">Choose your address to see shops.</p>
                 </div>
 
-                <div class="market-grid" id="market-results" aria-live="polite"></div>
+                <div class="market-grid" id="market-results" aria-live="polite" hidden></div>
 
-                <div class="market-empty" id="market-empty" hidden>
-                    <h3>No shops match that yet</h3>
-                    <p>Try another area or category — or invite a neighbourhood owner to open their digital shop.</p>
-                    <div class="market-empty-actions">
+                <div class="market-empty" id="market-empty">
+                    <h3 id="market-empty-title">Enter your address</h3>
+                    <p id="market-empty-copy">Start typing and choose your address from the suggestions. Add a category or shop name only if you want a shorter list.</p>
+                    <div class="market-empty-actions" id="market-empty-actions" hidden>
                         <button type="button" class="btn btn-secondary" id="market-reset">Clear filters</button>
                         <a href="onboarding.html" class="btn btn-primary">Invite a neighbourhood shop</a>
                     </div>
@@ -145,7 +146,7 @@
                 <aside class="market-owner-banner">
                     <div>
                         <h2>Run a neighbourhood shop?</h2>
-                        <p>List your kitchen, farm, or shelf here. Customers find you by area — you keep 100% of sales.</p>
+                        <p>List your kitchen, farm, or shelf here. Customers find you by address — you keep 100% of sales.</p>
                     </div>
                     <a href="onboarding.html" class="btn btn-primary">List your shop free</a>
                 </aside>
