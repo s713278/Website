@@ -4,7 +4,11 @@ import type {
   ProductReference,
 } from '@/shared/api'
 
-export const ONBOARDING_DRAFT_VERSION = 4 as const
+/**
+ * The persisted draft's format. 5 records, per edited field, the saved value its edit started
+ * from. A version-4 draft is still read and migrated (see `parsePersistedEnvelope`).
+ */
+export const ONBOARDING_DRAFT_VERSION = 5 as const
 export const ONBOARDING_CONFIG = {
   /** Fallback only. The real limit comes from the vendor context's `limits`. */
   maxCategories: 2,
@@ -201,8 +205,6 @@ export type VendorOnboardingDraftV1 = {
   business: {
     businessType: BusinessTypeReference | null
     businessName: string
-    ownerName: string
-    contactPerson: string
   }
   categories: DraftCategory[]
   products: SelectedProduct[]
@@ -223,6 +225,8 @@ export type OnboardingRuntimeState = {
   logoUrl: string | null
   bannerFile: File | null
   bannerUrl: string | null
+  savedLogoUrl: string | null
+  savedBannerUrl: string | null
 }
 
 export type PersistedOnboardingDraftV1 = Omit<VendorOnboardingDraftV1, 'maskedPhone'>
@@ -232,6 +236,9 @@ export type LocalPreviewSnapshotV1 = {
   completedAt: string
   draft: PersistedOnboardingDraftV1
 }
+
+/** An unsaved field: when it was last edited (ms), and the saved value its edit started from. */
+export type DraftFieldEdit = { at: number; saved?: unknown }
 
 export type VendorOnboardingPersistedEnvelopeV1 = {
   version: typeof ONBOARDING_DRAFT_VERSION
@@ -250,17 +257,18 @@ export type VendorOnboardingPersistedEnvelopeV1 = {
    * Steps 3-9 whose part of the draft holds edits not yet written to the vendor account.
    *
    * The account is the record; this browser only buffers what has not reached it yet.
-   * On entry the wizard takes the account copy for every step not listed here, so a stale
-   * local copy can never outlive one visit, while a listed step keeps the vendor's unsaved
-   * work. Once the store is submitted the account wins for every step.
+   * On entry the wizard takes the account copy for every step not listed here, and merges a
+   * listed step's unsaved fields with it (`mergeAccountFields`), so a stale local copy can
+   * never outlive one visit. Once the store is submitted the account wins for every step.
    */
   editedSteps?: OnboardingStep[]
   /**
-   * Legacy, read only: the single flag `editedSteps` replaced. No longer written. An
-   * envelope without `editedSteps` reads `false` as nothing edited, and `true` or absent as
-   * every step edited, which preserves whatever it holds rather than overwriting it.
+   * Per edited field of Steps 3-9 (`DraftField` in `onboarding-draft-merge.ts`): when it was
+   * last edited (ms) and, when known, the saved value its edit started from. Never a private
+   * payment or contact value. A step listed in `editedSteps` with no field here has no known
+   * saved values (a draft written before version 5).
    */
-  hasLocalEdits?: boolean
+  edits?: Partial<Record<string, DraftFieldEdit>>
   draft: PersistedOnboardingDraftV1
   previewSnapshot: LocalPreviewSnapshotV1 | null
 }
@@ -271,8 +279,6 @@ export type OnboardingPersistenceStatus =
   | 'saving'
   | 'saved'
   | 'unavailable'
-  | 'conflict'
-  | 'corrupt'
   /**
    * A draft exists in this browser but no one is signed in to claim it.
    *
@@ -310,9 +316,9 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   { step: 6, short: 'Prices', title: 'Set sizes and prices', description: 'Add one size and price for each product. Add another only for a different pack.' },
   { step: 7, short: 'Delivery', title: 'Set delivery and pickup', description: 'Choose how customers receive orders.' },
   { step: 8, short: 'Payments', title: 'Choose payment methods', description: 'Choose how customers pay, and pick one default.' },
-  // Step 9 is the only step that cannot be read back: the storefront read 404s until an
+  // Step 9 theme/text branding cannot be read back: the storefront read 404s until an
   // admin approves the store. The note stops a returning vendor concluding their branding
-  // was never saved. See docs/API_GAPS.md.
+  // was never saved. Images restore separately. See docs/API_GAPS.md.
   { step: 9, short: 'Store', title: 'Add your store details', description: 'Add the details customers need.', saveNote: 'Saved now, but shown here only after approval.' },
   { step: 10, short: 'Review', title: 'Review your store', description: 'Check your store before submitting.' },
 ]

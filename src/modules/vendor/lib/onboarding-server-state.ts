@@ -7,7 +7,6 @@ import {
   clampResumePointer,
   loadAccountResource,
   loadPlatformMeasurements,
-  savedBusinessType,
   stepResources,
   type OnboardingResource,
 } from './onboarding-resume'
@@ -55,8 +54,12 @@ export function prefetchOnboardingLanding(
   const fromSignIn = clampResumePointer(options.nextStep)
   const landing = fromSignIn !== null ? Promise.resolve(fromSignIn) : contextRead.then(backendResumeStep)
   landing
-    .then((step) => {
-      if (step !== null) loadStepResources(vendorId, step, { submitted: false, withUnits: false })
+    .then(async (step) => {
+      if (step === null) return
+      // Image restoration depends on verified progress, including when sign-in already
+      // supplied the landing step. Other steps keep their parallel head start.
+      const context = step === 9 || step === 10 ? await contextRead : options.context
+      loadStepResources(vendorId, step, { submitted: false, withUnits: false, context })
     })
     .catch(() => {})
 }
@@ -72,10 +75,10 @@ export type StepResourceReads = { [R in OnboardingResource]?: Promise<Onboarding
  * already holds or handles itself, such as resources it applied before a save dropped them
  * from the cache. Defaults to none.
  *
- * Business types are a dependent read: they start only once the profile shows a saved
- * type, and resolve to `[]` without a request when it shows none. Step 3 is the exception:
- * it lists every type, so it reads them at once alongside the profile, and the read files
- * the step's first page whether or not a type is saved.
+ * IN_PROGRESS through Step 9 starts with empty images, without a restoration request.
+ * Earlier pointers also cover a continuous wizard visit whose context predates Step 9.
+ * This initial-setup assumption is local, never cached over an account read. Recovery on
+ * re-entry after a partial image save with an unchanged pointer is deferred.
  *
  * Never rejects as a whole. Each promise settles on its own, and an unobserved failure is
  * not reported as unhandled: the cache has already dropped it so the next caller retries.
@@ -83,24 +86,24 @@ export type StepResourceReads = { [R in OnboardingResource]?: Promise<Onboarding
 export function loadStepResources(
   vendorId: string,
   step: OnboardingStep,
-  options: { submitted: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'> },
+  options: { submitted: boolean; approved?: boolean; withUnits: boolean; skip?: Iterable<OnboardingResource | 'units'>; context?: VendorContext },
 ): StepResourceReads {
   const skip = new Set(options.skip ?? [])
-  const needs = stepResources(step, { submitted: options.submitted })
+  const needs = stepResources(step, options)
   const reads: StepResourceReads = {}
   const wanted = (resource: OnboardingResource) =>
     !skip.has(resource) && peekOnboardingResource(vendorId, resource) === null
+  const progress = options.context?.onboarding
+  const initialSetup = !options.submitted && progress?.status === 'IN_PROGRESS'
+    && progress.nextStep !== null && progress.nextStep >= 1 && progress.nextStep <= 9
 
   for (const resource of needs.account) {
-    if (resource === 'businessTypes' || !wanted(resource)) continue
+    if (!wanted(resource)) continue
+    if ((resource === 'logo' || resource === 'banner') && initialSetup) {
+      reads[resource] = Promise.resolve(null)
+      continue
+    }
     Object.assign(reads, { [resource]: loadAccountResource(vendorId, resource) })
-  }
-  if (needs.account.includes('businessTypes') && wanted('businessTypes')) {
-    const profile = peekOnboardingResource(vendorId, 'profile')
-    reads.businessTypes = step === 3
-      ? loadAccountResource(vendorId, 'businessTypes')
-      : (profile ? Promise.resolve(profile.value) : loadAccountResource(vendorId, 'profile'))
-        .then((value) => savedBusinessType(value) ? loadAccountResource(vendorId, 'businessTypes') : [])
   }
   if (options.withUnits && needs.units && !skip.has('units') && peekMeasurementCatalog() === null) {
     reads.units = loadPlatformMeasurements()

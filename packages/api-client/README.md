@@ -33,6 +33,7 @@ Run those two commands separately until the root `sync:api` script stops delegat
 | Prices | Done | `pricesService.getSkuPrice` / `updateSkuPrice` |
 | Order History | Done | `ordersService.userHistory` / `userHistoryPaged` |
 | Account History | Done | `usersService.accountHistory` / `accountHistoryPaged` |
+| Vendor images | Wrapped | `imagesService.list` / `upload`: required generated query (`image_type`); upload body is `FormData`. Legacy `uploadVendorImage` also requires that query as its third argument. |
 | Vendor onboarding operations | Wrapped, integration gated | `vendorsService.updateBusinessType` / `getContext` / `saveStorefront` / `goLive` |
 | Public storefront identifier | Done | `storefrontService.get(identifier)` |
 | Public storefront product | Done | `storefrontService.getProduct(identifier, productId)` |

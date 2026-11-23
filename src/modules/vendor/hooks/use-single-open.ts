@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type ToggleEvent } from 'react'
 
 /**
- * One open section at a time, opening on the first.
+ * One open section at a time, opening on `initialId` or else the first.
  *
  * Steps 5 and 6 both list a long stack of groups, and letting every one stand open
  * turns the step into a page a vendor scrolls past rather than works through. Both
  * steps share this so the two behave identically.
  */
-export function useSingleOpen<T extends string | number>(ids: T[]) {
-  const [openId, setOpenId] = useState<T | null>(ids[0] ?? null)
+export function useSingleOpen<T extends string | number>(ids: T[], initialId?: T) {
+  const [openId, setOpenId] = useState<T | null>(() =>
+    initialId !== undefined && ids.includes(initialId) ? initialId : ids[0] ?? null)
   // Keyed on the contents rather than the array, which is rebuilt on every render.
   const key = ids.join('|')
   const idsRef = useRef(ids)

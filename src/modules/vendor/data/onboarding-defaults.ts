@@ -22,6 +22,8 @@ export function createEmptyRuntimeState(): OnboardingRuntimeState {
     logoUrl: null,
     bannerFile: null,
     bannerUrl: null,
+    savedLogoUrl: null,
+    savedBannerUrl: null,
   }
 }
 
@@ -36,8 +38,6 @@ export function createEmptyOnboardingDraft(): VendorOnboardingDraftV1 {
     business: {
       businessType: null,
       businessName: '',
-      ownerName: '',
-      contactPerson: '',
     },
     categories: [],
     products: [],

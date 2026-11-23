@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { ONBOARDING_DRAFT_STORAGE_KEY } from '@/modules/vendor/lib/onboarding-draft-keys'
+import { readSavedTypeRecord, recordConfirmedType } from '@/modules/vendor/lib/onboarding-saved-type-record'
 import {
   invalidateMeasurementCatalog,
   loadMeasurementCatalog,
@@ -80,6 +81,21 @@ describe('sign-out cleanup', () => {
 
     signIn()
     expect([...readPaidOrders('262')]).toEqual(['1931'])
+  })
+
+  it('clears the saved business type record on sign-out, but not on involuntary session loss', async () => {
+    vi.spyOn(authService, 'signOut').mockResolvedValue(undefined)
+    const dairy = { id: 1, name: 'Dairy & Farm Fresh', icon: null, displayOrder: 1 }
+    render(<AppProviders>{null}</AppProviders>)
+    signIn()
+    recordConfirmedType('262', dairy)
+
+    useAuthStore.getState().clearSession()
+    expect(readSavedTypeRecord('262').confirmed).toEqual(dairy)
+
+    signIn()
+    await useAuthStore.getState().logout()
+    expect(readSavedTypeRecord('262').confirmed).toBeNull()
   })
 
   it('clears the customer cart persist and session caches on logout', async () => {

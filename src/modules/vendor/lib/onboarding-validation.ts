@@ -345,7 +345,7 @@ export function validateStep(
   if (step === 1) {
     return isValidIndianMobile(runtime.phone)
       ? []
-      : [issue(1, 'phone', 'Enter a valid 10-digit Indian mobile number beginning with 6-9.')]
+      : [issue(1, 'phone', 'Enter a valid mobile number.')]
   }
   if (step === 2) {
     return draft.mobileVerified
@@ -399,8 +399,6 @@ export function validateStep(
     const issues: ValidationIssue[] = []
     if (draft.storefront.storeName.trim().length < MIN_STORE_NAME_LENGTH) issues.push(issue(9, 'store-name', `Enter at least ${MIN_STORE_NAME_LENGTH} characters for the store name.`))
     if (draft.storefront.storeName.trim().length > 100) issues.push(issue(9, 'store-name', 'Keep the store name under 100 characters.'))
-    if (draft.business.ownerName.trim().length < 3) issues.push(issue(9, 'owner-name', 'Enter at least 3 characters for the owner name.'))
-    if (draft.business.contactPerson.trim().length < 3) issues.push(issue(9, 'contact-person', 'Enter at least 3 characters for the contact person.'))
     if (draft.storefront.tagline.length > 120) issues.push(issue(9, 'tagline', 'Keep the tagline under 120 characters.'))
     if (!draft.storefront.businessLocation.trim()) issues.push(issue(9, 'business-location', 'Enter a business location.'))
     if (draft.storefront.businessLocation.length > 100) issues.push(issue(9, 'business-location', 'Keep the business location under 100 characters.'))
@@ -453,47 +451,32 @@ export function readinessIssues(
 }
 
 /**
- * What a submitted store may still validate: catalog limits and size details.
- *
- * A submitted store is with an administrator, so the whole-store readiness checks in
- * `validateStep` do not apply here — reporting "every product needs a size" on a store
- * that is already submitted blocks the vendor on a problem they were never asked to fix
- * and cannot (existing entries are read-only). Step 6 reaches this only after approval;
- * it checks each size against its siblings without requiring every product to be priced.
+ * Step 6 for an approved store, which edits sizes in place. Setup's rules apply — limits,
+ * size details, and every product needs a size switched on — except that saved sizes are
+ * not held to their product's measurement: Step 6 does not reconcile a submitted store's
+ * saved sizes to their product. A store under review never reaches this: its Step 6 is
+ * read-only, so it is not asked for sizes it cannot add.
  */
-export function additiveCatalogIssues(
-  step: OnboardingStep,
+export function approvedSizeIssues(
   draft: VendorOnboardingDraftV1,
-  maxCategories: number = ONBOARDING_CONFIG.maxCategories,
   catalog: CatalogEnforcement = {},
   measurementCatalog: MeasurementCatalog = [],
 ): ValidationIssue[] {
   const account = catalog.account ?? EMPTY_ACCOUNT
-  const maxProducts = catalog.maxProducts ?? ONBOARDING_CONFIG.maxProducts
-  if (step === 4) {
-    return categoryLimitIssue(account.categoryIds, draft.categories.map((category) => category.id), maxCategories)
-  }
-  if (step === 5) {
-    return productLimitIssue(account.productIds, draft.products.map((product) => product.id), maxProducts)
-  }
-  if (step === 6) {
-    const issues = skuLimitIssue(account.skuIds, draft.skus, catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus, account.unlistedSkuCount)
-    for (const product of draft.products) {
-      const siblings = draft.skus.filter((sku) => sku.productId === product.id)
-      const measurement = expectedMeasurementFor(product, measurementCatalog)
-      // Saved sizes are editable after approval, so they are validated too. Their measurement
-      // is not: Step 6 does not reconcile a submitted store's saved sizes to their product.
-      const sizeIssues = siblings.flatMap((sku) =>
-        validateDraftSku(sku, siblings, isAccountSkuId(sku.id) ? undefined : measurement))
-      issues.push(...sizeIssues)
-      // Saved sizes can be switched off after approval, so a product must still keep one on.
-      if (siblings.length && !sizeIssues.length && !siblings.some((sku) => sku.active)) {
-        issues.push(issue(6, `product-${product.id}`, `Turn on at least one size for ${product.name}.`))
-      }
+  const issues = skuLimitIssue(account.skuIds, draft.skus, catalog.maxSkus ?? ONBOARDING_CONFIG.maxSkus, account.unlistedSkuCount)
+  for (const product of draft.products) {
+    const siblings = draft.skus.filter((sku) => sku.productId === product.id)
+    const measurement = expectedMeasurementFor(product, measurementCatalog)
+    const sizeIssues = siblings.flatMap((sku) =>
+      validateDraftSku(sku, siblings, isAccountSkuId(sku.id) ? undefined : measurement))
+    issues.push(...sizeIssues)
+    if (!siblings.length) {
+      issues.push(issue(6, `product-${product.id}`, `Add a size for ${product.name}.`))
+    } else if (!sizeIssues.length && !siblings.some((sku) => sku.active)) {
+      issues.push(issue(6, `product-${product.id}`, `Turn on at least one size for ${product.name}.`))
     }
-    return issues
   }
-  return []
+  return issues
 }
 
 export function normalizeDraftSlug(value: string): string {

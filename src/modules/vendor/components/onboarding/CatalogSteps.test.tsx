@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as renderBare, screen, waitFor, within } from '@testing-library/react'
 import categoryFallbackImage from '@/assets/onboarding/category-fallback.svg'
 import productFallbackImage from '@/assets/onboarding/product-fallback.svg'
 import { vendorOnboardingService } from '@/shared/api'
@@ -9,9 +10,11 @@ import { useOnboardingStore } from '../../store/onboarding-store'
 import { writeReferenceCache } from '../../lib/onboarding-catalog-cache'
 import { ONBOARDING_CONFIG } from '../../types/onboarding'
 import { invalidateOnboardingResources } from '../../lib/onboarding-resource-cache'
-import { loadAccountResource } from '../../lib/onboarding-resume'
 import { readCategoryReferenceFirstPage, readProductReferenceFirstPage, resetFirstPageReadsForTests } from '../../hooks/use-onboarding-catalog'
+import { OnboardingFeedbackProvider } from './OnboardingFeedbackProvider'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
+
+const render = (ui: ReactNode) => renderBare(ui, { wrapper: OnboardingFeedbackProvider })
 
 afterEach(() => {
   cleanup()
@@ -142,7 +145,7 @@ describe('product step messages', () => {
       pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
     })
     setCatalogDraft(43, [{ id: 430, businessTypeId: 43, name: 'Dairy', description: null, imageUrl: null, displayOrder: 1 }])
-    render(<ProductStep issues={[]} confirm={() => undefined} />)
+    return render(<ProductStep issues={[]} confirm={() => undefined} />)
   }
 
   it('states the plan limit once, even after the vendor tries another product', async () => {
@@ -161,27 +164,39 @@ describe('product step messages', () => {
     act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
     fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
 
-    expect(screen.getByText('Skim Milk is saved, so it can’t be removed here. You can set it inactive in the next step.')).toBeTruthy()
+    const notice = screen.getByText('Skim Milk is saved. Set inactive in the next step.')
+    expect(notice.closest('[data-slot="toast"]')?.className).toContain('bg-amber-50')
   })
 
-  it('clears the saved-product note after a few seconds, counted from the latest tap', async () => {
-    renderProducts()
+  it('shows a dismissible toast outside the product grid without removing the saved product', async () => {
+    const { container } = renderProducts()
     fireEvent.click(await screen.findByRole('button', { name: /Skim Milk/ }))
     act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
-    vi.useFakeTimers()
-    const note = /Skim Milk is saved/
     fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
-    act(() => vi.advanceTimersByTime(3000))
-    fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
-    act(() => vi.advanceTimersByTime(3000))
-    expect(screen.queryByText(note)).toBeTruthy()
-    act(() => vi.advanceTimersByTime(1000))
-    expect(screen.queryByText(note)).toBeNull()
+    const notice = screen.getByText(/Skim Milk is saved/)
+    expect(container.contains(notice)).toBe(false)
+    expect(screen.getByRole('button', { name: /Skim Milk/ }).getAttribute('aria-pressed')).toBe('true')
+    const viewport = notice.closest('[data-slot="toast-viewport"]')
+    if (!viewport) throw new Error('Toast viewport missing')
+    fireEvent.mouseEnter(viewport)
+    fireEvent.click(await screen.findByRole('button', { name: 'Close toast' }))
+    await waitFor(() => expect(screen.queryByText(/Skim Milk is saved/)).toBeNull())
   })
+
+  it('removes the product toast when leaving the step', async () => {
+    const { unmount } = renderProducts()
+    fireEvent.click(await screen.findByRole('button', { name: /Skim Milk/ }))
+    act(() => useOnboardingStore.getState().setAccountCatalog({ categoryIds: [430], productIds: [4301] }))
+    fireEvent.click(screen.getByRole('button', { name: /Skim Milk/ }))
+    expect(screen.getByText(/Skim Milk is saved/)).toBeTruthy()
+    unmount()
+    expect(screen.queryByText(/Skim Milk is saved/)).toBeNull()
+  })
+
 })
 
 describe('category step messages', () => {
-  it('clears the saved-category note after a few seconds', async () => {
+  it('shows a saved-category refusal as an amber toast', async () => {
     vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({
       items: [{ id: 4401, businessTypeId: 44, name: 'Pickles', description: null, icon: null, imageUrl: null, displayOrder: 1 }],
       pageNumber: 0, pageSize: 12, totalElements: 1, totalPages: 1, lastPage: true,
@@ -190,11 +205,31 @@ describe('category step messages', () => {
     useOnboardingStore.getState().setAccountCatalog({ categoryIds: [4401], productIds: [] })
     render(<CategoryStep issues={[]} confirm={() => undefined} />)
     const card = await screen.findByRole('button', { name: /Pickles/ })
-    vi.useFakeTimers()
     fireEvent.click(card)
-    expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeTruthy()
-    act(() => vi.advanceTimersByTime(4000))
-    expect(screen.queryByText('Pickles is saved, so it can’t be removed here.')).toBeNull()
+    expect(screen.getByText('Pickles is saved and can’t be removed here.').closest('[data-slot="toast"]')?.className).toContain('bg-amber-50')
+  })
+
+  it('drops an unsaved category’s hidden products without asking', async () => {
+    const pickles = { id: 4401, businessTypeId: 44, name: 'Pickles', description: null, imageUrl: null, displayOrder: 1 }
+    const jams = { ...pickles, id: 4402, name: 'Jams', displayOrder: 2 }
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({
+      items: [{ ...pickles, icon: null }, { ...jams, icon: null }],
+      pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    setCatalogDraft(44, [pickles, jams])
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      products: [{ id: 9901, categoryId: jams.id, name: 'Mango jam', description: null, imageUrl: null, measurementId: null, measurementName: 'COUNT' }],
+    }), 5)
+    useOnboardingStore.setState({ editedSteps: [4, 5], savedBaselines: { 4: { categories: [pickles] }, 5: { products: [] } } })
+    const confirm = vi.fn()
+    render(<CategoryStep issues={[]} confirm={confirm} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Jams/ }))
+
+    expect(confirm).not.toHaveBeenCalled()
+    expect(useOnboardingStore.getState().draft.categories).toEqual([pickles])
+    expect(useOnboardingStore.getState().draft.products).toEqual([])
   })
 
   it('shows three skeleton tiles below the list, not a spinner, while more categories load', async () => {
@@ -231,65 +266,6 @@ function emptyReferenceCache() {
     )
   }
 }
-
-describe('business step after a resume that read the catalog', () => {
-  const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
-  const wide = {
-    items: Array.from({ length: 30 }, (_, index) => type(index + 1)),
-    pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
-  }
-
-  async function resumeThenRender() {
-    emptyReferenceCache()
-    const getBusinessTypes = vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
-    getBusinessTypes.mockResolvedValueOnce(wide)
-    await loadAccountResource('88', 'businessTypes')
-    getBusinessTypes.mockClear()
-    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
-    render(<BusinessStep issues={[]} />)
-    return getBusinessTypes
-  }
-
-  it('shows the first nine types without asking for them', async () => {
-    const getBusinessTypes = await resumeThenRender()
-
-    expect(await screen.findByRole('button', { name: /Business 1$/ })).toBeTruthy()
-    // Let the zero-delay fetch timer run, were there one.
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-
-    expect(getBusinessTypes).not.toHaveBeenCalled()
-    const cards = screen.getAllByRole('button', { name: /^Business \d+$/ })
-    expect(cards.map((card) => card.textContent)).toEqual(
-      Array.from({ length: 9 }, (_, index) => `Business ${index + 1}`),
-    )
-  })
-
-  it('requests page 1 of nine when the vendor shows more', async () => {
-    const getBusinessTypes = await resumeThenRender()
-    getBusinessTypes.mockResolvedValue({
-      items: [type(10), type(11)], pageNumber: 1, pageSize: 9, totalElements: 30, totalPages: 4, lastPage: false,
-    })
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Show more business types' }))
-
-    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
-    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ pageNumber: 1, pageSize: 9 })
-    expect(await screen.findByRole('button', { name: /Business 10$/ })).toBeTruthy()
-  })
-
-  it('still requests a keyword search with the keyword', async () => {
-    const getBusinessTypes = await resumeThenRender()
-    getBusinessTypes.mockResolvedValue({
-      items: [type(21)], pageNumber: 0, pageSize: 9, totalElements: 1, totalPages: 1, lastPage: true,
-    })
-
-    fireEvent.change(await screen.findByLabelText('Search business type'), { target: { value: 'bakery' } })
-    fireEvent.submit(screen.getByRole('search'))
-
-    await waitFor(() => expect(getBusinessTypes).toHaveBeenCalledTimes(1))
-    expect(getBusinessTypes.mock.calls[0][0]).toMatchObject({ keyword: 'bakery', pageNumber: 0, pageSize: 9 })
-  })
-})
 
 describe('business step loading', () => {
   const page = (id: number) => ({
@@ -341,6 +317,29 @@ describe('business step loading', () => {
     expect(await screen.findByRole('button', { name: /Business 63$/ })).toBeTruthy()
     expect(screen.queryByRole('status', { name: 'Loading business types' })).toBeNull()
     expect(screen.getByLabelText('Search business type')).toBe(input)
+  })
+})
+
+describe('business step icons', () => {
+  it('shows the listed icon on the saved card when the draft’s type carries none', async () => {
+    emptyReferenceCache()
+    const icon = 'https://cdn.example.test/business/x.svg'
+    vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValueOnce({
+      items: [
+        { id: 5401, name: 'Business 5401', icon: null, displayOrder: 1 },
+        { id: 5402, name: 'Business 5402', icon, displayOrder: 2 },
+      ],
+      pageNumber: 0, pageSize: 9, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    useOnboardingStore.getState().updateDraft((current) => ({
+      ...current,
+      catalogSource: 'account',
+      business: { ...current.business, businessType: { id: 5402, name: 'Business 5402', icon: null, displayOrder: null } },
+    }), 3)
+    render(<BusinessStep issues={[]} />)
+
+    const card = await screen.findByRole('button', { name: /Business 5402$/ })
+    expect(card.querySelector('img')?.getAttribute('src')).toBe(icon)
   })
 })
 
@@ -467,6 +466,20 @@ describe('product step reads a category only once its panel has been opened', ()
     expect(fruit.getByRole('button', { name: /Saved Mango/ })).toBeTruthy()
     expect(fruit.queryByRole('alert')).toBeNull()
     expect(readIds(read)).toEqual([510, 510])
+  })
+
+  it('shows no box and reads no products for a category picked but not saved', async () => {
+    const read = setup()
+    act(() => useOnboardingStore.setState({
+      editedSteps: [4],
+      savedBaselines: { 4: { categories: [category(511, 'Dairy'), category(512, 'Bakery')] } },
+    }))
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+
+    expect(await screen.findByRole('button', { name: /Item of 511/ })).toBeTruthy()
+    await settle()
+    expect(document.getElementById('category-products-510')).toBeNull()
+    expect(readIds(read)).toEqual([511])
   })
 
   it('shows an empty category issue first in that panel, right under its summary', async () => {
@@ -611,15 +624,20 @@ describe('catalog lists in sets of one page', () => {
     vi.spyOn(vendorOnboardingService, 'getBusinessTypes').mockResolvedValueOnce({
       items: ids(5401, 9).map(type), pageNumber: 0, pageSize: 9, totalElements: 18, totalPages: 2, lastPage: false,
     })
-    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account' }), 3)
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account', business: { ...current.business, businessType: type(5402) } }), 3)
     render(<BusinessStep issues={[]} readOnly />)
 
+    // Locked cards stay pressable, so a press on another type can explain the lock.
     const card = await screen.findByRole('button', { name: /Business 5401/ })
-    expect(card.matches(':disabled')).toBe(true)
+    expect(card.matches(':disabled')).toBe(false)
+    expect(card.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(card)
+    expect((await screen.findByText('Business type cannot be changed now. Contact support to change it.')).closest('[data-slot="toast"]')).toBeTruthy()
+    expect(useOnboardingStore.getState().draft.business.businessType?.id).toBe(5402)
     expect(screen.getByRole('button', { name: 'Show more business types' }).getAttribute('aria-disabled')).toBe('false')
   })
 
-  it('moves focus to the list when a press reveals locked business types', async () => {
+  it('moves focus to the first revealed card when a press reveals locked business types', async () => {
     emptyReferenceCache()
     const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
     vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
@@ -632,7 +650,29 @@ describe('catalog lists in sets of one page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
 
     await screen.findByRole('button', { name: /Business 5518/ })
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Business type choices' })))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Business 5510/ })))
+  })
+
+  it('keeps the first set of business types while the next page loads when a saved type off the first page offsets the list', async () => {
+    emptyReferenceCache()
+    const type = (id: number) => ({ id, name: `Business ${id}`, icon: null, displayOrder: id })
+    let resolveMore: (page: Awaited<ReturnType<typeof vendorOnboardingService.getBusinessTypes>>) => void = () => undefined
+    vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
+      .mockResolvedValueOnce({ items: ids(5701, 9).map(type), pageNumber: 0, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve }))
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, catalogSource: 'account', business: { ...current.business, businessType: type(5799) } }), 3)
+    render(<BusinessStep issues={[]} readOnly />)
+    await screen.findByRole('button', { name: /Business 5701/ })
+    expect(shownNames(/Business \d+/)).toHaveLength(9)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more business types' }))
+
+    expect((await screen.findByRole('status')).textContent).toBe('Loading more business types.')
+    expect(shownNames(/Business \d+/)).toHaveLength(9)
+
+    await act(async () => resolveMore({ items: ids(5710, 9).map(type), pageNumber: 1, pageSize: 9, totalElements: 27, totalPages: 3, lastPage: false }))
+    expect(shownNames(/Business \d+/)).toHaveLength(18)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Business 5709/ })))
   })
 
   it('shows a category the vendor authors at once, even with a full set already shown', async () => {
@@ -916,10 +956,170 @@ describe('a freshly authored entry scrolls into view', () => {
     fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
 
-    const remove = await screen.findByRole('button', { name: /Mango pickle, added by you/ })
+    const remove = await screen.findByRole('button', { name: 'Mango pickle' })
     expect(scrolls).toHaveBeenCalledTimes(1)
     expect(scrolls).toHaveBeenCalledWith({ behavior: 'auto', block: 'nearest' })
     expect(scrolls.mock.contexts[0]).toBe(remove.parentElement)
     expect(status().textContent).toBe('Added Mango pickle')
+  })
+})
+
+describe('only optional extra catalog picks wear a dashed outline', () => {
+  const category = (id: number, name: string) => ({ id, businessTypeId: 71, name, description: null, imageUrl: null, displayOrder: id })
+  const product = (id: number, name: string) => ({
+    id, name, description: null, icon: null, imageUrl: null, measurementId: null, measurementName: 'COUNT',
+  })
+  const pickles = category(7101, 'Pickles')
+  const jams = category(7102, 'Jams')
+  const skim = product(7201, 'Skim Milk')
+  const dashed = (element: HTMLElement) => element.className.includes('border-dashed')
+  // No key line explains the outline: it made the list jump as it came and went.
+  const keyLine = () => screen.queryByText(/dashed outline|saved yet/i)
+
+  // An authored entry scrolls into view, which jsdom cannot do.
+  function stubScrolling() {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    delete (Element.prototype as Partial<Element>).scrollIntoView
+  })
+
+  function renderCategories(saved: Array<typeof pickles>, chosen = [pickles, jams]) {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getCategories').mockResolvedValue({
+      items: [{ ...pickles, icon: null }, { ...jams, icon: null }],
+      pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    setCatalogDraft(71, chosen)
+    useOnboardingStore.setState({ editedSteps: [4], savedBaselines: { 4: { categories: saved } } })
+    render(<CategoryStep issues={[]} confirm={() => undefined} />)
+  }
+
+  it('marks no first pick while the account holds no saved category', async () => {
+    renderCategories([])
+
+    const jamsCard = await screen.findByRole('button', { name: /Jams/ })
+    const picklesCard = screen.getByRole('button', { name: /Pickles/ })
+    for (const card of [jamsCard, picklesCard]) {
+      expect(dashed(card)).toBe(false)
+      expect(card.textContent).not.toContain('not saved')
+    }
+    expect(keyLine()).toBeNull()
+  })
+
+  it('dashes a pick added once a category is saved, telling screen readers it is not saved', async () => {
+    renderCategories([pickles])
+
+    const jamsCard = await screen.findByRole('button', { name: /Jams/ })
+    const picklesCard = screen.getByRole('button', { name: /Pickles/ })
+    expect(dashed(jamsCard)).toBe(true)
+    expect(jamsCard.textContent).toContain('not saved')
+    expect(dashed(picklesCard)).toBe(false)
+    expect(picklesCard.textContent).not.toContain('not saved')
+    expect(keyLine()).toBeNull()
+    expect(screen.queryByText(/Saved to your store|Not saved yet/)).toBeNull()
+  })
+
+  it('shows no dashed outline once every chosen category is saved', async () => {
+    renderCategories([pickles, jams])
+
+    expect(dashed(await screen.findByRole('button', { name: /Jams/ }))).toBe(false)
+  })
+
+  it('dashes a vendor-authored category only once a category is saved', async () => {
+    stubScrolling()
+    // One chosen, so the plan's category limit leaves room to author another.
+    renderCategories([pickles], [pickles])
+    await screen.findByRole('button', { name: /Jams/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Category name'), { target: { value: 'Chutneys' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Category' }))
+
+    const authored = await screen.findByRole('button', { name: /Chutneys/ })
+    expect(dashed(authored)).toBe(true)
+    expect(authored.textContent).toContain('not saved')
+    expect(keyLine()).toBeNull()
+  })
+
+  it('leaves a vendor-authored first category unmarked', async () => {
+    stubScrolling()
+    renderCategories([], [])
+    await screen.findByRole('button', { name: /Jams/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Category name'), { target: { value: 'Chutneys' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Category' }))
+
+    const authored = await screen.findByRole('button', { name: /Chutneys/ })
+    expect(dashed(authored)).toBe(false)
+    expect(authored.textContent).not.toContain('not saved')
+  })
+
+  /** Pickles saved, holding `saved` products. */
+  function renderProducts(saved: Array<typeof skim>) {
+    emptyReferenceCache()
+    vi.spyOn(vendorOnboardingService, 'getProductsByCategory').mockResolvedValue({
+      items: [skim, product(7202, 'Cow Milk')],
+      pageNumber: 0, pageSize: 12, totalElements: 2, totalPages: 1, lastPage: true,
+    })
+    setCatalogDraft(71, [pickles])
+    const products = saved.map((item) => ({ ...item, categoryId: pickles.id }))
+    useOnboardingStore.getState().updateDraft((current) => ({ ...current, products }))
+    useOnboardingStore.setState({ editedSteps: [], savedBaselines: { 4: { categories: [pickles] }, 5: { products } } })
+    render(<ProductStep issues={[]} confirm={() => undefined} />)
+  }
+
+  it('marks no pick in a category without a saved product', async () => {
+    renderProducts([])
+    fireEvent.click(await screen.findByRole('button', { name: /Cow Milk/ }))
+
+    const cow = screen.getByRole('button', { name: /Cow Milk/ })
+    expect(cow.getAttribute('aria-pressed')).toBe('true')
+    expect(dashed(cow)).toBe(false)
+    expect(cow.textContent).not.toContain('not saved')
+    expect(keyLine()).toBeNull()
+  })
+
+  it('dashes a new pick in a category with a saved product until it is saved', async () => {
+    renderProducts([skim])
+    expect(dashed(await screen.findByRole('button', { name: /Skim Milk/ }))).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: /Cow Milk/ }))
+    const cow = screen.getByRole('button', { name: /Cow Milk/ })
+    expect(dashed(cow)).toBe(true)
+    expect(cow.textContent).toContain('not saved')
+    expect(keyLine()).toBeNull()
+
+    act(() => useOnboardingStore.setState((state) => ({
+      editedSteps: [], savedBaselines: { ...state.savedBaselines, 5: { products: state.draft.products } },
+    })))
+    expect(dashed(screen.getByRole('button', { name: /Cow Milk/ }))).toBe(false)
+  })
+
+  it('dashes an authored product only in a category with a saved product', async () => {
+    stubScrolling()
+    renderProducts([skim])
+    await screen.findByRole('button', { name: /Skim Milk/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
+
+    const remove = await screen.findByRole('button', { name: 'Mango pickle, not saved' })
+    expect(dashed(remove.parentElement!)).toBe(true)
+    expect(screen.queryByText(/added by you/)).toBeNull()
+    expect(keyLine()).toBeNull()
+  })
+
+  it('leaves an authored first product unmarked', async () => {
+    stubScrolling()
+    renderProducts([])
+    await screen.findByRole('button', { name: /Skim Milk/ })
+
+    fireEvent.change(screen.getByPlaceholderText('Product name'), { target: { value: 'Mango pickle' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Product' }))
+
+    const remove = await screen.findByRole('button', { name: 'Mango pickle' })
+    expect(dashed(remove.parentElement!)).toBe(false)
   })
 })

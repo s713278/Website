@@ -11,6 +11,7 @@ type StorefrontPreviewProps = {
   logoUrl: string | null
   bannerUrl: string | null
   fullPage?: boolean
+  onboardingBranding?: boolean
   /** Catalog parts shown from the account summary instead of the draft. */
   accountParts?: PhonePreviewAccountParts
 }
@@ -31,7 +32,7 @@ function PreviewImage({ src, alt, className }: { src: string | null; alt: string
   return <img src={src} alt={alt} className={cn('object-cover', className)} onError={() => setFailed(true)} />
 }
 
-export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false, accountParts }: StorefrontPreviewProps) {
+export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false, onboardingBranding = false, accountParts }: StorefrontPreviewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const store = draft.storefront
   const storeName = store.storeName.trim() || draft.business.businessName.trim() || 'Your local store'
@@ -121,9 +122,9 @@ export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false,
         </div>
       ) : null}
 
-      <div className={cn('relative shrink-0 overflow-hidden', fullPage ? 'h-72' : 'h-36')}>
+      <div className={cn('relative shrink-0 overflow-hidden', onboardingBranding ? 'aspect-[3/1]' : fullPage ? 'h-72' : 'h-36')}>
         {bannerUrl ? (
-          <img src={bannerUrl} alt="Store banner preview" className="size-full object-cover" />
+          <PreviewImage src={bannerUrl} alt="Store banner preview" className="size-full object-cover" />
         ) : (
           <div className="size-full bg-[linear-gradient(135deg,var(--store-theme),var(--store-accent))]" />
         )}
@@ -137,7 +138,7 @@ export function StorefrontPreview({ draft, logoUrl, bannerUrl, fullPage = false,
             fullPage ? 'size-14 text-lg' : 'size-11 text-sm',
           )}>
             {logoUrl ? (
-              <img src={logoUrl} alt="Store logo preview" className="size-full object-cover" />
+              <PreviewImage src={logoUrl} alt="Store logo preview" className={cn('size-full', onboardingBranding ? 'object-contain' : 'object-cover')} />
             ) : initials}
           </div>
           <div className="min-w-0 text-white">

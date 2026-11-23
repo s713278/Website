@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { SAMPLE_MEASUREMENT_CATALOG } from '../data/onboarding-measurement-sample'
 import {
-  vendorOnboardingService,
   type BusinessTypeReference,
   type CheckoutOptionsSnapshot,
   type VendorCategoryRef,
@@ -10,10 +9,7 @@ import {
   type VendorProfile,
   type VendorSkuRef,
 } from '@/shared/api'
-import { businessTypeCacheKey, readReferenceCache, writeReferenceCache } from './onboarding-catalog-cache'
 import { createEmptyOnboardingDraft, createEmptyRuntimeState } from '../data/onboarding-defaults'
-import { invalidateOnboardingResources } from './onboarding-resource-cache'
-import { loadStepResources } from './onboarding-server-state'
 import {
   applyBusinessType,
   applyCategories,
@@ -26,11 +22,9 @@ import {
   derivedResumeStep,
   earliestIncompleteStep,
   furthestSavedStep,
-  loadAccountResource,
   isVendorApproved,
   isStoreSubmitted,
   measurementCatalogsForResume,
-  resolveBusinessType,
   resumeOrderWhatsapp,
   resumePaymentDetails,
   accountResumeState,
@@ -41,7 +35,8 @@ import {
   type ResumeApplyOptions,
   type ServerOnboardingState,
 } from './onboarding-resume'
-import type { OnboardingStep } from '../types/onboarding'
+import { resolveSavedType } from './onboarding-saved-type'
+import { ONBOARDING_DRAFT_VERSION, type OnboardingStep } from '../types/onboarding'
 import { readinessIssues } from './onboarding-validation'
 import { parsePersistedEnvelope, toPersistedDraft } from './onboarding-persistence'
 import { deriveStoreState } from './store-state'
@@ -82,8 +77,7 @@ function context(overrides: Partial<VendorContext> = {}): VendorContext {
 const PROFILE: VendorProfile = {
   businessName: 'SK Organic Store',
   businessType: BUSINESS_TYPE.name,
-  ownerName: 'Sanjay Kumar',
-  contactPerson: 'Sanjay Kumar',
+  businessTypeId: BUSINESS_TYPE.id,
   contactNumber: '9876543210',
 }
 
@@ -146,7 +140,6 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
     products: PRODUCTS,
     skus: SKUS,
     checkout: CHECKOUT,
-    businessTypes: [BUSINESS_TYPE],
     ...overrides,
   }
 }
@@ -154,7 +147,11 @@ function fullState(overrides: Partial<ServerOnboardingState> = {}): ServerOnboar
 /** Every applier in dependency order over the whole state, as the wizard composes them. */
 function composeByHand(state: ServerOnboardingState) {
   const options = { edited: new Set<OnboardingStep>(), submitted: isStoreSubmitted(state) }
-  const businessType = resolveBusinessType(state.profile, state.businessTypes)
+  const resolution = resolveSavedType({
+    confirmed: null, stepSaved: true, categoriesSaved: true, profileTypeName: state.profile?.businessType ?? null,
+    profileTypeId: state.profile?.businessTypeId ?? null,
+  })
+  const businessType = resolution.kind === 'locked' ? resolution.type : null
   let draft = applyResumeFrame(createEmptyOnboardingDraft(), derivedResumeStep(state), options)
   draft = applyProfile(draft, state.profile, options)
   draft = applyBusinessType(draft, businessType, options)
@@ -192,7 +189,7 @@ describe('submission and approval', () => {
 
 describe('earliestIncompleteStep', () => {
   it('reports the first step with nothing saved behind it', () => {
-    expect(earliestIncompleteStep(fullState({ profile: { ...PROFILE, businessType: 'Others' } }))).toBe(3)
+    expect(earliestIncompleteStep(fullState({ profile: { ...PROFILE, businessType: 'Others', businessTypeId: 30 } }))).toBe(3)
     expect(earliestIncompleteStep(fullState({ categories: [] }))).toBe(4)
     expect(earliestIncompleteStep(fullState({ products: [] }))).toBe(5)
     expect(earliestIncompleteStep(fullState({ skus: [] }))).toBe(6)
@@ -286,7 +283,7 @@ describe('derivedResumeStep — fallback only, if the contract drops next_step',
   })
 
   it('reports the furthest step the account can prove', () => {
-    expect(furthestSavedStep(fullState({ profile: { ...PROFILE, businessType: 'Others' }, categories: [], products: [], skus: [], checkout: null }))).toBeNull()
+    expect(furthestSavedStep(fullState({ profile: { ...PROFILE, businessType: 'Others', businessTypeId: 30 }, categories: [], products: [], skus: [], checkout: null }))).toBeNull()
     expect(furthestSavedStep(fullState({ categories: [], products: [], skus: [], checkout: null }))).toBe(3)
     expect(furthestSavedStep(fullState({ products: [], skus: [], checkout: null }))).toBe(4)
     expect(furthestSavedStep(fullState({ skus: [], checkout: null }))).toBe(5)
@@ -309,7 +306,7 @@ describe('derivedResumeStep — fallback only, if the contract drops next_step',
 
   it('opens a brand-new account at Step 3', () => {
     expect(derivedResumeStep(fullState({
-      profile: { ...PROFILE, businessType: 'Others' }, categories: [], products: [], skus: [], checkout: null,
+      profile: { ...PROFILE, businessType: 'Others', businessTypeId: 30 }, categories: [], products: [], skus: [], checkout: null,
     }))).toBe(3)
   })
 })
@@ -320,8 +317,7 @@ describe('the appliers over a whole account', () => {
 
     expect(draft.currentStep).toBe(9)
     expect(draft.mobileVerified).toBe(true)
-    expect(draft.business.businessType).toEqual(BUSINESS_TYPE)
-    expect(draft.business.ownerName).toBe('Sanjay Kumar')
+    expect(draft.business.businessType).toEqual({ ...BUSINESS_TYPE, displayOrder: null })
     expect(draft.categories.map((category) => category.id)).toEqual([10])
     expect(draft.products.map((product) => product.id)).toEqual([31])
     expect(draft.skus).toHaveLength(1)
@@ -395,7 +391,7 @@ describe('the appliers over a whole account', () => {
 
   it('leaves an unconfigured vendor at Step 3 with an empty draft', () => {
     const { draft } = composeByHand(fullState({
-      profile: { ...PROFILE, businessType: 'Others' }, categories: [], products: [], skus: [], checkout: null,
+      profile: { ...PROFILE, businessType: 'Others', businessTypeId: 30 }, categories: [], products: [], skus: [], checkout: null,
     }))
 
     expect(draft.currentStep).toBe(3)
@@ -423,17 +419,17 @@ describe('a resumed draft is submittable', () => {
   })
 })
 
-describe('a partial resume still produces a loadable draft', () => {
-  // `getBusinessTypes` can fail independently, while the vendor's
-  // categories load fine. Attributing those categories to business type `0` used to make
-  // the draft unpersistable — the validator rejects a zero reference id — so a transient
-  // read failure came back as "your saved draft is damaged" on the next reload.
-  function stateWithoutBusinessTypes(): ServerOnboardingState {
-    return fullState({ businessTypes: [] })
+describe('a record without `business_type_id` still produces a loadable draft', () => {
+  // A record without the id names no type, while the vendor's categories load fine.
+  // Attributing those categories to business type `0` used to make the draft unpersistable —
+  // the validator rejects a zero reference id — so it came back as "your saved draft is
+  // damaged" on the next reload.
+  function stateWithoutTypeId(): ServerOnboardingState {
+    return fullState({ profile: { ...PROFILE, businessTypeId: null } })
   }
 
   it('records unknown attribution as null rather than zero', () => {
-    const { draft } = composeByHand(stateWithoutBusinessTypes())
+    const { draft } = composeByHand(stateWithoutTypeId())
 
     expect(draft.business.businessType).toBeNull()
     expect(draft.categories.length).toBeGreaterThan(0)
@@ -443,9 +439,9 @@ describe('a partial resume still produces a loadable draft', () => {
   })
 
   it('round-trips through the draft validator', () => {
-    const { draft } = composeByHand(stateWithoutBusinessTypes())
+    const { draft } = composeByHand(stateWithoutTypeId())
     const envelope = {
-      version: 4,
+      version: ONBOARDING_DRAFT_VERSION,
       revision: 1,
       updatedAt: new Date().toISOString(),
       ownerId: '91',
@@ -466,76 +462,18 @@ describe('a partial resume still produces a loadable draft', () => {
   })
 })
 
-describe('the account business-type read files Step 3\'s first page', () => {
-  const accountKey = businessTypeCacheKey('account', '')
-  const types = Array.from({ length: 30 }, (_, index) => ({
-    id: index + 1, name: `Type ${index + 1}`, icon: null, displayOrder: index + 1,
-  }))
-
-  // The cache is module-level with no reset; 48 other keys push every earlier entry out.
-  beforeEach(() => {
-    for (let index = 0; index < 48; index++) {
-      writeReferenceCache(`test-filler:${index}`, { items: [], pageNumber: 0, pageSize: 9, totalElements: 0, totalPages: 0, lastPage: true }, false)
-    }
-  })
-  afterEach(() => {
-    vi.restoreAllMocks()
-    invalidateOnboardingResources()
-  })
-
-  function answerReads(businessType: string | null) {
-    vi.spyOn(vendorOnboardingService, 'getVendorProfile').mockResolvedValue({
-      businessName: 'Store', businessType, ownerName: '', contactPerson: '', contactNumber: '',
-    })
-    vi.spyOn(vendorOnboardingService, 'getVendorCategories').mockResolvedValue([])
-    return vi.spyOn(vendorOnboardingService, 'getBusinessTypes')
-  }
-
-  it('seeds the account key from the 100-row read when a type is saved', async () => {
-    const getBusinessTypes = answerReads('Type 3')
-    getBusinessTypes.mockResolvedValue({
-      items: types, pageNumber: 0, pageSize: 100, totalElements: 30, totalPages: 1, lastPage: true,
-    })
-
-    const businessTypes = await loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes
-
-    expect(getBusinessTypes).toHaveBeenCalledTimes(1)
-    expect(businessTypes).toHaveLength(30)
-    const seeded = readReferenceCache<{ id: number }>(accountKey)
-    expect(seeded?.items.map((entry) => entry.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    expect(seeded).toMatchObject({ pageNumber: 0, lastPage: false })
-  })
-
-  it('seeds nothing when the read rejects', async () => {
-    answerReads('Type 3').mockRejectedValue(new Error('offline'))
-
-    await expect(loadAccountResource('91', 'businessTypes')).rejects.toThrow('offline')
-
-    expect(readReferenceCache(accountKey)).toBeNull()
-  })
-
-  it.each([null, 'Others'])('makes no read and seeds nothing for a saved type of %s', async (saved) => {
-    const getBusinessTypes = answerReads(saved)
-
-    await expect(loadStepResources('91', 4, { submitted: false, withUnits: false }).businessTypes).resolves.toEqual([])
-
-    expect(getBusinessTypes).not.toHaveBeenCalled()
-    expect(readReferenceCache(accountKey)).toBeNull()
-  })
-})
-
 describe('stepResources', () => {
   it.each([
     [1, false, [], false],
     [2, false, [], false],
-    [3, false, ['profile', 'businessTypes'], false],
-    [4, false, ['profile', 'businessTypes', 'categories'], false],
-    [5, false, ['profile', 'businessTypes', 'categories', 'products'], true],
-    [6, false, ['profile', 'businessTypes', 'categories', 'products', 'skus'], true],
+    [3, false, ['profile'], false],
+    [4, false, ['profile', 'categories'], false],
+    [5, false, ['profile', 'categories', 'products'], true],
+    [6, false, ['profile', 'categories', 'products', 'skus'], true],
     [7, false, ['checkout'], false],
     [8, false, ['checkout'], false],
-    [9, false, ['profile', 'businessTypes'], false],
-    [10, false, ['profile', 'businessTypes', 'categories', 'products', 'skus', 'checkout'], true],
+    [9, false, ['profile', 'logo', 'banner'], false],
+    [10, false, ['profile', 'categories', 'products', 'skus', 'checkout', 'logo', 'banner'], true],
     [10, true, ['profile'], false],
   ] as const)('Step %i (submitted: %s) needs %j, units %s', (step, submitted, account, units) => {
     expect(stepResources(step, { submitted })).toEqual({ account, units })
@@ -559,7 +497,7 @@ describe('per-resource appliers', () => {
       currentStep: 5 as OnboardingStep,
       completedSteps: [1, 2, 3, 4] as OnboardingStep[],
       catalogSource: 'sample' as const,
-      business: { businessType: { ...BUSINESS_TYPE, id: 99, name: 'Local' }, businessName: 'Local', ownerName: 'L', contactPerson: 'L' },
+      business: { businessType: { ...BUSINESS_TYPE, id: 99, name: 'Local' }, businessName: 'Local' },
       categories: [{ id: 77, name: 'Local', imageUrl: null, businessTypeId: 99, description: null, displayOrder: null }],
       products: [],
       skus: [],
@@ -608,10 +546,36 @@ describe('per-resource appliers', () => {
     expect(draft.business).toEqual(local.business)
   })
 
-  it('frame the draft only when nothing is edited or the store is submitted', () => {
+  // A saved Step 9 is no longer edited, but its storefront is unreadable before approval.
+  it('keep the saved Step 9 location and tagline on resume, taking only the store name from the account', () => {
+    const local = localDraft()
+    const saved = { ...local, storefront: { ...local.storefront, businessLocation: 'Indiranagar', tagline: 'Fresh daily' } }
+
+    const draft = applyProfile(saved, { ...PROFILE, businessName: 'Saved Store' }, NONE)
+
+    expect(draft.storefront).toEqual({ ...saved.storefront, storeName: 'Saved Store' })
+  })
+
+  it('take the Step 9 store name from the vendor record', () => {
+    const draft = applyProfile(localDraft(), { ...PROFILE, businessName: 'Saved Store' }, NONE)
+
+    expect(draft.storefront.storeName).toBe('Saved Store')
+    expect(draft.business.businessName).toBe('Saved Store')
+  })
+
+  it('take position and progress from the account even while a step is edited', () => {
     const local = localDraft()
 
-    expect(applyResumeFrame(local, 7, { edited: new Set([4]), submitted: false })).toBe(local)
+    const framed = applyResumeFrame(local, 7, { edited: new Set([4]), submitted: false })
+
+    expect(framed).toMatchObject({ currentStep: 7, completedSteps: [1, 2, 3, 4, 5, 6], mobileVerified: true })
+    // An edited draft keeps its catalog source, so a sample draft stays refused at Continue.
+    expect(framed.catalogSource).toBe('sample')
+    expect(framed.categories).toBe(local.categories)
+  })
+
+  it('reset the fields no resource owns only when nothing is edited or the store is submitted', () => {
+    const local = localDraft()
 
     for (const options of [NONE, { edited: new Set<OnboardingStep>([4]), submitted: true }]) {
       const framed = applyResumeFrame(local, 7, options)
@@ -634,8 +598,8 @@ describe('per-resource appliers', () => {
 })
 describe('stepLoadState', () => {
   const ALL_LOADED = {
-    profile: 'loaded', businessTypes: 'loaded', categories: 'loaded',
-    products: 'loaded', skus: 'loaded', checkout: 'loaded',
+    profile: 'loaded', categories: 'loaded',
+    products: 'loaded', skus: 'loaded', checkout: 'loaded', logo: 'loaded', banner: 'loaded', storefront: 'loaded',
   } as const
   const with_ = (changes: Partial<Record<OnboardingResource, ResourceStatus>>) => ({ ...ALL_LOADED, ...changes })
 
@@ -647,10 +611,17 @@ describe('stepLoadState', () => {
   })
 
   it('waits only on what the step lists', () => {
-    const checkoutOnly = { ...with_({ profile: 'idle', businessTypes: 'idle', categories: 'failed' }), checkout: 'loaded' as const }
+    const checkoutOnly = { ...with_({ profile: 'idle', categories: 'failed' }), checkout: 'loaded' as const }
     expect(stepLoadState(7, { submitted: false, resources: checkoutOnly, units: 'idle' })).toBe('loaded')
     expect(stepLoadState(7, { submitted: false, resources: with_({ checkout: 'loading' }), units: 'idle' })).toBe('loading')
-    expect(stepLoadState(3, { submitted: false, resources: with_({ businessTypes: 'idle' }), units: 'idle' })).toBe('loading')
+    expect(stepLoadState(3, { submitted: false, resources: with_({ profile: 'idle' }), units: 'idle' })).toBe('loading')
+  })
+
+  it('keeps Step 9 and review independent of optional image reads without ignoring required failures', () => {
+    expect(stepLoadState(9, { submitted: false, resources: with_({ logo: 'loading', banner: 'loading' }), units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(9, { submitted: false, resources: with_({ logo: 'failed', banner: 'failed' }), units: 'idle' })).toBe('loaded')
+    expect(stepLoadState(9, { submitted: false, resources: with_({ profile: 'failed', logo: 'failed', banner: 'failed' }), units: 'idle' })).toBe('failed')
+    expect(stepLoadState(10, { submitted: false, resources: with_({ logo: 'failed', banner: 'loading' }), units: 'loaded' })).toBe('loaded')
   })
 
   it('fails when a listed resource failed, even while another still loads', () => {
@@ -675,8 +646,7 @@ describe('stepLoadState', () => {
 describe('accountResumeState', () => {
   it('feeds the resource-derived resume step from the values read one by one', () => {
     const state = accountResumeState(context({ onboarding: { status: 'IN_PROGRESS', description: null, nextStep: null } }), {
-      profile: { businessName: 'Store', businessType: BUSINESS_TYPE.name, ownerName: '', contactPerson: '', contactNumber: '' },
-      businessTypes: [BUSINESS_TYPE],
+      profile: { businessName: 'Store', businessType: BUSINESS_TYPE.name, businessTypeId: BUSINESS_TYPE.id, contactNumber: '' },
       categories: [],
       products: [],
       skus: [],
