@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client/http';
-import type { ApiEnvelope } from '../client/types';
-import type { components } from '../schema';
+import type { ApiEnvelope, RequestConfig } from '../client/types';
+import type { components, operations } from '../schema';
 
 /** FAQs, measurements, SKU price (tag 12, 14) */
 export const platformService = {
@@ -25,10 +25,10 @@ export const platformService = {
 };
 
 export const imagesService = {
-  list: (vendorId: number | string, params?: Record<string, unknown>) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, { params }),
-  upload: (vendorId: number | string, body: FormData) =>
-    apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, body),
+  list: (vendorId: number | string, params: operations['getVendorImageUrl']['parameters']['query'], config: RequestConfig = {}) =>
+    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, { ...config, params }),
+  upload: (vendorId: number | string, body: FormData, params: operations['uploadVendorImage']['parameters']['query'], config: RequestConfig = {}) =>
+    apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/images`, body, { ...config, params }),
 };
 
 export const pricesService = {

@@ -3,14 +3,19 @@ import {
   BanknoteIcon,
   LandmarkIcon,
   PlusIcon,
+  RotateCcwIcon,
   SmartphoneIcon,
   Trash2Icon,
   XIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button, EmptyState, Input } from '@/shared/components/ui'
+import { Badge, Button, EmptyState, Input } from '@/shared/components/ui'
 import { isAccountSkuId, localSkuId } from '../../lib/onboarding-sku-id'
+import { productsWithoutSize } from '../../lib/onboarding-catalog-dependencies'
 import { useSingleOpen } from '../../hooks/use-single-open'
+import { useSavedCatalog } from '../../hooks/use-saved-catalog'
+import { stepCatalog } from '../../lib/onboarding-saved-catalog'
+import { useOnboardingFeedback } from './onboarding-feedback'
 import {
   selectProjectedSkuTotal,
   selectSkuLimit,
@@ -122,11 +127,14 @@ function SkuStatusSwitch({
   heading,
   active,
   disabled = false,
+  changed = false,
   onChange,
 }: {
   heading: string
   active: boolean
   disabled?: boolean
+  /** Switched away from its saved state: a light brand halo, the switch's own field tint. */
+  changed?: boolean
   onChange?: (active: boolean) => void
 }) {
   return (
@@ -141,6 +149,7 @@ function SkuStatusSwitch({
       className={cn(
         'relative h-7 w-12 shrink-0 rounded-full transition-colors max-[30rem]:h-6 max-[30rem]:w-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand-soft)] disabled:cursor-not-allowed',
         active ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700',
+        changed && 'ring-4 ring-[var(--ob-brand-soft)]',
       )}
     >
       <span
@@ -156,7 +165,9 @@ function SkuStatusSwitch({
 
 /**
  * A bare red cross with a fixed hit area, so the header and every row stay aligned. It is
- * always rendered; `inert` marks a product's only size, which cannot be removed.
+ * always rendered; `inert` marks a product's only size, which cannot be removed. A saved size
+ * with unsaved changes offers Undo in its place: the same button, so focus stays on it when
+ * Undo brings the cross back.
  */
 function SkuRemoveButton({
   heading,
@@ -164,13 +175,28 @@ function SkuRemoveButton({
   disabled = false,
   inert = false,
   onClick,
+  onUndo,
 }: {
   heading: string
   active: boolean
   disabled?: boolean
   inert?: boolean
   onClick?: () => void
+  onUndo?: () => void
 }) {
+  if (onUndo) {
+    return (
+      <button
+        type="button"
+        aria-label="Undo changes"
+        title="Undo changes"
+        onClick={onUndo}
+        className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--ob-brand)] transition-colors hover:bg-[var(--ob-brand-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ob-brand)] max-[30rem]:w-7"
+      >
+        <RotateCcwIcon className="size-4" strokeWidth={2.2} aria-hidden="true" />
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -215,6 +241,13 @@ const SKU_FIELDS = [
 
 type SkuGroupId = number | 'other'
 
+/** What a vendor can change on a saved size; a change to any of them leaves the size unsaved. */
+const SKU_SAVED_FIELDS = ['quantity', 'unit', 'listPrice', 'salePrice', 'active'] as const
+type SkuSavedField = (typeof SKU_SAVED_FIELDS)[number]
+
+/** A changed field of a saved size: a light brand fill and tinted border, nothing else. */
+const skuChangedClass = 'border-[var(--ob-brand)]/45 bg-[var(--ob-brand-soft)]'
+
 function SkuHeaderRow() {
   return (
     <div aria-hidden="true" className={cn(SKU_ROW_GRID, 'mb-1.5 items-end px-0.5 text-[0.7rem] leading-tight text-[var(--ob-ink-soft)]')}>
@@ -246,8 +279,18 @@ function SkuReadOnlyRow({ sku, heading }: { sku: DraftSku; heading: string }) {
   )
 }
 
-export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
-  const draft = useOnboardingStore((state) => state.draft)
+export function SkuStep({ issues, markMissing = false }: {
+  issues: ValidationIssue[]
+  /** Step 6 is done but needs attention: mark the products still without a valid size. */
+  markMissing?: boolean
+}) {
+  const fullDraft = useOnboardingStore((state) => state.draft)
+  const saved = useSavedCatalog()
+  // Only saved products take sizes: a product picked on Step 5 waits, hidden, for its save.
+  const draft = useMemo(() => stepCatalog(6, fullDraft, saved), [fullDraft, saved])
+  const savedProductKey = saved.products.map((product) => product.id).join(',')
+  const savedSkuById = useMemo(() => new Map(saved.skus.map((sku) => [sku.id, sku])), [saved.skus])
+  const feedback = useOnboardingFeedback()
   const updateDraft = useOnboardingStore((state) => state.updateDraft)
   const measurementCatalog = useOnboardingStore((state) => state.measurementCatalog)
   const productMeasurementCatalog = useOnboardingStore((state) => state.productMeasurementCatalog)
@@ -265,43 +308,54 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     () => [...draft.categories.map((category) => category.id), ...(hasOrphanProducts ? ['other' as const] : [])],
     [draft.categories, hasOrphanProducts],
   )
-  const { openId, setOpenId, onToggle } = useSingleOpen<SkuGroupId>(groupIds)
+  const missing = useMemo(
+    () => markMissing ? productsWithoutSize(draft) : [],
+    [markMissing, draft],
+  )
+  // Arriving to finish missing work opens the group holding the first product without a size.
+  const firstMissing = draft.products.find((product) => product.id === missing[0])
+  const { openId, setOpenId, onToggle } = useSingleOpen<SkuGroupId>(
+    groupIds,
+    firstMissing ? (draft.categories.some((category) => category.id === firstMissing.categoryId) ? firstMissing.categoryId : 'other') : undefined,
+  )
 
-  // Scaffold a size for any product without one, and reconcile every existing size to its
+  // Scaffold a size for any saved product without one, and reconcile every existing size to its
   // product's measurement — a size resumed from the account or restored from persistence can
   // carry a measurement that drifted off its product, and Step 6 no longer offers a control
   // to fix it by hand. `reconcileSkuToProductMeasurement` returns the same size when nothing
   // needs to change, so this is idempotent and cannot loop this effect.
   //
-  // Submitted stores add sizes explicitly after approval. Do not scaffold phantom rows,
-  // consume plan capacity on a read, or reconcile already saved sizes behind their backs.
+  // A store under review cannot add sizes, so it gets no starter row. An approved store gets
+  // one as in setup, but its saved sizes are not reconciled behind its back.
   //
-  // Otherwise, deliberately no `invalidateFrom`. Neither scaffolding nor reconciling is an
-  // edit the vendor made, and invalidating from Step 6 would drop `furthestVisitedStep` to 6
-  // and filter `completedSteps`. A vendor who resumed at Step 9 with one unpriced product
-  // left over (the exact case `furthestSavedStep` exists to protect) would lose Steps 7-10
-  // just by opening Step 6 to look at it.
+  // Otherwise, deliberately no `invalidateFrom`: neither scaffolding nor reconciling is an
+  // edit the vendor made. (Invalidation once dropped progress, so a vendor who resumed at
+  // Step 9 with one unpriced product lost Steps 7-10 just by opening Step 6; edits no longer
+  // take progress away.)
   useEffect(() => {
-    if (storeIsSubmitted) return
+    if (storeIsSubmitted && !storeIsApproved) return
+    const reconcile = !storeIsSubmitted
     const productById = new Map(draft.products.map((product) => [product.id, product]))
     const missingSize = draft.products.some((product) => !draft.skus.some((sku) => sku.productId === product.id))
-    const driftedSize = draft.skus.some((sku) => {
+    const driftedSize = reconcile && draft.skus.some((sku) => {
       const product = productById.get(sku.productId)
       return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) !== sku : false
     })
     if (!missingSize && !driftedSize) return
+    const savedProductIds = new Set(savedProductKey.split(',').map(Number))
     updateDraft((current) => {
       const currentProductById = new Map(current.products.map((product) => [product.id, product]))
-      const skus = current.skus.map((sku) => {
+      const skus = reconcile ? current.skus.map((sku) => {
         const product = currentProductById.get(sku.productId)
         return product ? reconcileSkuToProductMeasurement(sku, product, measurementCatalog) : sku
-      })
+      }) : [...current.skus]
       for (const product of current.products) {
+        if (!savedProductIds.has(product.id)) continue
         if (!skus.some((sku) => sku.productId === product.id)) skus.push(makeSku(product, skus, measurementCatalog))
       }
       return { ...current, skus }
     })
-  }, [draft.products, draft.skus, updateDraft, measurementCatalog, storeIsSubmitted])
+  }, [draft.products, draft.skus, savedProductKey, updateDraft, measurementCatalog, storeIsSubmitted, storeIsApproved])
 
   // A problem inside a closed category would otherwise be reported with nothing on
   // screen to fix. Only one panel can be open, so open the category holding the first
@@ -328,6 +382,26 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     setOpenId(categories.some((category) => category.id === faulty.categoryId) ? faulty.categoryId : 'other')
   }, [issues, setOpenId])
 
+  // Every product keeps a switched-on size while setting up (Continue checks the rest). A
+  // submitted store keeps its own rules: its Continue checks this for approved edits.
+  const lastActiveSize = (sku: DraftSku) => !storeIsSubmitted && sku.active
+    && !draft.skus.some((item) => item.productId === sku.productId && item.id !== sku.id && item.active)
+  const refuseLastActive = (sku: DraftSku) => {
+    const product = draft.products.find((item) => item.id === sku.productId)
+    feedback.show(`Turn on at least one size for ${product?.name ?? 'this product'}.`, 'warning')
+  }
+
+  // Undo puts a saved size back as saved, unless that would leave its product with no size on.
+  // Focus stays on the button, which turns back into the cross; a product's only size has an
+  // inert cross, so focus moves to that size's quantity instead.
+  const undoSku = (sku: DraftSku, savedSku: DraftSku) => {
+    if (!savedSku.active && lastActiveSize(sku)) return refuseLastActive(sku)
+    updateSku(sku.id, Object.fromEntries(SKU_SAVED_FIELDS.map((key) => [key, savedSku[key]])))
+    if (draft.skus.filter((item) => item.productId === sku.productId).length <= 1) {
+      window.setTimeout(() => document.getElementById(`sku-${sku.id}-quantity`)?.focus(), 0)
+    }
+  }
+
   const updateSku = (skuId: string, patch: Partial<DraftSku>) => updateDraft(
     (current) => ({
       ...current,
@@ -339,6 +413,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
   const removeSku = (sku: DraftSku) => {
     const productSkuCount = draft.skus.filter((item) => item.productId === sku.productId).length
     if (productSkuCount <= 1) return
+    if (lastActiveSize(sku)) return refuseLastActive(sku)
 
     updateDraft(
       (current) => {
@@ -395,6 +470,12 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     // one of its inputs, so they describe the whole row and are the focus target for it.
     const rowId = `sku-${sku.id}`
     const rowIssue = issues.find((item) => item.field === rowId)?.message
+    // A saved size shows each changed field and offers Undo. A new size is marked only as an
+    // optional extra, on a product that already has a saved size: never the first.
+    const savedSku = savedSkuById.get(sku.id)
+    const changed = (key: SkuSavedField) => savedSku !== undefined && savedSku[key] !== sku[key]
+    const edited = SKU_SAVED_FIELDS.some(changed)
+    const extra = !savedSku && saved.skus.some((item) => item.productId === sku.productId)
     // A field's error sits directly under its own input, so only that column grows.
     const fieldError = (key: (typeof SKU_FIELDS)[number]['key']) => {
       const message = issueFor(key)
@@ -406,8 +487,14 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
       <fieldset
         key={sku.id}
         id={rowId}
-        className="min-w-0 border-0 p-0"
-        aria-label={groupLabel}
+        className={cn(
+          // Border plus padding equal the pull-back, and the border is always there, so the
+          // columns stay level with the header and marking a row never moves or grows it.
+          '-mx-1.5 min-w-0 rounded-lg border-2 border-transparent px-1 py-0.5',
+          extra && 'border-dashed border-[var(--ob-brand)]',
+        )}
+        // The marks are visual only.
+        aria-label={extra ? `${groupLabel}, not saved` : edited ? `${groupLabel}, unsaved changes` : groupLabel}
         aria-describedby={rowIssue ? `${rowId}-error` : undefined}
       >
         <div className={cn(SKU_ROW_GRID, 'items-start', !sku.active && 'opacity-55')}>
@@ -421,7 +508,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.quantity ?? ''}
               onChange={(event) => updateSku(sku.id, { quantity: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('quantity') && skuChangedClass)}
             />
             {fieldError('quantity')}
           </div>
@@ -430,7 +517,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               {...fieldA11y('unit')}
               value={sku.unit}
               onChange={(event) => updateSku(sku.id, { unit: event.target.value })}
-              className={cn(skuFieldClass, 'pr-1')}
+              className={cn(skuFieldClass, 'pr-1', changed('unit') && skuChangedClass)}
             >
               {unitsForMeasurement(measurement, measurementCatalog).map((unit) => (
                 <option key={unit} value={unit}>{unit}</option>
@@ -448,7 +535,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.listPrice ?? ''}
               onChange={(event) => updateSku(sku.id, { listPrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('listPrice') && skuChangedClass)}
             />
             {fieldError('list-price')}
           </div>
@@ -462,19 +549,25 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
               value={sku.salePrice ?? ''}
               onChange={(event) => updateSku(sku.id, { salePrice: parseDraftNumber(event.target.value) })}
               onWheel={(event) => event.currentTarget.blur()}
-              className={skuNumberClass}
+              className={cn(skuNumberClass, changed('salePrice') && skuChangedClass)}
             />
             {fieldError('sale-price')}
           </div>
           {/* Input height, so the switch and cross stay level with the inputs when an error grows a column. */}
           <div className="flex h-9 items-center">
-            <SkuStatusSwitch heading={heading} active={sku.active} onChange={(active) => updateSku(sku.id, { active })} />
+            <SkuStatusSwitch
+              heading={heading}
+              active={sku.active}
+              changed={changed('active')}
+              onChange={(active) => active || !lastActiveSize(sku) ? updateSku(sku.id, { active }) : refuseLastActive(sku)}
+            />
           </div>
           <SkuRemoveButton
             heading={heading}
             active={sku.active}
             inert={productSkus.length <= 1}
             onClick={() => removeSku(sku)}
+            onUndo={savedSku && edited ? () => undoSku(sku, savedSku) : undefined}
           />
         </div>
         {rowIssue ? (
@@ -497,17 +590,25 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
     const unitSummary = measurementSummary.units.length
       ? `${measurementSummary.units.join(', ')}${measurementSummary.additionalUnitCount ? ` +${measurementSummary.additionalUnitCount}` : ''}`
       : 'Units unavailable'
+    const attention = missing.includes(product.id)
     return (
       <div
         key={product.id}
         id={`product-${product.id}`}
         role="group"
         aria-labelledby={`sku-product-${product.id}`}
-        className="overflow-x-auto rounded-xl border border-[var(--ob-line)] bg-[var(--ob-canvas)] p-3 max-[30rem]:p-2"
+        data-attention={attention || undefined}
+        className={cn(
+          'overflow-x-auto rounded-xl border bg-[var(--ob-canvas)] p-3 max-[30rem]:p-2',
+          attention ? 'border-[var(--md-warning)]' : 'border-[var(--ob-line)]',
+        )}
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h4 id={`sku-product-${product.id}`} className="truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{product.name}</h4>
+            <div className="flex min-w-0 items-center gap-2">
+              <h4 id={`sku-product-${product.id}`} className="truncate font-display text-sm font-semibold text-[var(--ob-ink)]">{product.name}</h4>
+              {attention ? <Badge tone="warning">Needs a size</Badge> : null}
+            </div>
             <p className="mt-0.5 text-[0.7rem] leading-4 text-[var(--ob-ink-soft)]">
               {measurementSummary.measurement ? `${measurementSummary.measurement} · ${unitSummary}` : 'Measurement unavailable'}
             </p>
@@ -568,7 +669,9 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
         <div className="space-y-3">
           {groups.map((group) => {
             const count = group.products.length
-            const meta = count ? `${count} ${count === 1 ? 'product' : 'products'}` : 'No products'
+            const needSize = group.products.filter((product) => missing.includes(product.id)).length
+            const meta = (count ? `${count} ${count === 1 ? 'product' : 'products'}` : 'No products')
+              + (needSize ? ` · ${needSize} ${needSize === 1 ? 'needs' : 'need'} a size` : '')
             return (
               <CategoryPanel
                 key={group.id}
@@ -578,6 +681,7 @@ export function SkuStep({ issues }: { issues: ValidationIssue[] }) {
                 name={group.name}
                 meta={meta}
                 count={count}
+                attention={needSize > 0}
               >
                 {count ? (
                   <div className="space-y-3">{group.products.map(renderProduct)}</div>

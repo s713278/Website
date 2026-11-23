@@ -10,6 +10,7 @@ Frozen snapshots of the original MithraDirect static pages. Use these while rebu
 | `store.html` | Customer storefront (incl. sample Order History + Chat with Owner) |
 | `onboarding.html` | Vendor setup / onboarding |
 | `dashboard.html` | Vendor dashboard (`#products` = photo / features / Instagram UX reference) |
+| `roles.html` | Sample navigation for vendor, admin, and customer care. Catalog editors: `#admin/categories`, `#admin/products`, `#vendor/products`. Integration stories: [docs/CATALOG_EDITOR_STORIES.md](../docs/CATALOG_EDITOR_STORIES.md) |
 | `privacy.html` | Privacy policy |
 | `terms-conditions.html` | Terms |
 

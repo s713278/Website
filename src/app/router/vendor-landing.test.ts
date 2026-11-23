@@ -100,15 +100,15 @@ describe('resolveLandingPath', () => {
     const getContext = vi.spyOn(vendorOnboardingService, 'getVendorContext').mockResolvedValue(SETTING_UP)
     const [getProfile, getBusinessTypes, getCategories, getProducts, getSkus, getCheckout, getMeasurements] = holdSetupReads()
     getProfile.mockResolvedValue({
-      businessName: 'Store', businessType: 'Beverages', ownerName: '', contactPerson: '', contactNumber: '',
+      businessName: 'Store', businessType: 'Beverages', businessTypeId: 7, contactNumber: '',
     })
 
     await resolveLandingPath(vendor)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Pointer 5: profile, business types, categories and products; no sizes, checkout or units.
-    for (const read of [getProfile, getBusinessTypes, getCategories, getProducts]) expect(read).toHaveBeenCalledTimes(1)
-    for (const read of [getSkus, getCheckout, getMeasurements]) expect(read).not.toHaveBeenCalled()
+    // Pointer 5: profile, categories and products; no business types, sizes, checkout or units.
+    for (const read of [getProfile, getCategories, getProducts]) expect(read).toHaveBeenCalledTimes(1)
+    for (const read of [getBusinessTypes, getSkus, getCheckout, getMeasurements]) expect(read).not.toHaveBeenCalled()
     expect(getContext).toHaveBeenCalledTimes(1)
   })
 

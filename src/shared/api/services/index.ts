@@ -100,4 +100,7 @@ export {
   type LiveSubscriptionRead,
 } from './live-billing.service'
 export { vendorOnboardingService } from './vendor-onboarding.service'
+export type { VendorStorefrontSettings } from '../mappers/vendor-storefront-settings'
+export { vendorImagesService } from './vendor-images.service'
+export type { VendorImageKind, VendorImages } from '../mappers/vendor-images'
 export type { ReferenceRequestConfig } from './vendor-onboarding.service'

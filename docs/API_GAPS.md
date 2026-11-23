@@ -23,10 +23,9 @@ tree. See [API_ARCHITECTURE.md](./API_ARCHITECTURE.md) for how the API layer is 
 Wrapped in `@mithra/api-client` as `storefrontService.get` / `checkDeliveryEligibility`, plus the
 flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `services/legacy.ts`.
 
-> **The richer storefront payload is not called from `src/` yet.** The package wrappers are aligned,
-> but the customer storefront still renders from the older catalog service (`/v1/vendors/…`). The
-> onboarding preview renders its private same-browser draft; it does not pretend to be this
-> public backend response.
+> The customer storefront still renders from the older catalog service (`/v1/vendors/…`). Approved
+> onboarding Step 9 now reads the richer storefront to restore its editable settings. The onboarding
+> preview remains a draft preview, not a claim that unsaved edits are public.
 
 ## Still open
 
@@ -47,11 +46,12 @@ flat `getVendorStorefront`, `loadVendorStorefront`, `getVendorProductSkus` in `s
 | Approval reset during go-live | Keeping an approved vendor able to add sizes after completing setup | A September 2026 test report describes an already `APPROVED` account returning to `approval_status: PENDING` after Step 10 called `POST /v1/vendors/{vendor_id}/go-live`. This transition still needs backend review, including how existing approval should be preserved and the intended status after onboarding. The frontend requires an approved status for submitted size additions (`APPROVED`, plus the current `ACTIVE` compatibility value). The completed-and-approved UI flow passes with simulated responses; a live check of that combined state awaits an approved account. |
 | Approval status vocabulary | Identifying approved vendors consistently | The documented contract and existing fixtures use `approval_status: APPROVED`, while a current supplied vendor context reports `approval_status: ACTIVE`. The frontend treats both as approved at its status boundary; the backend should publish one canonical enum and clarify whether `ACTIVE` belongs to `vendor_status` only. |
 | ~~QR sharing~~ **closed 21 Sep 2026** | The ticket's offline-friendly QR requirement | The dashboard and approved setup Step 10 generate the QR in-browser from the canonical storefront URL. Vendors can save the PNG, and the native file-share action appears only when the device supports sharing that file. |
-| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates name and contacts from the vendor record and leaves branding at defaults. |
+| Readable storefront before approval | Restoring Step 9 branding when a vendor resumes | `GET /{identifier}/storefront` is the only read carrying theme, tagline, badges and welcome message, and it `404`s until `approval_status: APPROVED` — exactly the vendor who needs it cannot use it. Resume repopulates the store name from the vendor record and keeps this owner's local copy of the other Step 9 fields. On another device or after the local draft is cleared they return to defaults. Logo/banner URLs restore separately through the authenticated images read. |
+| Saved business type is not readable or enforced | Locking the business type once a category is saved | `"Others"` doubles as "not chosen", vendor categories carry no type, and a type PATCH is accepted even after categories (they stay, mismatched). The wizard locks once categories exist, re-reads before type and first-category writes, and for `"Others"` checks the Others list (temporary, `TEMP(onboarding-saved-type)`). See [below](#saved-business-type-is-not-readable-or-enforced). |
 | Per-SKU fulfillment flags | Restoring Step 6 exactly | Neither the SKU list nor `GET /skus/{sku_id}` exposes `home_delivery` / `store_pickup`, though both are writable. A resumed SKU defaults both to true. |
 | Vendor-triggered approval | Testing the approval transition end to end | `PATCH /approval` returns `500` for a vendor token, so vendor credentials cannot exercise the administrator's approval transition. Login and a single active-size create/read-back have been verified with a manually approved live test account; this does not verify the approval transition itself. |
 | Date-scoped vendor revenue | The dashboard's "Today's sales" tile, and any earnings figure a vendor is shown | **No aggregate revenue endpoint exists** — all 117 paths enumerated, zero matches for revenue, sales, earning, payout, settlement, income, transaction, invoice, billing or payment. `GET /v1/users/{user_id}/dashboard` carries `payment_dues.paid_amount`, but it is **cumulative, never date-scoped**, so it cannot answer "today". The only derivation available is paginating `GET /v1/vendors/{id}/orders/?start_date=&end_date=` and summing client-side: both bounds are honoured live and a malformed date returns `417`, so the filter is real, but this spends N requests to produce one number and the per-order amount field is **unconfirmed** — no test vendor has orders yet. Backend should expose a date-scoped vendor revenue aggregate. Until then a vendor-facing revenue figure is either omitted or explicitly labelled cumulative. |
-| Vendor profile is not writable | Editing store name, owner, contact, email or address | **`PUT /v1/vendors/{id}` returns `417` "Could not commit JPA transaction" for every body shape tried** — echoing the record back unchanged, with the vendor's existing category ids, with `category_ids: []`, with `assign_categories` omitted, and with it null. Nothing changed on the record in any attempt. `VendorProfileRequest` also declares `assign_categories` **required**, which would collide with additive-only category assignment even if the write worked. No other endpoint covers these fields, and the wizard never calls this one, which is why the defect went unnoticed. Settings is therefore read-only. |
+| Profile update contract differs from measured behavior | Safely editing an approved store's names | `PUT /v1/vendors/{id}` exists; the earlier universal JPA-failure claim was retracted by the 6 September source correction after successful gone-live and unfinished-vendor tests. The schema still requires `assign_categories` and omits partial-merge semantics. Approved Step 9 uses the [scoped profile exception](#approved-store-profile-updates); dashboard Settings stays read-only. |
 | 14-day trial in production | The agreed 14-day free trial and access enforcement | Go-live now starts a trial (on dev a successful go-live counts as complete and approved; once a vendor verification step exists, the trial must start at approval), and `GET /v1/vendors/{vendor_id}/subscription` carries `trial_started_at` and `trial_ends_at`. Dev deliberately runs a 1-day trial so subscriptions come due quickly; production must give 14 days, a [release blocker](./VENDOR_BILLING_BACKEND_BRIEF.md#5-release-blockers). The app counts days from `trial_ends_at` and assumes no length. |
 | Vendor platform billing | Vendor-to-MithraDirect recurring fees, trial eligibility, verification and store access | The backend published its own billing API, and the Live API reads it. Gaps A–L are summarised [below](#vendor-platform-billing); the [backend billing brief](./VENDOR_BILLING_BACKEND_BRIEF.md) owns their detail and the production release blockers. The explicitly labeled [development preview](./VENDOR_BILLING_PREVIEW.md) stays demo-only; it never grants real access. |
 | `eligible_features` is unexplained | Deciding what a plan actually unlocks | Live returns `["DASHBOARD","VIEW","CATALOG"]` where the doc example returns five entries including `ORDERS` and `PRICES`. Nothing documents what the list governs. Mapped but **not** used for gating: gating on it would hide Orders from every FREE-tier vendor, which is currently all of them. |
@@ -264,6 +264,102 @@ migrated by this work. Reconciling those stored units requires a separate backen
 or an explicit update contract; the frontend must not claim that replacing its picker also
 changed existing account data.
 
+### Approved-store profile updates
+
+Checked against current QA OpenAPI on 9 November 2026. Image POST permits a vendor's own ID;
+storefront PUT saves branding; general profile PUT permits Vendor/Admin/Customer_Care after login.
+None documents an active/approved-store prohibition. This contract inspection made no authenticated
+writes and does not establish preservation of completed onboarding or approval on current QA.
+
+The existing Step 9 business-type PATCH is unsuitable for completed-store editing: it explicitly
+sets `onboarding_step` to `STEP_3_COMPLETED`, and QA (10 November 2026) moved `next_step` back to 4
+from any later step. It also requires `business_type` (`400` without it). Setup Step 9 therefore
+never sends it: the storefront PUT alone saves the store name. The storefront PUT rejects
+unknown fields (`400`, e.g. `owner_name`). Step 9 no longer collects owner name or contact person.
+Approved Step 9 instead uses general
+profile PUT for `business_name` only, without status, approval, address, category, business-type
+or onboarding fields. It never invokes go-live to recover from an edit failure.
+
+**Approved temporary exception:** send that nonblank profile field without
+`assign_categories`. The source correction of 6 September (commit `a59bf1959fc101ee4a4d855cf395e35b6a68f2cf`)
+reports successful writes on gone-live and unfinished stores, a partial merge, ignored nulls, and
+unenforced `assign_categories`; the older JPA error came from a malformed request. This historical
+measurement is not a new live verification. Do not send empty category lists to satisfy the schema.
+Remove this exception when the backend publishes an accurate partial-update contract with category
+assignment optional/separate, and reverify the mapped request against it.
+
+Before release, verify a dedicated eligible test vendor through read → save → read-back → reload,
+including unchanged vendor/approval/completion status, image replacement and partial failures.
+Storefront blank-field clearing remains unverified: its current mapper omits blank optional text,
+and profile PUT historically ignores null. No clearing capability is promised here.
+
+### Saved business type is not readable or enforced
+
+Product rule: one vendor has one business type, and its catalog belongs to it. It is fixed once the
+account holds a category; only support may change it afterwards. The contract supports neither half:
+
+MFPS-172 (QA, 16 November 2026): `GET /v1/vendors/{vendor_id}` now returns `business_type_id` (ids
+as in `GET /v1/business-types/`; omitted when the type matches no entry) and reflects a
+business-type PATCH immediately. Untested: whether the PATCH accepts the id; `/context` did not
+return it on two vendors. Still open:
+
+- **No enforcement.** `PATCH /v1/vendors/{vendor_id}/business-type` accepts a different type at any
+  time. QA, 16 November 2026 (fresh vendor): the PATCH always returns 200; a fresh vendor record
+  reads Others/30 with `next_step` 3; a type PATCH moves `next_step` 3→4, and another type with no
+  categories stays at 4; `PATCH …/categories` moves it to 5; a type PATCH after categories keeps
+  them (now mismatched) and moves `next_step` 5→4; an empty categories PATCH is a 400, so
+  categories cannot be cleared. **Required:** reject a business-type change to another type once
+  the vendor has any assigned category (a distinct error code), still accepting a same-type re-save.
+- **`"Others"` means two things.** A never-configured vendor reports `business_type: "Others"`
+  with Others' `business_type_id` (30 on QA), indistinguishable from a vendor who chose Others.
+  **Required:** omit both until a type is saved.
+- **Categories carry no type.** `GET /v1/vendors/{vendor_id}/categories` returns `id`, `ref_id`,
+  `name`, `image_path`, `icon`. `ref_id` is the platform category id (QA, 12 November 2026: an
+  assigned category 117 from `GET /v1/categories/?business_type_id=1` came back as `ref_id: 117`),
+  but nothing says which type it belongs to, so an already mixed catalog cannot be detected from
+  this read alone. **Required:** return the category's `business_type_id` on this read.
+
+**Current frontend behavior:** the type locks once the store is submitted, the context's
+`next_step` is past 4, or the assigned categories read holds a category (at `next_step` 4 only that
+read tells, since a type PATCH after categories also gives 4). Until then the fresh vendor record is
+the current type (`"Others"` included once Step 3 is saved), another card switches it, dropping
+unsaved Step 4–6 picks silently, and Step 3 re-saves it. One fresh read stands in for enforcement:
+the assigned categories before an unlocked Step 3 type save (a category found there locks the type
+and the save is refused). A type changed on another device between this browser's Step 3 save and
+its first category save is not detected; that accepted race can produce a mixed catalog until the
+backend enforces the lock. A changed Step 3 must be saved
+before the first category save. The browser that lands the first category assignment records its
+type per vendor (cleared on sign-out; see
+[SESSION.md](./SESSION.md#browser-local-state-owned-by-a-session)); the record is consulted only
+once locked, so an older record is ignored until then. Once locked, the wizard takes the type the
+vendor record returns by `business_type_id` and `business_type`, unless it says `"Others"`; then
+this browser's record when it matches the record's id (or the record has none). For `"Others"`
+with an id, it reads that type's category list (`GET /v1/categories/?business_type_id=`) and takes
+Others when it holds every assigned category. That answer is recorded, so the read runs once per
+browser, and its first page stands in for Step 4's own read. With none of these (no id, or a
+category outside the Others list) it never guesses: Steps 3-4 offer **Try again**, then support,
+and submission waits. Only Step 3's picker reads the business-type list, nine at a time.
+
+Before the lock, a vendor could save a second type and assign its categories on top of the first
+type's, so some accounts already hold a mixed catalog. The frontend never removes or reassigns
+assigned entries. It calls the catalog mixed only when the saved type's complete category list
+holds some assigned categories but not all, judging the assigned categories as read on entry
+(never what a save adds during the visit) against a list that visit read anyway: the Others list
+above, or Step 4's first page of the saved type (6 categories) when it is also the last. It
+reads nothing for this check alone and uses no cached list, so a mixed catalog goes undetected when
+the type came from this browser's record or the vendor record and its list runs past one Step 4
+page. When detected, Steps 4-6 and submission point the vendor to support. A category missing from
+its type's list for another reason (unverified whether the list hides an inactive category) would
+read as mixed too. With `business_type_id` on the assigned-categories read, detection needs no list.
+
+**TEMP(onboarding-saved-type), removal condition:** once the vendor record no longer reports
+`"Others"` for a vendor that has not saved a type, delete the Others category-list check and the
+`"Others"` exclusions marked `TEMP(onboarding-saved-type)` in `src/modules/vendor/lib/` and the
+wizard, and resolve from this browser's record and the record's `business_type_id` and name. Once
+the backend rejects a type change after categories, delete the Step 3 guard read (`typeGuardReads`).
+Backend enforcement of the lock is still required either way: the frontend lock does not cover other
+clients.
+
 ### Onboarding continuity a vendor still loses
 
 Symptom-first, because these are what a vendor actually reports. Each is caused by a gap
@@ -271,10 +367,11 @@ above and is **not** a frontend defect — the frontend cannot fix any of them a
 
 | What the vendor sees | Cause | What the backend must provide |
 |----------------------|-------|-------------------------------|
-| "I re-enter my business location every time I come back." | `business_location` lives only on the storefront payload, which `404`s until approval. The vendor record carries a structured `business_address` (measured on vendor 96 — see the corrections section below), but not the storefront's free-text `business_location`, so the wizard's location field still has nothing to resume from. | Either a vendor-readable storefront before approval, or `business_location` on `GET /v1/vendors/{id}`. |
+| "I re-enter my WhatsApp numbers after every reload, or I can't submit." | The storefront PUT saves `order_whatsapp_number` and `support_whatsapp_number`, but before approval no read returns them: the storefront read `404`s, and `GET /v1/vendors/{id}`, `/context` and a fresh `verify-otp` carry neither (QA, 12 Nov 2026). The frontend keeps both numbers in memory only, never in the draft, so after a reload Step 9 and Step 10 ask for them again. Order WhatsApp may show the login phone (`contact_number`), and support WhatsApp is empty. The Step 9 save sends both numbers, so a later Step 9 save needs them re-entered. No frontend workaround by decision. | Return both numbers before approval: a storefront read the vendor may call on their own unapproved store, or both fields on `GET /v1/vendors/{id}`. A partial storefront update that leaves omitted fields unchanged would also stop a later Step 9 save needing them. |
 | "My theme, tagline, welcome message and badges reset to defaults on every resume." | Same 404. `GET /{identifier}/storefront` is the only read carrying them, by `store_identifier` **and** by `vendor_id` — both verified `404` on a live `PENDING` vendor. | A read a vendor may call on their own unapproved store. |
 | "A SKU I set to pickup-only comes back as delivery + pickup." | The SKU read omits `home_delivery` and `store_pickup` entirely (verified: the row returns `vendor_product_id, sku_id, sku_name, image_path, sku_size, sku_type, is_active, valid_days, price_id, list_price, sale_price, effective_date, eligible_subscription_details, discount, on_sale, description`). Both are writable but unreadable, so resume defaults them to `true`. | Return the two flags on the SKU read. |
 | "I can't remove a category or product I picked by mistake." | 403 / no endpoint, above. | A vendor-callable un-assign for both. |
+| "A change I saved on my phone was undone when I saved on my laptop." | No onboarding read carries a version or `ETag`, and no write accepts `If-Match`; checkout and storefront writes replace the whole resource, and Step 6 reconciles every size. The frontend reads again before a write once its tab was hidden for 15 minutes or another tab of the browser saved, and merges silently ([details](./API_ARCHITECTURE.md#vendor-setup-account-hydration)), but cannot guarantee cross-device atomicity: a save from another device followed within 15 minutes by one here, or saves crossing in flight, can still overwrite each other. | A version (or `ETag`) on each onboarding resource read, and `If-Match` on its write answered with `409`/`412` when the resource changed since. |
 | "A product I don't want to sell blocks go-live." | Follows from the above: the product cannot be un-assigned, and Step 6 requires every assigned product to carry at least one *active* valid SKU. So a mistakenly assigned product must be priced and sold. | Same un-assign. Until then the only escape is support. |
 
 Normal size and price edits now preserve `sku_id`. The remaining legacy fulfillment-only
@@ -417,12 +514,15 @@ the frontend works around it with an inline comment at the call site.
   `customer_consent_text`. Anyone reading the document would conclude payments cannot be read back
   and rebuild them from scratch; they round-trip fine. Verified on a configured vendor.
 - **`GET /v1/vendors/{id}` is the only read for `business_type`** — while typed as a bare
-  `APIResponseObject` with no example. It also returns `owner_name`, `contact_person`,
+  `APIResponseObject` with no example. It also returns `business_type_id`, `owner_name`, `contact_person`,
   `contact_number`, `description`, `communication_email`, `business_address`, `banner_image`,
   `user_id`, `vendor_status` and `approval_status`; an earlier entry here claimed the record
   held the first few "and nothing else", which direct measurement disproved (see corrections).
   A never-configured vendor reports `business_type: "Others"`, which is indistinguishable from a
-  vendor who genuinely chose Others; the frontend treats it as unset and re-asks.
+  vendor who genuinely chose Others; see
+  [saved business type](#saved-business-type-is-not-readable-or-enforced) for how the wizard tells
+  them apart. Since MFPS-172, the business-type PATCH, the storefront `business_name` and a logo
+  upload are reflected on the next vendor-record read (QA, 16 November 2026).
 - **A vendor can only remove SKUs. Categories and products are additive for this role,
   permanently.** Verified live against the dev API with a `VENDOR` token:
 
@@ -497,9 +597,7 @@ bare `APIResponseObject` says nothing about what it actually returns, and operat
   `contact_number` and nothing else"** — it returns considerably more. Measured on vendor 96:
   `description`, `communication_email`, a full `business_address` object (country, state, district,
   city, address1, address2, zipCode), `banner_image`, `user_id`, `created_date`, `vendor_status`,
-  `approval_status` and `langauage` [sic]. This weakens the recorded "I re-enter my business
-  location every time I come back" symptom: `business_location` is missing from the *storefront*
-  read, but a business address is on the vendor record and is readable before approval.
+  `approval_status` and `langauage` [sic].
 - **"`GET /v1/vendors/{id}/products` returns `{id, ref_id}`"** — it also returns `name`,
   `category_id` and `measurement_id`. It carries no price and no size, which is the real reason the
   old products page rendered every row at ₹0; the dashboard reads `/products/skus` instead.
@@ -516,3 +614,40 @@ bare `APIResponseObject` says nothing about what it actually returns, and operat
   and returns it in `vendors[]`.
 - **"`VENDOR` may not be granted at verification"** — it is. A first-time vendor's `verify-otp`
   returns `roles: ["VENDOR", "USER"]`.
+
+
+## Vendor onboarding images (MFPS-166)
+
+Checked 9 November 2026 against the current QA `/api/v3/api-docs`: the image GET/POST contract
+matches the checked-in OpenAPI. The wizard sends `image_type` in the query and `file` in the
+multipart body, and uses the returned `image_url`. This contract check does not verify a live
+upload or authorize treating S3/Cloudflare delivery as production-ready.
+
+- **Fresh-vendor image reads (MFPS-173, resolved on QA 16 November 2026):** a fresh vendor's
+  THUMBNAIL and HOMEBANNER reads used to return `success: false`, `status: "404"`,
+  `failure_reason: "Vendor #<id> not found"` before any upload (reported 9 November, still on QA
+  11 November 2026). On QA, 16 November 2026, a fresh vendor's two reads both returned `200` with
+  `image_url: null`, and a read after an upload returned the uploaded URL. The frontend skips
+  restoration for initial setup using the agreed progress rule in
+  [vendor setup images](./API_ARCHITECTURE.md#vendor-setup-images), reads each image
+  independently, keeps optional read failures nonblocking with per-image Retry, and omits
+  untouched unknown URL fields on save. Still open: recovery after a browser reload following a
+  partial upload with an unchanged Step 9 pointer, and live verification that omitted existing
+  image fields are preserved; revisit the initial-setup assumption when partial-save re-entry
+  recovery is implemented.
+- **Nullable image read:** GET prose permits `image_url: null` before upload, but
+  `ImageUploadResponse.image_url` is an optional, non-nullable string in the schema. Backend
+  should publish a nullable response property. The mapper accepts the explicitly documented null;
+  missing/malformed fields remain errors. Remove this discrepancy note after regeneration includes
+  the corrected schema.
+- **Upload and delivery guarantees unverified:** the contract does not specify PNG/JPEG/GIF,
+  5 MB limits, precise validation errors, optimized Cloudflare URLs, immediate replacement/cache
+  invalidation or origin restrictions. Backend should document these ticket requirements and verify
+  them with a dedicated test vendor, including permissions, replacement and a failed transformation.
+  The frontend enforces the agreed selection rules and displays server errors; it does not build
+  CDN URLs or claim to clear server caches.
+- **No saved-image removal:** there is no DELETE/clear operation. The wizard offers replacement
+  only and lets a vendor discard an unsaved selection. Backend must define an authorized clear
+  contract before permanent removal can be offered.
+- **Display scope:** the wizard uses the written 3:1 banner guidance. The public storefront still
+  uses 16:9 and is explicitly outside this change; its different crop remains unresolved.

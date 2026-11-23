@@ -6,7 +6,11 @@ import {
   contextSnapshotMayReplace,
   loadVendorContext,
   peekVendorContext,
+  vendorContextIsCurrent,
 } from './vendor-context-cache'
+
+const away = vi.hoisted(() => ({ epoch: 0 }))
+vi.mock('./page-away', () => ({ pageAwayEpoch: () => away.epoch }))
 
 afterEach(() => {
   invalidateVendorContext()
@@ -191,5 +195,26 @@ describe('loadVendorContext', () => {
       expect(readVendorHeaderHint('96')).toBeNull()
       expect(readVendorHeaderHint('97')).toBeNull()
     })
+  })
+})
+
+describe('vendorContextIsCurrent', () => {
+  it('holds for a read in flight or resolved since the page was last away', async () => {
+    expect(vendorContextIsCurrent('77')).toBe(false)
+    const load = loadVendorContext('77', async () => contextFor('77'))
+    expect(vendorContextIsCurrent('77')).toBe(true)
+    await load
+    expect(vendorContextIsCurrent('77')).toBe(true)
+    away.epoch += 1
+    expect(vendorContextIsCurrent('77')).toBe(false)
+  })
+
+  it('leaves the dashboard reusing a context read before an away', async () => {
+    await loadVendorContext('77', async () => contextFor('77'))
+    away.epoch += 1
+    const read = vi.fn(async () => contextFor('77'))
+    await loadVendorContext('77', read)
+    expect(read).not.toHaveBeenCalled()
+    expect(peekVendorContext('77')).not.toBeNull()
   })
 })

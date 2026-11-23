@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from '../client/http';
-import type { ApiEnvelope } from '../client/types';
+import type { ApiEnvelope, RequestConfig } from '../client/types';
 
 export type StorefrontTheme = {
   primary_color?: string;
@@ -29,9 +29,9 @@ export type StorefrontCategory = {
 
 /** Vendor storefront public API (tag 20) */
 export const storefrontService = {
-  get: (identifier: number | string) =>
+  get: (identifier: number | string, config?: Pick<RequestConfig, 'signal'>) =>
     apiGet<ApiEnvelope>(`/v1/vendors/${encodeURIComponent(identifier)}/storefront`, {
-      skipAuth: true,
+      ...config, skipAuth: true,
     }),
   checkDeliveryEligibility: (vendorId: number | string, body: Record<string, unknown>) =>
     apiPost<ApiEnvelope>(`/v1/vendors/${vendorId}/delivery-eligibility`, body, { skipAuth: true }),

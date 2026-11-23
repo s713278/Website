@@ -52,7 +52,10 @@ function EditSetupLink() {
  * Until then the panel's one control sends the vendor to the wizard that *can* change these
  * — the same "Edit setup" the shared design puts here.
  */
-function StoreSettings({ profile, planName }: { profile: VendorStoreProfile; planName: ReactNode }) {
+function StoreSettings({ profile, planName }: {
+  profile: VendorStoreProfile
+  planName: ReactNode
+}) {
   return (
     <DashboardPanel title="Store settings" action={<EditSetupLink />}>
       <dl className="grid gap-2.5">
@@ -190,7 +193,10 @@ export function VendorSettingsPage() {
       {loading ? <StoreSettingsSkeleton /> : null}
 
       {!loading && profile ? (
-        <StoreSettings profile={profile} planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'} />
+        <StoreSettings
+          profile={profile}
+          planName={usesLiveBilling() ? <LivePlanName /> : plan.name ?? plan.code ?? 'Not set'}
+        />
       ) : null}
 
       {/*

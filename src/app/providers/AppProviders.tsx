@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { clearOnboardingDraft } from '@/modules/vendor/lib/onboarding-draft-keys'
+import { clearSavedTypeRecords } from '@/modules/vendor/lib/onboarding-saved-type-record'
 import { invalidateMeasurementCatalog } from '@/modules/vendor/lib/measurement-catalog-cache'
 import { invalidateOnboardingResources } from '@/modules/vendor/lib/onboarding-resource-cache'
 import { invalidateVendorContext } from '@/modules/vendor/lib/vendor-context-cache'
@@ -14,6 +15,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // whatever route it happened on. The wizard's own ownership check is the backstop for
   // sessions that end without an explicit sign-out.
   useEffect(() => onExplicitSignOut(clearOnboardingDraft), [])
+  // So must the record of which business type a save confirmed; a fresh demo starts unlocked.
+  useEffect(() => onExplicitSignOut(clearSavedTypeRecords), [])
 
   // Cached account reads are one vendor's store details and must not outlive their
   // session — the next sign-in on this browser may be someone else. The platform units are

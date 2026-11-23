@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Sample navigation for MithraDirect vendor, admin, and customer care. A starting set to enhance.">
+    <title>Role navigation — MithraDirect</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <script src="assets/js/assets-config.js"></script>
+</head>
+<body class="dash-page role-sample">
+    <div class="dash-shell" id="dash-shell">
+        <aside class="dash-sidebar" id="dash-sidebar" aria-label="Role navigation">
+            <div class="dash-brand">
+                <a href="index.html" aria-label="MithraDirect home">
+                    <img data-md-src="logos.dark" src="assets/img/logos/logo_dark_md.png" alt="MithraDirect" class="dash-logo">
+                </a>
+                <p class="dash-brand-sub" id="role-brand-sub">Platform</p>
+            </div>
+
+            <div class="role-switch" role="group" aria-label="Audience">
+                <button type="button" data-role="vendor">Vendor</button>
+                <button type="button" data-role="admin">Admin</button>
+                <button type="button" data-role="care">Care</button>
+            </div>
+
+            <nav class="dash-nav" id="role-nav" aria-label="Section"></nav>
+
+            <div class="dash-sidebar-foot" id="role-foot"></div>
+        </aside>
+
+        <div class="dash-main">
+            <header class="dash-topbar">
+                <button type="button" class="dash-menu-btn" id="dash-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="dash-sidebar">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <div class="dash-topbar-text">
+                    <h1 class="dash-page-title" id="role-title">Overview</h1>
+                    <p class="dash-page-sub" id="role-sub">Sample — edit the labels in this file</p>
+                </div>
+                <div class="dash-topbar-actions">
+                    <a href="index.html" class="dash-text-link">Home</a>
+                    <a href="dashboard.html" class="dash-text-link">Vendor dashboard</a>
+                </div>
+            </header>
+
+            <div class="dash-banner" role="note">
+                <div>
+                    <strong>Starting set.</strong>
+                    <span> Each audience sees only its own work. Change names and screens in this file, then build the ones you keep.</span>
+                </div>
+            </div>
+
+            <main class="dash-content" id="role-panel"></main>
+        </div>
+    </div>
+
+    <div class="dash-backdrop" id="dash-backdrop" hidden></div>
+
+    <script>
+    (function () {
+        /* Edit this object. Each role is one sidebar. Each item is one screen. */
+        var ROLES = {
+            vendor: {
+                label: 'Vendor',
+                sub: 'Your shop',
+                foot: '<a href="dashboard.html" class="btn btn-secondary btn-sm btn-block">Open vendor dashboard</a>',
+                items: [
+                    {
+                        id: 'overview',
+                        icon: '⌂',
+                        label: 'Overview',
+                        blurb: 'This shop today: orders, sales, and whether the store is open.',
+                        owner: 'This vendor',
+                        metrics: [
+                            { label: 'Orders today', value: '6' },
+                            { label: 'Sales today', value: '₹1,840' },
+                            { label: 'Products', value: '8' },
+                            { label: 'Store state', value: 'Open' }
+                        ]
+                    },
+                    {
+                        id: 'orders',
+                        icon: '☰',
+                        label: 'Orders',
+                        blurb: 'Orders placed with this store, and how far each one is toward the customer.',
+                        owner: 'This vendor updates delivery. This vendor records payment.',
+                        columns: ['Order', 'Customer', 'Amount', 'Delivery'],
+                        rows: [
+                            ['MD-1042', 'Ananya R.', '₹240', 'Out for delivery'],
+                            ['MD-1041', 'Ravi K.', '₹90', 'Confirmed'],
+                            ['MD-1038', 'Sneha M.', '₹510', 'Delivered']
+                        ]
+                    },
+                    {
+                        id: 'products',
+                        icon: '▦',
+                        label: 'Products',
+                        blurb: 'This store’s photos and features. They replace the shared ones on this shop only. Price stays with the store.',
+                        owner: 'This vendor',
+                        workspace: 'catalog'
+                    },
+                    {
+                        id: 'store',
+                        icon: '↗',
+                        label: 'Store & Share',
+                        blurb: 'This store’s link, QR, WhatsApp, and the look customers see on its page.',
+                        owner: 'This vendor',
+                        columns: ['Piece', 'Sample'],
+                        rows: [
+                            ['Shop link', 'mithradirect.com/lakshmi-stores'],
+                            ['WhatsApp', '+91 98450 11111'],
+                            ['Theme', 'Green, this store only']
+                        ]
+                    },
+                    {
+                        id: 'plan',
+                        icon: '₹',
+                        label: 'Shop plan',
+                        blurb: 'This store’s membership: trial or paid, and the catalog limits that come with it.',
+                        owner: 'This vendor pays. The platform sets the tiers.',
+                        metrics: [
+                            { label: 'Plan', value: 'Social Starter' },
+                            { label: 'Billing', value: 'Trial' },
+                            { label: 'Days left', value: '12' },
+                            { label: 'Product limit', value: '18 / 40' }
+                        ]
+                    },
+                    {
+                        id: 'settings',
+                        icon: '⚙',
+                        label: 'Settings',
+                        blurb: 'Hours, fulfilment, how this store takes payment, and the account phone.',
+                        owner: 'This vendor',
+                        columns: ['Setting', 'Sample'],
+                        rows: [
+                            ['Hours', '7:00–21:00'],
+                            ['Fulfilment', 'Delivery in 560038'],
+                            ['Payment methods', 'UPI, cash']
+                        ]
+                    }
+                ]
+            },
+            admin: {
+                label: 'Admin',
+                sub: 'Platform',
+                foot: '<p class="dash-page-sub">Shared catalog and homepage. One shop’s prices stay with that vendor.</p>',
+                items: [
+                    {
+                        id: 'overview',
+                        icon: '⌂',
+                        label: 'Overview',
+                        blurb: 'The marketplace at a glance: vendors on the platform, and the size of the shared catalog.',
+                        owner: 'Platform',
+                        metrics: [
+                            { label: 'Vendors', value: '128' },
+                            { label: 'Open stores', value: '96' },
+                            { label: 'Setting up', value: '18' },
+                            { label: 'Under review', value: '7' },
+                            { label: 'Suspended', value: '4' },
+                            { label: 'Orders today', value: '86' },
+                            { label: 'Categories', value: '24' },
+                            { label: 'Products', value: '310' }
+                        ]
+                    },
+                    {
+                        id: 'vendors',
+                        icon: '☰',
+                        label: 'Vendors',
+                        blurb: 'Every store: area, store state, and plan. Open a row later to see that store’s own categories and products. Suspend is the platform action here. Opening a submitted store stays with automated verification.',
+                        owner: 'Platform',
+                        columns: ['Store', 'Area', 'Store state', 'Plan'],
+                        rows: [
+                            ['Lakshmi Stores', '560038', 'Open', 'Paid'],
+                            ['Green Basket', '560001', 'Setting up', 'Trial'],
+                            ['Daily Milk', '560043', 'Under review', 'Trial'],
+                            ['Spice Route', '560076', 'Suspended', 'Lapsed']
+                        ]
+                    },
+                    {
+                        id: 'categories',
+                        icon: '▦',
+                        label: 'Categories',
+                        blurb: 'One image and a description for every category stores can sell. A vendor then takes the ones their store sells.',
+                        owner: 'Platform',
+                        workspace: 'categories'
+                    },
+                    {
+                        id: 'products',
+                        icon: '▣',
+                        label: 'Products',
+                        blurb: 'The shared catalog every store can sell. Set the main photo and the features customers read. A store can replace both, and still chooses its own price.',
+                        owner: 'Platform. Stores inherit the photo and the features until they replace them.',
+                        workspace: 'catalog'
+                    },
+                    {
+                        id: 'home',
+                        icon: '☀',
+                        label: 'Home & brand',
+                        blurb: 'The platform logo and the banner on the marketing homepage. A vendor’s own store colours stay on Store & Share.',
+                        owner: 'Platform',
+                        uploads: [
+                            { id: 'logo', label: 'Platform logo', hint: 'Site header on the marketing homepage and this shell.', ratio: 'logo', file: 'Replace logo' },
+                            { id: 'banner', label: 'Home banner', hint: 'Hero image on the marketing homepage.', ratio: 'banner', file: 'Replace home banner' }
+                        ]
+                    }
+                ]
+            },
+            care: {
+                label: 'Customer care',
+                sub: 'Help desk',
+                foot: '<p class="dash-page-sub">Look up and explain. The vendor still runs the order.</p>',
+                items: [
+                    {
+                        id: 'queue',
+                        icon: '⌂',
+                        label: 'Queue',
+                        blurb: 'People waiting. Open one, see the order or the store, and tell them the next step.',
+                        owner: 'Customer care',
+                        columns: ['Person', 'About', 'Waiting'],
+                        rows: [
+                            ['Ananya R.', 'Order MD-1042 not received', '18 min'],
+                            ['Ravi K.', 'Cannot find the store', '6 min'],
+                            ['Lakshmi Stores', 'Trial ending, how to pay', '2 min']
+                        ]
+                    },
+                    {
+                        id: 'orders',
+                        icon: '☰',
+                        label: 'Orders',
+                        blurb: 'Find an order by number or phone. See which store owns it and the delivery status.',
+                        owner: 'Customer care reads. The vendor updates delivery and records payment.',
+                        columns: ['Order', 'Store', 'Customer', 'Delivery'],
+                        rows: [
+                            ['MD-1042', 'Lakshmi Stores', 'Ananya R.', 'Out for delivery'],
+                            ['MD-1033', 'Daily Milk', 'Karthik P.', 'Delivered'],
+                            ['MD-1020', 'Green Basket', 'Sneha M.', 'Cancelled']
+                        ]
+                    },
+                    {
+                        id: 'stores',
+                        icon: '↗',
+                        label: 'Stores',
+                        blurb: 'Find a store and the facts a caller needs: store state, hours, and WhatsApp.',
+                        owner: 'Customer care reads. The vendor edits the store.',
+                        columns: ['Store', 'Store state', 'Hours', 'WhatsApp'],
+                        rows: [
+                            ['Lakshmi Stores', 'Open', '7:00–21:00', '+91 98450 11111'],
+                            ['Green Basket', 'Setting up', '—', '+91 98450 22222'],
+                            ['Spice Route', 'Suspended', '—', '+91 98450 33333']
+                        ]
+                    },
+                    {
+                        id: 'people',
+                        icon: '☺',
+                        label: 'People',
+                        blurb: 'A customer’s phone and the recent orders placed with any store.',
+                        owner: 'Customer care',
+                        columns: ['Customer', 'Phone', 'Last order', 'Store'],
+                        rows: [
+                            ['Ananya R.', '+91 90000 11111', 'MD-1042', 'Lakshmi Stores'],
+                            ['Ravi K.', '+91 90000 22222', 'MD-0991', 'Daily Milk'],
+                            ['Sneha M.', '+91 90000 33333', 'MD-1020', 'Green Basket']
+                        ]
+                    }
+                ]
+            }
+        };
+
+        /* Admin products sample. Photos and facts stay in this page until a real catalog screen is built. */
+        var featureSeq = 0;
+        var HINTS = [
+            { key: 'Brand', hint: 'Who makes it', example: 'Your brand name' },
+            { key: 'Easily Digestible', hint: 'How it feels', example: 'Light on the stomach' },
+            { key: 'Health Benefits', hint: 'Why it helps', example: 'Everyday energy' },
+            { key: 'How to Use', hint: 'How a customer uses it', example: 'Add to tea or cooking' },
+            { key: 'Ingredients', hint: 'What is in it', example: 'Milk, culture' },
+            { key: 'Made in', hint: 'Where it comes from', example: 'Karnataka' },
+            { key: 'Good for', hint: 'What it is good for', example: 'Tea and cooking' }
+        ];
+        var SUGGEST_KEYS = {
+            'Fresh vegetables': ['Good for', 'Storage', 'Pack'],
+            'Dairy': ['Brand', 'Made in', 'Good for', 'Shelf life'],
+            'Bakery': ['Brand', 'Good for', 'Diet'],
+            'Pooja': ['Brand', 'Made in', 'Good for'],
+            'Staples': ['Brand', 'Made in', 'Grade'],
+            'Personal care': ['Brand', 'Good for', 'Made in']
+        };
+
+        function nextFeatureId() {
+            featureSeq += 1;
+            return 'f' + featureSeq;
+        }
+
+        function fact(key, value) {
+            return { id: nextFeatureId(), key: key, value: value };
+        }
+
+        function swatch(name) {
+            var palette = ['#d1fae5', '#fef3c7', '#e0e7ff', '#ffe4e6', '#ecfccb', '#cffafe'];
+            var n = 0;
+            for (var i = 0; i < name.length; i++) n = (n + name.charCodeAt(i)) % palette.length;
+            return palette[n];
+        }
+
+        function placeholder(label) {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">' +
+                '<rect width="480" height="480" fill="' + swatch(label) + '"/>' +
+                '<text x="240" y="255" text-anchor="middle" font-family="Poppins,sans-serif" font-size="42" font-weight="700" fill="#064e3b">' +
+                label + '</text></svg>';
+            return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+        }
+
+        var CATALOG = [
+            { id: 'p1', name: 'Tomato', category: 'Fresh vegetables', image: '', thumbs: [], features: [] },
+            { id: 'p2', name: 'Onion', category: 'Fresh vegetables', image: placeholder('Onion'), thumbs: [], features: [fact('Good for', 'Curries and salads')] },
+            { id: 'p3', name: 'Potato', category: 'Fresh vegetables', image: placeholder('Potato'), thumbs: [placeholder('Potato 2')], features: [fact('Storage', 'Cool and dry')] },
+            { id: 'p4', name: 'Milk', category: 'Dairy', image: placeholder('Milk'), thumbs: [placeholder('Milk 2'), placeholder('Milk 3')], description: 'Everyday toned milk for tea, coffee, and cooking.', features: [fact('Brand', 'Nandini'), fact('Made in', 'Karnataka'), fact('Good for', 'Tea and coffee')] },
+            { id: 'p5', name: 'Curd', category: 'Dairy', image: placeholder('Curd'), thumbs: [], features: [fact('Brand', 'Nandini'), fact('Good for', 'Rice and snacks')] },
+            { id: 'p6', name: 'Paneer', category: 'Dairy', image: '', thumbs: [], features: [] },
+            { id: 'p7', name: 'Bread', category: 'Bakery', image: placeholder('Bread'), thumbs: [], features: [fact('Good for', 'Breakfast')] },
+            { id: 'p8', name: 'Bun', category: 'Bakery', image: '', thumbs: [], features: [] },
+            { id: 'p9', name: 'Cookies', category: 'Bakery', image: placeholder('Cookies'), thumbs: [], features: [fact('Brand', 'Homestyle'), fact('Good for', 'Tea time')] },
+            { id: 'p10', name: 'Agarbatti', category: 'Pooja', image: placeholder('Agarbatti'), thumbs: [], features: [fact('Brand', 'Cycle'), fact('Made in', 'Mysuru'), fact('Fragrance', 'Sandal')] },
+            { id: 'p11', name: 'Camphor', category: 'Pooja', image: '', thumbs: [], features: [] },
+            { id: 'p12', name: 'Toor dal', category: 'Staples', image: placeholder('Toor dal'), thumbs: [], features: [fact('Good for', 'Sambar')] },
+            { id: 'p13', name: 'Rice', category: 'Staples', image: placeholder('Rice'), thumbs: [placeholder('Rice 2')], features: [fact('Brand', 'Sona masoori'), fact('Made in', 'Karnataka')] },
+            { id: 'p14', name: 'Turmeric', category: 'Staples', image: placeholder('Turmeric'), thumbs: [], features: [fact('Good for', 'Colour and cooking')] },
+            { id: 'p15', name: 'Sugar', category: 'Staples', image: '', thumbs: [], features: [] },
+            { id: 'p16', name: 'Soap', category: 'Personal care', image: placeholder('Soap'), thumbs: [], features: [fact('Brand', 'Herbal'), fact('Good for', 'Daily wash')] },
+            { id: 'p17', name: 'Shampoo', category: 'Personal care', image: placeholder('Shampoo'), thumbs: [placeholder('Shampoo 2')], features: [fact('Good for', 'Daily hair wash')] },
+            { id: 'p18', name: 'Toothpaste', category: 'Personal care', image: '', thumbs: [], features: [] }
+        ];
+
+        var VENDOR_CATALOG = [
+            { id: 'v1', name: 'Tomato', category: 'Fresh vegetables', price: '₹30', sizes: '500 g, 1 kg', image: '', thumbs: [], features: [], instagram: '' },
+            { id: 'v2', name: 'Milk', category: 'Dairy', price: '₹28', sizes: '500 ml', image: placeholder('Milk'), thumbs: [placeholder('Milk 2')], description: 'Toned milk from this shop, for tea and coffee.', features: [fact('Brand', 'Nandini'), fact('Easily Digestible', 'Light on the stomach')], instagram: '@lakshmistores' },
+            { id: 'v3', name: 'Bread', category: 'Bakery', price: '₹45', sizes: '1 loaf', image: '', thumbs: [], features: [], instagram: '' },
+            { id: 'v4', name: 'Onion', category: 'Fresh vegetables', price: '₹40', sizes: '1 kg', image: placeholder('Onion'), thumbs: [], features: [fact('Good for', 'Curries')], instagram: '' },
+            { id: 'v5', name: 'Curd', category: 'Dairy', price: '₹25', sizes: '500 g', image: placeholder('Curd'), thumbs: [], features: [fact('Brand', 'Nandini')], instagram: '' },
+            { id: 'v6', name: 'Rice', category: 'Staples', price: '₹60', sizes: '1 kg', image: placeholder('Rice'), thumbs: [placeholder('Rice 2')], features: [fact('Made in', 'Karnataka')], instagram: '' },
+            { id: 'v7', name: 'Toor dal', category: 'Staples', price: '₹120', sizes: '1 kg', image: placeholder('Toor dal'), thumbs: [], features: [], instagram: '' },
+            { id: 'v8', name: 'Soap', category: 'Personal care', price: '₹35', sizes: '1 bar', image: '', thumbs: [], features: [fact('How to Use', 'Daily wash')], instagram: '' }
+        ];
+
+        var CATEGORIES = [
+            { id: 'c1', name: 'Fresh vegetables', type: 'Grocery', image: '', description: '' },
+            { id: 'c2', name: 'Dairy', type: 'Grocery', image: placeholder('Dairy'), description: 'Milk, curd, and paneer from nearby stores.' },
+            { id: 'c3', name: 'Bakery', type: 'Bakery', image: placeholder('Bakery'), description: 'Bread and snacks baked the same day.' },
+            { id: 'c4', name: 'Pooja', type: 'General', image: '', description: '' },
+            { id: 'c5', name: 'Staples', type: 'Grocery', image: placeholder('Staples'), description: 'Rice, dal, and everyday cooking staples.' },
+            { id: 'c6', name: 'Personal care', type: 'Personal care', image: '', description: 'Soap and daily wash items.' },
+            { id: 'c7', name: 'Beverages', type: 'Grocery', image: '', description: '' },
+            { id: 'c8', name: 'Snacks', type: 'Bakery', image: placeholder('Snacks'), description: '' }
+        ];
+
+        function activeCatalog() {
+            return state.role === 'vendor' ? VENDOR_CATALOG : CATALOG;
+        }
+
+        var catalogState = {
+            query: '',
+            category: 'all',
+            photo: 'all',
+            facts: 'all',
+            page: 1,
+            pageSize: 6,
+            selectedId: null,
+            notice: '',
+            error: '',
+            restoreFocus: '',
+            restoreCaret: null,
+            scrollEditor: false,
+            preview: false
+        };
+
+        var categoryState = {
+            query: '',
+            type: 'all',
+            image: 'all',
+            text: 'all',
+            page: 1,
+            pageSize: 6,
+            selectedId: null,
+            notice: '',
+            error: '',
+            restoreFocus: '',
+            restoreCaret: null,
+            scrollEditor: false,
+            preview: false
+        };
+
+        function catalogById(id) {
+            var list = activeCatalog();
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) return list[i];
+            }
+            return null;
+        }
+
+        function catalogProduct() {
+            return catalogById(catalogState.selectedId);
+        }
+
+        function hintFor(key) {
+            var norm = String(key || '').trim().toLowerCase();
+            for (var i = 0; i < HINTS.length; i++) {
+                if (HINTS[i].key.toLowerCase() === norm) return HINTS[i];
+            }
+            return null;
+        }
+
+        function hasFeatureKey(product, key) {
+            var norm = key.trim().toLowerCase();
+            for (var i = 0; i < product.features.length; i++) {
+                if (product.features[i].key.trim().toLowerCase() === norm) return true;
+            }
+            return false;
+        }
+
+        function catalogMatches(product) {
+            if (catalogState.category !== 'all' && product.category !== catalogState.category) return false;
+            var ready = !!product.image;
+            if (catalogState.photo === 'missing' && ready) return false;
+            if (catalogState.photo === 'ready' && !ready) return false;
+            if (catalogState.facts === 'missing' && filledFacts(product)) return false;
+            var q = catalogState.query.trim().toLowerCase();
+            if (!q) return true;
+            var hay = [product.name, product.category, product.description || ''];
+            product.features.forEach(function (row) {
+                hay.push(row.key, row.value);
+            });
+            return hay.join(' ').toLowerCase().indexOf(q) !== -1;
+        }
+
+        function catalogView() {
+            var matches = activeCatalog().filter(catalogMatches);
+            var pages = Math.max(1, Math.ceil(matches.length / catalogState.pageSize));
+            if (catalogState.page > pages) catalogState.page = pages;
+            if (catalogState.page < 1) catalogState.page = 1;
+            var start = (catalogState.page - 1) * catalogState.pageSize;
+            return {
+                matches: matches,
+                pages: pages,
+                start: start,
+                rows: matches.slice(start, start + catalogState.pageSize)
+            };
+        }
+
+        function catalogCategories() {
+            var seen = [];
+            activeCatalog().forEach(function (product) {
+                if (seen.indexOf(product.category) === -1) seen.push(product.category);
+            });
+            return seen;
+        }
+
+        function photoCell(product) {
+            if (!product.image) return '<span class="role-product-fallback" aria-hidden="true">+</span>';
+            return '<img src="' + esc(product.image) + '" alt="" width="64" height="64">';
+        }
+
+        function filledFacts(product) {
+            var count = 0;
+            product.features.forEach(function (row) {
+                if (row.key.trim() && row.value.trim()) count += 1;
+            });
+            return count;
+        }
+
+        function flagsHtml(product) {
+            var photo = product.image
+                ? '<span class="role-flag">Photo</span>'
+                : '<span class="role-flag is-warn">Needs photo</span>';
+            var count = filledFacts(product);
+            var featureFlag = count
+                ? '<span class="role-flag">' + count + (count === 1 ? ' feature' : ' features') + '</span>'
+                : '<span class="role-flag is-warn">No features</span>';
+            return photo + featureFlag;
+        }
+
+        function catalogListHtml(view) {
+            if (!view.rows.length) {
+                return '<p class="role-catalog-empty">No product matches. Try another word, or clear a filter.</p>';
+            }
+            return '<ul class="role-product-list">' + view.rows.map(function (product) {
+                var on = product.id === catalogState.selectedId;
+                return '<li><button type="button" class="role-product' + (on ? ' is-selected' : '') +
+                    '" data-catalog-action="select" data-id="' + esc(product.id) + '"' +
+                    (on ? ' aria-current="true"' : '') + '>' +
+                    '<span class="role-product-photo">' + photoCell(product) + '</span>' +
+                    '<span class="role-product-copy"><span class="role-product-name">' + esc(product.name) +
+                    '</span><span class="role-product-meta">' + esc(product.category) +
+                    (product.price ? ' · ' + esc(product.price) : '') + '</span></span>' +
+                    '<span class="role-product-flags">' + flagsHtml(product) + '</span></button></li>';
+            }).join('') + '</ul>';
+        }
+
+        function pagerHtml(view) {
+            if (!view.matches.length) return '';
+            var from = view.start + 1;
+            var to = view.start + view.rows.length;
+            var prev = catalogState.page - 1;
+            var next = catalogState.page + 1;
+            return '<nav class="role-pager" aria-label="Product pages"><button type="button" class="btn btn-secondary btn-sm" data-catalog-action="page" data-page="' +
+                prev + '"' + (catalogState.page <= 1 ? ' disabled' : '') + '>Previous</button><p>' +
+                from + '–' + to + ' of ' + view.matches.length + '</p><label class="role-page-size">Per page <select class="field" data-catalog-field="page-size" aria-label="Products per page">' +
+                '<option value="6"' + (catalogState.pageSize === 6 ? ' selected' : '') + '>6</option>' +
+                '<option value="12"' + (catalogState.pageSize === 12 ? ' selected' : '') + '>12</option></select></label>' +
+                '<button type="button" class="btn btn-secondary btn-sm" data-catalog-action="page" data-page="' +
+                next + '"' + (catalogState.page >= view.pages ? ' disabled' : '') + '>Next</button></nav>';
+        }
+
+        function factPreviewHtml(product) {
+            var rows = product.features.filter(function (row) { return row.key.trim() && row.value.trim(); });
+            if (!rows.length) {
+                if ((product.description || '').trim()) return '<p class="is-empty">Customers will see the description. No feature chips yet.</p>';
+                return '<p class="is-empty">Nothing for a customer to read yet.</p>';
+            }
+            return rows.map(function (row) {
+                return '<span><b>' + esc(row.key.trim()) + '</b> ' + esc(row.value.trim()) + '</span>';
+            }).join('');
+        }
+
+        function shopPreviewHtml(product) {
+            if (!catalogState.preview) return '';
+            var cover = product.image
+                ? '<img src="' + esc(product.image) + '" alt="Main photo of ' + esc(product.name) + '">'
+                : '<p>No main photo</p>';
+            var chips = factPreviewHtml(product);
+            var ig = (product.instagram || '').trim();
+            var where = state.role === 'vendor' ? 'On your shop only' : 'What stores inherit';
+            var about = (product.description || '').trim();
+            return '<aside class="role-shop-preview" id="catalog-shop-preview"><p>' + where + '</p><div class="role-shop-card">' +
+                cover + '<strong>' + esc(product.name) + '</strong>' +
+                (about ? '<p class="role-shop-about">' + esc(about) + '</p>' : '') +
+                '<div class="role-fact-preview">' + chips + '</div>' +
+                (ig ? '<p>' + esc(ig) + '</p>' : '') + '</div></aside>';
+        }
+
+        function editorHtml(product, hiddenByFilter) {
+            if (!product) {
+                return '<section class="role-editor" id="catalog-editor"><h2>Photos and features</h2>' +
+                    '<p>Choose a product. Orange marks mean it still needs a photo or features.</p></section>';
+            }
+            var hidden = hiddenByFilter ? '<p class="role-catalog-note">Hidden by the current search. Clear it to see this product in the list.</p>' : '';
+            var mainFace = product.image
+                ? '<img src="' + esc(product.image) + '" alt="">'
+                : '<span class="role-photo-add"><span aria-hidden="true">+</span>Add photo</span>';
+            var removeMain = product.image
+                ? '<button type="button" class="role-photo-x" data-catalog-action="remove-main" aria-label="Remove main photo">×</button>'
+                : '';
+            var room = 5 - product.thumbs.length;
+            var thumbs = product.thumbs.map(function (src, index) {
+                return '<li><label class="role-thumb-hit"><img src="' + esc(src) + '" alt="Thumbnail ' + (index + 1) + ' of ' + esc(product.name) +
+                    '"><input class="role-file" type="file" accept="image/*" data-catalog-file="thumb" data-index="' + index +
+                    '" aria-label="Replace thumbnail ' + (index + 1) + '"></label>' +
+                    '<button type="button" class="role-photo-x" data-catalog-action="remove-thumb" data-index="' + index +
+                    '" aria-label="Remove thumbnail ' + (index + 1) + '">×</button></li>';
+            }).join('');
+            var addThumb = room > 0
+                ? '<li><label class="role-thumb-add">+<input class="role-file" type="file" accept="image/*" multiple data-catalog-file="add-photos" aria-label="Add a thumbnail"></label></li>'
+                : '<li class="role-thumb-note">5 is the limit.</li>';
+            var used = {};
+            product.features.forEach(function (row) {
+                var key = row.key.trim().toLowerCase();
+                if (key) used[key] = true;
+            });
+            var chips = HINTS.filter(function (hint) { return !used[hint.key.toLowerCase()]; }).map(function (hint) {
+                return '<button type="button" data-catalog-action="add-hint" data-key="' + esc(hint.key) + '" title="' +
+                    esc(hint.hint + '. Example: ' + hint.example) + '">+ ' + esc(hint.key) + '</button>';
+            }).join('');
+            var featureRows = product.features.map(function (row) {
+                var hint = hintFor(row.key);
+                var placeholderText = hint ? hint.example : 'What customers should know';
+                return '<div class="role-fact"><input id="fact-key-' + esc(row.id) + '" class="field" aria-label="Label" autocomplete="off" data-catalog-field="feature-key" data-fid="' +
+                    esc(row.id) + '" value="' + esc(row.key) + '"><input id="fact-value-' + esc(row.id) + '" class="field" aria-label="Detail for ' + esc(row.key || 'this feature') +
+                    '" autocomplete="off" data-catalog-field="feature-value" data-fid="' + esc(row.id) + '" value="' + esc(row.value) +
+                    '" placeholder="' + esc(placeholderText) + '"><button type="button" class="role-remove" data-catalog-action="remove-feature" data-fid="' +
+                    esc(row.id) + '">Remove</button></div>';
+            }).join('');
+            var status = '';
+            if (catalogState.error) status += '<p class="role-catalog-note is-error" role="alert">' + esc(catalogState.error) + '</p>';
+            if (catalogState.notice) status += '<p class="role-catalog-note" role="status">' + esc(catalogState.notice) + '</p>';
+            var mainHelp = product.image
+                ? 'Square, 1600 × 1600 px. Shown on the shop card. Click the photo to replace it. It uploads as soon as you choose the file.'
+                : 'Square, 1600 × 1600 px. Shown on the shop card. Click Add photo. It uploads as soon as you choose the file.';
+            var thumbHelp = product.thumbs.length
+                ? 'Square, 1000 × 1000 px. Up to 5. Click a photo to replace it, or + to add one. Each one uploads as soon as you choose the file.'
+                : 'Square, 1000 × 1000 px. Up to 5. Click + to add one. It uploads as soon as you choose the file.';
+            var priceLine = product.price ? ' · ' + esc(product.price) : '';
+            return '<section class="role-editor" id="catalog-editor"><div class="role-editor-head"><button type="button" class="role-back" data-catalog-action="close-editor">All products</button><div><p class="role-kicker">' +
+                esc(product.category) + priceLine + '</p><h2>' + esc(product.name) + '</h2></div></div>' +
+                hidden + status +
+                '<div class="role-photo-layout"><div class="role-photo-frame"><label class="role-photo-main' + (product.image ? '' : ' is-empty') + '">' + mainFace +
+                '<input class="role-file" type="file" accept="image/*" data-catalog-file="main" aria-label="' + (product.image ? 'Replace main photo' : 'Add main photo') + '"></label>' +
+                removeMain + '</div><div class="role-photo-copy"><h3>Main photo</h3><p class="role-photo-size">' + mainHelp + '</p></div></div>' +
+                '<div class="role-photo-block"><h3>Thumbnails <span class="role-optional">optional</span></h3><p class="role-photo-size">' + thumbHelp + '</p><ul class="role-thumbs">' + thumbs + addThumb + '</ul></div>' +
+                '<div class="role-photo-block"><div class="role-desc-head"><label class="md-field-label" for="catalog-description">Description</label>' +
+                '<button type="button" class="role-ai" data-catalog-action="generate-description" title="Not available yet">Generate with AI <span>Later</span></button></div>' +
+                '<textarea id="catalog-description" class="field" rows="4" data-catalog-field="description" placeholder="What this product is, and how customers use it.">' +
+                esc(product.description || '') + '</textarea></div>' +
+                '<div class="role-photo-block"><h3>Product features</h3><p>Tap a sample, then edit the words for this product.</p>' +
+                '<div class="role-hints"><div>' + (chips || '<span>Those samples are already on this product.</span>') + '</div></div>' +
+                (featureRows ? '<div class="role-fact role-fact-head" aria-hidden="true"><span>Label</span><span>Detail</span><span></span></div>' + featureRows : '') +
+                '<button type="button" class="role-remove" data-catalog-action="add-feature">Add row</button>' +
+                '<label class="md-field-label" for="catalog-instagram">Instagram (optional)</label>' +
+                '<input id="catalog-instagram" class="field" type="text" autocomplete="off" data-catalog-field="instagram" value="' + esc(product.instagram || '') +
+                '" placeholder="@yourshop or https://instagram.com/p/...">' +
+                '<p class="role-ig-hint">Link a reel or profile so customers can see how you make or use this product.</p>' +
+                '<div class="role-fact-preview" id="catalog-fact-preview">' + factPreviewHtml(product) + '</div>' +
+                shopPreviewHtml(product) + '</div>' +
+                '<div class="role-editor-save"><p class="role-save-note">Photos upload when you choose them. This button saves the description, features, and Instagram link.</p>' +
+                '<button type="button" class="btn btn-primary" data-catalog-action="save">Save description and features</button>' +
+                '<button type="button" class="btn btn-secondary" data-catalog-action="preview">' + (catalogState.preview ? 'Hide preview' : 'Preview on shop') + '</button></div></section>';
+        }
+
+        function catalogHtml() {
+            var view = catalogView();
+            var selected = catalogProduct();
+            var hidden = selected && view.matches.every(function (product) { return product.id !== selected.id; });
+            var catalog = activeCatalog();
+            var missing = catalog.filter(function (product) { return !product.image; }).length;
+            var needFeatures = catalog.filter(function (product) { return !filledFacts(product); }).length;
+            var categories = catalogCategories();
+            var categoryOptions = '<option value="all">All categories</option>' + categories.map(function (category) {
+                return '<option value="' + esc(category) + '"' + (catalogState.category === category ? ' selected' : '') + '>' + esc(category) + '</option>';
+            }).join('');
+            var lead = state.role === 'vendor'
+                ? 'Replace the main photo and features for this shop only. Thumbnails are optional. Price stays as you set it.'
+                : 'Set the main photo and features every store starts with. A shop can replace both, and still sets its own price.';
+            return '<section class="role-catalog' + (selected ? ' is-editing' : '') + '" aria-label="' + (state.role === 'vendor' ? 'Your products' : 'Platform products') + '">' +
+                '<div class="role-catalog-tools"><p class="role-catalog-lead">' + lead + '</p>' +
+                '<div class="role-catalog-stats"><span class="role-catalog-stat">' + catalog.length + ' products</span>' +
+                '<button type="button" class="role-catalog-stat' + (missing ? ' is-warn' : '') + (catalogState.photo === 'missing' ? ' is-on' : '') +
+                '" data-catalog-action="filter-photo" data-photo="missing">' + missing + ' need a photo</button>' +
+                '<button type="button" class="role-catalog-stat' + (needFeatures ? ' is-warn' : '') + (catalogState.facts === 'missing' ? ' is-on' : '') +
+                '" data-catalog-action="filter-facts">' + needFeatures + ' need features</button></div>' +
+                '<div class="role-catalog-filters"><div><label class="md-field-label" for="catalog-search">Search</label>' +
+                '<input id="catalog-search" class="field" type="search" autocomplete="off" placeholder="Tomato, dairy, or Brand" value="' + esc(catalogState.query) + '" data-catalog-field="query"></div>' +
+                '<div><label class="md-field-label" for="catalog-category">Category</label><select id="catalog-category" class="field" data-catalog-field="category">' + categoryOptions + '</select></div></div></div>' +
+                '<div class="role-catalog-body"><div id="catalog-list">' + catalogListHtml(view) + pagerHtml(view) + '</div>' +
+                editorHtml(selected, hidden) + '</div></section>';
+        }
+
+        function refreshFactPreview(product) {
+            var list = document.getElementById('catalog-fact-preview');
+            if (!list) return;
+            list.innerHTML = factPreviewHtml(product);
+        }
+
+        function readImage(file, done, bucket) {
+            var box = bucket || catalogState;
+            if (!file) return;
+            if (!file.type || file.type.indexOf('image/') !== 0) {
+                box.error = 'Choose a photo. Other files will not show on a store.';
+                box.notice = '';
+                render();
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                box.error = 'Use a photo under 2 MB so store pages stay quick on a phone.';
+                box.notice = '';
+                render();
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function () { done(String(reader.result || '')); };
+            reader.onerror = function () {
+                box.error = 'That photo could not be read. Try another file.';
+                box.notice = '';
+                render();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function readImages(files, done) {
+            var urls = [];
+            var index = 0;
+            function next() {
+                if (index >= files.length) {
+                    done(urls);
+                    return;
+                }
+                var file = files[index];
+                index += 1;
+                if (!file.type || file.type.indexOf('image/') !== 0) {
+                    catalogState.error = 'Choose photos only. Other files will not show on a store.';
+                    next();
+                    return;
+                }
+                if (file.size > 2 * 1024 * 1024) {
+                    catalogState.error = 'Each photo must be under 2 MB.';
+                    next();
+                    return;
+                }
+                var reader = new FileReader();
+                reader.onload = function () {
+                    urls.push(String(reader.result || ''));
+                    next();
+                };
+                reader.onerror = function () { next(); };
+                reader.readAsDataURL(file);
+            }
+            next();
+        }
+
+        function addFeatureKey(product, key, focusValue) {
+            if (hasFeatureKey(product, key)) {
+                catalogState.notice = key + ' is already on this product.';
+                catalogState.error = '';
+                return;
+            }
+            var row = fact(key, '');
+            product.features.push(row);
+            catalogState.notice = 'Edit the detail for ' + key + '. The example is only a hint.';
+            catalogState.error = '';
+            catalogState.restoreFocus = focusValue ? 'fact-value-' + row.id : 'fact-key-' + row.id;
+        }
+
+        function saveProduct(product) {
+            var seen = {};
+            var clean = [];
+            for (var i = 0; i < product.features.length; i++) {
+                var row = product.features[i];
+                var key = row.key.trim();
+                var value = row.value.trim();
+                if (!key && !value) continue;
+                if (!key) {
+                    catalogState.error = 'Each feature needs a label, such as Brand.';
+                    catalogState.notice = '';
+                    return;
+                }
+                if (!value) {
+                    catalogState.error = 'Add a detail for ' + key + ', or remove that row.';
+                    catalogState.notice = '';
+                    return;
+                }
+                var norm = key.toLowerCase();
+                if (seen[norm]) {
+                    catalogState.error = key + ' is listed twice. Keep one.';
+                    catalogState.notice = '';
+                    return;
+                }
+                seen[norm] = true;
+                clean.push({ id: row.id, key: key, value: value });
+            }
+            product.features = clean;
+            catalogState.error = '';
+            catalogState.notice = state.role === 'vendor'
+                ? product.name + ' saved for this shop. Customers here see these photos and features.'
+                : product.name + ' saved for the shared catalog. A shop can still replace them.';
+        }
+
+        function onCatalogClick(event) {
+            var button = event.target.closest('[data-catalog-action]');
+            if (!button || button.disabled) return;
+            var action = button.getAttribute('data-catalog-action');
+            var product = catalogProduct();
+            if (action === 'select') {
+                catalogState.selectedId = button.getAttribute('data-id');
+                catalogState.notice = '';
+                catalogState.error = '';
+                catalogState.preview = false;
+                catalogState.scrollEditor = true;
+                render();
+                return;
+            }
+            if (action === 'page') {
+                catalogState.page = Number(button.getAttribute('data-page')) || 1;
+                render();
+                return;
+            }
+            if (action === 'filter-photo') {
+                var photo = button.getAttribute('data-photo');
+                catalogState.photo = catalogState.photo === photo ? 'all' : photo;
+                catalogState.page = 1;
+                render();
+                return;
+            }
+            if (action === 'filter-facts') {
+                catalogState.facts = catalogState.facts === 'missing' ? 'all' : 'missing';
+                catalogState.page = 1;
+                render();
+                return;
+            }
+            if (action === 'close-editor') {
+                catalogState.selectedId = null;
+                catalogState.notice = '';
+                catalogState.error = '';
+                render();
+                return;
+            }
+            if (action === 'back-to-list') {
+                var list = document.getElementById('catalog-list');
+                if (list) list.scrollIntoView({ block: 'start' });
+                return;
+            }
+            if (!product) return;
+            if (action === 'add-hint') {
+                addFeatureKey(product, button.getAttribute('data-key') || '', true);
+                render();
+                return;
+            }
+            if (action === 'add-feature') {
+                var blank = fact('', '');
+                product.features.push(blank);
+                catalogState.notice = 'Name the feature, then add its detail. Brand and Easily Digestible are good starts.';
+                catalogState.error = '';
+                catalogState.restoreFocus = 'fact-key-' + blank.id;
+                render();
+                return;
+            }
+            if (action === 'suggest') {
+                var keys = SUGGEST_KEYS[product.category] || ['Brand', 'Made in', 'Good for'];
+                var added = 0;
+                var firstId = '';
+                keys.forEach(function (key) {
+                    if (added >= 3 || hasFeatureKey(product, key)) return;
+                    var row = fact(key, '');
+                    product.features.push(row);
+                    if (!firstId) firstId = row.id;
+                    added += 1;
+                });
+                catalogState.error = '';
+                catalogState.notice = added
+                    ? 'Added ' + added + ' features. Fill in what is true. The examples are only hints.'
+                    : 'The usual features for ' + product.category + ' are already here.';
+                if (firstId) catalogState.restoreFocus = 'fact-value-' + firstId;
+                render();
+                return;
+            }
+            if (action === 'remove-feature') {
+                var fid = button.getAttribute('data-fid');
+                product.features = product.features.filter(function (row) { return row.id !== fid; });
+                catalogState.notice = '';
+                catalogState.error = '';
+                render();
+                return;
+            }
+            if (action === 'remove-main') {
+                product.image = '';
+                product.imageOnServer = false;
+                catalogState.error = '';
+                catalogState.notice = 'Main photo removed. Upload one before customers meet this product.';
+                render();
+                return;
+            }
+            if (action === 'remove-thumb') {
+                var thumbIndex = Number(button.getAttribute('data-index'));
+                product.thumbs.splice(thumbIndex, 1);
+                if (product.thumbsOnServer) product.thumbsOnServer.splice(thumbIndex, 1);
+                catalogState.error = '';
+                catalogState.notice = 'Thumbnail removed. The main photo is unchanged.';
+                render();
+                return;
+            }
+            if (action === 'generate-description') {
+                catalogState.error = '';
+                catalogState.notice = 'Generate with AI is for a later release. Write the description for now.';
+                render();
+                return;
+            }
+            if (action === 'preview') {
+                catalogState.preview = !catalogState.preview;
+                render();
+                return;
+            }
+            if (action === 'save') {
+                saveProduct(product);
+                render();
+            }
+        }
+
+        function onCatalogInput(event) {
+            var input = event.target;
+            if (!input.matches) return;
+            var field = input.getAttribute('data-catalog-field');
+            if (field === 'instagram' || field === 'description') {
+                var current = catalogProduct();
+                if (!current) return;
+                if (field === 'instagram') current.instagram = input.value;
+                else {
+                    current.description = input.value;
+                    refreshFactPreview(current);
+                }
+                return;
+            }
+            if (field === 'query') {
+                catalogState.query = input.value;
+                catalogState.page = 1;
+                catalogState.restoreFocus = 'catalog-search';
+                catalogState.restoreCaret = input.selectionStart;
+                render();
+                return;
+            }
+            if (field !== 'feature-key' && field !== 'feature-value') return;
+            var product = catalogProduct();
+            if (!product) return;
+            var rowId = input.getAttribute('data-fid');
+            for (var i = 0; i < product.features.length; i++) {
+                if (product.features[i].id !== rowId) continue;
+                if (field === 'feature-key') product.features[i].key = input.value;
+                else product.features[i].value = input.value;
+                var rowEl = input.closest('.role-fact');
+                if (rowEl && field === 'feature-key') {
+                    var hint = hintFor(product.features[i].key);
+                    var help = rowEl.querySelector('.role-hint-line');
+                    var valueInput = rowEl.querySelector('[data-catalog-field="feature-value"]');
+                    if (valueInput) {
+                        valueInput.placeholder = hint ? 'Example: ' + hint.example : 'What customers should know';
+                        valueInput.setAttribute('aria-label', 'Value for ' + (product.features[i].key.trim() || 'this fact'));
+                    }
+                    if (hint) {
+                        if (!help) {
+                            help = document.createElement('p');
+                            help.className = 'role-hint-line';
+                            rowEl.appendChild(help);
+                        }
+                        help.textContent = hint.hint + '. Example: ' + hint.example;
+                    } else if (help) {
+                        help.remove();
+                    }
+                }
+                refreshFactPreview(product);
+                return;
+            }
+        }
+
+        function onCatalogControl(event) {
+            var input = event.target;
+            if (!input.matches) return;
+            var field = input.getAttribute('data-catalog-field');
+            if (field === 'category' || field === 'photo' || field === 'page-size') {
+                if (field === 'category') catalogState.category = input.value;
+                if (field === 'photo') catalogState.photo = input.value;
+                if (field === 'page-size') catalogState.pageSize = Number(input.value) || 6;
+                catalogState.page = 1;
+                render();
+            }
+        }
+
+        function onCatalogFile(input) {
+            var product = catalogProduct();
+            if (!product) return;
+            var id = product.id;
+            var kind = input.getAttribute('data-catalog-file');
+            var index = Number(input.getAttribute('data-index'));
+            var files = input.files ? Array.prototype.slice.call(input.files) : [];
+            input.value = '';
+            if (kind === 'add-photos') {
+                readImages(files, function (urls) {
+                    var current = catalogById(id);
+                    if (!current || !urls.length) {
+                        render();
+                        return;
+                    }
+                    var skipped = false;
+                    if (!current.thumbsOnServer) current.thumbsOnServer = [];
+                    urls.forEach(function (url) {
+                        if (current.thumbs.length >= 5) {
+                            skipped = true;
+                            return;
+                        }
+                        current.thumbs.push(url);
+                        current.thumbsOnServer.push(true);
+                    });
+                    catalogState.error = '';
+                    catalogState.notice = skipped
+                        ? 'Uploaded what fits. A product can have 5 thumbnails.'
+                        : 'Thumbnails uploaded.';
+                    render();
+                });
+                return;
+            }
+            readImage(files[0], function (url) {
+                var current = catalogById(id);
+                if (!current) return;
+                if (kind === 'main') {
+                    current.image = url;
+                    current.imageOnServer = true;
+                } else if (kind === 'thumb' && current.thumbs[index] != null) {
+                    current.thumbs[index] = url;
+                    if (!current.thumbsOnServer) current.thumbsOnServer = [];
+                    current.thumbsOnServer[index] = true;
+                }
+                catalogState.error = '';
+                catalogState.notice = kind === 'main' ? 'Main photo uploaded.' : 'Thumbnail uploaded.';
+                render();
+            });
+        }
+
+        var state = { role: 'admin', view: 'overview' };
+
+        function esc(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function role() {
+            return ROLES[state.role];
+        }
+
+        function item() {
+            var items = role().items;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].id === state.view) return items[i];
+            }
+            return items[0];
+        }
+
+        function readHash() {
+            var raw = (location.hash || '').replace(/^#/, '');
+            if (!raw) return;
+            var parts = raw.split('/');
+            if (!ROLES[parts[0]]) return;
+            state.role = parts[0];
+            if (parts[1]) state.view = parts[1];
+        }
+
+        function writeHash() {
+            var next = '#' + state.role + '/' + state.view;
+            if (location.hash !== next) history.replaceState(null, '', next);
+        }
+
+        function closeNav() {
+            document.getElementById('dash-shell').classList.remove('is-nav-open');
+            document.getElementById('dash-menu-btn').setAttribute('aria-expanded', 'false');
+            document.getElementById('dash-backdrop').hidden = true;
+        }
+
+        function metricsHtml(list) {
+            return '<div class="dash-metrics">' + list.map(function (metric) {
+                return '<article class="dash-metric"><p class="dash-metric-label">' + esc(metric.label) +
+                    '</p><p class="dash-metric-value">' + esc(metric.value) + '</p></article>';
+            }).join('') + '</div>';
+        }
+
+        function tableHtml(screen) {
+            var head = screen.columns.map(function (col) {
+                return '<th>' + esc(col) + '</th>';
+            }).join('');
+            var body = screen.rows.map(function (row) {
+                return '<tr>' + row.map(function (cell) {
+                    return '<td>' + esc(cell) + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+            return '<div class="dash-table-wrap"><table class="dash-table"><thead><tr>' + head +
+                '</tr></thead><tbody>' + body + '</tbody></table></div>';
+        }
+
+        function uploadsHtml(list) {
+            var pair = list.length > 1 ? ' role-uploads--pair' : '';
+            return '<div class="role-uploads' + pair + '">' + list.map(function (slot) {
+                var previewClass = slot.ratio === 'banner' ? ' is-banner' : '';
+                return '<section class="role-upload"><h3>' + esc(slot.label) + '</h3><p>' + esc(slot.hint) +
+                    '</p><div class="role-upload-preview' + previewClass + '" id="preview-' + esc(slot.id) +
+                    '">No file yet</div><input type="file" accept="image/*" data-preview="' + esc(slot.id) +
+                    '" aria-label="' + esc(slot.file) + '"></section>';
+            }).join('') + '</div>';
+        }
+
+        function categoryById(id) {
+            for (var i = 0; i < CATEGORIES.length; i++) {
+                if (CATEGORIES[i].id === id) return CATEGORIES[i];
+            }
+            return null;
+        }
+
+        function categoryProductCount(name) {
+            var count = 0;
+            CATALOG.forEach(function (product) {
+                if (product.category === name) count += 1;
+            });
+            return count;
+        }
+
+        function categoryMatches(category) {
+            if (categoryState.type !== 'all' && category.type !== categoryState.type) return false;
+            if (categoryState.image === 'missing' && category.image) return false;
+            if (categoryState.text === 'missing' && (category.description || '').trim()) return false;
+            var q = categoryState.query.trim().toLowerCase();
+            if (!q) return true;
+            return [category.name, category.type, category.description || ''].join(' ').toLowerCase().indexOf(q) !== -1;
+        }
+
+        function categoryView() {
+            var matches = CATEGORIES.filter(categoryMatches);
+            var pages = Math.max(1, Math.ceil(matches.length / categoryState.pageSize));
+            if (categoryState.page > pages) categoryState.page = pages;
+            if (categoryState.page < 1) categoryState.page = 1;
+            var start = (categoryState.page - 1) * categoryState.pageSize;
+            return { matches: matches, pages: pages, start: start, rows: matches.slice(start, start + categoryState.pageSize) };
+        }
+
+        function categoryFlags(category) {
+            var image = category.image
+                ? '<span class="role-flag">Image</span>'
+                : '<span class="role-flag is-warn">Needs image</span>';
+            var text = (category.description || '').trim()
+                ? '<span class="role-flag">Description</span>'
+                : '<span class="role-flag is-warn">No description</span>';
+            return image + text;
+        }
+
+        function categoryListHtml(view) {
+            if (!view.rows.length) {
+                return '<p class="role-catalog-empty">No category matches. Try another word, or clear a filter.</p>';
+            }
+            return '<ul class="role-product-list">' + view.rows.map(function (category) {
+                var on = category.id === categoryState.selectedId;
+                var count = categoryProductCount(category.name);
+                return '<li><button type="button" class="role-product' + (on ? ' is-selected' : '') +
+                    '" data-category-action="select" data-id="' + esc(category.id) + '"' +
+                    (on ? ' aria-current="true"' : '') + '>' +
+                    '<span class="role-product-photo">' + (category.image
+                        ? '<img src="' + esc(category.image) + '" alt="" width="64" height="64">'
+                        : '<span class="role-product-fallback" aria-hidden="true">+</span>') + '</span>' +
+                    '<span class="role-product-copy"><span class="role-product-name">' + esc(category.name) +
+                    '</span><span class="role-product-meta">' + esc(category.type) + ' · ' + count +
+                    (count === 1 ? ' product' : ' products') + '</span></span>' +
+                    '<span class="role-product-flags">' + categoryFlags(category) + '</span></button></li>';
+            }).join('') + '</ul>';
+        }
+
+        function categoryPagerHtml(view) {
+            if (!view.matches.length) return '';
+            var from = view.start + 1;
+            var to = view.start + view.rows.length;
+            return '<nav class="role-pager" aria-label="Category pages"><button type="button" class="btn btn-secondary btn-sm" data-category-action="page" data-page="' +
+                (categoryState.page - 1) + '"' + (categoryState.page <= 1 ? ' disabled' : '') + '>Previous</button><p>' +
+                from + '–' + to + ' of ' + view.matches.length + '</p><label class="role-page-size">Per page <select class="field" data-category-field="page-size" aria-label="Categories per page">' +
+                '<option value="6"' + (categoryState.pageSize === 6 ? ' selected' : '') + '>6</option>' +
+                '<option value="12"' + (categoryState.pageSize === 12 ? ' selected' : '') + '>12</option></select></label>' +
+                '<button type="button" class="btn btn-secondary btn-sm" data-category-action="page" data-page="' +
+                (categoryState.page + 1) + '"' + (categoryState.page >= view.pages ? ' disabled' : '') + '>Next</button></nav>';
+        }
+
+        function categoryEditorHtml(category) {
+            if (!category) {
+                return '<section class="role-editor" id="category-editor"><h2>Image and description</h2>' +
+                    '<p>Choose a category. Orange marks mean it still needs an image or a description.</p></section>';
+            }
+            var face = category.image
+                ? '<img src="' + esc(category.image) + '" alt="">'
+                : '<span class="role-photo-add"><span aria-hidden="true">+</span>Add image</span>';
+            var remove = category.image
+                ? '<button type="button" class="role-photo-x" data-category-action="remove-image" aria-label="Remove category image">×</button>'
+                : '';
+            var help = category.image
+                ? 'Square, 1000 × 1000 px. One image for this category. Click it to replace. It uploads as soon as you choose the file.'
+                : 'Square, 1000 × 1000 px. One image for this category. Click Add image. It uploads as soon as you choose the file.';
+            var status = '';
+            if (categoryState.error) status += '<p class="role-catalog-note is-error" role="alert">' + esc(categoryState.error) + '</p>';
+            if (categoryState.notice) status += '<p class="role-catalog-note" role="status">' + esc(categoryState.notice) + '</p>';
+            var about = (category.description || '').trim();
+            var preview = categoryState.preview
+                ? '<aside class="role-shop-preview" id="category-shop-preview"><p>What stores inherit</p><div class="role-shop-card">' +
+                    (category.image ? '<img src="' + esc(category.image) + '" alt="Image of ' + esc(category.name) + '">' : '<p>No image</p>') +
+                    '<strong>' + esc(category.name) + '</strong>' +
+                    (about ? '<p class="role-shop-about">' + esc(about) + '</p>' : '<p class="role-shop-about">No description yet.</p>') +
+                    '</div></aside>'
+                : '';
+            return '<section class="role-editor" id="category-editor"><div class="role-editor-head"><button type="button" class="role-back" data-category-action="close-editor">All categories</button><div><p class="role-kicker">' +
+                esc(category.type) + ' · ' + categoryProductCount(category.name) + ' products</p><h2>' + esc(category.name) + '</h2></div></div>' +
+                status +
+                '<div class="role-photo-layout"><div class="role-photo-frame"><label class="role-photo-main' + (category.image ? '' : ' is-empty') + '">' + face +
+                '<input class="role-file" type="file" accept="image/*" data-category-file="image" aria-label="' + (category.image ? 'Replace category image' : 'Add category image') + '"></label>' +
+                remove + '</div><div class="role-photo-copy"><h3>Category image</h3><p class="role-photo-size">' + help + '</p></div></div>' +
+                '<div class="role-photo-block"><div class="role-desc-head"><label class="md-field-label" for="category-description">Description</label>' +
+                '<button type="button" class="role-ai" data-category-action="generate-description" title="Not available yet">Generate with AI <span>Later</span></button></div>' +
+                '<textarea id="category-description" class="field" rows="4" data-category-field="description" placeholder="What this category is, in a sentence customers can read.">' +
+                esc(category.description || '') + '</textarea></div>' +
+                preview +
+                '<div class="role-editor-save"><p class="role-save-note">The image uploads when you choose it. This button saves the description.</p>' +
+                '<button type="button" class="btn btn-primary" data-category-action="save">Save description</button>' +
+                '<button type="button" class="btn btn-secondary" data-category-action="preview">' + (categoryState.preview ? 'Hide preview' : 'Preview') + '</button></div></section>';
+        }
+
+        function categoryHtml() {
+            var view = categoryView();
+            var selected = categoryById(categoryState.selectedId);
+            var missingImage = CATEGORIES.filter(function (category) { return !category.image; }).length;
+            var missingText = CATEGORIES.filter(function (category) { return !(category.description || '').trim(); }).length;
+            var types = [];
+            CATEGORIES.forEach(function (category) {
+                if (types.indexOf(category.type) === -1) types.push(category.type);
+            });
+            var typeOptions = '<option value="all">All business types</option>' + types.map(function (type) {
+                return '<option value="' + esc(type) + '"' + (categoryState.type === type ? ' selected' : '') + '>' + esc(type) + '</option>';
+            }).join('');
+            return '<section class="role-catalog' + (selected ? ' is-editing' : '') + '" aria-label="Platform categories">' +
+                '<div class="role-catalog-tools"><p class="role-catalog-lead">Set the one image and the description every store starts with.</p>' +
+                '<div class="role-catalog-stats"><span class="role-catalog-stat">' + CATEGORIES.length + ' categories</span>' +
+                '<button type="button" class="role-catalog-stat' + (missingImage ? ' is-warn' : '') + (categoryState.image === 'missing' ? ' is-on' : '') +
+                '" data-category-action="filter-image">' + missingImage + ' need an image</button>' +
+                '<button type="button" class="role-catalog-stat' + (missingText ? ' is-warn' : '') + (categoryState.text === 'missing' ? ' is-on' : '') +
+                '" data-category-action="filter-text">' + missingText + ' need a description</button></div>' +
+                '<div class="role-catalog-filters"><div><label class="md-field-label" for="category-search">Search</label>' +
+                '<input id="category-search" class="field" type="search" autocomplete="off" placeholder="Dairy or grocery" value="' + esc(categoryState.query) + '" data-category-field="query"></div>' +
+                '<div><label class="md-field-label" for="category-type">Business type</label><select id="category-type" class="field" data-category-field="type">' + typeOptions + '</select></div></div></div>' +
+                '<div class="role-catalog-body"><div id="category-list">' + categoryListHtml(view) + categoryPagerHtml(view) + '</div>' +
+                categoryEditorHtml(selected) + '</div></section>';
+        }
+
+        function onCategoryClick(event) {
+            var button = event.target.closest('[data-category-action]');
+            if (!button || button.disabled) return;
+            var action = button.getAttribute('data-category-action');
+            var category = categoryById(categoryState.selectedId);
+            if (action === 'select') {
+                categoryState.selectedId = button.getAttribute('data-id');
+                categoryState.notice = '';
+                categoryState.error = '';
+                categoryState.preview = false;
+                categoryState.scrollEditor = true;
+                render();
+                return;
+            }
+            if (action === 'close-editor') {
+                categoryState.selectedId = null;
+                categoryState.notice = '';
+                categoryState.error = '';
+                categoryState.preview = false;
+                render();
+                return;
+            }
+            if (action === 'page') {
+                categoryState.page = Number(button.getAttribute('data-page')) || 1;
+                render();
+                return;
+            }
+            if (action === 'filter-image') {
+                categoryState.image = categoryState.image === 'missing' ? 'all' : 'missing';
+                categoryState.page = 1;
+                render();
+                return;
+            }
+            if (action === 'filter-text') {
+                categoryState.text = categoryState.text === 'missing' ? 'all' : 'missing';
+                categoryState.page = 1;
+                render();
+                return;
+            }
+            if (!category) return;
+            if (action === 'remove-image') {
+                category.image = '';
+                categoryState.notice = 'Category image removed.';
+                categoryState.error = '';
+                render();
+                return;
+            }
+            if (action === 'generate-description') {
+                categoryState.error = '';
+                categoryState.notice = 'Generate with AI is for a later release. Write the description for now.';
+                render();
+                return;
+            }
+            if (action === 'preview') {
+                categoryState.preview = !categoryState.preview;
+                render();
+                return;
+            }
+            if (action === 'save') {
+                categoryState.error = '';
+                categoryState.notice = category.name + ' saved. Stores use this image and description.';
+                render();
+            }
+        }
+
+        function onCategoryInput(event) {
+            var input = event.target;
+            if (!input.matches) return;
+            var field = input.getAttribute('data-category-field');
+            if (field === 'description') {
+                var current = categoryById(categoryState.selectedId);
+                if (!current) return;
+                current.description = input.value;
+                var about = document.querySelector('#category-shop-preview .role-shop-about');
+                if (about) about.textContent = input.value.trim() || 'No description yet.';
+                return;
+            }
+            if (field === 'query') {
+                categoryState.query = input.value;
+                categoryState.page = 1;
+                categoryState.restoreFocus = 'category-search';
+                categoryState.restoreCaret = input.selectionStart;
+                render();
+            }
+        }
+
+        function onCategoryFile(input) {
+            var category = categoryById(categoryState.selectedId);
+            if (!category) return;
+            var id = category.id;
+            var file = input.files && input.files[0];
+            input.value = '';
+            readImage(file, function (url) {
+                var current = categoryById(id);
+                if (!current) return;
+                current.image = url;
+                categoryState.error = '';
+                categoryState.notice = 'Category image uploaded.';
+                render();
+            }, categoryState);
+        }
+
+        function render() {
+            var current = role();
+            var screen = item();
+            state.view = screen.id;
+
+            document.getElementById('role-brand-sub').textContent = current.sub;
+            document.querySelectorAll('[data-role]').forEach(function (button) {
+                var on = button.getAttribute('data-role') === state.role;
+                button.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+
+            document.getElementById('role-nav').innerHTML = current.items.map(function (entry) {
+                var on = entry.id === screen.id;
+                return '<button type="button" class="dash-nav-item' + (on ? ' is-active' : '') +
+                    '" data-view="' + esc(entry.id) + '"' + (on ? ' aria-current="page"' : '') +
+                    '><span class="dash-nav-icon" aria-hidden="true">' + esc(entry.icon) +
+                    '</span><span>' + esc(entry.label) + '</span></button>';
+            }).join('');
+
+            document.getElementById('role-foot').innerHTML = current.foot;
+            document.getElementById('role-title').textContent = screen.label;
+            document.getElementById('role-sub').textContent = current.label + ' · sample';
+
+            var html = '';
+            if (screen.workspace !== 'catalog' && screen.workspace !== 'categories') {
+                html += '<section class="dash-panel"><p class="role-kicker">' + esc(current.label) +
+                    '</p><p class="dash-lead">' + esc(screen.blurb) + '</p><p class="role-owner">Owner: ' +
+                    esc(screen.owner) + '</p></section>';
+            }
+            if (screen.metrics) html += metricsHtml(screen.metrics);
+            if (screen.workspace === 'catalog') html += catalogHtml();
+            else if (screen.workspace === 'categories') html += categoryHtml();
+            else if (screen.rows) html += tableHtml(screen);
+            if (screen.uploads) html += uploadsHtml(screen.uploads);
+            document.getElementById('role-panel').innerHTML = html;
+            writeHash();
+            closeNav();
+            var workState = screen.workspace === 'categories' ? categoryState : catalogState;
+            var editorId = screen.workspace === 'categories' ? 'category-editor' : 'catalog-editor';
+            if (workState.restoreFocus) {
+                var focusEl = document.getElementById(workState.restoreFocus);
+                var caret = workState.restoreCaret;
+                workState.restoreFocus = '';
+                workState.restoreCaret = null;
+                if (focusEl) {
+                    focusEl.focus();
+                    if (typeof caret === 'number' && focusEl.setSelectionRange) {
+                        focusEl.setSelectionRange(caret, caret);
+                    }
+                }
+            }
+            if (workState.scrollEditor) {
+                workState.scrollEditor = false;
+                var editor = document.getElementById(editorId);
+                if (editor && window.matchMedia('(max-width: 1023px)').matches) {
+                    editor.scrollIntoView({ block: 'start' });
+                }
+            }
+        }
+
+        document.querySelector('.role-switch').addEventListener('click', function (event) {
+            var button = event.target.closest('[data-role]');
+            if (!button) return;
+            state.role = button.getAttribute('data-role');
+            state.view = ROLES[state.role].items[0].id;
+            catalogState.selectedId = null;
+            catalogState.page = 1;
+            catalogState.notice = '';
+            catalogState.error = '';
+            catalogState.preview = false;
+            categoryState.selectedId = null;
+            categoryState.page = 1;
+            categoryState.notice = '';
+            categoryState.error = '';
+            categoryState.preview = false;
+            render();
+        });
+
+        document.getElementById('role-nav').addEventListener('click', function (event) {
+            var button = event.target.closest('[data-view]');
+            if (!button) return;
+            state.view = button.getAttribute('data-view');
+            render();
+        });
+
+        document.getElementById('role-panel').addEventListener('click', function (event) {
+            if (event.target.closest('[data-category-action]')) {
+                onCategoryClick(event);
+                return;
+            }
+            onCatalogClick(event);
+        });
+        document.getElementById('role-panel').addEventListener('input', function (event) {
+            if (event.target.getAttribute && event.target.getAttribute('data-category-field')) {
+                onCategoryInput(event);
+                return;
+            }
+            onCatalogInput(event);
+        });
+        document.getElementById('role-panel').addEventListener('change', function (event) {
+            var input = event.target;
+            if (!input.matches) return;
+            if (input.matches('input[type="file"]') && input.hasAttribute('data-category-file')) {
+                onCategoryFile(input);
+                return;
+            }
+            if (input.getAttribute('data-category-field') === 'type') {
+                categoryState.type = input.value;
+                categoryState.page = 1;
+                render();
+                return;
+            }
+            if (input.getAttribute('data-category-field') === 'page-size') {
+                categoryState.pageSize = Number(input.value) || 6;
+                categoryState.page = 1;
+                render();
+                return;
+            }
+            if (input.matches('input[type="file"]') && input.hasAttribute('data-catalog-file')) {
+                onCatalogFile(input);
+                return;
+            }
+            if (input.matches('input[type="file"]')) {
+                var preview = document.getElementById('preview-' + input.getAttribute('data-preview'));
+                var file = input.files && input.files[0];
+                if (preview) preview.textContent = file ? file.name : 'No file yet';
+                return;
+            }
+            onCatalogControl(event);
+        });
+
+        document.getElementById('dash-menu-btn').addEventListener('click', function () {
+            var shell = document.getElementById('dash-shell');
+            var open = !shell.classList.contains('is-nav-open');
+            shell.classList.toggle('is-nav-open', open);
+            this.setAttribute('aria-expanded', open ? 'true' : 'false');
+            document.getElementById('dash-backdrop').hidden = !open;
+        });
+        document.getElementById('dash-backdrop').addEventListener('click', closeNav);
+
+        readHash();
+        render();
+    })();
+    </script>
+</body>
+</html>
