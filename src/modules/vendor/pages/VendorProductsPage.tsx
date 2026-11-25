@@ -1,4 +1,4 @@
-import { ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon, PencilIcon } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createToastManager, Toaster } from '@/components/ui/toast'
@@ -6,12 +6,13 @@ import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
 import { ProductDetailsEditor, type EditedProduct } from '@/modules/vendor/components/ProductDetailsEditor'
 import { ProductPhotoThumb } from '@/modules/vendor/components/ProductPhoto'
 import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
+import { SizePriceRow } from '@/modules/vendor/components/SizePriceRow'
 import { useProductPhoto } from '@/modules/vendor/hooks/use-product-photo'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorProductsService } from '@/shared/api'
-import { Badge, Button, Input, LoadError, Spinner } from '@/shared/components'
+import { Badge, Button, LoadError, Spinner } from '@/shared/components'
 import { cn, formatCurrency } from '@/shared/lib/utils'
 
 /**
@@ -27,86 +28,6 @@ function fromPrice(sizes: VendorSize[]): string | null {
   return prices.length ? `From ${formatCurrency(Math.min(...prices))}` : null
 }
 
-function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [listPrice, setListPrice] = useState(String(size.listPrice ?? ''))
-  const [salePrice, setSalePrice] = useState(String(size.salePrice ?? ''))
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  /*
-   * A size with no price record cannot be repriced: the write is addressed to the price
-   * id, not the SKU. Offering the control would produce a request with nowhere to go.
-   */
-  if (!size.priceId) {
-    return <span className="text-xs text-[var(--md-muted)]">No price record</span>
-  }
-
-  if (!open) {
-    return (
-      <Button size="sm" variant="outline" className="rounded-full" onClick={() => setOpen(true)}>
-        Edit price
-      </Button>
-    )
-  }
-
-  const list = Number(listPrice)
-  const sale = Number(salePrice)
-  const invalid =
-    !Number.isFinite(list) || !Number.isFinite(sale) || list <= 0 || sale <= 0 || sale > list
-
-  async function save() {
-    setBusy(true)
-    setError('')
-    try {
-      await vendorProductsService.updatePrice(size.priceId as string, {
-        skuId: size.skuId,
-        listPrice: list,
-        salePrice: sale,
-      })
-      setOpen(false)
-      onSaved()
-    } catch (err) {
-      setError(getErrorMessage(err, 'Could not save the price'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="w-full rounded-lg border border-[var(--vc-edge)] bg-white p-4">
-      <div className="grid gap-3 sm:max-w-md sm:grid-cols-2">
-        <Input
-          label="MRP"
-          inputMode="decimal"
-          value={listPrice}
-          onChange={(event) => setListPrice(event.target.value)}
-        />
-        <Input
-          label="Selling price"
-          inputMode="decimal"
-          value={salePrice}
-          onChange={(event) => setSalePrice(event.target.value)}
-        />
-      </div>
-      {invalid ? (
-        <p className="mt-2 max-w-[68ch] text-xs text-[var(--md-danger)]">
-          Both prices must be above zero, and the selling price cannot exceed the MRP.
-        </p>
-      ) : null}
-      {error ? <p className="mt-2 text-xs text-[var(--md-danger)]">{error}</p> : null}
-      <div className="mt-3 flex gap-2">
-        <Button size="sm" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>
-          Cancel
-        </Button>
-        <Button size="sm" className="rounded-full" pending={busy} disabled={busy || invalid} onClick={() => void save()}>
-          Save price
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 /**
  * One product: its photo, what it is called, how many sizes it comes in, what it starts
  * at — and, opened up beneath that, its photo control and each size and its price.
@@ -116,7 +37,8 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
  *
  * The reference shows only the summary line, because its catalog is a demo fixture nobody
  * can edit. Repricing is real here and it happens per size, so the sizes stay on the row
- * rather than behind a screen a vendor has to find.
+ * rather than behind a screen a vendor has to find. Products are ruled rows in the one
+ * catalog panel rather than cards inside it.
  */
 function ProductGroup({
   vendorId,
@@ -134,13 +56,15 @@ function ProductGroup({
   sizes: VendorSize[]
   open: boolean
   onToggle: () => void
-  onSaved: () => void
+  /** A price was saved; says which product and size, for the confirmation. */
+  onSaved: (repriced: string) => void
   onEditDetails: (product: EditedProduct) => void
 }) {
   const from = fromPrice(sizes)
   const sizesId = useId()
   const { photo, showUploaded } = useProductPhoto(vendorId, productId)
   const hasPhoto = photo.status === 'ready' && photo.url !== null
+  const sizeCount = `${sizes.length} ${sizes.length === 1 ? 'size' : 'sizes'}`
 
   function editDetails() {
     if (!productId) return
@@ -153,86 +77,84 @@ function ProductGroup({
   }
 
   return (
-    <li className="overflow-hidden rounded-lg border border-[var(--vc-edge)] bg-slate-50/70">
-      <div className="flex items-center gap-3 px-3.5">
+    <li>
+      {/*
+        What the product is, then what can be done with it, in that order at every width. A
+        phone gives the two actions their own line as wide, labelled buttons, which puts the
+        sizes right under the button that opens them; from `sm` they sit at the row's end.
+
+        The sizes toggle stretches over this whole block, so a press anywhere on it opens the
+        sizes. The photo and Edit details sit above that.
+      */}
+      <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4 sm:py-3.5">
         {/* Details are addressed to the vendor product id; a size without one has nothing to edit. */}
         {productId ? (
           <button
             type="button"
             onClick={editDetails}
             aria-label={hasPhoto ? `Change the photo of ${name}` : `Add a photo of ${name}`}
-            className="shrink-0 rounded-lg transition-shadow hover:shadow-[var(--vc-shadow-lift)] focus-visible:ring-2 focus-visible:ring-[var(--md-green-500)] focus-visible:ring-offset-2 focus-visible:outline-none motion-reduce:transition-none"
+            className="relative z-10 rounded-xl transition-shadow hover:shadow-[var(--vc-shadow-lift)] focus-visible:ring-2 focus-visible:ring-[var(--md-green-500)] focus-visible:ring-offset-2 focus-visible:outline-none motion-reduce:transition-none"
           >
             <ProductPhotoThumb photo={photo} />
           </button>
         ) : (
           <ProductPhotoThumb photo={photo} />
         )}
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={sizesId}
-          className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 py-3 text-left"
-        >
-          <span className="min-w-0">
-            <span className="block font-display font-semibold">{name}</span>
-            <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[var(--md-muted)]">
-              <span className="vc-num">
-                {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
-              </span>
-              {photo.status === 'ready' && !photo.url ? <Badge tone="warning">Needs photo</Badge> : null}
-            </span>
-          </span>
-          <span className="flex items-center gap-3">
+        <div className="min-w-0">
+          <span className="font-display block leading-snug font-semibold [overflow-wrap:anywhere]">{name}</span>
+          <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-2.5 gap-y-1">
             {from ? (
-              <span className="vc-num font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</span>
+              <span className="vc-num text-sm font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</span>
             ) : null}
+            {photo.status === 'ready' && !photo.url ? <Badge tone="warning">Needs photo</Badge> : null}
+          </div>
+        </div>
+        <div className="col-span-2 flex gap-2 sm:col-span-1">
+          {productId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="relative z-10 flex-1 rounded-full bg-white max-sm:h-11 sm:flex-none sm:px-4"
+              aria-label={`Edit details of ${name}`}
+              onClick={editDetails}
+            >
+              <PencilIcon className="size-4" aria-hidden />
+              Edit details
+            </Button>
+          ) : null}
+          {/* A fixed width from `sm`, so "1 size" and "12 sizes" leave the buttons in line
+              down the list. */}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls={sizesId}
+            aria-label={`${name}, ${sizeCount}`}
+            className={cn(
+              'vc-num inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full border px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-[var(--md-green-500)] focus-visible:ring-offset-2 motion-reduce:transition-none max-sm:h-11 sm:w-28 sm:flex-none',
+              open
+                ? 'border-[var(--vc-tint-line)] bg-[var(--vc-tint)] text-[var(--vc-tint-ink)]'
+                : 'border-[var(--md-border)] bg-white hover:border-[var(--vc-tint-line)] hover:bg-emerald-50 hover:text-[var(--vc-tint-ink)]',
+            )}
+          >
+            {sizeCount}
             <ChevronDownIcon
-              className={`size-4 shrink-0 text-[var(--md-muted)] transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+              className={cn('size-4 shrink-0 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
               aria-hidden
             />
-          </span>
-        </button>
-        {productId ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0 rounded-full"
-            aria-label={`Edit details of ${name}`}
-            onClick={editDetails}
-          >
-            Edit details
-          </Button>
-        ) : null}
+          </button>
+        </div>
       </div>
 
       <div id={sizesId} hidden={!open}>
-        {/*
-          Size, then price, then the control — three columns rather than a left-stacked
-          block, because a vendor checking their prices is comparing one size against the
-          next and a ragged price column defeats that.
-        */}
-        <ul className="vc-rows border-t border-[var(--vc-rule)] bg-white">
+        {/* An inset under the product's name, so the sizes read as part of that row. */}
+        <ul className="vc-rows mb-3.5 rounded-xl bg-slate-50 sm:ml-[4.5rem]">
           {sizes.map((size) => (
-            <li
+            <SizePriceRow
               key={size.skuId}
-              className="flex flex-wrap items-center gap-x-6 gap-y-3 px-3.5 py-3"
-            >
-              <div className="flex flex-wrap items-center gap-2 sm:w-40">
-                <span className="text-sm font-medium">{size.size ?? 'Standard'}</span>
-                {!size.active ? <Badge tone="neutral">Hidden</Badge> : null}
-              </div>
-              <p className="vc-num flex-1 text-sm">
-                {size.salePrice != null ? formatCurrency(size.salePrice) : '—'}
-                {size.listPrice != null && size.listPrice !== size.salePrice ? (
-                  <span className="ml-2 text-[var(--md-muted)] line-through">
-                    {formatCurrency(size.listPrice)}
-                  </span>
-                ) : null}
-              </p>
-              <PriceEditor size={size} onSaved={onSaved} />
-            </li>
+              size={size}
+              onSaved={() => onSaved(`${name}, ${size.size ?? 'Standard'}`)}
+            />
           ))}
         </ul>
       </div>
@@ -240,7 +162,7 @@ function ProductGroup({
   )
 }
 
-const PRODUCTS_PER_PAGE = 5
+const PRODUCTS_PER_PAGE = 6
 
 export function VendorProductsPage() {
   const { vendorId } = useVendorAccount()
@@ -254,6 +176,9 @@ export function VendorProductsPage() {
   const [toasts] = useState(() => createToastManager())
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+  const confirmSaved = (title: string) => {
+    toasts.add({ title, type: 'success', timeout: 3000, priority: 'low' })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -291,11 +216,9 @@ export function VendorProductsPage() {
         action={
           <div className="flex items-center gap-3">
             {loading && sizes !== null ? <Spinner label="Updating products" /> : null}
-            <Link to="/onboarding">
-              <Button size="sm" variant="outline" className="rounded-full">
-                Edit in setup
-              </Button>
-            </Link>
+            <Button asChild size="sm" variant="outline" className="rounded-full bg-white max-sm:h-11">
+              <Link to="/onboarding">Edit in setup</Link>
+            </Button>
           </div>
         }
       >
@@ -303,7 +226,11 @@ export function VendorProductsPage() {
           error ? (
             <LoadError onRetry={reload} />
           ) : (
-            <RowSkeleton label="Loading products" rowClassName="h-[4.25rem] rounded-lg" className="gap-2.5" />
+            <RowSkeleton
+              label="Loading products"
+              rowClassName="h-[8.375rem] rounded-xl sm:h-[5.25rem]"
+              className="gap-2.5"
+            />
           )
         ) : (
           <>
@@ -319,7 +246,7 @@ export function VendorProductsPage() {
                   Products and their sizes are added during store setup.
                 </p>
               ) : (
-                <ul className="grid gap-2.5">
+                <ul className="vc-rows -mb-3.5 border-t border-[var(--vc-edge)]">
                   {visible.map((group) => (
                     <ProductGroup
                       key={group.id}
@@ -329,7 +256,10 @@ export function VendorProductsPage() {
                       sizes={group.sizes}
                       open={openProductId === group.id}
                       onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
-                      onSaved={reload}
+                      onSaved={(repriced) => {
+                        reload()
+                        confirmSaved(`${repriced} price saved.`)
+                      }}
                       onEditDetails={setEditing}
                     />
                   ))}
@@ -338,8 +268,14 @@ export function VendorProductsPage() {
             </div>
 
             {totalPages > 1 ? (
-              <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
-                <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+              <div className="mt-3.5 flex items-center justify-between border-t border-[var(--vc-edge)] pt-3.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full bg-white max-sm:h-11"
+                  disabled={currentPage === 0}
+                  onClick={() => setPage(currentPage - 1)}
+                >
                   Previous
                 </Button>
                 <span className="vc-num text-sm text-[var(--md-muted)]">
@@ -347,7 +283,8 @@ export function VendorProductsPage() {
                 </span>
                 <Button
                   size="sm"
-                  variant="secondary"
+                  variant="outline"
+                  className="rounded-full bg-white max-sm:h-11"
                   disabled={currentPage >= totalPages - 1}
                   onClick={() => setPage(currentPage + 1)}
                 >
@@ -364,7 +301,7 @@ export function VendorProductsPage() {
         onClose={() => setEditing(null)}
         onSaved={(name) => {
           setEditing(null)
-          toasts.add({ title: `${name} details saved.`, type: 'success', timeout: 3000, priority: 'low' })
+          confirmSaved(`${name} details saved.`)
         }}
       />
       <Toaster toastManager={toasts} limit={1} />

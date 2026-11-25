@@ -3,13 +3,23 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/modules/vendor/components/ConfirmDialog'
+import { ProductEditorSkeleton } from '@/modules/vendor/components/ProductEditorSkeleton'
 import { ProductPhotoField, type PickedPhoto } from '@/modules/vendor/components/ProductPhoto'
-import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
 import { useMediaQuery } from '@/modules/vendor/hooks/use-media-query'
+import {
+  DESCRIPTION_HINT,
+  EDITOR_BODY,
+  EDITOR_HINT,
+  EDITOR_TITLE,
+  FEATURE_COLUMNS,
+  FEATURE_TABLE,
+  FEATURES_HINT,
+} from '@/modules/vendor/lib/product-editor-ui'
 import { checkFeatures, featureLabelKey, type FeatureRowError } from '@/modules/vendor/lib/product-features'
 import type { ProductFeature, VendorProductDetails } from '@/modules/vendor/types/dashboard'
 import { getErrorMessage, vendorImagesService, vendorProductsService } from '@/shared/api'
 import { Button, Label, LoadError, ShadcnInput } from '@/shared/components'
+import { cn } from '@/shared/lib/utils'
 
 /** The vendor product being edited, as its list row knows it. */
 export type EditedProduct = {
@@ -20,6 +30,19 @@ export type EditedProduct = {
   /** Shows a newly saved photo on the row. */
   onPhotoSaved: (url: string) => void
 }
+
+/**
+ * A focused cell's outline: a thin line along the cell's own edges. Cells are square, except
+ * where one fills a corner of the table and takes that corner's curve.
+ */
+const FEATURE_FOCUS =
+  'focus-visible:relative focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-[var(--md-green-600)] focus-visible:ring-inset'
+
+/** An input that is a cell of the feature table: the table draws the lines, the cell its focus. */
+const FEATURE_CELL = cn(
+  'h-11 rounded-none border-0 px-3 aria-invalid:border-transparent aria-invalid:ring-1 aria-invalid:ring-destructive/70 aria-invalid:ring-inset',
+  FEATURE_FOCUS,
+)
 
 /** A product feature being edited; `id` keeps each row's inputs stable while rows come and go. */
 type FeatureRow = ProductFeature & { id: number }
@@ -122,104 +145,98 @@ function ProductFeaturesField({
 
   return (
     <section className="grid gap-3" aria-labelledby={headingId} aria-describedby={helpId}>
-      <div className="grid gap-1">
-        <h3 id={headingId} className="font-display text-sm font-semibold">
+      <div className="grid gap-0.5">
+        <h3 id={headingId} className={EDITOR_TITLE}>
           Product features
         </h3>
-        <p id={helpId} className="max-w-[60ch] text-xs text-[var(--md-muted)]">
-          Each feature is a label and a detail, such as Brand: Nandini. Remove every feature to show
-          the catalog features instead.
+        <p id={helpId} className={EDITOR_HINT}>
+          {FEATURES_HINT}
         </p>
       </div>
 
-      {samples.length ? (
-        <div className="grid gap-1.5">
-          <p id={samplesId} className="text-xs font-medium text-[var(--md-muted)]">
-            Samples
-          </p>
-          <ul className="flex flex-wrap gap-2" aria-labelledby={samplesId}>
-            {samples.map((sample) => (
-              <li key={sample.label}>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 rounded-full px-3 text-xs"
-                  disabled={disabled}
-                  aria-label={`Add ${sample.label}`}
-                  onClick={() => add(sample.label, 'detail')}
-                >
-                  <PlusIcon aria-hidden />
-                  {sample.label}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {rows.length ? (
-        <div className="grid gap-1.5">
-          <div
-            className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_2.5rem] gap-2 text-xs font-medium text-[var(--md-muted)]"
-            aria-hidden
-          >
-            <span>Label</span>
-            <span>Detail</span>
-          </div>
-          <ol id={`${inputId}-rows`} className="grid gap-2">
+      {/* Drawn as one table, like the facts printed on a pack: each label beside its detail,
+          and the way to add the next one as its last line. */}
+      <div className={FEATURE_TABLE}>
+        {rows.length ? (
+          <ol id={`${inputId}-rows`} className="divide-y divide-[var(--md-border)] border-b border-[var(--md-border)]">
             {rows.map((row, index) => {
               const error = errors[index]
               const errorId = `${inputId}-${row.id}-error`
               const invalid = (field: FeatureRowError['field']) =>
                 error?.field === field ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
               return (
-              <li key={row.id} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_2.5rem] items-center gap-x-2 gap-y-1">
-                <ShadcnInput
-                  id={`${inputId}-${row.id}-label`}
-                  {...invalid('label')}
-                  value={row.label}
-                  disabled={disabled}
-                  data-vaul-no-drag
-                  aria-label={`Feature label ${index + 1}`}
-                  placeholder="e.g. Pack size"
-                  className="h-10 rounded-xl"
-                  onChange={(event) => edit(row.id, { label: event.target.value })}
-                />
-                <ShadcnInput
-                  id={`${inputId}-${row.id}-detail`}
-                  {...invalid('detail')}
-                  value={row.detail}
-                  disabled={disabled}
-                  data-vaul-no-drag
-                  aria-label={`Feature detail ${index + 1}`}
-                  placeholder={detailPlaceholder(row.label)}
-                  className="h-10 rounded-xl"
-                  onChange={(event) => edit(row.id, { detail: event.target.value })}
-                />
-                <Button
-                  id={`${inputId}-${row.id}-remove`}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="size-10 rounded-full px-0 text-[var(--md-muted)]"
-                  disabled={disabled}
-                  aria-label={`Remove feature ${index + 1}`}
-                  onClick={() => remove(index)}
-                >
-                  <Trash2Icon aria-hidden />
-                </Button>
-                {error ? (
-                  <p id={errorId} className="col-span-full text-xs text-[var(--md-danger)]">
-                    {error.message}
-                  </p>
-                ) : null}
-              </li>
+                // A phone has no room for two columns: the detail goes under its label, at
+                // full width, so a long one is not cut off.
+                <li key={row.id} className={FEATURE_COLUMNS}>
+                  <ShadcnInput
+                    id={`${inputId}-${row.id}-label`}
+                    {...invalid('label')}
+                    value={row.label}
+                    disabled={disabled}
+                    data-vaul-no-drag
+                    aria-label={`Feature label ${index + 1}`}
+                    placeholder="Label, e.g. Pack size"
+                    className={cn(
+                      FEATURE_CELL,
+                      'border-r border-[var(--md-border)] bg-emerald-50/70 font-semibold',
+                      index === 0 && 'rounded-tl-[11px]',
+                    )}
+                    onChange={(event) => edit(row.id, { label: event.target.value })}
+                  />
+                  <ShadcnInput
+                    id={`${inputId}-${row.id}-detail`}
+                    {...invalid('detail')}
+                    value={row.detail}
+                    disabled={disabled}
+                    data-vaul-no-drag
+                    aria-label={`Feature detail ${index + 1}`}
+                    placeholder={detailPlaceholder(row.label)}
+                    className={cn(
+                      FEATURE_CELL,
+                      'bg-white max-sm:col-start-1 max-sm:row-start-2 max-sm:border-r max-sm:border-[var(--md-border)]',
+                    )}
+                    onChange={(event) => edit(row.id, { detail: event.target.value })}
+                  />
+                  <Button
+                    id={`${inputId}-${row.id}-remove`}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="size-11 self-center justify-self-center rounded-full px-0 text-[var(--md-muted)] hover:text-[var(--md-danger)] max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1"
+                    disabled={disabled}
+                    aria-label={`Remove feature ${index + 1}`}
+                    onClick={() => remove(index)}
+                  >
+                    <Trash2Icon className="size-4" aria-hidden />
+                  </Button>
+                  {error ? (
+                    <p id={errorId} className="col-span-full bg-red-50 px-3 py-1.5 text-xs text-[var(--md-danger)]">
+                      {error.message}
+                    </p>
+                  ) : null}
+                </li>
               )
             })}
           </ol>
-        </div>
-      ) : null}
+        ) : null}
+        <Button
+          id={`${inputId}-add`}
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'h-11 w-full justify-start gap-2 rounded-none px-3 text-sm font-semibold text-[var(--vc-tint-ink)] hover:bg-emerald-50 hover:text-[var(--vc-tint-ink)]',
+            FEATURE_FOCUS,
+            // The table's last line, and its only one when there are no features.
+            rows.length ? 'rounded-b-[11px]' : 'rounded-[11px]',
+          )}
+          disabled={disabled}
+          onClick={() => add('', 'label')}
+        >
+          <PlusIcon className="size-4" aria-hidden />
+          Add feature
+        </Button>
+      </div>
 
       {tooLong ? (
         <p id={`${inputId}-size`} tabIndex={-1} className="text-xs text-[var(--md-danger)] outline-none">
@@ -227,18 +244,32 @@ function ProductFeaturesField({
         </p>
       ) : null}
 
-      <Button
-        id={`${inputId}-add`}
-        type="button"
-        variant="outline"
-        size="sm"
-        className="justify-self-start rounded-xl border-[var(--vc-tint-line)] bg-white px-3.5 font-semibold text-[var(--vc-tint-ink)] hover:bg-[var(--vc-tint)] hover:text-[var(--vc-tint-ink)]"
-        disabled={disabled}
-        onClick={() => add('', 'label')}
-      >
-        <PlusIcon aria-hidden />
-        Add row
-      </Button>
+      {samples.length ? (
+        <div className="grid gap-2">
+          <p id={samplesId} className="text-xs font-medium text-[var(--md-muted)]">
+            Suggested features
+          </p>
+          <ul className="flex flex-wrap gap-2" aria-labelledby={samplesId}>
+            {samples.map((sample) => (
+              <li key={sample.label}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  // Dashed until added: an offer, not yet one of the product's features.
+                  className="rounded-full border-dashed border-slate-300 bg-transparent px-3 text-xs font-medium hover:border-[var(--vc-tint-line)] hover:bg-emerald-50 max-sm:h-11 pointer-coarse:h-11"
+                  disabled={disabled}
+                  aria-label={`Add ${sample.label}`}
+                  onClick={() => add(sample.label, 'detail')}
+                >
+                  <PlusIcon className="size-3.5" aria-hidden />
+                  {sample.label}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -289,6 +320,7 @@ function EditorBody({
   const [blockedSaves, setBlockedSaves] = useState(0)
   const descriptionId = useId()
   const descriptionHelpId = useId()
+  const descriptionNoteId = useId()
 
   useEffect(() => {
     const first = retryToken === 0
@@ -393,30 +425,39 @@ function EditorBody({
 
   return (
     <>
-      <header className="flex items-start gap-3 px-5 pt-3 pb-3 sm:pt-5">
+      <header className="flex items-start gap-3 border-b border-slate-100 px-5 pt-3 pb-3.5 sm:pt-5">
         <div className="min-w-0 flex-1">
           <DrawerTitle className="truncate text-xl">{name}</DrawerTitle>
           <DrawerDescription className="mt-0.5 text-sm text-[var(--md-muted)]">
-            The photo and description customers see on your shop.
+            Photo, description and features of this product.
           </DrawerDescription>
         </div>
         <DrawerClose asChild>
-          <Button variant="ghost" size="sm" className="-mr-2 rounded-full" aria-label="Close" disabled={saving}>
-            <XIcon aria-hidden />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-mt-1 -mr-2.5 size-11 rounded-full px-0"
+            aria-label="Close"
+            disabled={saving}
+          >
+            <XIcon className="size-5" aria-hidden />
           </Button>
         </DrawerClose>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5">
         {loaded.status === 'loading' ? (
-          <RowSkeleton label="Loading product details" rows={2} rowClassName="h-32 rounded-2xl" />
+          <ProductEditorSkeleton productName={name} photoUrl={product.photoUrl} />
         ) : loaded.status === 'failed' ? (
           <LoadError
+            className="my-5"
             message="Could not load this product's details."
             onRetry={() => setRetryToken((token) => token + 1)}
           />
         ) : (
-          <div className="grid gap-5 rounded-2xl border border-[var(--vc-edge)] bg-white p-4 sm:p-5">
+          // The drawer is already the surface: space and headings set the sections apart,
+          // with no box or rule between them.
+          <div className={EDITOR_BODY}>
             <ProductPhotoField
               productName={name}
               currentUrl={loaded.photoUrl}
@@ -426,29 +467,35 @@ function EditorBody({
               onUndo={() => setPicked(null)}
             />
 
-            <div className="h-px bg-[var(--vc-rule)]" aria-hidden />
-
-            <section className="grid gap-1.5">
-              <Label htmlFor={descriptionId} className="font-display text-sm font-semibold">
-                Product description
-              </Label>
-              <Textarea
-                id={descriptionId}
-                rows={5}
-                value={description}
-                disabled={saving}
-                data-vaul-no-drag
-                aria-describedby={descriptionHelpId}
-                placeholder="What makes this product worth buying from your shop? Freshness, source, how it is packed."
-                className="resize-y rounded-xl"
-                onChange={(event) => setDescription(event.target.value)}
-              />
-              <p id={descriptionHelpId} className="max-w-[60ch] text-xs text-[var(--md-muted)]">
-                Leave this empty to show the catalog description instead.
-              </p>
+            <section className="grid gap-3">
+              <div className="grid gap-0.5">
+                <Label htmlFor={descriptionId} className={EDITOR_TITLE}>
+                  Product description
+                </Label>
+                <p id={descriptionHelpId} className={EDITOR_HINT}>
+                  {DESCRIPTION_HINT}
+                </p>
+              </div>
+              <div className="grid gap-1.5">
+                {/* Grows with what is written, where the browser can; elsewhere it resizes by hand. */}
+                <Textarea
+                  id={descriptionId}
+                  rows={4}
+                  value={description}
+                  disabled={saving}
+                  data-vaul-no-drag
+                  aria-describedby={`${descriptionHelpId} ${descriptionNoteId}`}
+                  placeholder="e.g. Fresh stock every week, cleaned and packed in our shop."
+                  className="field-sizing-content max-h-72 min-h-28 resize-y rounded-lg bg-white px-3.5 py-3 leading-6 md:leading-6"
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+                <p id={descriptionNoteId} className="text-xs leading-5 text-[var(--md-muted)]">
+                  {description.trim()
+                    ? 'Clear the box to show the catalog description instead.'
+                    : 'Left empty, your shop shows the catalog description.'}
+                </p>
+              </div>
             </section>
-
-            <div className="h-px bg-[var(--vc-rule)]" aria-hidden />
 
             <ProductFeaturesField
               rows={features}
@@ -462,7 +509,7 @@ function EditorBody({
         )}
       </div>
 
-      <footer className="grid gap-2 border-t border-[var(--vc-rule)] bg-card px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <footer className="grid gap-2 border-t border-slate-100 bg-card px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {saveError || (blockedSaves > 0 && featuresBlocked) ? (
           // Keyed by blocked saves, so a repeated blocked save is announced again.
           <p key={blockedSaves} role="alert" className="text-sm text-[var(--md-danger)]">
@@ -472,12 +519,12 @@ function EditorBody({
         <div className="flex items-center gap-2 sm:justify-end">
           <p className="mr-auto hidden text-xs text-[var(--md-muted)] sm:block">{changed ? 'Unsaved changes' : ''}</p>
           <DrawerClose asChild>
-            <Button variant="secondary" className="hidden rounded-full sm:inline-flex" disabled={saving}>
+            <Button variant="outline" className="hidden rounded-full bg-white px-5 sm:inline-flex" disabled={saving}>
               Cancel
             </Button>
           </DrawerClose>
           <Button
-            className="h-11 w-full rounded-full sm:h-9 sm:w-auto sm:px-6"
+            className="w-full rounded-full sm:w-auto sm:px-7"
             disabled={!changed || saving}
             pending={saving}
             onClick={() => void save()}

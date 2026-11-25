@@ -787,7 +787,7 @@ query carries the type and id, and the multipart body carries only `file`.
 - **Vendor's own photo only.** The read returns `image_url: null` when the shop has not uploaded
   a photo, and the page shows **Add photo** and a **Needs photo** badge. It does not use
   `image_path` from `/products/skus`, which may already fall back to the platform photo.
-- **One read per visible product.** Each row reads its photo when it mounts, at most five per
+- **One read per visible product.** Each row reads its photo when it mounts, at most six per
   page, and cancels the read when it unmounts. A failed read shows a broken-image thumbnail; it
   does not block prices. The details editor reuses the row's photo and reads it only when the
   row has not.
@@ -820,7 +820,7 @@ phone and from the right from tablet width, with one Save. `vendorProductsServic
 - **Features are rows.** The view model is `{ description, features: { label, detail }[] }` in wire
   order. `features_type: "map"` becomes rows in key order; `"list"` becomes rows with an empty
   label and the item as the detail; missing features become no rows. The editor shows them as
-  Label/Detail rows with sample chips, **Add row** and Remove, and sends `features` only when the
+  Label/Detail rows with sample chips, **Add feature** and Remove, and sends `features` only when the
   rows differ from what it loaded, so untouched list-shaped rows are never sent. Before anything
   is sent, including a picked photo, `src/modules/vendor/lib/product-features.ts` checks the
   rows: completely empty rows are dropped, labels and details are trimmed, and a half-filled row

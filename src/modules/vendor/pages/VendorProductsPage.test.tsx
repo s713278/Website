@@ -168,6 +168,21 @@ describe('VendorProductsPage', () => {
     expect(dal.getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('shows six products a page', async () => {
+    const names = ['Rice', 'Dal', 'Milk', 'Ghee', 'Salt', 'Jaggery', 'Honey']
+    vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue(names.map(size))
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getAllByRole('button', { name: /^Edit details of / })).toHaveLength(6)
+    expect(screen.getByText('Page 1 of 2')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getAllByRole('button', { name: /^Edit details of / })).toHaveLength(1)
+  })
+
   it('offers no price control for a size with no price record', async () => {
     // The write is addressed to the price id; without one there is nowhere to send it.
     const priceless: VendorSize = { ...size('Loose Grain'), priceId: null }
@@ -189,7 +204,7 @@ describe('VendorProductsPage', () => {
     renderFor('vendor-1')
 
     expect(screen.getByText('Your catalog')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Edit in setup' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Edit in setup' })).toBeTruthy()
     expect(screen.getByRole('status', { name: 'Loading products' })).toBeTruthy()
   })
 
@@ -239,6 +254,111 @@ describe('VendorProductsPage', () => {
     expect(screen.queryByRole('status', { name: 'Updating products' })).toBeNull()
   })
 
+  it('drops an abandoned price draft on Escape and moves focus with the editor', async () => {
+    vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([size('Rice')])
+    const update = vi.spyOn(vendorProductsService, 'updatePrice')
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Rice/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit price' }))
+    const sale = screen.getByLabelText('Selling price') as HTMLInputElement
+    await waitFor(() => expect(document.activeElement).toBe(sale))
+    fireEvent.change(sale, { target: { value: '12' } })
+    fireEvent.keyDown(sale, { key: 'Escape' })
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit price' })),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit price' }))
+    expect((screen.getByLabelText('Selling price') as HTMLInputElement).value).toBe('90')
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('saves a price when the form is submitted, and says which size was saved', async () => {
+    vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([size('Rice')])
+    const update = vi.spyOn(vendorProductsService, 'updatePrice').mockResolvedValue(undefined)
+
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Rice/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit price' }))
+    const sale = screen.getByLabelText('Selling price')
+    fireEvent.change(sale, { target: { value: '80' } })
+    await act(async () => {
+      // What Enter in a field does.
+      fireEvent.submit(sale.closest('form')!)
+      await Promise.resolve()
+    })
+
+    expect(update).toHaveBeenCalledWith('price-Rice', { skuId: 'sku-Rice', listPrice: 100, salePrice: 80 })
+    expect(document.body.textContent).toContain('Rice, 1 kg price saved.')
+  })
+
+  async function openPriceForm() {
+    vi.spyOn(vendorProductsService, 'listSizes').mockResolvedValue([size('Rice')])
+    renderFor('vendor-1')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Rice/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit price' }))
+    return {
+      sale: screen.getByLabelText('Selling price') as HTMLInputElement,
+      mrp: screen.getByLabelText('MRP') as HTMLInputElement,
+      save: screen.getByRole('button', { name: 'Save price' }) as HTMLButtonElement,
+    }
+  }
+
+  it('keeps Save price off until a price changes, and sends nothing for an unchanged one', async () => {
+    const update = vi.spyOn(vendorProductsService, 'updatePrice')
+    const { sale, save } = await openPriceForm()
+
+    expect(save.disabled).toBe(true)
+    fireEvent.submit(sale.closest('form')!)
+    expect(update).not.toHaveBeenCalled()
+    fireEvent.change(sale, { target: { value: '85' } })
+    expect(save.disabled).toBe(false)
+    // Typed back to what is saved, there is nothing to save again.
+    fireEvent.change(sale, { target: { value: '90.0' } })
+    expect(save.disabled).toBe(true)
+  })
+
+  it('previews the typed prices as the shop shows them', async () => {
+    const { sale } = await openPriceForm()
+    const form = sale.closest('form')!
+
+    fireEvent.change(sale, { target: { value: '75' } })
+    expect(within(form).getByText('On your shop')).toBeTruthy()
+    expect(within(form).getByText('25% off')).toBeTruthy()
+    expect(form.querySelector('s')?.textContent).toBe('₹100')
+
+    // At the MRP there is no discount, and the shop strikes nothing through.
+    fireEvent.change(sale, { target: { value: '100' } })
+    expect(within(form).queryByText(/% off/)).toBeNull()
+    expect(form.querySelector('s')).toBeNull()
+  })
+
+  it('names the price to fix, and marks only that field', async () => {
+    const { sale, mrp, save } = await openPriceForm()
+    const described = (input: HTMLInputElement) =>
+      document.getElementById(input.getAttribute('aria-describedby') ?? '')?.textContent
+
+    fireEvent.change(sale, { target: { value: '120' } })
+    expect(described(sale)).toBe('The selling price cannot be more than the MRP of ₹100.')
+    expect(mrp.getAttribute('aria-invalid')).toBeNull()
+    expect(save.disabled).toBe(true)
+
+    fireEvent.change(sale, { target: { value: '90' } })
+    fireEvent.change(mrp, { target: { value: '' } })
+    expect(described(mrp)).toBe('Enter the MRP as a number above 0.')
+    expect(sale.getAttribute('aria-invalid')).toBeNull()
+  })
+
   it('reads each product photo by vendor product id and flags a product without one', async () => {
     const read = vi.mocked(vendorImagesService.getProductImage).mockImplementation(async (_vendor, productId) =>
       productId === 'p-Rice' ? 'https://images.example.test/rice.webp' : null,
@@ -257,8 +377,8 @@ describe('VendorProductsPage', () => {
     expect(screen.getByRole('button', { name: 'Change the photo of Rice' }).querySelector('img')?.getAttribute('src'))
       .toBe('https://images.example.test/rice.webp')
     expect(screen.getByRole('button', { name: 'Add a photo of Dal' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^Rice/ }).textContent).not.toContain('Needs photo')
-    expect(screen.getByRole('button', { name: /^Dal/ }).textContent).toContain('Needs photo')
+    expect(screen.getByRole('button', { name: /^Rice/ }).closest('li')?.textContent).not.toContain('Needs photo')
+    expect(screen.getByRole('button', { name: /^Dal/ }).closest('li')?.textContent).toContain('Needs photo')
   })
 
   it('offers no photo for a size without a vendor product id', async () => {
@@ -315,6 +435,17 @@ describe('vendor product details editor', () => {
 
     expect((within(editor).getByLabelText('Product description') as HTMLTextAreaElement).value).toBe('Fresh every morning.')
     expect(editor.textContent).toContain('catalog')
+  })
+
+  it('shows the photo its row already read while the details are still loading', async () => {
+    vi.mocked(vendorImagesService.getProductImage).mockResolvedValue('https://images.example.test/milk.webp')
+    await openEditorFor('Milk', deferred<VendorProductDetails>().promise)
+
+    const editor = screen.getByRole('dialog', { name: 'Milk' })
+    expect(within(editor).getByRole('status', { name: 'Loading product details' })).toBeTruthy()
+    expect(editor.querySelector('img')?.getAttribute('src')).toBe('https://images.example.test/milk.webp')
+    expect(within(editor).getByText('Saved photo')).toBeTruthy()
+    expect(vendorImagesService.getProductImage).toHaveBeenCalledTimes(1)
   })
 
   it('shows a load failure with Try again, which reads again', async () => {
@@ -473,7 +604,15 @@ describe('vendor product details editor', () => {
       .toBe('blob:preview')
     expect(save.disabled).toBe(false)
 
-    fireEvent.click(within(editor).getByRole('button', { name: /Keep current photo/ }))
+    expect(within(editor).getByText('rice.png · Not saved yet')).toBeTruthy()
+    const remove = within(editor).getByRole('button', { name: 'Undo photo change' })
+    remove.focus()
+    fireEvent.click(remove)
+
+    // Undo goes with the picked file, so focus moves to the photo it sat on.
+    expect(document.activeElement).toBe(within(editor).getByRole('button', { name: 'Change the photo of Rice' }))
+    expect(within(editor).queryByRole('button', { name: 'Undo photo change' })).toBeNull()
+    expect(within(editor).getByText('Saved photo')).toBeTruthy()
 
     expect(within(editor).getByRole('button', { name: 'Change the photo of Rice' }).querySelector('img')?.getAttribute('src'))
       .toBe(RICE_PHOTO)
@@ -518,7 +657,7 @@ describe('vendor product details editor', () => {
 
     const editor = screen.getByRole('dialog', { name: 'Rice' })
     expect(within(editor).getByRole('button', { name: 'Add a photo of Rice' })).toBeTruthy()
-    expect(within(editor).getByText(/No photo of your own yet/)).toBeTruthy()
+    expect(within(editor).getByText('Add your own photo')).toBeTruthy()
     expect(vendorImagesService.uploadProductImage).not.toHaveBeenCalled()
   })
 
@@ -693,14 +832,14 @@ describe('vendor product details editor', () => {
     })
     const editor = screen.getByRole('dialog', { name: 'Milk' })
 
-    fireEvent.click(within(editor).getByRole('button', { name: 'Add row' }))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Add feature' }))
     expect(value('Feature label 3')).toBe('')
     expect(value('Feature detail 3')).toBe('')
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Feature label 3')))
 
     fireEvent.click(within(editor).getByRole('button', { name: 'Remove feature 1' }))
     fireEvent.click(within(editor).getByRole('button', { name: 'Remove feature 2' }))
-    fireEvent.click(within(editor).getByRole('button', { name: 'Add row' }))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Add feature' }))
 
     expect(value('Feature label 1')).toBe('Made in')
     expect(value('Feature label 2')).toBe('')
@@ -723,7 +862,7 @@ describe('vendor product details editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add Made in' }))
     expect(save.disabled).toBe(false)
     fireEvent.change(screen.getByLabelText('Feature detail 2'), { target: { value: 'Mandya' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
     fireEvent.change(screen.getByLabelText('Feature label 3'), { target: { value: 'Fat' } })
     fireEvent.change(screen.getByLabelText('Feature detail 3'), { target: { value: '3%' } })
     await clickSave()
@@ -761,7 +900,7 @@ describe('vendor product details editor', () => {
   it('keeps Save off when the rows end up as they were loaded', async () => {
     await openEditorFor('Milk', { description: '', features: [{ label: 'Brand', detail: 'Nandini' }] })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove feature 2' }))
 
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
@@ -864,7 +1003,7 @@ describe('vendor product details editor', () => {
   it('blocks a save when two rows share a label, ignoring case and spaces', async () => {
     const update = vi.spyOn(vendorProductsService, 'updateProductDetails').mockResolvedValue(undefined)
     await openEditorFor('Milk', { description: '', features: [{ label: 'Brand', detail: 'Nandini' }] })
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
     fireEvent.change(screen.getByLabelText('Feature label 2'), { target: { value: '  bRAND ' } })
     fireEvent.change(screen.getByLabelText('Feature detail 2'), { target: { value: 'Amul' } })
 
@@ -879,8 +1018,8 @@ describe('vendor product details editor', () => {
   it('ignores rows left completely empty when saving', async () => {
     const update = vi.spyOn(vendorProductsService, 'updateProductDetails').mockResolvedValue(undefined)
     await openEditorFor('Milk', { description: '', features: [{ label: 'Brand', detail: 'Nandini' }] })
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
     fireEvent.change(screen.getByLabelText('Feature label 3'), { target: { value: 'Fat' } })
     fireEvent.change(screen.getByLabelText('Feature detail 3'), { target: { value: ' 3% ' } })
 
@@ -897,7 +1036,7 @@ describe('vendor product details editor', () => {
   it('treats a blank row beside untouched list-shaped rows as no feature change', async () => {
     const update = vi.spyOn(vendorProductsService, 'updateProductDetails').mockResolvedValue(undefined)
     await openEditorFor('Milk', { description: 'Fresh.', features: [{ label: '', detail: 'Toned milk' }] })
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add feature' }))
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.change(screen.getByLabelText('Product description'), { target: { value: 'Fresher.' } })
