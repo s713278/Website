@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/shared/components/ui'
 import type { ValidationIssue } from '../../types/onboarding'
-import type { ConfirmDialogState } from './ConfirmDialog'
+import type { ConfirmDialogState } from '@/modules/vendor/components/ConfirmDialog'
 
 export type RequestConfirmation = (
   request: Omit<ConfirmDialogState, 'open'>,
