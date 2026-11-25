@@ -829,7 +829,7 @@ describe('catalog dependencies guide a revisit save', () => {
     expect(panel.open).toBe(true)
     expect(panel.getAttribute('data-attention')).toBe('true')
     expect(within(panel).getByText('Needs a product')).toBeTruthy()
-    fireEvent.click(within(panel).getByRole('button', { name: /^Toor dal/ }))
+    fireEvent.click(await within(panel).findByRole('button', { name: /^Toor dal/ }))
     // The pick is unsaved: Step 5 stays marked until it is saved, and Step 6 is not lit.
     expect(stepLabel(5)).toMatch(/needs attention/i)
     expect(stepLabel(6)).not.toMatch(/needs attention/i)
