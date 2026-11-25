@@ -100,7 +100,7 @@ export async function requestBrowserCoords(): Promise<{ latitude: number; longit
   try {
     return await readGpsCoords()
   } catch (error) {
-    if (geolocationCode(error) === PERMISSION_DENIED) throw new Error(LOCATION_BLOCKED)
+    if (geolocationCode(error) === PERMISSION_DENIED) throw new Error(LOCATION_BLOCKED, { cause: error })
     try {
       return await readIpCoords()
     } catch (ipError) {
