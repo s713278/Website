@@ -998,8 +998,11 @@
    edge reads as "next panel" rather than "next row". The rule is still a visible grey, though:
    the earlier #f3f4f6 sat at about 1.1:1 on white and vanished on most screens, so rows ran
    together; the edge stays the heavier, green-tinted line. */
+/* `.vendor-portal-scope` carries the same tokens into vendor UI portalled to <body>, outside
+   the console, such as the product details drawer. Tokens only: no console background. */
 .vendor-console,
-.store-share-scope {
+.store-share-scope,
+.vendor-portal-scope {
   --vc-panel: #ffffff;
   --vc-edge: color-mix(in srgb, var(--md-green-500) 12%, var(--md-border));
   --vc-rule: #e5e7eb;
@@ -1063,6 +1066,18 @@
     --vc-rail: 17rem;
     --vc-gutter: 1.75rem;
   }
+}
+
+/* vaul resizes and lifts the product details sheet by hand as the on-screen keyboard opens and
+   closes (the confirm's focus move closes it), setting `height` and `bottom` inline. Easing them
+   stops the sheet jumping behind the confirm. Unlayered on purpose: vaul's own unlayered
+   `transition` beats any layered utility, and the inline `transition: none` it sets while the
+   sheet is dragged must still win, so no `!important`. */
+.vendor-portal-scope[data-vaul-drawer] {
+  transition:
+    transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+    height 0.25s ease-out,
+    bottom 0.25s ease-out;
 }
 
 @layer components {

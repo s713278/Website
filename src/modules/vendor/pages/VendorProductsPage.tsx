@@ -1,8 +1,12 @@
 import { ChevronDownIcon } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { createToastManager, Toaster } from '@/components/ui/toast'
 import { DashboardPanel } from '@/modules/vendor/components/DashboardPanel'
+import { ProductDetailsEditor, type EditedProduct } from '@/modules/vendor/components/ProductDetailsEditor'
+import { ProductPhotoThumb } from '@/modules/vendor/components/ProductPhoto'
 import { RowSkeleton } from '@/modules/vendor/components/RowSkeleton'
+import { useProductPhoto } from '@/modules/vendor/hooks/use-product-photo'
 import { useVendorAccount } from '@/modules/vendor/hooks/use-vendor-account'
 import { groupByProduct } from '@/modules/vendor/lib/product-groups'
 import type { VendorSize } from '@/modules/vendor/types/dashboard'
@@ -104,8 +108,8 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
 }
 
 /**
- * One product: what it is called, how many sizes it comes in, what it starts at — and,
- * opened up beneath that, each of those sizes and its price.
+ * One product: its photo, what it is called, how many sizes it comes in, what it starts
+ * at — and, opened up beneath that, its photo control and each size and its price.
  *
  * The page keeps one product open at a time. Closed sizes stay mounted, so a price edit
  * left half-typed survives opening another product.
@@ -115,74 +119,123 @@ function PriceEditor({ size, onSaved }: { size: VendorSize; onSaved: () => void 
  * rather than behind a screen a vendor has to find.
  */
 function ProductGroup({
+  vendorId,
+  productId,
   name,
   sizes,
   open,
   onToggle,
   onSaved,
+  onEditDetails,
 }: {
+  vendorId: string
+  productId: string | null
   name: string
   sizes: VendorSize[]
   open: boolean
   onToggle: () => void
   onSaved: () => void
+  onEditDetails: (product: EditedProduct) => void
 }) {
   const from = fromPrice(sizes)
   const sizesId = useId()
+  const { photo, showUploaded } = useProductPhoto(vendorId, productId)
+  const hasPhoto = photo.status === 'ready' && photo.url !== null
+
+  function editDetails() {
+    if (!productId) return
+    onEditDetails({
+      vendorProductId: productId,
+      name,
+      photoUrl: photo.status === 'ready' ? photo.url : undefined,
+      onPhotoSaved: showUploaded,
+    })
+  }
 
   return (
     <li className="overflow-hidden rounded-lg border border-[var(--vc-edge)] bg-slate-50/70">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-controls={sizesId}
-        className="flex w-full flex-wrap items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-100/70"
-      >
-        <span className="min-w-0">
-          <span className="block font-display font-semibold">{name}</span>
-          <span className="vc-num mt-0.5 block text-xs text-[var(--md-muted)]">
-            {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
-          </span>
-        </span>
-        <span className="flex items-center gap-3">
-          {from ? (
-            <span className="vc-num font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</span>
-          ) : null}
-          <ChevronDownIcon
-            className={`size-4 shrink-0 text-[var(--md-muted)] transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
-            aria-hidden
-          />
-        </span>
-      </button>
-
-      {/*
-        Size, then price, then the control — three columns rather than a left-stacked
-        block, because a vendor checking their prices is comparing one size against the
-        next and a ragged price column defeats that.
-      */}
-      <ul id={sizesId} hidden={!open} className="vc-rows border-t border-[var(--vc-rule)] bg-white">
-        {sizes.map((size) => (
-          <li
-            key={size.skuId}
-            className="flex flex-wrap items-center gap-x-6 gap-y-3 px-3.5 py-3"
+      <div className="flex items-center gap-3 px-3.5">
+        {/* Details are addressed to the vendor product id; a size without one has nothing to edit. */}
+        {productId ? (
+          <button
+            type="button"
+            onClick={editDetails}
+            aria-label={hasPhoto ? `Change the photo of ${name}` : `Add a photo of ${name}`}
+            className="shrink-0 rounded-lg transition-shadow hover:shadow-[var(--vc-shadow-lift)] focus-visible:ring-2 focus-visible:ring-[var(--md-green-500)] focus-visible:ring-offset-2 focus-visible:outline-none motion-reduce:transition-none"
           >
-            <div className="flex flex-wrap items-center gap-2 sm:w-40">
-              <span className="text-sm font-medium">{size.size ?? 'Standard'}</span>
-              {!size.active ? <Badge tone="neutral">Hidden</Badge> : null}
-            </div>
-            <p className="vc-num flex-1 text-sm">
-              {size.salePrice != null ? formatCurrency(size.salePrice) : '—'}
-              {size.listPrice != null && size.listPrice !== size.salePrice ? (
-                <span className="ml-2 text-[var(--md-muted)] line-through">
-                  {formatCurrency(size.listPrice)}
-                </span>
-              ) : null}
-            </p>
-            <PriceEditor size={size} onSaved={onSaved} />
-          </li>
-        ))}
-      </ul>
+            <ProductPhotoThumb photo={photo} />
+          </button>
+        ) : (
+          <ProductPhotoThumb photo={photo} />
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={sizesId}
+          className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 py-3 text-left"
+        >
+          <span className="min-w-0">
+            <span className="block font-display font-semibold">{name}</span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[var(--md-muted)]">
+              <span className="vc-num">
+                {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
+              </span>
+              {photo.status === 'ready' && !photo.url ? <Badge tone="warning">Needs photo</Badge> : null}
+            </span>
+          </span>
+          <span className="flex items-center gap-3">
+            {from ? (
+              <span className="vc-num font-bold whitespace-nowrap text-[var(--vc-tint-ink)]">{from}</span>
+            ) : null}
+            <ChevronDownIcon
+              className={`size-4 shrink-0 text-[var(--md-muted)] transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </span>
+        </button>
+        {productId ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 rounded-full"
+            aria-label={`Edit details of ${name}`}
+            onClick={editDetails}
+          >
+            Edit details
+          </Button>
+        ) : null}
+      </div>
+
+      <div id={sizesId} hidden={!open}>
+        {/*
+          Size, then price, then the control — three columns rather than a left-stacked
+          block, because a vendor checking their prices is comparing one size against the
+          next and a ragged price column defeats that.
+        */}
+        <ul className="vc-rows border-t border-[var(--vc-rule)] bg-white">
+          {sizes.map((size) => (
+            <li
+              key={size.skuId}
+              className="flex flex-wrap items-center gap-x-6 gap-y-3 px-3.5 py-3"
+            >
+              <div className="flex flex-wrap items-center gap-2 sm:w-40">
+                <span className="text-sm font-medium">{size.size ?? 'Standard'}</span>
+                {!size.active ? <Badge tone="neutral">Hidden</Badge> : null}
+              </div>
+              <p className="vc-num flex-1 text-sm">
+                {size.salePrice != null ? formatCurrency(size.salePrice) : '—'}
+                {size.listPrice != null && size.listPrice !== size.salePrice ? (
+                  <span className="ml-2 text-[var(--md-muted)] line-through">
+                    {formatCurrency(size.listPrice)}
+                  </span>
+                ) : null}
+              </p>
+              <PriceEditor size={size} onSaved={onSaved} />
+            </li>
+          ))}
+        </ul>
+      </div>
     </li>
   )
 }
@@ -197,6 +250,8 @@ export function VendorProductsPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [openProductId, setOpenProductId] = useState<string | null>(null)
   const [page, setPage] = useState(0)
+  const [editing, setEditing] = useState<EditedProduct | null>(null)
+  const [toasts] = useState(() => createToastManager())
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
@@ -230,74 +285,89 @@ export function VendorProductsPage() {
   const visible = groups.slice(currentPage * PRODUCTS_PER_PAGE, (currentPage + 1) * PRODUCTS_PER_PAGE)
 
   return (
-    <DashboardPanel
-      title="Your catalog"
-      action={
-        <div className="flex items-center gap-3">
-          {loading && sizes !== null ? <Spinner label="Updating products" /> : null}
-          <Link to="/onboarding">
-            <Button size="sm" variant="outline" className="rounded-full">
-              Edit in setup
-            </Button>
-          </Link>
-        </div>
-      }
-    >
-      {sizes === null ? (
-        error ? (
-          <LoadError onRetry={reload} />
-        ) : (
-          <RowSkeleton label="Loading products" rowClassName="h-[4.25rem] rounded-lg" className="gap-2.5" />
-        )
-      ) : (
-        <>
-          {error ? <LoadError onRetry={reload} className="mb-4" /> : null}
-
-          <div
-            aria-busy={loading || undefined}
-            className={cn('transition-opacity motion-reduce:transition-none', loading && 'opacity-60')}
-          >
-            {!groups.length ? (
-              <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
-                <span className="mb-1 block font-semibold text-[var(--md-ink)]">Nothing listed yet</span>
-                Products and their sizes are added during store setup.
-              </p>
-            ) : (
-              <ul className="grid gap-2.5">
-                {visible.map((group) => (
-                  <ProductGroup
-                    key={group.id}
-                    name={group.name}
-                    sizes={group.sizes}
-                    open={openProductId === group.id}
-                    onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
-                    onSaved={reload}
-                  />
-                ))}
-              </ul>
-            )}
+    <>
+      <DashboardPanel
+        title="Your catalog"
+        action={
+          <div className="flex items-center gap-3">
+            {loading && sizes !== null ? <Spinner label="Updating products" /> : null}
+            <Link to="/onboarding">
+              <Button size="sm" variant="outline" className="rounded-full">
+                Edit in setup
+              </Button>
+            </Link>
           </div>
+        }
+      >
+        {sizes === null ? (
+          error ? (
+            <LoadError onRetry={reload} />
+          ) : (
+            <RowSkeleton label="Loading products" rowClassName="h-[4.25rem] rounded-lg" className="gap-2.5" />
+          )
+        ) : (
+          <>
+            {error ? <LoadError onRetry={reload} className="mb-4" /> : null}
 
-          {totalPages > 1 ? (
-            <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
-              <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-                Previous
-              </Button>
-              <span className="vc-num text-sm text-[var(--md-muted)]">
-                Page {currentPage + 1} of {totalPages}
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={currentPage >= totalPages - 1}
-                onClick={() => setPage(currentPage + 1)}
-              >
-                Next
-              </Button>
+            <div
+              aria-busy={loading || undefined}
+              className={cn('transition-opacity motion-reduce:transition-none', loading && 'opacity-60')}
+            >
+              {!groups.length ? (
+                <p className="px-4 py-8 text-center text-sm text-[var(--md-muted)]">
+                  <span className="mb-1 block font-semibold text-[var(--md-ink)]">Nothing listed yet</span>
+                  Products and their sizes are added during store setup.
+                </p>
+              ) : (
+                <ul className="grid gap-2.5">
+                  {visible.map((group) => (
+                    <ProductGroup
+                      key={group.id}
+                      vendorId={vendorId}
+                      productId={group.productId}
+                      name={group.name}
+                      sizes={group.sizes}
+                      open={openProductId === group.id}
+                      onToggle={() => setOpenProductId((id) => (id === group.id ? null : group.id))}
+                      onSaved={reload}
+                      onEditDetails={setEditing}
+                    />
+                  ))}
+                </ul>
+              )}
             </div>
-          ) : null}
-        </>
-      )}
-    </DashboardPanel>
+
+            {totalPages > 1 ? (
+              <div className="mt-4 flex items-center justify-between border-t border-[var(--vc-rule)] pt-4">
+                <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+                  Previous
+                </Button>
+                <span className="vc-num text-sm text-[var(--md-muted)]">
+                  Page {currentPage + 1} of {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={currentPage >= totalPages - 1}
+                  onClick={() => setPage(currentPage + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
+      </DashboardPanel>
+      <ProductDetailsEditor
+        vendorId={vendorId}
+        product={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(name) => {
+          setEditing(null)
+          toasts.add({ title: `${name} details saved.`, type: 'success', timeout: 3000, priority: 'low' })
+        }}
+      />
+      <Toaster toastManager={toasts} limit={1} />
+    </>
   )
 }

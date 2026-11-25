@@ -58,13 +58,24 @@ export const vendorsService = {
             : undefined
           : queryOrParams,
     }),
-  getProduct: (vendorId: number | string, productId: number | string) =>
-    apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`),
+  /** Vendor product details; `productId` is the vendor product id (`getVendorProductDetails`). */
+  getProduct: (
+    vendorId: number | string,
+    productId: number | string,
+    config?: Pick<RequestConfig, 'signal'>,
+  ) => apiGet<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`, config),
   /** PDP — GET /v1/vendors/products/{product_id}/skus/{sku_id} (`fetchSkuDetails`). */
   getSkuDetails: (productId: number | string, skuId: number | string) =>
  apiGet<ApiEnvelope>(`/v1/vendors/products/${productId}/skus/${skuId}`, { skipAuth: true }),
-  updateProduct: (vendorId: number | string, productId: number | string, body: Record<string, unknown>) =>
-    apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`, body),
+  /** Description and/or features of a vendor product; omitted fields are unchanged (`updateVendorProduct`). */
+  updateProduct: (
+    vendorId: number | string,
+    productId: number | string,
+    // The generated `JsonNode` is `Record<string, never>`; the contract accepts any object or array.
+    body: Omit<components['schemas']['UpdateVendorProductRequest'], 'features'> & {
+      features?: Record<string, unknown> | unknown[] | null
+    },
+  ) => apiPatch<ApiEnvelope>(`/v1/vendors/${vendorId}/products/${productId}`, body),
   assignProducts: (
     vendorId: number | string,
     body: components['schemas']['AssignProductsRequest'],

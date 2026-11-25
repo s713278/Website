@@ -1,8 +1,14 @@
-import type { VendorSize } from '@/modules/vendor/types/dashboard'
+import { vendorsService } from '@mithra/api-client'
+import type {
+  VendorProductDetails,
+  VendorProductDetailsChanges,
+  VendorSize,
+} from '@/modules/vendor/types/dashboard'
 import { apiGet, apiPut } from '../client'
-import { updateDemoSizeByPriceId } from '../fixtures/demo-state'
+import { demoProductDetails, updateDemoProductDetails, updateDemoSizeByPriceId } from '../fixtures/demo-state'
 import { demoVendorSizes } from '../fixtures/vendor-dashboard'
 import { mapVendorSizePage, mapVendorSizes } from '../mappers/vendor-dashboard'
+import { mapVendorProductDetails, vendorProductFeaturesToWire } from '../mappers/vendor-product-details'
 import { isLiveApi } from '../mode'
 import { demoDelay } from './demo-delay'
 
@@ -86,7 +92,49 @@ export async function updateSizePrice(
   })
 }
 
+/**
+ * A vendor product's product description and product features. `vendorProductId` is the
+ * vendor product id. Each part falls back to the catalog default when the vendor has not set
+ * their own, and the read does not say which it is; see API_GAPS.
+ */
+export async function getProductDetails(
+  vendorId: string,
+  vendorProductId: string,
+  config: { signal?: AbortSignal } = {},
+): Promise<VendorProductDetails> {
+  if (!isLiveApi()) {
+    await demoDelay()
+    config.signal?.throwIfAborted()
+    return mapVendorProductDetails({ success: true, data: demoProductDetails(vendorProductId) })
+  }
+  return mapVendorProductDetails(await vendorsService.getProduct(vendorId, vendorProductId, config))
+}
+
+/**
+ * Sends only the parts in `changes`. Sending an unchanged part would copy the catalog default
+ * the read fell back to into the shop's own text. A blank description and an empty feature
+ * set each reset that part to the catalog default.
+ */
+export async function updateProductDetails(
+  vendorId: string,
+  vendorProductId: string,
+  changes: VendorProductDetailsChanges,
+): Promise<void> {
+  const body: { description?: string; features?: Record<string, string> } = {}
+  if (changes.description !== undefined) body.description = changes.description
+  if (changes.features !== undefined) body.features = vendorProductFeaturesToWire(changes.features)
+
+  if (!isLiveApi()) {
+    await demoDelay()
+    if (!updateDemoProductDetails(vendorProductId, body)) throw new Error('No such product.')
+    return
+  }
+  await vendorsService.updateProduct(vendorId, vendorProductId, body)
+}
+
 export const vendorProductsService = {
   listSizes: listVendorSizes,
   updatePrice: updateSizePrice,
+  getProductDetails,
+  updateProductDetails,
 }

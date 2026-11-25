@@ -88,4 +88,49 @@ describe('vendor image contract', () => {
     await expect(vendorImagesService.uploadImage('91', 'logo', new File(['png'], 'logo.png', { type: 'image/png' })))
       .rejects.toThrow()
   })
+
+  it('reads a product photo by vendor product id and keeps an absent one as no photo', async () => {
+    const get = vi.spyOn(getHttp(), 'get')
+      .mockResolvedValueOnce({ data: { success: true, data: { image_url: 'https://images.example.test/p418.webp', image_type: 'PRODUCT', reference_id: 418 } } })
+      .mockResolvedValueOnce({ data: { success: true, data: { image_url: null, image_type: 'PRODUCT', reference_id: 419 } } })
+    const controller = new AbortController()
+    await expect(vendorImagesService.getProductImage('91', '418', { signal: controller.signal })).resolves.toBe('https://images.example.test/p418.webp')
+    await expect(vendorImagesService.getProductImage('91', '419')).resolves.toBeNull()
+    expect(get.mock.calls[0]).toEqual([
+      '/v1/vendors/91/images',
+      expect.objectContaining({ params: { image_type: 'PRODUCT', reference_id: 418 }, signal: controller.signal }),
+    ])
+  })
+
+  it('uploads a product photo with only the file in multipart and the product in the query', async () => {
+    const post = vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: {
+      success: true, data: { image_url: 'https://images.example.test/p418-new.webp', image_type: 'PRODUCT', reference_id: 418 },
+    } })
+    const file = new File(['webp'], 'tomato.webp', { type: 'image/webp' })
+    await expect(vendorImagesService.uploadProductImage('91', '418', file)).resolves.toBe('https://images.example.test/p418-new.webp')
+    const [path, body, config] = post.mock.calls[0]
+    expect(path).toBe('/v1/vendors/91/images')
+    if (!(body instanceof FormData)) throw new Error('Expected multipart body')
+    expect([...body.keys()]).toEqual(['file'])
+    expect(body.get('file')).toBe(file)
+    expect(config).toMatchObject({ params: { image_type: 'PRODUCT', reference_id: 418 } })
+  })
+
+  it('does not report a product photo as saved without a returned URL', async () => {
+    vi.spyOn(getHttp(), 'post').mockResolvedValue({ data: { success: true, data: { image_url: null } } })
+    await expect(vendorImagesService.uploadProductImage('91', '418', new File(['png'], 'p.png', { type: 'image/png' })))
+      .rejects.toThrow('did not return a photo URL')
+  })
+
+  it('keeps demo product photos in this tab, off the network', async () => {
+    live = false
+    const get = vi.spyOn(getHttp(), 'get').mockRejectedValue(new Error('Unexpected request'))
+    const post = vi.spyOn(getHttp(), 'post').mockRejectedValue(new Error('Unexpected request'))
+    await expect(vendorImagesService.getProductImage('demo', 'demo-p1')).resolves.toBeNull()
+    const url = await vendorImagesService.uploadProductImage('demo', 'demo-p1', new File(['png'], 'p.png', { type: 'image/png' }))
+    expect(url).toMatch(/^blob:/)
+    await expect(vendorImagesService.getProductImage('demo', 'demo-p1')).resolves.toBe(url)
+    expect(get).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+  })
 })
