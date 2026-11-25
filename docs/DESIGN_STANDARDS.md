@@ -65,6 +65,22 @@ design reference.
 - Successful Continue advances without a toast. Persistent guidance, limits, retryable read errors,
   submission outcomes, and destructive confirmation dialogs keep their contextual presentation.
 
+## Overlays: drawers and dialogs
+
+- **Portalled vendor UI needs the token scope.** Radix and vaul portal their content to `<body>`,
+  outside `.vendor-console`, so every `--vc-*` token is undefined there: borders fall back to
+  `currentColor` and tints vanish with no error. Put `vendor-portal-scope` on the portalled
+  content element (see `ProductDetailsEditor`'s `DrawerContent`); it carries the tokens without
+  the console background.
+- **Animate both sides of a dialog.** Content and backdrop fade in and out together. Content with
+  no exit animation vanishes in one frame while its backdrop is still fading, which reads as a
+  flicker. Reduced-motion classes need `!` to beat the `data-[state]` animation utilities.
+- **One dim over a sheet.** A dialog opened over a vaul drawer uses `ConfirmDialog`'s `overSheet`:
+  a lighter scrim, so the two backdrops do not stack, and below 640px a bottom action sheet that
+  slides with the drawer's curve.
+- Check overlay motion with the frame sampling in
+  [TESTING.md](./TESTING.md#browser-checks), at phone width with touch on.
+
 ## Loading and error states
 
 ### Which loader
