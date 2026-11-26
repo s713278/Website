@@ -25,6 +25,20 @@ A platform product a particular vendor has taken on. It has no price until the v
 gives it at least one size.
 _Avoid_: my product, selected product, assigned product
 
+**Product description**:
+A short text about a vendor product that customers read.
+_Avoid_: blurb, about text, details
+
+**Product feature**:
+One labelled fact about a vendor product, such as Brand: Nandini. A product's features
+are an ordered set with no repeated labels.
+_Avoid_: attribute, highlight, spec, fact
+
+**Catalog default**:
+A platform product's own photo, description and features. A vendor product shows the
+catalog default for each of these until the vendor gives it their own.
+_Avoid_: shared text, platform text, fallback
+
 **Assignment**:
 The act of a vendor taking on a platform category or product. Assignment is currently
 one-way: nothing the vendor assigns can be given back.

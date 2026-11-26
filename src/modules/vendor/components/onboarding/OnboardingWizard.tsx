@@ -145,7 +145,7 @@ import {
 } from '../../types/onboarding'
 import { AccessNotice, OnboardingStatus, StepNotice } from './AccessNotice'
 import { BusinessStep, CategoryStep, ProductStep } from './CatalogSteps'
-import { ConfirmDialog, type ConfirmDialogState } from './ConfirmDialog'
+import { ConfirmDialog, type ConfirmDialogState } from '@/modules/vendor/components/ConfirmDialog'
 import { OtpSentTo, OtpStep, PhoneStep } from './IdentitySteps'
 import { DeliveryStep, PaymentStep, SkuStep } from './OperationsSteps'
 import { OnboardingStepper } from './OnboardingStepper'

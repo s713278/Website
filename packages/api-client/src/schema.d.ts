@@ -274,42 +274,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/categories/{category_id}/products/{product_id}/image": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["updateProductImage"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/categories/products/{productId}/image": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Image Upload
-         * @description API accessed by Admin/Customer_Care role only
-         */
-        put: operations["updateProductImage_1"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/api/subscription-plans/{id}": {
         parameters: {
             query?: never;
@@ -1125,7 +1089,7 @@ export interface paths {
         put?: never;
         /**
          * Create a product
-         * @description Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description.
+         * @description Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description. `image_path` is not accepted (400); upload the image via POST /v1/catalog/products/{product_id}/image. Optional `features` must be a JSON object or array (max 16 KB); `null`, `{}` or `[]` store no features.
          */
         post: operations["addProduct"];
         delete?: never;
@@ -1149,9 +1113,66 @@ export interface paths {
         put?: never;
         /**
          * Create a category
-         * @description Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles.
+         * @description Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles. `image_path` is not accepted (400); upload the image via POST /v1/catalog/categories/{category_id}/image.
          */
         post: operations["createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/catalog/products/{product_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload platform product image
+         * @description Uploads the platform image of a catalog product (updates <code>tb_product.image_path</code>).
+         *     Max size <b>3 MB</b>. <code>product_id</code> is the platform product id
+         *     (<code>tb_product.id</code>), not a vendor product id.<br/>
+         *     This image is the <b>default for every vendor</b> selling the product; vendors that
+         *     uploaded their own product image keep showing their own image.<br/>
+         *     <b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file content,
+         *     not the Content-Type header.<br/>
+         *     <b>Storage:</b> every upload is stored under a new unique S3 key, so the returned URL changes on
+         *     each upload and CDN caches never serve a stale image.<br/>
+         *     <b>Access:</b> ADMIN and CUSTOMER_CARE only. VENDOR receives 403 - vendors manage their own
+         *     product image via <code>POST /v1/vendors/{vendor_id}/images?image_type=PRODUCT</code>.
+         */
+        post: operations["uploadProductImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/catalog/categories/{category_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload platform category image
+         * @description Uploads the platform image of a catalog category (updates <code>tb_category.image_path</code>).
+         *     Max size <b>1 MB</b>.<br/>
+         *     <b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file content,
+         *     not the Content-Type header.<br/>
+         *     <b>Storage:</b> every upload is stored under a new unique S3 key, so the returned URL changes on
+         *     each upload and CDN caches never serve a stale image.<br/>
+         *     <b>Access:</b> ADMIN and CUSTOMER_CARE only. VENDOR receives 403 - vendors manage their own
+         *     product image via <code>POST /v1/vendors/{vendor_id}/images?image_type=PRODUCT</code>.
+         */
+        post: operations["uploadCategoryImage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1445,7 +1466,19 @@ export interface paths {
         };
         /**
          * Get vendor product details
-         * @description Fetch detailed information about a specific vendor product by vendor product ID.
+         * @description Returns a vendor product (<code>product_id</code> = vendor product id,
+         *     <code>ref_id</code> = platform product id).<br/>
+         *     Fallback to the platform product when the vendor has not set a value:
+         *     <ul>
+         *       <li><code>description</code>: vendor description, else the platform description</li>
+         *       <li><code>image_path</code>: vendor product image, else the platform product image</li>
+         *       <li><code>features_map</code> / <code>features_type</code> / <code>features_list</code>:
+         *       vendor features, else the platform features (empty <code>{}</code> / <code>[]</code>
+         *       counts as not set)</li>
+         *     </ul>
+         *     <b>Access:</b> ADMIN, CUSTOMER_CARE, or a member (OWNER / STAFF) of
+         *     <code>vendor_id</code>; other callers get 403. 404 when the product does not belong to
+         *     <code>vendor_id</code>.
          */
         get: operations["getVendorProductDetails"];
         put?: never;
@@ -1455,8 +1488,22 @@ export interface paths {
         head?: never;
         /**
          * Update vendor product description and features
-         * @description Update the description and/or features of a vendor product.
-         *     Only the provided fields will be updated (partial update).
+         * @description Partially updates a vendor product. Same body naming and rules as the platform product
+         *     PATCH (<code>PATCH /v1/categories/{category_id}/products/{product_id}</code>):
+         *     <ul>
+         *       <li><code>description</code>: omitted = unchanged; blank = reset (the platform
+         *       description is shown)</li>
+         *       <li><code>features</code> (also <code>features_map</code> / <code>features_list</code>):
+         *       omitted = unchanged; JSON object or array = replace (no merge); <code>null</code>,
+         *       <code>{}</code> or <code>[]</code> = clear (the platform features are shown); any other
+         *       value or more than 16 KB = 400</li>
+         *       <li><code>image_path</code>: not accepted (400). Upload via
+         *       <code>POST /v1/vendors/{vendor_id}/images</code> with <code>image_type=PRODUCT</code>
+         *       and <code>reference_id</code> = vendor product id.</li>
+         *     </ul>
+         *     <code>product_id</code> in the body is optional and ignored (the path value is used).<br/>
+         *     <b>Access:</b> ADMIN, CUSTOMER_CARE, or a member (OWNER / STAFF with CATALOG) of
+         *     <code>vendor_id</code>. 404 when the product does not belong to <code>vendor_id</code>.
          */
         patch: operations["updateVendorProduct"];
         trace?: never;
@@ -1637,7 +1684,9 @@ export interface paths {
         /**
          * Assign products to a vendor
          * @description Assigns one or more products to a vendor with their features by Admin/Customer_Care role. <br>
-         *     In the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it.
+         *     In the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it. <br>
+         *     If a product's features are omitted or empty, the vendor product inherits the platform product features
+         *     (set via PATCH /v1/categories/{category_id}/products/{product_id}).
          */
         patch: operations["assignProducts"];
         trace?: never;
@@ -1852,12 +1901,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Fetch product details
+         * @description Returns a platform product including its features. ADMIN only.<br/>
+         *     <code>features_map</code> holds the stored features (object or array),
+         *     <code>features_type</code> is <code>map</code> or <code>list</code>, and
+         *     <code>features_list</code> is present only for lists. All three are omitted when the
+         *     product has no features.
+         */
         get: operations["fetchProductInfo"];
         put?: never;
         post?: never;
         delete: operations["deleteProductByCategory"];
         options?: never;
         head?: never;
+        /**
+         * Update a product (partial)
+         * @description Partially updates a platform product (<code>tb_product</code>). Omitted fields are left
+         *     unchanged. Accessible by VENDOR, ADMIN and CUSTOMER_CARE.<br/>
+         *     <b>features</b> (also accepted as <code>features_map</code> / <code>features_list</code>):
+         *     a JSON object (map) or array (list).
+         *     <ul>
+         *       <li>omitted: unchanged</li>
+         *       <li>object / array: replaces the stored features (no merge)</li>
+         *       <li><code>null</code>, <code>{}</code> or <code>[]</code>: clears the features</li>
+         *       <li>any other value, or a payload above 16 KB: 400</li>
+         *     </ul>
+         *     Platform features are the default for every vendor product whose own features are empty.
+         *     <code>image_path</code> is not accepted (400); upload the image via
+         *     POST /v1/catalog/products/{product_id}/image.
+         */
         patch: operations["updateProduct"];
         trace?: never;
     };
@@ -2253,6 +2326,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/vendors/shops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find shops for a location (unified discovery)
+         * @description Single endpoint powering the storefront "Find shops" listing.<br>
+         *     <b>Location</b>: <code>service_area</code> (pincode) and/or <code>latitude</code> +
+         *     <code>longitude</code>. A shop matches when its service polygon covers the point OR
+         *     the pincode is in its zipcode list (pincode-only lookups also include global
+         *     vendors).<br>
+         *     <b>Filters</b>: <code>category_id</code> / <code>category_name</code> for the chips,
+         *     <code>keyword</code> for the "category or shop name" text box,
+         *     <code>taking_orders</code> (ACTIVE vendors only) and <code>delivers_here</code>
+         *     (default true; false = browse all shops regardless of location).<br>
+         *     <b>Sort</b>: <code>sort</code> = distance | name | newest (default distance when
+         *     coordinates are supplied, else name). Each shop returns
+         *     <code>distance_meters</code> when coordinates are known.<br>
+         *     <b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>
+         *     header is optional; when sent it must be valid, otherwise <code>401</code> is
+         *     returned.<br>
+         *     Results are cached (~30 min); <code>page_size</code> is capped at 50.<br>
+         *     Test data: service_area:502103, latitude:18.100525, longitude:78.848279.
+         */
+        get: operations["searchShops"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/vendors/search": {
         parameters: {
             query?: never;
@@ -2282,9 +2391,11 @@ export interface paths {
         };
         /**
          * Fetch Vendors by zipcode with/without category_id
-         * @description This API used for searching vendors and specific vendors based on zipcode and/or category_id.
+         * @deprecated
+         * @description Deprecated — use <code>GET /v1/vendors/shops</code> instead.
+         *     <br>This API used for searching vendors and specific vendors based on zipcode and/or category_id.
          *     <br>If <b>category_id</b> is NULL: Vendors will be filtered by zipcode only.
-         *     <br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & product_id.
+         *     <br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & category_id.
          *     <br>Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103
          */
         get: operations["fetchActiveVendorsByServiceArea"];
@@ -2305,7 +2416,8 @@ export interface paths {
         };
         /**
          * Search vendors by zipcode and product keyword[ regex: vendor name , category name,product name and sku name ]
-         * @description This API used for search and list of matched vendors for given search pattern.
+         * @deprecated
+         * @description Deprecated — use <code>GET /v1/vendors/shops</code> instead.
          *     <br>Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish
          */
         get: operations["searchVendorsByKeyword"];
@@ -2363,6 +2475,8 @@ export interface paths {
         /**
          * Fetch Categories by service_area
          * @description This API used for fetching all categories served by the vendors based on service_area/zipcode.
+         *         <br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>
+         *         header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
          *         <br>Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.
          */
         get: operations["fetchCategoriesByZipCode"];
@@ -2787,6 +2901,8 @@ export interface paths {
          *     <br> On click on the <b>new vendor image/name</b> ,User has to navigate to vendor's product listing page.
          *     <br> On click on <b>offer image/name</b> ,User has to navigate to vendor's specific sku's listing page.
          *     <br> On click on <b>top product</b> ,User has to navigate to vendor's specific sku's listing page.
+         *     <br><br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>
+         *     header is optional; when sent it must be valid, otherwise <code>401</code> is returned.
          */
         get: operations["getHomePageData"];
         put?: never;
@@ -3148,8 +3264,6 @@ export interface components {
             business_address?: {
                 [key: string]: string;
             };
-            /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
-            banner_image?: string;
             /** @description This is to assign products later on. */
             assign_categories: components["schemas"]["AssignCategoriesRequest"];
             /**
@@ -4202,7 +4316,7 @@ export interface components {
             message?: string;
             image_url?: string;
             /** @enum {string} */
-            image_type?: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU";
+            image_type?: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU" | "CATEGORY" | "CATALOG_PRODUCT";
             /** Format: int64 */
             reference_id?: number;
         };
@@ -4504,8 +4618,26 @@ export interface components {
             description?: string;
             /** Format: int64 */
             measurement_unit_id?: number;
-            /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
-            image_path?: string;
+            /**
+             * @description Image URL (read-only). Not accepted in create/update requests (400); upload via POST /v1/catalog/products/{product_id}/image (ADMIN / CUSTOMER_CARE).
+             * @example https://mithradirect.com/cdn-cgi/image/width=400/platform/products/1003/a.webp
+             */
+            readonly image_path?: string;
+            /**
+             * @description Platform product features: a JSON object (map) or array (list). Default for every vendor product whose own features are empty. Optional on create. PATCH semantics: omitted = unchanged, object/array = replace, null / {} / [] = clear. Also accepted as `features` or `features_list` in requests.
+             * @example {
+             *       "Brand": "MithraDirect",
+             *       "Shelf Life": "5 days"
+             *     }
+             */
+            features_map?: components["schemas"]["JsonNode"];
+            /**
+             * @description `map` or `list`, depending on the shape of features.
+             * @example map
+             */
+            readonly features_type?: string;
+            /** @description Same as features_map when features is a list; otherwise omitted. */
+            readonly features_list?: components["schemas"]["JsonNode"];
         };
         CategoryDTO: {
             /** Format: int64 */
@@ -4519,8 +4651,11 @@ export interface components {
              * @example 12
              */
             business_type_id: number;
-            /** @example data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk */
-            image_path?: string;
+            /**
+             * @description Image URL (read-only). Not accepted in create/update requests (400); upload via POST /v1/catalog/categories/{category_id}/image (ADMIN / CUSTOMER_CARE).
+             * @example https://mithradirect.com/cdn-cgi/image/width=200/platform/categories/12/a.webp
+             */
+            readonly image_path?: string;
             /** @example A category dedicated to Milk products, offering a wide range of high-quality items for everyday use. */
             description?: string;
             /**
@@ -4725,10 +4860,27 @@ export interface components {
             is_active?: boolean;
         };
         UpdateVendorProductRequest: {
-            /** Format: int64 */
-            product_id: number;
+            /**
+             * @description Vendor product description. Omitted = unchanged; blank = reset to the platform product description.
+             * @example SRK farm tomatoes, hand-picked
+             */
             description?: string;
+            /**
+             * Format: int64
+             * @deprecated
+             * @description Ignored; the vendor product id is taken from the path. Kept for backward compatibility.
+             */
+            product_id?: number;
+            /**
+             * @description Vendor product features: a JSON object (map) or array (list), max 16 KB. Omitted = unchanged, object/array = replace, null / {} / [] = clear (the platform product features are then shown). Also accepted as `features_map` or `features_list`.
+             * @example {
+             *       "Brand": "SRK",
+             *       "Shelf Life": "5 days"
+             *     }
+             */
             features?: components["schemas"]["JsonNode"];
+            /** @description Not accepted (400). Upload the image via POST /v1/vendors/{vendor_id}/images (image_type=PRODUCT, reference_id=vendor product id). */
+            image_path?: string;
         };
         OrderUpdateRequest: {
             /**
@@ -6237,65 +6389,6 @@ export interface operations {
             };
         };
     };
-    updateProductImage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                category_id: number;
-                product_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** Format: binary */
-                    image: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-        };
-    };
-    updateProductImage_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                productId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** Format: binary */
-                    image: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
-                };
-            };
-        };
-    };
     fetchSubscriptionPlan: {
         parameters: {
             query?: never;
@@ -7164,7 +7257,7 @@ export interface operations {
     getVendorImageUrl: {
         parameters: {
             query: {
-                image_type: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU";
+                image_type: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU" | "CATEGORY" | "CATALOG_PRODUCT";
                 reference_id?: number;
             };
             header?: never;
@@ -7189,7 +7282,7 @@ export interface operations {
     uploadVendorImage: {
         parameters: {
             query: {
-                image_type: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU";
+                image_type: "HOMEBANNER" | "THUMBNAIL" | "PRODUCT" | "SKU" | "CATEGORY" | "CATALOG_PRODUCT";
                 reference_id?: number;
                 fileName?: string;
             };
@@ -7839,7 +7932,7 @@ export interface operations {
                     "application/json": components["schemas"]["APIResponse"];
                 };
             };
-            /** @description Product with the same name already exists in this category */
+            /** @description Product with the same name already exists in this category, invalid features, or image_path supplied */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7919,6 +8012,124 @@ export interface operations {
             };
             /** @description Category with the same name already exists */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    uploadProductImage: {
+        parameters: {
+            query?: {
+                file_name?: string;
+            };
+            header?: never;
+            path: {
+                /** @example 1003 */
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Product image uploaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Missing, unsupported or oversized file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not ADMIN or CUSTOMER_CARE */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Product not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+        };
+    };
+    uploadCategoryImage: {
+        parameters: {
+            query?: {
+                file_name?: string;
+            };
+            header?: never;
+            path: {
+                /** @example 12 */
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Category image uploaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Missing, unsupported or oversized file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not ADMIN or CUSTOMER_CARE */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Category not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8412,13 +8623,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Vendor product details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller has no access to this vendor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor product not found for this vendor */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -8435,35 +8664,47 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description Vendor product update request */
+        /** @description Fields to update */
         requestBody: {
             content: {
-                /**
-                 * @example {
-                 *       "product_id": 123,
-                 *       "description": "Updated product description",
-                 *       "features": {
-                 *         "Features": [
-                 *           {
-                 *             "Brand": "MithraDirect",
-                 *             "Health Benfits": "Low Fat",
-                 *             "How to Use": "Easy"
-                 *           }
-                 *         ]
-                 *       }
-                 *     }
-                 */
                 "application/json": components["schemas"]["UpdateVendorProductRequest"];
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Vendor product updated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Invalid features or image_path supplied */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller has no access to this vendor */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Vendor product not found for this vendor */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -9253,13 +9494,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Product details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Product not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -9297,19 +9556,47 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Fields to update */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProductDTO"];
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Product updated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["APIResponseObject"];
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Invalid features, image_path supplied, or measurement unit in use */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Caller is not VENDOR, ADMIN or CUSTOMER_CARE */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
+                };
+            };
+            /** @description Product not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIResponse"];
                 };
             };
         };
@@ -9903,6 +10190,59 @@ export interface operations {
             };
         };
     };
+    searchShops: {
+        parameters: {
+            query?: {
+                /** @example 502103 */
+                service_area?: string;
+                /** @example 18.100525 */
+                latitude?: number;
+                /** @example 78.848279 */
+                longitude?: number;
+                /** @example 102 */
+                category_id?: number;
+                /** @example Dairy */
+                category_name?: string;
+                /** @example Milk */
+                keyword?: string;
+                /** @example true */
+                taking_orders?: boolean;
+                /** @example true */
+                delivers_here?: boolean;
+                /** @example distance */
+                sort?: string;
+                page_number?: number;
+                page_size?: number;
+            };
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shops matching the filters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     getVendorProfileByMobile: {
         parameters: {
             query: {
@@ -10043,19 +10383,31 @@ export interface operations {
                 /** @example 78.848279 */
                 longitude?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Categories served in the location */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["APIResponseObject"];
+                };
+            };
+            /** @description An X-API-Key header was sent but it is not a valid key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -10789,11 +11141,14 @@ export interface operations {
                 /** @example 502103 */
                 service_area: string;
                 /** @example 18.100525 */
-                latitude: number;
+                latitude?: number;
                 /** @example 78.848279 */
-                longitude: number;
+                longitude?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Optional public API key. If supplied, it must be a valid key. */
+                "X-API-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };

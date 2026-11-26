@@ -41,6 +41,26 @@ type DemoState = {
   billingCancelRequestedAt: Map<string, string>
   billingRevisions: Map<string, number>
   trialEndsAt: string
+  /** Vendor product id → the photo this tab uploaded for it. */
+  productImages: Map<string, string>
+  /** Vendor product id → the shop's own description and features, kept apart from the catalog default. */
+  productText: Map<string, { description?: string; features?: Row }>
+}
+
+/**
+ * The catalog default description and features of each demo vendor product, in wire shape.
+ * Rice carries list-shaped features, which only the admin catalog or an import can produce.
+ */
+const DEMO_CATALOG_PRODUCT_TEXT: Record<string, { description: string; features: Row | string[] }> = {
+  '201': {
+    description: 'Ripe, firm tomatoes for curries, chutneys and salads.',
+    features: { 'Made in': 'Kolar, Karnataka', 'Good for': 'Curries and salads' },
+  },
+  '202': {
+    description: 'Unpolished organic sona masoori rice.',
+    features: ['Unpolished', 'Certified organic'],
+  },
+  '203': { description: 'Wood-pressed groundnut oil.', features: {} },
 }
 
 function seed(): DemoState {
@@ -54,6 +74,8 @@ function seed(): DemoState {
     billingCancelRequestedAt: new Map(),
     billingRevisions: new Map(),
     trialEndsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    productImages: new Map(),
+    productText: new Map(),
   }
 }
 
@@ -122,6 +144,46 @@ export function demoSizes(): Row[] {
 
 export function demoProfile(): Row {
   return state.profile
+}
+
+/** The demo vendor's own photo for one product; seeded products start without one. */
+export function demoProductImage(productId: string): string | null {
+  return state.productImages.get(productId) ?? null
+}
+
+export function setDemoProductImage(productId: string, url: string) {
+  state.productImages.set(productId, url)
+}
+
+/**
+ * One demo vendor product as `GET /v1/vendors/{vendor_id}/products/{product_id}` sends it:
+ * the shop's own text where set, else the catalog default, with nothing saying which.
+ */
+export function demoProductDetails(productId: string): Row {
+  const catalog = DEMO_CATALOG_PRODUCT_TEXT[productId]
+  if (!catalog) throw new Error('No such product.')
+  const own = state.productText.get(productId) ?? {}
+  const features = own.features ?? catalog.features
+  return {
+    product_id: Number(productId),
+    description: own.description ?? catalog.description,
+    ...(Array.isArray(features)
+      ? { features_type: 'list', features_list: features, features_map: {} }
+      : { features_type: 'map', features_map: features }),
+  }
+}
+
+/**
+ * Applies a details PATCH the way live does: an omitted part is unchanged, and a blank
+ * description or `{}` features resets that part to the catalog default.
+ */
+export function updateDemoProductDetails(productId: string, patch: { description?: string; features?: Row }): boolean {
+  if (!DEMO_CATALOG_PRODUCT_TEXT[productId]) return false
+  const own = { ...state.productText.get(productId) }
+  if (patch.description !== undefined) own.description = patch.description.trim() ? patch.description : undefined
+  if (patch.features !== undefined) own.features = Object.keys(patch.features).length ? { ...patch.features } : undefined
+  state.productText.set(productId, own)
+  return true
 }
 
 /**

@@ -80,10 +80,12 @@ Acceptance:
 
 Use:
 
-- Admin upload: `PUT /v1/categories/{category_id}/products/{product_id}/image` or `PUT /v1/categories/products/{productId}/image`, body field `image`.
+- Admin upload: `POST /v1/catalog/products/{product_id}/image` with multipart `file` (ADMIN / CUSTOMER_CARE; MFPS-175 and the 24 November 2026 OpenAPI).
 - Vendor upload: `POST /v1/vendors/{vendor_id}/images?image_type=PRODUCT&reference_id={productId}` with multipart `file`.
 - Vendor read: `GET /v1/vendors/{vendor_id}/images?image_type=PRODUCT&reference_id={productId}` (`image_url`).
 - After upload, show the returned URL. Reload the product if the response has no URL.
+- Server limits: JPEG, PNG, WebP or GIF, at most 3 MB. There is no delete endpoint, so the corner × waits for one.
+- Vendor side is built on `/vendor/products`; see [vendor product photos](./API_ARCHITECTURE.md#vendor-product-photos).
 
 ### 6. Gallery
 

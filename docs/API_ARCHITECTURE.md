@@ -224,7 +224,8 @@ which is the default — so the bug shows up as an empty screen, not an error.
 | `vendor.service.ts` | `getVendorInsights`, `getVendorStoreProfile` | wire-shaped fixtures in `shared/api/fixtures/vendor-dashboard.ts` | `GET /v1/users/{userId}/dashboard` (vendor figures, keyed on the **user** id) and `GET /v1/vendors/{id}` (Settings editor is not built; profile PUT caveats live in [API_GAPS.md](./API_GAPS.md#approved-store-profile-updates)) |
 | `vendor-orders.service.ts` | `listVendorOrders`, `getVendorOrder`, `updateVendorOrderStatus` | same fixtures | `GET /v1/vendors/{vendorId}/orders/` (paginated `result` container), `GET`/`PATCH` on one order. The write sends `{delivery_status, payment_status}` — the contract has no single `status` field |
 | `vendor-subscriptions.service.ts` | `listVendorSubscriptions` | same fixtures, with wire-shaped rows covering each supported filter | `GET /v1/vendors/{vendorId}/subs` (read-only, server-filtered, paginated `result` container) |
-| `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}` |
+| `vendor-products.service.ts` | `listVendorSizes`, `updateSizePrice`, `getProductDetails`, `updateProductDetails` | same fixtures | `GET /v1/vendors/{vendorId}/products/skus` (**not** `/products`, which carries no price), `PUT /v1/sku/price/{price_id}`, `GET`/`PATCH /v1/vendors/{vendorId}/products/{product_id}` |
+| `vendor-images.service.ts` | `getImage`, `uploadImage` (logo, banner); `getProductImage`, `uploadProductImage` | Logo/banner: no read, upload refused. Product photos: in-memory object URLs in `demo-state.ts`, kept for the tab | `GET`/`POST /v1/vendors/{vendorId}/images`; see [vendor setup images](#vendor-setup-images) and [vendor product photos](#vendor-product-photos) |
 | `cart.service.ts` | `get`, `clear`, `addItem`, `setItemQty`, `removeItem` | Service returns empty snapshots/no-ops; cart orchestration mutates Zustand locally | `/v1/vendors/{vendorId}/cart/*`, mapped by `mapCartPayload`; called by storefront `cart-actions.ts` |
 | `live-billing.service.ts` | `liveBillingService` | In development, the [local Razorpay Test backend](#local-razorpay-test-backend-development-demo); a production demo build routes Plan to the billing panel instead | The package's `vendorBillingService`; see [Live API billing](#vendor-platform-billing-live-api) |
 | `vendor-onboarding.service.ts` | Public catalog reads plus vendor setup account reads and writes | Wire-shaped vendor-context fixture mounts the console; setup references still come only from the explicitly selected sample catalog | Package `catalogService`, `vendorsService`, and `platformService`; strict mappers normalize references, account resources, checkout options, and measurements |
@@ -774,6 +775,68 @@ fields only: `order_id`, `store_name`, `order_status`, `payment_status`,
 `order_items` (`sku_name`, `size`, `quantity`, `unit_price`, `list_price`,
 `line_total`, `discount`, `image_path`). Item size stays on its own field; it is
 not folded into the name.
+
+#### Vendor product photos
+
+`/vendor/products` shows and replaces the vendor's own photo for each product (MFPS-175).
+`vendorImagesService.getProductImage` and `uploadProductImage` call
+`GET`/`POST /v1/vendors/{vendor_id}/images` with `image_type=PRODUCT` and `reference_id` set to the
+vendor product id (`vendor_product_id` on the `/products/skus` rows). As with logo and banner, the
+query carries the type and id, and the multipart body carries only `file`.
+
+- **Vendor's own photo only.** The read returns `image_url: null` when the shop has not uploaded
+  a photo, and the page shows **Add photo** and a **Needs photo** badge. It does not use
+  `image_path` from `/products/skus`, which may already fall back to the platform photo.
+- **One read per visible product.** Each row reads its photo when it mounts, at most six per
+  page, and cancels the read when it unmounts. A failed read shows a broken-image thumbnail; it
+  does not block prices. The details editor reuses the row's photo and reads it only when the
+  row has not.
+- **Upload on Save.** The photo is edited in the details editor below, opened from the row's
+  photo or **Edit details**. A picked file is checked first (JPEG, PNG, WebP or GIF, at most 3 MB,
+  the contract's limits for `PRODUCT`) and only previewed through an object URL, revoked when it
+  changes or the editor closes. **Save** uploads it before the description is sent; the row then
+  shows the returned URL. A failed upload keeps the picked photo for another Save. Each upload
+  returns a new URL.
+- **No remove, no thumbnails.** There is no delete endpoint, and the backend serves one photo per
+  product; see [API_GAPS.md](./API_GAPS.md#still-open).
+- A size without a vendor product id gets no photo control.
+
+#### Vendor product details
+
+**Edit details** (or the photo) on each `/vendor/products` row opens one editor for that vendor
+product's photo, product description and product features (MFPS-175): a drawer from the bottom on a
+phone and from the right from tablet width, with one Save. `vendorProductsService.getProductDetails` and
+`updateProductDetails` call `GET` and `PATCH /v1/vendors/{vendor_id}/products/{product_id}`, where
+`product_id` is the vendor product id, through the package's `vendorsService.getProduct` and
+`updateProduct`. `src/shared/api/mappers/vendor-product-details.ts` owns the mapping.
+
+- **The read falls back to the catalog default.** `description` and the features are the vendor's
+  own, else the platform product's, with no marker saying which; see
+  [API_GAPS.md](./API_GAPS.md#still-open). The editor never uses `image_path` from this read.
+- **Only changed parts are sent.** The editor compares against what it loaded and sends only a
+  changed `description` and/or `features`; an omitted field is unchanged on the server. This is
+  what keeps an unedited catalog default from becoming the shop's own text. A blank description
+  and `features: {}` each reset that part to the catalog default.
+- **Features are rows.** The view model is `{ description, features: { label, detail }[] }` in wire
+  order. `features_type: "map"` becomes rows in key order; `"list"` becomes rows with an empty
+  label and the item as the detail; missing features become no rows. The editor shows them as
+  Label/Detail rows with sample chips, **Add feature** and Remove, and sends `features` only when the
+  rows differ from what it loaded, so untouched list-shaped rows are never sent. Before anything
+  is sent, including a picked photo, `src/modules/vendor/lib/product-features.ts` checks the
+  rows: completely empty rows are dropped, labels and details are trimmed, and a half-filled row
+  (so an edited list row with no label) or a repeated label (ignoring case and spaces) blocks the
+  save with a message under that row. Features over 16 KB block it with a message under the rows.
+  The contract says "max 16 KB" without saying how it is measured; the editor assumes UTF-8 bytes
+  of the sent object, 16,384. Writes always send an object, Label → Detail, in row order (`{}` for
+  no rows). The generated `JsonNode` type is
+  `Record<string, never>`, so the package wrapper widens `features` to an object or array.
+- **Saved parts are not resent.** Save uploads a picked photo, then sends the changed text. If the
+  text fails after the photo saved, the editor says so and the next Save sends only the text.
+- **Read once per page visit.** The editor keeps each product's details while the page is open,
+  so reopening a product sends no read. Saving a description or features drops that product's
+  copy, because a blank description or `{}` falls back to catalog text only the server knows.
+- **Demo.** `demo-state.ts` holds each demo product's catalog default and, separately, the shop's
+  own text, both in wire shape. A demo save applies the same omitted/blank/`{}` rules as live.
 
 #### Vendor dashboard reads
 

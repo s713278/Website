@@ -58,12 +58,12 @@
       "description": "APIs for managing customer shopping cart with multi-item support.\n<br><br><b>Vendor Context:</b>\n<br>• Each customer can only have items from ONE vendor per cart\n<br>• Attempting to add items from different vendors will return an error\n<br>• Clear cart option available to switch vendors\n<br><br><b>Cart Features:</b>\n<br>• Add multiple items from the same vendor\n<br>• Update item quantities\n<br>• Remove individual items\n<br>• Clear entire cart\n<br>• Real-time total calculation\n<br>• 24-hour cart expiration\n"
     },
     {
-      "name": "21. Vendor Social Links API",
-      "description": "Manage optional vendor social media links (Instagram, Facebook, YouTube, LinkedIn, ...).\nActive links are also returned as `social_links` in the storefront API.\n"
+      "name": "02. Vendors Discovery and Products Listing API",
+      "description": "APIs for fetching vendors listing and SKU listing in order to display on UI for User journey."
     },
     {
-      "name": "02. Vendors and Products Listing API",
-      "description": "APIs for fetching vendors listing and SKU listing in order to display on UI for User journey."
+      "name": "21. Vendor Social Links API",
+      "description": "Manage optional vendor social media links (Instagram, Facebook, YouTube, LinkedIn, ...).\nActive links are also returned as `social_links` in the storefront API.\n"
     },
     {
       "name": "16. Courier Partners",
@@ -337,7 +337,7 @@
     "/v1/vendors/{vendor_id}/checkout_options": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Get checkout options for a vendor",
         "description": "Returns the available fulfillment methods and their configuration for the checkout UI.\n<br><br>The vendor's <code>fulfillment_type</code> determines which options are returned:\n<br>• <b>HOME_DELIVERY</b> — delivery charges, free threshold, same-day availability, delivery slots\n<br>• <b>STORE_PICKUP</b> — list of active pickup stores with per-store ready time and pickup slots\n<br>• <b>BOTH</b> — both options returned, user selects at checkout\n<br><br><b>Delivery Scheduling Strategies:</b>\n<br>• <b>FIXED_WINDOW</b> — Eco products: 3-5 days delivery window\n<br>• <b>CUSTOMER_SELECT_DATE</b> — Milk delivery: customer picks exact date within 1-30 days\n<br>• <b>PREDEFINED_DAYS</b> — Seasonal products: delivery only on specific days (e.g., Sunday, Wednesday)\n<br>• <b>INSTANT</b> — Hotel/Restaurant: 30-60 minutes delivery\n<br><br><b>Response Structure:</b>\n<br>• <code>delivery_methods</code> — list of available methods: <code>[\"HOME_DELIVERY\"]</code>, <code>[\"STORE_PICKUP\"]</code>, or both\n<br>• <code>delivery_options</code> — home delivery config (charges, scheduling, slots) — null if not available\n<br>• <code>delivery_options.scheduling_strategy</code> — one of: FIXED_WINDOW, CUSTOMER_SELECT_DATE, PREDEFINED_DAYS, INSTANT\n<br>• <code>delivery_options.shipping_strategy_type</code> — ORDER_AMOUNT_THRESHOLD, ZIPCODE_THRESHOLD, ZIPCODE_TIERED, FLAT, WEIGHT_BASED\n<br>• <code>delivery_options.shipping_config</code> — strategy-specific configuration (snake_case keys)\n<br>• <code>delivery_options.scheduling_config</code> — strategy-specific configuration\n<br>• <code>delivery_options.available_delivery_dates</code> — list of available dates based on strategy\n<br>• <code>pickup_options.stores[]</code> — pickup store list with address, ready time, slots — null if not available\n<br><br><b>Shipping Strategy Configurations:</b>\n<br>• <b>ORDER_AMOUNT_THRESHOLD</b>: delivery_charge=30, free_delivery_threshold=300\n<br>• <b>ZIPCODE_THRESHOLD</b>: free_zipcodes=[\"560001\"], free_delivery_threshold=500, default_charge=50\n<br>• <b>ZIPCODE_TIERED</b>: tiers=[{label, zipcodes[], charge}], rest_of_india_charge=80\n<br>• <b>FLAT</b>: charge=40\n<br>• <b>WEIGHT_BASED</b>: free_up_to_kg=2, charge_per_kg=20\n<br><br><b>Scheduling Strategy Configurations:</b>\n<br>• <b>FIXED_WINDOW</b>: min_delivery_days=3, max_delivery_days=5, deliveryFrequency=false\n<br>• <b>CUSTOMER_SELECT_DATE</b>: min_advance_booking_days=1, max_advance_booking_days=30, cutoff_time=18:00\n<br>• <b>PREDEFINED_DAYS</b>: available_delivery_days=[\"SUNDAY\", \"WEDNESDAY\"], max_orders_per_day=50\n<br>• <b>INSTANT</b>: minPrepTimeMinutes=30, maxPrepTimeMinutes=60, operatingUntil=23:59, orderCutoffTime=22:00\n",
@@ -1326,120 +1326,6 @@
         "responses": {
           "200": {
             "description": "OK"
-          }
-        }
-      }
-    },
-    "/v1/categories/{category_id}/products/{product_id}/image": {
-      "put": {
-        "tags": [
-          "11. Platform APIs - Product Catalog"
-        ],
-        "operationId": "updateProductImage",
-        "parameters": [
-          {
-            "name": "category_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "product_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "image": {
-                    "type": "string",
-                    "format": "binary"
-                  }
-                },
-                "required": [
-                  "image"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "E-Commerce Application": []
-          }
-        ]
-      }
-    },
-    "/v1/categories/products/{productId}/image": {
-      "put": {
-        "tags": [
-          "11. Platform APIs - Product Catalog"
-        ],
-        "summary": "Image Upload",
-        "description": "API accessed by Admin/Customer_Care role only",
-        "operationId": "updateProductImage_1",
-        "parameters": [
-          {
-            "name": "productId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "image": {
-                    "type": "string",
-                    "format": "binary"
-                  }
-                },
-                "required": [
-                  "image"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
-                }
-              }
-            }
           }
         }
       }
@@ -3060,7 +2946,9 @@
                 "HOMEBANNER",
                 "THUMBNAIL",
                 "PRODUCT",
-                "SKU"
+                "SKU",
+                "CATEGORY",
+                "CATALOG_PRODUCT"
               ]
             }
           },
@@ -3119,7 +3007,9 @@
                 "HOMEBANNER",
                 "THUMBNAIL",
                 "PRODUCT",
-                "SKU"
+                "SKU",
+                "CATEGORY",
+                "CATALOG_PRODUCT"
               ]
             }
           },
@@ -4897,7 +4787,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Create a product",
-        "description": "Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description.",
+        "description": "Creates a product in the specified category. Obtain measurement_unit_id from GET /v1/measurements/. If description is omitted or blank, the product name is used as its description. `image_path` is not accepted (400); upload the image via POST /v1/catalog/products/{product_id}/image. Optional `features` must be a JSON object or array (max 16 KB); `null`, `{}` or `[]` store no features.",
         "operationId": "addProduct",
         "parameters": [
           {
@@ -4920,6 +4810,9 @@
               "examples": {
                 "Create product - Minimal": {
                   "$ref": "#/components/examples/Req_Create_Product_Minimal"
+                },
+                "Create product - With features": {
+                  "$ref": "#/components/examples/Req_Create_Product_With_Features"
                 }
               }
             }
@@ -4943,7 +4836,7 @@
             }
           },
           "400": {
-            "description": "Product with the same name already exists in this category",
+            "description": "Product with the same name already exists in this category, invalid features, or image_path supplied",
             "content": {
               "application/json": {
                 "schema": {
@@ -4952,6 +4845,9 @@
                 "examples": {
                   "Duplicate": {
                     "$ref": "#/components/examples/Resp_Create_Product_Duplicate"
+                  },
+                  "Invalid features": {
+                    "$ref": "#/components/examples/Resp_Product_Invalid_Features"
                   }
                 }
               }
@@ -5055,7 +4951,7 @@
           "11. Platform APIs - Product Catalog"
         ],
         "summary": "Create a category",
-        "description": "Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles.",
+        "description": "Creates a platform catalog category for a business type. Accessible to Vendor, Admin, and Customer Care roles. `image_path` is not accepted (400); upload the image via POST /v1/catalog/categories/{category_id}/image.",
         "operationId": "createCategory",
         "requestBody": {
           "description": "Category details",
@@ -5114,6 +5010,232 @@
                 "examples": {
                   "Duplicate": {
                     "$ref": "#/components/examples/Resp_Create_Category_Duplicate"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/catalog/products/{product_id}/image": {
+      "post": {
+        "tags": [
+          "11. Platform APIs - Product Catalog"
+        ],
+        "summary": "Upload platform product image",
+        "description": "Uploads the platform image of a catalog product (updates <code>tb_product.image_path</code>).\nMax size <b>3 MB</b>. <code>product_id</code> is the platform product id\n(<code>tb_product.id</code>), not a vendor product id.<br/>\nThis image is the <b>default for every vendor</b> selling the product; vendors that\nuploaded their own product image keep showing their own image.<br/>\n<b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file content,\nnot the Content-Type header.<br/>\n<b>Storage:</b> every upload is stored under a new unique S3 key, so the returned URL changes on\neach upload and CDN caches never serve a stale image.<br/>\n<b>Access:</b> ADMIN and CUSTOMER_CARE only. VENDOR receives 403 - vendors manage their own\nproduct image via <code>POST /v1/vendors/{vendor_id}/images?image_type=PRODUCT</code>.\n",
+        "operationId": "uploadProductImage",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 1003
+            },
+            "example": 1003
+          },
+          {
+            "name": "file_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product image uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Catalog_Product_Image_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing, unsupported or oversized file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Invalid file": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Invalid_File"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not ADMIN or CUSTOMER_CARE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Catalog_Product_Image_Not_Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "E-Commerce Application": []
+          }
+        ]
+      }
+    },
+    "/v1/catalog/categories/{category_id}/image": {
+      "post": {
+        "tags": [
+          "11. Platform APIs - Product Catalog"
+        ],
+        "summary": "Upload platform category image",
+        "description": "Uploads the platform image of a catalog category (updates <code>tb_category.image_path</code>).\nMax size <b>1 MB</b>.<br/>\n<b>Allowed formats:</b> JPEG, PNG, WebP, GIF. The format is detected from the file content,\nnot the Content-Type header.<br/>\n<b>Storage:</b> every upload is stored under a new unique S3 key, so the returned URL changes on\neach upload and CDN caches never serve a stale image.<br/>\n<b>Access:</b> ADMIN and CUSTOMER_CARE only. VENDOR receives 403 - vendors manage their own\nproduct image via <code>POST /v1/vendors/{vendor_id}/images?image_type=PRODUCT</code>.\n",
+        "operationId": "uploadCategoryImage",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 12
+            },
+            "example": 12
+          },
+          {
+            "name": "file_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category image uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Catalog_Category_Image_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing, unsupported or oversized file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Invalid file": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Invalid_File"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not ADMIN or CUSTOMER_CARE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Catalog_Category_Image_Not_Found"
                   }
                 }
               }
@@ -5960,7 +6082,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Get vendor product details",
-        "description": "Fetch detailed information about a specific vendor product by vendor product ID.",
+        "description": "Returns a vendor product (<code>product_id</code> = vendor product id,\n<code>ref_id</code> = platform product id).<br/>\nFallback to the platform product when the vendor has not set a value:\n<ul>\n  <li><code>description</code>: vendor description, else the platform description</li>\n  <li><code>image_path</code>: vendor product image, else the platform product image</li>\n  <li><code>features_map</code> / <code>features_type</code> / <code>features_list</code>:\n  vendor features, else the platform features (empty <code>{}</code> / <code>[]</code>\n  counts as not set)</li>\n</ul>\n<b>Access:</b> ADMIN, CUSTOMER_CARE, or a member (OWNER / STAFF) of\n<code>vendor_id</code>; other callers get 403. 404 when the product does not belong to\n<code>vendor_id</code>.\n",
         "operationId": "getVendorProductDetails",
         "parameters": [
           {
@@ -5988,11 +6110,46 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Vendor product details",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Vendor_Product_Details_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller has no access to this vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor product not found for this vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Product_Not_Found"
+                  }
                 }
               }
             }
@@ -6009,7 +6166,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Update vendor product description and features",
-        "description": "Update the description and/or features of a vendor product.\nOnly the provided fields will be updated (partial update).\n",
+        "description": "Partially updates a vendor product. Same body naming and rules as the platform product\nPATCH (<code>PATCH /v1/categories/{category_id}/products/{product_id}</code>):\n<ul>\n  <li><code>description</code>: omitted = unchanged; blank = reset (the platform\n  description is shown)</li>\n  <li><code>features</code> (also <code>features_map</code> / <code>features_list</code>):\n  omitted = unchanged; JSON object or array = replace (no merge); <code>null</code>,\n  <code>{}</code> or <code>[]</code> = clear (the platform features are shown); any other\n  value or more than 16 KB = 400</li>\n  <li><code>image_path</code>: not accepted (400). Upload via\n  <code>POST /v1/vendors/{vendor_id}/images</code> with <code>image_type=PRODUCT</code>\n  and <code>reference_id</code> = vendor product id.</li>\n</ul>\n<code>product_id</code> in the body is optional and ignored (the path value is used).<br/>\n<b>Access:</b> ADMIN, CUSTOMER_CARE, or a member (OWNER / STAFF with CATALOG) of\n<code>vendor_id</code>. 404 when the product does not belong to <code>vendor_id</code>.\n",
         "operationId": "updateVendorProduct",
         "parameters": [
           {
@@ -6036,23 +6193,24 @@
           }
         ],
         "requestBody": {
-          "description": "Vendor product update request",
+          "description": "Fields to update",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateVendorProductRequest"
               },
-              "example": {
-                "product_id": 123,
-                "description": "Updated product description",
-                "features": {
-                  "Features": [
-                    {
-                      "Brand": "MithraDirect",
-                      "Health Benfits": "Low Fat",
-                      "How to Use": "Easy"
-                    }
-                  ]
+              "examples": {
+                "Description and features": {
+                  "$ref": "#/components/examples/Req_Update_Vendor_Product"
+                },
+                "Set features (map)": {
+                  "$ref": "#/components/examples/Req_Update_Product_Features_Map"
+                },
+                "Set features (list)": {
+                  "$ref": "#/components/examples/Req_Update_Product_Features_List"
+                },
+                "Reset to platform features": {
+                  "$ref": "#/components/examples/Req_Update_Product_Clear_Features"
                 }
               }
             }
@@ -6061,11 +6219,61 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Vendor product updated",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Update_Vendor_Product_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid features or image_path supplied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Invalid features": {
+                    "$ref": "#/components/examples/Resp_Product_Invalid_Features"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller has no access to this vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vendor product not found for this vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Vendor_Product_Not_Found"
+                  }
                 }
               }
             }
@@ -6735,7 +6943,7 @@
           "07. Vendor Profile API"
         ],
         "summary": "Assign products to a vendor",
-        "description": "Assigns one or more products to a vendor with their features by Admin/Customer_Care role. <br>\nIn the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it.\n",
+        "description": "Assigns one or more products to a vendor with their features by Admin/Customer_Care role. <br>\nIn the request, the key should be vendor assigned category. Refer the /{vendor_id}/categories API to get it. <br>\nIf a product's features are omitted or empty, the vendor product inherits the platform product features\n(set via PATCH /v1/categories/{category_id}/products/{product_id}).\n",
         "operationId": "assignProducts",
         "parameters": [
           {
@@ -7619,6 +7827,8 @@
         "tags": [
           "11. Platform APIs - Product Catalog"
         ],
+        "summary": "Fetch product details",
+        "description": "Returns a platform product including its features. ADMIN only.<br/>\n<code>features_map</code> holds the stored features (object or array),\n<code>features_type</code> is <code>map</code> or <code>list</code>, and\n<code>features_list</code> is present only for lists. All three are omitted when the\nproduct has no features.\n",
         "operationId": "fetchProductInfo",
         "parameters": [
           {
@@ -7642,11 +7852,46 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Product details",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Get_Product_Success"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not ADMIN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Product_Not_Found"
+                  }
                 }
               }
             }
@@ -7705,6 +7950,8 @@
         "tags": [
           "11. Platform APIs - Product Catalog"
         ],
+        "summary": "Update a product (partial)",
+        "description": "Partially updates a platform product (<code>tb_product</code>). Omitted fields are left\nunchanged. Accessible by VENDOR, ADMIN and CUSTOMER_CARE.<br/>\n<b>features</b> (also accepted as <code>features_map</code> / <code>features_list</code>):\na JSON object (map) or array (list).\n<ul>\n  <li>omitted: unchanged</li>\n  <li>object / array: replaces the stored features (no merge)</li>\n  <li><code>null</code>, <code>{}</code> or <code>[]</code>: clears the features</li>\n  <li>any other value, or a payload above 16 KB: 400</li>\n</ul>\nPlatform features are the default for every vendor product whose own features are empty.\n<code>image_path</code> is not accepted (400); upload the image via\nPOST /v1/catalog/products/{product_id}/image.\n",
         "operationId": "updateProduct",
         "parameters": [
           {
@@ -7727,10 +7974,25 @@
           }
         ],
         "requestBody": {
+          "description": "Fields to update",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProductDTO"
+              },
+              "examples": {
+                "Set features (map)": {
+                  "$ref": "#/components/examples/Req_Update_Product_Features_Map"
+                },
+                "Set features (list)": {
+                  "$ref": "#/components/examples/Req_Update_Product_Features_List"
+                },
+                "Clear features": {
+                  "$ref": "#/components/examples/Req_Update_Product_Clear_Features"
+                },
+                "Update name and description": {
+                  "$ref": "#/components/examples/Req_Update_Product_Details"
+                }
               }
             }
           },
@@ -7738,11 +8000,61 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Product updated",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIResponseObject"
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Success": {
+                    "$ref": "#/components/examples/Resp_Update_Product_Success"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid features, image_path supplied, or measurement unit in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Invalid features": {
+                    "$ref": "#/components/examples/Resp_Product_Invalid_Features"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not VENDOR, ADMIN or CUSTOMER_CARE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Forbidden": {
+                    "$ref": "#/components/examples/Resp_Catalog_Image_Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                },
+                "examples": {
+                  "Not found": {
+                    "$ref": "#/components/examples/Resp_Product_Not_Found"
+                  }
                 }
               }
             }
@@ -8038,7 +8350,7 @@
     "/v1/vendors/{vendor_id}/skus/search": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "SKU Search by category name,product name and sku name in vendor context.",
         "description": "This API searches SKUs and returns separate quantity_value and unit fields.\n",
@@ -8103,7 +8415,7 @@
     "/v1/vendors/{vendor_id}/products": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Fetch vendor assigned products",
         "description": "  This API endpoint retrieves a list of products assigned to a specific vendor.\n   The response includes an array of products, each with its id, name, category_id,\n   and measurement_id. Optionally, descriptions can be included in the response.\n    * vendorId The ID of the vendor whose assigned products are to be fetched. (Example: 91,94,99)\n    * categoryId (Optional) The category ID to filter products by category.\n    * descNeeded (Optional) A boolean flag indicating whether descriptions are needed in the response.\n",
@@ -8155,7 +8467,7 @@
     "/v1/vendors/{vendor_id}/products/skus": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Fetch SKUs with vendor_id and/or without product_id",
         "description": "This API used for fetching all the SKUs and specific SKUs based on vendor_id and/or product_id.\n<br>If <b>product_id</b> is NULL: SKUs will be filtered by vendor_id only.\n<br>If <b>product_id</b> is not NULL: SKUs will be filtered by vendor_id & product_id.\n<br>Each SKU returns measurement as separate <b>quantity_value</b> and <b>unit</b> fields.\n<br>Test data: vendor_id:91 and Items product_id:1 and Service product_id: 2\n",
@@ -8849,6 +9161,165 @@
         }
       }
     },
+    "/v1/vendors/shops": {
+      "get": {
+        "tags": [
+          "02. Vendors Discovery and Products Listing API"
+        ],
+        "summary": "Find shops for a location (unified discovery)",
+        "description": "Single endpoint powering the storefront \"Find shops\" listing.<br>\n<b>Location</b>: <code>service_area</code> (pincode) and/or <code>latitude</code> +\n<code>longitude</code>. A shop matches when its service polygon covers the point OR\nthe pincode is in its zipcode list (pincode-only lookups also include global\nvendors).<br>\n<b>Filters</b>: <code>category_id</code> / <code>category_name</code> for the chips,\n<code>keyword</code> for the \"category or shop name\" text box,\n<code>taking_orders</code> (ACTIVE vendors only) and <code>delivers_here</code>\n(default true; false = browse all shops regardless of location).<br>\n<b>Sort</b>: <code>sort</code> = distance | name | newest (default distance when\ncoordinates are supplied, else name). Each shop returns\n<code>distance_meters</code> when coordinates are known.<br>\n<b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>\nheader is optional; when sent it must be valid, otherwise <code>401</code> is\nreturned.<br>\nResults are cached (~30 min); <code>page_size</code> is capped at 50.<br>\nTest data: service_area:502103, latitude:18.100525, longitude:78.848279.\n",
+        "operationId": "searchShops",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Optional public API key. If supplied, it must be a valid key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service_area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "502103"
+            },
+            "example": 502103
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "example": 18.100525
+            },
+            "example": 18.100525
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "example": 78.848279
+            },
+            "example": 78.848279
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 102
+            },
+            "example": 102
+          },
+          {
+            "name": "category_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "Dairy"
+            },
+            "example": "Dairy"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "Milk"
+            },
+            "example": "Milk"
+          },
+          {
+            "name": "taking_orders",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "example": true
+            },
+            "example": true
+          },
+          {
+            "name": "delivers_here",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "example": true
+            },
+            "example": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "distance"
+            },
+            "example": "distance"
+          },
+          {
+            "name": "page_number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shops matching the filters",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Find shops": {
+                    "$ref": "#/components/examples/Resp_Vendor_Shops_Success"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "An X-API-Key header was sent but it is not a valid key",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Invalid API key": {
+                    "$ref": "#/components/examples/Resp_PublicApi_Invalid_Key"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/vendors/search": {
       "get": {
         "tags": [
@@ -8889,10 +9360,10 @@
     "/v1/vendors/search/{service_area}": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Fetch Vendors by zipcode with/without category_id",
-        "description": "This API used for searching vendors and specific vendors based on zipcode and/or category_id.\n<br>If <b>category_id</b> is NULL: Vendors will be filtered by zipcode only.\n<br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & product_id.\n<br>Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103\n",
+        "description": "Deprecated — use <code>GET /v1/vendors/shops</code> instead.\n<br>This API used for searching vendors and specific vendors based on zipcode and/or category_id.\n<br>If <b>category_id</b> is NULL: Vendors will be filtered by zipcode only.\n<br>If <b>category_id</b> is not NULL: Vendors will be filtered by zipcode & category_id.\n<br>Test data: zipcode:502108,502103,Siddipet,Hyderabad and category_id: 102,103\n",
         "operationId": "fetchActiveVendorsByServiceArea",
         "parameters": [
           {
@@ -8970,16 +9441,17 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/v1/vendors/search/keyword": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Search vendors by zipcode and product keyword[ regex: vendor name , category name,product name and sku name ]",
-        "description": "This API used for search and list of matched vendors for given search pattern.\n<br>Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish\n",
+        "description": "Deprecated — use <code>GET /v1/vendors/shops</code> instead.\n<br>Test data: zipcode:502108,502103, keyword:Milk,Chicken,Fish\n",
         "operationId": "searchVendorsByKeyword",
         "parameters": [
           {
@@ -9056,13 +9528,14 @@
               }
             }
           }
-        }
+        },
+        "deprecated": true
       }
     },
     "/v1/vendors/products/{product_id}/skus/{sku_id}": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Fetch Product SKU Details to display on PDP page.",
         "description": "This API returns SKU information with separate quantity_value and unit fields.\n",
@@ -9133,12 +9606,20 @@
     "/v1/vendors/categories": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Fetch Categories by service_area",
-        "description": "    This API used for fetching all categories served by the vendors based on service_area/zipcode.\n    <br>Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.\n",
+        "description": "    This API used for fetching all categories served by the vendors based on service_area/zipcode.\n    <br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>\n    header is optional; when sent it must be valid, otherwise <code>401</code> is returned.\n    <br>Test data: zipcode:502103,latitude:18.100525,longitude:78.848279.\n",
         "operationId": "fetchCategoriesByZipCode",
         "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Optional public API key. If supplied, it must be a valid key.",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "service_area",
             "in": "query",
@@ -9174,11 +9655,23 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Categories served in the location",
             "content": {
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/APIResponseObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "An X-API-Key header was sent but it is not a valid key",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Invalid API key": {
+                    "$ref": "#/components/examples/Resp_PublicApi_Invalid_Key"
+                  }
                 }
               }
             }
@@ -10434,7 +10927,7 @@
     "/v1/redirect": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Deep Link Redirect",
         "description": "Handles deep link redirect. Opens app if installed via App Link, otherwise shows Play Store fallback page.",
@@ -10552,12 +11045,20 @@
     "/v1/home": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "GeoBased Home Page API",
-        "description": "This API is used for fetching new_vendors , offers based on user's location.\n<br> On click on the <b>new vendor image/name</b> ,User has to navigate to vendor's product listing page.\n<br> On click on <b>offer image/name</b> ,User has to navigate to vendor's specific sku's listing page.\n<br> On click on <b>top product</b> ,User has to navigate to vendor's specific sku's listing page.\n",
+        "description": "This API is used for fetching new_vendors , offers based on user's location.\n<br> On click on the <b>new vendor image/name</b> ,User has to navigate to vendor's product listing page.\n<br> On click on <b>offer image/name</b> ,User has to navigate to vendor's specific sku's listing page.\n<br> On click on <b>top product</b> ,User has to navigate to vendor's specific sku's listing page.\n<br><br><b>Public endpoint</b> — no bearer token required. The <code>X-API-Key</code>\nheader is optional; when sent it must be valid, otherwise <code>401</code> is returned.\n",
         "operationId": "getHomePageData",
         "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "Optional public API key. If supplied, it must be a valid key.",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "service_area",
             "in": "query",
@@ -10571,7 +11072,7 @@
           {
             "name": "latitude",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "format": "double",
@@ -10582,7 +11083,7 @@
           {
             "name": "longitude",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "format": "double",
@@ -10682,7 +11183,7 @@
     "/v1/deeplink": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "summary": "Generate Deep Link",
         "description": "Generates a shareable deep link for a product. Opens the app if installed, or redirects to Play Store.",
@@ -11172,7 +11673,7 @@
     "/v1/.well-known/assetlinks.json": {
       "get": {
         "tags": [
-          "02. Vendors and Products Listing API"
+          "02. Vendors Discovery and Products Listing API"
         ],
         "operationId": "getAssetLinks",
         "responses": {
@@ -11460,10 +11961,6 @@
               "zipCode": "502108",
               "district": "Siddipet"
             }
-          },
-          "banner_image": {
-            "type": "string",
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk"
           },
           "assign_categories": {
             "$ref": "#/components/schemas/AssignCategoriesRequest",
@@ -13265,7 +13762,9 @@
               "HOMEBANNER",
               "THUMBNAIL",
               "PRODUCT",
-              "SKU"
+              "SKU",
+              "CATEGORY",
+              "CATALOG_PRODUCT"
             ]
           },
           "reference_id": {
@@ -13819,7 +14318,28 @@
           },
           "image_path": {
             "type": "string",
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk"
+            "description": "Image URL (read-only). Not accepted in create/update requests (400); upload via POST /v1/catalog/products/{product_id}/image (ADMIN / CUSTOMER_CARE).",
+            "example": "https://mithradirect.com/cdn-cgi/image/width=400/platform/products/1003/a.webp",
+            "readOnly": true
+          },
+          "features_map": {
+            "$ref": "#/components/schemas/JsonNode",
+            "description": "Platform product features: a JSON object (map) or array (list). Default for every vendor product whose own features are empty. Optional on create. PATCH semantics: omitted = unchanged, object/array = replace, null / {} / [] = clear. Also accepted as `features` or `features_list` in requests.",
+            "example": {
+              "Brand": "MithraDirect",
+              "Shelf Life": "5 days"
+            }
+          },
+          "features_type": {
+            "type": "string",
+            "description": "`map` or `list`, depending on the shape of features.",
+            "example": "map",
+            "readOnly": true
+          },
+          "features_list": {
+            "$ref": "#/components/schemas/JsonNode",
+            "description": "Same as features_map when features is a list; otherwise omitted.",
+            "readOnly": true
           }
         }
       },
@@ -13846,7 +14366,9 @@
           },
           "image_path": {
             "type": "string",
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAk"
+            "description": "Image URL (read-only). Not accepted in create/update requests (400); upload via POST /v1/catalog/categories/{category_id}/image (ADMIN / CUSTOMER_CARE).",
+            "example": "https://mithradirect.com/cdn-cgi/image/width=200/platform/categories/12/a.webp",
+            "readOnly": true
           },
           "description": {
             "type": "string",
@@ -14261,20 +14783,30 @@
       "UpdateVendorProductRequest": {
         "type": "object",
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "Vendor product description. Omitted = unchanged; blank = reset to the platform product description.",
+            "example": "SRK farm tomatoes, hand-picked"
+          },
           "product_id": {
             "type": "integer",
-            "format": "int64"
-          },
-          "description": {
-            "type": "string"
+            "format": "int64",
+            "deprecated": true,
+            "description": "Ignored; the vendor product id is taken from the path. Kept for backward compatibility."
           },
           "features": {
-            "$ref": "#/components/schemas/JsonNode"
+            "$ref": "#/components/schemas/JsonNode",
+            "description": "Vendor product features: a JSON object (map) or array (list), max 16 KB. Omitted = unchanged, object/array = replace, null / {} / [] = clear (the platform product features are then shown). Also accepted as `features_map` or `features_list`.",
+            "example": {
+              "Brand": "SRK",
+              "Shelf Life": "5 days"
+            }
+          },
+          "image_path": {
+            "type": "string",
+            "description": "Not accepted (400). Upload the image via POST /v1/vendors/{vendor_id}/images (image_type=PRODUCT, reference_id=vendor product id)."
           }
-        },
-        "required": [
-          "product_id"
-        ]
+        }
       },
       "OrderUpdateRequest": {
         "type": "object",
@@ -16025,6 +16557,22 @@
       }
     },
     "examples": {
+      "Resp_Update_Product_Success": {
+        "value": {
+          "timestamp": "2026-11-20T10:00:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": "Product updated successfully."
+        }
+      },
+      "Resp_Update_Vendor_Product_Success": {
+        "value": {
+          "timestamp": "2026-11-21T10:00:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": "Vendor product updated successfully"
+        }
+      },
       "Resp_OTP_Auth_Failed_1": {
         "value": {
           "success": false,
@@ -16044,6 +16592,60 @@
             "user_id": 3052,
             "mobile_verified": true
           }
+        }
+      },
+      "Req_Update_Product_Features_Map": {
+        "value": {
+          "features": {
+            "Brand": "MithraDirect",
+            "Shelf Life": "5 days",
+            "Storage": "Refrigerate below 4°C"
+          }
+        }
+      },
+      "Resp_Product_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-11-20T10:00:00.123456789",
+          "failure_reason": "Product not found with id: 1003",
+          "user_message": "Resource not found.",
+          "api_details": []
+        }
+      },
+      "Req_Update_Product_Details": {
+        "value": {
+          "name": "Whole Milk 1L",
+          "description": "Fresh whole milk from local farms"
+        }
+      },
+      "Resp_Vendor_Product_Details_Success": {
+        "value": {
+          "timestamp": "2026-11-21T10:00:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "id": 418,
+            "ref_id": 1002,
+            "name": "Tomato",
+            "description": "SRK farm tomatoes, hand-picked",
+            "image_path": "https://mithradirect.com/cdn-cgi/image/width=800,quality=85,format=auto,fit=cover,onerror=redirect/https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/vendors/91/products/418/tomato_ab12cd34.webp",
+            "features_map": {
+              "Brand": "SRK",
+              "Shelf Life": "5 days"
+            },
+            "features_type": "map"
+          }
+        }
+      },
+      "Resp_Vendor_Product_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-11-21T10:00:00.123456789",
+          "failure_reason": "Vendor product #418 not found for vendor #91",
+          "user_message": "No data found!!",
+          "api_details": []
         }
       },
       "Req_Verify_OTP": {
@@ -16075,6 +16677,27 @@
             "updated_at": "2026-09-26T10:20:00Z",
             "message": "Subscription cancelled."
           }
+        }
+      },
+      "Resp_Catalog_Category_Image_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Category #12 not found",
+          "user_message": "No data found!!",
+          "api_details": []
+        }
+      },
+      "Resp_PublicApi_Invalid_Key": {
+        "value": {
+          "timestamp": "2026-11-22T10:15:30.123456789",
+          "success": false,
+          "status": "UNAUTHORIZED",
+          "failure_reason": "Invalid or missing API key",
+          "user_message": "Authentication failed. Please provide valid credentials.",
+          "api_details": [],
+          "reason_code": "UNAUTHORIZED"
         }
       },
       "Req_Vendor_Subscription_Subscribe_Yearly": {
@@ -16115,6 +16738,16 @@
             "created_by": "3",
             "langauage": "en"
           }
+        }
+      },
+      "Resp_Catalog_Image_Forbidden": {
+        "value": {
+          "success": false,
+          "status": 403,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Authorization failed!!",
+          "user_message": "Authorization failed!!",
+          "api_details": []
         }
       },
       "Res_Sub_OneTime_With_Fixed_Failed_1": {
@@ -16243,6 +16876,67 @@
           "user_message": "No data found!!",
           "api_details": [],
           "reason_code": "404"
+        }
+      },
+      "Resp_Catalog_Image_Invalid_File": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Invalid or unsupported image file. Allowed types are: [image/jpeg, image/png, image/webp, image/gif]",
+          "user_message": "Please check the input request and try again.",
+          "api_details": []
+        }
+      },
+      "Req_Update_Product_Clear_Features": {
+        "value": {
+          "features": null
+        }
+      },
+      "Resp_Vendor_Shops_Success": {
+        "value": {
+          "timestamp": "2026-11-22T10:15:30.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "result": [
+              {
+                "id": 91,
+                "vendor_id": 91,
+                "business_name": "Mirdoddi Farm Fresh",
+                "banner_image": "https://imagedelivery.net/acct-hash/vendor-91-banner/banner",
+                "thumbnail_image": "https://imagedelivery.net/acct-hash/vendor-91-thumb/thumbnail",
+                "status": "ACTIVE",
+                "category": [
+                  "Vegetables",
+                  "Fruits"
+                ],
+                "distance_meters": 1842.5,
+                "zip_codes": [
+                  "502103",
+                  "502105"
+                ]
+              },
+              {
+                "id": 94,
+                "vendor_id": 94,
+                "business_name": "Pasha Natural Foods",
+                "status": "INACTIVE",
+                "category": [
+                  "Dairy"
+                ],
+                "distance_meters": 5310.7,
+                "zip_codes": [
+                  "502103"
+                ]
+              }
+            ],
+            "page_number": 0,
+            "page_size": 10,
+            "total_elements": 2,
+            "total_pages": 1,
+            "last_page": true
+          }
         }
       },
       "Resp_Subscription_Plans_Success": {
@@ -16445,6 +17139,19 @@
           "api_details": []
         }
       },
+      "Resp_Catalog_Category_Image_Success": {
+        "value": {
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "message": "Category image uploaded successfully",
+            "image_url": "https://mithradirect.com/cdn-cgi/image/width=200,quality=80,format=auto,fit=cover,onerror=redirect/https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/categories/12/dairy_3f9a1c2e.webp",
+            "image_type": "CATEGORY",
+            "reference_id": 12
+          }
+        }
+      },
       "Resp_Create_Category_Success": {
         "value": {
           "timestamp": "2026-08-23T23:20:00.123456789",
@@ -16510,6 +17217,16 @@
           }
         }
       },
+      "Resp_Product_Invalid_Features": {
+        "value": {
+          "success": false,
+          "status": 400,
+          "timestamp": "2026-11-20T10:00:00.123456789",
+          "failure_reason": "features must be a JSON object or array",
+          "user_message": "Please check the request and try again!!",
+          "api_details": []
+        }
+      },
       "Resp_SignUp_Success": {
         "value": {
           "timestamp": "2024-10-22T09:05:58.140309",
@@ -16522,6 +17239,15 @@
             "email_verified": false,
             "message": "Mobile registered successfully!"
           }
+        }
+      },
+      "Req_Update_Product_Features_List": {
+        "value": {
+          "features": [
+            "Farm fresh",
+            "No preservatives",
+            "Delivered chilled"
+          ]
         }
       },
       "Resp_Vendor_SignIn_Success": {
@@ -16709,6 +17435,17 @@
           "api_details": []
         }
       },
+      "Req_Create_Product_With_Features": {
+        "value": {
+          "name": "Whole Milk 1L",
+          "measurement_unit_id": 1,
+          "description": "Fresh whole milk",
+          "features": {
+            "Brand": "MithraDirect",
+            "Shelf Life": "5 days"
+          }
+        }
+      },
       "Resp_Vendor_Update_Business_Type_Not_Found": {
         "value": {
           "success": false,
@@ -16818,6 +17555,16 @@
           "contact_person": "SK Contact"
         }
       },
+      "Resp_Catalog_Product_Image_Not_Found": {
+        "value": {
+          "success": false,
+          "status": 404,
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "failure_reason": "Product #1003 not found",
+          "user_message": "No data found!!",
+          "api_details": []
+        }
+      },
       "Resp_Vendor_Update_Business_Type_Validation_Error": {
         "value": {
           "success": false,
@@ -16875,6 +17622,26 @@
               "max_images_per_product": 10,
               "max_staff_users": 2
             }
+          }
+        }
+      },
+      "Resp_Get_Product_Success": {
+        "value": {
+          "timestamp": "2026-11-20T10:00:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "id": 1003,
+            "name": "Whole Milk 1L",
+            "measurement_unit_id": 1,
+            "image_path": "https://mithradirect.com/cdn-cgi/image/width=800,quality=80,format=auto,fit=cover,onerror=redirect/https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/1003/farm_stay_a1b2c3d4.webp",
+            "description": "Fresh whole milk",
+            "features_map": {
+              "Brand": "MithraDirect",
+              "Shelf Life": "5 days",
+              "Storage": "Refrigerate below 4°C"
+            },
+            "features_type": "map"
           }
         }
       },
@@ -16959,6 +17726,15 @@
         "value": {
           "name": "Whole Milk 1L",
           "measurement_unit_id": 1
+        }
+      },
+      "Req_Update_Vendor_Product": {
+        "value": {
+          "description": "SRK farm tomatoes, hand-picked",
+          "features": {
+            "Brand": "SRK",
+            "Shelf Life": "5 days"
+          }
         }
       },
       "Resp_User_Order_History_Date_Range_Success": {
@@ -17168,6 +17944,19 @@
           "data": {
             "user_id": 3051,
             "mobile_verified": false
+          }
+        }
+      },
+      "Resp_Catalog_Product_Image_Success": {
+        "value": {
+          "timestamp": "2026-11-14T10:15:00.123456789",
+          "success": true,
+          "status": 200,
+          "data": {
+            "message": "Product image uploaded successfully",
+            "image_url": "https://mithradirect.com/cdn-cgi/image/width=400,quality=80,format=auto,fit=cover,onerror=redirect/https://mithradirect-s3-ap-south-2.s3.ap-south-2.amazonaws.com/platform/products/1003/farm_stay_a1b2c3d4.webp",
+            "image_type": "CATALOG_PRODUCT",
+            "reference_id": 1003
           }
         }
       },

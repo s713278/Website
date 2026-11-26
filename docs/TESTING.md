@@ -14,7 +14,14 @@ test command because it binds a loopback socket and reopens a durable store.
 | Logic | node (default) | `src/**/*.test.ts` | Pure domain and presentation logic — onboarding resume, validation, entry routing, payload mapping, wire-to-view-model mappers |
 | Component | jsdom (opt-in per file) | `src/**/*.test.tsx` | React effect lifecycle: what a page fetches, when it refetches, and what it does with the response |
 
-There is **no end-to-end runner**. Full-journey behaviour is still verified by running the app.
+There is **no end-to-end runner**. Full-journey behaviour is still verified by running the app; see
+[Browser checks](#browser-checks).
+
+### Node's built-in `localStorage`
+
+Node 25 and later define a global `localStorage` that shadows jsdom's and breaks every suite that
+touches storage. `vitest.config.ts` starts the workers with `--no-experimental-webstorage` when the
+running Node knows the flag, so `npm run test` needs no extra environment.
 
 ### Worker cap
 
@@ -23,6 +30,36 @@ machine saturated its own CPU: jsdom renders slowed until Testing Library querie
 `findBy*`/`waitFor` default or the 5 s test timeout, and every full run failed 1–3 different tests.
 With six workers, five consecutive runs passed in the same ~60 s. Fix a load flake by capping
 contention, not by raising a timeout for one file — a larger timeout hides real slowness.
+
+## Browser checks
+
+A UI change is checked in a real browser before anyone is asked to look at it. jsdom has no layout,
+animation, touch or on-screen keyboard, so styling, motion and gesture bugs reach it unseen.
+
+1. Start the app in demo mode on a fixed port: `VITE_USE_API=false npx vite --port 5199 --strictPort`.
+2. Sign in at `/vendor/login` (or `/login`) with any valid-format 10-digit mobile number and OTP
+   `1234`; see [README.md](../README.md#authentication-status).
+3. Check each layout the change affects, each in a fresh browser context:
+   - Desktop: 1280 × 800.
+   - Tablet: 768 × 1024 with `hasTouch: true`.
+   - Phone: 390 × 844 with `isMobile: true`, `hasTouch: true` and an iPhone user agent. A plain
+     resize to 390 misses touch and mobile code paths; vaul, for one, branches on the user agent.
+4. Take a screenshot of every visual change and look at it before reporting.
+
+Motion and gesture bugs need more than a screenshot:
+
+- **Swipes:** send real touch events over CDP (`Input.dispatchTouchEvent`: `touchStart`, a series
+  of `touchMove` about 16 ms apart, `touchEnd`). Mouse drags take a different path.
+- **Flicker:** sample the opacity and transform of the moving layers in a `requestAnimationFrame`
+  loop during the transition. A jump between two frames is the bug, even when the first and last
+  frames look right.
+- **On-screen keyboard:** Chrome has none. Simulate one by redefining `visualViewport.height` and
+  dispatching `resize` on `visualViewport`. Real iOS and Android keyboard timing still needs a
+  device.
+
+Playwright needs Chrome installed in the environment that runs it (under WSL:
+`sudo npx playwright install --with-deps chrome`, using an absolute `npx` path if `sudo` loses
+nvm's `PATH`).
 
 ## Local billing helper HTTP test
 

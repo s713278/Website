@@ -106,8 +106,10 @@ npm --prefix packages/api-client run typecheck
 ```
 
 Use focused checks while iterating, then run the baseline on the final code change. Build when
-bundling or production behavior is affected; exercise the affected UI flow when static checks cannot
-establish the result. One `npm run test` runs all Vitest tiers; there is no end-to-end runner.
+bundling or production behavior is affected. Visual, motion or gesture changes need the
+[browser checks](./docs/TESTING.md#browser-checks) before you report them. One `npm run test` runs
+all Vitest tiers; there is no end-to-end runner. CI (`.github/workflows/ci.yml`) runs the baseline
+and the package typecheck on every pull request.
 Automated tests must isolate the network through the seams in [docs/TESTING.md](./docs/TESTING.md).
 
 For documentation-only changes, check links, commands and claims against their sources, and run

@@ -15,7 +15,14 @@ import viteConfig from './vite.config'
  *
  * Workers are capped because the default (one per core) saturates the CPU and pushes jsdom
  * queries past their timeouts; see docs/TESTING.md.
+ *
+ * Node 25+ ships a built-in `localStorage` global that shadows jsdom's and breaks suites that
+ * use storage; the workers run with it turned off where the running Node knows the flag.
  */
+const webstorageOff = process.allowedNodeEnvironmentFlags.has('--no-experimental-webstorage')
+  ? ['--no-experimental-webstorage']
+  : []
+
 export default mergeConfig(
   viteConfig,
   defineConfig({
@@ -23,6 +30,7 @@ export default mergeConfig(
       environment: 'node',
       include: ['src/**/*.test.{ts,tsx}'],
       maxWorkers: 6,
+      poolOptions: { forks: { execArgv: webstorageOff } },
     },
   }),
 )

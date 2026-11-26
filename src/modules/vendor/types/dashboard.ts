@@ -205,3 +205,15 @@ export type VendorStoreProfile = {
   bannerImage: string | null
   storeIdentifier: string | null
 }
+
+/** One labelled fact about a vendor product, such as Brand: Nandini. */
+export type ProductFeature = { label: string; detail: string }
+
+/**
+ * A vendor product's product description and product features, as the details read returns
+ * them. Either may be the catalog default: the read falls back without saying which.
+ */
+export type VendorProductDetails = { description: string; features: ProductFeature[] }
+
+/** Only the parts to send; an omitted part is left unchanged on the server. */
+export type VendorProductDetailsChanges = { description?: string; features?: ProductFeature[] }

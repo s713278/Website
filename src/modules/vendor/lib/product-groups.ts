@@ -13,10 +13,10 @@ function productName(size: VendorSize): string {
 
 /** Sizes arrive flat; a vendor thinks in products, so they are grouped back up. */
 export function groupByProduct(sizes: VendorSize[]) {
-  const groups = new Map<string, { name: string; sizes: VendorSize[] }>()
+  const groups = new Map<string, { name: string; productId: string | null; sizes: VendorSize[] }>()
   for (const size of sizes) {
     const key = size.productId ?? `sku-${size.skuId}`
-    const group = groups.get(key) ?? { name: productName(size), sizes: [] }
+    const group = groups.get(key) ?? { name: productName(size), productId: size.productId, sizes: [] }
     group.sizes.push(size)
     groups.set(key, group)
   }
